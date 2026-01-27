@@ -1,0 +1,3 @@
+@echo off
+echo Deploying to Vercel...
+node "%APPDATA%\npm\node_modules\vercel\dist\index.js" --prod

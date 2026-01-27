@@ -1,0 +1,8 @@
+# Vite-specific files (no longer needed with Next.js)
+index.html
+vite.config.ts
+App.tsx
+index.tsx
+
+# Keep these
+!app/
