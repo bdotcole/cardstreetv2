@@ -1,0 +1,49 @@
+================================================================================
+VERCEL ENVIRONMENT VARIABLES SETUP
+================================================================================
+
+INSTRUCTIONS:
+1. Go to: https://vercel.com/dashboard
+2. Click on: cardstreet-tcg
+3. Click: Settings → Environment Variables
+4. For each variable below, click "Add New"
+5. Enter the Name and Value exactly as shown
+6. Select: Production, Preview, AND Development (all 3)
+7. Click Save
+
+================================================================================
+
+VARIABLE 1:
+-----------
+Name: NEXT_PUBLIC_SUPABASE_URL
+Value: https://fdxgzddvywtmnqsaqysx.supabase.co
+Environments: Production, Preview, Development
+
+================================================================================
+
+VARIABLE 2:
+-----------
+Name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkeGd6ZGR2eXd0bW5xc2FxeXN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzMTc3MTksImV4cCI6MjA4NDg5MzcxOX0.xvoLoBzTP_Tzff5E35tupTBNdUFUuiMOaOAQd6zGI6I
+Environments: Production, Preview, Development
+
+================================================================================
+
+VARIABLE 3:
+-----------
+Name: SUPABASE_SERVICE_ROLE_KEY
+Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkeGd6ZGR2eXd0bW5xc2FxeXN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTMxNzcxOSwiZXhwIjoyMDg0ODkzNzE5fQ.Hz5vJpnCeiUDoD4owCd-LCTJ1VTdViH1v-cx6g1smKU
+Environments: Production, Preview, Development
+
+================================================================================
+
+AFTER ADDING ALL 3 VARIABLES:
+1. Go to the "Deployments" tab
+2. Click the "..." menu on the latest deployment
+3. Click "Redeploy"
+4. Wait 2-3 minutes for build to complete
+
+Your site will then be live with Supabase!
+Visit: https://cardstreet-tcg.vercel.app
+
+================================================================================

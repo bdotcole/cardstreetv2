@@ -196,7 +196,9 @@ export const pokemonService = {
             }
 
             // Order by relevance: exact matches first, then partial
+            // PERFORMANCE: Limit to 50 results max
             const { data: cards, error } = await queryBuilder
+                .order('name', { ascending: true })
                 .limit(50);
 
             if (error) {
