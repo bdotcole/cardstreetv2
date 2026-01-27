@@ -10,6 +10,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'assets.tcgdex.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.tcgdex.net',
+      },
     ],
   },
   experimental: {

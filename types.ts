@@ -34,6 +34,7 @@ export interface Card {
   number: string;
   rarity: Rarity;
   imageUrl: string;
+  images?: { small: string; large: string };
   marketPrice: number;
   prices?: CardPrices;
   tcgplayerUrl?: string;

@@ -250,18 +250,28 @@ export const pokemonService = {
         const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 5.0;
         const marketThb = Math.round(marketUsd * EXCHANGE_RATE);
 
-        // Fix image URLs - TCGdex stores base URL, need to append /high or /low
+        // Fix image URLs - Handle both TCGdex and Pokemon TCG API formats
         let imageUrl = '';
+        let imageSmall = '';
+
+        // TCGdex format: image URLs already include /high or /low
         if (supabaseCard.image_large) {
-            imageUrl = supabaseCard.image_large.includes('/high')
-                ? supabaseCard.image_large
-                : `${supabaseCard.image_large}/high`;
+            imageUrl = supabaseCard.image_large;
         } else if (supabaseCard.image_small) {
-            imageUrl = supabaseCard.image_small.includes('/low')
-                ? supabaseCard.image_small
-                : `${supabaseCard.image_small}/low`;
-        } else if (rawData.image) {
-            imageUrl = `${rawData.image}/high`;
+            imageUrl = supabaseCard.image_small;
+        }
+        // Pokemon TCG API format: use raw_data.images
+        else if (rawData.images?.large) {
+            imageUrl = rawData.images.large;
+            imageSmall = rawData.images.small;
+        }
+        // Fallback to raw_data.image (TCGdex base URL)
+        else if (rawData.image) {
+            imageUrl = rawData.image.includes('http') ? rawData.image : `${rawData.image}/high`;
+        }
+        // Ultimate fallback: placeholder
+        else {
+            imageUrl = 'https://images.pokemontcg.io/placeholder.png';
         }
 
         return {
@@ -272,6 +282,10 @@ export const pokemonService = {
             number: supabaseCard.number ? `${supabaseCard.number}/${rawData.set?.printedTotal || '??'}` : '??',
             rarity: supabaseCard.rarity || 'Common',
             imageUrl: imageUrl,
+            images: {
+                small: imageSmall || imageUrl,
+                large: imageUrl
+            },
             marketPrice: marketThb,
             tcgplayerUrl: supabaseCard.tcgplayer_url,
             prices: {
