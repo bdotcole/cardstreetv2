@@ -181,8 +181,8 @@ async function migrate() {
                             abilities: c.abilities || null,
                             rules: c.rules || [],
                             regulation_mark: c.regulationMark || null,
-                            image_small: `${c.image}/low`,
-                            image_large: `${c.image}/high`,
+                            image_small: `${c.image}/low.png`,
+                            image_large: `${c.image}/high.png`,
                             tcgplayer_url: null, // TCGdex doesn't give direct URL easily
                             cardmarket_url: null,
                             raw_data: {
