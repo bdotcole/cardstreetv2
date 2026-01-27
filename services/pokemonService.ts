@@ -250,15 +250,25 @@ export const pokemonService = {
         const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 5.0;
         const marketThb = Math.round(marketUsd * EXCHANGE_RATE);
 
+        // Helper function to ensure TCGdex URLs have .png extension
+        const fixTcgdexUrl = (url: string | null): string => {
+            if (!url) return '';
+            // TCGdex requires .png extension (e.g., /high.png not just /high)
+            if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp)$/i)) {
+                return `${url}.png`;
+            }
+            return url;
+        };
+
         // Fix image URLs - Handle both TCGdex and Pokemon TCG API formats
         let imageUrl = '';
         let imageSmall = '';
 
-        // TCGdex format: image URLs already include /high or /low
+        // TCGdex format: URLs need .png extension appended
         if (supabaseCard.image_large) {
-            imageUrl = supabaseCard.image_large;
+            imageUrl = fixTcgdexUrl(supabaseCard.image_large);
         } else if (supabaseCard.image_small) {
-            imageUrl = supabaseCard.image_small;
+            imageUrl = fixTcgdexUrl(supabaseCard.image_small);
         }
         // Pokemon TCG API format: use raw_data.images
         else if (rawData.images?.large) {
@@ -267,11 +277,17 @@ export const pokemonService = {
         }
         // Fallback to raw_data.image (TCGdex base URL)
         else if (rawData.image) {
-            imageUrl = rawData.image.includes('http') ? rawData.image : `${rawData.image}/high`;
+            const baseUrl = rawData.image.includes('http') ? rawData.image : `${rawData.image}/high`;
+            imageUrl = fixTcgdexUrl(baseUrl);
         }
         // Ultimate fallback: placeholder
         else {
             imageUrl = 'https://images.pokemontcg.io/placeholder.png';
+        }
+
+        // Fix imageSmall too
+        if (supabaseCard.image_small && !imageSmall) {
+            imageSmall = fixTcgdexUrl(supabaseCard.image_small);
         }
 
         return {
