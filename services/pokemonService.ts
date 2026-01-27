@@ -66,19 +66,30 @@ export const pokemonService = {
             }
 
             // Transform Supabase data to match API format
-            const transformedSets: ApiSet[] = (sets || []).map(s => ({
-                id: s.id,
-                name: s.name,
-                series: s.series || '',
-                printedTotal: s.printed_total || 0,
-                total: s.total || 0,
-                releaseDate: s.release_date || '',
-                updatedAt: s.updated_at || '',
-                images: {
-                    symbol: s.symbol_url || '',
-                    logo: s.logo_url || ''
-                }
-            }));
+            const transformedSets: ApiSet[] = (sets || []).map(s => {
+                // Helper to fix TCGdex URLs (same as card images)
+                const fixTcgdexUrl = (url: string | null): string => {
+                    if (!url) return '';
+                    if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp|svg)$/i)) {
+                        return `${url}.png`;
+                    }
+                    return url;
+                };
+
+                return {
+                    id: s.id,
+                    name: s.name,
+                    series: s.series || '',
+                    printedTotal: s.printed_total || 0,
+                    total: s.total || 0,
+                    releaseDate: s.release_date || '',
+                    updatedAt: s.updated_at || '',
+                    images: {
+                        symbol: fixTcgdexUrl(s.symbol_url),
+                        logo: fixTcgdexUrl(s.logo_url)
+                    }
+                };
+            });
 
             const result = { data: transformedSets, totalCount: count || 0 };
             setsCache.set(cacheKey, result);
