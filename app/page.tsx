@@ -299,7 +299,7 @@ export default function HomePage() {
                     <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
                             {/* CardStreet Logo */}
-                            <div className="relative w-14 h-14 flex-shrink-0">
+                            <div className="relative w-20 h-20 flex-shrink-0">
                                 {/* Halftone/Glow behind */}
                                 <div className="absolute -inset-4 bg-brand-cyan/20 blur-xl rounded-full opacity-50"></div>
                                 <img
