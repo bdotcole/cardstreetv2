@@ -298,31 +298,15 @@ export default function HomePage() {
                     {/* Header */}
                     <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
-                            {/* CardStreet Icon Only */}
+                            {/* CardStreet Logo */}
                             <div className="relative w-14 h-14 flex-shrink-0">
                                 {/* Halftone/Glow behind */}
                                 <div className="absolute -inset-4 bg-brand-cyan/20 blur-xl rounded-full opacity-50"></div>
-
-                                {/* Shield Background */}
-                                <div className="absolute inset-0 bg-black border-[3px] border-white rounded-xl transform skew-x-[-5deg] scale-[0.9] z-0 shadow-2xl"></div>
-
-                                {/* Green Card (Back Right) */}
-                                <div className="absolute top-2 right-1.5 w-6 h-8 bg-brand-green rounded-md border-2 border-white transform rotate-[15deg] shadow-md z-10"></div>
-
-                                {/* Red Card (Middle) */}
-                                <div className="absolute top-1 left-4 w-6 h-8 bg-brand-red rounded-md border-2 border-white transform -rotate-[5deg] shadow-md z-20"></div>
-
-                                {/* Blue Card (Front Left) */}
-                                <div className="absolute top-2 left-1.5 w-6 h-8 bg-brand-cyan rounded-md border-2 border-white transform -rotate-[20deg] shadow-lg z-30 overflow-hidden">
-                                    {/* The Road Stripe */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-2 bg-white skew-x-[15deg] opacity-90"></div>
-                                    {/* Road Markings */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-2 flex flex-col justify-between py-[2px] skew-x-[15deg]">
-                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
-                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
-                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
-                                    </div>
-                                </div>
+                                <img
+                                    src="/logo.png"
+                                    alt="CardStreet"
+                                    className="relative z-10 w-full h-full object-contain drop-shadow-xl"
+                                />
                             </div>
                         </div>
 
