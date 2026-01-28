@@ -298,13 +298,49 @@ export default function HomePage() {
                     {/* Header */}
                     <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
-                            {/* CardStreet Logo */}
-                            <div className="relative w-14 h-14 flex-shrink-0">
-                                <img
-                                    src="/logo.png"
-                                    alt="CardStreet"
-                                    className="w-full h-full object-contain"
-                                />
+                            {/* CardStreet Logo - Precise CSS Recreation */}
+                            <div className="relative w-[60px] h-[60px] flex-shrink-0">
+
+                                {/* Black Shield Background */}
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[48px] h-[42px] bg-black rounded-lg transform -rotate-[2deg] z-0 shadow-lg border border-gray-800"></div>
+
+                                {/* Green Card (Back Right) */}
+                                <div className="absolute bottom-[6px] right-[2px] w-[22px] h-[30px] rounded-[3px] transform rotate-[22deg] z-10 shadow-md"
+                                    style={{ background: 'linear-gradient(135deg, #7CB342 0%, #558B2F 100%)', border: '2px solid #33691E' }}>
+                                    <div className="absolute inset-[2px] rounded-[2px] border border-white/40"></div>
+                                </div>
+
+                                {/* Red/Pink Card (Middle) */}
+                                <div className="absolute bottom-[8px] left-1/2 -translate-x-1/2 w-[22px] h-[30px] rounded-[3px] transform rotate-[2deg] z-20 shadow-md"
+                                    style={{ background: 'linear-gradient(135deg, #E91E63 0%, #C2185B 100%)', border: '2px solid #880E4F' }}>
+                                    <div className="absolute inset-[2px] rounded-[2px] border border-white/40"></div>
+                                </div>
+
+                                {/* Cyan/Blue Card (Front Left) with Road Stripe */}
+                                <div className="absolute bottom-[6px] left-[2px] w-[22px] h-[30px] rounded-[3px] transform -rotate-[22deg] z-30 shadow-lg overflow-hidden"
+                                    style={{ background: 'linear-gradient(135deg, #26C6DA 0%, #00ACC1 100%)', border: '2px solid #00838F' }}>
+                                    <div className="absolute inset-[2px] rounded-[2px] border border-white/50"></div>
+                                    {/* Road Stripe */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-[-2px] bottom-[-2px] w-[6px] bg-white transform skew-x-[10deg] shadow-sm">
+                                        {/* Dashed lines */}
+                                        <div className="absolute inset-0 flex flex-col justify-evenly items-center py-[3px]">
+                                            <div className="w-[4px] h-[5px] bg-[#00ACC1] rounded-[1px]"></div>
+                                            <div className="w-[4px] h-[5px] bg-[#00ACC1] rounded-[1px]"></div>
+                                            <div className="w-[4px] h-[5px] bg-[#00ACC1] rounded-[1px]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Halftone Dots at Bottom */}
+                                <div className="absolute -bottom-[2px] left-1/2 -translate-x-1/2 flex items-end gap-[1.5px] z-0">
+                                    <div className="w-[2px] h-[2px] rounded-full bg-gray-500"></div>
+                                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500"></div>
+                                    <div className="w-[3px] h-[3px] rounded-full bg-gray-600"></div>
+                                    <div className="w-[3.5px] h-[3.5px] rounded-full bg-gray-700"></div>
+                                    <div className="w-[3px] h-[3px] rounded-full bg-gray-600"></div>
+                                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500"></div>
+                                    <div className="w-[2px] h-[2px] rounded-full bg-gray-500"></div>
+                                </div>
                             </div>
                         </div>
 
