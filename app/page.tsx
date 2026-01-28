@@ -298,52 +298,13 @@ export default function HomePage() {
                     {/* Header */}
                     <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
-                            {/* CardStreet Logo - CSS Recreation */}
-                            <div className="relative w-16 h-16 flex-shrink-0">
-                                {/* Subtle glow behind */}
-                                <div className="absolute -inset-3 bg-brand-cyan/15 blur-xl rounded-full opacity-40"></div>
-
-                                {/* Shield/Badge Background */}
-                                <div className="absolute inset-0 z-0">
-                                    <div className="absolute inset-0 bg-black rounded-xl transform -rotate-[3deg] border-[2px] border-gray-700 shadow-xl"></div>
-                                </div>
-
-                                {/* Green Card (Back Right) - matches logo angle */}
-                                <div className="absolute top-1 right-0 w-[26px] h-[34px] bg-gradient-to-br from-brand-green to-emerald-600 rounded-[4px] border-[2.5px] border-black transform rotate-[18deg] shadow-md z-10">
-                                    <div className="absolute inset-[2px] border border-white/30 rounded-[2px]"></div>
-                                </div>
-
-                                {/* Red Card (Middle) - matches logo position */}
-                                <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-[26px] h-[34px] bg-gradient-to-br from-brand-red to-rose-600 rounded-[4px] border-[2.5px] border-black transform -rotate-[2deg] shadow-md z-20">
-                                    <div className="absolute inset-[2px] border border-white/30 rounded-[2px]"></div>
-                                </div>
-
-                                {/* Blue/Cyan Card (Front Left) - with road stripe */}
-                                <div className="absolute top-1 left-0 w-[26px] h-[34px] bg-gradient-to-br from-brand-cyan to-cyan-500 rounded-[4px] border-[2.5px] border-black transform -rotate-[18deg] shadow-lg z-30 overflow-hidden">
-                                    <div className="absolute inset-[2px] border border-white/30 rounded-[2px]"></div>
-                                    {/* Road stripe with dashes */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-[5px] bg-white/90 transform skew-x-[12deg]">
-                                        <div className="absolute inset-0 flex flex-col justify-evenly items-center py-1">
-                                            <div className="w-[3px] h-[4px] bg-brand-cyan"></div>
-                                            <div className="w-[3px] h-[4px] bg-brand-cyan"></div>
-                                            <div className="w-[3px] h-[4px] bg-brand-cyan"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Halftone dots at bottom */}
-                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-[2px] z-0 opacity-60">
-                                    {[...Array(7)].map((_, i) => (
-                                        <div
-                                            key={i}
-                                            className="rounded-full bg-gray-600"
-                                            style={{
-                                                width: `${3 - Math.abs(i - 3) * 0.4}px`,
-                                                height: `${3 - Math.abs(i - 3) * 0.4}px`
-                                            }}
-                                        ></div>
-                                    ))}
-                                </div>
+                            {/* CardStreet Logo */}
+                            <div className="relative w-14 h-14 flex-shrink-0">
+                                <img
+                                    src="/logo.png"
+                                    alt="CardStreet"
+                                    className="w-full h-full object-contain"
+                                />
                             </div>
                         </div>
 
