@@ -296,28 +296,44 @@ export default function HomePage() {
 
                 <main className="flex-1 overflow-y-auto scrollbar-hide flex flex-col z-10">
                     {/* Header */}
-                    <header className="w-full px-6 py-8 flex justify-between items-center z-30 shrink-0">
+                    <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
-                            {/* CardStreet Logo */}
-                            <div className="relative w-[100px] h-[100px] flex-shrink-0">
+                            {/* CardStreet Icon Only */}
+                            <div className="relative w-14 h-14 flex-shrink-0">
                                 {/* Halftone/Glow behind */}
-                                <div className="absolute -inset-6 bg-brand-cyan/25 blur-2xl rounded-full opacity-60"></div>
-                                <img
-                                    src="/logo.png"
-                                    alt="CardStreet"
-                                    className="relative z-10 w-full h-full object-contain drop-shadow-2xl"
-                                />
+                                <div className="absolute -inset-4 bg-brand-cyan/20 blur-xl rounded-full opacity-50"></div>
+
+                                {/* Shield Background */}
+                                <div className="absolute inset-0 bg-black border-[3px] border-white rounded-xl transform skew-x-[-5deg] scale-[0.9] z-0 shadow-2xl"></div>
+
+                                {/* Green Card (Back Right) */}
+                                <div className="absolute top-2 right-1.5 w-6 h-8 bg-brand-green rounded-md border-2 border-white transform rotate-[15deg] shadow-md z-10"></div>
+
+                                {/* Red Card (Middle) */}
+                                <div className="absolute top-1 left-4 w-6 h-8 bg-brand-red rounded-md border-2 border-white transform -rotate-[5deg] shadow-md z-20"></div>
+
+                                {/* Blue Card (Front Left) */}
+                                <div className="absolute top-2 left-1.5 w-6 h-8 bg-brand-cyan rounded-md border-2 border-white transform -rotate-[20deg] shadow-lg z-30 overflow-hidden">
+                                    {/* The Road Stripe */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-2 bg-white skew-x-[15deg] opacity-90"></div>
+                                    {/* Road Markings */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-2 flex flex-col justify-between py-[2px] skew-x-[15deg]">
+                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
+                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
+                                        <div className="w-full h-[20%] bg-brand-cyan"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex gap-3 items-center">
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => setIsCartOpen(true)}
-                                className="w-11 h-11 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 relative transition-all border border-white/10"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 relative transition-all"
                             >
-                                <i className="fa-solid fa-cart-shopping text-slate-300 text-lg"></i>
+                                <i className="fa-solid fa-cart-shopping text-slate-400"></i>
                                 {cart.length > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-brand-red text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-brand-darker">
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-red text-white text-[9px] font-black rounded-full flex items-center justify-center border border-brand-darker">
                                         {cart.length}
                                     </span>
                                 )}
