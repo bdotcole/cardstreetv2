@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { pokemonService, ApiSet } from '../services/pokemonService';
 import { Card } from '../types';
 import { CURRENCY_SYMBOLS } from '@/constants';
@@ -13,6 +13,7 @@ interface ExploreProps {
 
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
+  const [selectedGame, setSelectedGame] = useState<'pokemon' | 'onepiece'>('pokemon');
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
   const [cards, setCards] = useState<Card[]>([]);
@@ -29,8 +30,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 400); // 400ms delay
-
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
@@ -45,18 +45,27 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle Search Request from props (e.g. from Wishlist "Shop" button)
+  // Handle Search Request from props
   useEffect(() => {
     if (searchRequest) {
       setSearchTerm(searchRequest.term);
     }
   }, [searchRequest]);
 
-  // Fetch Sets on mount or language/game change
+  // Fetch Sets on mount or language change
   useEffect(() => {
     const loadSets = async () => {
       setIsLoadingSets(true);
-      // Fetch only first page (50 items) for the dropdown to keep it lightweight initially
+
+      // Only fetch Pokemon sets - One Piece will show empty for now
+      if (selectedGame === 'onepiece') {
+        setSets([]);
+        setSelectedSetId('');
+        setCards([]);
+        setIsLoadingSets(false);
+        return;
+      }
+
       const result = await pokemonService.fetchSets(selectedLanguage, 1, 50);
       setSets(result.data);
       if (result.data.length > 0) {
@@ -68,9 +77,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       setIsLoadingSets(false);
     };
     loadSets();
-  }, [selectedLanguage]);
+  }, [selectedLanguage, selectedGame]);
 
-  // Fetch Cards when set changes, but ONLY if we aren't performing a text search
+  // Fetch Cards when set changes
   useEffect(() => {
     if (!selectedSetId || debouncedSearchTerm.length > 2) return;
     const loadCards = async () => {
@@ -93,7 +102,6 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       };
       performSearch();
     } else if (debouncedSearchTerm.length === 0 && selectedSetId) {
-      // Revert to set view if cleared
       const loadCards = async () => {
         setIsLoadingCards(true);
         const apiCards = await pokemonService.fetchCardsBySet(selectedSetId);
@@ -107,7 +115,6 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
   const getLowestListingPrice = (card: Card) => {
-    // Robust matching: ID or Name+Set
     const matches = localListings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set));
     if (matches.length === 0) return null;
     return Math.min(...matches.map(m => m.price));
@@ -118,6 +125,26 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   };
 
   const selectedSet = sets.find(s => s.id === selectedSetId);
+
+  // Generate a placeholder image based on set name for missing logos
+  const getSetLogoDisplay = (set: ApiSet) => {
+    if (set.images.logo) {
+      return (
+        <img
+          src={set.images.logo}
+          alt={set.name}
+          className="max-h-full max-w-full object-contain filter group-hover:brightness-110 transition-all"
+          onError={(e) => {
+            // On error, replace with placeholder
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            target.nextElementSibling?.classList.remove('hidden');
+          }}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -134,13 +161,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         />
       </div>
 
-      {/* Database Selectors - Language → Set */}
+      {/* Database Selectors - Language → Game → Set */}
       <div className="space-y-4">
         <div className="flex justify-between items-end">
           <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">Card <span className="text-brand-cyan">Database</span></h2>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 z-30 relative">
+        <div className="grid grid-cols-3 gap-2 z-30 relative">
           {/* Language Dropdown */}
           <div className="relative">
             <select
@@ -155,10 +182,27 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
           </div>
 
+          {/* Game Dropdown */}
+          <div className="relative">
+            <select
+              value={selectedGame}
+              onChange={(e) => setSelectedGame(e.target.value as any)}
+              className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
+            >
+              <option value="pokemon">Pokémon</option>
+              <option value="onepiece">One Piece</option>
+            </select>
+            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+          </div>
+
           {/* Set Dropdown */}
           <div className="relative" ref={setListRef}>
             {isLoadingSets ? (
               <div className="w-full h-10 bg-white/5 rounded-lg skeleton opacity-20"></div>
+            ) : sets.length === 0 ? (
+              <div className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center border border-white/10">
+                <span className="text-xs font-bold text-slate-500">No sets available</span>
+              </div>
             ) : (
               <>
                 <button
@@ -174,7 +218,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 </button>
 
                 {isSetListOpen && (
-                  <div className="absolute top-full right-0 w-[240px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
+                  <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
                     <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">Select Expansion</span>
                       <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} Found</span>
@@ -185,25 +229,25 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                         onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
                         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                       >
-                        <div className="w-12 h-8 flex items-center justify-center flex-shrink-0 bg-white/5 rounded p-1 border border-white/5 group-hover:border-white/10">
+                        {/* Set Logo/Icon Container */}
+                        <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10">
                           {set.images.logo ? (
                             <img
                               src={set.images.logo}
-                              alt={set.name}
-                              className="max-h-full max-w-full object-contain filter group-hover:brightness-110 transition-all"
+                              alt=""
+                              className="max-h-8 max-w-8 object-contain"
                               onError={(e) => {
-                                // Hide broken image and show fallback
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
                             />
                           ) : (
-                            <span className="text-xs font-black text-slate-500">{set.name.charAt(0)}</span>
+                            <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series}</span>
+                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || 'Expansion'}</span>
                             <span className="text-[8px] text-slate-700 font-bold">•</span>
                             <span className="text-[8px] text-slate-600 font-bold">{set.total} Cards</span>
                           </div>
@@ -232,6 +276,18 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 </div>
               </div>
             ))}
+          </div>
+        ) : cards.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-6">
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+              <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
+            </div>
+            <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">No Cards Found</h3>
+            <p className="text-slate-500 text-xs text-center">
+              {selectedGame === 'onepiece'
+                ? 'One Piece sets coming soon!'
+                : 'Select a set to browse cards or try a different search.'}
+            </p>
           </div>
         ) : (
           <div className="w-full">
