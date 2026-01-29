@@ -15,8 +15,11 @@ interface MarketplaceProps {
 
 const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelectCard, onSelectListing, onSellerClick, onAddToCart, listings = [], currency = 'THB', exchangeRate = 1 }) => {
   const [selectedGame, setSelectedGame] = useState(initialGame);
+  const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
+  const [showFilters, setShowFilters] = useState(false);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
 
   // Filter Logic
   const filteredListings = useMemo(() => {
@@ -26,35 +29,51 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
 
       // Game Filter
       let matchesGame = true;
-      if (selectedGame === 'pokemon-th') {
-        matchesGame = THAI_SETS.some(s => set.includes(s) || s.includes(set));
-      } else if (selectedGame === 'pokemon-jp') {
-        matchesGame = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
-      } else if (selectedGame === 'onepiece-en') {
+      if (selectedGame === 'pokemon') {
+        const isOp = ONE_PIECE_SETS.some(s => set.includes(s));
+        matchesGame = !isOp;
+      } else if (selectedGame === 'onepiece') {
         matchesGame = ONE_PIECE_SETS.some(s => set.includes(s));
-      } else if (selectedGame === 'pokemon-en') {
-        // Assume English if not Thai, JP, or One Piece (simplified logic for MVP)
+      }
+
+      // Language Filter
+      let matchesLanguage = true;
+      if (selectedLanguage === 'en') {
         const isThai = THAI_SETS.some(s => set.includes(s) || s.includes(set));
         const isJp = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
-        const isOp = ONE_PIECE_SETS.some(s => set.includes(s));
-        matchesGame = !isThai && !isJp && !isOp;
+        matchesLanguage = !isThai && !isJp;
+      } else if (selectedLanguage === 'jp') {
+        matchesLanguage = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
+      } else if (selectedLanguage === 'th') {
+        matchesLanguage = THAI_SETS.some(s => set.includes(s) || s.includes(set));
       }
+
+      // Price Filter
+      const price = listing.price * exchangeRate;
+      const matchesPrice = price >= priceRange[0] && price <= priceRange[1];
 
       // Search Filter
       const matchesSearch = card.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         set.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesGame && matchesSearch;
+      return matchesGame && matchesLanguage && matchesPrice && matchesSearch;
     }).sort((a, b) => {
       if (sortOrder === 'price_asc') return a.price - b.price;
       if (sortOrder === 'price_desc') return b.price - a.price;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [listings, selectedGame, searchQuery, sortOrder]);
+  }, [listings, selectedGame, selectedLanguage, priceRange, searchQuery, sortOrder, exchangeRate]);
+
+  // Count active filters
+  const activeFilterCount = [
+    selectedGame !== 'all',
+    selectedLanguage !== 'all',
+    priceRange[0] > 0 || priceRange[1] < 100000
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-6 animate-fadeIn pb-32">
-      {/* Header & Stats */}
+      {/* Header */}
       <div className="pt-6 px-4">
         <div className="flex justify-between items-end mb-2">
           <div>
@@ -62,10 +81,6 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
             <h2 className="text-3xl font-black text-white tracking-tighter italic skew-x-[-6deg]">
               Market <span className="text-brand-green">Live</span>
             </h2>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Active Listings</p>
-            <p className="text-xl font-black text-white">{filteredListings.length}</p>
           </div>
         </div>
 
@@ -85,32 +100,27 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
         </div>
       </div>
 
-      {/* Sticky Game Filter Tabs */}
+      {/* Filter & Sort Bar */}
       <div className="sticky top-0 z-30 bg-brand-darker/95 backdrop-blur-xl border-b border-white/5 py-3 px-4 shadow-2xl">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {[
-            { id: 'all', label: 'All', icon: 'fa-globe' },
-            { id: 'pokemon-en', label: 'PKMN EN', icon: 'fa-earth-americas' },
-            { id: 'pokemon-jp', label: 'PKMN JP', icon: 'fa-sun' },
-            { id: 'pokemon-th', label: 'PKMN TH', icon: 'fa-flag' },
-            { id: 'onepiece-en', label: 'One Piece', icon: 'fa-skull-crossbones' }
-          ].map((game) => (
-            <button
-              key={game.id}
-              onClick={() => setSelectedGame(game.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${selectedGame === game.id
-                ? 'bg-brand-cyan text-brand-darker border-brand-cyan shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20'
-                }`}
-            >
-              <i className={`fa-solid ${game.icon}`}></i>
-              {game.label}
-            </button>
-          ))}
-        </div>
+        <div className="flex justify-between items-center">
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${showFilters || activeFilterCount > 0
+                ? 'bg-brand-purple/20 text-brand-purple border-brand-purple/30'
+                : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white'
+              }`}
+          >
+            <i className="fa-solid fa-sliders"></i>
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1 w-4 h-4 rounded-full bg-brand-purple text-white text-[8px] flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
 
-        {/* Sort Options */}
-        <div className="flex justify-end mt-2">
+          {/* Sort Options */}
           <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
             {[
               { id: 'newest', label: 'New' },
@@ -127,6 +137,101 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
             ))}
           </div>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mt-4 p-4 bg-[#0f172a] rounded-xl border border-white/10 space-y-4 animate-fadeIn">
+            {/* Card Game Filter */}
+            <div>
+              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Card Game</label>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { id: 'all', label: 'All Games' },
+                  { id: 'pokemon', label: 'Pokémon' },
+                  { id: 'onepiece', label: 'One Piece' }
+                ].map(game => (
+                  <button
+                    key={game.id}
+                    onClick={() => setSelectedGame(game.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedGame === game.id
+                        ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                      }`}
+                  >
+                    {game.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Language Filter */}
+            <div>
+              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Language</label>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { id: 'all', label: 'All', icon: 'fa-globe' },
+                  { id: 'en', label: 'English', icon: 'fa-earth-americas' },
+                  { id: 'jp', label: 'Japanese', icon: 'fa-sun' },
+                  { id: 'th', label: 'Thai', icon: 'fa-flag' }
+                ].map(lang => (
+                  <button
+                    key={lang.id}
+                    onClick={() => setSelectedLanguage(lang.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedLanguage === lang.id
+                        ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                      }`}
+                  >
+                    <i className={`fa-solid ${lang.icon} text-[8px]`}></i>
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price Range */}
+            <div>
+              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">
+                Price Range: {CURRENCY_SYMBOLS[currency] || currency}{priceRange[0].toLocaleString()} - {CURRENCY_SYMBOLS[currency] || currency}{priceRange[1].toLocaleString()}
+              </label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="0"
+                  max="100000"
+                  step="500"
+                  value={priceRange[0]}
+                  onChange={(e) => setPriceRange([Math.min(Number(e.target.value), priceRange[1] - 500), priceRange[1]])}
+                  className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-cyan"
+                />
+                <input
+                  type="range"
+                  min="0"
+                  max="100000"
+                  step="500"
+                  value={priceRange[1]}
+                  onChange={(e) => setPriceRange([priceRange[0], Math.max(Number(e.target.value), priceRange[0] + 500)])}
+                  className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-purple"
+                />
+              </div>
+            </div>
+
+            {/* Clear Filters */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => {
+                  setSelectedGame('all');
+                  setSelectedLanguage('all');
+                  setPriceRange([0, 100000]);
+                }}
+                className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+              >
+                <i className="fa-solid fa-xmark mr-2"></i>
+                Clear All Filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Listings Grid (Machine/Ticket Style) */}
@@ -216,10 +321,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
             <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">Signal Lost</h3>
             <p className="text-slate-500 text-xs">No active listings found in this sector.</p>
             <button
-              onClick={() => setSelectedGame('all')}
+              onClick={() => {
+                setSelectedGame('all');
+                setSelectedLanguage('all');
+                setPriceRange([0, 100000]);
+              }}
               className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
             >
-              Reset Sensors
+              Reset Filters
             </button>
           </div>
         )}
