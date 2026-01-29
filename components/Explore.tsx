@@ -58,10 +58,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     const loadSets = async () => {
       setIsLoadingSets(true);
       // Fetch only first page (50 items) for the dropdown to keep it lightweight initially
-      const result = await pokemonService.fetchSets(selectedLanguage === 'jp' ? 'jp' : 'en', 1, 50);
+      const result = await pokemonService.fetchSets(selectedLanguage, 1, 50);
       setSets(result.data);
       if (result.data.length > 0) {
         setSelectedSetId(result.data[0].id);
+      } else {
+        setSelectedSetId('');
+        setCards([]);
       }
       setIsLoadingSets(false);
     };
@@ -197,7 +200,19 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                       >
                         <div className="w-12 h-8 flex items-center justify-center flex-shrink-0 bg-white/5 rounded p-1 border border-white/5 group-hover:border-white/10">
-                          <img src={set.images.logo} alt={set.name} className="max-h-full max-w-full object-contain filter group-hover:brightness-110 transition-all" />
+                          {set.images.logo ? (
+                            <img
+                              src={set.images.logo}
+                              alt={set.name}
+                              className="max-h-full max-w-full object-contain filter group-hover:brightness-110 transition-all"
+                              onError={(e) => {
+                                // Hide broken image and show fallback
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xs font-black text-slate-500">{set.name.charAt(0)}</span>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>

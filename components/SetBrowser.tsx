@@ -98,12 +98,19 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet }) 
             >
               <div className="w-full aspect-square glass rounded-3xl p-3 flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <img
-                  src={set.images.logo}
-                  alt={set.name}
-                  className="w-full h-full object-contain filter drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
-                  loading="lazy"
-                />
+                {set.images.logo ? (
+                  <img
+                    src={set.images.logo}
+                    alt={set.name}
+                    className="w-full h-full object-contain filter drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span className="text-3xl font-black text-slate-500">{set.name.charAt(0)}</span>
+                )}
                 <div className="absolute bottom-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <i className="fa-solid fa-chevron-right text-brand-cyan text-xs"></i>
                 </div>
