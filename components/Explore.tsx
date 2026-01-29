@@ -13,7 +13,6 @@ interface ExploreProps {
 
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
-  const [selectedGame, setSelectedGame] = useState<'pokemon' | 'onepiece'>('pokemon');
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
   const [cards, setCards] = useState<Card[]>([]);
@@ -69,7 +68,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       setIsLoadingSets(false);
     };
     loadSets();
-  }, [selectedLanguage, selectedGame]);
+  }, [selectedLanguage]);
 
   // Fetch Cards when set changes, but ONLY if we aren't performing a text search
   useEffect(() => {
@@ -135,13 +134,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         />
       </div>
 
-      {/* Database Selectors - Cascading: Language → Game → Set */}
+      {/* Database Selectors - Language → Set */}
       <div className="space-y-4">
         <div className="flex justify-between items-end">
           <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">Card <span className="text-brand-cyan">Database</span></h2>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 z-30 relative">
+        <div className="grid grid-cols-2 gap-3 z-30 relative">
           {/* Language Dropdown */}
           <div className="relative">
             <select
@@ -152,19 +151,6 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               <option value="en">English</option>
               <option value="jp">Japanese</option>
               <option value="th">Thai</option>
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
-          </div>
-
-          {/* Game Dropdown */}
-          <div className="relative">
-            <select
-              value={selectedGame}
-              onChange={(e) => setSelectedGame(e.target.value as any)}
-              className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
-            >
-              <option value="pokemon">Pokémon</option>
-              <option value="onepiece">One Piece</option>
             </select>
             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
           </div>
