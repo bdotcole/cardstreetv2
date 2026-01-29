@@ -169,20 +169,19 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
               <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Language</label>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { id: 'all', label: 'All', flag: '🌐' },
-                  { id: 'en', label: 'English', flag: '🇺🇸' },
-                  { id: 'jp', label: 'Japanese', flag: '🇯🇵' },
-                  { id: 'th', label: 'Thai', flag: '🇹🇭' }
+                  { id: 'all', label: 'All' },
+                  { id: 'en', label: 'English' },
+                  { id: 'jp', label: 'Japanese' },
+                  { id: 'th', label: 'Thai' }
                 ].map(lang => (
                   <button
                     key={lang.id}
                     onClick={() => setSelectedLanguage(lang.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedLanguage === lang.id
-                        ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedLanguage === lang.id
+                      ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
                       }`}
                   >
-                    <span className="text-sm">{lang.flag}</span>
                     {lang.label}
                   </button>
                 ))}
