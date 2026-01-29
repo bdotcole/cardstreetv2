@@ -1,0 +1,17 @@
+{
+  "/api/auth/callback/route": "/api/auth/callback",
+  "/api/listings/route": "/api/listings",
+  "/api/checkout/route": "/api/checkout",
+  "/api/health/route": "/api/health",
+  "/api/paypal/capture-order/route": "/api/paypal/capture-order",
+  "/api/paypal/create-order/route": "/api/paypal/create-order",
+  "/api/profile/payment-methods/route": "/api/profile/payment-methods",
+  "/api/profile/orders/route": "/api/profile/orders",
+  "/api/profile/route": "/api/profile",
+  "/api/profile/settings/route": "/api/profile/settings",
+  "/api/profile/sales/route": "/api/profile/sales",
+  "/manifest.webmanifest/route": "/manifest.webmanifest",
+  "/_not-found/page": "/_not-found",
+  "/api/sets/route": "/api/sets",
+  "/page": "/"
+}

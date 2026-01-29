@@ -1,4 +1,17 @@
 {
+  "/api/auth/callback/route": "app/api/auth/callback/route.js",
+  "/api/listings/route": "app/api/listings/route.js",
+  "/api/checkout/route": "app/api/checkout/route.js",
+  "/api/health/route": "app/api/health/route.js",
+  "/api/paypal/capture-order/route": "app/api/paypal/capture-order/route.js",
+  "/api/paypal/create-order/route": "app/api/paypal/create-order/route.js",
+  "/api/profile/payment-methods/route": "app/api/profile/payment-methods/route.js",
+  "/api/profile/orders/route": "app/api/profile/orders/route.js",
+  "/api/profile/route": "app/api/profile/route.js",
+  "/api/profile/settings/route": "app/api/profile/settings/route.js",
+  "/api/profile/sales/route": "app/api/profile/sales/route.js",
   "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/sets/route": "app/api/sets/route.js",
   "/page": "app/page.js"
 }

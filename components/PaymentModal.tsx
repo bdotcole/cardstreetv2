@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
+import { PayPalButtons } from '@paypal/react-paypal-js';
 
 // Declare Omise global
 declare const Omise: any;
@@ -22,7 +25,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentSuccess,
     onPaymentFailed
 }) => {
-    const [method, setMethod] = useState<'promptpay' | 'card'>('promptpay');
+    const [method, setMethod] = useState<'promptpay' | 'card' | 'paypal'>('promptpay');
     const [loading, setLoading] = useState(false);
     const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
     const [cardDetails, setCardDetails] = useState({
@@ -32,6 +35,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         expiration_year: '',
         security_code: ''
     });
+
+    // Convert THB to USD for PayPal (approximate rate)
+    const paypalAmount = currency === 'THB' ? (amount * 0.028).toFixed(2) : amount.toFixed(2);
 
     useEffect(() => {
         if (typeof Omise !== 'undefined') {
@@ -61,7 +67,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         onPaymentFailed(response.message);
                     }
                 });
-            } else {
+            } else if (method === 'card') {
                 // Create Token for Credit Card
                 const cardTokenParams = {
                     name: cardDetails.name,
@@ -116,13 +122,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 if (data.source?.scannable_code?.image?.download_uri) {
                     setQrCodeUrl(data.source.scannable_code.image.download_uri);
                     setLoading(false);
-                    // In a real app, we would poll for status here.
-                    // For MVP, we'll simulate success after 5 seconds or let user click "I Paid"
                 } else {
-                    // Sometimes sandbox sources are auto-charged or behavior differs
-                    // Check status
-                    if (data.status === 'successful' || data.status === 'pending') { // Pending is normal for QR
-                        setQrCodeUrl(data.source?.scannable_code?.image?.download_uri); // Re-assign if exists
+                    if (data.status === 'successful' || data.status === 'pending') {
+                        setQrCodeUrl(data.source?.scannable_code?.image?.download_uri);
                         setLoading(false);
                     } else {
                         throw new Error("Could not generate QR code");
@@ -133,9 +135,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 if (data.status === 'successful') {
                     onPaymentSuccess();
                 } else {
-                    // 3DSecure redirect might be needed, but assume success or simple failure for MVP
                     if (data.authorize_uri) {
-                        window.location.href = data.authorize_uri; // Redirect for 3DS
+                        window.location.href = data.authorize_uri;
                     } else {
                         onPaymentFailed("Payment not successful: " + data.status);
                     }
@@ -149,6 +150,52 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         }
     };
 
+    // PayPal handlers
+    const createPayPalOrder = async () => {
+        try {
+            const response = await fetch('/api/paypal/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: parseFloat(paypalAmount),
+                    currency: 'USD', // PayPal uses USD
+                }),
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            return data.orderID;
+        } catch (error: any) {
+            onPaymentFailed(error.message);
+            throw error;
+        }
+    };
+
+    const onPayPalApprove = async (data: any) => {
+        try {
+            setLoading(true);
+            const response = await fetch('/api/paypal/capture-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderID: data.orderID }),
+            });
+
+            const captureData = await response.json();
+
+            if (captureData.success) {
+                onPaymentSuccess();
+            } else {
+                onPaymentFailed(captureData.message || 'Payment capture failed');
+            }
+        } catch (error: any) {
+            onPaymentFailed(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -158,7 +205,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 <div className="bg-gradient-to-r from-brand-darker to-[#1e293b] p-6 border-b border-white/5 flex justify-between items-center">
                     <div>
                         <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">Secure Checkout</h3>
-                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">Encrypted via Omise</p>
+                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">Encrypted Payment</p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-slate-400">
                         <i className="fa-solid fa-xmark"></i>
@@ -168,7 +215,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 <div className="p-6">
                     <div className="mb-6 flex justify-between items-center bg-white/5 rounded-xl p-3">
                         <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Amount</span>
-                        <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
+                        <div className="text-right">
+                            <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
+                            {method === 'paypal' && currency === 'THB' && (
+                                <p className="text-[10px] text-slate-500">≈ ${paypalAmount} USD</p>
+                            )}
+                        </div>
                     </div>
 
                     {qrCodeUrl ? (
@@ -198,7 +250,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     className={`flex-1 py-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${method === 'card' ? 'bg-brand-purple/10 border-brand-purple text-brand-purple' : 'bg-white/5 border-transparent text-slate-500'}`}
                                 >
                                     <i className="fa-regular fa-credit-card text-xl leading-none"></i>
-                                    <span className="text-[9px] font-black uppercase tracking-widest">Credit Card</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest">Card</span>
+                                </button>
+                                <button
+                                    onClick={() => setMethod('paypal')}
+                                    className={`flex-1 py-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${method === 'paypal' ? 'bg-[#0070ba]/10 border-[#0070ba] text-[#0070ba]' : 'bg-white/5 border-transparent text-slate-500'}`}
+                                >
+                                    <i className="fa-brands fa-paypal text-xl leading-none"></i>
+                                    <span className="text-[9px] font-black uppercase tracking-widest">PayPal</span>
                                 </button>
                             </div>
 
@@ -243,6 +302,35 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         />
                                     </div>
                                 </div>
+                            ) : method === 'paypal' ? (
+                                <div className="space-y-4">
+                                    <div className="text-center py-4 bg-white/5 rounded-2xl border border-dashed border-white/10">
+                                        <div className="w-16 h-10 bg-white rounded-lg mx-auto mb-2 flex items-center justify-center">
+                                            <i className="fa-brands fa-paypal text-[#0070ba] text-2xl"></i>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">Pay securely with PayPal</p>
+                                    </div>
+                                    <div className="paypal-button-container">
+                                        <PayPalButtons
+                                            style={{
+                                                layout: 'vertical',
+                                                color: 'blue',
+                                                shape: 'rect',
+                                                label: 'paypal',
+                                                height: 45
+                                            }}
+                                            createOrder={createPayPalOrder}
+                                            onApprove={onPayPalApprove}
+                                            onError={(err) => {
+                                                console.error('PayPal Error:', err);
+                                                onPaymentFailed('PayPal payment failed');
+                                            }}
+                                            onCancel={() => {
+                                                console.log('PayPal payment cancelled');
+                                            }}
+                                        />
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center py-4 bg-white/5 rounded-2xl border border-dashed border-white/10">
                                     <div className="w-12 h-12 bg-white rounded-lg mx-auto mb-2 p-1">
@@ -252,13 +340,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 </div>
                             )}
 
-                            <button
-                                onClick={handlePay}
-                                disabled={loading}
-                                className={`mt-6 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'}`}
-                            >
-                                {loading ? 'Processing...' : `Pay ${currency === 'THB' ? '฿' : '$'}${amount.toLocaleString()}`}
-                            </button>
+                            {method !== 'paypal' && (
+                                <button
+                                    onClick={handlePay}
+                                    disabled={loading}
+                                    className={`mt-6 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'}`}
+                                >
+                                    {loading ? 'Processing...' : `Pay ${currency === 'THB' ? '฿' : '$'}${amount.toLocaleString()}`}
+                                </button>
+                            )}
                         </>
                     )}
                 </div>

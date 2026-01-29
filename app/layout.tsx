@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import PayPalProvider from '@/components/PayPalProvider'
 
 export const metadata: Metadata = {
     title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
@@ -26,7 +27,9 @@ export default function RootLayout({
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
             </head>
             <body>
-                {children}
+                <PayPalProvider>
+                    {children}
+                </PayPalProvider>
             </body>
         </html>
     )
