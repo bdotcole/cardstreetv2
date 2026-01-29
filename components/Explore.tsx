@@ -85,7 +85,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     if (debouncedSearchTerm.length > 2) {
       const performSearch = async () => {
         setIsLoadingCards(true);
-        const results = await pokemonService.searchCards(debouncedSearchTerm);
+        const results = await pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage);
         setCards(results);
         setIsLoadingCards(false);
       };
@@ -100,7 +100,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       };
       loadCards();
     }
-  }, [debouncedSearchTerm, selectedSetId]);
+  }, [debouncedSearchTerm, selectedSetId, selectedLanguage]);
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
