@@ -107,8 +107,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${showFilters || activeFilterCount > 0
-                ? 'bg-brand-purple/20 text-brand-purple border-brand-purple/30'
-                : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white'
+              ? 'bg-brand-purple/20 text-brand-purple border-brand-purple/30'
+              : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white'
               }`}
           >
             <i className="fa-solid fa-sliders"></i>
@@ -154,8 +154,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                     key={game.id}
                     onClick={() => setSelectedGame(game.id)}
                     className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedGame === game.id
-                        ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                      ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
                       }`}
                   >
                     {game.label}
@@ -169,10 +169,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
               <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Language</label>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { id: 'all', label: 'All', icon: 'fa-globe' },
-                  { id: 'en', label: 'English', icon: 'fa-earth-americas' },
-                  { id: 'jp', label: 'Japanese', icon: 'fa-sun' },
-                  { id: 'th', label: 'Thai', icon: 'fa-flag' }
+                  { id: 'all', label: 'All', flag: '🌐' },
+                  { id: 'en', label: 'English', flag: '🇺🇸' },
+                  { id: 'jp', label: 'Japanese', flag: '🇯🇵' },
+                  { id: 'th', label: 'Thai', flag: '🇹🇭' }
                 ].map(lang => (
                   <button
                     key={lang.id}
@@ -182,7 +182,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                         : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
                       }`}
                   >
-                    <i className={`fa-solid ${lang.icon} text-[8px]`}></i>
+                    <span className="text-sm">{lang.flag}</span>
                     {lang.label}
                   </button>
                 ))}
