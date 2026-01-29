@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile, Review, Card } from '@/types';
 import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
+import { CURRENCY_SYMBOLS } from '@/constants';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -9,10 +10,14 @@ interface SellerProfileProps {
     reviews: Review[];
     onBack: () => void;
     onSelectCard: (card: Card) => void;
+    currency?: string;
+    exchangeRate?: number;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectCard }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectCard, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
+
+    const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
     // Stats
     const totalSales = 142; // Mock
@@ -106,7 +111,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     </span>
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
-                                <p className="text-brand-green font-black text-xs">฿{listing.price.toLocaleString()}</p>
+                                <p className="text-brand-green font-black text-xs">{currencySymbol}{Math.round(listing.price * exchangeRate).toLocaleString()}</p>
                                 <button
                                     onClick={() => onSelectCard(listing.card_data)}
                                     className="absolute inset-0 w-full h-full opacity-0"

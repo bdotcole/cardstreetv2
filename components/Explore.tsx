@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { pokemonService, ApiSet } from '../services/pokemonService';
 import { Card } from '../types';
+import { CURRENCY_SYMBOLS } from '@/constants';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
   searchRequest?: { term: string, timestamp: number } | null;
   localListings?: any[];
+  currency?: string;
+  exchangeRate?: number;
 }
 
-const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [] }) => {
+const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
   const [selectedGame, setSelectedGame] = useState<'en' | 'jp' | 'th'>('en');
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
@@ -97,6 +100,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       loadCards();
     }
   }, [debouncedSearchTerm, selectedSetId]);
+
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
   const getLowestListingPrice = (card: Card) => {
     // Robust matching: ID or Name+Set
@@ -258,11 +263,11 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   <div className="text-right">
                     {getListingCount(card) > 0 ? (
                       <>
-                        <p className="text-brand-green text-sm font-black tracking-tight">Buy from ฿{getLowestListingPrice(card)?.toLocaleString()}</p>
+                        <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((getLowestListingPrice(card) || 0) * exchangeRate).toLocaleString()}</p>
                         <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} Listing(s)</p>
                       </>
                     ) : (
-                      <p className="text-white text-sm font-black tracking-tight">฿{card.marketPrice.toLocaleString()}</p>
+                      <p className="text-white text-sm font-black tracking-tight">{currencySymbol}{Math.round(card.marketPrice * exchangeRate).toLocaleString()}</p>
                     )}
                   </div>
 

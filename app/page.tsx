@@ -332,6 +332,8 @@ export default function HomePage() {
                                 onSelectCard={setSelectedCard}
                                 searchRequest={searchRequest}
                                 localListings={activeListings}
+                                currency={currency}
+                                exchangeRate={exchangeRate}
                             />
                         )}
                         {activeTab === 'marketplace' && (
@@ -364,6 +366,8 @@ export default function HomePage() {
                                 reviews={MOCK_REVIEWS}
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectCard={setSelectedCard}
+                                currency={currency}
+                                exchangeRate={exchangeRate}
                             />
                         )}
                         {activeTab === 'add' && <AddCard onScanClick={() => fileInputRef.current?.click()} onSelectCard={setSelectedCard} />}
