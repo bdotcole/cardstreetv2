@@ -110,7 +110,7 @@ export const pokemonService = {
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
                 .select('*')
-                .eq('set_id', setId)
+                .ilike('set_id', setId)
                 .order('number', { ascending: true });
 
             if (error) {
