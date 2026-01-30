@@ -66,7 +66,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         return;
       }
 
-      const result = await pokemonService.fetchSets(selectedLanguage, 1, 50);
+      const result = await pokemonService.fetchSets(selectedLanguage, 1, 300);
       setSets(result.data);
       if (result.data.length > 0) {
         setSelectedSetId(result.data[0].id);

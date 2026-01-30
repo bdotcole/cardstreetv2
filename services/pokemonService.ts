@@ -104,6 +104,8 @@ export const pokemonService = {
         try {
             const supabase = createClient();
 
+            console.log('[fetchCardsBySet] Querying for set_id:', setId);
+
             // Query cards by set_id
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
@@ -114,6 +116,18 @@ export const pokemonService = {
             if (error) {
                 console.error('Supabase error fetching cards:', error);
                 return [];
+            }
+
+            console.log('[fetchCardsBySet] Found cards count:', cards?.length || 0);
+
+            // If no cards found, try with ilike for partial match (debugging)
+            if (cards && cards.length === 0) {
+                const { data: debugCards } = await supabase
+                    .from('pokemon_cards')
+                    .select('set_id')
+                    .ilike('set_id', `%${setId.split('-')[0]}%`)
+                    .limit(5);
+                console.log('[fetchCardsBySet] Debug - similar set_ids found:', debugCards?.map(c => c.set_id));
             }
 
             return (cards || []).map(c => this.mapSupabaseCardToInternal(c));
