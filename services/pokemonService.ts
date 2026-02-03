@@ -57,7 +57,7 @@ export const pokemonService = {
                 .from('pokemon_sets')
                 .select('*', { count: 'exact' })
                 .eq('language', dbLang)
-                .order('release_date', { ascending: false })
+                .order('release_date', { ascending: false, nullsFirst: false })
                 .range(from, to);
 
             if (error) {
