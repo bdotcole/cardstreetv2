@@ -176,7 +176,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
             >
               <option value="en">English</option>
-              <option value="jp">Japanese</option>
+              {/* Japanese temporarily hidden until database is complete */}
+              {/* <option value="jp">Japanese</option> */}
               <option value="th">Thai</option>
             </select>
             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
@@ -190,7 +191,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
             >
               <option value="pokemon">Pokémon</option>
-              <option value="onepiece">One Piece</option>
+              {/* One Piece temporarily hidden until database is complete */}
+              {/* <option value="onepiece">One Piece</option> */}
             </select>
             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
           </div>
