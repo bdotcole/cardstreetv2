@@ -19,6 +19,9 @@ import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 
 import { createClient } from '@/lib/supabase/client';
+import { useUserCollections } from '@/lib/hooks/useUserCollections';
+import { useWishlist } from '@/lib/hooks/useWishlist';
+import { useUserSettings } from '@/lib/hooks/useUserSettings';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
@@ -32,13 +35,46 @@ export default function HomePage() {
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
-    const [wishlist, setWishlist] = useState<Card[]>([]);
     const [user, setUser] = useState<UserProfile | null>(null);
-    const [currency, setCurrency] = useState<string>('THB');
-    const [language, setLanguage] = useState<'TH' | 'EN'>('TH');
 
-    // Cart State
-    const [cart, setCart] = useState<CartItem[]>([]);
+    // Supabase hooks for data management
+    const {
+        collections: customCollections,
+        isLoading: collectionsLoading,
+        addCollection,
+        deleteCollection,
+        updateCollection,
+        addCardToCollection,
+        removeCardFromCollection,
+        updateCollectionItem
+    } = useUserCollections();
+
+    const {
+        wishlist,
+        isLoading: wishlistLoading,
+        addToWishlist,
+        removeFromWishlist,
+        isInWishlist
+    } = useWishlist();
+
+    const {
+        settings,
+        updateCurrency,
+        updateLanguage
+    } = useUserSettings();
+
+    // Derive currency and language from settings
+    const currency = settings.currency;
+    const language = settings.language;
+
+    // Cart State (still using localStorage for now)
+    const [cart, setCart] = useState<CartItem[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('cardstreet-cart');
+            if (saved) return JSON.parse(saved);
+        }
+        return [];
+    });
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -48,42 +84,6 @@ export default function HomePage() {
     // Search Request State (Object with timestamp to force updates even for same query)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [searchRequest, setSearchRequest] = useState<{ term: string, timestamp: number } | null>(null);
-
-
-    const [customCollections, setCustomCollections] = useState<CustomCollection[]>(() => {
-        // Hydrate from localStorage or default
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('cardstreet-data-v1');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed.customCollections?.length > 0) return parsed.customCollections;
-            }
-        }
-
-        // Seed Dummy Data if empty
-        const dummyItems: UserCollectionItem[] = MOCK_CARDS.slice(0, 3).map((card, i) => ({
-            id: `seed-item-${i}`,
-            cardId: card.id,
-            card: card,
-            quantity: 1,
-            condition: i === 0 ? CardCondition.NM : i === 1 ? CardCondition.LP : CardCondition.NM,
-            purchasePrice: card.marketPrice,
-            addedAt: new Date().toISOString(),
-            isListing: true,
-            listingPrice: i === 0 ? 5500 : i === 1 ? 1200 : 15000,
-            isGraded: i === 2,
-            gradingCompany: i === 2 ? 'PSA' : undefined,
-            grade: i === 2 ? 10 : undefined
-        }));
-
-        return [{
-            id: 'default',
-            name: 'Main Vault',
-            items: dummyItems,
-            includeInPortfolio: true,
-            createdAt: new Date().toISOString()
-        }];
-    });
     const [isAiLoading, setIsAiLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,30 +119,15 @@ export default function HomePage() {
             }
         });
 
-        // Load other local preferences
-        const saved = localStorage.getItem('cardstreet-data-v1');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.wishlist) setWishlist(parsed.wishlist);
-            if (parsed.customCollections) setCustomCollections(parsed.customCollections);
-            if (parsed.currency) setCurrency(parsed.currency);
-            if (parsed.language) setLanguage(parsed.language);
-            if (parsed.cart) setCart(parsed.cart);
-        }
-
         return () => subscription.unsubscribe();
     }, []);
 
+    // Persist cart to localStorage
     useEffect(() => {
-        // Persist everything EXCEPT user (now handled by Supabase)
-        localStorage.setItem('cardstreet-data-v1', JSON.stringify({
-            wishlist,
-            customCollections,
-            currency,
-            language,
-            cart
-        }));
-    }, [wishlist, customCollections, currency, language, cart]);
+        if (cart.length > 0) {
+            localStorage.setItem('cardstreet-cart', JSON.stringify(cart));
+        }
+    }, [cart]);
 
     // Currency Converter
     const exchangeRate = EXCHANGE_RATES[currency] || 1;
@@ -159,36 +144,38 @@ export default function HomePage() {
 
     const displayValue = totalValueTHB * (currency === 'THB' ? 1 : exchangeRate); // Rough valid assumption, assuming mock prices are THB
 
-    const handleToggleWishlist = (card: Card) => {
-        setWishlist(prev => {
-            const exists = prev.find(c => c.id === card.id);
-            if (exists) return prev.filter(c => c.id !== card.id);
-            return [...prev, card];
-        });
+    const handleToggleWishlist = async (card: Card) => {
+        if (isInWishlist(card.id)) {
+            await removeFromWishlist(card.id);
+        } else {
+            await addToWishlist(card);
+        }
     };
 
-    const handleAddToCollection = (card: Card, collectionId: string = 'default') => {
-        const newItem: UserCollectionItem = {
-            id: Math.random().toString(36).substr(2, 9),
-            cardId: card.id,
-            card: card, // Persist card data
-            quantity: 1,
-            condition: CardCondition.NM,
-            purchasePrice: card.marketPrice,
-            addedAt: new Date().toISOString()
-        };
-
-        setCustomCollections(prev => prev.map(col => {
-            if (col.id === collectionId) {
-                return { ...col, items: [...col.items, newItem] };
+    const handleAddToCollection = async (card: Card, collectionId: string = 'default') => {
+        try {
+            // Find the target collection or use first one
+            let targetId = collectionId;
+            if (collectionId === 'default' && customCollections.length > 0) {
+                targetId = customCollections[0].id;
             }
-            return col;
-        }));
 
-        // Auto-remove from wishlist if present
-        setWishlist(prev => prev.filter(c => c.id !== card.id));
+            await addCardToCollection(targetId, card, {
+                quantity: 1,
+                condition: CardCondition.NM,
+                purchasePrice: card.marketPrice
+            });
 
-        setActiveTab('vault');
+            // Auto-remove from wishlist if present
+            if (isInWishlist(card.id)) {
+                await removeFromWishlist(card.id);
+            }
+
+            setActiveTab('vault');
+        } catch (error) {
+            console.error('Failed to add card to collection:', error);
+            alert('Failed to add card to collection. Please try again.');
+        }
     };
 
     const handleAddToCart = (item: CartItem) => {
