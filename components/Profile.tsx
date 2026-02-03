@@ -308,34 +308,59 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-12 py-10 flex flex-col items-center justify-center min-h-[70vh]"
+          className="space-y-8 py-10 flex flex-col items-center justify-center min-h-[70vh]"
         >
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-[2.2rem] glass mx-auto flex items-center justify-center border border-brand-cyan/20">
-              <Lock className="w-8 h-8 text-brand-cyan" />
+            <div className="w-24 h-24 rounded-[2.8rem] glass mx-auto flex items-center justify-center border border-brand-cyan/20 shadow-2xl shadow-brand-cyan/10 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-brand-cyan/10 to-brand-green/10"></div>
+              <Lock className="w-10 h-10 text-brand-cyan relative z-10 group-hover:scale-110 transition-transform duration-500" />
             </div>
-            <div className="space-y-1 px-4">
-              <h2 className="text-3xl font-black text-white tracking-tight uppercase leading-tight italic skew-x-[-10deg]">Elite Registry</h2>
-              <p className="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em] leading-relaxed max-w-[240px] mx-auto">
-                Unlock cross-device vault synchronization
+            <div className="space-y-2 px-4">
+              <h2 className="text-3xl font-black text-white tracking-tight uppercase leading-tight italic skew-x-[-10deg]">
+                Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">CardStreet</span>
+              </h2>
+              <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-[280px] mx-auto">
+                Create an account to sync your collection across all devices
               </p>
             </div>
           </div>
 
-          <div className="w-full space-y-4 px-4 max-w-sm">
+          <div className="w-full space-y-3 px-4 max-w-sm">
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="w-full h-16 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl flex items-center justify-center gap-4 transition-all shadow-xl group mb-3"
+              className="w-full h-14 bg-gradient-to-r from-brand-cyan to-brand-green hover:shadow-lg hover:shadow-brand-cyan/30 active:scale-95 rounded-2xl flex items-center justify-center gap-3 transition-all group font-black text-brand-darker uppercase tracking-wide text-sm"
             >
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-900">Access Terminal</span>
-              <ChevronRight className="w-4 h-4 text-slate-900 group-hover:translate-x-1 transition-transform" />
+              <span>Create Account</span>
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
+
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="w-full h-12 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-xl flex items-center justify-center gap-2 transition-all border border-white/10 text-slate-300 font-semibold"
+            >
+              <span>Already have an account? Sign in</span>
+            </button>
+
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-slate-700"></div>
+              <span className="flex-shrink-0 mx-4 text-[10px] text-slate-600 uppercase font-bold tracking-widest">Or</span>
+              <div className="flex-grow border-t border-slate-700"></div>
+            </div>
+
             <button
               onClick={onGuestLogin}
-              className="w-full py-4 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-white transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-2"
             >
-              Enter as Guest <User className="w-3 h-3" />
+              Continue as Guest
+              <User className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          <div className="text-center px-4 max-w-xs">
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              Guest mode: Collections stored locally only.
+              <span className="block mt-1 text-brand-cyan/70">Create an account for cloud sync.</span>
+            </p>
           </div>
         </motion.div>
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
