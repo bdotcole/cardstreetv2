@@ -10,6 +10,7 @@ interface CardDetailsProps {
   onAddToCollection: (card: Card) => void;
   onToggleWishlist: (card: Card) => void;
   onShopNow?: () => void;
+  onAddToBuylist?: () => void;
   listings?: any[];
   actionButtons?: React.ReactNode;
   onAddToCart?: (item: any) => void;
@@ -24,6 +25,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   onAddToCollection,
   onToggleWishlist,
   onShopNow,
+  onAddToBuylist,
   listings = [],
   actionButtons,
   onAddToCart,
@@ -234,7 +236,15 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             ADD TO VAULT
           </button>
           <button
-            onClick={onShopNow}
+            onClick={() => {
+              // Check if there are any listings for this card
+              const cardListings = listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set));
+              if (cardListings.length > 0 && onShopNow) {
+                onShopNow();
+              } else if (onAddToBuylist) {
+                onAddToBuylist();
+              }
+            }}
             className="flex-1 h-14 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-store"></i>

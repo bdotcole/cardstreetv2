@@ -23,6 +23,7 @@ import { createClient } from '@/lib/supabase/client';
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
 import SellerProfile from '@/components/SellerProfile';
+import BuylistRequest from '@/components/BuylistRequest';
 
 export default function HomePage() {
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
@@ -40,6 +41,9 @@ export default function HomePage() {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+    // Buylist State
+    const [buylistCard, setBuylistCard] = useState<Card | null>(null);
 
     // Search Request State (Object with timestamp to force updates even for same query)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -483,6 +487,11 @@ export default function HomePage() {
                             setSearchRequest({ term: selectedCard.name, timestamp: Date.now() });
                             setSelectedCard(null);
                         }}
+                        onAddToBuylist={() => {
+                            setBuylistCard(selectedCard);
+                            setSelectedCard(null);
+                        }}
+                        listings={activeListings}
                         onAddToCart={(item) => handleAddToCart(item)}
                         currency={currency}
                         exchangeRate={exchangeRate}
@@ -527,6 +536,15 @@ export default function HomePage() {
                             setSelectedListing(null); // Close modal
                             setActiveTab('seller_profile');
                         }}
+                        currency={currency}
+                        exchangeRate={exchangeRate}
+                    />
+                )}
+
+                {buylistCard && (
+                    <BuylistRequest
+                        card={buylistCard}
+                        onClose={() => setBuylistCard(null)}
                         currency={currency}
                         exchangeRate={exchangeRate}
                     />
