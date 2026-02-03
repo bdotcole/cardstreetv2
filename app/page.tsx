@@ -223,27 +223,23 @@ export default function HomePage() {
     // Listing State (New)
     const [listingTarget, setListingTarget] = useState<{ colId: string, item: UserCollectionItem, card: Card } | null>(null);
 
-    const handlePublishListing = (listingData: any) => {
+    const handlePublishListing = async (listingData: any) => {
         if (!listingTarget) return;
 
-        setCustomCollections(prev => prev.map(col => {
-            if (col.id === listingTarget.colId) {
-                return {
-                    ...col,
-                    items: col.items.map(it => it.id === listingTarget.item.id ? {
-                        ...it,
-                        isListing: true,
-                        listingPrice: listingData.price,
-                        condition: listingData.condition,
-                        isGraded: listingData.is_graded,
-                        gradingCompany: listingData.grading_company,
-                        grade: listingData.grade
-                    } : it)
-                };
-            }
-            return col;
-        }));
-        setListingTarget(null);
+        try {
+            await updateCollectionItem(listingTarget.colId, listingTarget.item.id, {
+                isListing: true,
+                listingPrice: listingData.price,
+                condition: listingData.condition,
+                isGraded: listingData.is_graded,
+                gradingCompany: listingData.grading_company,
+                grade: listingData.grade
+            });
+            setListingTarget(null);
+        } catch (error) {
+            console.error('Failed to publish listing:', error);
+            alert('Failed to publish listing. Please try again.');
+        }
     };
 
 
