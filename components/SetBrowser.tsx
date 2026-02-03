@@ -92,16 +92,21 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'oldest':
-          return new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+          // Parse dates properly - handle various formats including empty strings
+          const dateA = new Date(a.releaseDate || '1900-01-01');
+          const dateB = new Date(b.releaseDate || '1900-01-01');
+          return dateA.getTime() - dateB.getTime();
         case 'newest':
-          return new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
+          const dateANewer = new Date(a.releaseDate || '1900-01-01');
+          const dateBNewer = new Date(b.releaseDate || '1900-01-01');
+          return dateBNewer.getTime() - dateANewer.getTime();
         case 'completion-desc':
           return getSetCompletion(b) - getSetCompletion(a);
-        case 'completion-asc':
-          return getSetCompletion(a) - getSetCompletion(b);
         case 'recent-update':
           // Sort by updatedAt if available, otherwise releaseDate
-          return new Date(b.updatedAt || b.releaseDate).getTime() - new Date(a.updatedAt || a.releaseDate).getTime();
+          const updateA = new Date(a.updatedAt || a.releaseDate || '1900-01-01');
+          const updateB = new Date(b.updatedAt || b.releaseDate || '1900-01-01');
+          return updateB.getTime() - updateA.getTime();
         default:
           return 0;
       }
@@ -204,15 +209,14 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                     { id: 'newest', label: 'Newest First', icon: 'fa-calendar-days' },
                     { id: 'oldest', label: 'Oldest First', icon: 'fa-clock-rotate-left' },
                     { id: 'completion-desc', label: 'Most Complete', icon: 'fa-chart-line' },
-                    { id: 'completion-asc', label: 'Least Complete', icon: 'fa-chart-line-down' },
                     { id: 'recent-update', label: 'Recently Updated', icon: 'fa-rotate' },
                   ].map((opt) => (
                     <button
                       key={opt.id}
                       onClick={() => { setSortBy(opt.id as SortOption); setIsSortMenuOpen(false); }}
                       className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider mb-1 last:mb-0 transition-colors flex items-center gap-2 ${sortBy === opt.id
-                          ? 'bg-brand-cyan/10 text-brand-cyan'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'bg-brand-cyan/10 text-brand-cyan'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
                         }`}
                     >
                       <i className={`fa-solid ${opt.icon} text-xs w-4`}></i>
