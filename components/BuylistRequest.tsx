@@ -20,28 +20,57 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
     const [quantity, setQuantity] = useState('1');
     const [notifyMe, setNotifyMe] = useState(true);
     const [submitted, setSubmitted] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsLoading(true);
+        setError(null);
 
-        // TODO: Backend integration - save buylist request
-        console.log('Buylist request:', {
-            card,
-            condition,
-            maxPrice: parseFloat(maxPrice),
-            quantity: parseInt(quantity),
-            notifyMe,
-            currency
-        });
+        try {
+            const response = await fetch('/api/buylist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    card,
+                    condition,
+                    maxPrice,
+                    quantity,
+                    notifyMe,
+                    currency
+                }),
+            });
 
-        setSubmitted(true);
+            const data = await response.json();
 
-        // Close after showing success message
-        setTimeout(() => {
-            onClose();
-        }, 2000);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setError('Please sign in to add items to your buylist.');
+                } else {
+                    setError(data.error || 'Failed to create buylist request');
+                }
+                setIsLoading(false);
+                return;
+            }
+
+            // Success!
+            setSubmitted(true);
+
+            // Close after showing success message
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+
+        } catch (err) {
+            console.error('Error submitting buylist request:', err);
+            setError('Network error. Please check your connection and try again.');
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -111,8 +140,8 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                                 type="button"
                                                 onClick={() => setCondition(cond)}
                                                 className={`py-3 rounded-lg font-black text-xs uppercase tracking-wider transition-all ${condition === cond
-                                                        ? 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/20'
-                                                        : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5'
+                                                    ? 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/20'
+                                                    : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5'
                                                     }`}
                                             >
                                                 {cond}
@@ -168,13 +197,39 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                     </button>
                                 </div>
 
+                                {/* Error Alert */}
+                                {error && (
+                                    <div className="bg-gradient-to-br from-brand-red/10 to-brand-red/5 border border-brand-red/20 rounded-xl p-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-brand-red/20 flex items-center justify-center flex-shrink-0">
+                                                <i className="fa-solid fa-exclamation text-brand-red text-sm"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-white font-bold text-xs mb-0.5">Error</p>
+                                                <p className="text-slate-400 text-xs leading-relaxed">{error}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Submit Button */}
                                 <button
                                     type="submit"
-                                    className="w-full h-14 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black text-sm tracking-wider rounded-xl shadow-lg shadow-brand-cyan/20 hover:shadow-brand-cyan/40 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+                                    disabled={isLoading}
+                                    className={`w-full h-14 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black text-sm tracking-wider rounded-xl shadow-lg shadow-brand-cyan/20 hover:shadow-brand-cyan/40 transition-all uppercase flex items-center justify-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
+                                        }`}
                                 >
-                                    <i className="fa-solid fa-list-check"></i>
-                                    Add to Buylist
+                                    {isLoading ? (
+                                        <>
+                                            <div className="animate-spin h-5 w-5 border-3 border-brand-darker/20 border-t-brand-darker rounded-full"></div>
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-list-check"></i>
+                                            Add to Buylist
+                                        </>
+                                    )}
                                 </button>
                             </form>
                         </>
