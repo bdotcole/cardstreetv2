@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
+import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
 
 interface UseWishlistReturn {
     wishlist: Card[];
@@ -59,6 +60,9 @@ export function useWishlist(): UseWishlistReturn {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Must be signed in to add to wishlist');
+
+            // Ensure user profile exists (for legacy users)
+            await ensureUserProfile();
 
             const { error } = await supabase
                 .from('wishlists')

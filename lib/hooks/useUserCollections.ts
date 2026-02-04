@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, UserCollectionItem, CardCondition, CustomCollection } from '@/types';
+import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
 
 interface UseUserCollectionsReturn {
     collections: CustomCollection[];
@@ -97,6 +98,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Must be signed in to create collections');
 
+            // Ensure user profile exists (for legacy users)
+            await ensureUserProfile();
+
             const { data, error } = await supabase
                 .from('collections')
                 .insert({
@@ -178,6 +182,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            // Ensure user profile exists (for legacy users)
+            await ensureUserProfile();
+
             const { data, error } = await supabase
                 .from('collection_items')
                 .insert({

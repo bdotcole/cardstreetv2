@@ -163,9 +163,10 @@ export default function HomePage() {
             } else {
                 await addToWishlist(card);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update wishlist:', error);
-            alert('Failed to update wishlist. Please try again.');
+            const errorMessage = error?.message || 'Unknown error';
+            alert(`Failed to update wishlist: ${errorMessage}`);
         }
     };
 
@@ -195,9 +196,11 @@ export default function HomePage() {
             }
 
             setActiveTab('vault');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to add card to collection:', error);
-            alert('Failed to add card to collection. Please try again.');
+            // Show more detailed error for debugging
+            const errorMessage = error?.message || 'Unknown error';
+            alert(`Failed to add card to collection: ${errorMessage}`);
         }
     };
 
