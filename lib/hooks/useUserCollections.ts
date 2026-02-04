@@ -6,7 +6,7 @@ interface UseUserCollectionsReturn {
     collections: CustomCollection[];
     isLoading: boolean;
     error: string | null;
-    addCollection: (name: string, includeInPortfolio?: boolean) => Promise<void>;
+    addCollection: (name: string, includeInPortfolio?: boolean) => Promise<string>;
     deleteCollection: (collectionId: string) => Promise<void>;
     updateCollection: (collectionId: string, updates: Partial<CustomCollection>) => Promise<void>;
     addCardToCollection: (collectionId: string, card: Card, details?: Partial<UserCollectionItem>) => Promise<void>;
@@ -90,7 +90,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
         loadCollections();
     }, []);
 
-    const addCollection = async (name: string, includeInPortfolio: boolean = true) => {
+    const addCollection = async (name: string, includeInPortfolio: boolean = true): Promise<string> => {
         const supabase = createClient();
 
         try {
@@ -117,6 +117,8 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 createdAt: data.created_at,
                 items: []
             }]);
+
+            return data.id; // Return the new collection ID
         } catch (err: any) {
             console.error('Error adding collection:', err);
             setError(err.message);

@@ -144,19 +144,42 @@ export default function HomePage() {
 
     const displayValue = totalValueTHB * (currency === 'THB' ? 1 : exchangeRate); // Rough valid assumption, assuming mock prices are THB
 
+    // Helper function to check authentication
+    const requireAuth = (actionName: string): boolean => {
+        if (!user) {
+            alert(`Please sign in to ${actionName}`);
+            setActiveTab('profile');
+            return false;
+        }
+        return true;
+    };
+
     const handleToggleWishlist = async (card: Card) => {
-        if (isInWishlist(card.id)) {
-            await removeFromWishlist(card.id);
-        } else {
-            await addToWishlist(card);
+        if (!requireAuth('manage your wishlist')) return;
+
+        try {
+            if (isInWishlist(card.id)) {
+                await removeFromWishlist(card.id);
+            } else {
+                await addToWishlist(card);
+            }
+        } catch (error) {
+            console.error('Failed to update wishlist:', error);
+            alert('Failed to update wishlist. Please try again.');
         }
     };
 
     const handleAddToCollection = async (card: Card, collectionId: string = 'default') => {
+        if (!requireAuth('add cards to your vault')) return;
+
         try {
-            // Find the target collection or use first one
+            // Use the first collection (Main Vault created on signup)
+            // If somehow no collections exist, create one
             let targetId = collectionId;
-            if (collectionId === 'default' && customCollections.length > 0) {
+            if (customCollections.length === 0) {
+                const newCollectionId = await addCollection('Main Vault', true);
+                targetId = newCollectionId;
+            } else if (collectionId === 'default') {
                 targetId = customCollections[0].id;
             }
 
