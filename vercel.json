@@ -4,5 +4,11 @@
     "framework": "nextjs",
     "regions": [
         "sin1"
+    ],
+    "crons": [
+        {
+            "path": "/api/cron/portfolio-snapshots",
+            "schedule": "0 * * * *"
+        }
     ]
 }
