@@ -32,6 +32,8 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             }}
           />
           <Tooltip
+            active={true}
+            isAnimationActive={false}
             cursor={{ stroke: '#06b6d4', strokeWidth: 1, strokeDasharray: '4 4' }}
             contentStyle={{
               backgroundColor: '#020617',
@@ -43,6 +45,7 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             itemStyle={{ color: '#fff', fontWeight: '800', fontSize: '12px' }}
             labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontSize: '10px', textTransform: 'uppercase', fontWeight: '700' }}
             formatter={(val: number) => [`฿${val.toLocaleString()}`, 'Valuation']}
+            allowEscapeViewBox={{ x: true, y: true }}
           />
           <Line
             type="monotone"
@@ -50,7 +53,14 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             stroke="#06b6d4"
             strokeWidth={3}
             dot={false}
-            activeDot={{ r: 6, fill: '#06b6d4', stroke: '#fff', strokeWidth: 2 }}
+            activeDot={{
+              r: 8,
+              fill: '#06b6d4',
+              stroke: '#fff',
+              strokeWidth: 3,
+              style: { cursor: 'pointer' }
+            }}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
