@@ -56,8 +56,13 @@ const Vault: React.FC<VaultProps> = ({
       try {
         // Add timestamp to bypass cache
         const timestamp = new Date().getTime();
-        const response = await fetch(`/api/portfolio/history?range=${timeframe}&t=${timestamp}`);
+        console.log('[Vault] Fetching portfolio data:', { timeframe, timestamp });
+        const response = await fetch(`/api/portfolio/history?range=${timeframe}&t=${timestamp}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         const result = await response.json();
+        console.log('[Vault] API Response:', result);
 
         if (result.success && result.data) {
           // Transform API response to chart format with proper labels
@@ -83,6 +88,13 @@ const Vault: React.FC<VaultProps> = ({
             };
           });
 
+          console.log('[Vault] Setting chart data:', {
+            points: formattedData.length,
+            firstPrice: formattedData[0]?.price,
+            lastPrice: formattedData[formattedData.length - 1]?.price,
+            sample: formattedData.slice(0, 3)
+          });
+
           setChartData(formattedData);
         } else {
           // Fallback to empty data or show error
@@ -102,11 +114,21 @@ const Vault: React.FC<VaultProps> = ({
 
   // Calculate percentage change based on chart data
   const percentageChange = useMemo(() => {
-    if (chartData.length < 2) return 0;
+    console.log('[Vault] Calculating percentage, chartData length:', chartData.length);
+    if (chartData.length < 2) {
+      console.log('[Vault] Not enough data points');
+      return 0;
+    }
     const firstPrice = chartData[0].price;
     const lastPrice = chartData[chartData.length - 1].price;
-    if (firstPrice === 0) return 0;
-    return ((lastPrice - firstPrice) / firstPrice) * 100;
+    console.log('[Vault] Percentage calc:', { firstPrice, lastPrice, dataPoints: chartData.length });
+    if (firstPrice === 0) {
+      console.log('[Vault] First price is zero');
+      return 0;
+    }
+    const change = ((lastPrice - firstPrice) / firstPrice) * 100;
+    console.log('[Vault] Calculated percentage:', change.toFixed(2) + '%');
+    return change;
   }, [chartData]);
 
   // Card Details Popup State
