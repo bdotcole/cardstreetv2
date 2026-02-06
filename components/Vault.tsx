@@ -54,7 +54,9 @@ const Vault: React.FC<VaultProps> = ({
     const fetchPortfolioHistory = async () => {
       setIsLoadingChart(true);
       try {
-        const response = await fetch(`/api/portfolio/history?range=${timeframe}`);
+        // Add timestamp to bypass cache
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/portfolio/history?range=${timeframe}&t=${timestamp}`);
         const result = await response.json();
 
         if (result.success && result.data) {

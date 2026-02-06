@@ -166,6 +166,8 @@ async function getPortfolioHistory(
         }
     }
 
+    console.log(`[Portfolio API] Calculated current value: ฿${currentPortfolioValue} from ${collections?.length || 0} collections`);
+
     // Generate expected time slots
     const expectedSlots = generateTimeSlots(startTime, endTime, interval, pointCount);
 
@@ -203,10 +205,21 @@ export async function GET(request: NextRequest) {
         // Fetch portfolio history
         const history = await getPortfolioHistory(user.id, timeRange);
 
+        console.log(`[Portfolio API] User: ${user.id}, Range: ${timeRange}, Data Points: ${history.length}`);
+        if (history.length > 0) {
+            console.log(`[Portfolio API] First: ฿${history[0].value}, Last: ฿${history[history.length - 1].value}`);
+        }
+
         return NextResponse.json({
             success: true,
             data: history,
             range: timeRange
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
 
     } catch (error: any) {
