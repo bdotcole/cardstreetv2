@@ -10,7 +10,7 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
   return (
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 5, bottom: 20, left: 0 }}>
+        <LineChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
           <XAxis
             dataKey="date"
@@ -35,6 +35,12 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             active={true}
             isAnimationActive={false}
             cursor={{ stroke: '#06b6d4', strokeWidth: 1, strokeDasharray: '4 4' }}
+            wrapperStyle={{
+              outline: 'none',
+              zIndex: 1000
+            }}
+            position={{ y: 0 }}
+            allowEscapeViewBox={{ x: false, y: true }}
             contentStyle={{
               backgroundColor: '#020617',
               borderRadius: '8px',
@@ -45,7 +51,6 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             itemStyle={{ color: '#fff', fontWeight: '800', fontSize: '12px' }}
             labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontSize: '10px', textTransform: 'uppercase', fontWeight: '700' }}
             formatter={(val: number) => [`฿${val.toLocaleString()}`, 'Valuation']}
-            allowEscapeViewBox={{ x: true, y: true }}
           />
           <Line
             type="monotone"
