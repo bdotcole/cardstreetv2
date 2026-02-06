@@ -50,13 +50,30 @@ const Vault: React.FC<VaultProps> = ({
   // Chart Logic - Mocking portfolio history based on current value for visual
   const chartData = useMemo(() => {
     // Generate specific curve based on timeframe
-    const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : 30;
+    const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : 12;
     const variance = totalValue * 0.05;
 
-    return Array.from({ length: points }).map((_, i) => ({
-      date: i.toString(),
-      price: totalValue - (variance * Math.cos(i / 5)) // Fake fancy curve
-    }));
+    return Array.from({ length: points }).map((_, i) => {
+      let label = '';
+      if (timeframe === '1D') {
+        // Show hours (0h, 6h, 12h, 18h)
+        label = i % 6 === 0 ? `${i}h` : '';
+      } else if (timeframe === '1W') {
+        // Show day names
+        label = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] || `D${i}`;
+      } else if (timeframe === '1M') {
+        // Show day numbers every 5 days
+        label = i % 5 === 0 ? `D${i + 1}` : '';
+      } else {
+        // 1Y - show months
+        label = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i] || '';
+      }
+
+      return {
+        date: label,
+        price: totalValue - (variance * Math.cos(i / 5)) // Fake fancy curve
+      };
+    });
   }, [totalValue, timeframe]);
 
   // Card Details Popup State
@@ -195,7 +212,7 @@ const Vault: React.FC<VaultProps> = ({
                 </button>
               ))}
             </div>
-            <div className="h-40">
+            <div className="h-48">
               <PriceChart data={chartData} />
             </div>
           </div>

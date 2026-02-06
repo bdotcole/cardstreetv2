@@ -8,29 +8,35 @@ interface PriceChartProps {
 
 const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
   return (
-    <div className="h-48 w-full">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
+        <LineChart data={data} margin={{ top: 5, right: 5, bottom: 20, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-          <XAxis 
-            dataKey="date" 
-            tick={{ fontSize: 9, fill: '#64748b' }} 
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 9, fill: '#64748b' }}
             axisLine={false}
             tickLine={false}
-            dy={10}
+            dy={5}
+            minTickGap={20}
           />
-          <YAxis 
-            tick={{ fontSize: 9, fill: '#64748b' }} 
-            axisLine={false} 
+          <YAxis
+            tick={{ fontSize: 9, fill: '#64748b' }}
+            axisLine={false}
             tickLine={false}
-            tickFormatter={(val) => `฿${val/1000}k`}
+            tickFormatter={(val) => {
+              if (val >= 1000) {
+                return `฿${(val / 1000).toFixed(val >= 10000 ? 0 : 1)}k`;
+              }
+              return `฿${val.toFixed(0)}`;
+            }}
           />
-          <Tooltip 
+          <Tooltip
             cursor={{ stroke: '#06b6d4', strokeWidth: 1, strokeDasharray: '4 4' }}
-            contentStyle={{ 
-              backgroundColor: '#020617', 
-              borderRadius: '8px', 
-              border: '1px solid #06b6d4', 
+            contentStyle={{
+              backgroundColor: '#020617',
+              borderRadius: '8px',
+              border: '1px solid #06b6d4',
               boxShadow: '0 10px 30px -10px rgba(6, 182, 212, 0.3)',
               padding: '8px 12px'
             }}
@@ -38,11 +44,11 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
             labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontSize: '10px', textTransform: 'uppercase', fontWeight: '700' }}
             formatter={(val: number) => [`฿${val.toLocaleString()}`, 'Valuation']}
           />
-          <Line 
-            type="monotone" 
-            dataKey="price" 
-            stroke="#06b6d4" 
-            strokeWidth={3} 
+          <Line
+            type="monotone"
+            dataKey="price"
+            stroke="#06b6d4"
+            strokeWidth={3}
             dot={false}
             activeDot={{ r: 6, fill: '#06b6d4', stroke: '#fff', strokeWidth: 2 }}
           />
