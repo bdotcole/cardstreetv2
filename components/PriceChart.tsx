@@ -10,7 +10,7 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
   return (
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+        <LineChart data={data} margin={{ top: 5, right: 30, bottom: 5, left: -20 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
           <XAxis
             dataKey="date"
