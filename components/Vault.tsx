@@ -51,7 +51,7 @@ const Vault: React.FC<VaultProps> = ({
   const chartData = useMemo(() => {
     // Generate specific curve based on timeframe
     const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : 12;
-    const variance = totalValue * 0.05;
+    const variance = totalValue * 0.08; // 8% variance range
 
     return Array.from({ length: points }).map((_, i) => {
       let label = '';
@@ -69,9 +69,16 @@ const Vault: React.FC<VaultProps> = ({
         label = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i] || '';
       }
 
+      // Create a realistic growth curve that ENDS at totalValue (most recent on right)
+      // Use a combination of growth trend + sine wave for natural fluctuation
+      const progress = i / (points - 1); // 0 to 1 from left to right
+      const baseGrowth = totalValue * (0.92 + (0.08 * progress)); // Start at 92% of current, grow to 100%
+      const fluctuation = variance * 0.3 * Math.sin(i / 2); // Small wave pattern
+      const price = baseGrowth + fluctuation;
+
       return {
         date: label,
-        price: totalValue - (variance * Math.cos(i / 5)) // Fake fancy curve
+        price: Math.max(0, price) // Ensure no negative values
       };
     });
   }, [totalValue, timeframe]);
