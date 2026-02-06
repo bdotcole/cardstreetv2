@@ -88,14 +88,16 @@ function zeroFillData(
     snapshots: { timestamp: string; total_market_value: number }[]
 ): { timestamp: Date; total_market_value: number }[] {
     const result: { timestamp: Date; total_market_value: number }[] = [];
-    let lastKnownValue = 0;
-    let snapshotIndex = 0;
 
     // Convert snapshot timestamps to Date objects
     const snapshotDates = snapshots.map(s => ({
         timestamp: new Date(s.timestamp),
         total_market_value: s.total_market_value
     }));
+
+    // Initialize with first snapshot value if available, not 0
+    let lastKnownValue = snapshotDates.length > 0 ? snapshotDates[0].total_market_value : 0;
+    let snapshotIndex = 0;
 
     for (const slot of expectedSlots) {
         // Find snapshots up to this time slot
@@ -107,7 +109,7 @@ function zeroFillData(
             snapshotIndex++;
         }
 
-        // Use last known value or 0 for new accounts
+        // Use last known value (now initialized to first snapshot, not 0)
         result.push({
             timestamp: slot,
             total_market_value: lastKnownValue
