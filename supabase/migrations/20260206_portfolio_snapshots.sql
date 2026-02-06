@@ -17,10 +17,6 @@ CREATE INDEX idx_portfolio_snapshots_user_time
 CREATE INDEX idx_portfolio_snapshots_user_latest 
   ON portfolio_snapshots(user_id, created_at DESC);
 
--- Prevent duplicate snapshots at the same hour for the same user
-CREATE UNIQUE INDEX idx_portfolio_snapshots_unique_user_time 
-  ON portfolio_snapshots(user_id, DATE_TRUNC('hour', timestamp));
-
 -- Row Level Security
 ALTER TABLE portfolio_snapshots ENABLE ROW LEVEL SECURITY;
 
