@@ -46,52 +46,57 @@ const Vault: React.FC<VaultProps> = ({
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
   const [isSelectingForListing, setIsSelectingForListing] = useState(false);
   const [timeframe, setTimeframe] = useState('1M');
+  const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
+  const [isLoadingChart, setIsLoadingChart] = useState(true);
 
-  // Chart Logic - Mocking portfolio history based on current value for visual
-  const chartData = useMemo(() => {
-    const now = new Date();
-    const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : 12;
-    const variance = totalValue * 0.08; // 8% variance range
+  // Fetch real portfolio history from API
+  useEffect(() => {
+    const fetchPortfolioHistory = async () => {
+      setIsLoadingChart(true);
+      try {
+        const response = await fetch(`/api/portfolio/history?range=${timeframe}`);
+        const result = await response.json();
 
-    return Array.from({ length: points }).map((_, i) => {
-      let label = '';
-      let dateObj = new Date();
+        if (result.success && result.data) {
+          // Transform API response to chart format with proper labels
+          const formattedData = result.data.map((point: any, index: number) => {
+            const dateObj = new Date(point.date);
+            let label = '';
 
-      if (timeframe === '1D') {
-        // Go back 24 hours from now
-        dateObj = new Date(now.getTime() - (points - 1 - i) * 60 * 60 * 1000);
-        label = i % 6 === 0 ? `${dateObj.getHours()}h` : '';
-      } else if (timeframe === '1W') {
-        // Go back 7 days from now
-        dateObj = new Date(now);
-        dateObj.setDate(now.getDate() - (points - 1 - i));
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        label = dayNames[dateObj.getDay()];
-      } else if (timeframe === '1M') {
-        // Go back 30 days from now
-        dateObj = new Date(now);
-        dateObj.setDate(now.getDate() - (points - 1 - i));
-        label = i % 5 === 0 ? `${dateObj.getDate()}` : '';
-      } else {
-        // 1Y - Go back 12 months from now
-        dateObj = new Date(now);
-        dateObj.setMonth(now.getMonth() - (points - 1 - i));
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        label = monthNames[dateObj.getMonth()];
+            if (timeframe === '1D') {
+              label = index % 6 === 0 ? `${dateObj.getHours()}h` : '';
+            } else if (timeframe === '1W') {
+              const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+              label = dayNames[dateObj.getDay()];
+            } else if (timeframe === '1M') {
+              label = index % 5 === 0 ? `${dateObj.getDate()}` : '';
+            } else {
+              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              label = monthNames[dateObj.getMonth()];
+            }
+
+            return {
+              date: label,
+              price: point.value
+            };
+          });
+
+          setChartData(formattedData);
+        } else {
+          // Fallback to empty data or show error
+          console.error('Failed to fetch portfolio history:', result.error);
+          setChartData([]);
+        }
+      } catch (error) {
+        console.error('Error fetching portfolio history:', error);
+        setChartData([]);
+      } finally {
+        setIsLoadingChart(false);
       }
+    };
 
-      // Create a realistic growth curve that ENDS at totalValue (most recent on right)
-      const progress = i / (points - 1); // 0 to 1 from left to right
-      const baseGrowth = totalValue * (0.92 + (0.08 * progress)); // Start at 92% of current, grow to 100%
-      const fluctuation = variance * 0.3 * Math.sin(i / 2); // Small wave pattern
-      const price = baseGrowth + fluctuation;
-
-      return {
-        date: label,
-        price: Math.max(0, price)
-      };
-    });
-  }, [totalValue, timeframe]);
+    fetchPortfolioHistory();
+  }, [timeframe]);
 
   // Calculate percentage change based on chart data
   const percentageChange = useMemo(() => {
