@@ -140,17 +140,50 @@ async function getPortfolioHistory(
         throw new Error('Failed to fetch portfolio history');
     }
 
+    // Calculate CURRENT portfolio value (for the end point)
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('include_in_portfolio', true);
+
+    let currentPortfolioValue = 0;
+
+    if (collections && collections.length > 0) {
+        const collectionIds = collections.map(c => c.id);
+
+        const { data: items } = await supabase
+            .from('collection_items')
+            .select('card_data, quantity')
+            .in('collection_id', collectionIds);
+
+        if (items && items.length > 0) {
+            currentPortfolioValue = items.reduce((total, item) => {
+                const marketPrice = item.card_data?.marketPrice || 0;
+                const quantity = item.quantity || 1;
+                return total + (marketPrice * quantity);
+            }, 0);
+        }
+    }
+
     // Generate expected time slots
     const expectedSlots = generateTimeSlots(startTime, endTime, interval, pointCount);
 
     // Zero-fill missing data
     const filledData = zeroFillData(expectedSlots, snapshots || []);
 
-    // Format response
-    return filledData.map(point => ({
+    // Format response and ensure last point is current value
+    const formattedData = filledData.map(point => ({
         date: point.timestamp.toISOString(),
         value: point.total_market_value
     }));
+
+    // Override the last data point with current actual portfolio value
+    if (formattedData.length > 0) {
+        formattedData[formattedData.length - 1].value = currentPortfolioValue;
+    }
+
+    return formattedData;
 }
 
 export async function GET(request: NextRequest) {
