@@ -49,28 +49,38 @@ const Vault: React.FC<VaultProps> = ({
 
   // Chart Logic - Mocking portfolio history based on current value for visual
   const chartData = useMemo(() => {
-    // Generate specific curve based on timeframe
+    const now = new Date();
     const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : 12;
     const variance = totalValue * 0.08; // 8% variance range
 
     return Array.from({ length: points }).map((_, i) => {
       let label = '';
+      let dateObj = new Date();
+
       if (timeframe === '1D') {
-        // Show hours (0h, 6h, 12h, 18h)
-        label = i % 6 === 0 ? `${i}h` : '';
+        // Go back 24 hours from now
+        dateObj = new Date(now.getTime() - (points - 1 - i) * 60 * 60 * 1000);
+        label = i % 6 === 0 ? `${dateObj.getHours()}h` : '';
       } else if (timeframe === '1W') {
-        // Show day names
-        label = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] || `D${i}`;
+        // Go back 7 days from now
+        dateObj = new Date(now);
+        dateObj.setDate(now.getDate() - (points - 1 - i));
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        label = dayNames[dateObj.getDay()];
       } else if (timeframe === '1M') {
-        // Show day numbers every 5 days
-        label = i % 5 === 0 ? `D${i + 1}` : '';
+        // Go back 30 days from now
+        dateObj = new Date(now);
+        dateObj.setDate(now.getDate() - (points - 1 - i));
+        label = i % 5 === 0 ? `${dateObj.getDate()}` : '';
       } else {
-        // 1Y - show months
-        label = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i] || '';
+        // 1Y - Go back 12 months from now
+        dateObj = new Date(now);
+        dateObj.setMonth(now.getMonth() - (points - 1 - i));
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        label = monthNames[dateObj.getMonth()];
       }
 
       // Create a realistic growth curve that ENDS at totalValue (most recent on right)
-      // Use a combination of growth trend + sine wave for natural fluctuation
       const progress = i / (points - 1); // 0 to 1 from left to right
       const baseGrowth = totalValue * (0.92 + (0.08 * progress)); // Start at 92% of current, grow to 100%
       const fluctuation = variance * 0.3 * Math.sin(i / 2); // Small wave pattern
@@ -78,10 +88,19 @@ const Vault: React.FC<VaultProps> = ({
 
       return {
         date: label,
-        price: Math.max(0, price) // Ensure no negative values
+        price: Math.max(0, price)
       };
     });
   }, [totalValue, timeframe]);
+
+  // Calculate percentage change based on chart data
+  const percentageChange = useMemo(() => {
+    if (chartData.length < 2) return 0;
+    const firstPrice = chartData[0].price;
+    const lastPrice = chartData[chartData.length - 1].price;
+    if (firstPrice === 0) return 0;
+    return ((lastPrice - firstPrice) / firstPrice) * 100;
+  }, [chartData]);
 
   // Card Details Popup State
   const [viewingCard, setViewingCard] = useState<Card | null>(null);
@@ -194,9 +213,11 @@ const Vault: React.FC<VaultProps> = ({
 
         <div className="flex justify-between items-end mb-1 px-2">
           <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">My Portfolio</p>
-          <div className="flex items-center gap-1.5 bg-brand-green/10 px-2 py-1 rounded-md border border-brand-green/20">
-            <i className="fa-solid fa-arrow-trend-up text-brand-green text-[10px]"></i>
-            <span className="text-brand-green text-[10px] font-black">+4.2%</span>
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${percentageChange >= 0 ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-red/10 border-brand-red/20'}`}>
+            <i className={`fa-solid ${percentageChange >= 0 ? 'fa-arrow-trend-up text-brand-green' : 'fa-arrow-trend-down text-brand-red'} text-[10px]`}></i>
+            <span className={`${percentageChange >= 0 ? 'text-brand-green' : 'text-brand-red'} text-[10px] font-black`}>
+              {percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(1)}%
+            </span>
           </div>
         </div>
 
