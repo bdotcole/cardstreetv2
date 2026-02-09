@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useUserSettings } from './useUserSettings';
 import enTranslations from '../locales/en.json';
 import thTranslations from '../locales/th.json';
@@ -13,7 +14,10 @@ export function useTranslation() {
 
     console.log('useTranslation: current language is', lang);
 
-    const translations = lang === 'TH' ? thTranslations : enTranslations;
+    // Use useMemo to ensure translations reload when language changes
+    const translations = useMemo(() => {
+        return lang === 'TH' ? thTranslations : enTranslations;
+    }, [lang]);
 
     /**
      * Get translation for a key

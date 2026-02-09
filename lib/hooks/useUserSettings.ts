@@ -24,7 +24,7 @@ interface UseUserSettingsReturn {
 
 const DEFAULT_SETTINGS: UserSettings = {
     currency: 'THB',
-    language: 'TH',
+    language: 'EN',  // Default to English
     twoFactorEnabled: false,
     notifyPriceDrops: true,
     notifyOrderUpdates: true,
