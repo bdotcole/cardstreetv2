@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '@/types';
 import { THAI_SETS, ONE_PIECE_SETS, JAPANESE_SETS, CURRENCY_SYMBOLS } from '@/constants';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -14,6 +15,7 @@ interface MarketplaceProps {
 }
 
 const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelectCard, onSelectListing, onSellerClick, onAddToCart, listings = [], currency = 'THB', exchangeRate = 1 }) => {
+  const { t } = useTranslation();
   const [selectedGame, setSelectedGame] = useState(initialGame);
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -91,7 +93,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
             <i className="fa-solid fa-magnifying-glass text-slate-500 ml-3 mr-2"></i>
             <input
               type="text"
-              placeholder="Search by card name or set..."
+              placeholder={t('marketplace.searchPlaceholder') || 'Search by card name or set...'}
               className="w-full bg-transparent text-white text-xs font-bold focus:outline-none placeholder:text-slate-600 h-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -112,7 +114,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
               }`}
           >
             <i className="fa-solid fa-sliders"></i>
-            Filters
+            {t('marketplace.filters') || 'Filters'}
             {activeFilterCount > 0 && (
               <span className="ml-1 w-4 h-4 rounded-full bg-brand-purple text-white text-[8px] flex items-center justify-center">
                 {activeFilterCount}
@@ -143,12 +145,12 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
           <div className="mt-4 p-4 bg-[#0f172a] rounded-xl border border-white/10 space-y-4 animate-fadeIn">
             {/* Card Game Filter */}
             <div>
-              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Card Game</label>
+              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Card Game'}</label>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { id: 'all', label: 'All Games' },
-                  { id: 'pokemon', label: 'Pokémon' },
-                  { id: 'onepiece', label: 'One Piece' }
+                  { id: 'all', label: t('marketplace.allGames') || 'All Games' },
+                  { id: 'pokemon', label: t('marketplace.pokemon') || 'Pokémon' },
+                  { id: 'onepiece', label: t('marketplace.onepiece') || 'One Piece' }
                 ].map(game => (
                   <button
                     key={game.id}
@@ -166,13 +168,13 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
 
             {/* Language Filter */}
             <div>
-              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">Language</label>
+              <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.language') || 'Language'}</label>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { id: 'all', label: 'All' },
-                  { id: 'en', label: 'English' },
-                  { id: 'jp', label: 'Japanese' },
-                  { id: 'th', label: 'Thai' }
+                  { id: 'all', label: t('marketplace.allLanguages') || 'All' },
+                  { id: 'en', label: t('marketplace.english') || 'English' },
+                  { id: 'jp', label: t('marketplace.japanese') || 'Japanese' },
+                  { id: 'th', label: t('marketplace.thai') || 'Thai' }
                 ].map(lang => (
                   <button
                     key={lang.id}
@@ -191,7 +193,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
             {/* Price Range */}
             <div>
               <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">
-                Price Range: {CURRENCY_SYMBOLS[currency] || currency}{priceRange[0].toLocaleString()} - {CURRENCY_SYMBOLS[currency] || currency}{priceRange[1].toLocaleString()}
+                {t('marketplace.priceRange') || 'Price Range'}: {CURRENCY_SYMBOLS[currency] || currency}{priceRange[0].toLocaleString()} - {CURRENCY_SYMBOLS[currency] || currency}{priceRange[1].toLocaleString()}
               </label>
               <div className="flex items-center gap-4">
                 <input
@@ -226,7 +228,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
               >
                 <i className="fa-solid fa-xmark mr-2"></i>
-                Clear All Filters
+                {t('marketplace.clearFilters') || 'Clear All Filters'}
               </button>
             )}
           </div>
@@ -327,7 +329,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
               }}
               className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
             >
-              Reset Filters
+              {t('marketplace.clearFilters') || 'Reset Filters'}
             </button>
           </div>
         )}

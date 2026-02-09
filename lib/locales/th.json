@@ -28,6 +28,9 @@
     },
     "marketplace": {
         "title": "ตลาด",
+        "searchPlaceholder": "ค้นหาชื่อการ์ดหรือชุด...",
+        "filters": "ตัวกรอง",
+        "game": "เกม",
         "allGames": "ทุกเกม",
         "pokemon": "โปเกมอน",
         "onepiece": "วันพีซ",

@@ -28,6 +28,9 @@
     },
     "marketplace": {
         "title": "Marketplace",
+        "searchPlaceholder": "Search by card name or set...",
+        "filters": "Filters",
+        "game": "Card Game",
         "allGames": "All Games",
         "pokemon": "Pokémon",
         "onepiece": "One Piece",
