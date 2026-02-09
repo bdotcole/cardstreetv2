@@ -11,6 +11,7 @@ import {
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
 import { createClient } from '@/lib/supabase/client';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -102,6 +103,7 @@ const tierConfig = {
 };
 
 const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin }) => {
+  const { t } = useTranslation();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const supabase = createClient();
@@ -267,36 +269,36 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // Menu sections
   const menuSections = [
     {
-      title: 'Account',
+      title: t('profile.account'),
       items: [
-        { name: 'Edit Profile', icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' },
-        { name: 'Payment Methods', icon: CreditCard, panel: 'payment' as ActivePanel, color: 'text-emerald-400' },
-        { name: 'Rewards', icon: Gift, panel: 'rewards' as ActivePanel, color: 'text-amber-400' }
+        { name: t('profile.editProfile'), icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' },
+        { name: t('profile.paymentMethods'), icon: CreditCard, panel: 'payment' as ActivePanel, color: 'text-emerald-400' },
+        { name: t('profile.rewards'), icon: Gift, panel: 'rewards' as ActivePanel, color: 'text-amber-400' }
       ]
     },
     {
-      title: 'Security & Notifications',
+      title: t('profile.securityNotifications'),
       items: [
-        { name: 'Settings', icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
+        { name: t('profile.settings'), icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
       ]
     },
     {
-      title: 'Orders & Sales',
+      title: t('profile.ordersSales'),
       items: [
-        { name: 'Track Orders', icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
-        { name: 'Sales History', icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' }
+        { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
+        { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' }
       ]
     },
     {
-      title: 'Operations',
+      title: t('profile.operations'),
       items: [
-        { name: 'Partner Dashboard', icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
+        { name: t('profile.partnerDashboard'), icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
       ]
     },
     {
-      title: 'Support',
+      title: t('profile.support'),
       items: [
-        { name: 'Help & Support', icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
+        { name: t('profile.partnerDashboard'), icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
       ]
     }
   ];
@@ -409,7 +411,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 >
                   <Gift className="w-4 h-4 text-amber-400" />
                   <span className="text-sm font-bold text-white">{rewards.points_balance.toLocaleString()}</span>
-                  <span className="text-[9px] uppercase tracking-wider text-slate-500">Points</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500">{t('common.points')}</span>
                   <ChevronRight className="w-3 h-3 text-slate-600" />
                 </button>
               )}
