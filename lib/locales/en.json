@@ -50,6 +50,51 @@
         "loading": "Loading...",
         "buyFrom": "Buy from",
         "addToCart": "Add to Cart",
-        "noResults": "No results found"
+        "noResults": "No results found",
+        "points": "Points"
+    },
+    "profile": {
+        "account": "Account",
+        "editProfile": "Edit Profile",
+        "paymentMethods": "Payment Methods",
+        "rewards": "Rewards",
+        "securityNotifications": "Security & Notifications",
+        "settings": "Settings",
+        "ordersSales": "Orders & Sales",
+        "trackOrders": "Track Orders",
+        "salesHistory": "Sales History",
+        "operations": "Operations",
+        "partner Dashboard": "Partner Dashboard",
+        "support": "Support"
+    },
+    "vault": {
+        "myPortfolio": "My Portfolio",
+        "collection": "Collection",
+        "listings": "Listings",
+        "wishlist": "Wishlist",
+        "masterSets": "Master Sets",
+        "items": "Items"
+    },
+    "scan": {
+        "registryEntry": "Registry Entry",
+        "digitizeCollection": "Digitize Your Physical Collection",
+        "scanCard": "Scan Card",
+        "realtimeVisionAI": "Real-Time Vision AI",
+        "searchRegistry": "Search Registry",
+        "globalArchives": "Global Product Archives"
+    },
+    "card": {
+        "common": "Common",
+        "uncommon": "Uncommon",
+        "rare": "Rare",
+        "doubleRare": "Double Rare",
+        "ultraRare": "Ultra Rare",
+        "secretRare": "Secret Rare",
+        "nm": "NM",
+        "lp": "LP",
+        "mp": "MP",
+        "hp": "HP",
+        "dmg": "DMG",
+        "askPrice": "Ask Price"
     }
 }

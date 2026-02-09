@@ -50,6 +50,51 @@
         "loading": "กำลังโหลด...",
         "buyFrom": "ซื้อจาก",
         "addToCart": "เพิ่มลงตะกร้า",
-        "noResults": "ไม่พบผลลัพธ์"
+        "noResults": "ไม่พบผลลัพธ์",
+        "points": "คะแนน"
+    },
+    "profile": {
+        "account": "บัญชี",
+        "editProfile": "แก้ไขโปรไฟล์",
+        "paymentMethods": "วิธีการชำระเงิน",
+        "rewards": "รางวัล",
+        "securityNotifications": "ความปลอดภัยและการแจ้งเตือน",
+        "settings": "การตั้งค่า",
+        "ordersSales": "คำสั่งซื้อและยอดขาย",
+        "trackOrders": "ติดตามคำสั่งซื้อ",
+        "salesHistory": "ประวัติการขาย",
+        "operations": "การดำเนินงาน",
+        "partnerDashboard": "แดชบอร์ดพาร์ทเนอร์",
+        "support": "ฝ่ายสนับสนุน"
+    },
+    "vault": {
+        "myPortfolio": "พอร์ตของฉัน",
+        "collection": "คอลเลกชัน",
+        "listings": "รายการขาย",
+        "wishlist": "รายการที่ต้องการ",
+        "masterSets": "ชุดหลัก",
+        "items": "รายการ"
+    },
+    "scan": {
+        "registryEntry": "ลงทะเบียนการ์ด",
+        "digitizeCollection": "เปลี่ยนคอลเลกชันกายภาพของคุณเป็นดิจิทัล",
+        "scanCard": "สแกนการ์ด",
+        "realtimeVisionAI": "AI รู้จักภาพแบบเรียลไทม์",
+        "searchRegistry": "ค้นหาทะเบียน",
+        "globalArchives": "คลังข้อมูลทั่วโลก"
+    },
+    "card": {
+        "common": "ธรรมดา",
+        "uncommon": "ไม่ธรรมดา",
+        "rare": "หายาก",
+        "doubleRare": "หายากสองเท่า",
+        "ultraRare": "หายากสุดยอด",
+        "secretRare": "หายากลับ",
+        "nm": "สภาพดีเยี่ยม",
+        "lp": "สภาพดี",
+        "mp": "สภาพปานกลาง",
+        "hp": "สภาพพอใช้",
+        "dmg": "ชำรุด",
+        "askPrice": "ราคาขาย"
     }
 }
