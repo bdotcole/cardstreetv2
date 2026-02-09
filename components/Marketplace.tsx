@@ -79,9 +79,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
       <div className="pt-6 px-4">
         <div className="flex justify-between items-end mb-2">
           <div>
-            <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">Global Exchange</p>
+            <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('marketplace.globalExchange')}</p>
             <h2 className="text-3xl font-black text-white tracking-tighter italic skew-x-[-6deg]">
-              Market <span className="text-brand-green">Live</span>
+              {t('marketplace.market')} <span className="text-brand-green">{t('marketplace.live')}</span>
             </h2>
           </div>
         </div>
@@ -125,9 +125,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
           {/* Sort Options */}
           <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
             {[
-              { id: 'newest', label: 'New' },
-              { id: 'price_asc', label: 'Low $' },
-              { id: 'price_desc', label: 'High $' }
+              { id: 'newest', label: t('marketplace.new') },
+              { id: 'price_asc', label: t('marketplace.lowPrice') },
+              { id: 'price_desc', label: t('marketplace.highPrice') }
             ].map(sort => (
               <button
                 key={sort.id}
