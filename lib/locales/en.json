@@ -70,8 +70,9 @@
         "trackOrders": "Track Orders",
         "salesHistory": "Sales History",
         "operations": "Operations",
-        "partner Dashboard": "Partner Dashboard",
-        "support": "Support"
+        "partnerDashboard": "Partner Dashboard",
+        "support": "Support",
+        "signOut": "Sign Out"
     },
     "vault": {
         "myPortfolio": "My Portfolio",
