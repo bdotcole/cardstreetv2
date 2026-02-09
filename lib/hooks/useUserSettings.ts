@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 interface UserSettings {
@@ -35,8 +35,15 @@ export function useUserSettings(): UseUserSettingsReturn {
     const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const hasLoadedOnce = useRef(false);
 
     const loadSettings = async () => {
+        // Only load settings once on mount
+        if (hasLoadedOnce.current) {
+            console.log('Settings already loaded, skipping reload to preserve manual changes');
+            return;
+        }
+
         const supabase = createClient();
 
         try {
@@ -50,6 +57,7 @@ export function useUserSettings(): UseUserSettingsReturn {
                     setSettings({ ...DEFAULT_SETTINGS, ...parsed });
                 }
                 setIsLoading(false);
+                hasLoadedOnce.current = true;
                 return;
             }
 
@@ -88,9 +96,11 @@ export function useUserSettings(): UseUserSettingsReturn {
             }
 
             setError(null);
+            hasLoadedOnce.current = true;
         } catch (err: any) {
             console.error('Error loading settings:', err);
             setError(err.message);
+            hasLoadedOnce.current = true;
         } finally {
             setIsLoading(false);
         }
