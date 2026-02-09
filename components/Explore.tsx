@@ -23,10 +23,12 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   // Custom Set Selector State
   const [isSetListOpen, setIsSetListOpen] = useState(false);
   const setListRef = useRef<HTMLDivElement>(null);
+  const cardListRef = useRef<HTMLDivElement>(null);
 
   // Debounce search term
   useEffect(() => {
@@ -122,8 +124,20 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     return Math.min(...matches.map(m => m.price));
   };
 
-  const getListingCount = (card: Card) => {
-    return localListings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length;
+  const getListingCount = (card: Card): number => {
+    return localListings.filter(l => l.card_id === card.id).length;
+  };
+
+  // Handle scroll for back-to-top button
+  const handleScroll = () => {
+    if (cardListRef.current) {
+      setShowBackToTop(cardListRef.current.scrollTop > 200);
+    }
+  };
+
+  // Scroll to top function
+  const scrollToTop = () => {
+    cardListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const selectedSet = sets.find(s => s.id === selectedSetId);
@@ -149,198 +163,223 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Search Engine */}
-      <div className="relative group">
-        <div className="absolute inset-0 bg-brand-cyan/20 blur-md rounded-xl group-focus-within:opacity-100 opacity-0 transition-opacity"></div>
-        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-cyan transition-colors z-10"></i>
-        <input
-          type="text"
-          placeholder={t('explore.searchPlaceholder')}
-          className="relative w-full h-12 pl-12 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {/* Database Selectors - Language → Game → Set */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-end">
-          <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">{t('explore.cardDatabase').split(' ')[0]} <span className="text-brand-cyan">{t('explore.cardDatabase').split(' ')[1] || 'Database'}</span></h2>
+    <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn">
+      {/* Fixed Header Section */}
+      <div className="flex-shrink-0 space-y-4 pb-4">
+        {/* Search Engine */}
+        <div className="relative group">
+          <div className="absolute inset-0 bg-brand-cyan/20 blur-md rounded-xl group-focus-within:opacity-100 opacity-0 transition-opacity"></div>
+          <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-cyan transition-colors z-10"></i>
+          <input
+            type="text"
+            placeholder={t('explore.searchPlaceholder')}
+            className="relative w-full h-12 pl-12 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 z-30 relative">
-          {/* Language Dropdown */}
-          <div className="relative">
-            <select
-              value={selectedLanguage}
-              onChange={(e) => setSelectedLanguage(e.target.value as any)}
-              className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
-            >
-              <option value="en">{t('explore.english')}</option>
-              {/* Japanese temporarily hidden until database is complete */}
-              {/* <option value="jp">{t('explore.japanese')}</option> */}
-              <option value="th">{t('explore.thai')}</option>
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+        {/* Database Selectors - Language → Game → Set */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-end">
+            <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">{t('explore.cardDatabase').split(' ')[0]} <span className="text-brand-cyan">{t('explore.cardDatabase').split(' ')[1] || 'Database'}</span></h2>
           </div>
 
-          {/* Game Dropdown */}
-          <div className="relative">
-            <select
-              value={selectedGame}
-              onChange={(e) => setSelectedGame(e.target.value as any)}
-              className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
-            >
-              <option value="pokemon">Pokémon</option>
-              {/* One Piece temporarily hidden until database is complete */}
-              {/* <option value="onepiece">One Piece</option> */}
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
-          </div>
+          <div className="grid grid-cols-3 gap-2 z-30 relative">
+            {/* Language Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value as any)}
+                className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
+              >
+                <option value="en">{t('explore.english')}</option>
+                {/* Japanese temporarily hidden until database is complete */}
+                {/* <option value="jp">{t('explore.japanese')}</option> */}
+                <option value="th">{t('explore.thai')}</option>
+              </select>
+              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+            </div>
 
-          {/* Set Dropdown */}
-          <div className="relative" ref={setListRef}>
-            {isLoadingSets ? (
-              <div className="w-full h-10 bg-white/5 rounded-lg skeleton opacity-20"></div>
-            ) : sets.length === 0 ? (
-              <div className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center border border-white/10">
-                <span className="text-xs font-bold text-slate-500">No sets available</span>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setIsSetListOpen(!isSetListOpen)}
-                  className="w-full h-10 bg-brand-darker rounded-lg px-2 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan text-left active:bg-white/5 transition-colors"
-                >
-                  {selectedSet ? (
-                    <span className="text-xs font-bold text-slate-300 truncate pr-4">{selectedSet.name}</span>
-                  ) : (
-                    <span className="text-xs font-bold text-slate-500">Select Set</span>
-                  )}
-                  <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
-                </button>
+            {/* Game Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedGame}
+                onChange={(e) => setSelectedGame(e.target.value as any)}
+                className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
+              >
+                <option value="pokemon">Pokémon</option>
+                {/* One Piece temporarily hidden until database is complete */}
+                {/* <option value="onepiece">One Piece</option> */}
+              </select>
+              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+            </div>
 
-                {isSetListOpen && (
-                  <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
-                    <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
-                      <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} {t('explore.found')}</span>
-                    </div>
-                    {sets.map(set => (
-                      <button
-                        key={set.id}
-                        onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
-                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
-                      >
-                        {/* Set Logo/Icon Container */}
-                        <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10">
-                          {set.images.logo ? (
-                            <img
-                              src={set.images.logo}
-                              alt=""
-                              className="max-h-8 max-w-8 object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || t('explore.expansion')}</span>
-                            <span className="text-[8px] text-slate-700 font-bold">•</span>
-                            <span className="text-[8px] text-slate-600 font-bold">{set.total} {t('explore.cards')}</span>
-                          </div>
-                        </div>
-                        {selectedSetId === set.id && <i className="fa-solid fa-check text-brand-cyan text-xs"></i>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Results Table */}
-      <div className="bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 overflow-hidden shadow-2xl min-h-[400px]">
-        {isLoadingCards ? (
-          <div className="p-6 space-y-4">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="flex gap-4 items-center">
-                <div className="w-10 h-14 skeleton rounded-lg opacity-20"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-2 w-32 skeleton rounded opacity-20"></div>
-                  <div className="h-1.5 w-20 skeleton rounded opacity-20"></div>
+            {/* Set Dropdown */}
+            <div className="relative" ref={setListRef}>
+              {isLoadingSets ? (
+                <div className="w-full h-10 bg-white/5 rounded-lg skeleton opacity-20"></div>
+              ) : sets.length === 0 ? (
+                <div className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center border border-white/10">
+                  <span className="text-xs font-bold text-slate-500">No sets available</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : cards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-6">
-            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-              <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
-            </div>
-            <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
-            <p className="text-slate-500 text-xs text-center">
-              {selectedGame === 'onepiece'
-                ? t('explore.onePieceSoon')
-                : t('explore.selectSet')}
-            </p>
-          </div>
-        ) : (
-          <div className="w-full">
-            <div className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t('explore.asset')}</span>
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">{t('explore.marketPrice')}</span>
-              <span></span>
-            </div>
-            <div className="divide-y divide-white/[0.03]">
-              {cards.map(card => (
-                <div
-                  key={card.id}
-                  className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
-                  onClick={() => onSelectCard(card)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-14 bg-brand-darker rounded overflow-hidden flex-shrink-0 border border-white/5">
-                      <img src={card.imageUrl} className="w-full h-full object-contain" alt={card.name} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
-                        <span className="text-[9px] text-slate-600 font-bold">#{card.number}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    {getListingCount(card) > 0 ? (
-                      <>
-                        <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((getLowestListingPrice(card) || 0) * exchangeRate).toLocaleString()}</p>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} {t('explore.listings')}</p>
-                      </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsSetListOpen(!isSetListOpen)}
+                    className="w-full h-10 bg-brand-darker rounded-lg px-2 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan text-left active:bg-white/5 transition-colors"
+                  >
+                    {selectedSet ? (
+                      <span className="text-xs font-bold text-slate-300 truncate pr-4">{selectedSet.name}</span>
                     ) : (
-                      <p className="text-white text-sm font-black tracking-tight">{currencySymbol}{Math.round(card.marketPrice * exchangeRate).toLocaleString()}</p>
+                      <span className="text-xs font-bold text-slate-500">Select Set</span>
                     )}
-                  </div>
+                    <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
+                  </button>
 
-                  <div className="text-right">
-                    <button className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${getListingCount(card) > 0 ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
-                      {getListingCount(card) > 0 ? <i className="fa-solid fa-cart-shopping text-[10px]"></i> : <i className="fa-solid fa-plus text-[10px]"></i>}
-                    </button>
+                  {isSetListOpen && (
+                    <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
+                      <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
+                        <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} {t('explore.found')}</span>
+                      </div>
+                      {sets.map(set => (
+                        <button
+                          key={set.id}
+                          onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
+                          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
+                        >
+                          {/* Set Logo/Icon Container */}
+                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10">
+                            {set.images.logo ? (
+                              <img
+                                src={set.images.logo}
+                                alt=""
+                                className="max-h-8 max-w-8 object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || t('explore.expansion')}</span>
+                              <span className="text-[8px] text-slate-700 font-bold">•</span>
+                              <span className="text-[8px] text-slate-600 font-bold">{set.total} {t('explore.cards')}</span>
+                            </div>
+                          </div>
+                          {selectedSetId === set.id && <i className="fa-solid fa-check text-brand-cyan text-xs"></i>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Results Section */}
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
+          {isLoadingCards ? (
+            <div className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="flex gap-4 items-center">
+                  <div className="w-10 h-14 skeleton rounded-lg opacity-20"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-2 w-32 skeleton rounded opacity-20"></div>
+                    <div className="h-1.5 w-20 skeleton rounded opacity-20"></div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : cards.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 px-6">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
+              </div>
+              <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
+              <p className="text-slate-500 text-xs text-center">
+                {selectedGame === 'onepiece'
+                  ? t('explore.onePieceSoon')
+                  : t('explore.selectSet')}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full">
+              {/* Fixed Header Row */}
+              <div className="flex-shrink-0 grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t('explore.asset')}</span>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">{t('explore.marketPrice')}</span>
+                <span></span>
+              </div>
+
+              {/* Scrollable Card List */}
+              <div
+                ref={cardListRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative"
+              >
+                {cards.map(card => (
+                  <div
+                    key={card.id}
+                    className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
+                    onClick={() => onSelectCard(card)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-14 bg-brand-darker rounded overflow-hidden flex-shrink-0 border border-white/5">
+                        <img src={card.imageUrl} className="w-full h-full object-contain" alt={card.name} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-xs font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
+                          <span className="text-[9px] text-slate-600 font-bold">#{card.number}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      {getListingCount(card) > 0 ? (
+                        <>
+                          <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((getLowestListingPrice(card) || 0) * exchangeRate).toLocaleString()}</p>
+                          <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} {t('explore.listings')}</p>
+                        </>
+                      ) : (
+                        <p className="text-white text-sm font-black tracking-tight">{currencySymbol}{Math.round(card.marketPrice * exchangeRate).toLocaleString()}</p>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <button className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${getListingCount(card) > 0 ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
+                        {getListingCount(card) > 0 ? <i className="fa-solid fa-cart-shopping text-[10px]"></i> : <i className="fa-solid fa-plus text-[10px]"></i>}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Back to Top Button */}
+                {showBackToTop && (
+                  <div className="sticky bottom-4 left-0 right-0 flex justify-center pointer-events-none pb-4">
+                    <button
+                      onClick={scrollToTop}
+                      className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-brand-cyan text-brand-darker rounded-full font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-cyan/30 hover:bg-white active:scale-95 transition-all"
+                    >
+                      <i className="fa-solid fa-arrow-up text-xs"></i>
+                      {t('common.backToTop') || 'Back to Top'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

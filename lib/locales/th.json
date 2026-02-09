@@ -57,7 +57,8 @@
         "buyFrom": "ซื้อจาก",
         "addToCart": "เพิ่มลงตะกร้า",
         "noResults": "ไม่พบผลลัพธ์",
-        "points": "คะแนน"
+        "points": "คะแนน",
+        "backToTop": "กลับด้านบน"
     },
     "profile": {
         "account": "บัญชี",

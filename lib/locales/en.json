@@ -57,7 +57,8 @@
         "buyFrom": "Buy from",
         "addToCart": "Add to Cart",
         "noResults": "No results found",
-        "points": "Points"
+        "points": "Points",
+        "backToTop": "Back to Top"
     },
     "profile": {
         "account": "Account",
