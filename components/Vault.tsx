@@ -401,7 +401,7 @@ const Vault: React.FC<VaultProps> = ({
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-black text-brand-cyan">฿{item.listingPrice?.toLocaleString()}</p>
-                  <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest">Asking Price</p>
+                  <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest">{t('card.askPrice')}</p>
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
