@@ -6,11 +6,13 @@ import { Card } from '../types';
 interface MasterSetDetailProps {
   set: ApiSet;
   ownedCardIds: Set<string>;
+  wishlistCardIds: Set<string>;
   onBack: () => void;
   onCardClick?: (card: Card) => void;
+  onToggleWishlist?: (card: Card) => void;
 }
 
-const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, onBack, onCardClick }) => {
+const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wishlistCardIds, onBack, onCardClick, onToggleWishlist }) => {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -85,8 +87,8 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, on
             return (
               <div
                 key={card.id}
-                onClick={() => onCardClick?.(card)}
-                className={`relative aspect-[3/4] rounded-xl overflow-hidden transition-all duration-500 group ${isOwned ? 'glass border-brand-cyan/30 shadow-lg shadow-brand-cyan/10' : 'bg-white/[0.02] border border-white/5'}`}
+                onClick={() => isOwned && onCardClick?.(card)}
+                className={`relative aspect-[3/4] rounded-xl overflow-hidden transition-all duration-500 group ${isOwned ? 'glass border-brand-cyan/30 shadow-lg shadow-brand-cyan/10 cursor-pointer' : 'bg-white/[0.02] border border-white/5 cursor-default'}`}
               >
                 {/* Background Image (Ghost if unowned) */}
                 <img
@@ -118,6 +120,19 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, on
                   <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-1 text-center">
                     <span className="text-[8px] text-white font-bold tracking-wider">{card.number}</span>
                   </div>
+                )}
+
+                {/* Wishlist Heart (for unowned cards) */}
+                {!isOwned && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleWishlist?.(card);
+                    }}
+                    className="absolute bottom-2 left-2 z-20 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-brand-red/20 active:scale-90 transition-all group/wishlist"
+                  >
+                    <i className={`fa-${wishlistCardIds.has(card.id) ? 'solid' : 'regular'} fa-heart text-xs ${wishlistCardIds.has(card.id) ? 'text-brand-red' : 'text-white/60'} group-hover/wishlist:text-brand-red transition-colors`}></i>
+                  </button>
                 )}
               </div>
             );

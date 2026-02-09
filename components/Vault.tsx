@@ -696,13 +696,19 @@ const Vault: React.FC<VaultProps> = ({
       }}
     />
   );
-  if (view === 'set-detail' && selectedSet) return (
-    <MasterSetDetail
-      set={selectedSet}
-      ownedCardIds={ownedCardIds}
-      onBack={() => setView('sets')}
-    />
-  );
+  if (view === 'set-detail' && selectedSet) {
+    const wishlistCardIds = useMemo(() => new Set(wishlist.map(card => card.id)), [wishlist]);
+
+    return (
+      <MasterSetDetail
+        set={selectedSet}
+        ownedCardIds={ownedCardIds}
+        wishlistCardIds={wishlistCardIds}
+        onBack={() => setView('sets')}
+        onToggleWishlist={onToggleWishlist}
+      />
+    );
+  }
 
   return renderFolders();
 };
