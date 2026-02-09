@@ -8,6 +8,7 @@ import MasterSetDetail from './MasterSetDetail';
 import { ApiSet } from '../services/pokemonService';
 import CardDetails from './CardDetails';
 import PriceChart from './PriceChart';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface VaultProps {
   customCollections: CustomCollection[];
@@ -41,6 +42,7 @@ const Vault: React.FC<VaultProps> = ({
   totalValue,
   currencySymbol
 }) => {
+  const { t } = useTranslation();
   const [view, setView] = useState<VaultView>('folders');
   const [selectedRegion, setSelectedRegion] = useState<string>('');
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
@@ -241,7 +243,7 @@ const Vault: React.FC<VaultProps> = ({
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-cyan to-brand-green opacity-20 blur-3xl rounded-full"></div>
 
         <div className="flex justify-between items-end mb-1 px-2">
-          <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">My Portfolio</p>
+          <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('vault.myPortfolio')}</p>
           <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${percentageChange >= 0 ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-red/10 border-brand-red/20'}`}>
             <i className={`fa-solid ${percentageChange >= 0 ? 'fa-arrow-trend-up text-brand-green' : 'fa-arrow-trend-down text-brand-red'} text-[10px]`}></i>
             <span className={`${percentageChange >= 0 ? 'text-brand-green' : 'text-brand-red'} text-[10px] font-black`}>
@@ -305,8 +307,13 @@ const Vault: React.FC<VaultProps> = ({
                 <div className="w-12 h-12 rounded-2xl glass border-white/10 flex items-center justify-center mb-4 group-hover:border-white/20 transition-colors">
                   <i className={`fa-solid ${folder.icon} ${iconColor} group-hover:scale-110 transition-transform`}></i>
                 </div>
-                <h4 className="text-white text-sm font-bold tracking-tight mb-1">{folder.name}</h4>
-                <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest">{count} Items</p>
+                <h4 className="text-white text-sm font-bold tracking-tight mb-1">
+                  {folder.id === 'collections' ? t('vault.collection') :
+                    folder.id === 'listings' ? t('vault.listings') :
+                      folder.id === 'wishlist' ? t('vault.wishlist') :
+                        folder.id === 'master' ? t('vault.masterSets') : folder.name}
+                </h4>
+                <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest">{count} {t('vault.items')}</p>
               </div>
             );
           })}
@@ -454,7 +461,7 @@ const Vault: React.FC<VaultProps> = ({
         <button onClick={() => setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
           <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
         </button>
-        <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">Wishlist</h3>
+        <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t('vault.wishlist')}</h3>
       </div>
       <div className="space-y-3">
         {wishlist.length === 0 ? (
@@ -492,7 +499,7 @@ const Vault: React.FC<VaultProps> = ({
             <button onClick={() => setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
               <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
             </button>
-            <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">My Collection</h3>
+            <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t('vault.collection')}</h3>
           </div>
           <div className="bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{allVaultItems.length} Cards</span>

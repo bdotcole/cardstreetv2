@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface AddCardProps {
   onScanClick: () => void;
@@ -11,6 +12,7 @@ interface AddCardProps {
 type AddView = 'options' | 'manual';
 
 const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
+  const { t } = useTranslation();
   const [view, setView] = useState<AddView>('options');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<Card[]>([]);
@@ -23,9 +25,9 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
       setIsSearching(true);
       const needsAi = /[\u0E00-\u0E7F]/.test(val) || val.split(' ').length > 1;
       if (needsAi) setIsAiResolving(true);
-      
+
       const data = await pokemonService.searchCards(val);
-      
+
       setResults(data);
       setIsSearching(false);
       setIsAiResolving(false);
@@ -36,7 +38,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
 
   const handleManualSearchChange = (val: string) => {
     setSearchQuery(val);
-    
+
     if (searchTimeout.current) {
       window.clearTimeout(searchTimeout.current);
     }
@@ -53,7 +55,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
   const renderManualView = () => (
     <div className="space-y-6 animate-fadeIn pb-20">
       <div className="flex items-center gap-4 pt-2">
-        <button 
+        <button
           onClick={() => setView('options')}
           className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all"
         >
@@ -67,8 +69,8 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
       <div className="space-y-2">
         <div className="relative group">
           <i className="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-brand-cyan transition-colors"></i>
-          <input 
-            type="text" 
+          <input
+            type="text"
             autoFocus
             placeholder="Search name, set, number..."
             className="w-full h-14 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl focus:border-brand-cyan/50 outline-none text-sm font-medium text-white placeholder:text-slate-600 transition-all"
@@ -76,7 +78,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
             onChange={(e) => handleManualSearchChange(e.target.value)}
           />
         </div>
-        
+
         {isAiResolving && (
           <div className="flex items-center gap-2 px-4 animate-pulse">
             <div className="w-1.5 h-1.5 rounded-full bg-brand-cyan"></div>
@@ -101,10 +103,10 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
                 className="glass p-5 rounded-[2.2rem] border-white/5 active:scale-[0.97] transition-all group flex items-center gap-5 text-left relative overflow-hidden"
               >
                 <div className="w-14 h-20 rounded-xl bg-slate-900 flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg group-hover:scale-105 transition-transform duration-300">
-                  <img 
-                    src={card.imageUrl} 
-                    alt={card.name} 
-                    className="w-full h-full object-contain filter drop-shadow-md" 
+                  <img
+                    src={card.imageUrl}
+                    alt={card.name}
+                    className="w-full h-full object-contain filter drop-shadow-md"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -140,12 +142,12 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
   const renderOptions = () => (
     <div className="space-y-8 animate-fadeIn pt-4 pb-12">
       <div className="text-center space-y-3 mb-12 px-4">
-        <h2 className="text-3xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">Registry Entry</h2>
-        <p className="text-[10px] text-slate-600 font-black tracking-[0.3em] uppercase">Digitize your physical collection</p>
+        <h2 className="text-3xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('scan.registryEntry')}</h2>
+        <p className="text-[10px] text-slate-600 font-black tracking-[0.3em] uppercase">{t('scan.digitizeCollection')}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
-        <button 
+        <button
           onClick={onScanClick}
           className="glass min-h-[180px] rounded-[2.5rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative overflow-hidden"
         >
@@ -154,12 +156,12 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
             <i className="fa-solid fa-expand text-brand-darker text-3xl"></i>
           </div>
           <div className="text-center z-10">
-            <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">Scan Card</span>
-            <span className="text-[9px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] mt-1">Real-time Vision AI</span>
+            <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">{t('scan.scanCard')}</span>
+            <span className="text-[9px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] mt-1">{t('scan.realtimeVisionAI')}</span>
           </div>
         </button>
 
-        <button 
+        <button
           onClick={() => setView('manual')}
           className="glass min-h-[180px] rounded-[2.5rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative"
         >
@@ -167,8 +169,8 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
             <i className="fa-solid fa-keyboard text-slate-400 text-2xl"></i>
           </div>
           <div className="text-center z-10">
-            <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">Search Registry</span>
-            <span className="text-[9px] text-slate-600 font-black uppercase tracking-[0.4em] mt-1">Global Product Archives</span>
+            <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">{t('scan.searchRegistry')}</span>
+            <span className="text-[9px] text-slate-600 font-black uppercase tracking-[0.4em] mt-1">{t('scan.globalArchives')}</span>
           </div>
         </button>
       </div>
