@@ -697,8 +697,6 @@ const Vault: React.FC<VaultProps> = ({
     />
   );
   if (view === 'set-detail' && selectedSet) {
-    const wishlistCardIds = useMemo(() => new Set(wishlist.map(card => card.id)), [wishlist]);
-
     return (
       <MasterSetDetail
         set={selectedSet}
