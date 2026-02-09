@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useUserSettings } from './useUserSettings';
+import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import enTranslations from '../locales/en.json';
 import thTranslations from '../locales/th.json';
 

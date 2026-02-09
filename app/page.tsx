@@ -22,7 +22,7 @@ import { pokemonService } from '@/services/pokemonService';
 import { createClient } from '@/lib/supabase/client';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
-import { useUserSettings } from '@/lib/hooks/useUserSettings';
+import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
 import PartnerPortal from '@/components/PartnerPortal';
