@@ -12,6 +12,7 @@ interface LanguagePickerProps {
 const LanguagePicker: React.FC<LanguagePickerProps> = ({ currentLanguage, onLanguageChange }) => {
     const toggleLanguage = () => {
         const newLang = currentLanguage === 'TH' ? 'EN' : 'TH';
+        console.log('LanguagePicker: Changing language from', currentLanguage, 'to', newLang);
         onLanguageChange(newLang);
     };
 

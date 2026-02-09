@@ -11,6 +11,8 @@ export function useTranslation() {
     const { settings } = useUserSettings();
     const lang = settings.language;
 
+    console.log('useTranslation: current language is', lang);
+
     const translations = lang === 'TH' ? thTranslations : enTranslations;
 
     /**

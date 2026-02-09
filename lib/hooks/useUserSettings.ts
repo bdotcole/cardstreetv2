@@ -110,12 +110,17 @@ export function useUserSettings(): UseUserSettingsReturn {
     };
 
     const updateLanguage = async (language: 'TH' | 'EN') => {
+        console.log('updateLanguage called with:', language);
         // Language stored in localStorage for now
-        localStorage.setItem('cardstreet-settings', JSON.stringify({
+        const newSettings = {
             ...settings,
             language
-        }));
-        setSettings(prev => ({ ...prev, language }));
+        };
+        localStorage.setItem('cardstreet-settings', JSON.stringify(newSettings));
+        setSettings(prev => {
+            console.log('Setting language from', prev.language, 'to', language);
+            return { ...prev, language };
+        });
     };
 
     const updateSettings = async (updates: Partial<UserSettings>) => {
