@@ -167,6 +167,9 @@ const Vault: React.FC<VaultProps> = ({
     return ids;
   }, [customCollections]);
 
+  // Create wishlist card IDs Set for fast lookup
+  const wishlistCardIds = useMemo(() => new Set(wishlist.map(card => card.id)), [wishlist]);
+
   const myVaultListings = useMemo(() => {
     const list: { colId: string, item: UserCollectionItem, card: Card }[] = [];
     customCollections.forEach(col => {
