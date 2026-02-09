@@ -71,7 +71,8 @@
         "salesHistory": "ประวัติการขาย",
         "operations": "การดำเนินงาน",
         "partnerDashboard": "แดชบอร์ดพาร์ทเนอร์",
-        "support": "ฝ่ายสนับสนุน"
+        "support": "ฝ่ายสนับสนุน",
+        "signOut": "ออกจากระบบ"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

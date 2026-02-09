@@ -449,7 +449,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               className="w-full h-14 glass rounded-[2rem] text-brand-red/70 font-bold text-xs uppercase tracking-[0.2em] border-brand-red/10 active:scale-[0.98] transition-all mt-4 hover:text-brand-red hover:bg-brand-red/5 shadow-lg flex items-center justify-center gap-3"
             >
               <LogOut className="w-4 h-4" />
-              Sign Out
+              {t('profile.signOut')}
             </button>
           </motion.div>
         )}
