@@ -5,6 +5,7 @@ import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile,
 import { MOCK_CARDS, MOCK_MARKET_LISTINGS, MOCK_REVIEWS, EXCHANGE_RATES } from '@/constants';
 // import Home from '@/components/Home'; // Retired
 import CurrencySwitcher from '@/components/CurrencySwitcher';
+import LanguagePicker from '@/components/LanguagePicker';
 import Explore from '@/components/Explore';
 import Marketplace from '@/components/Marketplace';
 import AddCard from '@/components/AddCard';
@@ -22,6 +23,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
@@ -29,6 +31,7 @@ import SellerProfile from '@/components/SellerProfile';
 import BuylistRequest from '@/components/BuylistRequest';
 
 export default function HomePage() {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -334,6 +337,7 @@ export default function HomePage() {
                                 )}
                             </button>
 
+                            <LanguagePicker currentLanguage={language} onLanguageChange={(newLang) => updateLanguage(newLang)} />
                             <CurrencySwitcher currentCurrency={currency} onCurrencyChange={(newCurrency) => updateCurrency(newCurrency)} />
                         </div>
                     </header>
@@ -450,13 +454,13 @@ export default function HomePage() {
                     {/* 1. SHOP (Marketplace) */}
                     <button onClick={() => setActiveTab('marketplace')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'marketplace' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-shop text-xl transition-colors ${activeTab === 'marketplace' ? 'text-brand-purple drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'marketplace' ? 'opacity-100 text-white' : 'opacity-0'}`}>Shop</span>
+                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'marketplace' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.shop')}</span>
                     </button>
 
                     {/* 2. EXPLORE */}
                     <button onClick={() => setActiveTab('explore')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'explore' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-magnifying-glass text-xl transition-colors ${activeTab === 'explore' ? 'text-brand-red drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'explore' ? 'opacity-100 text-white' : 'opacity-0'}`}>Explore</span>
+                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'explore' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.explore')}</span>
                     </button>
 
                     {/* 3. SCAN (Center) */}
@@ -470,20 +474,20 @@ export default function HomePage() {
                             )}
                         </button>
                         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-full text-center">
-                            <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'add' ? 'opacity-100 text-white' : 'opacity-0'}`}>Scan</span>
+                            <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'add' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.scan')}</span>
                         </div>
                     </div>
 
                     {/* 4. VAULT */}
                     <button onClick={() => setActiveTab('vault')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'vault' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-vault text-xl transition-colors ${activeTab === 'vault' ? 'text-brand-green drop-shadow-[0_0_10px_rgba(132,204,22,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'vault' ? 'opacity-100 text-white' : 'opacity-0'}`}>Vault</span>
+                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'vault' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.vault')}</span>
                     </button>
 
                     {/* 5. PROFILE */}
                     <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'profile' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-user-astronaut text-xl transition-colors ${activeTab === 'profile' ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'profile' ? 'opacity-100 text-white' : 'opacity-0'}`}>Profile</span>
+                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'profile' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.profile')}</span>
                     </button>
                 </nav>
 

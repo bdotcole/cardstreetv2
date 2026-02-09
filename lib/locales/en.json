@@ -1,0 +1,52 @@
+{
+    "nav": {
+        "shop": "Shop",
+        "explore": "Explore",
+        "scan": "Scan",
+        "vault": "Vault",
+        "profile": "Profile"
+    },
+    "explore": {
+        "searchPlaceholder": "Search Card Registry...",
+        "cardDatabase": "Card Database",
+        "language": "Language",
+        "game": "Game",
+        "set": "Set",
+        "selectExpansion": "Select Expansion",
+        "found": "Found",
+        "noCards": "No Cards Found",
+        "selectSet": "Select a set to browse cards or try a different search.",
+        "onePieceSoon": "One Piece sets coming soon!",
+        "asset": "Asset",
+        "marketPrice": "Market Price",
+        "listings": "Listing(s)",
+        "cards": "Cards",
+        "expansion": "Expansion",
+        "english": "English",
+        "thai": "Thai",
+        "japanese": "Japanese"
+    },
+    "marketplace": {
+        "title": "Marketplace",
+        "allGames": "All Games",
+        "pokemon": "Pokémon",
+        "onepiece": "One Piece",
+        "language": "Language",
+        "allLanguages": "All",
+        "english": "English",
+        "thai": "Thai",
+        "japanese": "Japanese",
+        "priceRange": "Price Range",
+        "sortBy": "Sort By",
+        "newest": "Newest",
+        "priceHigh": "Price: High",
+        "priceLow": "Price: Low",
+        "clearFilters": "Clear Filters"
+    },
+    "common": {
+        "loading": "Loading...",
+        "buyFrom": "Buy from",
+        "addToCart": "Add to Cart",
+        "noResults": "No results found"
+    }
+}

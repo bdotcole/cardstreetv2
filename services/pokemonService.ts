@@ -178,85 +178,102 @@ export const pokemonService = {
     async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th') {
         if (!query || query.trim().length < 2) return [];
 
-        const cacheKey = `${query.toLowerCase().trim()}-${language || 'all'}`;
+        // Cache key without language for cross-language search
+        const cacheKey = `${query.toLowerCase().trim()}-all-languages`;
         if (searchIndex.has(cacheKey)) {
             return searchIndex.get(cacheKey) || [];
         }
 
         try {
             const supabase = createClient();
-            const containsThai = /[\u0E00-\u0E7F]/.test(query);
-            const containsJapanese = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(query);
-            const lowerQuery = query.toLowerCase();
+            const cleanQuery = query.toLowerCase().trim();
 
-            // Determine language filter - use provided language or auto-detect from query
-            let langFilter: string | null = null;
-            if (language) {
-                // Map 'jp' to 'ja' for database
-                langFilter = language === 'jp' ? 'ja' : language;
-            } else if (containsThai || lowerQuery.includes('thai') || lowerQuery.includes(' th ')) {
-                langFilter = 'th';
-            } else if (containsJapanese || lowerQuery.includes('japanese') || lowerQuery.includes(' jp') || lowerQuery.includes(' ja ')) {
-                langFilter = 'ja';
-            } else if (lowerQuery.includes('english') || lowerQuery.includes(' en ')) {
-                langFilter = 'en';
-            }
-
-            // Clean search term
-            const cleanQuery = query
-                .toLowerCase()
-                .replace(/\b(japanese|jp|jpn|thai|th|english|en)\b/g, '')
-                .trim();
-
-            // Multi-strategy search for better results
-            let queryBuilder = supabase
+            // CROSS-LANGUAGE SEARCH: Search both 'name' and 'english_name' fields
+            // This allows English users to find Thai cards and vice versa
+            const { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('id, name, set_id, number, supertype, subtypes, rarity, hp, types, image_small, image_large, language, raw_data');
-
-            // Apply language filter if detected
-            if (langFilter) {
-                queryBuilder = queryBuilder.eq('language', langFilter);
-            }
-
-            // Use case-insensitive name search with wildcards
-            if (cleanQuery) {
-                queryBuilder = queryBuilder.ilike('name', `%${cleanQuery}%`);
-            }
-
-            // Order by relevance: exact matches first, then partial
-            // PERFORMANCE: Limit to 50 results max
-            const { data: cards, error } = await queryBuilder
-                .order('name', { ascending: true })
-                .limit(50);
+                .select(`
+                    id, name, english_name, set_id, number, supertype, subtypes, 
+                    rarity, hp, types, image_small, image_large, language, raw_data
+                `)
+                .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
+                .limit(100);
 
             if (error) {
-                console.error('Supabase search error:', error);
+                console.error('Search error:', error);
                 return [];
             }
 
-            // Score and sort results
+            // Get search popularity data
+            const cardIds = (cards || []).map(c => c.id);
+            const { data: popularityData } = await supabase
+                .from('search_popularity')
+                .select('card_id, search_count')
+                .in('card_id', cardIds);
+
+            const popularityMap = new Map(
+                (popularityData || []).map(p => [p.card_id, p.search_count])
+            );
+
+            // Score results with popularity boost
             const scoredResults = (cards || []).map(card => {
-                const nameLower = card.name.toLowerCase();
-                const queryLower = cleanQuery.toLowerCase();
+                const nameLower = card.name?.toLowerCase() || '';
+                const englishLower = card.english_name?.toLowerCase() || '';
+                const queryLower = cleanQuery;
 
                 let score = 0;
-                if (nameLower === queryLower) score = 100;
-                else if (nameLower.startsWith(queryLower)) score = 75;
-                else if (nameLower.includes(queryLower)) score = 50;
-                else score = 25;
 
-                // Boost Pokemon cards
+                // Exact match = highest score
+                if (nameLower === queryLower || englishLower === queryLower) {
+                    score = 100;
+                }
+                // Starts with query
+                else if (nameLower.startsWith(queryLower) || englishLower.startsWith(queryLower)) {
+                    score = 75;
+                }
+                // Contains query
+                else if (nameLower.includes(queryLower) || englishLower.includes(queryLower)) {
+                    score = 50;
+                } else {
+                    score = 25;
+                }
+
+                // POPULARITY BOOST - Machine learning from user searches!
+                const searchCount = popularityMap.get(card.id) || 0;
+                const popularityBoost = Math.min(50, Math.floor(searchCount / 10)); // Max +50 points
+                score += popularityBoost;
+
+                // Boost Pokemon cards over Trainers/Energy
                 if (card.supertype === 'Pokémon') score += 10;
+
+                // Hardcoded boost for most popular Pokemon
+                const popularPokemon = [
+                    'charizard', 'pikachu', 'mewtwo', 'rayquaza', 'lucario',
+                    'eevee', 'gengar', 'dragonite', 'gyarados', 'garchomp',
+                    'ลิซาร์ดอน', 'ปิกาจู', 'มิวทู' // Thai names for popular Pokemon
+                ];
+                if (popularPokemon.some(p => nameLower.includes(p) || englishLower.includes(p))) {
+                    score += 30;
+                }
 
                 return { card, score };
             });
 
-            // Sort by score and take top 30
+            // Sort by score descending and take top 30
             const topResults = scoredResults
                 .sort((a, b) => b.score - a.score)
                 .slice(0, 30)
                 .map(r => this.mapSupabaseCardToInternal(r.card));
 
+            // Track search popularity for top 10 results (learning!)
+            if (topResults.length > 0) {
+                // Fire and forget - track search popularity
+                topResults.slice(0, 10).forEach(card => {
+                    void supabase.rpc('increment_search_popularity', { p_card_id: card.id });
+                });
+            }
+
+            // Cache results
             if (topResults.length > 0) {
                 searchIndex.set(cacheKey, topResults);
             }

@@ -1,0 +1,52 @@
+{
+    "nav": {
+        "shop": "ร้านค้า",
+        "explore": "สำรวจ",
+        "scan": "สแกน",
+        "vault": "คลังการ์ด",
+        "profile": "โปรไฟล์"
+    },
+    "explore": {
+        "searchPlaceholder": "ค้นหาการ์ด...",
+        "cardDatabase": "ฐานข้อมูลการ์ด",
+        "language": "ภาษา",
+        "game": "เกม",
+        "set": "ชุด",
+        "selectExpansion": "เลือกชุดการ์ด",
+        "found": "พบ",
+        "noCards": "ไม่พบการ์ด",
+        "selectSet": "เลือกชุดเพื่อดูการ์ดหรือลองค้นหาใหม่",
+        "onePieceSoon": "การ์ดวันพีซเร็วๆ นี้!",
+        "asset": "รายการ",
+        "marketPrice": "ราคาตลาด",
+        "listings": "รายการขาย",
+        "cards": "การ์ด",
+        "expansion": "ชุดการ์ด",
+        "english": "อังกฤษ",
+        "thai": "ไทย",
+        "japanese": "ญี่ปุ่น"
+    },
+    "marketplace": {
+        "title": "ตลาด",
+        "allGames": "ทุกเกม",
+        "pokemon": "โปเกมอน",
+        "onepiece": "วันพีซ",
+        "language": "ภาษา",
+        "allLanguages": "ทั้งหมด",
+        "english": "อังกฤษ",
+        "thai": "ไทย",
+        "japanese": "ญี่ปุ่น",
+        "priceRange": "ช่วงราคา",
+        "sortBy": "เรียงตาม",
+        "newest": "ใหม่ล่าสุด",
+        "priceHigh": "ราคา: สูงสุด",
+        "priceLow": "ราคา: ต่ำสุด",
+        "clearFilters": "ล้างตัวกรอง"
+    },
+    "common": {
+        "loading": "กำลังโหลด...",
+        "buyFrom": "ซื้อจาก",
+        "addToCart": "เพิ่มลงตะกร้า",
+        "noResults": "ไม่พบผลลัพธ์"
+    }
+}

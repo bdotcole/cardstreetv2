@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { pokemonService, ApiSet } from '../services/pokemonService';
 import { Card } from '../types';
 import { CURRENCY_SYMBOLS } from '@/constants';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
@@ -12,6 +13,7 @@ interface ExploreProps {
 }
 
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
+  const { t } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
   const [selectedGame, setSelectedGame] = useState<'pokemon' | 'onepiece'>('pokemon');
   const [sets, setSets] = useState<ApiSet[]>([]);
@@ -154,7 +156,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-cyan transition-colors z-10"></i>
         <input
           type="text"
-          placeholder="Search Card Registry..."
+          placeholder={t('explore.searchPlaceholder')}
           className="relative w-full h-12 pl-12 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -164,7 +166,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       {/* Database Selectors - Language → Game → Set */}
       <div className="space-y-4">
         <div className="flex justify-between items-end">
-          <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">Card <span className="text-brand-cyan">Database</span></h2>
+          <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">{t('explore.cardDatabase').split(' ')[0]} <span className="text-brand-cyan">{t('explore.cardDatabase').split(' ')[1] || 'Database'}</span></h2>
         </div>
 
         <div className="grid grid-cols-3 gap-2 z-30 relative">
@@ -175,10 +177,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               onChange={(e) => setSelectedLanguage(e.target.value as any)}
               className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
             >
-              <option value="en">English</option>
+              <option value="en">{t('explore.english')}</option>
               {/* Japanese temporarily hidden until database is complete */}
-              {/* <option value="jp">Japanese</option> */}
-              <option value="th">Thai</option>
+              {/* <option value="jp">{t('explore.japanese')}</option> */}
+              <option value="th">{t('explore.thai')}</option>
             </select>
             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
           </div>
@@ -222,8 +224,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 {isSetListOpen && (
                   <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
                     <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">Select Expansion</span>
-                      <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} Found</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
+                      <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} {t('explore.found')}</span>
                     </div>
                     {sets.map(set => (
                       <button
@@ -249,9 +251,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                         <div className="min-w-0 flex-1">
                           <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || 'Expansion'}</span>
+                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || t('explore.expansion')}</span>
                             <span className="text-[8px] text-slate-700 font-bold">•</span>
-                            <span className="text-[8px] text-slate-600 font-bold">{set.total} Cards</span>
+                            <span className="text-[8px] text-slate-600 font-bold">{set.total} {t('explore.cards')}</span>
                           </div>
                         </div>
                         {selectedSetId === set.id && <i className="fa-solid fa-check text-brand-cyan text-xs"></i>}
@@ -284,18 +286,18 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
             </div>
-            <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">No Cards Found</h3>
+            <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
             <p className="text-slate-500 text-xs text-center">
               {selectedGame === 'onepiece'
-                ? 'One Piece sets coming soon!'
-                : 'Select a set to browse cards or try a different search.'}
+                ? t('explore.onePieceSoon')
+                : t('explore.selectSet')}
             </p>
           </div>
         ) : (
           <div className="w-full">
             <div className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Asset</span>
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Market Price</span>
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t('explore.asset')}</span>
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">{t('explore.marketPrice')}</span>
               <span></span>
             </div>
             <div className="divide-y divide-white/[0.03]">
@@ -322,7 +324,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     {getListingCount(card) > 0 ? (
                       <>
                         <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((getLowestListingPrice(card) || 0) * exchangeRate).toLocaleString()}</p>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} Listing(s)</p>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} {t('explore.listings')}</p>
                       </>
                     ) : (
                       <p className="text-white text-sm font-black tracking-tight">{currencySymbol}{Math.round(card.marketPrice * exchangeRate).toLocaleString()}</p>
