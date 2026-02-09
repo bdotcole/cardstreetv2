@@ -324,7 +324,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               <div
                 ref={cardListRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative"
+                className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
               >
                 {cards.map(card => (
                   <div
