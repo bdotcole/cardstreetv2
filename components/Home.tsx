@@ -66,7 +66,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
     fetch('/api/listings?limit=10')
       .then(res => res.json())
       .then(data => {
-        let items = [];
+        let items: any[] = [];
         if (Array.isArray(data)) {
           items = data;
         }
