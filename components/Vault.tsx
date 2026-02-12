@@ -46,6 +46,7 @@ const Vault: React.FC<VaultProps> = ({
   const [view, setView] = useState<VaultView>('folders');
   const [selectedRegion, setSelectedRegion] = useState<string>('');
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
   const [isSelectingForListing, setIsSelectingForListing] = useState(false);
   const [timeframe, setTimeframe] = useState('1M');
   const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
@@ -693,8 +694,9 @@ const Vault: React.FC<VaultProps> = ({
     <SetBrowser
       region={selectedRegion}
       onBack={() => setView('master')}
-      onSelectSet={(set: ApiSet) => {
+      onSelectSet={(set: ApiSet, language: 'en' | 'jp' | 'th') => {
         setSelectedSet(set);
+        setSelectedLanguage(language);
         setView('set-detail');
       }}
     />
@@ -707,6 +709,7 @@ const Vault: React.FC<VaultProps> = ({
         wishlistCardIds={wishlistCardIds}
         onBack={() => setView('sets')}
         onToggleWishlist={onToggleWishlist}
+        language={selectedLanguage}
       />
     );
   }

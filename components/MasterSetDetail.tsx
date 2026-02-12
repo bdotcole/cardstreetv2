@@ -10,16 +10,21 @@ interface MasterSetDetailProps {
   onBack: () => void;
   onCardClick?: (card: Card) => void;
   onToggleWishlist?: (card: Card) => void;
+  language?: 'en' | 'jp' | 'th';
 }
 
-const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wishlistCardIds, onBack, onCardClick, onToggleWishlist }) => {
+const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wishlistCardIds, onBack, onCardClick, onToggleWishlist, language }) => {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Scroll to top when changing sets
+    const main = document.querySelector('main');
+    if (main) main.scrollTo({ top: 0, behavior: 'instant' });
+
     const loadCards = async () => {
       setLoading(true);
-      const data = await pokemonService.fetchCardsBySet(set.id);
+      const data = await pokemonService.fetchCardsBySet(set.id, language);
 
       // Sort: First by number (attempting numeric sort), then fallback string
       const sortedData = data.sort((a: any, b: any) => {
@@ -129,7 +134,7 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                       e.stopPropagation();
                       onToggleWishlist?.(card);
                     }}
-                    className="absolute bottom-2 left-2 z-20 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-brand-red/20 active:scale-90 transition-all group/wishlist"
+                    className="absolute bottom-2 left-2 z-10 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-brand-red/20 active:scale-90 transition-all group/wishlist"
                   >
                     <i className={`fa-${wishlistCardIds.has(card.id) ? 'solid' : 'regular'} fa-heart text-xs ${wishlistCardIds.has(card.id) ? 'text-brand-red' : 'text-white/60'} group-hover/wishlist:text-brand-red transition-colors`}></i>
                   </button>

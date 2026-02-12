@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Card Matching - CardStreet TCG</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #1a202c;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 2.5rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            padding: 0.875rem 1.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .status-box {
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .status-box.error {
+            border-left-color: #f56565;
+            background: #fff5f5;
+            color: #c53030;
+        }
+
+        .status-box.success {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+            color: #2f855a;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .confidence-high {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .confidence-medium {
+            background: #fef5e7;
+            color: #975a16;
+        }
+
+        .confidence-low {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .config-note {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .config-note code {
+            background: #bee3f8;
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🃏 Card Matching Test Interface</h1>
+        <p class="subtitle">Test the Thai-to-English card matching Edge Function</p>
+
+        <div class="config-note">
+            <strong>⚠️ Configuration Required:</strong> This test interface uses your environment's Supabase
+            credentials.
+            Make sure you're running this from a development server (e.g., <code>npm run dev</code>) with proper
+            .env.local file configured.
+        </div>
+
+        <div class="button-container">
+            <button id="runMatchingBtn" class="btn-primary">
+                Run Card Matching
+            </button>
+            <button id="clearBtn" class="btn-secondary">
+                Clear Results
+            </button>
+        </div>
+
+        <div id="statusBox" class="status-box hidden"></div>
+
+        <div id="statsGrid" class="stats-grid hidden">
+            <div class="stat-card">
+                <div class="stat-label">Mapped</div>
+                <div class="stat-value" id="mappedCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Priced</div>
+                <div class="stat-value" id="pricedCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Failed</div>
+                <div class="stat-value" id="failedCount">-</div>
+            </div>
+        </div>
+
+        <div id="resultsTable" class="hidden">
+            <h2 style="margin-bottom: 1rem; font-size: 1.5rem;">Recent Mappings</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Thai Card</th>
+                        <th>English Card</th>
+                        <th>Set</th>
+                        <th>Confidence</th>
+                        <th>Method</th>
+                    </tr>
+                </thead>
+                <tbody id="mappingsTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+        // Read from environment or window object (set by Next.js)
+        const SUPABASE_URL = window.ENV?.NEXT_PUBLIC_SUPABASE_URL || '';
+        const SUPABASE_ANON_KEY = window.ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+            alert('Supabase credentials not found. Please run this from your Next.js dev server with proper .env.local configuration.');
+        }
+
+        const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/daily-market-update`;
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const runMatchingBtn = document.getElementById('runMatchingBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusBox = document.getElementById('statusBox');
+        const statsGrid = document.getElementById('statsGrid');
+        const resultsTable = document.getElementById('resultsTable');
+        const mappingsTableBody = document.getElementById('mappingsTableBody');
+        const mappedCount = document.getElementById('mappedCount');
+        const pricedCount = document.getElementById('pricedCount');
+        const failedCount = document.getElementById('failedCount');
+
+        function showStatus(message, type = 'info') {
+            statusBox.textContent = message;
+            statusBox.className = `status-box ${type}`;
+            statusBox.classList.remove('hidden');
+        }
+
+        function getConfidenceBadge(score) {
+            const scoreNum = parseFloat(score);
+            let className = 'confidence-medium';
+            if (scoreNum >= 0.9) className = 'confidence-high';
+            else if (scoreNum < 0.75) className = 'confidence-low';
+            return `<span class="confidence-badge ${className}">${(scoreNum * 100).toFixed(0)}%</span>`;
+        }
+
+        async function runMatching() {
+            try {
+                runMatchingBtn.disabled = true;
+                runMatchingBtn.innerHTML = '<span class="spinner"></span>Running...';
+                showStatus('Triggering Edge Function...', 'info');
+
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token || SUPABASE_ANON_KEY;
+
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus(`✓ Matching completed at ${new Date(result.timestamp).toLocaleString()}`, 'success');
+
+                    mappedCount.textContent = result.mapped || 0;
+                    pricedCount.textContent = result.priced || 0;
+                    failedCount.textContent = result.failed || 0;
+
+                    statsGrid.classList.remove('hidden');
+
+                    // Load recent mappings
+                    await loadRecentMappings();
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`✗ Error: ${error.message}`, 'error');
+            } finally {
+                runMatchingBtn.disabled = false;
+                runMatchingBtn.textContent = 'Run Card Matching';
+            }
+        }
+
+        async function loadRecentMappings() {
+            try {
+                const { data: mappings, error } = await supabase
+                    .from('card_mappings')
+                    .select(`
+                        *,
+                        thai_card:card_id_th (name, set_id),
+                        english_card:card_id_en (name, set_id)
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+
+                if (error) throw error;
+
+                if (mappings && mappings.length > 0) {
+                    mappingsTableBody.innerHTML = mappings.map(m => `
+                        <tr>
+                            <td>${m.thai_card?.name || 'N/A'}</td>
+                            <td>${m.english_card?.name || 'N/A'}</td>
+                            <td><strong>${m.english_card?.set_id || 'N/A'}</strong></td>
+                            <td>${getConfidenceBadge(m.confidence_score)}</td>
+                            <td>${m.match_method || 'N/A'}</td>
+                        </tr>
+                    `).join('');
+
+                    resultsTable.classList.remove('hidden');
+                } else {
+                    showStatus('No mappings found yet. Click "Run Card Matching" to create mappings.', 'info');
+                }
+            } catch (error) {
+                console.error('Error loading mappings:', error);
+                showStatus(`✗ Error loading mappings: ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            statusBox.classList.add('hidden');
+            statsGrid.classList.add('hidden');
+            resultsTable.classList.add('hidden');
+            mappingsTableBody.innerHTML = '';
+            mappedCount.textContent = '-';
+            pricedCount.textContent = '-';
+            failedCount.textContent = '-';
+        }
+
+        runMatchingBtn.addEventListener('click', runMatching);
+        clearBtn.addEventListener('click', clearResults);
+
+        // Auto-load recent mappings on page load
+        loadRecentMappings();
+    </script>
+</body>
+
+</html>

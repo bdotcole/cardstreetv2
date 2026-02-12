@@ -315,13 +315,16 @@ export default function HomePage() {
                     <header className="w-full px-6 py-6 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
                             {/* CardStreet Logo */}
-                            <div className="relative w-[60px] h-[60px] flex-shrink-0">
+                            <button
+                                onClick={() => setActiveTab('marketplace')}
+                                className="relative w-[60px] h-[60px] flex-shrink-0 hover:scale-105 transition-transform"
+                            >
                                 <img
                                     src="/logo.png"
                                     alt="CardStreet"
                                     className="w-full h-full object-contain"
                                 />
-                            </div>
+                            </button>
                         </div>
 
                         <div className="flex gap-2">

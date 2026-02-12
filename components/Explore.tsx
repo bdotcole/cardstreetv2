@@ -88,12 +88,12 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     if (!selectedSetId || debouncedSearchTerm.length > 2) return;
     const loadCards = async () => {
       setIsLoadingCards(true);
-      const apiCards = await pokemonService.fetchCardsBySet(selectedSetId);
+      const apiCards = await pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage);
       setCards(apiCards);
       setIsLoadingCards(false);
     };
     loadCards();
-  }, [selectedSetId, debouncedSearchTerm]);
+  }, [selectedSetId, debouncedSearchTerm, selectedLanguage]);
 
   // Perform search when debounced term changes
   useEffect(() => {
@@ -108,7 +108,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     } else if (debouncedSearchTerm.length === 0 && selectedSetId) {
       const loadCards = async () => {
         setIsLoadingCards(true);
-        const apiCards = await pokemonService.fetchCardsBySet(selectedSetId);
+        const apiCards = await pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage);
         setCards(apiCards);
         setIsLoadingCards(false);
       };

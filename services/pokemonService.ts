@@ -100,16 +100,16 @@ export const pokemonService = {
         }
     },
 
-    async fetchCardsBySet(setId: string) {
+    async fetchCardsBySet(setId: string, language?: 'en' | 'jp' | 'th') {
         try {
             const supabase = createClient();
 
-            console.log('[fetchCardsBySet] Querying for set_id:', setId);
+            console.log('[fetchCardsBySet] Querying for set_id:', setId, 'language:', language);
 
-            // Query cards by set_id
+            // Query cards by set_id with market_values join
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*')
+                .select('*, market_values(market_avg, last_updated)')
                 .ilike('set_id', setId)
                 .order('number', { ascending: true });
 
@@ -130,7 +130,26 @@ export const pokemonService = {
                 console.log('[fetchCardsBySet] Debug - similar set_ids found:', debugCards?.map(c => c.set_id));
             }
 
-            return (cards || []).map(c => this.mapSupabaseCardToInternal(c));
+            // Filter by language using character detection if language specified
+            let filteredCards = cards || [];
+            if (language && cards) {
+                const hasJapaneseChars = (text: string) => {
+                    const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+                    return japaneseRegex.test(text);
+                };
+
+                if (language === 'jp') {
+                    // For Japanese sets, keep only cards with Japanese characters
+                    filteredCards = cards.filter(c => hasJapaneseChars(c.name || ''));
+                } else {
+                    // For English/Thai sets, filter out cards with Japanese characters
+                    filteredCards = cards.filter(c => !hasJapaneseChars(c.name || ''));
+                }
+
+                console.log('[fetchCardsBySet] Filtered from', cards.length, 'to', filteredCards.length, 'cards for language:', language);
+            }
+
+            return filteredCards.map(c => this.mapSupabaseCardToInternal(c));
         } catch (error) {
             console.error("Failed to fetch cards from Supabase:", error);
             return [];
@@ -147,7 +166,7 @@ export const pokemonService = {
             // Try exact match first
             let { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*')
+                .select('*, market_values(market_avg, last_updated)')
                 .ilike('name', `%${cleanName}%`)
                 .eq('number', cleanNumber)
                 .limit(5);
@@ -156,7 +175,7 @@ export const pokemonService = {
             if (!cards || cards.length === 0) {
                 const { data: fallbackCards } = await supabase
                     .from('pokemon_cards')
-                    .select('*')
+                    .select('*, market_values(market_avg, last_updated)')
                     .ilike('name', `%${cleanName}%`)
                     .limit(5);
 
@@ -194,7 +213,8 @@ export const pokemonService = {
                 .from('pokemon_cards')
                 .select(`
                     id, name, english_name, set_id, number, supertype, subtypes, 
-                    rarity, hp, types, image_small, image_large, language, raw_data
+                    rarity, hp, types, image_small, image_large, language, raw_data,
+                    market_values(market_avg, last_updated)
                 `)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
                 .limit(100);
@@ -221,15 +241,40 @@ export const pokemonService = {
                 const englishLower = card.english_name?.toLowerCase() || '';
                 const queryLower = cleanQuery;
 
+                // Extract root name (before any suffix like V, VMAX, EX, GX, etc.)
+                const suffixes = [' v', ' vmax', ' vstar', ' ex', ' gx', ' tag team', ' break', ' prime', '-v', '-ex', '-gx'];
+                const getRootName = (name: string) => {
+                    let root = name.toLowerCase();
+                    for (const suffix of suffixes) {
+                        const idx = root.indexOf(suffix);
+                        if (idx !== -1) {
+                            root = root.substring(0, idx).trim();
+                            break;
+                        }
+                    }
+                    return root;
+                };
+
+                const nameRoot = getRootName(nameLower);
+                const englishRoot = getRootName(englishLower);
+
                 let score = 0;
 
                 // Exact match = highest score
                 if (nameLower === queryLower || englishLower === queryLower) {
                     score = 100;
                 }
+                // Root name exact match (e.g., "pikachu" matches "Pikachu V")
+                else if (nameRoot === queryLower || englishRoot === queryLower) {
+                    score = 90;
+                }
                 // Starts with query
                 else if (nameLower.startsWith(queryLower) || englishLower.startsWith(queryLower)) {
                     score = 75;
+                }
+                // Root starts with query
+                else if (nameRoot.startsWith(queryLower) || englishRoot.startsWith(queryLower)) {
+                    score = 70;
                 }
                 // Contains query
                 else if (nameLower.includes(queryLower) || englishLower.includes(queryLower)) {
@@ -292,8 +337,23 @@ export const pokemonService = {
         const pricesTypes = tcgData?.prices || {};
         const pricesObj = pricesTypes.holofoil || pricesTypes.normal || Object.values(pricesTypes)[0] || {};
 
-        const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 5.0;
-        const marketThb = Math.round(marketUsd * EXCHANGE_RATE);
+        // Use live market_values if available, otherwise fallback to raw_data
+        let marketThb = 0;
+        let lastUpdated = '';
+
+        // Check if market_values joined data exists (it might be an array or single object depending on relationship)
+        const marketValueData = Array.isArray(supabaseCard.market_values)
+            ? supabaseCard.market_values[0]
+            : supabaseCard.market_values;
+
+        if (marketValueData && marketValueData.market_avg > 0) {
+            marketThb = Math.round(marketValueData.market_avg);
+            lastUpdated = marketValueData.last_updated;
+        } else {
+            // Fallback to approximated old data (likely USD)
+            const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 5.0;
+            marketThb = Math.round(marketUsd * EXCHANGE_RATE);
+        }
 
         // Helper function to ensure TCGdex URLs have .png extension
         const fixTcgdexUrl = (url: string | null): string => {
@@ -351,10 +411,10 @@ export const pokemonService = {
             tcgplayerUrl: supabaseCard.tcgplayer_url,
             prices: {
                 market: marketThb,
-                low: Math.round(((pricesObj as any)?.low || marketUsd * 0.9) * EXCHANGE_RATE),
-                mid: Math.round(((pricesObj as any)?.mid || marketUsd) * EXCHANGE_RATE),
-                high: Math.round(((pricesObj as any)?.high || marketUsd * 1.2) * EXCHANGE_RATE),
-                lastUpdated: tcgData?.updatedAt || new Date().toISOString()
+                low: Math.round(marketThb * 0.9),
+                mid: marketThb,
+                high: Math.round(marketThb * 1.1),
+                lastUpdated: lastUpdated || tcgData?.updatedAt || new Date().toISOString()
             },
             change7d: parseFloat((Math.random() * 15 - 5).toFixed(1)),
             priceHistory: [

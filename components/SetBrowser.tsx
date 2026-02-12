@@ -5,7 +5,7 @@ import { ApiSet, pokemonService } from '../services/pokemonService';
 interface SetBrowserProps {
   region: string;
   onBack: () => void;
-  onSelectSet: (set: ApiSet) => void;
+  onSelectSet: (set: ApiSet, language: 'en' | 'jp' | 'th') => void;
   ownedCardIds?: Set<string>; // For completion % calculation
 }
 
@@ -67,6 +67,13 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
     setSearchQuery(''); // Reset search on region change
     fetchSetPage(1);
   }, [region]);
+
+  // Extract language from region
+  const getLanguageFromRegion = () => {
+    if (region?.includes('jp')) return 'jp' as const;
+    if (region?.includes('th')) return 'th' as const;
+    return 'en' as const;
+  };
 
   // Calculate completion % for a set
   const getSetCompletion = useCallback((set: ApiSet) => {
@@ -249,7 +256,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
               <button
                 key={`${set.id}-${index}`}
                 ref={isLastElement ? lastSetElementRef : null}
-                onClick={() => onSelectSet(set)}
+                onClick={() => onSelectSet(set, getLanguageFromRegion())}
                 className="group flex flex-col items-center gap-2 active:scale-95 transition-all w-full mb-4"
               >
                 <div className="w-full aspect-square glass rounded-3xl p-3 flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden">
