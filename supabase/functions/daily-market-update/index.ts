@@ -268,11 +268,11 @@ serve(async (req) => {
                 }
 
                 const strictSetMapping: { [key: string]: string | string[] } = {
-                    'MA2': 'me02', // Phantasmal Flames
-                    'MA1': 'me01', // Mega Evolution
-                    'SV10s': 'sv10', // Destined Rivals
-                    'SV9s': 'sv09', // Journey Together
-                    'SV11s': ['sv10.5b', 'sv10.5w'] // Black Bolt & White Flare
+                    'MA2': 'sv02', // Paldea Evolved
+                    'MA1': 'sv03.5', // 151
+                    'SV10s': 'sv04.5', // Paldean Fates (Assuming)
+                    'SV9s': 'sv04', // Paradox Rift (Assuming)
+                    'SV11s': ['sv05'] // Temporal Forces (Assuming)
                 };
 
                 const targetSetId = strictSetMapping[thaiCard.set_id];
@@ -296,12 +296,47 @@ serve(async (req) => {
                     .in('rarity', targetRarities)
                     .ilike('name', thaiCard.english_name.trim());
 
-                // If specific set mapped, filter by it
                 if (searchSetIds) {
                     query = query.in('set_id', searchSetIds);
                 }
 
-                const { data: enCards } = await query;
+                let { data: enCards } = await query;
+
+                // FALLBACK: If strict set match failed, try matching by Name + Rarity across ALL English sets
+                if ((!enCards || enCards.length === 0) && searchSetIds) {
+                    const { data: globalMatches } = await supabase
+                        .from('pokemon_cards')
+                        .select('*, pokemon_sets!inner(release_date)')
+                        .eq('language', 'en')
+                        .in('rarity', targetRarities)
+                        .ilike('name', thaiCard.english_name.trim())
+                        .limit(5); // Limit to avoid too many duplicates
+
+                    if (globalMatches && globalMatches.length > 0) {
+                        console.log(`Fallback global match candidate found for ${thaiCard.name}`);
+                        enCards = globalMatches;
+                        // Clear searchSetIds so we don't try to force strict match logic below
+                        searchSetIds = null;
+                    }
+                }
+
+                // FALLBACK: If strict set match failed, try matching by Name + Rarity across ALL English sets
+                if ((!enCards || enCards.length === 0) && searchSetIds) {
+                    const { data: globalMatches } = await supabase
+                        .from('pokemon_cards')
+                        .select('*, pokemon_sets!inner(release_date)')
+                        .eq('language', 'en')
+                        .in('rarity', targetRarities)
+                        .ilike('name', thaiCard.english_name.trim())
+                        .limit(5); // Limit to avoid too many duplicates
+
+                    if (globalMatches && globalMatches.length > 0) {
+                        console.log(`Fallback global match candidate found for ${thaiCard.name}`);
+                        enCards = globalMatches;
+                        // Clear searchSetIds so we don't try to force strict match logic below
+                        searchSetIds = null;
+                    }
+                }
 
                 if (enCards && enCards.length > 0) {
                     let bestMatch = null;
@@ -369,6 +404,7 @@ serve(async (req) => {
         }
 
         let pricingCandidates = cardsToPrice || [];
+        const debugLog: any[] = [];
 
         // Shuffle to ensure we cover different cards over time
         pricingCandidates.sort(() => Math.random() - 0.5);
@@ -454,7 +490,7 @@ serve(async (req) => {
                 }
 
                 // Upsert into market_values
-                await supabase.from('market_values').upsert({
+                const { data: upsertData, error: insertError } = await supabase.from('market_values').upsert({
                     card_id: card.id,
                     language: 'th',
                     condition: 'Raw_NM',
@@ -463,9 +499,16 @@ serve(async (req) => {
                     source_prices: { raw_calculated: calculatedPrice, method: pricingMethod },
                     currency: 'THB',
                     last_updated: new Date().toISOString()
-                }, { onConflict: 'card_id, language, condition' });
+                }, { onConflict: 'card_id, language, condition' }).select();
 
-                priced++;
+                if (insertError) {
+                    console.error('Error inserting price:', insertError);
+                    failed++;
+                    debugLog.push({ card: card.id, error: insertError });
+                } else {
+                    priced++;
+                    debugLog.push({ card: card.id, price: finalPrice, success: true });
+                }
 
             } catch (error) {
                 console.error(`Failed to price card ${card.id}:`, error);
@@ -479,6 +522,7 @@ serve(async (req) => {
                 mapped,
                 priced,
                 failed,
+                debug: debugLog.slice(0, 20),
                 timestamp: new Date().toISOString(),
             }),
             { headers: { 'Content-Type': 'application/json' } }
