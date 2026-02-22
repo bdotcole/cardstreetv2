@@ -25,3 +25,7 @@ dist-ssr
 
 .vercel
 .next
+
+# Capacitor
+android/app/build
+ios/App/Pods

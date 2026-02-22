@@ -16,6 +16,8 @@ interface CardDetailsProps {
   onAddToCart?: (item: any) => void;
   currency?: string;
   exchangeRate?: number;
+  isVaultView?: boolean;
+  vaultActionButtons?: React.ReactNode;
 }
 
 const CardDetails: React.FC<CardDetailsProps> = ({
@@ -30,30 +32,38 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   actionButtons,
   onAddToCart,
   currency = 'THB',
-  exchangeRate = 1
+  exchangeRate = 1,
+  isVaultView = false,
+  vaultActionButtons
 }) => {
 
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const getGradedValue = (basePrice: number, multiplier: number) => {
-    return Math.round(basePrice * multiplier * displayExchangeRate);
-  };
-
   // Thai Price Adjustment Logic
-  // If the card is from a Thai set, we assume the market data (mocked) is based on JP values or needs this adjustment per user request.
-  // "Update the Thai market price to 55% of the Japanese counterpart market value"
   const isThaiSet = THAI_SETS.some(s => card.set.includes(s) || s.includes(card.set));
   const priceAdjustment = isThaiSet ? 0.55 : 1.0;
 
   const displayExchangeRate = exchangeRate * priceAdjustment;
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
   // Format helper
   const formatPrice = (price: number) => {
-    if (!price) return '---';
-    return Math.round(price * displayExchangeRate).toLocaleString();
+    if (!price || price === 0) return 'N/A';
+    const val = price * displayExchangeRate;
+    if (currency === 'USD') {
+      return `${currencySymbol} ${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `${currencySymbol} ${Math.round(val).toLocaleString()}`;
   };
 
-  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+  const getGradedValue = (basePrice: number, multiplier: number) => {
+    if (!basePrice || basePrice === 0) return 'N/A';
+    const val = basePrice * multiplier * displayExchangeRate;
+    if (currency === 'USD') {
+      return `${currencySymbol} ${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `${currencySymbol} ${Math.round(val).toLocaleString()}`;
+  };
 
   // Prioritize hires images if available
   const displayImageUrl = card.imageUrl;
@@ -122,7 +132,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
               <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Spot Price</p>
               <p className="text-2xl font-black text-white">
-                {currencySymbol} {formatPrice(card.prices?.market || card.marketPrice)}
+                {formatPrice(card.prices?.market || card.marketPrice)}
               </p>
               <div className="mt-2 text-[8px] text-brand-green font-bold uppercase tracking-widest flex items-center gap-1">
                 <i className="fa-solid fa-arrow-trend-up"></i> +3.2%
@@ -131,7 +141,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Market High</p>
               <p className="text-2xl font-black text-brand-red">
-                {currencySymbol} {formatPrice(card.prices?.high || 45000)}
+                {formatPrice(card.prices?.high || 45000)}
               </p>
               <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">Peak</div>
             </div>
@@ -141,87 +151,97 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <PriceChart data={card.priceHistory} />
           </div>
 
-          {/* Marketplace Listings (Individual Sellers) */}
-          <div className="space-y-4">
-            <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">Marketplace Availability</h3>
-            <div className="space-y-2">
-              {listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length > 0 ? (
-                listings
-                  .filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set))
-                  .map((listing, idx) => (
-                    <div key={idx} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:border-brand-green/30 transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 flex-shrink-0">
-                          {listing.seller.avatar_url ? (
-                            <img src={listing.seller.avatar_url} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500">?</div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-white text-xs font-bold">{listing.seller.display_name}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{listing.condition}</span>
-                            <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                            <span className="text-[8px] text-slate-500 font-bold uppercase">{listing.seller.rating || 5.0} ★</span>
+          {!isVaultView ? (
+            <>
+              {/* Marketplace Listings (Individual Sellers) */}
+              <div className="space-y-4">
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">Marketplace Availability</h3>
+                <div className="space-y-2">
+                  {listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length > 0 ? (
+                    listings
+                      .filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set))
+                      .map((listing, idx) => (
+                        <div key={idx} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:border-brand-green/30 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 flex-shrink-0">
+                              {listing.seller?.avatar_url ? (
+                                <img src={listing.seller.avatar_url} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500">?</div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-white text-xs font-bold">{listing.seller?.display_name || 'User'}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{listing.condition}</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                <span className="text-[8px] text-slate-500 font-bold uppercase">{listing.seller?.rating || 5.0} ★</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right flex items-center gap-4">
+                            <div>
+                              <p className="text-white text-base font-black italic">
+                                {currencySymbol} {Math.round(listing.price * exchangeRate).toLocaleString()}
+                              </p>
+                              <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">+ Free Ship</p>
+                            </div>
+                            <button
+                              onClick={() => onAddToCart && onAddToCart({
+                                id: listing.id,
+                                cardId: listing.card_id,
+                                card: listing.card_data,
+                                price: listing.price,
+                                sellerId: listing.seller_id,
+                                sellerName: listing.seller?.display_name || 'Unknown',
+                                condition: listing.condition
+                              })}
+                              className="bg-brand-green text-brand-darker text-[9px] font-black px-4 py-2 rounded-lg hover:bg-white transition-colors active:scale-95 shadow-lg shadow-brand-green/10"
+                            >
+                              BUY
+                            </button>
                           </div>
                         </div>
+                      ))
+                  ) : (
+                    <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
+                      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No listings available for this item</p>
+                      <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Graded Section */}
+              <div className="space-y-4">
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">Graded Dashboard</h3>
+                <div className="space-y-2">
+                  {[
+                    { label: "PSA 10", grade: "Gem Mint", multiplier: 3.5, color: "text-brand-cyan" },
+                    { label: "BGS 9.5", grade: "Gem Mint", multiplier: 3.2, color: "text-brand-green" },
+                    { label: "CGC 10", grade: "Pristine", multiplier: 3.4, color: "text-brand-red" }
+                  ].map((graded, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-white/[0.03] p-4 rounded-xl border border-white/5 hover:border-brand-cyan/30 transition-all cursor-default">
+                      <div>
+                        <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
+                        <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{graded.grade}</p>
                       </div>
-                      <div className="text-right flex items-center gap-4">
-                        <div>
-                          <p className="text-white text-base font-black italic">
-                            {currencySymbol} {Math.round(listing.price * exchangeRate).toLocaleString()}
-                          </p>
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">+ Free Ship</p>
-                        </div>
-                        <button
-                          onClick={() => onAddToCart && onAddToCart({
-                            id: listing.id || Math.random().toString(),
-                            card: listing.card_data,
-                            price: listing.price,
-                            sellerName: listing.seller.display_name,
-                            condition: listing.condition
-                          })}
-                          className="bg-brand-green text-brand-darker text-[9px] font-black px-4 py-2 rounded-lg hover:bg-white transition-colors active:scale-95 shadow-lg shadow-brand-green/10"
-                        >
-                          BUY
-                        </button>
+                      <div className="text-right">
+                        <p className={`font-black text-base ${graded.color}`}>
+                          {getGradedValue(card.prices?.market || card.marketPrice, graded.multiplier)}
+                        </p>
+                        <p className="text-[8px] text-slate-600 font-bold tracking-widest">{graded.multiplier}x Prem.</p>
                       </div>
                     </div>
-                  ))
-              ) : (
-                <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
-                  <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No listings available for this item</p>
-                  <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
+                  ))}
                 </div>
-              )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4 mt-6">
+              {vaultActionButtons}
             </div>
-          </div>
-
-          {/* Graded Section */}
-          <div className="space-y-4">
-            <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">Graded Dashboard</h3>
-            <div className="space-y-2">
-              {[
-                { label: "PSA 10", grade: "Gem Mint", multiplier: 3.5, color: "text-brand-cyan" },
-                { label: "BGS 9.5", grade: "Gem Mint", multiplier: 3.2, color: "text-brand-green" },
-                { label: "CGC 10", grade: "Pristine", multiplier: 3.4, color: "text-brand-red" }
-              ].map((graded, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-white/[0.03] p-4 rounded-xl border border-white/5 hover:border-brand-cyan/30 transition-all cursor-default">
-                  <div>
-                    <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
-                    <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{graded.grade}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-black text-base ${graded.color}`}>
-                      {currencySymbol} {getGradedValue(card.prices?.market || card.marketPrice, graded.multiplier).toLocaleString()}
-                    </p>
-                    <p className="text-[8px] text-slate-600 font-bold tracking-widest">{graded.multiplier}x Prem.</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

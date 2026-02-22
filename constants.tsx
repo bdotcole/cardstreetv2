@@ -146,12 +146,6 @@ export const MOCK_CARDS: Card[] = [
   }
 ];
 
-export const MOCK_SELLERS = [
-  { id: 'u1', name: 'PokeMaster99', avatar: 'https://i.pravatar.cc/150?u=u1', rating: 4.9 },
-  { id: 'u2', name: 'CardSharkTH', avatar: 'https://i.pravatar.cc/150?u=u2', rating: 4.5 },
-  { id: 'u3', name: 'CollectorJane', avatar: 'https://i.pravatar.cc/150?u=u3', rating: 5.0 }
-];
-
 export const MOCK_REVIEWS = [
   {
     id: 'r1',
@@ -184,98 +178,5 @@ export const MOCK_REVIEWS = [
     comment: 'Legit seller. Will buy again.',
     date: '2 weeks ago',
     verifiedPurchase: false
-  }
-];
-
-export const MOCK_MARKET_LISTINGS = [
-  {
-    id: 'l1',
-    card_id: 'p1',
-    card_data: MOCK_CARDS[0],
-    price: 4300,
-    condition: 'NM',
-    seller: MOCK_SELLERS[0],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l2',
-    card_id: 'p1',
-    card_data: MOCK_CARDS[0],
-    price: 4500,
-    condition: 'NM',
-    seller: MOCK_SELLERS[1],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l3',
-    card_id: 'p1',
-    card_data: MOCK_CARDS[0],
-    price: 3900,
-    condition: 'LP',
-    seller: MOCK_SELLERS[2],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l4',
-    card_id: 'p2',
-    card_data: MOCK_CARDS[1],
-    price: 1100,
-    condition: 'NM',
-    seller: MOCK_SELLERS[1],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l5',
-    card_id: 'p2',
-    card_data: MOCK_CARDS[1],
-    price: 1050,
-    condition: 'LP',
-    seller: MOCK_SELLERS[0],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l6',
-    card_id: 'p3',
-    card_data: MOCK_CARDS[2],
-    price: 8500,
-    condition: 'NM',
-    seller: MOCK_SELLERS[0],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l7',
-    card_id: 'p3',
-    card_data: MOCK_CARDS[2],
-    price: 8200,
-    condition: 'LP',
-    seller: MOCK_SELLERS[1],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l8',
-    card_id: 'p3',
-    card_data: MOCK_CARDS[2],
-    price: 8000,
-    condition: 'MP',
-    seller: MOCK_SELLERS[2],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l9',
-    card_id: 'p4',
-    card_data: MOCK_CARDS[3],
-    price: 2200,
-    condition: 'NM',
-    seller: MOCK_SELLERS[2],
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'l10',
-    card_id: 'p4',
-    card_data: MOCK_CARDS[3],
-    price: 2100,
-    condition: 'LP',
-    seller: MOCK_SELLERS[0],
-    created_at: new Date().toISOString()
   }
 ];

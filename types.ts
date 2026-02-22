@@ -40,12 +40,14 @@ export interface Card {
   tcgplayerUrl?: string;
   change7d?: number;
   priceHistory: { date: string; price: number }[];
+  language?: string;
 }
 
 export interface UserCollectionItem {
   id: string;
   cardId: string;
   card?: Card; // Added to store snapshot of API data
+  cardData?: any;
   quantity: number;
   condition: CardCondition;
   purchasePrice: number;
@@ -78,6 +80,12 @@ export interface UserProfile {
   bio?: string;
   joinedAt?: string;
   badges?: string[];
+  phone?: string;
+  address?: string;
+  district?: string;
+  state?: string;
+  province?: string;
+  postcode?: string;
 }
 
 export interface Review {
@@ -109,8 +117,10 @@ export interface CollectionFolder {
 
 export interface CartItem {
   id: string; // Listing ID
+  cardId: string; // Actual card ID
   card: Card;
   price: number;
+  sellerId: string;
   sellerName: string;
   condition: string;
 }

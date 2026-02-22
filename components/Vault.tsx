@@ -23,6 +23,9 @@ interface VaultProps {
   activeListings?: any[];
   totalValue: number;
   currencySymbol: string;
+  currency: string;
+  exchangeRate: number;
+  onRemoveFromCollection?: (collectionId: string, itemId: string) => Promise<void>;
 }
 
 type VaultView = 'folders' | 'wishlist' | 'listings' | 'collections' | 'master' | 'sets' | 'set-detail';
@@ -40,7 +43,10 @@ const Vault: React.FC<VaultProps> = ({
   onPublishListing,
   activeListings = [],
   totalValue,
-  currencySymbol
+  currencySymbol,
+  currency,
+  exchangeRate,
+  onRemoveFromCollection
 }) => {
   const { t } = useTranslation();
   const [view, setView] = useState<VaultView>('folders');
@@ -144,6 +150,40 @@ const Vault: React.FC<VaultProps> = ({
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
+  // Handle Android Back Button
+  useEffect(() => {
+    let backListener: any;
+
+    const setupBackListener = async () => {
+      // Dynamic import to avoid SSR issues
+      const { App } = await import('@capacitor/app');
+
+      backListener = await App.addListener('backButton', () => {
+        if (view === 'set-detail') {
+          setView('sets');
+        } else if (view === 'sets') {
+          setView('master');
+        } else if (view === 'master') {
+          setView('folders');
+        } else if (view === 'folders') {
+          // If at root of Vault, minimize app (default behavior)
+          App.minimizeApp();
+        } else {
+          // Default fallback for other views
+          setView('folders');
+        }
+      });
+    };
+
+    setupBackListener();
+
+    return () => {
+      if (backListener) {
+        backListener.remove();
+      }
+    };
+  }, [view]);
+
   // Close sort menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -154,6 +194,8 @@ const Vault: React.FC<VaultProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close sort menu when clicking outside
 
   // Flatten all owned card IDs for fast lookup in Master Set view
   const ownedCardIds = useMemo(() => {
@@ -224,10 +266,24 @@ const Vault: React.FC<VaultProps> = ({
     });
   }, [allVaultItems, collectionSearchQuery, sortOption]);
 
-  const deleteCollection = (e: React.MouseEvent, id: string) => {
+  const handleRemoveCard = async (e: React.MouseEvent, colId: string, itemId: string) => {
     e.stopPropagation();
-    if (confirm("Are you sure you want to delete this collection and all items inside it?")) {
-      onUpdateCollections(customCollections.filter(c => c.id !== id));
+    if (confirm("Are you sure you want to remove this card from your collection?")) {
+      if (onRemoveFromCollection) {
+        try {
+          await onRemoveFromCollection(colId, itemId);
+        } catch (error) {
+          console.error('Failed to remove card:', error);
+          alert('Failed to remove card from vault.');
+        }
+      } else {
+        // Fallback for legacy
+        const col = customCollections.find(c => c.id === colId);
+        if (col) {
+          const updatedItems = col.items.filter(item => item.id !== itemId);
+          onUpdateCollections(customCollections.map(c => c.id === colId ? { ...c, items: updatedItems } : c));
+        }
+      }
     }
   };
 
@@ -369,7 +425,7 @@ const Vault: React.FC<VaultProps> = ({
                     <p className="text-[9px] text-slate-500 uppercase font-black">{item.condition} • {card.set}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-white text-xs font-black">฿{card.marketPrice.toLocaleString()}</p>
+                    <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
                   </div>
                 </button>
               ))
@@ -404,7 +460,7 @@ const Vault: React.FC<VaultProps> = ({
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} Unit(s)</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-black text-brand-cyan">฿{item.listingPrice?.toLocaleString()}</p>
+                  <p className="text-xl font-black text-brand-cyan">{currencySymbol}{item.listingPrice?.toLocaleString()}</p>
                   <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest">{t('card.askPrice')}</p>
                 </div>
               </div>
@@ -447,9 +503,9 @@ const Vault: React.FC<VaultProps> = ({
           card={listingTarget.card}
           initialCondition={listingTarget.item.condition}
           onClose={onCancelListing}
-          onSuccess={(data) => {
+          onSuccess={async (data) => {
             if (data) {
-              onPublishListing(data);
+              await onPublishListing(data);
             }
             setIsSelectingForListing(false);
             setView('listings');
@@ -486,7 +542,7 @@ const Vault: React.FC<VaultProps> = ({
                 <p className="text-[9px] text-slate-500 uppercase font-bold">{card.set} • {card.rarity}</p>
               </div>
               <div className="text-right">
-                <p className="text-white text-xs font-black">฿{card.marketPrice.toLocaleString()}</p>
+                <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
               </div>
             </div>
           ))
@@ -606,9 +662,9 @@ const Vault: React.FC<VaultProps> = ({
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  <p className="text-white text-xs font-black">฿{card.marketPrice.toLocaleString()}</p>
+                  <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
                   <button
-                    onClick={(e) => deleteCollection(e, colId)}
+                    onClick={(e) => handleRemoveCard(e, colId, item.id)}
                     className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 hover:bg-brand-red/20 hover:text-brand-red text-slate-600 transition-colors"
                   >
                     <i className="fa-solid fa-trash-can text-[10px]"></i>
@@ -633,6 +689,8 @@ const Vault: React.FC<VaultProps> = ({
           onToggleWishlist={onToggleWishlist}
           onAddToCollection={onAddToCollection}
           listings={activeListings}
+          currency={currency}
+          exchangeRate={exchangeRate}
         />
       )}
     </>
@@ -648,33 +706,32 @@ const Vault: React.FC<VaultProps> = ({
           onClose={() => { setViewingCard(null); setViewingItem(null); }}
           onToggleWishlist={onToggleWishlist}
           onAddToCollection={onAddToCollection}
-          actionButtons={
+          isVaultView={true}
+          vaultActionButtons={
             !viewingItem.item.isListing ? (
-              <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 z-[60]">
-                <button
-                  onClick={() => {
-                    onListCard(viewingItem.colId, viewingItem.item, viewingCard);
-                    setViewingCard(null);
-                    setViewingItem(null);
-                    setIsSelectingForListing(false);
-                    setView('listings');
-                  }}
-                  className="w-full h-14 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
-                >
-                  <i className="fa-solid fa-tag"></i>
-                  Sell Asset
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  onListCard(viewingItem.colId, viewingItem.item, viewingCard);
+                  setViewingCard(null);
+                  setViewingItem(null);
+                  setIsSelectingForListing(false);
+                  setView('listings');
+                }}
+                className="w-full h-14 mt-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-tag"></i>
+                Sell Asset
+              </button>
             ) : (
-              <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 z-20 text-center">
-                <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs">
-                  <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
-                  Currently Listed on Market
-                </div>
+              <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs py-4">
+                <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
+                Currently Listed on Market
               </div>
             )
           }
           listings={activeListings}
+          currency={currency}
+          exchangeRate={exchangeRate}
         />
       )}
     </>

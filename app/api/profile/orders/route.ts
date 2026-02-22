@@ -21,12 +21,9 @@ export async function GET(request: NextRequest) {
             .from('orders')
             .select(`
                 *,
-                transaction:transactions(
-                    amount,
-                    listing:listings(
-                        card_data,
-                        condition
-                    )
+                listing:listings(
+                    card_data,
+                    condition
                 )
             `, { count: 'exact' })
             .eq('buyer_id', user.id)
@@ -35,7 +32,7 @@ export async function GET(request: NextRequest) {
 
         // Filter by status
         if (status === 'active') {
-            query = query.in('status', ['processing', 'shipped', 'out_for_delivery'])
+            query = query.in('status', ['pending', 'paid', 'label_generated', 'processing', 'shipped', 'out_for_delivery'])
         } else if (status === 'completed') {
             query = query.in('status', ['delivered', 'cancelled'])
         }

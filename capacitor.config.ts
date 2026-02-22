@@ -1,0 +1,32 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.cardstreet.app',
+  appName: 'CardStreet',
+  webDir: 'out',
+
+  // Load the live Vercel deployment instead of bundled static files.
+  // This works because the Next.js app has API routes that require a server.
+  // Remove this block to load from bundled static files (if you switch to static export later).
+  server: {
+    url: 'https://cardstreet-tcg.vercel.app',
+    cleartext: true,
+    androidScheme: 'https'
+  },
+
+  // Native plugin config
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#0f1419', // brand-darker
+      showSpinner: false,
+      androidScaleType: 'CENTER_CROP',
+    },
+    StatusBar: {
+      style: 'DARK',        // Light text on dark bg
+      backgroundColor: '#0f1419',
+    },
+  },
+};
+
+export default config;

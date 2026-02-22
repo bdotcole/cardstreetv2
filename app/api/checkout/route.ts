@@ -11,13 +11,15 @@ export async function POST(req: Request) {
     try {
         const { amount, currency, token, source, metadata } = await req.json();
 
+        const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://cardstreet-tcg.vercel.app';
+
         const charge = await omise.charges.create({
             amount: Math.round(amount * 100), // Convert to subunits (Stang/Cents)
             currency,
             card: token, // For Credit Card
             source,      // For PromptPay/TrueMoney/InternetBanking
             metadata,
-            return_uri: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.vercel.app') || 'http://localhost:3000'}/marketplace?payment_status=complete` // Simplistic return URL
+            return_uri: `${baseUrl}/?payment_status=complete`
         });
 
         return NextResponse.json(charge);

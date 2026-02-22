@@ -47,9 +47,13 @@ class JustTCGClient {
     /**
      * Fetch market data for a specific card by name
      */
+    /**
+     * Fetch market data for a specific card by name
+     */
     async getCardPrices(cardName: string, language: 'en' | 'jp' = 'en'): Promise<JustTCGPrice[]> {
         try {
-            const url = `${this.baseUrl}/prices/search`;
+            // Updated endpoint: cards/search
+            const url = `${this.baseUrl}/cards/search`;
             const params = new URLSearchParams({
                 q: cardName,
                 game: 'pokemon',
@@ -64,11 +68,37 @@ class JustTCGClient {
             });
 
             if (!response.ok) {
-                throw new Error(`JustTCG API error: ${response.status} ${response.statusText}`);
+                console.error(`JustTCG API error: ${response.status} ${response.statusText}`);
+                return [];
             }
 
-            const data: JustTCGResponse = await response.json();
-            return data.success ? data.data : [];
+            const data = await response.json();
+
+            if (data.data && data.data.length > 0) {
+                // Try to find exact match first
+                const exactMatch = data.data.find((c: any) => c.name.toLowerCase() === cardName.toLowerCase());
+                const card = exactMatch || data.data[0];
+
+                if (card && card.variants) {
+                    // Map variants to JustTCGPrice structure
+                    return card.variants.map((v: any) => ({
+                        card_id: card.id,
+                        card_name: card.name,
+                        set_name: card.set_name || card.set,
+                        number: card.number,
+                        rarity: card.rarity,
+                        market_price: v.price || v.avgPrice,
+                        low_price: v.minPrice30d || 0, // Approximate
+                        high_price: v.maxPrice30d || 0, // Approximate
+                        condition: v.condition === 'Near Mint' ? 'NM' : v.condition,
+                        language: v.language === 'English' ? 'en' : (v.language === 'Japanese' ? 'jp' : 'en'),
+                        last_updated: new Date().toISOString(), // Use current time as fallback
+                        source_url: `https://justtcg.com/card/${card.id}`
+                    }));
+                }
+            }
+
+            return [];
         } catch (error) {
             console.error('JustTCG getCardPrices error:', error);
             return [];

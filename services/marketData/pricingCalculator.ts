@@ -4,7 +4,6 @@
  */
 
 import { justTCGClient } from './justTCGClient';
-import { pokeDataClient } from './pokeDataClient';
 import { createClient } from '@/lib/supabase/client';
 
 export interface PriceSource {
@@ -44,7 +43,7 @@ export class PricingCalculator {
 
     /**
      * Calculate weighted average from multiple price sources
-     * JustTCG gets 60% weight, PokeData++ gets 40% weight
+     * JustTCG gets 100% weight now
      */
     calculateWeightedAverage(sources: PriceSource[]): number {
         const totalWeight = sources.reduce((sum, s) => sum + s.weight, 0);
@@ -75,11 +74,8 @@ export class PricingCalculator {
      */
     async fetchEnglishMarketPrice(cardName: string): Promise<MarketSnapshot | null> {
         try {
-            // Get prices from both sources
-            const [justTcgPrice, pokeDataPrice] = await Promise.all([
-                justTCGClient.getAverageMarketPrice(cardName, 'en'),
-                pokeDataClient.getMarketPrice(cardName),
-            ]);
+            // Get prices from JustTCG only
+            const justTcgPrice = await justTCGClient.getAverageMarketPrice(cardName, 'en');
 
             const sources: PriceSource[] = [];
 
@@ -88,16 +84,7 @@ export class PricingCalculator {
                     source: 'JustTCG',
                     price: justTcgPrice,
                     url: 'https://justtcg.com',
-                    weight: 0.6
-                });
-            }
-
-            if (pokeDataPrice) {
-                sources.push({
-                    source: 'TCGplayer (PokeData++)',
-                    price: pokeDataPrice,
-                    url: 'https://www.tcgplayer.com',
-                    weight: 0.4
+                    weight: 1.0
                 });
             }
 

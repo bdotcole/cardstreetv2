@@ -40,14 +40,28 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
 
       // Language Filter
       let matchesLanguage = true;
+      const cardLang = card.language;
+
       if (selectedLanguage === 'en') {
-        const isThai = THAI_SETS.some(s => set.includes(s) || s.includes(set));
-        const isJp = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
-        matchesLanguage = !isThai && !isJp;
+        if (cardLang) {
+          matchesLanguage = cardLang === 'en';
+        } else {
+          const isThai = THAI_SETS.some(s => set.includes(s) || s.includes(set));
+          const isJp = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
+          matchesLanguage = !isThai && !isJp;
+        }
       } else if (selectedLanguage === 'jp') {
-        matchesLanguage = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
+        if (cardLang) {
+          matchesLanguage = cardLang === 'ja' || cardLang === 'jp';
+        } else {
+          matchesLanguage = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
+        }
       } else if (selectedLanguage === 'th') {
-        matchesLanguage = THAI_SETS.some(s => set.includes(s) || s.includes(set));
+        if (cardLang) {
+          matchesLanguage = cardLang === 'th';
+        } else {
+          matchesLanguage = THAI_SETS.some(s => set.includes(s) || s.includes(set));
+        }
       }
 
       // Price Filter
@@ -284,7 +298,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                   <div className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden">
                     {listing.seller?.avatar_url && <img src={listing.seller.avatar_url} className="w-full h-full object-cover" />}
                   </div>
-                  <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || 'Ghost Seller'}</span>
+                  <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || listing.seller?.name || 'Unknown Seller'}</span>
                   <span className="text-[8px] text-yellow-500">★ {listing.seller?.rating || '5.0'}</span>
                 </div>
               </div>
@@ -296,7 +310,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                   <p className="text-lg font-black text-brand-cyan leading-none">
                     {/* Use CURRENCY_SYMBOLS map if available, else fallback to currency code */}
                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
-                    {Math.round(listing.price * exchangeRate).toLocaleString()}
+                    {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
                   </p>
                 </div>
                 <button
@@ -305,8 +319,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                     if (onAddToCart) {
                       onAddToCart({
                         id: listing.id,
+                        cardId: listing.card_id,
                         card: listing.card_data,
                         price: listing.price,
+                        sellerId: listing.seller_id,
                         sellerName: listing.seller?.display_name || 'Unknown',
                         condition: listing.condition
                       });

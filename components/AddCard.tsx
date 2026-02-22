@@ -7,11 +7,12 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 interface AddCardProps {
   onScanClick: () => void;
   onSelectCard: (card: Card) => void;
+  isScanning?: boolean;
 }
 
 type AddView = 'options' | 'manual';
 
-const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
+const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning = false }) => {
   const { t } = useTranslation();
   const [view, setView] = useState<AddView>('options');
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,7 +178,25 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard }) => {
     </div>
   );
 
-  return view === 'options' ? renderOptions() : renderManualView();
+  return (
+    <>
+      {isScanning && (
+        <div className="fixed inset-0 z-[100] bg-brand-darker/95 backdrop-blur-xl flex flex-col items-center justify-center gap-6 animate-fadeIn">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-3xl bg-brand-cyan/20 flex items-center justify-center animate-pulse">
+              <i className="fa-solid fa-expand text-brand-cyan text-4xl"></i>
+            </div>
+            <div className="absolute -inset-4 border-2 border-brand-cyan/30 rounded-[2rem] animate-ping opacity-30"></div>
+          </div>
+          <div className="text-center space-y-2">
+            <p className="text-white text-lg font-black uppercase tracking-widest">Analyzing Card</p>
+            <p className="text-[10px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] animate-pulse">AI Vision Processing...</p>
+          </div>
+        </div>
+      )}
+      {view === 'options' ? renderOptions() : renderManualView()}
+    </>
+  );
 };
 
 export default AddCard;

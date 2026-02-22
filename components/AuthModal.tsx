@@ -29,13 +29,42 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setLoading(true);
         setError(null);
         try {
-            const { error } = await supabase.auth.signInWithOAuth({
+            let redirectUrl = `https://cardstreet-tcg.vercel.app/api/auth/callback`;
+            let isNative = false;
+
+            try {
+                const { Capacitor } = await import('@capacitor/core');
+                if (Capacitor.isNativePlatform()) {
+                    redirectUrl = 'https://cardstreet-tcg.vercel.app/mobile-redirect';
+                    isNative = true;
+                }
+            } catch (e) {
+                // Ignore, fallback to web URL
+            }
+
+            console.log('[Auth] Initiating Google Login. Native:', isNative, 'Redirect:', redirectUrl);
+
+            const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/api/auth/callback`,
+                    redirectTo: redirectUrl,
+                    skipBrowserRedirect: isNative // Only skip on native to open manually in system browser
                 },
             });
+
             if (error) throw error;
+
+            // Handle manual redirect for Native Custom Scheme
+            if (isNative && data?.url) {
+                console.log('[Auth] Opening Capacitor Browser for Auth:', data.url);
+                try {
+                    const { Browser } = await import('@capacitor/browser');
+                    await Browser.open({ url: data.url });
+                } catch (e) {
+                    console.error('Failed to open Capacitor Browser:', e);
+                    window.open(data.url, '_system');
+                }
+            }
         } catch (err: any) {
             console.error('Error logging in with Google:', err);
             setError('Failed to sign in with Google. Please try again.');

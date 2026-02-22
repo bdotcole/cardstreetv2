@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PriceChart from './PriceChart';
 import { pokemonService, ApiSet } from '@/services/pokemonService';
 import { Card } from '@/types';
-import { MOCK_MARKET_LISTINGS, MOCK_SELLERS } from '@/constants';
 
 interface HomeProps {
   totalValue: number;
@@ -71,30 +70,13 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
           items = data;
         }
 
-        // Format MOCK_MARKET_LISTINGS to match expected structure
-        const globalMocks = MOCK_MARKET_LISTINGS.map(l => ({
-          ...l,
-          seller: {
-            display_name: l.seller.name,
-            avatar_url: l.seller.avatar
-          }
-        }));
-
-        // Merge local listings, global mocks, and real API items
-        // We take up to 10 latest unique items
-        const combined = [...localListings, ...globalMocks, ...items];
+        // Merge local listings and real API items
+        const combined = [...localListings, ...items];
         setRecentListings(combined.slice(0, 10));
       })
       .catch(err => {
-        // Even if API fails, show guest listings and global mocks
-        const globalMocks = MOCK_MARKET_LISTINGS.map(l => ({
-          ...l,
-          seller: {
-            display_name: l.seller.name,
-            avatar_url: l.seller.avatar
-          }
-        }));
-        setRecentListings([...localListings, ...globalMocks].slice(0, 10));
+        // Even if API fails, show local listings
+        setRecentListings([...localListings].slice(0, 10));
         setListingsError(null);
       })
       .finally(() => setIsListingsLoading(false));
@@ -186,7 +168,11 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
                 <div className="space-y-0.5 px-1">
                   <p className="text-white text-xs font-bold truncate">{card.name}</p>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide truncate">{card.set}</p>
-                  <p className="text-sm font-black text-brand-cyan mt-1">฿{card.marketPrice.toLocaleString()}</p>
+                  <p className="text-sm font-black text-brand-cyan mt-1">
+                    {(!card.marketPrice || card.marketPrice === 0)
+                      ? 'N/A'
+                      : `฿${card.marketPrice.toLocaleString()}`}
+                  </p>
                 </div>
               </div>
             ))}

@@ -112,3 +112,71 @@
   background-color: rgba(6, 182, 212, 0.3);
   color: #fff;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE / CAPACITOR — Touch-First & Safe Area Styles
+   ═══════════════════════════════════════════════════════════ */
+
+/* Safe area padding for notch, home indicator, and rounded corners.
+   env() values are injected by the native WebView on iOS/Android
+   when viewport-fit=cover is set. We expose them as CSS vars for
+   easy use in components. */
+@layer base {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
+
+  /* Prevent overscroll bounce (rubber-banding) in native shell */
+  body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    /* Prevent accidental text selection on interactive items */
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Touch-First: Ensure all interactive elements meet 44x44px minimum.
+   This only applies on devices that support touch (mobile). */
+@media (pointer: coarse) {
+
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Convert :hover to :active for touch devices.
+     Hover states don't exist on phones — active gives tactile feedback. */
+  button:active,
+  a:active,
+  [role="button"]:active {
+    opacity: 0.8;
+    transform: scale(0.98);
+    transition: all 0.1s ease;
+  }
+
+  /* Disable hover styles on touch devices to avoid sticky hover bug */
+  @media (hover: none) {
+
+    button:hover,
+    a:hover,
+    [role="button"]:hover {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Prevent text selection on buttons and navigation */
+  nav,
+  button,
+  [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

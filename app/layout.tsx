@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import './globals.css'
 import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
@@ -14,6 +15,7 @@ export const viewport = {
     width: 'device-width',
     initialScale: 1,
     maximumScale: 1,
+    viewportFit: 'cover' as const,
 }
 
 
@@ -33,6 +35,7 @@ export default function RootLayout({
                         {children}
                     </PayPalProvider>
                 </UserSettingsProvider>
+                <Script src="https://cdn.omise.co/omise.js" strategy="beforeInteractive" />
             </body>
         </html>
     )

@@ -25,6 +25,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
 
+  const [sortOption, setSortOption] = useState<'number' | 'priceHigh' | 'priceLow'>('number');
+
   // Custom Set Selector State
   const [isSetListOpen, setIsSetListOpen] = useState(false);
   const setListRef = useRef<HTMLDivElement>(null);
@@ -161,6 +163,41 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     }
     return null;
   };
+
+  // Sort cards based on option
+  const sortedCards = useMemo(() => {
+    if (!cards) return [];
+
+    // Create a copy to allow sorting without mutating state
+    const sorted = [...cards];
+
+    // Helper to get raw number for sorting (handles "001/165" -> 1)
+    const getCardNum = (c: Card) => {
+      const numPart = c.number.split('/')[0];
+      // Remove non-numeric chars for pure number sort if needed, or keep as is?
+      // Usually best to parse int
+      return parseInt(numPart.replace(/[^0-9]/g, '')) || 999999;
+    };
+
+    switch (sortOption) {
+      case 'priceHigh':
+        return sorted.sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0));
+      case 'priceLow':
+        return sorted.sort((a, b) => {
+          // Put 0/null prices at the bottom for "Low to High" as they are usually "unknown" not "free"
+          const priceA = a.marketPrice || Infinity;
+          const priceB = b.marketPrice || Infinity;
+          if (priceA === Infinity && priceB === Infinity) return 0;
+          if (priceA === Infinity) return 1;
+          if (priceB === Infinity) return -1;
+          return priceA - priceB;
+        });
+      case 'number':
+      default:
+        // Default sort from API is usually by number, but we can enforce it here
+        return sorted.sort((a, b) => getCardNum(a) - getCardNum(b));
+    }
+  }, [cards, sortOption]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn">
@@ -316,7 +353,23 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               {/* Fixed Header Row */}
               <div className="flex-shrink-0 grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t('explore.asset')}</span>
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">{t('explore.marketPrice')}</span>
+                <div
+                  className="flex items-center justify-end gap-1 cursor-pointer group"
+                  onClick={() => setSortOption(prev => {
+                    if (prev === 'number') return 'priceHigh';
+                    if (prev === 'priceHigh') return 'priceLow';
+                    return 'number';
+                  })}
+                  title="Toggle Sort: Number -> Price High -> Price Low"
+                >
+                  <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${sortOption !== 'number' ? 'text-brand-cyan' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                    {t('explore.marketPrice')}
+                  </span>
+                  <div className="flex flex-col -space-y-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <i className={`fa-solid fa-caret-up text-[8px] ${sortOption === 'priceLow' ? 'text-brand-cyan' : 'text-slate-600'}`}></i>
+                    <i className={`fa-solid fa-caret-down text-[8px] ${sortOption === 'priceHigh' ? 'text-brand-cyan' : 'text-slate-600'}`}></i>
+                  </div>
+                </div>
                 <span></span>
               </div>
 
@@ -326,7 +379,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
               >
-                {cards.map(card => (
+                {sortedCards.map(card => (
                   <div
                     key={card.id}
                     className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
@@ -352,7 +405,14 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} {t('explore.listings')}</p>
                         </>
                       ) : (
-                        <p className="text-white text-sm font-black tracking-tight">{currencySymbol}{Math.round(card.marketPrice * exchangeRate).toLocaleString()}</p>
+                        <p className="text-white text-sm font-black tracking-tight">
+                          {(!card.marketPrice || card.marketPrice === 0)
+                            ? 'N/A'
+                            : currency === 'USD'
+                              ? `${currencySymbol}${(card.marketPrice * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : `${currencySymbol}${Math.round(card.marketPrice * exchangeRate).toLocaleString()}`
+                          }
+                        </p>
                       )}
                     </div>
 

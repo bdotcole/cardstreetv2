@@ -53,6 +53,25 @@ export function useUserCollections(): UseUserCollectionsReturn {
 
             if (itemsError) throw itemsError;
 
+            // Fetch user's active listings to map them to vault items
+            const { data: listingsData, error: listingsError } = await supabase
+                .from('listings')
+                .select('*')
+                .eq('seller_id', user.id)
+                .eq('status', 'active');
+
+            if (listingsError) throw listingsError;
+
+            // Map listings by card_id for easy consumption
+            // If user has multiple listings for same card, we keep an array to match multiple items
+            const userListingsMap: Record<string, any[]> = {};
+            (listingsData || []).forEach(listing => {
+                if (!userListingsMap[listing.card_id]) {
+                    userListingsMap[listing.card_id] = [];
+                }
+                userListingsMap[listing.card_id].push(listing);
+            });
+
             // Group items by collection
             const collectionsWithItems: CustomCollection[] = (collectionsData || []).map(col => ({
                 id: col.id,
@@ -61,20 +80,37 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 createdAt: col.created_at,
                 items: (itemsData || [])
                     .filter(item => item.collection_id === col.id)
-                    .map(item => ({
-                        id: item.id,
-                        cardId: item.card_id,
-                        card: item.card_data as Card,
-                        quantity: item.quantity,
-                        condition: item.condition as CardCondition,
-                        purchasePrice: parseFloat(item.purchase_price || '0'),
-                        addedAt: item.added_at,
-                        isListing: false, // Will be determined by checking listings table
-                        listingPrice: undefined,
-                        isGraded: false,
-                        gradingCompany: undefined,
-                        grade: undefined
-                    }))
+                    .map(item => {
+                        // Find a matching listing for this item (matching card ID and condition ideally)
+                        let matchedListing: any = null;
+                        const potentialListings = userListingsMap[item.card_id];
+
+                        if (potentialListings && potentialListings.length > 0) {
+                            // Try to match by condition first
+                            const exactMatchIdx = potentialListings.findIndex(l => l.condition === item.condition);
+                            if (exactMatchIdx !== -1) {
+                                matchedListing = potentialListings.splice(exactMatchIdx, 1)[0];
+                            } else {
+                                // Fallback to any listing for same card
+                                matchedListing = potentialListings.shift();
+                            }
+                        }
+
+                        return {
+                            id: item.id,
+                            cardId: item.card_id,
+                            card: item.card_data as Card,
+                            quantity: item.quantity,
+                            condition: item.condition as CardCondition,
+                            purchasePrice: parseFloat(item.purchase_price || '0'),
+                            addedAt: item.added_at,
+                            isListing: !!matchedListing,
+                            listingPrice: matchedListing ? parseFloat(matchedListing.price) : undefined,
+                            isGraded: matchedListing ? matchedListing.is_graded : false,
+                            gradingCompany: matchedListing ? matchedListing.grading_company : undefined,
+                            grade: matchedListing ? matchedListing.grade : undefined
+                        };
+                    })
             }));
 
             setCollections(collectionsWithItems);

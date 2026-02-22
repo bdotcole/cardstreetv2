@@ -15,21 +15,24 @@ export async function GET(request: Request) {
             const isLocalEnv = process.env.NODE_ENV === 'development'
 
             if (isLocalEnv) {
-                // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
                 return NextResponse.redirect(`${origin}${next}`)
             } else if (forwardedHost) {
                 return NextResponse.redirect(`https://${forwardedHost}${next}`)
             } else {
-                // Fallback: If request.url is localhost but we are in prod (unlikely but possible in some setups), try valid host header
                 const host = request.headers.get('host')
                 if (host && !host.includes('localhost')) {
                     return NextResponse.redirect(`https://${host}${next}`)
                 }
                 return NextResponse.redirect(`${origin}${next}`)
             }
+        } else {
+            // Log the error and pass it to the frontend
+            console.error('[Auth Callback] Code exchange failed:', error.message)
+            return NextResponse.redirect(`${origin}/?error=auth_failed&details=${encodeURIComponent(error.message)}`)
         }
     }
 
     // return the user to an error page with instructions
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+    console.error('[Auth Callback] Code missing')
+    return NextResponse.redirect(`${origin}/?error=auth_failed&details=missing_code`)
 }

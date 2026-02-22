@@ -14,8 +14,10 @@ const Portfolio: React.FC<PortfolioProps> = ({ collection }) => {
 
   const totalValue = useMemo(() => {
     return collection.reduce((acc, item) => {
-      const card = MOCK_CARDS.find(c => c.id === item.cardId);
-      return acc + (card ? card.marketPrice * item.quantity : 0);
+      // Try to read the market price from the real populated card data first
+      // Fallback to MOCK_CARDS if it's strictly a mocked asset
+      const marketPrice = item.card?.marketPrice ?? item.cardData?.marketPrice ?? MOCK_CARDS.find(c => c.id === item.cardId)?.marketPrice ?? 0;
+      return acc + (marketPrice * item.quantity);
     }, 0);
   }, [collection]);
 
@@ -93,25 +95,30 @@ const Portfolio: React.FC<PortfolioProps> = ({ collection }) => {
         <h3 className="font-bold text-white text-[10px] px-2 uppercase tracking-[0.3em] opacity-40">Asset Registry</h3>
         <div className="space-y-3">
           {collection.map(item => {
-            const card = MOCK_CARDS.find(c => c.id === item.cardId);
-            if (!card) return null;
-            const isProfit = card.marketPrice >= item.purchasePrice;
+            const cardObj = item.card || item.cardData || MOCK_CARDS.find(c => c.id === item.cardId);
+            if (!cardObj) return null;
+
+            const itemMarketPrice = cardObj.marketPrice || 0;
+            const isProfit = itemMarketPrice >= item.purchasePrice;
+            const imageUrl = cardObj.images?.small || cardObj.imageUrl;
+            const name = cardObj.name || 'Unknown Card';
+
             return (
               <div key={item.id} className="glass p-4 rounded-3xl flex items-center gap-4 border border-white/5 active:bg-white/[0.06] transition-all">
                 <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 p-1">
-                  <img src={card.imageUrl} className="w-full h-full object-contain filter drop-shadow-lg" />
+                  <img src={imageUrl} className="w-full h-full object-contain filter drop-shadow-lg" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-slate-200 text-sm truncate tracking-tight">{card.name}</h4>
+                  <h4 className="font-bold text-slate-200 text-sm truncate tracking-tight">{name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[9px] border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">{item.condition}</span>
                     <span className="text-[9px] text-slate-600 font-medium">Qty: {item.quantity}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-white text-sm">฿{card.marketPrice.toLocaleString()}</p>
-                  <p className={`text-[10px] font-bold ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {isProfit ? '+' : ''}{((card.marketPrice - item.purchasePrice) / item.purchasePrice * 100).toFixed(1)}%
+                  <p className="font-bold text-white text-sm">฿{itemMarketPrice.toLocaleString()}</p>
+                  <p className={`text-[10px] font-bold ${itemMarketPrice === 0 ? 'text-slate-500' : isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {itemMarketPrice === 0 ? 'NO DATA' : `${isProfit ? '+' : ''}${((itemMarketPrice - item.purchasePrice) / item.purchasePrice * 100).toFixed(1)}%`}
                   </p>
                 </div>
               </div>

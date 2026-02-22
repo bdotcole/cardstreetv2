@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 
-// Declare Omise global
-declare const Omise: any;
+// Dynamic load for Omise since Next.js Script tags can be flaky on client nav
 
 interface PaymentModalProps {
     isOpen: boolean;
@@ -40,9 +39,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const paypalAmount = currency === 'THB' ? (amount * 0.028).toFixed(2) : amount.toFixed(2);
 
     useEffect(() => {
-        if (typeof Omise !== 'undefined') {
-            Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY);
-        }
+        if (!isOpen) return;
+
+        const loadOmise = () => {
+            if (typeof window !== 'undefined' && (window as any).Omise) {
+                (window as any).Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdn.omise.co/omise.js';
+            script.async = true;
+            script.onload = () => {
+                if ((window as any).Omise) {
+                    (window as any).Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY);
+                }
+            };
+            document.body.appendChild(script);
+        };
+
+        loadOmise();
     }, [isOpen]);
 
     const handlePay = async () => {
@@ -50,13 +66,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setQrCodeUrl(null); // Reset
 
         try {
-            if (typeof Omise === 'undefined') {
-                throw new Error("Omise.js not loaded");
+            if (typeof window === 'undefined' || !(window as any).Omise) {
+                throw new Error("Omise.js not loaded. Please wait a second and try again.");
             }
+
+            const omise = (window as any).Omise;
 
             if (method === 'promptpay') {
                 // Create Source for PromptPay
-                Omise.createSource('promptpay', {
+                omise.createSource('promptpay', {
                     "amount": amount * 100,
                     "currency": currency
                 }, (statusCode: number, response: any) => {
@@ -77,7 +95,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     security_code: cardDetails.security_code
                 };
 
-                Omise.createToken('card', cardTokenParams, (statusCode: number, response: any) => {
+                omise.createToken('card', cardTokenParams, (statusCode: number, response: any) => {
                     if (statusCode === 200) {
                         processCharge(response.id, 'card', amount);
                     } else {

@@ -111,7 +111,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     </span>
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
-                                <p className="text-brand-green font-black text-xs">{currencySymbol}{Math.round(listing.price * exchangeRate).toLocaleString()}</p>
+                                <p className="text-brand-green font-black text-xs">{currencySymbol}{(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}</p>
                                 <button
                                     onClick={() => onSelectCard(listing.card_data)}
                                     className="absolute inset-0 w-full h-full opacity-0"

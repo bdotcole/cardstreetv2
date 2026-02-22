@@ -18,6 +18,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'api.tcgdex.net',
       },
+      {
+        protocol: 'https',
+        hostname: 'asia.pokemon-card.com',
+      },
     ],
   },
   experimental: {

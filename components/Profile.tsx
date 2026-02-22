@@ -67,23 +67,22 @@ interface PaymentMethod {
 
 interface Order {
   id: string;
-  status: 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'pending' | 'paid' | 'label_generated' | 'processing' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
   tracking_number: string | null;
   carrier: string | null;
   created_at: string;
   estimated_delivery: string | null;
-  transaction: {
-    amount: number;
-    listing: {
-      card_data: any;
-      condition: string;
-    };
+  total_amount: number;
+  listing: {
+    card_data: any;
+    condition: string;
   };
+  shipping_labels?: { label_url: string }[];
 }
 
 interface Sale {
   id: string;
-  amount: number;
+  total_amount: number;
   platform_fee: number;
   completed_at: string;
   listing: {
@@ -93,7 +92,7 @@ interface Sale {
   };
 }
 
-type ActivePanel = 'none' | 'account' | 'payment' | 'rewards' | 'settings' | 'orders' | 'sales' | 'support';
+type ActivePanel = 'none' | 'account' | 'payment' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support';
 
 const tierConfig = {
   bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
@@ -126,13 +125,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [shipments, setShipments] = useState<Order[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   // Edit states
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
-  const [editAddress, setEditAddress] = useState({ street: '', city: '', state: '', postal_code: '', country: '' });
+  const [editAddress, setEditAddress] = useState({ address: '', district: '', state: '', province: '', postcode: '' });
+  const [profileData, setProfileData] = useState<any>(null);
+
+  // Modal states
+  const [shippingModalOrderId, setShippingModalOrderId] = useState<string | null>(null);
+  const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
+  const [reviewScore, setReviewScore] = useState<number>(5);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  // Scroll to top when panel changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activePanel]);
 
   // Fetch profile data on mount
   useEffect(() => {
@@ -146,6 +159,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       const res = await fetch('/api/profile');
       if (res.ok) {
         const data = await res.json();
+        if (data.profile) setProfileData(data.profile);
         if (data.settings) setSettings(data.settings);
         if (data.rewards) setRewards(data.rewards);
       }
@@ -191,6 +205,79 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     }
   };
 
+  const fetchShipments = async () => {
+    try {
+      const res = await fetch('/api/profile/shipments');
+      if (res.ok) {
+        const data = await res.json();
+        setShipments(data.shipments);
+      }
+    } catch (error) {
+      console.error('Error fetching shipments:', error);
+    }
+  };
+
+  const handleShipOrder = (orderId: string) => {
+    setShippingModalOrderId(orderId);
+  };
+
+  const executeShipOrder = async () => {
+    if (!shippingModalOrderId) return;
+    setIsProcessingAction(true);
+    try {
+      const res = await fetch('/api/orders/ship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: shippingModalOrderId, trackingNumber: '', carrier: 'Thailand Post' })
+      });
+      if (res.ok) {
+        setShippingModalOrderId(null);
+        fetchShipments(); // Refresh
+      } else {
+        const data = await res.json();
+        alert('Failed: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error shipping order:', error);
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleCompleteOrder = (orderId: string) => {
+    setReviewModalOrderId(orderId);
+    setReviewScore(5);
+    setReviewComment('');
+  };
+
+  const executeCompleteOrder = async () => {
+    if (!reviewModalOrderId) return;
+    setIsProcessingAction(true);
+    try {
+      const res = await fetch('/api/orders/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: reviewModalOrderId,
+          reviewScore: reviewScore || null,
+          reviewComment
+        })
+      });
+
+      if (res.ok) {
+        setReviewModalOrderId(null);
+        fetchOrders(); // Refresh
+      } else {
+        const data = await res.json();
+        alert('Failed: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error completing order:', error);
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
   const handleLogout = async () => {
     if (user?.provider === 'guest') {
       localStorage.removeItem('cardstreet-guest');
@@ -224,13 +311,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         body: JSON.stringify({
           display_name: editName,
           phone_number: editPhone,
-          shipping_address: editAddress
+          ...editAddress
         })
       });
-      setSettings(prev => ({
+      setProfileData((prev: any) => ({
         ...prev,
+        display_name: editName,
         phone_number: editPhone,
-        shipping_address: editAddress
+        ...editAddress
       }));
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -253,15 +341,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     if (panel === 'payment') fetchPaymentMethods();
     if (panel === 'orders') fetchOrders();
     if (panel === 'sales') fetchSales();
+    if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {
       setEditName(user.name);
-      setEditPhone(settings.phone_number || '');
+      setEditPhone(profileData?.phone_number || '');
       setEditAddress({
-        street: settings.shipping_address?.street || '',
-        city: settings.shipping_address?.city || '',
-        state: settings.shipping_address?.state || '',
-        postal_code: settings.shipping_address?.postal_code || '',
-        country: settings.shipping_address?.country || ''
+        address: profileData?.address || '',
+        district: profileData?.district || '',
+        state: profileData?.state || '',
+        province: profileData?.province || '',
+        postcode: profileData?.postcode || ''
       });
     }
   };
@@ -286,6 +375,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       title: t('profile.ordersSales'),
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
+        { name: 'Pending Shipments', icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
         { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' }
       ]
     },
@@ -520,41 +610,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   </label>
                   <input
                     type="text"
-                    value={editAddress.street}
-                    onChange={(e) => setEditAddress(prev => ({ ...prev, street: e.target.value }))}
+                    value={editAddress.address}
+                    onChange={(e) => setEditAddress(prev => ({ ...prev, address: e.target.value }))}
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                    placeholder="Street address"
+                    placeholder="House/Building Number, Street"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
-                      value={editAddress.city}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, city: e.target.value }))}
+                      value={editAddress.district}
+                      onChange={(e) => setEditAddress(prev => ({ ...prev, district: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="City"
+                      placeholder="District / Sub-district"
                     />
                     <input
                       type="text"
                       value={editAddress.state}
                       onChange={(e) => setEditAddress(prev => ({ ...prev, state: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="State/Province"
+                      placeholder="State / District"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
-                      value={editAddress.postal_code}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, postal_code: e.target.value }))}
+                      value={editAddress.province}
+                      onChange={(e) => setEditAddress(prev => ({ ...prev, province: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="Postal Code"
+                      placeholder="Province"
                     />
                     <input
                       type="text"
-                      value={editAddress.country}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, country: e.target.value }))}
+                      value={editAddress.postcode}
+                      onChange={(e) => setEditAddress(prev => ({ ...prev, postcode: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="Country"
+                      placeholder="Postal Code"
                     />
                   </div>
                 </div>
@@ -825,9 +915,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       {/* Order Header */}
                       <div className="flex items-start gap-3">
                         <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                          {order.transaction?.listing?.card_data?.images?.small && (
+                          {order.listing?.card_data?.images?.small && (
                             <img
-                              src={order.transaction.listing.card_data.images.small}
+                              src={order.listing.card_data.images.small}
                               alt="Card"
                               className="w-full h-full object-cover"
                             />
@@ -835,10 +925,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold text-sm truncate">
-                            {order.transaction?.listing?.card_data?.name || 'Card Order'}
+                            {order.listing?.card_data?.name || 'Card Order'}
                           </p>
-                          <p className="text-slate-500 text-xs">{order.transaction?.listing?.condition}</p>
-                          <p className="text-brand-cyan font-bold text-sm mt-1">฿{order.transaction?.amount?.toLocaleString()}</p>
+                          <p className="text-slate-500 text-xs">{order.listing?.condition}</p>
+                          <p className="text-brand-cyan font-bold text-sm mt-1">฿{order.total_amount?.toLocaleString()}</p>
                         </div>
                       </div>
 
@@ -876,6 +966,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           <span className="text-slate-500">Tracking:</span>
                           <span className="text-white font-mono">{order.tracking_number}</span>
                         </div>
+                      )}
+
+                      {/* Buyer Action required */}
+                      {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (
+                        <button
+                          onClick={() => handleCompleteOrder(order.id)}
+                          className="w-full h-10 mt-2 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors"
+                        >
+                          Confirm Delivery & Review
+                        </button>
                       )}
                     </div>
                   ))
@@ -934,11 +1034,86 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-brand-green font-bold">+฿{(sale.amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                        <p className="text-brand-green font-bold">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
                         <p className="text-slate-600 text-[10px]">
                           {new Date(sale.completed_at).toLocaleDateString()}
                         </p>
                       </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Pending Shipments Panel */}
+        {activePanel === 'shipments' && (
+          <motion.div
+            key="shipments"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="absolute inset-0 bg-brand-darker z-50 overflow-y-auto pb-20"
+          >
+            <div className="p-4 space-y-6">
+              <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-slate-400" />
+                </button>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">Pending Shipments</h2>
+              </div>
+
+              <div className="space-y-3">
+                {shipments.length === 0 ? (
+                  <div className="text-center py-12 space-y-4">
+                    <Truck className="w-12 h-12 text-slate-700 mx-auto" />
+                    <p className="text-slate-500 text-sm">No pending shipments</p>
+                    <p className="text-slate-600 text-xs">When buyers purchase your cards, they will appear here to be shipped.</p>
+                  </div>
+                ) : (
+                  shipments.map((shipment) => (
+                    <div key={shipment.id} className="glass p-4 rounded-2xl border border-white/5 space-y-4">
+                      {/* Shipment Header */}
+                      <div className="flex items-start gap-3">
+                        <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                          {shipment.listing?.card_data?.images?.small && (
+                            <img
+                              src={shipment.listing.card_data.images.small}
+                              alt="Card"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm truncate">
+                            {shipment.listing?.card_data?.name || 'Card Order'}
+                          </p>
+                          <p className="text-slate-500 text-xs">{shipment.listing?.condition}</p>
+                          <p className="text-brand-orange font-bold text-sm mt-1">
+                            Status: <span className="uppercase tracking-wider text-[10px]">{shipment.status.replace('_', ' ')}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Required */}
+                      {(shipment.status === 'paid' || shipment.status === 'pending') && (
+                        <button
+                          onClick={() => handleShipOrder(shipment.id)}
+                          className="w-full h-10 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors">
+                          Generate Label & Ship
+                        </button>
+                      )}
+                      {shipment.shipping_labels?.[0]?.label_url && shipment.shipping_labels[0].label_url !== 'N/A' && (
+                        <a
+                          href={shipment.shipping_labels[0].label_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full h-10 flex items-center justify-center bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors">
+                          Print Shipping Label
+                        </a>
+                      )}
                     </div>
                   ))
                 )}
@@ -991,6 +1166,119 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <p className="text-slate-700 text-[10px] mt-1">Made with ❤️ in Thailand</p>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Action Modals */}
+      <AnimatePresence>
+        {shippingModalOrderId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm glass rounded-3xl p-6 border border-white/10 relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-cyan to-brand-green"></div>
+              <div className="flex justify-between items-start mb-6">
+                <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
+                  Confirm<br />Shipment
+                </h3>
+                <button
+                  onClick={() => setShippingModalOrderId(null)}
+                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                >
+                  <i className="fa-solid fa-xmark text-slate-400"></i>
+                </button>
+              </div>
+
+              <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                This will automatically generate a tracking number and shipping label via SHIPPOP for this order.
+                Are you ready to box and drop off the package?
+              </p>
+
+              <button
+                onClick={executeShipOrder}
+                disabled={isProcessingAction}
+                className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker font-black text-sm uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessingAction ? 'Processing...' : 'Generate Auto-Label'}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {reviewModalOrderId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm glass rounded-3xl p-6 border border-white/10 relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-orange to-amber-500"></div>
+              <div className="flex justify-between items-start mb-6">
+                <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
+                  Confirm<br />Delivery
+                </h3>
+                <button
+                  onClick={() => setReviewModalOrderId(null)}
+                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                >
+                  <i className="fa-solid fa-xmark text-slate-400"></i>
+                </button>
+              </div>
+
+              <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                Has this order safely arrived in your hands? Confirming will finalize the transaction and release the funds from escrow to the seller.
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Leave a Rating</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        onClick={() => setReviewScore(star)}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${reviewScore >= star ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50' : 'bg-white/5 text-slate-600 border border-transparent'
+                          }`}
+                      >
+                        <i className="fa-solid fa-star text-sm"></i>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Review Comment (Optional)</label>
+                  <textarea
+                    value={reviewComment}
+                    onChange={e => setReviewComment(e.target.value)}
+                    className="w-full h-24 bg-black/50 border border-white/10 rounded-xl p-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-brand-orange/50 resize-none"
+                    placeholder="Great packaging, card arrived mint!"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={executeCompleteOrder}
+                disabled={isProcessingAction}
+                className="w-full h-12 rounded-xl bg-brand-orange text-white font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brand-darker active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessingAction ? 'Processing...' : 'Confirm Received'}
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

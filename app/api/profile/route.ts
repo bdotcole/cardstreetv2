@@ -56,7 +56,7 @@ export async function GET() {
     }
 }
 
-// PATCH - Update profile info (name, phone, address)
+// PATCH - Update profile info (name, phone, address fields)
 export async function PATCH(request: NextRequest) {
     const supabase = await createClient()
 
@@ -67,32 +67,25 @@ export async function PATCH(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { display_name, phone_number, shipping_address } = body
+        const { display_name, phone_number, address, district, state, province, postcode } = body
 
-        // Update profile if display_name provided
-        if (display_name !== undefined) {
+        // Prepare profile update
+        const profileUpdate: any = {}
+        if (display_name !== undefined) profileUpdate.display_name = display_name
+        if (phone_number !== undefined) profileUpdate.phone_number = phone_number
+        if (address !== undefined) profileUpdate.address = address
+        if (district !== undefined) profileUpdate.district = district
+        if (state !== undefined) profileUpdate.state = state
+        if (province !== undefined) profileUpdate.province = province
+        if (postcode !== undefined) profileUpdate.postcode = postcode
+
+        if (Object.keys(profileUpdate).length > 0) {
             const { error: profileError } = await supabase
                 .from('profiles')
-                .update({ display_name })
+                .update(profileUpdate)
                 .eq('id', user.id)
 
             if (profileError) throw profileError
-        }
-
-        // Update settings if phone/address provided
-        if (phone_number !== undefined || shipping_address !== undefined) {
-            const updateData: any = {}
-            if (phone_number !== undefined) updateData.phone_number = phone_number
-            if (shipping_address !== undefined) updateData.shipping_address = shipping_address
-
-            const { error: settingsError } = await supabase
-                .from('user_settings')
-                .upsert({
-                    user_id: user.id,
-                    ...updateData
-                }, { onConflict: 'user_id' })
-
-            if (settingsError) throw settingsError
         }
 
         return NextResponse.json({ success: true })

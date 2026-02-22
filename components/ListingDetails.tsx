@@ -69,7 +69,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Asking Price</p>
                                 <p className="text-4xl font-black text-brand-cyan">
                                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
-                                    {Math.round(listing.price * exchangeRate).toLocaleString()}
+                                    {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
                                 </p>
                             </div>
                             <div className="text-right">

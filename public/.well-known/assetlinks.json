@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.cardstreet.app",
+            "sha256_cert_fingerprints": [
+                "87:E4:3A:F6:15:91:30:0A:07:7E:8F:27:D7:BD:41:B0:E4:8D:7F:CA:CE:AF:3D:DC:30:78:E4:FA:BA:19:EA:6E"
+            ]
+        }
+    }
+]

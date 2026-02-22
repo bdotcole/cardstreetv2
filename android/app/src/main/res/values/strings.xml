@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CardStreet</string>
+    <string name="title_activity_main">CardStreet</string>
+    <string name="package_name">com.cardstreet.app</string>
+    <string name="custom_url_scheme">com.cardstreet.app</string>
+</resources>

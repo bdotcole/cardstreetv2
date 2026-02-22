@@ -17,10 +17,10 @@ export async function GET(request: NextRequest) {
         const offset = (page - 1) * limit
 
         const { data: sales, error, count } = await supabase
-            .from('transactions')
+            .from('orders')
             .select(`
                 id,
-                amount,
+                total_amount,
                 platform_fee,
                 status,
                 created_at,
@@ -36,20 +36,20 @@ export async function GET(request: NextRequest) {
                 )
             `, { count: 'exact' })
             .eq('seller_id', user.id)
-            .eq('status', 'completed')
-            .order('completed_at', { ascending: false })
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
         if (error) throw error
 
         // Calculate total earnings
         const { data: totals } = await supabase
-            .from('transactions')
-            .select('amount, platform_fee')
+            .from('orders')
+            .select('total_amount, platform_fee')
             .eq('seller_id', user.id)
             .eq('status', 'completed')
 
-        const totalEarnings = totals?.reduce((sum, t) => sum + (t.amount - (t.platform_fee || 0)), 0) || 0
+        const totalEarnings = totals?.reduce((sum, t) => sum + (t.total_amount - (t.platform_fee || 0)), 0) || 0
 
         return NextResponse.json({
             sales: sales || [],

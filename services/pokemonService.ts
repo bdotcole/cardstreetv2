@@ -109,7 +109,7 @@ export const pokemonService = {
             // Query cards by set_id with market_values join
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*, market_values(market_avg, last_updated)')
+                .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
                 .ilike('set_id', setId)
                 .order('number', { ascending: true });
 
@@ -163,11 +163,12 @@ export const pokemonService = {
             const cleanNumber = number.split('/')[0].trim();
             const cleanName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
 
-            // Try exact match first
+            // Try exact match first (searching both name and english_name)
+            // Use RAW SQL-like filter for OR condition with AND on number
             let { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*, market_values(market_avg, last_updated)')
-                .ilike('name', `%${cleanName}%`)
+                .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
+                .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                 .eq('number', cleanNumber)
                 .limit(5);
 
@@ -175,8 +176,8 @@ export const pokemonService = {
             if (!cards || cards.length === 0) {
                 const { data: fallbackCards } = await supabase
                     .from('pokemon_cards')
-                    .select('*, market_values(market_avg, last_updated)')
-                    .ilike('name', `%${cleanName}%`)
+                    .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
+                    .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                     .limit(5);
 
                 cards = fallbackCards;
@@ -214,7 +215,8 @@ export const pokemonService = {
                 .select(`
                     id, name, english_name, set_id, number, supertype, subtypes, 
                     rarity, hp, types, image_small, image_large, language, raw_data,
-                    market_values(market_avg, last_updated)
+                    market_values(market_avg, last_updated),
+                    pokemon_sets(name)
                 `)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
                 .limit(100);
@@ -351,7 +353,7 @@ export const pokemonService = {
             lastUpdated = marketValueData.last_updated;
         } else {
             // Fallback to approximated old data (likely USD)
-            const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 5.0;
+            const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 0;
             marketThb = Math.round(marketUsd * EXCHANGE_RATE);
         }
 
@@ -395,11 +397,36 @@ export const pokemonService = {
             imageSmall = fixTcgdexUrl(supabaseCard.image_small);
         }
 
+        let setName = supabaseCard.pokemon_sets?.name || rawData.set?.name || 'Unknown Set';
+
+        // Add dual-language wrapper for Thai sets to ensure filtering and visibility
+        if (supabaseCard.language === 'th') {
+            const thaiSetMap: Record<string, string> = {
+                'SV1V': 'Violet ex',
+                'SV1S': 'Scarlet ex',
+                'SV2D': 'Clay Burst',
+                'SV2P': 'Snow Hazard',
+                'SV5K': 'Wild Force',
+                'SV5M': 'Cyber Judge',
+                'MA1': 'Mega Evolution',
+                'MA2': 'Crimson Haze',
+                'MA3': 'Mega Evolution Dream ex',
+                'SV10s': 'The Unbeatable Hero',
+                'SV9s': 'Destiny Threads',
+                // Keep extending as needed
+            };
+            const engName = thaiSetMap[supabaseCard.set_id];
+            if (engName && !setName.includes(engName)) {
+                setName = `${engName} (${setName})`;
+            }
+        }
+
         return {
             id: supabaseCard.id,
             name: supabaseCard.name,
-            thaiName: supabaseCard.name,
-            set: rawData.set?.name || 'Unknown Set',
+            thaiName: supabaseCard.english_name || supabaseCard.name, // Try to store both
+            set: setName,
+            language: supabaseCard.language || 'en',
             number: supabaseCard.number ? `${supabaseCard.number}/${rawData.set?.printedTotal || '??'}` : '??',
             rarity: supabaseCard.rarity || 'Common',
             imageUrl: imageUrl,

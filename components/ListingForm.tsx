@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
@@ -7,7 +7,7 @@ interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
   onClose: () => void;
-  onSuccess: (data?: any) => void;
+  onSuccess: (data?: any) => Promise<void> | void;
 }
 
 const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
@@ -19,6 +19,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recommendedPrice, setRecommendedPrice] = useState<number>(0);
+  const isSubmittingRef = useRef(false);
 
   // Recalculate recommendation when inputs change
   React.useEffect(() => {
@@ -34,49 +35,15 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setIsSubmitting(true);
     setError(null);
 
-    const supabase = createClient();
-
-    const isGuest = localStorage.getItem('cardstreet-guest') === 'true';
-
-    // Check auth
-    if (!isGuest) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setError("You must be logged in to sell cards.");
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
     try {
-      if (isGuest) {
-        // Mock successful submission for guest
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate delay
-      } else {
-        const response = await fetch('/api/listings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            card_id: card.id,
-            card_data: card,
-            price: parseFloat(price),
-            condition,
-            is_graded: isGraded,
-            grading_company: isGraded ? gradingCompany : null,
-            grade: isGraded ? parseFloat(grade) : null,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to create listing');
-        }
-      }
+      // Defer database insertion to the parent component (page.tsx)
+      // which uses marketplaceService and handles global state updates
 
       const listingData = {
         card_id: card.id,
@@ -87,12 +54,12 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
         grade: isGraded ? parseFloat(grade) : null,
       };
 
-      onSuccess(listingData);
+      await onSuccess(listingData);
       onClose();
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
