@@ -41,113 +41,32 @@ export const pokemonService = {
         }
 
         try {
-            const supabase = createClient();
-
-            // Calculate pagination offsets
-            const from = (page - 1) * pageSize;
-            const to = from + pageSize - 1;
-
-            // Map app language to database language
-            let dbLang = 'en';
-            if (language?.includes('jp')) dbLang = 'ja';
-            if (language?.includes('th')) dbLang = 'th';
-
-            // Query Supabase for sets
-            const { data: sets, error, count } = await supabase
-                .from('pokemon_sets')
-                .select('*', { count: 'exact' })
-                .eq('language', dbLang)
-                .order('release_date', { ascending: false, nullsFirst: false })
-                .range(from, to);
-
-            if (error) {
-                console.error('Supabase error fetching sets:', error);
+            const response = await fetch(`/api/sets?language=${language}&page=${page}&pageSize=${pageSize}`);
+            if (!response.ok) {
+                console.error('Failed to fetch sets from Edge API:', response.statusText);
                 return { data: [], totalCount: 0 };
             }
+            const result = await response.json();
 
-            // Transform Supabase data to match API format
-            const transformedSets: ApiSet[] = (sets || []).map(s => {
-                // Helper to fix TCGdex URLs (same as card images)
-                const fixTcgdexUrl = (url: string | null): string => {
-                    if (!url) return '';
-                    if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp|svg)$/i)) {
-                        return `${url}.png`;
-                    }
-                    return url;
-                };
-
-                return {
-                    id: s.id,
-                    name: s.name,
-                    series: s.series || '',
-                    printedTotal: s.printed_total || 0,
-                    total: s.total || 0,
-                    releaseDate: s.release_date || '',
-                    updatedAt: s.updated_at || '',
-                    images: {
-                        symbol: fixTcgdexUrl(s.symbol_url),
-                        logo: fixTcgdexUrl(s.logo_url)
-                    }
-                };
-            });
-
-            const result = { data: transformedSets, totalCount: count || 0 };
             setsCache.set(cacheKey, result);
             return result;
         } catch (error) {
-            console.error("Failed to fetch sets from Supabase:", error);
+            console.error("Failed to fetch sets from Edge API:", error);
             return { data: [], totalCount: 0 };
         }
     },
 
     async fetchCardsBySet(setId: string, language?: 'en' | 'jp' | 'th') {
         try {
-            const supabase = createClient();
+            console.log('[fetchCardsBySet] Querying via Edge API for set_id:', setId, 'language:', language);
 
-            console.log('[fetchCardsBySet] Querying for set_id:', setId, 'language:', language);
-
-            // Query cards by set_id with market_values join
-            const { data: cards, error } = await supabase
-                .from('pokemon_cards')
-                .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
-                .ilike('set_id', setId)
-                .order('number', { ascending: true });
-
-            if (error) {
-                console.error('Supabase error fetching cards:', error);
+            const response = await fetch(`/api/sets/${setId}/cards${language ? `?language=${language}` : ''}`);
+            if (!response.ok) {
+                console.error('Failed to fetch cards from Edge API:', response.statusText);
                 return [];
             }
 
-            console.log('[fetchCardsBySet] Found cards count:', cards?.length || 0);
-
-            // If no cards found, try with ilike for partial match (debugging)
-            if (cards && cards.length === 0) {
-                const { data: debugCards } = await supabase
-                    .from('pokemon_cards')
-                    .select('set_id')
-                    .ilike('set_id', `%${setId.split('-')[0]}%`)
-                    .limit(5);
-                console.log('[fetchCardsBySet] Debug - similar set_ids found:', debugCards?.map(c => c.set_id));
-            }
-
-            // Filter by language using character detection if language specified
-            let filteredCards = cards || [];
-            if (language && cards) {
-                const hasJapaneseChars = (text: string) => {
-                    const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
-                    return japaneseRegex.test(text);
-                };
-
-                if (language === 'jp') {
-                    // For Japanese sets, keep only cards with Japanese characters
-                    filteredCards = cards.filter(c => hasJapaneseChars(c.name || ''));
-                } else {
-                    // For English/Thai sets, filter out cards with Japanese characters
-                    filteredCards = cards.filter(c => !hasJapaneseChars(c.name || ''));
-                }
-
-                console.log('[fetchCardsBySet] Filtered from', cards.length, 'to', filteredCards.length, 'cards for language:', language);
-            }
+            const filteredCards = await response.json();
 
             return filteredCards.map(c => this.mapSupabaseCardToInternal(c));
         } catch (error) {

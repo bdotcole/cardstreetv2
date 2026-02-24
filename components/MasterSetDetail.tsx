@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Image from 'next/image';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 
@@ -66,7 +67,15 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
             </div>
           </div>
           {set.images?.logo && (
-            <img src={set.images.logo} className="h-8 object-contain" alt="logo" />
+            <div className="relative h-8 w-24">
+              <Image
+                src={set.images.logo}
+                alt="logo"
+                fill
+                className="object-contain"
+                sizes="(max-width: 768px) 100px, 100px"
+              />
+            </div>
           )}
         </div>
 
@@ -98,12 +107,16 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                   className={`relative aspect-[3/4] rounded-xl overflow-hidden transition-all duration-500 group ${isOwned ? 'glass border-brand-cyan/30 shadow-lg shadow-brand-cyan/10 cursor-pointer' : 'bg-white/[0.02] border border-white/5 cursor-default'}`}
                 >
                   {/* Background Image (Ghost if unowned) */}
-                  <img
-                    src={card.imageUrl}
-                    alt={card.name}
-                    loading="lazy"
-                    className={`w-full h-full object-cover transition-all duration-500 ${isOwned ? 'opacity-100' : 'opacity-20 grayscale blur-[1px]'}`}
-                  />
+                  <div className={`absolute inset-0 transition-opacity duration-500 ${isOwned ? 'opacity-100' : 'opacity-20 grayscale blur-[1px]'}`}>
+                    <Image
+                      src={card.images?.small || card.imageUrl}
+                      alt={card.name}
+                      fill
+                      sizes="(max-width: 768px) 33vw, 20vw"
+                      className="object-cover"
+                      loading="lazy"
+                    />
+                  </div>
 
                   {/* Unowned Overlay */}
                   {!isOwned && (
