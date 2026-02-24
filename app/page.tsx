@@ -670,11 +670,11 @@ export default function HomePage() {
                                     setViewingSeller({
                                         id: seller.id || 'mock-id',
                                         name: seller.display_name,
-                                        email: 'seller@example.com',
+                                        email: seller.email || 'seller@example.com',
                                         avatar: seller.avatar_url,
                                         provider: 'google',
-                                        rating: parseFloat(seller.rating) || 4.8,
-                                        badges: ['Verified Pro', 'Fast Shipper']
+                                        rating: parseFloat(seller.rating) || 0,
+                                        badges: seller.badges || []
                                     });
                                     setActiveTab('seller_profile');
                                 }}
@@ -859,11 +859,11 @@ export default function HomePage() {
                             setViewingSeller({
                                 id: seller.id || 'mock-id',
                                 name: seller.display_name,
-                                email: 'seller@example.com',
+                                email: seller.email || 'seller@example.com',
                                 avatar: seller.avatar_url,
                                 provider: 'google',
-                                rating: parseFloat(seller.rating) || 4.8,
-                                badges: ['Verified Pro', 'Fast Shipper']
+                                rating: parseFloat(seller.rating) || 0,
+                                badges: seller.badges || []
                             });
                             setSelectedListing(null); // Close modal
                             setActiveTab('seller_profile');

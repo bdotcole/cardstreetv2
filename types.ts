@@ -77,6 +77,7 @@ export interface UserProfile {
   partnerStats?: PartnerStats;
   rating?: number;
   reviewCount?: number;
+  totalSales?: number;
   bio?: string;
   joinedAt?: string;
   badges?: string[];

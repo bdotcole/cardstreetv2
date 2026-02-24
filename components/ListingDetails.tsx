@@ -89,20 +89,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             <div>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">Seller</p>
                                 <p className="text-white font-bold group-hover:text-brand-cyan transition-colors">{listing.seller.display_name}</p>
-                                <div className="flex text-[10px] text-yellow-500 gap-0.5">
-                                    <i className="fa-solid fa-star"></i>
-                                    <i className="fa-solid fa-star"></i>
-                                    <i className="fa-solid fa-star"></i>
-                                    <i className="fa-solid fa-star"></i>
-                                    <i className="fa-solid fa-star-half-stroke"></i>
-                                    <span className="text-slate-500 ml-1">(4.8)</span>
+                                <div className="flex items-center gap-1 text-[10px]">
+                                    <i className="fa-solid fa-star text-yellow-500"></i>
+                                    <span className="text-slate-500 font-bold">{parseFloat(listing.seller.rating) || 0}</span>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Seller Note Mock */}
-                        <div className="bg-white/5 p-3 rounded-xl">
-                            <p className="text-xs text-slate-400 italic">"Pack fresh, immediately sleeved. Will ship in top loader."</p>
                         </div>
                     </div>
                 </div>

@@ -20,9 +20,9 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
     // Stats
-    const totalSales = 142; // Mock
-    const rating = seller.rating || 4.9;
-    const reviewCount = seller.reviewCount || 84;
+    const totalSales = seller.totalSales || 0;
+    const rating = seller.rating || 0;
+    const reviewCount = seller.reviewCount || 0;
 
     return (
         <div className="bg-brand-darker min-h-screen pb-32 animate-fadeIn relative">
@@ -129,16 +129,16 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     <div className="glass p-6 rounded-2xl border border-white/5 space-y-4 text-center">
                         <i className="fa-solid fa-quote-left text-brand-cyan text-2xl opacity-50"></i>
                         <p className="text-sm text-slate-300 italic leading-relaxed">
-                            {seller.bio || "Professional collector based in Bangkok. Specializing in Mint condition Japanese FA and SAR charts. Fast shipping and bomb-proof packaging guaranteed!"}
+                            {seller.bio || "Welcome to my CardStreet shop!"}
                         </p>
                         <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
                             <div className="flex justify-between text-xs">
                                 <span className="text-slate-500 font-bold uppercase">Member Since</span>
-                                <span className="text-white font-mono">{seller.joinedAt || "Nov 2023"}</span>
+                                <span className="text-white font-mono">{seller.joinedAt || "New Member"}</span>
                             </div>
                             <div className="flex justify-between text-xs">
                                 <span className="text-slate-500 font-bold uppercase">Avg Ship Time</span>
-                                <span className="text-brand-green font-mono">1.2 Days</span>
+                                <span className="text-brand-green font-mono">N/A</span>
                             </div>
                         </div>
                     </div>
