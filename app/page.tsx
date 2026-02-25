@@ -621,12 +621,12 @@ export default function HomePage() {
 
                 <main className="flex-1 overflow-y-auto scrollbar-hide flex flex-col z-10 w-full h-full relative">
                     {/* Header */}
-                    <header className="w-full px-6 pt-4 pb-1 flex justify-between items-center z-30 shrink-0">
+                    <header className="w-full px-6 pt-5 pb-2 flex justify-between items-center z-30 shrink-0">
                         <div className="flex items-center">
                             {/* CardStreet Logo */}
                             <button
                                 onClick={() => setActiveTab('marketplace')}
-                                className="relative w-[48px] h-[48px] flex-shrink-0 hover:scale-105 transition-transform"
+                                className="relative w-[54px] h-[54px] flex-shrink-0 hover:scale-105 transition-transform"
                             >
                                 <img
                                     src="/logo.png"
