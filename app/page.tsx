@@ -24,6 +24,7 @@ import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
@@ -32,6 +33,7 @@ import BuylistRequest from '@/components/BuylistRequest';
 
 export default function HomePage() {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -177,7 +179,7 @@ export default function HomePage() {
     // Helper function to check authentication
     const requireAuth = (actionName: string): boolean => {
         if (!user) {
-            alert(`Please sign in to ${actionName}`);
+            showToast(`Please sign in to ${actionName}`, 'error');
             setActiveTab('profile');
             return false;
         }
@@ -196,7 +198,7 @@ export default function HomePage() {
         } catch (error: any) {
             console.error('Failed to update wishlist:', error);
             const errorMessage = error?.message || 'Unknown error';
-            alert(`Failed to update wishlist: ${errorMessage}`);
+            showToast(`Failed to update wishlist: ${errorMessage}`, 'error');
         }
     };
 
@@ -230,7 +232,7 @@ export default function HomePage() {
             console.error('Failed to add card to collection:', error);
             // Show more detailed error for debugging
             const errorMessage = error?.message || 'Unknown error';
-            alert(`Failed to add card to collection: ${errorMessage}`);
+            showToast(`Failed to add card to collection: ${errorMessage}`, 'error');
         }
     };
 
@@ -276,7 +278,7 @@ export default function HomePage() {
             fetchGlobalListings();
             refreshCollections();
 
-            alert(`Payment Successful! Thank you for your purchase.`);
+            showToast(`Payment Successful! Thank you for your purchase.`, 'success');
         } catch (err: any) {
             console.error('Checkout failed:', err);
             alert(`Payment succeeded but checkout failed: ${err.message}`);
@@ -335,7 +337,7 @@ export default function HomePage() {
             console.log('[Scan] Gemini response:', scanData);
 
             if (!scanData || !scanData.primary?.name) {
-                alert('Could not identify the card. Please try again with better lighting or angle.');
+                showToast('Could not identify the card. Please try again with better lighting or angle.', 'error');
                 return;
             }
 
@@ -371,7 +373,7 @@ export default function HomePage() {
             } else if (matches.length > 1) {
                 setScanCandidates(matches);
             } else {
-                alert(`AI identified: "${scanData.primary.name}" from set "${scanData.primary.set}", but no matching card was found in the database.`);
+                showToast(`AI identified: "${scanData.primary.name}" from set "${scanData.primary.set}", but no matching card was found in the database.`, 'error');
             }
         } catch (error: any) {
             // Check for user cancellation (Capacitor camera cancel or file input cancel)
@@ -381,7 +383,7 @@ export default function HomePage() {
                 console.log('[Scan] User cancelled camera');
             } else {
                 console.error('[Scan] Error:', error);
-                alert(`Scan failed: ${msg || 'Unknown error'}. Please try again.`);
+                showToast(`Scan failed: ${msg || 'Unknown error'}. Please try again.`, 'error');
             }
         } finally {
             setIsAiLoading(false);
@@ -434,7 +436,7 @@ export default function HomePage() {
             });
 
             setListingTarget(null);
-            alert('Listing successfully published to the market!');
+            showToast('Listing successfully published to the market!', 'success');
         } catch (error) {
             console.error('Failed to publish listing:', error);
             alert('Failed to publish listing. Please try again.');
@@ -536,7 +538,7 @@ export default function HomePage() {
 
                         if (error) {
                             console.error('[DeepLink] Auth Error:', error, errorDescription);
-                            alert(`Authentication Failed: ${errorDescription || error}`);
+                            showToast(`Authentication Failed: ${errorDescription || error}`, 'error');
                             return;
                         }
 
@@ -547,11 +549,11 @@ export default function HomePage() {
 
                             if (sessionError) {
                                 console.error('[DeepLink] Exchange Failed:', sessionError);
-                                alert(`Login Failed: ${sessionError.message}`);
+                                showToast(`Login Failed: ${sessionError.message}`, 'error');
                             } else {
                                 console.log('[DeepLink] Exchange Success!', sessionData);
                                 // Session is set, UI will update via onAuthStateChange
-                                alert('Successfully signed in!');
+                                showToast('Successfully signed in!', 'success');
                                 // Force reload if needed or just let state update
                             }
                         } else {
@@ -569,9 +571,9 @@ export default function HomePage() {
                                     });
                                     if (setSessionError) {
                                         console.error('[DeepLink] SetSession Failed:', setSessionError);
-                                        alert('Login Failed: ' + setSessionError.message);
+                                        showToast('Login Failed: ' + setSessionError.message, 'error');
                                     } else {
-                                        alert('Successfully signed in!');
+                                        showToast('Successfully signed in!', 'success');
                                     }
                                 }
                             }
@@ -590,7 +592,7 @@ export default function HomePage() {
         if (error === 'auth_failed') {
             const details = params.get('details');
             console.error("Auth Failed Redirect Detected:", details);
-            alert(`Authentication failed: ${details || 'Unknown error'}`);
+            showToast(`Authentication failed: ${details || 'Unknown error'}`, 'error');
 
             // Clean up URL
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -754,7 +756,7 @@ export default function HomePage() {
                                             }
                                         });
                                     } else {
-                                        alert("Please sign in to apply.");
+                                        showToast("Please sign in to apply.", 'info');
                                         setActiveTab('profile');
                                     }
                                 }} />

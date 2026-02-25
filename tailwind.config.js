@@ -20,6 +20,15 @@ module.exports = {
             fontFamily: {
                 sans: ['Inter', 'sans-serif'],
             },
+            keyframes: {
+                slideDown: {
+                    '0%': { transform: 'translateY(-20px)', opacity: '0' },
+                    '100%': { transform: 'translateY(0)', opacity: '1' },
+                },
+            },
+            animation: {
+                slideDown: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            },
         },
     },
     plugins: [],

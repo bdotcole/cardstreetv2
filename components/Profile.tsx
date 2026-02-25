@@ -12,6 +12,7 @@ import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -103,6 +104,7 @@ const tierConfig = {
 
 const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin }) => {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const supabase = createClient();
@@ -235,7 +237,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         fetchShipments(); // Refresh
       } else {
         const data = await res.json();
-        alert('Failed: ' + data.error);
+        showToast('Failed: ' + data.error, 'error');
       }
     } catch (error) {
       console.error('Error shipping order:', error);
@@ -269,7 +271,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         fetchOrders(); // Refresh
       } else {
         const data = await res.json();
-        alert('Failed: ' + data.error);
+        showToast('Failed: ' + data.error, 'error');
       }
     } catch (error) {
       console.error('Error completing order:', error);

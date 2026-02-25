@@ -9,6 +9,7 @@ import { ApiSet } from '../services/pokemonService';
 import CardDetails from './CardDetails';
 import PriceChart from './PriceChart';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface VaultProps {
   customCollections: CustomCollection[];
@@ -49,6 +50,7 @@ const Vault: React.FC<VaultProps> = ({
   onRemoveFromCollection
 }) => {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [view, setView] = useState<VaultView>('folders');
   const [selectedRegion, setSelectedRegion] = useState<string>('');
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
@@ -272,9 +274,10 @@ const Vault: React.FC<VaultProps> = ({
       if (onRemoveFromCollection) {
         try {
           await onRemoveFromCollection(colId, itemId);
+          showToast('Card removed successfully.', 'success');
         } catch (error) {
           console.error('Failed to remove card:', error);
-          alert('Failed to remove card from vault.');
+          showToast('Failed to remove card from vault.', 'error');
         }
       } else {
         // Fallback for legacy

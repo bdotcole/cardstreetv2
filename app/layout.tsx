@@ -3,6 +3,7 @@ import Script from 'next/script'
 import './globals.css'
 import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
+import { ToastProvider } from '@/lib/contexts/ToastContext'
 
 export const metadata: Metadata = {
     title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
@@ -32,7 +33,9 @@ export default function RootLayout({
             <body>
                 <UserSettingsProvider>
                     <PayPalProvider>
-                        {children}
+                        <ToastProvider>
+                            {children}
+                        </ToastProvider>
                     </PayPalProvider>
                 </UserSettingsProvider>
                 <Script src="https://cdn.omise.co/omise.js" strategy="beforeInteractive" />
