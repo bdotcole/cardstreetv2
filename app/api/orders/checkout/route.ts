@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { sendSoldNotification, sendOrderConfirmationNotification } from '@/lib/courier';
 
 export async function POST(req: Request) {
     try {
@@ -45,13 +46,19 @@ export async function POST(req: Request) {
             throw new Error('Failed to generate orders in database');
         }
 
-        // Fire Courier notifications asynchronously
+        // Fire Courier notifications asynchronously but await them before Serverless timeout
         if (insertedOrders) {
-            import('@/lib/courier').then(({ sendSoldNotification }) => {
-                for (const order of insertedOrders) {
-                    sendSoldNotification(order.seller_id, order);
-                }
-            }).catch(e => console.error('Courier dynamic import error:', e));
+            try {
+                const notifications = insertedOrders.flatMap(order => [
+                    sendSoldNotification(order.seller_id, order),
+                    sendOrderConfirmationNotification(order.buyer_id, order)
+                ]);
+
+                await Promise.allSettled(notifications);
+            } catch (e) {
+                console.error('Courier notification error:', e);
+                // We don't want notification failure to break the checkout flow
+            }
         }
 
         // 3. Update Listings to 'sold'

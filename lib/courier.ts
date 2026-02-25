@@ -148,3 +148,37 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
         console.error(`[Courier] Error sending 'Shipped' notification:`, error);
     }
 }
+
+/**
+ * Notifies the buyer that their order was successfully placed.
+ */
+export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any) {
+    // Re-use shipped preferences or add order_email to DB later, using shipped_email for now
+    const prefs = await getNotificationPreferences(buyerId);
+    if (!prefs.shipped_email && !prefs.shipped_push) return;
+
+    const email = await getUserEmail(buyerId);
+    if (!email) return;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: email },
+                content: {
+                    title: "CardStreet: Order Confirmed!",
+                    body: `Thank you for your purchase! We've received your order for ฿${orderDetails.total_amount}. The seller has been notified to start shipping.`,
+                },
+                routing: {
+                    method: "all",
+                    channels: [
+                        ...(prefs.shipped_email ? ["email"] : []),
+                        ...(prefs.shipped_push ? ["push"] : [])
+                    ]
+                }
+            }
+        });
+        console.log(`[Courier] 'Order Confirmation' notification sent to buyer ${buyerId}`);
+    } catch (error) {
+        console.error(`[Courier] Error sending 'Order Confirmation' notification:`, error);
+    }
+}

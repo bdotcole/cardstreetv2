@@ -1,14 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET - List user's orders with pagination
 export async function GET(request: NextRequest) {
-    const supabase = await createClient()
+    const supabaseSession = await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseSession.auth.getUser()
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Initialize Admin client to bypass RLS on joined 'sold' listings
+    const supabaseAdmin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     try {
         const { searchParams } = new URL(request.url)
@@ -17,7 +24,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
         const offset = (page - 1) * limit
 
-        let query = supabase
+        let query = supabaseAdmin
             .from('orders')
             .select(`
                 *,
