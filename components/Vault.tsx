@@ -300,9 +300,9 @@ const Vault: React.FC<VaultProps> = ({
   };
 
   const renderFolders = () => (
-    <div className="space-y-6 animate-fadeIn pb-32">
+    <div className="space-y-4 animate-fadeIn pb-24">
       {/* Portfolio Header */}
-      <div className="pt-6 relative">
+      <div className="pt-2 relative">
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-cyan to-brand-green opacity-20 blur-3xl rounded-full"></div>
 
         <div className="flex justify-between items-end mb-1 px-2">
@@ -315,12 +315,12 @@ const Vault: React.FC<VaultProps> = ({
           </div>
         </div>
 
-        <h2 className="px-2 text-6xl font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg mb-6">
+        <h2 className="px-2 text-5xl font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg mb-3">
           {currencySymbol}{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </h2>
 
         {/* Chart Card */}
-        <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl mb-8 mx-1">
+        <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl mb-4 mx-1">
           <div className="bg-[#0f172a] rounded-2xl p-4">
             <div className="flex justify-start items-center mb-4 gap-2">
               {['1D', '1W', '1M', '1Y'].map((t) => (
@@ -334,14 +334,14 @@ const Vault: React.FC<VaultProps> = ({
                 </button>
               ))}
             </div>
-            <div className="h-48">
+            <div className="h-32">
               <PriceChart data={chartData} />
             </div>
           </div>
         </div>
 
         {/* Folders */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {COLLECTION_FOLDERS.map((folder) => {
             let count = 0;
             let iconColor = 'text-slate-500';
@@ -365,9 +365,9 @@ const Vault: React.FC<VaultProps> = ({
               <div
                 key={folder.id}
                 onClick={() => setView(targetView)}
-                className="glass p-6 rounded-[2.5rem] border-white/5 active:scale-95 transition-all group cursor-pointer hover:border-brand-cyan/20"
+                className="glass p-4 rounded-[2rem] border-white/5 active:scale-95 transition-all group cursor-pointer hover:border-brand-cyan/20"
               >
-                <div className="w-12 h-12 rounded-2xl glass border-white/10 flex items-center justify-center mb-4 group-hover:border-white/20 transition-colors">
+                <div className="w-10 h-10 rounded-2xl glass border-white/10 flex items-center justify-center mb-3 group-hover:border-white/20 transition-colors">
                   <i className={`fa-solid ${folder.icon} ${iconColor} group-hover:scale-110 transition-transform`}></i>
                 </div>
                 <h4 className="text-white text-sm font-bold tracking-tight mb-1">
