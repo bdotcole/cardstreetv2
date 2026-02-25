@@ -32,7 +32,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
             {/* Header */}
-            <div className="px-6 py-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5">
+            <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
                 <button
                     onClick={onClose}
                     className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 active:bg-brand-cyan active:text-brand-darker transition-all border border-white/5"

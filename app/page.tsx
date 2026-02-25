@@ -103,6 +103,8 @@ export default function HomePage() {
                     if (platform === 'android') {
                         // Hardcode safe limits for modern Android Edge-to-Edge constraints
                         setSafeArea({ top: 44, bottom: 24 });
+                        document.documentElement.style.setProperty('--sat', '44px');
+                        document.documentElement.style.setProperty('--sab', '24px');
                     }
                 }
             } catch {
