@@ -8,14 +8,19 @@ export enum CardCondition {
 }
 
 export enum Rarity {
-  C = 'Common',
-  U = 'Uncommon',
-  R = 'Rare',
-  RR = 'Double Rare',
-  RRR = 'Triple Rare',
-  SR = 'Super Rare',
-  SAR = 'Special Art Rare',
-  UR = 'Ultra Rare'
+  C = 'C',
+  U = 'U',
+  R = 'R',
+  RR = 'RR',
+  RRR = 'RRR',
+  SR = 'SR',
+  AR = 'AR',
+  SAR = 'SAR',
+  UR = 'UR',
+  PB = 'PB',
+  EH = 'EH',
+  MA = 'MA',
+  MUR = 'MUR',
 }
 
 export interface CardPrices {

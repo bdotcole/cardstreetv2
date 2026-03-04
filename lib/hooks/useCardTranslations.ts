@@ -5,16 +5,21 @@ import { useTranslation } from './useTranslation';
 export function useRarityTranslation() {
     const { t } = useTranslation();
 
-    return (rarity: Rarity): string => {
-        const rarityMap: Record<Rarity, string> = {
-            [Rarity.C]: t('card.common'),
-            [Rarity.U]: t('card.uncommon'),
-            [Rarity.R]: t('card.rare'),
-            [Rarity.RR]: t('card.doubleRare'),
-            [Rarity.RRR]: 'Triple Rare', // Not in translations yet, keeping English
-            [Rarity.SR]: 'Super Rare', // Not in translations yet, keeping English
-            [Rarity.SAR]: 'Special Art Rare', // Not in translations yet, keeping English
-            [Rarity.UR]: t('card.ultraRare'),
+    return (rarity: string): string => {
+        const rarityMap: Record<string, string> = {
+            'C': 'Common',
+            'U': 'Uncommon',
+            'R': 'Rare',
+            'RR': 'Double Rare',
+            'RRR': 'Triple Rare',
+            'SR': 'Super Rare',
+            'AR': 'Art Rare',
+            'SAR': 'Special Art Rare',
+            'UR': 'Ultra Rare',
+            'PB': 'Pokeball Holo',
+            'EH': 'Energy Holo',
+            'MA': 'MA',
+            'MUR': 'MUR',
         };
 
         return rarityMap[rarity] || rarity;

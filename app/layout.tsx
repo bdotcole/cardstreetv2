@@ -4,6 +4,7 @@ import './globals.css'
 import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
+import PushNotificationManager from '@/components/PushNotificationManager'
 
 export const metadata: Metadata = {
     title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
@@ -34,6 +35,7 @@ export default function RootLayout({
                 <UserSettingsProvider>
                     <PayPalProvider>
                         <ToastProvider>
+                            <PushNotificationManager />
                             {children}
                         </ToastProvider>
                     </PayPalProvider>

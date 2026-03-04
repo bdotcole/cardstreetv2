@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "385207592781",
+    "project_id": "clever-case-464300-s6",
+    "storage_bucket": "clever-case-464300-s6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:385207592781:android:56c897cfea1c74b5107904",
+        "android_client_info": {
+          "package_name": "com.cardstreet.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "385207592781-kbipf35s92gijtf40digs5mgvn1r6ai7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAisJCohg3P6-ivoD6MZa2VIAcuBkUt4Mk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "385207592781-kbipf35s92gijtf40digs5mgvn1r6ai7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

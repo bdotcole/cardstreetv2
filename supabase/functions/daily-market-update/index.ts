@@ -205,8 +205,33 @@ serve(async (req) => {
         let failed = 0;
 
         // Step 1: Get cards from specific sets that need matching/pricing
-        // If targetSet provided, use ONLY that set. Otherwise use default list.
-        const setsToProcess = targetSet ? [targetSet] : ['MA1', 'MA2', 'SV10s', 'SV9s', 'SV11s', 'me01', 'me02', 'sv09', 'sv10'];
+        // If targetSet provided, use ONLY that set.
+        // Otherwise: dynamically pull ALL Thai set IDs from set_bridge table + their EN equivalents.
+        let setsToProcess: string[];
+
+        if (targetSet) {
+            setsToProcess = [targetSet];
+        } else {
+            // Pull all unique Thai set IDs from the bridge table
+            const { data: bridgeRows, error: bridgeError } = await supabase
+                .from('set_bridge')
+                .select('thai_set_id, english_set_id');
+
+            if (bridgeError || !bridgeRows) {
+                console.warn('Could not load set_bridge, falling back to hardcoded sets');
+                setsToProcess = ['MA1', 'MA2', 'SV10s', 'SV9s', 'SV11s', 'me01', 'me02', 'sv09', 'sv10'];
+            } else {
+                // Collect Thai IDs and their English counterparts
+                const thaiIds = new Set<string>(bridgeRows.map((r: any) => r.thai_set_id));
+                const enIds = new Set<string>(
+                    bridgeRows
+                        .filter((r: any) => r.english_set_id)
+                        .map((r: any) => r.english_set_id)
+                );
+                setsToProcess = [...thaiIds, ...enIds];
+                console.log(`Loaded ${setsToProcess.length} sets from set_bridge (${thaiIds.size} Thai + ${enIds.size} English)`);
+            }
+        }
 
         // Optimize: Fetch ALL target cards first (dataset is small, ~2000 cards)
         let allTargetCards: any[] = [];
@@ -322,10 +347,10 @@ serve(async (req) => {
                 let calculatedPrice = 0;
                 let pricingMethod = 'default_floor';
                 let sourceLinks: string[] = [];
+                let currency = 'THB'; // Default currency
 
                 // Logic Branch: English vs Thai
                 let justTcgPrice: number | null = null;
-
 
                 if (card.language === 'en') {
                     // English Card: Price directly using JustTCG Only (pass targetSet if available to filter)
@@ -338,14 +363,14 @@ serve(async (req) => {
                     console.log(`[DEBUG] Check ${card.name} (${card.id}): JustTCG=${justTcgPrice}`);
 
                     if (justTcgPrice && justTcgPrice > 0) {
-                        calculatedPrice = justTcgPrice * 35.85; // USD -> THB 
+                        calculatedPrice = justTcgPrice; // Keep native USD
+                        currency = 'USD';
                         pricingMethod = 'en_direct';
                         sourceLinks = ['JustTCG'];
-                        console.log(`Price found for ${card.name} (EN Direct): ${calculatedPrice.toFixed(2)} THB`);
+                        console.log(`Price found for ${card.name} (EN Direct): ${calculatedPrice.toFixed(2)} USD`);
                     } else {
                         console.log(`[DEBUG] No price found for ${card.name} from JustTCG.`);
                     }
-
 
                 } else {
                     // Thai Card: Check mapping
@@ -365,13 +390,13 @@ serve(async (req) => {
                                 .single();
 
                             if (enCard) {
-                                const [justTcgPrice, pokeDataPrice] = await Promise.all([
+                                const [justTcgPriceEn, pokeDataPrice] = await Promise.all([
                                     fetchJustTCGPrice(enCard.name, 'en'),
-                                    fetchPokeDataPrice(enCard.name),
+                                    Promise.resolve(null),
                                 ]);
 
                                 const prices = [];
-                                if (justTcgPrice) prices.push({ price: justTcgPrice, weight: 0.6 });
+                                if (justTcgPriceEn) prices.push({ price: justTcgPriceEn, weight: 0.6 });
                                 if (pokeDataPrice) prices.push({ price: pokeDataPrice, weight: 0.4 });
 
                                 if (prices.length > 0) {
@@ -408,25 +433,28 @@ serve(async (req) => {
                 }
 
                 // 3. Apply Minimum Floor & Default
-                // If no price found (unmapped or API fail), default to 10 THB
-                // If price found but < 10 THB, floor at 10 THB
-                const finalPrice = Math.max(calculatedPrice, 10);
-
-                if (calculatedPrice === 0) {
-                    console.log(`Using default 10 THB for ${card.name} (${card.id})`);
-                } else if (finalPrice === 10 && calculatedPrice < 10) {
-                    console.log(`Flooring price to 10 THB for ${card.name} (calc: ${calculatedPrice.toFixed(2)})`);
+                // Only enforce the 10 THB minimum if currency is THB
+                let finalPrice = calculatedPrice;
+                if (currency === 'THB') {
+                    finalPrice = Math.max(calculatedPrice, 10);
+                    if (calculatedPrice === 0) {
+                        console.log(`Using default 10 THB for ${card.name} (${card.id})`);
+                    } else if (finalPrice === 10 && calculatedPrice < 10) {
+                        console.log(`Flooring price to 10 THB for ${card.name} (calc: ${calculatedPrice.toFixed(2)})`);
+                    }
+                } else if (currency === 'USD' && calculatedPrice === 0) {
+                    console.log(`No price could be determined for ${card.name} in USD. Setting to 0.`);
                 }
 
                 // Upsert into market_values
                 const { data: upsertData, error: insertError } = await supabase.from('market_values').upsert({
                     card_id: card.id,
-                    language: 'th',
+                    language: card.language || 'th',
                     condition: 'Raw_NM',
                     market_avg: finalPrice,
                     source_links: sourceLinks,
                     source_prices: { raw_calculated: calculatedPrice, method: pricingMethod },
-                    currency: 'THB',
+                    currency: currency,
                     last_updated: new Date().toISOString()
                 }, { onConflict: 'card_id, language, condition' }).select();
 
