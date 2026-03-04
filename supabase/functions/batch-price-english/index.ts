@@ -25,6 +25,7 @@ const SET_ID_MAP: Record<string, string> = {
     'sv10.5b': 'sv-black-bolt-pokemon',
     'sv10.5w': 'sv-white-flare-pokemon',
     'sv07': 'sv07-stellar-crown-pokemon',
+    'sv06.5': 'sv-shrouded-fable-pokemon',
     'sv06': 'sv06-twilight-masquerade-pokemon',
     'sv05': 'sv05-temporal-forces-pokemon',
     'sv04.5': 'sv-paldean-fates-pokemon',

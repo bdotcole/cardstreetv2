@@ -147,9 +147,9 @@ async function runLocal(dbSetId, jtcgId) {
 }
 
 async function bulkSync() {
-    console.log("Syncing SV09 and SV10 to restore USD prices...");
-    await runLocal('sv09', 'sv09-journey-together-pokemon');
-    await runLocal('sv10', 'sv10-destined-rivals-pokemon');
+    console.log("Syncing SV06.5 and SV8PT5 to fetch missing market prices...");
+    await runLocal('sv06.5', 'sv-shrouded-fable-pokemon');
+    await runLocal('sv8pt5', 'sv-prismatic-evolutions-pokemon');
     console.log("Sync completed.");
 }
 
