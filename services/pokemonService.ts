@@ -8,8 +8,9 @@
 import { createClient } from '@/lib/supabase/client';
 import { geminiService, SearchIntent } from './geminiService';
 import { Card } from '../types';
+import { EXCHANGE_RATES } from '@/constants';
 
-const EXCHANGE_RATE = 35.85;
+const EXCHANGE_RATE = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 
 // Client-side search cache
 const searchIndex = new Map<string, Card[]>();
@@ -86,7 +87,7 @@ export const pokemonService = {
             // Use RAW SQL-like filter for OR condition with AND on number
             let { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
+                .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name)')
                 .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                 .eq('number', cleanNumber)
                 .limit(5);
@@ -95,7 +96,7 @@ export const pokemonService = {
             if (!cards || cards.length === 0) {
                 const { data: fallbackCards } = await supabase
                     .from('pokemon_cards')
-                    .select('*, market_values(market_avg, last_updated), pokemon_sets(name)')
+                    .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name)')
                     .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                     .limit(5);
 
@@ -134,7 +135,7 @@ export const pokemonService = {
                 .select(`
                     id, name, english_name, set_id, number, supertype, subtypes, 
                     rarity, hp, types, image_small, image_large, language, raw_data,
-                    market_values(market_avg, last_updated),
+                    market_values(market_avg, currency, last_updated),
                     pokemon_sets(name)
                 `)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
@@ -268,7 +269,11 @@ export const pokemonService = {
             : supabaseCard.market_values;
 
         if (marketValueData && marketValueData.market_avg > 0) {
-            marketThb = Math.round(marketValueData.market_avg);
+            let avg = marketValueData.market_avg;
+            if (marketValueData.currency === 'USD') {
+                avg = avg * EXCHANGE_RATE; // Convert to base THB
+            }
+            marketThb = avg;
             lastUpdated = marketValueData.last_updated;
         } else {
             // Fallback to approximated old data (likely USD)
