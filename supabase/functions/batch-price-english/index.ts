@@ -92,6 +92,16 @@ const SET_ID_MAP: Record<string, string> = {
     'hgss3': 'undaunted-pokemon',
     'hgss2': 'unleashed-pokemon',
     'hgss1': 'heartgold-soulsilver-pokemon',
+
+    // Vintage / e-Card Sets
+    'gym2': 'gym-challenge-pokemon',
+    'gym1': 'gym-heroes-pokemon',
+    'ecard3': 'skyridge-pokemon',
+    'si1': 'southern-islands-pokemon',
+    'lc': 'legendary-collection-pokemon',
+    'ecard1': 'expedition-base-set-pokemon',
+    'ecard2': 'aquapolis-pokemon',
+
     'pl4': 'arceus-pokemon',
     'pl3': 'supreme-victors-pokemon',
     'pl2': 'rising-rivals-pokemon',
