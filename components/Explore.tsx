@@ -251,8 +251,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                       key={lang}
                       onClick={() => { setSelectedLanguage(lang); setIsLanguageOpen(false); }}
                       className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang
-                          ? 'text-brand-cyan bg-brand-cyan/10'
-                          : 'text-slate-300 hover:bg-white/5'
+                        ? 'text-brand-cyan bg-brand-cyan/10'
+                        : 'text-slate-300 hover:bg-white/5'
                         }`}
                     >
                       {lang === 'en' ? t('explore.english') : t('explore.thai')}
@@ -276,8 +276,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   <button
                     onClick={() => { setSelectedGame('pokemon'); setIsGameOpen(false); }}
                     className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedGame === 'pokemon'
-                        ? 'text-brand-cyan bg-brand-cyan/10'
-                        : 'text-slate-300 hover:bg-white/5'
+                      ? 'text-brand-cyan bg-brand-cyan/10'
+                      : 'text-slate-300 hover:bg-white/5'
                       }`}
                   >
                     Pokémon
@@ -356,7 +356,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       </div>
 
       {/* Scrollable Results Section */}
-      <div className="flex-1 overflow-hidden px-6 pb-24">
+      <div className="flex-1 overflow-hidden px-6 pb-4">
         <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
           {isLoadingCards ? (
             <div className="p-6 space-y-4">
