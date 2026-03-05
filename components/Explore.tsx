@@ -29,7 +29,11 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   // Custom Set Selector State
   const [isSetListOpen, setIsSetListOpen] = useState(false);
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const [isGameOpen, setIsGameOpen] = useState(false);
   const setListRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<HTMLDivElement>(null);
   const cardListRef = useRef<HTMLDivElement>(null);
 
   // Debounce search term
@@ -45,6 +49,12 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     const handleClickOutside = (event: MouseEvent) => {
       if (setListRef.current && !setListRef.current.contains(event.target as Node)) {
         setIsSetListOpen(false);
+      }
+      if (languageRef.current && !languageRef.current.contains(event.target as Node)) {
+        setIsLanguageOpen(false);
+      }
+      if (gameRef.current && !gameRef.current.contains(event.target as Node)) {
+        setIsGameOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -224,32 +234,56 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
           <div className="grid grid-cols-3 gap-2 z-30 relative">
             {/* Language Dropdown */}
-            <div className="relative">
-              <select
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value as any)}
-                className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
+            <div className="relative" ref={languageRef}>
+              <button
+                onClick={() => { setIsLanguageOpen(!isLanguageOpen); setIsGameOpen(false); }}
+                className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan active:bg-white/5 transition-colors"
               >
-                <option value="en">{t('explore.english')}</option>
-                {/* Japanese temporarily hidden until database is complete */}
-                {/* <option value="jp">{t('explore.japanese')}</option> */}
-                <option value="th">{t('explore.thai')}</option>
-              </select>
-              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+                <span className="text-xs font-bold text-slate-300">
+                  {selectedLanguage === 'en' ? t('explore.english') : t('explore.thai')}
+                </span>
+                <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isLanguageOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+              {isLanguageOpen && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                  {(['en', 'th'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => { setSelectedLanguage(lang); setIsLanguageOpen(false); }}
+                      className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang
+                          ? 'text-brand-cyan bg-brand-cyan/10'
+                          : 'text-slate-300 hover:bg-white/5'
+                        }`}
+                    >
+                      {lang === 'en' ? t('explore.english') : t('explore.thai')}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Game Dropdown */}
-            <div className="relative">
-              <select
-                value={selectedGame}
-                onChange={(e) => setSelectedGame(e.target.value as any)}
-                className="w-full h-10 bg-brand-darker rounded-lg px-3 text-xs font-bold text-slate-300 border border-white/10 appearance-none outline-none focus:border-brand-cyan"
+            <div className="relative" ref={gameRef}>
+              <button
+                onClick={() => { setIsGameOpen(!isGameOpen); setIsLanguageOpen(false); }}
+                className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan active:bg-white/5 transition-colors"
               >
-                <option value="pokemon">Pokémon</option>
-                {/* One Piece temporarily hidden until database is complete */}
-                {/* <option value="onepiece">One Piece</option> */}
-              </select>
-              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+                <span className="text-xs font-bold text-slate-300">Pokémon</span>
+                <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isGameOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+              {isGameOpen && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                  <button
+                    onClick={() => { setSelectedGame('pokemon'); setIsGameOpen(false); }}
+                    className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedGame === 'pokemon'
+                        ? 'text-brand-cyan bg-brand-cyan/10'
+                        : 'text-slate-300 hover:bg-white/5'
+                      }`}
+                  >
+                    Pokémon
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Set Dropdown */}
