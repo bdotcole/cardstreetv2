@@ -618,10 +618,10 @@ export default function HomePage() {
                 <div className="absolute top-[-10%] left-[-20%] w-[200px] h-[200px] bg-brand-cyan/10 rounded-full blur-[80px] pointer-events-none"></div>
                 <div className="absolute bottom-[-10%] right-[-20%] w-[200px] h-[200px] bg-brand-red/10 rounded-full blur-[80px] pointer-events-none"></div>
 
-                <main className="flex-1 overflow-y-auto scrollbar-hide flex flex-col z-10 w-full h-full relative">
+                <main className="flex-1 flex flex-col z-10 w-full h-full relative overflow-hidden">
                     {/* Header */}
                     <header
-                        className="w-full px-6 pt-5 pb-3 flex justify-between items-center z-50 shrink-0 sticky top-0 bg-brand-darker/95 backdrop-blur-xl border-b border-white/5"
+                        className="w-full px-6 pt-5 pb-3 flex justify-between items-center z-50 shrink-0 bg-brand-darker border-b border-white/5"
                         style={{
                             paddingTop: safeArea.top ? `${Math.max(safeArea.top + 8, 20)}px` : 'max(calc(env(safe-area-inset-top, 0px) + 8px), 20px)',
                         }}
@@ -658,7 +658,7 @@ export default function HomePage() {
                         </div>
                     </header>
 
-                    <div className="flex-1 px-6 pb-40">
+                    <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6 pb-24' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
                         {/* Home Tab Removed - Default is Marketplace */}
                         {activeTab === 'explore' && (
                             <Explore

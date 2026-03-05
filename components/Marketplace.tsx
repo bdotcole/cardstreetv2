@@ -88,11 +88,11 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
   ].filter(Boolean).length;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn">
+    <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 space-y-4 pb-4">
+      <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
         {/* Header */}
-        <div className="pt-6 px-4">
+        <div className="">
           <div className="flex justify-between items-end mb-2">
             <div>
               <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('marketplace.globalExchange')}</p>
@@ -119,7 +119,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
         </div>
 
         {/* Filter & Sort Bar */}
-        <div className="sticky top-0 z-30 bg-brand-darker/95 backdrop-blur-xl border-b border-white/5 py-3 px-4 shadow-2xl">
+        <div className="bg-brand-darker/95 backdrop-blur-xl border-b border-white/5 py-3 px-6 shadow-2xl">
           <div className="flex justify-between items-center">
             {/* Filter Button */}
             <button
@@ -253,7 +253,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
       </div>
 
       {/* Scrollable Listings Grid */}
-      <div className="flex-1 overflow-y-auto px-2 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto px-6 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <div className="grid grid-cols-1 gap-2">
           {filteredListings.length > 0 ? filteredListings.map((listing) => (
             <div

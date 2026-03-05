@@ -200,9 +200,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   }, [cards, sortOption]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn">
+    <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 space-y-4 pb-4">
+      <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
         {/* Search Engine */}
         <div className="relative group">
           <div className="absolute inset-0 bg-brand-cyan/20 blur-md rounded-xl group-focus-within:opacity-100 opacity-0 transition-opacity"></div>
@@ -322,7 +322,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       </div>
 
       {/* Scrollable Results Section */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden px-6 pb-24">
         <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
           {isLoadingCards ? (
             <div className="p-6 space-y-4">
