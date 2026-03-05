@@ -102,11 +102,20 @@ export default function HomePage() {
                 const { Capacitor } = await import('@capacitor/core');
                 if (Capacitor.isNativePlatform()) {
                     const platform = Capacitor.getPlatform();
+
+                    try {
+                        const { StatusBar, Style } = await import('@capacitor/status-bar');
+                        await StatusBar.setOverlaysWebView({ overlay: true });
+                        await StatusBar.setStyle({ style: Style.Dark });
+                    } catch (e) {
+                        console.warn('StatusBar plugin not available', e);
+                    }
+
                     if (platform === 'android') {
-                        // Hardcode safe limits for modern Android Edge-to-Edge constraints
+                        // Track both top and bottom safe areas now that webview overlays the status bar
                         setSafeArea({ top: 44, bottom: 24 });
-                        document.documentElement.style.setProperty('--sat', '44px');
                         document.documentElement.style.setProperty('--sab', '24px');
+                        document.documentElement.style.setProperty('--sat', '44px');
                     }
                 }
             } catch {
