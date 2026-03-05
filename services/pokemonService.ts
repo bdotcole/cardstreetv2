@@ -87,7 +87,7 @@ export const pokemonService = {
             // Use RAW SQL-like filter for OR condition with AND on number
             let { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name)')
+                .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
                 .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                 .eq('number', cleanNumber)
                 .limit(5);
@@ -96,7 +96,7 @@ export const pokemonService = {
             if (!cards || cards.length === 0) {
                 const { data: fallbackCards } = await supabase
                     .from('pokemon_cards')
-                    .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name)')
+                    .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
                     .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
                     .limit(5);
 
@@ -136,7 +136,7 @@ export const pokemonService = {
                     id, name, english_name, set_id, number, supertype, subtypes, 
                     rarity, hp, types, image_small, image_large, language, raw_data,
                     market_values(market_avg, currency, last_updated),
-                    pokemon_sets(name)
+                    pokemon_sets(name, printed_total, total)
                 `)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
                 .limit(100);
@@ -345,13 +345,19 @@ export const pokemonService = {
             }
         }
 
+        // Try to get printed_total from joined pokemon_sets, fallback to total, then rawData
+        const setTotal = supabaseCard.pokemon_sets?.printed_total
+            || supabaseCard.pokemon_sets?.total
+            || rawData.set?.printedTotal
+            || '??';
+
         return {
             id: supabaseCard.id,
             name: supabaseCard.name,
             thaiName: supabaseCard.english_name || supabaseCard.name, // Try to store both
             set: setName,
             language: supabaseCard.language || 'en',
-            number: supabaseCard.number ? `${supabaseCard.number}/${rawData.set?.printedTotal || '??'}` : '??',
+            number: supabaseCard.number ? `${supabaseCard.number.split('/')[0]}/${setTotal}` : '??',
             rarity: supabaseCard.rarity || 'Common',
             imageUrl: imageUrl,
             images: {
