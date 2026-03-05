@@ -147,8 +147,24 @@ async function runLocal(dbSetId, jtcgId) {
 }
 
 async function bulkSync() {
-    console.log("Syncing Gym Challenge locally to diagnose...");
-    await runLocal('gym2', 'gym-challenge-pokemon');
+    const sets = [
+        { db: 'gym2', jtcg: 'gym-challenge-pokemon' },
+        { db: 'gym1', jtcg: 'gym-heroes-pokemon' },
+        { db: 'ecard3', jtcg: 'skyridge-pokemon' },
+        { db: 'si1', jtcg: 'southern-islands-pokemon' },
+        { db: 'lc', jtcg: 'legendary-collection-pokemon' },
+        { db: 'ecard1', jtcg: 'expedition-base-set-pokemon' },
+        { db: 'ecard2', jtcg: 'aquapolis-pokemon' },
+    ];
+
+    console.log(`Syncing ${sets.length} vintage sets...`);
+    for (const s of sets) {
+        console.log(`\n--- Starting ${s.db} (${s.jtcg}) ---`);
+        await runLocal(s.db, s.jtcg);
+        // Extra 3s pause between sets to be safe
+        await new Promise(r => setTimeout(r, 3000));
+    }
+    console.log('\nAll vintage sets synced.');
 }
 
 bulkSync();

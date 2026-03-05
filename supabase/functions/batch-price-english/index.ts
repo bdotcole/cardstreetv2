@@ -99,7 +99,7 @@ const SET_ID_MAP: Record<string, string> = {
     'ecard3': 'skyridge-pokemon',
     'si1': 'southern-islands-pokemon',
     'lc': 'legendary-collection-pokemon',
-    'ecard1': 'expedition-base-set-pokemon',
+    'ecard1': 'expedition-pokemon',
     'ecard2': 'aquapolis-pokemon',
 
     'pl4': 'arceus-pokemon',
