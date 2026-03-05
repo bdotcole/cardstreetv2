@@ -608,6 +608,7 @@ export default function HomePage() {
     return (
         <div className="bg-brand-darker h-[100dvh] w-full flex justify-center selection:bg-brand-cyan/30 overflow-hidden text-slate-200 font-sans"
             style={{
+                paddingTop: safeArea.top ? `${safeArea.top}px` : 'env(safe-area-inset-top, 0px)',
                 paddingBottom: safeArea.bottom ? `${safeArea.bottom}px` : 'env(safe-area-inset-bottom, 0px)',
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
@@ -621,10 +622,7 @@ export default function HomePage() {
                 <main className="flex-1 flex flex-col z-10 w-full h-full relative overflow-hidden">
                     {/* Header */}
                     <header
-                        className="w-full px-6 pt-5 pb-3 flex justify-between items-center z-50 shrink-0 bg-brand-darker border-b border-white/5"
-                        style={{
-                            paddingTop: safeArea.top ? `${Math.max(safeArea.top + 8, 20)}px` : 'max(calc(env(safe-area-inset-top, 0px) + 8px), 20px)',
-                        }}
+                        className="w-full px-6 py-3 flex justify-between items-center z-50 shrink-0 bg-brand-darker border-b border-white/5"
                     >
                         <div className="flex items-center">
                             {/* CardStreet Logo */}
