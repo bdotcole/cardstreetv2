@@ -6,7 +6,8 @@ import { ReactNode, useState } from 'react'
 
 const NAV_ITEMS = [
     { href: '/admin', label: 'Overview', icon: 'fa-solid fa-chart-line' },
-    { href: '/admin/users', label: 'Users & Partners', icon: 'fa-solid fa-users' },
+    { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-user' },
+    { href: '/admin/partners', label: 'Partners', icon: 'fa-solid fa-handshake' },
     { href: '/admin/tickets', label: 'Support Tickets', icon: 'fa-solid fa-ticket' },
     { href: '/admin/downloads', label: 'Download Analytics', icon: 'fa-solid fa-download' },
 ]
