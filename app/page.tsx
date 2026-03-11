@@ -759,7 +759,7 @@ export default function HomePage() {
                                             ...user,
                                             isPartner: true,
                                             partnerStats: {
-                                                totalSignups: 324,
+                                                totalDownloads: 324,
                                                 level: 2,
                                                 currentFee: 4.5,
                                                 totalEarnings: 15400,

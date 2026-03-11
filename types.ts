@@ -107,7 +107,7 @@ export interface Review {
 }
 
 export interface PartnerStats {
-  totalSignups: number;
+  totalDownloads: number;
   totalEarnings: number;
   currentFee: number;
   referralCode: string;

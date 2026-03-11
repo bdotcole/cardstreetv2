@@ -412,6 +412,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 ref={cardListRef}
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}
               >
                 {sortedCards.map(card => (
                   <div

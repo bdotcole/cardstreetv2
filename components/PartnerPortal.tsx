@@ -5,18 +5,103 @@ interface PartnerPortalProps {
     user: UserProfile;
 }
 
-const PARTNER_TIERS = [
-    { level: 1, name: 'Entry', minSignups: 0, fee: 5.0, color: 'text-brand-orange border-brand-orange' },
-    { level: 2, name: 'Rising Star', minSignups: 100, fee: 4.5, color: 'text-slate-300 border-slate-300' },
-    { level: 3, name: 'Pro Dealer', minSignups: 500, fee: 4.0, color: 'text-yellow-400 border-yellow-400' },
-    { level: 4, name: 'Market Maker', minSignups: 1000, fee: 3.5, color: 'text-brand-cyan border-brand-cyan' },
-    { level: 5, name: 'Hobby Icon', minSignups: 5000, fee: 3.0, color: 'text-brand-purple border-brand-purple' },
-    { level: 6, name: 'Legendary', minSignups: 10000, fee: 2.0, color: 'text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan via-white to-brand-purple border-white' },
+interface PartnerTier {
+    level: number;
+    name: string;
+    minDownloads: number;
+    fee: number;
+    color: string;
+    gemIcon: string;
+    rewards: string[];
+}
+
+const PARTNER_TIERS: PartnerTier[] = [
+    {
+        level: 1,
+        name: 'Bronze Rare',
+        minDownloads: 0,
+        fee: 5.0,
+        color: 'text-amber-600 border-amber-600',
+        gemIcon: '🟤',
+        rewards: ['Partner QR Code & referral link'],
+    },
+    {
+        level: 2,
+        name: 'Silver Rare',
+        minDownloads: 100,
+        fee: 4.5,
+        color: 'text-slate-300 border-slate-300',
+        gemIcon: '⚪',
+        rewards: ['4.5% seller fee'],
+    },
+    {
+        level: 3,
+        name: 'Gold Rare',
+        minDownloads: 500,
+        fee: 4.0,
+        color: 'text-yellow-400 border-yellow-400',
+        gemIcon: '🟡',
+        rewards: ['4% seller fee', 'Early access to feature updates (Actions & Live Breaks)'],
+    },
+    {
+        level: 4,
+        name: 'Platinum Rare',
+        minDownloads: 1000,
+        fee: 3.5,
+        color: 'text-slate-200 border-slate-200',
+        gemIcon: '🔷',
+        rewards: ['3.5% seller fee', 'Raffle entry: English booster box (must reach by EOY)'],
+    },
+    {
+        level: 5,
+        name: 'Sapphire Rare',
+        minDownloads: 2500,
+        fee: 3.0,
+        color: 'text-blue-400 border-blue-400',
+        gemIcon: '💎',
+        rewards: ['3% seller fee', 'Cardstreet social media feature'],
+    },
+    {
+        level: 6,
+        name: 'Ruby Rare',
+        minDownloads: 3500,
+        fee: 2.75,
+        color: 'text-red-400 border-red-400',
+        gemIcon: '🔴',
+        rewards: ['2.75% seller fee', 'Exclusive Cardstreet mousepad'],
+    },
+    {
+        level: 7,
+        name: 'Emerald Rare',
+        minDownloads: 5000,
+        fee: 2.5,
+        color: 'text-green-400 border-green-400',
+        gemIcon: '🟢',
+        rewards: ['2.5% seller fee', 'Free table spot at 2027 SEA International Card Show'],
+    },
+    {
+        level: 8,
+        name: 'Diamond Rare',
+        minDownloads: 7500,
+        fee: 2.25,
+        color: 'text-brand-cyan border-brand-cyan',
+        gemIcon: '💠',
+        rewards: ['2.25% seller fee', '1% profit sharing on transactions from your referred users'],
+    },
+    {
+        level: 9,
+        name: 'Pink Diamond Rare',
+        minDownloads: 10000,
+        fee: 2.0,
+        color: 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-fuchsia-300 to-pink-500 border-pink-400',
+        gemIcon: '🩷',
+        rewards: ['2% seller fee', '2% profit sharing on transactions from your referred users'],
+    },
 ];
 
 const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
     const stats = user.partnerStats || {
-        totalSignups: 0,
+        totalDownloads: 0,
         totalEarnings: 0,
         currentFee: 5.0,
         referralCode: `CARDSTREET-${user.name.toUpperCase().slice(0, 5)}`,
@@ -29,7 +114,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
 
     // Progress Calculation
     const progressToNext = nextTier
-        ? Math.min(100, Math.max(0, ((stats.totalSignups - currentTier.minSignups) / (nextTier.minSignups - currentTier.minSignups)) * 100))
+        ? Math.min(100, Math.max(0, ((stats.totalDownloads - currentTier.minDownloads) / (nextTier.minDownloads - currentTier.minDownloads)) * 100))
         : 100;
 
     const [copied, setCopied] = useState(false);
@@ -60,10 +145,10 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <i className="fa-solid fa-users text-4xl text-brand-cyan"></i>
                         </div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total Sign-ups</p>
-                        <p className="text-4xl font-black text-white">{stats.totalSignups.toLocaleString()}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total App Downloads</p>
+                        <p className="text-4xl font-black text-white">{stats.totalDownloads.toLocaleString()}</p>
                         <div className="mt-2 text-[10px] text-brand-green font-bold uppercase flex items-center gap-1">
-                            <i className="fa-solid fa-arrow-trend-up"></i> Top 5%
+                            <i className="fa-solid fa-arrow-trend-up"></i> Keep Growing
                         </div>
                     </div>
 
@@ -87,7 +172,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                         <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">Road to Legend</h3>
                         {nextTier && (
                             <span className="text-[9px] font-bold text-brand-cyan uppercase tracking-wider">
-                                {nextTier.minSignups - stats.totalSignups} to Level {nextTier.level}
+                                {nextTier.minDownloads - stats.totalDownloads} downloads to {nextTier.name}
                             </span>
                         )}
                     </div>
@@ -104,8 +189,8 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     </div>
 
                     <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-widest relative z-10">
-                        <span>{currentTier.minSignups}</span>
-                        <span>{nextTier ? nextTier.minSignups : 'MAX'}</span>
+                        <span>{currentTier.minDownloads.toLocaleString()}</span>
+                        <span>{nextTier ? nextTier.minDownloads.toLocaleString() : 'MAX'}</span>
                     </div>
                 </div>
 
@@ -131,29 +216,48 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                 {/* Tier Overview */}
                 <div className="space-y-3">
                     <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide px-2">Tier Rewards</h3>
-                    {PARTNER_TIERS.map((tier) => (
-                        <div
-                            key={tier.level}
-                            className={`flex justify-between items-center p-4 rounded-xl border transition-all ${tier.level === stats.level
+                    {PARTNER_TIERS.map((tier) => {
+                        const isActive = tier.level === stats.level;
+                        const isUnlocked = tier.level <= stats.level;
+                        return (
+                            <div
+                                key={tier.level}
+                                className={`p-4 rounded-xl border transition-all ${isActive
                                     ? 'bg-white/10 border-brand-cyan/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]'
-                                    : 'bg-white/5 border-white/5 opacity-60'
-                                }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs border ${tier.color.replace('text-', 'bg-').split(' ')[0]} bg-opacity-20 ${tier.color.split(' ')[0]}`}>
-                                    {tier.level}
+                                    : isUnlocked
+                                        ? 'bg-white/5 border-white/10'
+                                        : 'bg-white/5 border-white/5 opacity-50'
+                                    }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl">{tier.gemIcon}</span>
+                                        <div>
+                                            <p className={`text-sm font-bold ${tier.color.split(' ')[0]}`}>{tier.name}</p>
+                                            <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minDownloads.toLocaleString()}+ Downloads</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-black text-white">{tier.fee}%</p>
+                                        <p className="text-[8px] text-slate-500 font-bold uppercase">Seller Fee</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className={`text-sm font-bold ${tier.color.split(' ')[0]}`}>{tier.name}</p>
-                                    <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minSignups}+ Recruits</p>
-                                </div>
+                                <ul className="space-y-1 pl-9">
+                                    {tier.rewards.map((reward, i) => (
+                                        <li key={i} className="text-[10px] text-slate-400 font-semibold flex items-start gap-1.5">
+                                            <span className="text-brand-cyan mt-0.5">✦</span>
+                                            {reward}
+                                        </li>
+                                    ))}
+                                </ul>
+                                {isActive && (
+                                    <div className="mt-2 pl-9">
+                                        <span className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">← Current Tier</span>
+                                    </div>
+                                )}
                             </div>
-                            <div className="text-right">
-                                <p className="text-sm font-black text-white">{tier.fee}%</p>
-                                <p className="text-[8px] text-slate-500 font-bold uppercase">Fee</p>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>

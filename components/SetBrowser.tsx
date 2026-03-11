@@ -158,7 +158,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-brand-darker flex flex-col">
+    <div className="fixed inset-0 z-50 bg-brand-darker flex flex-col" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 140px)' }}>
       {/* Fixed Header */}
       <div className="flex-none bg-brand-darker/95 backdrop-blur-xl z-20 pb-4 border-b border-white/5 pt-[calc(var(--sat)+1rem)] px-4 shadow-lg">
         <div className="flex items-center gap-4">
@@ -242,7 +242,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
       </div>
 
       {/* Scrollable Body - Sets Grid */}
-      <div className="flex-1 overflow-y-auto p-4 pt-4">
+      <div className="flex-1 overflow-y-auto p-4 pt-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}>
         {processedSets.length === 0 && !loading ? (
           <div className="text-center py-32 glass rounded-[2.5rem] border-dashed border-white/5 mx-1">
             <i className="fa-solid fa-box-open text-4xl text-slate-800 mb-6"></i>
@@ -251,7 +251,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 pb-24">
+          <div className="grid grid-cols-3 gap-3">
             {processedSets.map((set, index) => {
               const isLastElement = index === processedSets.length - 1 && hasMore;
               const completion = getSetCompletion(set);

@@ -253,7 +253,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
       </div>
 
       {/* Scrollable Listings Grid */}
-      <div className="flex-1 overflow-y-auto px-6 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
         <div className="grid grid-cols-1 gap-2">
           {filteredListings.length > 0 ? filteredListings.map((listing) => (
             <div

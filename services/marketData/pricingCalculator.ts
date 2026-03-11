@@ -54,12 +54,12 @@ export class PricingCalculator {
 
     /**
      * Calculate Thai card price based on English or Japanese counterpart
-     * EN: 0.6x multiplier
+     * EN: 0.55x multiplier
      * JP: 0.8x multiplier
      */
     calculateThaiPrice(enPrice?: number, jpPrice?: number): number | null {
         if (enPrice && enPrice > 0) {
-            return enPrice * 0.6;
+            return enPrice * 0.55;
         }
 
         if (jpPrice && jpPrice > 0) {
@@ -154,13 +154,44 @@ export class PricingCalculator {
     }
 
     /**
-     * Calculate Thai card price based on mapped English/Japanese card
+     * Calculate Thai card price based on mapped English/Japanese card or Internal Sales
      */
     async calculateThaiCardPrice(thaiCardId: string): Promise<MarketSnapshot | null> {
         const supabase = createClient();
 
         try {
-            // Get the card mapping
+            // First, check for Cardstreet internal sales
+            const { data: soldListings, error: listingsErr } = await supabase
+                .from('listings')
+                .select('price')
+                .eq('card_id', thaiCardId)
+                .eq('status', 'sold');
+
+            if (!listingsErr && soldListings && soldListings.length > 0) {
+                // Calculate average of internal sales
+                const sum = soldListings.reduce((acc, curr) => acc + Number(curr.price), 0);
+                const internalAvg = sum / soldListings.length;
+
+                return {
+                    cardId: thaiCardId,
+                    language: 'th',
+                    condition: 'Raw_NM',
+                    marketAvg: internalAvg,
+                    sources: [{
+                        source: 'Cardstreet Internal Sales',
+                        price: internalAvg,
+                        url: 'Internal Listings Data',
+                        weight: 1.0
+                    }],
+                    calculationBreakdown: {
+                        rawPrices: soldListings.map(l => Number(l.price)),
+                        afterOutlierRemoval: soldListings.map(l => Number(l.price)),
+                        weightedAverage: internalAvg,
+                    }
+                };
+            }
+
+            // Get the card mapping as fallback
             const { data: mapping } = await supabase
                 .from('card_mappings')
                 .select('card_id_en, card_id_jp')
@@ -189,8 +220,8 @@ export class PricingCalculator {
                     if (enSnapshot) {
                         enPrice = enSnapshot.marketAvg;
                         sources.push({
-                            source: 'English Counterpart (0.6x)',
-                            price: enPrice * 0.6,
+                            source: 'English Counterpart (0.55x)',
+                            price: enPrice * 0.55,
                             url: 'Calculated from EN sources',
                             weight: 1.0
                         });

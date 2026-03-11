@@ -43,6 +43,9 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
 
             if (language === 'jp') {
                 filteredCards = cards.filter(c => hasJapaneseChars(c.name || ''));
+            } else if (language === 'th') {
+                // For Thai: prefer cards with language='th', exclude pure Japanese-language cards
+                filteredCards = cards.filter(c => c.language === 'th' || (!hasJapaneseChars(c.name || '') && c.language !== 'ja'));
             } else {
                 filteredCards = cards.filter(c => !hasJapaneseChars(c.name || ''));
             }

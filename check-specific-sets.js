@@ -1,55 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
-dotenv.config({ path: '.env.local' });
+const envPath = path.join(__dirname, '.env.local');
+const envContent = fs.readFileSync(envPath, 'utf8');
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-async function checkSets() {
-    console.log("=== Checking Set Metadata ===");
-    const { data: sets } = await supabase
-        .from('pokemon_sets')
-        .select('id, name, series, release_date')
-        .or('name.ilike.%Prismatic%,name.ilike.%Shrouded Fable%');
-
-    console.table(sets);
-
-    if (sets) {
-        for (const set of sets) {
-            console.log(`\n=== Checking Cards for ${set.name} (${set.id}) ===`);
-            const { data: cards } = await supabase
-                .from('pokemon_cards')
-                .select('id, name, language, set_id')
-                .eq('set_id', set.id)
-                .limit(5);
-
-            const { count: cardCount } = await supabase
-                .from('pokemon_cards')
-                .select('id', { count: 'exact', head: true })
-                .eq('set_id', set.id);
-
-            console.log(`Total Cards: ${cardCount}`);
-            if (cards && cards.length > 0) {
-                console.table(cards);
-            }
-
-            console.log(`\n=== Checking Market Prices for ${set.name} ===`);
-            const { data: prices } = await supabase
-                .from('market_values')
-                .select('card_id, market_avg, currency, updated_at')
-                .in('card_id', (cards || []).map(c => c.id))
-                .limit(5);
-
-            if (prices && prices.length > 0) {
-                console.table(prices);
-            } else {
-                console.log("No market prices found for the sampled cards.");
-            }
+const env = {};
+envContent.split('\n').forEach(line => {
+    const match = line.match(/^([^=]+)=(.*)$/);
+    if (match) {
+        let value = match[2].trim();
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
         }
+        env[match[1].trim()] = value;
     }
-}
+});
 
-checkSets().catch(console.error);
+const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+async function check() {
+    const { data } = await supabase.from('pokemon_sets').select('id, name, printed_total, total').in('id', ['MA1', 'MA2', 'MA3', 'SV11s', 'SV9s']);
+    console.log(data);
+}
+check();

@@ -51,7 +51,7 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
   }, [cards, ownedCardIds]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-brand-darker flex flex-col">
+    <div className="fixed inset-0 z-50 bg-brand-darker flex flex-col" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 140px)' }}>
       {/* Fixed Header */}
       <div className="flex-none bg-brand-darker/95 backdrop-blur-xl z-20 pb-4 border-b border-white/5 pt-[calc(var(--sat)+1rem)] px-4 shadow-2xl">
         <div className="flex items-center gap-4 mb-4 mt-4">
@@ -89,7 +89,7 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
         {loading ? (
           <div className="grid grid-cols-3 gap-3">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
@@ -97,7 +97,7 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 pb-24">
+          <div className="grid grid-cols-3 gap-3">
             {cards.map((card) => {
               const isOwned = ownedCardIds.has(card.id);
               return (
