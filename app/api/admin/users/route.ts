@@ -9,12 +9,19 @@ export async function GET(request: Request) {
     const limit = 50
     const offset = (page - 1) * limit
     const search = searchParams.get('search') ?? ''
+    const roleFilter = searchParams.get('role') // 'partner' | 'non-partner' | null
 
     let query = supabase
         .from('profiles')
         .select('id, display_name, avatar_url, role, total_downloads, partner_level, partner_fee, partner_joined_at, created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+    if (roleFilter === 'partner') {
+        query = query.eq('role', 'partner')
+    } else if (roleFilter === 'non-partner') {
+        query = query.neq('role', 'partner')
+    }
 
     if (search) {
         query = query.ilike('display_name', `%${search}%`)
