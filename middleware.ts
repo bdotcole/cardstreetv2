@@ -5,8 +5,8 @@ import { createServerClient } from '@supabase/ssr'
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
-    // Only guard /admin routes
-    if (!pathname.startsWith('/admin')) {
+    // Only guard /admin routes — but let the login page through
+    if (!pathname.startsWith('/admin') || pathname.startsWith('/admin/login')) {
         return NextResponse.next()
     }
 
@@ -32,14 +32,12 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    // Get the current session
+    // Get the current session (reads from cookie)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/'
-        redirectUrl.searchParams.set('error', 'unauthorized')
-        return NextResponse.redirect(redirectUrl)
+        const loginUrl = new URL('/admin/login', request.nextUrl.origin)
+        return NextResponse.redirect(loginUrl)
     }
 
     // Check admin role via profiles table
@@ -50,10 +48,9 @@ export async function middleware(request: NextRequest) {
         .single()
 
     if (!profile || profile.role !== 'admin') {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/'
-        redirectUrl.searchParams.set('error', 'unauthorized')
-        return NextResponse.redirect(redirectUrl)
+        const loginUrl = new URL('/admin/login', request.nextUrl.origin)
+        loginUrl.searchParams.set('error', 'not_admin')
+        return NextResponse.redirect(loginUrl)
     }
 
     return response
