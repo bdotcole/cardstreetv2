@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Script from 'next/script'
 import './globals.css'
 import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
@@ -41,7 +40,7 @@ export default function RootLayout({
                         </ToastProvider>
                     </PayPalProvider>
                 </UserSettingsProvider>
-                <Script src="https://cdn.omise.co/omise.js" strategy="beforeInteractive" />
+
             </body>
         </html>
     )

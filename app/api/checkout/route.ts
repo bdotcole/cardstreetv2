@@ -1,32 +1,31 @@
 
 import { NextResponse } from 'next/server';
-import Omise from 'omise';
+import Stripe from 'stripe';
 
-const omise = Omise({
-    publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
-    secretKey: process.env.OMISE_SECRET_KEY!,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
     try {
-        const { amount, currency, token, source, metadata } = await req.json();
+        const { amount, currency, token, metadata } = await req.json();
 
-        const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://cardstreet-tcg.vercel.app';
+        const baseUrl = process.env.NODE_ENV === 'development'
+            ? 'http://localhost:3000'
+            : 'https://cardstreet-tcg.vercel.app';
 
-        const charge = await omise.charges.create({
-            amount: Math.round(amount * 100), // Convert to subunits (Stang/Cents)
-            currency,
-            card: token, // For Credit Card
-            source,      // For PromptPay/TrueMoney/InternetBanking
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: Math.round(amount * 100), // Convert to subunits (Cents/Stang)
+            currency: currency.toLowerCase(),
+            payment_method: token, // Stripe PaymentMethod ID from client
+            confirm: true,
+            return_url: `${baseUrl}/?payment_status=complete`,
             metadata,
-            return_uri: `${baseUrl}/?payment_status=complete`
         });
 
-        return NextResponse.json(charge);
+        return NextResponse.json({ status: paymentIntent.status, id: paymentIntent.id });
     } catch (error: any) {
-        console.error('Omise Charge Error:', error);
+        console.error('Stripe Charge Error:', error);
         return NextResponse.json(
-            { error: error.message || 'Payment processing failed using Omise' },
+            { error: error.message || 'Payment processing failed' },
             { status: 500 }
         );
     }

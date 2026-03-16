@@ -25,7 +25,7 @@ export async function POST(req: Request) {
                 listing_id: item.id,
                 buyer_id: buyerId,
                 seller_id: item.sellerId,
-                status: 'paid', // Skip pending if we're hitting this after Omise/PayPal success
+                status: 'paid', // Skip pending if we're hitting this after Stripe/PayPal success
                 total_amount: item.price,
                 platform_fee: item.price * 0.05, // 5% example fee
                 escrow_status: 'held',
