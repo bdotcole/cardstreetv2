@@ -1,5 +1,15 @@
 import { createClient } from '@/lib/supabase/client';
-import { Card, UserProfile } from '@/types';
+import { Card } from '@/types';
+
+// Shape returned from profiles table join (Supabase column names, not UserProfile)
+export interface SellerProfile {
+    id: string;
+    display_name?: string;
+    avatar_url?: string;
+    partner_tier?: string;
+    rating?: number | string;
+}
+
 
 export interface MarketplaceListing {
     id: string;
@@ -15,33 +25,92 @@ export interface MarketplaceListing {
     created_at: string;
     sold_at?: string;
     updated_at: string;
-    seller?: UserProfile;
+    seller?: SellerProfile;
+}
+
+export interface ListingFilters {
+    search?: string;
+    language?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    sort?: 'newest' | 'price_asc' | 'price_desc';
+    limit?: number;
+    offset?: number;
 }
 
 export const marketplaceService = {
     /**
-     * Fetch all active listings from the marketplace, joining with seller profiles.
+     * Fetch active listings with optional server-side filters.
+     * Only fetches fields that are actually rendered — never profiles(*).
      */
-    async getActiveListings(): Promise<MarketplaceListing[]> {
+    async getActiveListings(filters: ListingFilters = {}): Promise<MarketplaceListing[]> {
         const supabase = createClient();
+        const {
+            search,
+            language,
+            minPrice,
+            maxPrice,
+            sort = 'newest',
+            limit = 50,
+            offset = 0,
+        } = filters;
 
         try {
-            // Note: In Supabase, joining foreign key tables uses the syntax:
-            // select('*, seller:profiles!seller_id(*)')
-            // Or if foreign key is correctly inferred: select('*, seller:seller_id(*)')
-            // Let's use standard table join syntax based on the schema
-            const { data, error } = await supabase
+            let query = supabase
                 .from('listings')
                 .select(`
-                    *,
-                    seller:profiles(*)
+                    id,
+                    seller_id,
+                    card_id,
+                    card_data,
+                    price,
+                    condition,
+                    is_graded,
+                    grading_company,
+                    grade,
+                    status,
+                    created_at,
+                    updated_at,
+                    seller:profiles(id, display_name, avatar_url, partner_tier, rating)
                 `)
-                .eq('status', 'active')
-                .order('created_at', { ascending: false });
+                .eq('status', 'active');
 
+            // Server-side search: filter by card name inside JSONB
+            if (search && search.trim().length > 0) {
+                query = query.ilike('card_data->>name', `%${search.trim()}%`);
+            }
+
+            // Server-side language filter
+            if (language && language !== 'all') {
+                query = query.eq('card_data->>language', language);
+            }
+
+            // Server-side price range
+            if (minPrice !== undefined && minPrice > 0) {
+                query = query.gte('price', minPrice);
+            }
+            if (maxPrice !== undefined && maxPrice < 100000) {
+                query = query.lte('price', maxPrice);
+            }
+
+            // Server-side sort
+            switch (sort) {
+                case 'price_asc':
+                    query = query.order('price', { ascending: true });
+                    break;
+                case 'price_desc':
+                    query = query.order('price', { ascending: false });
+                    break;
+                default:
+                    query = query.order('created_at', { ascending: false });
+            }
+
+            // Pagination
+            query = query.range(offset, offset + limit - 1);
+
+            const { data, error } = await query;
             if (error) throw error;
-
-            return (data || []) as MarketplaceListing[];
+            return (data || []) as unknown as MarketplaceListing[];
         } catch (error) {
             console.error('Error fetching active listings:', error);
             return [];
@@ -81,12 +150,11 @@ export const marketplaceService = {
                 })
                 .select(`
                     *,
-                    seller:profiles(*)
+                    seller:profiles(id, display_name, avatar_url, partner_tier, rating)
                 `)
                 .single();
 
             if (error) throw error;
-
             return data as MarketplaceListing;
         } catch (error) {
             console.error('Error creating listing:', error);

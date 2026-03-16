@@ -407,15 +407,34 @@ export default function HomePage() {
 
     const fetchGlobalListings = async () => {
         try {
-            const listings = await marketplaceService.getActiveListings();
+            // Limit to 50 — used only for the Explore price overlay.
+            // Marketplace manages its own server-side paginated fetch.
+            const listings = await marketplaceService.getActiveListings({ limit: 50 });
             setActiveListings(listings);
         } catch (error) {
             console.error('Failed to fetch global listings:', error);
         }
     };
 
+    // Initial fetch + Realtime subscription for live marketplace updates
     useEffect(() => {
         fetchGlobalListings();
+
+        const supabase = createClient();
+        const channel = supabase
+            .channel('listings-realtime')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'listings' },
+                () => {
+                    // Re-fetch the slim overlay set whenever any listing changes
+                    fetchGlobalListings();
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handlePublishListing = async (listingData: any) => {

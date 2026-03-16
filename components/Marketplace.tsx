@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Card } from '@/types';
-import { THAI_SETS, ONE_PIECE_SETS, JAPANESE_SETS, CURRENCY_SYMBOLS } from '@/constants';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
+import { Card } from '@/types';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -9,90 +10,97 @@ interface MarketplaceProps {
   onSelectListing?: (listing: any) => void;
   onSellerClick: (seller: any) => void;
   onAddToCart?: (item: any) => void;
-  listings?: any[];
+  listings?: MarketplaceListing[];   // used only for Explore price overlay, marketplace fetches its own
   currency?: string;
   exchangeRate?: number;
 }
 
-const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelectCard, onSelectListing, onSellerClick, onAddToCart, listings = [], currency = 'THB', exchangeRate = 1 }) => {
+const Marketplace: React.FC<MarketplaceProps> = ({
+  onSelectCard,
+  onSelectListing,
+  onSellerClick,
+  onAddToCart,
+  currency = 'THB',
+  exchangeRate = 1,
+}) => {
   const { t } = useTranslation();
-  const [selectedGame, setSelectedGame] = useState(initialGame);
-  const [selectedLanguage, setSelectedLanguage] = useState('all');
+
+  // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
 
-  // Filter Logic
-  const filteredListings = useMemo(() => {
-    return listings.filter(listing => {
-      const card = listing.card_data;
-      const set = card.set || '';
+  // ── Data state ──────────────────────────────────────────────────────────────
+  const [listings, setListings] = useState<MarketplaceListing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 20;
 
-      // Game Filter
-      let matchesGame = true;
-      if (selectedGame === 'pokemon') {
-        const isOp = ONE_PIECE_SETS.some(s => set.includes(s));
-        matchesGame = !isOp;
-      } else if (selectedGame === 'onepiece') {
-        matchesGame = ONE_PIECE_SETS.some(s => set.includes(s));
-      }
+  // Debounce search input 400ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
-      // Language Filter
-      let matchesLanguage = true;
-      const cardLang = card.language;
+  // ── Fetch listings whenever filters change ──────────────────────────────────
+  const fetchListings = useCallback(async (reset = false) => {
+    setIsLoading(true);
+    const currentOffset = reset ? 0 : offset;
 
-      if (selectedLanguage === 'en') {
-        if (cardLang) {
-          matchesLanguage = cardLang === 'en';
-        } else {
-          const isThai = THAI_SETS.some(s => set.includes(s) || s.includes(set));
-          const isJp = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
-          matchesLanguage = !isThai && !isJp;
-        }
-      } else if (selectedLanguage === 'jp') {
-        if (cardLang) {
-          matchesLanguage = cardLang === 'ja' || cardLang === 'jp';
-        } else {
-          matchesLanguage = JAPANESE_SETS.some(s => set.includes(s) || s.includes(set));
-        }
-      } else if (selectedLanguage === 'th') {
-        if (cardLang) {
-          matchesLanguage = cardLang === 'th';
-        } else {
-          matchesLanguage = THAI_SETS.some(s => set.includes(s) || s.includes(set));
-        }
-      }
-
-      // Price Filter
-      const price = listing.price * exchangeRate;
-      const matchesPrice = price >= priceRange[0] && price <= priceRange[1];
-
-      // Search Filter
-      const matchesSearch = card.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        set.toLowerCase().includes(searchQuery.toLowerCase());
-
-      return matchesGame && matchesLanguage && matchesPrice && matchesSearch;
-    }).sort((a, b) => {
-      if (sortOrder === 'price_asc') return a.price - b.price;
-      if (sortOrder === 'price_desc') return b.price - a.price;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    const data = await marketplaceService.getActiveListings({
+      search: debouncedSearch,
+      language: selectedLanguage === 'all' ? undefined : selectedLanguage,
+      minPrice: priceRange[0],
+      maxPrice: priceRange[1],
+      sort: sortOrder,
+      limit: PAGE_SIZE,
+      offset: currentOffset,
     });
-  }, [listings, selectedGame, selectedLanguage, priceRange, searchQuery, sortOrder, exchangeRate]);
+
+    if (reset) {
+      setListings(data);
+      setOffset(PAGE_SIZE);
+    } else {
+      setListings(prev => [...prev, ...data]);
+      setOffset(prev => prev + PAGE_SIZE);
+    }
+    setHasMore(data.length === PAGE_SIZE);
+    setIsLoading(false);
+  }, [debouncedSearch, selectedLanguage, priceRange, sortOrder, offset]);
+
+  // When filters change, reset and re-fetch
+  useEffect(() => {
+    setOffset(0);
+    fetchListings(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedLanguage, priceRange, sortOrder]);
+
+  // ── Infinite scroll observer ─────────────────────────────────────────────────
+  const observerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!observerRef.current || !hasMore || isLoading) return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) fetchListings(false);
+    }, { threshold: 0.1 });
+    io.observe(observerRef.current);
+    return () => io.disconnect();
+  }, [hasMore, isLoading, fetchListings]);
 
   // Count active filters
   const activeFilterCount = [
-    selectedGame !== 'all',
     selectedLanguage !== 'all',
-    priceRange[0] > 0 || priceRange[1] < 100000
+    priceRange[0] > 0 || priceRange[1] < 100000,
   ].filter(Boolean).length;
 
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
       <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
-        {/* Header */}
-        <div className="">
+        <div>
           <div className="flex justify-between items-end mb-2">
             <div>
               <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('marketplace.globalExchange')}</p>
@@ -114,6 +122,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {debouncedSearch !== searchQuery && (
+                <div className="w-3 h-3 border-2 border-brand-cyan/60 border-t-transparent rounded-full animate-spin mr-3" />
+              )}
             </div>
           </div>
         </div>
@@ -140,14 +151,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
 
             {/* Sort Options */}
             <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
-              {[
+              {([
                 { id: 'newest', label: t('marketplace.new') },
                 { id: 'price_asc', label: t('marketplace.lowPrice') },
                 { id: 'price_desc', label: t('marketplace.highPrice') }
-              ].map(sort => (
+              ] as const).map(sort => (
                 <button
                   key={sort.id}
-                  onClick={() => setSortOrder(sort.id as any)}
+                  onClick={() => setSortOrder(sort.id)}
                   className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase transition-all ${sortOrder === sort.id ? 'bg-brand-cyan text-brand-darker shadow-md' : 'text-slate-500 hover:text-white'}`}
                 >
                   {sort.label}
@@ -159,29 +170,6 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
           {/* Filter Panel */}
           {showFilters && (
             <div className="mt-4 p-4 bg-[#0f172a] rounded-xl border border-white/10 space-y-4 animate-fadeIn">
-              {/* Card Game Filter */}
-              <div>
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Card Game'}</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: 'all', label: t('marketplace.allGames') || 'All Games' },
-                    { id: 'pokemon', label: t('marketplace.pokemon') || 'Pokémon' },
-                    { id: 'onepiece', label: t('marketplace.onepiece') || 'One Piece' }
-                  ].map(game => (
-                    <button
-                      key={game.id}
-                      onClick={() => setSelectedGame(game.id)}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedGame === game.id
-                        ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
-                        }`}
-                    >
-                      {game.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Language Filter */}
               <div>
                 <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.language') || 'Language'}</label>
@@ -213,19 +201,13 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 </label>
                 <div className="flex items-center gap-4">
                   <input
-                    type="range"
-                    min="0"
-                    max="100000"
-                    step="500"
+                    type="range" min="0" max="100000" step="500"
                     value={priceRange[0]}
                     onChange={(e) => setPriceRange([Math.min(Number(e.target.value), priceRange[1] - 500), priceRange[1]])}
                     className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-cyan"
                   />
                   <input
-                    type="range"
-                    min="0"
-                    max="100000"
-                    step="500"
+                    type="range" min="0" max="100000" step="500"
                     value={priceRange[1]}
                     onChange={(e) => setPriceRange([priceRange[0], Math.max(Number(e.target.value), priceRange[0] + 500)])}
                     className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-purple"
@@ -233,14 +215,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 </div>
               </div>
 
-              {/* Clear Filters */}
               {activeFilterCount > 0 && (
                 <button
-                  onClick={() => {
-                    setSelectedGame('all');
-                    setSelectedLanguage('all');
-                    setPriceRange([0, 100000]);
-                  }}
+                  onClick={() => { setSelectedLanguage('all'); setPriceRange([0, 100000]); }}
                   className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                 >
                   <i className="fa-solid fa-xmark mr-2"></i>
@@ -255,7 +232,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
       {/* Scrollable Listings Grid */}
       <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
         <div className="grid grid-cols-1 gap-2">
-          {filteredListings.length > 0 ? filteredListings.map((listing) => (
+          {listings.length > 0 ? listings.map((listing, idx) => (
             <div
               key={listing.id}
               onClick={() => onSelectListing ? onSelectListing(listing) : onSelectCard(listing.card_data)}
@@ -264,11 +241,15 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
               {/* Highlight Bar */}
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-cyan to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
-              {/* Card Image */}
+              {/* Card Image — lazy load, fixed dimensions to prevent CLS */}
               <div className="w-20 aspect-[3/4] bg-brand-darker rounded-lg relative overflow-hidden flex-shrink-0 border border-white/10">
                 <img
                   src={listing.card_data.images?.small || listing.card_data.imageUrl}
-                  alt="Card"
+                  alt={listing.card_data.name || 'Card'}
+                  width={80}
+                  height={107}
+                  loading={idx < 4 ? 'eager' : 'lazy'}
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -278,9 +259,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 <div>
                   <div className="flex justify-between items-start">
                     <h3 className="text-white font-bold text-sm truncate pr-2">{listing.card_data.name}</h3>
-                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${listing.condition === 'NM' ? 'bg-brand-green/10 text-brand-green border-brand-green/20' :
-                      'bg-slate-700 text-slate-300 border-slate-600'
-                      }`}>
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${listing.condition === 'NM' ? 'bg-brand-green/10 text-brand-green border-brand-green/20' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
                       {listing.condition}
                     </span>
                   </div>
@@ -289,16 +268,23 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
 
                 {/* Seller */}
                 <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (listing.seller) onSellerClick(listing.seller);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); if (listing.seller) onSellerClick(listing.seller); }}
                   className="flex items-center gap-1.5 mt-2 bg-black/20 p-1.5 rounded-lg w-fit cursor-pointer hover:bg-white/10 transition-colors"
                 >
                   <div className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden">
-                    {listing.seller?.avatar_url && <img src={listing.seller.avatar_url} className="w-full h-full object-cover" />}
+                    {listing.seller?.avatar_url && (
+                      <img
+                        src={listing.seller.avatar_url}
+                        alt=""
+                        width={16}
+                        height={16}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
-                  <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || listing.seller?.name || 'Unknown Seller'}</span>
+                  <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || 'Unknown Seller'}</span>
                   <span className="text-[8px] text-yellow-500">★ {listing.seller?.rating || '5.0'}</span>
                 </div>
               </div>
@@ -308,9 +294,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 <div className="text-right">
                   <p className="text-[9px] text-slate-500 font-bold uppercase">Ask Price</p>
                   <p className="text-lg font-black text-brand-cyan leading-none">
-                    {/* Use CURRENCY_SYMBOLS map if available, else fallback to currency code */}
                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
-                    {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
+                    {(listing.price * exchangeRate) < 1
+                      ? (listing.price * exchangeRate).toFixed(2)
+                      : Math.round(listing.price * exchangeRate).toLocaleString()}
                   </p>
                 </div>
                 <button
@@ -334,24 +321,45 @@ const Marketplace: React.FC<MarketplaceProps> = ({ initialGame = 'all', onSelect
                 </button>
               </div>
             </div>
-          )) : (
+          )) : !isLoading ? (
             <div className="text-center py-20 px-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4 animate-pulse">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
               <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">Signal Lost</h3>
               <p className="text-slate-500 text-xs">No active listings found in this sector.</p>
               <button
-                onClick={() => {
-                  setSelectedGame('all');
-                  setSelectedLanguage('all');
-                  setPriceRange([0, 100000]);
-                }}
+                onClick={() => { setSelectedLanguage('all'); setPriceRange([0, 100000]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
               >
                 {t('marketplace.clearFilters') || 'Reset Filters'}
               </button>
             </div>
+          ) : null}
+
+          {/* Loading skeleton */}
+          {isLoading && (
+            <div className="space-y-2 mt-2">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="bg-[#1e293b]/50 border border-white/5 rounded-xl p-2 flex gap-3 animate-pulse">
+                  <div className="w-20 aspect-[3/4] bg-white/5 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-2 py-2">
+                    <div className="h-3 bg-white/5 rounded w-3/4" />
+                    <div className="h-2 bg-white/5 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Infinite scroll trigger */}
+          {!isLoading && hasMore && <div ref={observerRef} className="h-8" />}
+
+          {/* End of results */}
+          {!isLoading && !hasMore && listings.length > 0 && (
+            <p className="text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest py-4">
+              — {listings.length} listings shown —
+            </p>
           )}
         </div>
       </div>

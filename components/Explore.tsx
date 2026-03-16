@@ -24,8 +24,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
-
   const [sortOption, setSortOption] = useState<'number' | 'priceHigh' | 'priceLow'>('number');
+
+  // In-memory sets cache: avoid re-fetching on language/game toggle
+  const setsCache = useRef<Map<string, ApiSet[]>>(new Map());
 
   // Custom Set Selector State
   const [isSetListOpen, setIsSetListOpen] = useState(false);
@@ -38,24 +40,16 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   // Debounce search term
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 400);
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (setListRef.current && !setListRef.current.contains(event.target as Node)) {
-        setIsSetListOpen(false);
-      }
-      if (languageRef.current && !languageRef.current.contains(event.target as Node)) {
-        setIsLanguageOpen(false);
-      }
-      if (gameRef.current && !gameRef.current.contains(event.target as Node)) {
-        setIsGameOpen(false);
-      }
+      if (setListRef.current && !setListRef.current.contains(event.target as Node)) setIsSetListOpen(false);
+      if (languageRef.current && !languageRef.current.contains(event.target as Node)) setIsLanguageOpen(false);
+      if (gameRef.current && !gameRef.current.contains(event.target as Node)) setIsGameOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -63,33 +57,31 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   // Handle Search Request from props
   useEffect(() => {
-    if (searchRequest) {
-      setSearchTerm(searchRequest.term);
-    }
+    if (searchRequest) setSearchTerm(searchRequest.term);
   }, [searchRequest]);
 
-  // Fetch Sets on mount or language change
+  // ── Fetch Sets — with in-memory cache ────────────────────────────────────────
   useEffect(() => {
     const loadSets = async () => {
       setIsLoadingSets(true);
-
-      // Only fetch Pokemon sets - One Piece will show empty for now
       if (selectedGame === 'onepiece') {
-        setSets([]);
-        setSelectedSetId('');
-        setCards([]);
+        setSets([]); setSelectedSetId(''); setCards([]); setIsLoadingSets(false);
+        return;
+      }
+      const cacheKey = `${selectedLanguage}:${selectedGame}`;
+      if (setsCache.current.has(cacheKey)) {
+        const cached = setsCache.current.get(cacheKey)!;
+        setSets(cached);
+        if (cached.length > 0) setSelectedSetId(cached[0].id);
         setIsLoadingSets(false);
         return;
       }
-
-      const result = await pokemonService.fetchSets(selectedLanguage, 1, 300);
+      // Reduced 300 → 50: drastically cuts first-load payload
+      const result = await pokemonService.fetchSets(selectedLanguage, 1, 50);
+      setsCache.current.set(cacheKey, result.data);
       setSets(result.data);
-      if (result.data.length > 0) {
-        setSelectedSetId(result.data[0].id);
-      } else {
-        setSelectedSetId('');
-        setCards([]);
-      }
+      if (result.data.length > 0) setSelectedSetId(result.data[0].id);
+      else { setSelectedSetId(''); setCards([]); }
       setIsLoadingSets(false);
     };
     loadSets();
@@ -102,6 +94,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       setIsLoadingCards(true);
       const apiCards = await pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage);
       setCards(apiCards);
+      cardListRef.current?.scrollTo({ top: 0 });
       setIsLoadingCards(false);
     };
     loadCards();
@@ -130,82 +123,46 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
-  const getLowestListingPrice = (card: Card) => {
-    const matches = localListings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set));
-    if (matches.length === 0) return null;
-    return Math.min(...matches.map(m => m.price));
-  };
-
-  const getListingCount = (card: Card): number => {
-    return localListings.filter(l => l.card_id === card.id).length;
-  };
+  // ── O(1) listing lookups — precomputed Map instead of O(n) .filter() per row ─
+  const listingMap = useMemo(() => {
+    const map = new Map<string, { count: number; minPrice: number }>();
+    for (const l of localListings) {
+      const key = l.card_id || l.card_data?.id;
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count++;
+        if (l.price < existing.minPrice) existing.minPrice = l.price;
+      } else {
+        map.set(key, { count: 1, minPrice: l.price });
+      }
+    }
+    return map;
+  }, [localListings]);
 
   // Handle scroll for back-to-top button
   const handleScroll = () => {
-    if (cardListRef.current) {
-      setShowBackToTop(cardListRef.current.scrollTop > 200);
-    }
+    if (cardListRef.current) setShowBackToTop(cardListRef.current.scrollTop > 200);
   };
 
-  // Scroll to top function
-  const scrollToTop = () => {
-    cardListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const scrollToTop = () => cardListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
   const selectedSet = sets.find(s => s.id === selectedSetId);
 
-  // Generate a placeholder image based on set name for missing logos
-  const getSetLogoDisplay = (set: ApiSet) => {
-    if (set.images.logo) {
-      return (
-        <img
-          src={set.images.logo}
-          alt={set.name}
-          className="max-h-full max-w-full object-contain filter group-hover:brightness-110 transition-all"
-          onError={(e) => {
-            // On error, replace with placeholder
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            target.nextElementSibling?.classList.remove('hidden');
-          }}
-        />
-      );
-    }
-    return null;
-  };
-
   // Sort cards based on option
   const sortedCards = useMemo(() => {
-    if (!cards) return [];
-
-    // Create a copy to allow sorting without mutating state
     const sorted = [...cards];
-
-    // Helper to get raw number for sorting (handles "001/165" -> 1)
-    const getCardNum = (c: Card) => {
-      const numPart = c.number.split('/')[0];
-      // Remove non-numeric chars for pure number sort if needed, or keep as is?
-      // Usually best to parse int
-      return parseInt(numPart.replace(/[^0-9]/g, '')) || 999999;
-    };
-
+    const getCardNum = (c: Card) => parseInt(c.number.split('/')[0].replace(/[^0-9]/g, '')) || 999999;
     switch (sortOption) {
-      case 'priceHigh':
-        return sorted.sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0));
-      case 'priceLow':
-        return sorted.sort((a, b) => {
-          // Put 0/null prices at the bottom for "Low to High" as they are usually "unknown" not "free"
-          const priceA = a.marketPrice || Infinity;
-          const priceB = b.marketPrice || Infinity;
-          if (priceA === Infinity && priceB === Infinity) return 0;
-          if (priceA === Infinity) return 1;
-          if (priceB === Infinity) return -1;
-          return priceA - priceB;
-        });
-      case 'number':
-      default:
-        // Default sort from API is usually by number, but we can enforce it here
-        return sorted.sort((a, b) => getCardNum(a) - getCardNum(b));
+      case 'priceHigh': return sorted.sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0));
+      case 'priceLow': return sorted.sort((a, b) => {
+        const priceA = a.marketPrice || Infinity, priceB = b.marketPrice || Infinity;
+        if (priceA === Infinity && priceB === Infinity) return 0;
+        if (priceA === Infinity) return 1;
+        if (priceB === Infinity) return -1;
+        return priceA - priceB;
+      });
+      default: return sorted.sort((a, b) => getCardNum(a) - getCardNum(b));
     }
   }, [cards, sortOption]);
 
@@ -250,10 +207,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     <button
                       key={lang}
                       onClick={() => { setSelectedLanguage(lang); setIsLanguageOpen(false); }}
-                      className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang
-                        ? 'text-brand-cyan bg-brand-cyan/10'
-                        : 'text-slate-300 hover:bg-white/5'
-                        }`}
+                      className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
                     >
                       {lang === 'en' ? t('explore.english') : t('explore.thai')}
                     </button>
@@ -275,10 +229,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
                   <button
                     onClick={() => { setSelectedGame('pokemon'); setIsGameOpen(false); }}
-                    className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedGame === 'pokemon'
-                      ? 'text-brand-cyan bg-brand-cyan/10'
-                      : 'text-slate-300 hover:bg-white/5'
-                      }`}
+                    className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedGame === 'pokemon' ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
                   >
                     Pokémon
                   </button>
@@ -320,16 +271,17 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
                           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                         >
-                          {/* Set Logo/Icon Container */}
                           <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10">
                             {set.images.logo ? (
                               <img
                                 src={set.images.logo}
                                 alt=""
+                                width={32}
+                                height={32}
+                                loading="lazy"
+                                decoding="async"
                                 className="max-h-8 max-w-8 object-contain"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                               />
                             ) : (
                               <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
@@ -377,9 +329,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               </div>
               <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
               <p className="text-slate-500 text-xs text-center">
-                {selectedGame === 'onepiece'
-                  ? t('explore.onePieceSoon')
-                  : t('explore.selectSet')}
+                {selectedGame === 'onepiece' ? t('explore.onePieceSoon') : t('explore.selectSet')}
               </p>
             </div>
           ) : (
@@ -394,7 +344,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     if (prev === 'priceHigh') return 'priceLow';
                     return 'number';
                   })}
-                  title="Toggle Sort: Number -> Price High -> Price Low"
+                  title="Toggle Sort: Number → Price High → Price Low"
                 >
                   <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${sortOption !== 'number' ? 'text-brand-cyan' : 'text-slate-500 group-hover:text-slate-300'}`}>
                     {t('explore.marketPrice')}
@@ -404,60 +354,74 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     <i className={`fa-solid fa-caret-down text-[8px] ${sortOption === 'priceHigh' ? 'text-brand-cyan' : 'text-slate-600'}`}></i>
                   </div>
                 </div>
-                <span></span>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sortedCards.length}c</span>
               </div>
 
-              {/* Scrollable Card List */}
+              {/* Scrollable Card List — with CSS content-visibility for layout performance */}
               <div
                 ref={cardListRef}
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                 style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}
               >
-                {sortedCards.map(card => (
-                  <div
-                    key={card.id}
-                    className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
-                    onClick={() => onSelectCard(card)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-14 bg-brand-darker rounded overflow-hidden flex-shrink-0 border border-white/5">
-                        <img src={card.imageUrl} className="w-full h-full object-contain" alt={card.name} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-white text-xs font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
-                          <span className="text-[9px] text-slate-600 font-bold">#{card.number}</span>
+                {sortedCards.map((card, idx) => {
+                  const listing = listingMap.get(card.id);
+                  return (
+                    <div
+                      key={card.id}
+                      className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
+                      // content-visibility: auto skips rendering off-screen rows in layout engine
+                      // contain-intrinsic-size provides a placeholder height so scrollbar stays accurate
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 72px' } as React.CSSProperties}
+                      onClick={() => onSelectCard(card)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-14 bg-brand-darker rounded overflow-hidden flex-shrink-0 border border-white/5">
+                          <img
+                            src={card.imageUrl}
+                            width={40}
+                            height={56}
+                            loading={idx < 10 ? 'eager' : 'lazy'}
+                            decoding="async"
+                            className="w-full h-full object-contain"
+                            alt={card.name}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white text-xs font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
+                            <span className="text-[9px] text-slate-600 font-bold">#{card.number}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="text-right">
-                      {getListingCount(card) > 0 ? (
-                        <>
-                          <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((getLowestListingPrice(card) || 0) * exchangeRate).toLocaleString()}</p>
-                          <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{getListingCount(card)} {t('explore.listings')}</p>
-                        </>
-                      ) : (
-                        <p className="text-white text-sm font-black tracking-tight">
-                          {(!card.marketPrice || card.marketPrice === 0)
-                            ? 'N/A'
-                            : currency === 'USD'
-                              ? `${currencySymbol}${(card.marketPrice * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                              : `${currencySymbol}${Math.round(card.marketPrice * exchangeRate).toLocaleString()}`
-                          }
-                        </p>
-                      )}
-                    </div>
+                      <div className="text-right">
+                        {listing ? (
+                          <>
+                            <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((listing.minPrice || 0) * exchangeRate).toLocaleString()}</p>
+                            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{listing.count} {t('explore.listings')}</p>
+                          </>
+                        ) : (
+                          <p className="text-white text-sm font-black tracking-tight">
+                            {(!card.marketPrice || card.marketPrice === 0)
+                              ? 'N/A'
+                              : currency === 'USD'
+                                ? `${currencySymbol}${(card.marketPrice * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : `${currencySymbol}${Math.round(card.marketPrice * exchangeRate).toLocaleString()}`
+                            }
+                          </p>
+                        )}
+                      </div>
 
-                    <div className="text-right">
-                      <button className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${getListingCount(card) > 0 ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
-                        {getListingCount(card) > 0 ? <i className="fa-solid fa-cart-shopping text-[10px]"></i> : <i className="fa-solid fa-plus text-[10px]"></i>}
-                      </button>
+                      <div className="text-right">
+                        <button className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${listing ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
+                          {listing ? <i className="fa-solid fa-cart-shopping text-[10px]"></i> : <i className="fa-solid fa-plus text-[10px]"></i>}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Back to Top Button */}
                 {showBackToTop && (
