@@ -42,16 +42,12 @@ export async function GET(request: Request) {
         const transformedSets = (sets || []).map(s => {
             const fixTcgdexUrl = (url: string | null): string => {
                 if (!url) return '';
-                // Only append .png to TCGdex CARD image paths (/high or /low)
-                // Logo/symbol paths (ending in /logo or /symbol) serve content-negotiated WebP — don't modify them
-                const isCardImagePath = url.includes('tcgdex.net')
-                    && !url.match(/\.(png|jpg|jpeg|webp|svg)$/i)
-                    && !url.match(/\/(logo|symbol)$/i);
-                if (isCardImagePath) {
+                if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp|svg)$/i)) {
                     return `${url}.png`;
                 }
                 return url;
             };
+
 
             return {
                 id: s.id,
