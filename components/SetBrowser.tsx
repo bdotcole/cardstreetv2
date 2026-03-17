@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import NextImage from 'next/image';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 
 interface SetBrowserProps {
@@ -266,21 +267,37 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     {set.images.logo ? (
                       <div className="absolute inset-0 m-3 group-hover:scale-110 transition-transform duration-300">
-                        <img
-                          src={set.images.logo}
-                          alt={set.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-contain filter drop-shadow-lg"
-                          onError={(e) => {
-                            // Hide broken image and show letter fallback
-                            const parent = (e.target as HTMLImageElement).parentElement;
-                            if (parent) {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              parent.innerHTML = `<span class="text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">${set.name.charAt(0)}</span>`;
-                            }
-                          }}
-                        />
+                        {/* Use Next.js Image for large-PNG domains (auto-resize + WebP conversion).
+                            Use plain img for everything else so onError fallback works. */}
+                        {set.images.logo.includes('asia.pokemon-card.com') ? (
+                          <NextImage
+                            src={set.images.logo}
+                            alt={set.name}
+                            fill
+                            sizes="(max-width: 768px) 120px, 160px"
+                            className="object-contain filter drop-shadow-lg"
+                            loading="lazy"
+                            onError={(e) => {
+                              const parent = (e.target as HTMLImageElement).closest('.set-logo-wrap');
+                              if (parent) parent.innerHTML = `<span class="text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">${set.name.charAt(0)}</span>`;
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={set.images.logo}
+                            alt={set.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-contain filter drop-shadow-lg"
+                            onError={(e) => {
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                parent.innerHTML = `<span class="text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">${set.name.charAt(0)}</span>`;
+                              }
+                            }}
+                          />
+                        )}
                       </div>
                     ) : (
                       <span className="text-3xl font-black text-slate-500">{set.name.charAt(0)}</span>
