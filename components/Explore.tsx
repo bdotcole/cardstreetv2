@@ -336,7 +336,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             <div className="flex flex-col h-full">
               {/* Fixed Header Row */}
               <div className="flex-shrink-0 grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t('explore.asset')}</span>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  {t('explore.asset')}
+                  <span className="text-[8px] font-bold text-slate-700 normal-case tracking-normal">{sortedCards.length}</span>
+                </span>
                 <div
                   className="flex items-center justify-end gap-1 cursor-pointer group"
                   onClick={() => setSortOption(prev => {
@@ -354,7 +357,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     <i className={`fa-solid fa-caret-down text-[8px] ${sortOption === 'priceHigh' ? 'text-brand-cyan' : 'text-slate-600'}`}></i>
                   </div>
                 </div>
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sortedCards.length}c</span>
+                <span className="w-8">{/* add button placeholder */}</span>
               </div>
 
               {/* Scrollable Card List — with CSS content-visibility for layout performance */}
