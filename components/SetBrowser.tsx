@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import Image from 'next/image';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 
 interface SetBrowserProps {
@@ -267,13 +266,20 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     {set.images.logo ? (
                       <div className="absolute inset-0 m-3 group-hover:scale-110 transition-transform duration-300">
-                        <Image
+                        <img
                           src={set.images.logo}
                           alt={set.name}
-                          fill
-                          sizes="(max-width: 768px) 33vw, 20vw"
-                          className="object-contain filter drop-shadow-lg"
                           loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-contain filter drop-shadow-lg"
+                          onError={(e) => {
+                            // Hide broken image and show letter fallback
+                            const parent = (e.target as HTMLImageElement).parentElement;
+                            if (parent) {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              parent.innerHTML = `<span class="text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">${set.name.charAt(0)}</span>`;
+                            }
+                          }}
                         />
                       </div>
                     ) : (

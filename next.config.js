@@ -39,6 +39,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'api.dicebear.com',
       },
+      {
+        // Pokedata set images (used for some English sets like Temporal Forces)
+        protocol: 'https',
+        hostname: 'pokemonsetimages.pokedata.io',
+      },
     ],
   },
   experimental: {
