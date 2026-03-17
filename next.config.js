@@ -22,6 +22,23 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'asia.pokemon-card.com',
       },
+      {
+        // Supabase Storage — card images, set logos, avatars
+        protocol: 'https',
+        hostname: 'fdxgzddvywtmnqsaqysx.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        // Supabase Storage render/transform endpoint
+        protocol: 'https',
+        hostname: 'fdxgzddvywtmnqsaqysx.supabase.co',
+        pathname: '/storage/v1/render/image/**',
+      },
+      {
+        // DiceBear avatars (used as user avatar fallback)
+        protocol: 'https',
+        hostname: 'api.dicebear.com',
+      },
     ],
   },
   experimental: {
