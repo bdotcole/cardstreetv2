@@ -34,7 +34,7 @@ const RARITY_MAP = {
     'UR': ['Hyper Rare'],
     // Thai-specific gold card codes
     'MUR': ['Hyper Rare'],          // Thai Hyper Rare (gold card)
-    'MA': ['Illustration Rare', 'Special Illustration Rare'],  // Thai Master/Mega Art
+    'MA': ['Ultra Rare'],            // Thai Master Art -> English Ultra Rare
     'PR': ['Promo'],                 // Promo
     // Pass-through English rarity names
     'Common': ['Common'], 'Uncommon': ['Uncommon'], 'Rare': ['Rare'],
