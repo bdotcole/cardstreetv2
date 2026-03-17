@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import Image from 'next/image';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 
@@ -67,13 +66,14 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
             </div>
           </div>
           {set.images?.logo && (
-            <div className="relative h-8 w-24">
-              <Image
+            <div className="relative h-8 w-24 flex items-center justify-end">
+              <img
                 src={set.images.logo}
                 alt="logo"
-                fill
-                className="object-contain"
-                sizes="(max-width: 768px) 100px, 100px"
+                loading="lazy"
+                decoding="async"
+                className="max-h-8 max-w-[96px] w-auto object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             </div>
           )}
@@ -108,13 +108,15 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                 >
                   {/* Background Image (Ghost if unowned) */}
                   <div className={`absolute inset-0 transition-opacity duration-500 ${isOwned ? 'opacity-100' : 'opacity-20 grayscale blur-[1px]'}`}>
-                    <Image
+                    <img
                       src={card.images?.small || card.imageUrl}
                       alt={card.name}
-                      fill
-                      sizes="(max-width: 768px) 33vw, 20vw"
-                      className="object-cover"
                       loading="lazy"
+                      decoding="async"
+                      width={200}
+                      height={280}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
                     />
                   </div>
 
