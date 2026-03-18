@@ -56,7 +56,7 @@ export async function GET() {
     }
 }
 
-// PATCH - Update profile info (name, phone, address fields)
+// PATCH - Update profile info (name, phone, address fields, and username)
 export async function PATCH(request: NextRequest) {
     const supabase = await createClient()
 
@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { display_name, phone_number, address, district, state, province, postcode } = body
+        const { display_name, phone_number, address, district, state, province, postcode, username } = body
 
         // Prepare profile update
         const profileUpdate: any = {}
@@ -79,16 +79,63 @@ export async function PATCH(request: NextRequest) {
         if (province !== undefined) profileUpdate.province = province
         if (postcode !== undefined) profileUpdate.postcode = postcode
 
+        // Username update logic
+        if (username) {
+            // Validate username characters (alphanumeric and underscores only)
+            const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+            if (cleanUsername !== username.toLowerCase() || cleanUsername.length < 3) {
+                return NextResponse.json({ error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores.' }, { status: 400 })
+            }
+
+            // Check cooldown
+            const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('username, username_updated_at')
+                .eq('id', user.id)
+                .single();
+
+            if (currentProfile?.username !== cleanUsername) {
+                if (currentProfile?.username_updated_at) {
+                    const lastUpdated = new Date(currentProfile.username_updated_at);
+                    const daysSinceUpdate = (new Date().getTime() - lastUpdated.getTime()) / (1000 * 3600 * 24);
+                    
+                    if (daysSinceUpdate < 30) {
+                        return NextResponse.json({ error: `You can only change your username once every 30 days. Please wait ${Math.ceil(30 - daysSinceUpdate)} more days.` }, { status: 400 })
+                    }
+                }
+
+                // Check uniqueness (handled by Postgres UNIQUE constraint, but good to check early)
+                const { data: existingUser } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('username', cleanUsername)
+                    .neq('id', user.id)
+                    .maybeSingle();
+
+                if (existingUser) {
+                    return NextResponse.json({ error: 'This username is already taken.' }, { status: 400 })
+                }
+
+                profileUpdate.username = cleanUsername;
+                profileUpdate.username_updated_at = new Date().toISOString();
+            }
+        }
+
         if (Object.keys(profileUpdate).length > 0) {
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update(profileUpdate)
                 .eq('id', user.id)
 
-            if (profileError) throw profileError
+            if (profileError) {
+                if (profileError.code === '23505') { // Postgres unique violation error code
+                    return NextResponse.json({ error: 'This username is already taken.' }, { status: 400 });
+                }
+                throw profileError;
+            }
         }
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json({ success: true, updatedFields: profileUpdate })
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

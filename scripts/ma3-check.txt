@@ -1,0 +1,18 @@
+﻿Γ£à MAPPED: [MA] Charizard ex (#223)
+       -> Charizard ex [R] in ex6 by name_rarity
+Γ£à MAPPED: [MA] Gengar ex (#230)
+       -> Gengar EX [SR] in xy4 by name_rarity
+Γ£à MAPPED: [SAR] Pikachu ex (#234)
+       -> Pikachu ex [Special illustration rare] in me02.5 by name_rarity
+Γ£à MAPPED: [SAR] Gengar ex (#240)
+       -> Gengar EX [SR] in xy4 by name_rarity
+Γ£à MAPPED: [MUR] Dragonite ex (#250)
+       -> Dragonite EX [SR] in xy3 by name_rarity
+Γ£à MAPPED: [MA] Dragonite ex (#232)
+       -> Dragonite EX [SR] in xy3 by name_rarity
+Γ£à MAPPED: [SAR] Dragonite ex (#246)
+       -> Dragonite EX [SR] in xy3 by name_rarity
+Γ£à MAPPED: [RR] Pikachu ex (#044)
+       -> Pikachu ex [Double rare] in sv8pt5 by name_rarity
+Γ£à MAPPED: [RR] Dragonite ex (#126)
+       -> Dragonite EX [SR] in xy3 by name_rarity

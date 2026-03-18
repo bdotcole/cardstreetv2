@@ -1,0 +1,73 @@
+﻿
+=== MA3 High-Rarity Thai Cards (57) ===
+  [AR] #201  english_name="Heliolisk"  thai="α╣Çα╕¡α╣Çα╕Ñα╕ïα╕▓α╕úα╣îα╕ö"
+  [AR] #200  english_name="Snorunt"  thai="α╕óα╕╣α╕üα╕┤α╕ºα╕▓α╕úα╕▓α╕èα╕┤"
+  [AR] #199  english_name="Psyduck"  thai="α╣éα╕äα╕öα╕▒α╕ü"
+  [AR] #198  english_name="Numel"  thai="α╕öα╕¡α╕Öα╣Çα╕íα╕Ñ"
+  [AR] #197  english_name="Magcargo"  thai="α╕íα╕▒α╕üα╕äα╕▓α╕úα╣îα╣éα╕ü <α╕éα╕¡α╕çα╕«α╕┤α╕Üα╕┤α╕üα╕┤>"
+  [AR] #196  english_name="Budew"  thai="α╕ïα╕╢α╣éα╕Üα╕íα╕╡"
+  [AR] #195  english_name="Dustox"  thai="α╣éα╕öα╕äα╕╕α╣Çα╕äα╕Ñ"
+  [AR] #194  english_name="Beautifly"  thai="α╕¡α╕▓α╣Çα╕üα╕«α╕▒α╕Öα╕ùα╣î"
+  [AR] #207  english_name="Medicham"  thai="α╕èα╕▓α╣Çα╕úα╕í"
+  [AR] #208  english_name="Spiritomb"  thai="α╕íα╕┤α╕äα╕▓α╕úα╕╣α╣Çα╕üα╕░ <α╕éα╕¡α╕çα╕èα╕┤α╣éα╕úα╕Öα╕░>"
+  [AR] #209  english_name="Obstagoon"  thai="α╕üα╕▓α╕Ñα╕▓α╕úα╣î α╕ùα╕▓α╕êα╕┤α╕ƒα╕╕α╕ïα╕▓α╕üα╕╕α╕íα╕░"
+  [AR] #210  english_name="Zekrom"  thai="α╣Çα╕ïα╕äα╕úα╕¡α╕í <α╕éα╕¡α╕ç N>"
+  [AR] #211  english_name="Dreepy"  thai="α╣éα╕öα╕úα╕▓α╣Çα╕íα╕èα╕┤α╕óα╕░"
+  [AR] #212  english_name="Dragapult"  thai="α╣éα╕öα╕úα╕¡α╕Öα╕êα╕┤"
+  [AR] #206  english_name="Dugtrio"  thai="α╕öα╕▒α╕üα╕ùα╕úα╕┤α╣éα╕¡ <α╕éα╕¡α╕çα╣üα╕üα╣èα╕çα╕úα╣çα╕¡α╕üα╣Çα╕üα╕ò>"
+  [AR] #213  english_name="Rotom"  thai="α╕¬α╕¢α╕┤α╕Öα╣éα╕úα╕òα╕¡α╕í"
+  [AR] #205  english_name="Mimikyu-disguised"  thai="α╕íα╕┤α╕íα╕┤α╕äα╕äα╕┤α╕º <α╕éα╕¡α╕çα╣üα╕üα╣èα╕çα╕úα╣çα╕¡α╕üα╣Çα╕üα╕ò>"
+  [AR] #204  english_name="Trevenant"  thai="α╣éα╕¡α╕úα╣çα╕¡α╕ò <α╕éα╕¡α╕çα╕«α╣çα╕¡α╕¢>"
+  [AR] #203  english_name="Togekiss"  thai="α╣éα╕ùα╣Çα╕üα╕äα╕┤α╕¬"
+  [AR] #202  english_name="Misdreavus"  thai="α╕íα╕╣α╕íα╕▓"
+  [MA] #228  english_name="Lucario ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕Ñα╕╣α╕äα╕▓α╕úα╕┤α╣éα╕¡ex"
+  [MA] #223  english_name="Charizard ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕Ñα╕┤α╕ïα╕▓α╕úα╣îα╕öα╕¡α╕Ö Xex"
+  [MA] #224  english_name="Froslass ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕óα╕╣α╕üα╕┤α╣Çα╕íα╣éα╕Öα╣éα╕üα╕░ex"
+  [MA] #225  english_name="Eelektross ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕èα╕┤α╕Üα╕┤α╕úα╕╣α╕öα╕¡α╕Öex"
+  [MA] #226  english_name="Gardevoir ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣Çα╕ïα╕¡α╣äα╕Öα╕ùα╣îex"
+  [MA] #230  english_name="Gengar ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣Çα╕üα╣çα╕çα╕üα╕▓ex"
+  [MA] #229  english_name="Hawlucha ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕Ñα╕╣α╕êα╕▓α╕Üα╕╣α╕Ñex"
+  [MA] #227  english_name="Diancie ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕öα╕╡α╣üα╕¡α╕Öα╕ïα╕╡ex"
+  [MA] #232  english_name="Dragonite ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣äα╕äα╕úα╕┤α╕ºex"
+  [MA] #231  english_name="Scrafty ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕ïα╕╢α╕úα╕╕α╕ïα╕╢α╕äα╕┤α╕Öex"
+  [MUR] #250  english_name="Dragonite ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣äα╕äα╕úα╕┤α╕ºex"
+  [SAR] #249  english_name="Surfer"  thai="α╕Öα╕▒α╕üα╣éα╕òα╣ëα╕äα╕Ñα╕╖α╣êα╕Ö"
+  [SAR] #248  english_name="Kahili"  thai="α╕äα╕▓α╕Öα╕▓α╕úα╕╡"
+  [SAR] #247  english_name="Iris's Fighting Spirit"  thai="α╕êα╕┤α╕òα╕Öα╕▒α╕üα╕¬α╕╣α╣ëα╕éα╕¡α╕çα╣äα╕¡α╕úα╕┤α╕¬"
+  [SAR] #233  english_name="Froslass ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕óα╕╣α╕üα╕┤α╣Çα╕íα╣éα╕Öα╣éα╕üα╕░ex"
+  [SAR] #242  english_name="Zoroark ex"  thai="α╣éα╕ïα╣éα╕úα╕¡α╕▓α╕úα╣îα╕äex <α╕éα╕¡α╕ç N>"
+  [SAR] #246  english_name="Dragonite ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣äα╕äα╕úα╕┤α╕ºex"
+  [SAR] #240  english_name="Gengar ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╣Çα╕üα╣çα╕çα╕üα╕▓ex"
+  [SAR] #239  english_name="Hawlucha ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕Ñα╕╣α╕êα╕▓α╕Üα╕╣α╕Ñex"
+  [SAR] #238  english_name="Diancie ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕öα╕╡α╣üα╕¡α╕Öα╕ïα╕╡ex"
+  [SAR] #237  english_name="Mewtwo ex"  thai="α╕íα╕┤α╕ºα╕ùα╕╣ex <α╕éα╕¡α╕çα╣üα╕üα╣èα╕çα╕úα╣çα╕¡α╕üα╣Çα╕üα╕ò>"
+  [SAR] #236  english_name="Bellibolt ex"  thai="α╕«α╕▓α╕úα╕▓α╕Üα╕▓α╕úα╕╡ex <α╕éα╕¡α╕çα╕Öα╕▒α╕Öα╕êα╕▓α╣éα╕í>"
+  [SAR] #234  english_name="Pikachu ex"  thai="α╕₧α╕┤α╕äα╕▓α╕èα╕╣ex"
+  [SAR] #241  english_name="Scrafty ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕ïα╕╢α╕úα╕╕α╕ïα╕╢α╕äα╕┤α╕Öex"
+  [SAR] #245  english_name="Metagross ex"  thai="α╣Çα╕íα╕ùα╕▓α╕üα╕úα╕¡α╕¬ex <α╕éα╕¡α╕çα╣äα╕öα╣éα╕üα╕░>"
+  [SAR] #235  english_name="Eelektross ex"  thai="α╣Çα╕íα╕üα╣ëα╕▓α╕èα╕┤α╕Üα╕┤α╕úα╕╣α╕öα╕¡α╕Öex"
+  [SAR] #244  english_name="Fezandipiti ex"  thai="α╕äα╕┤α╕êα╕┤α╕äα╕┤α╕üα╕┤α╕¬α╕╢ex"
+  [SAR] #243  english_name="Morgrem ex"  thai="α╣éα╕¡α╕Ñα╕¡α╕çα╣Çα╕üα╕░ex <α╕éα╕¡α╕çα╣üα╕íα╕úα╕╡>"
+  [SR] #219  english_name="Kahili"  thai="α╕äα╕▓α╕Öα╕▓α╕úα╕╡"
+  [SR] #218  english_name="Counter Gain"  thai="α╣Çα╕äα╕▓α╕Öα╣îα╣Çα╕òα╕¡α╕úα╣îα╣Çα╕üα╕Ö"
+  [SR] #217  english_name="Team Rocket's Receiver"  thai="α╕úα╕╡α╕ïα╕╡α╕ƒα╣Çα╕ºα╕¡α╕úα╣îα╕éα╕¡α╕çα╣üα╕üα╣èα╕çα╕úα╣çα╕¡α╕üα╣Çα╕üα╕ò"
+  [SR] #214  english_name="N's Elixir"  thai="α╕óα╕▓α╣Çα╕₧α╕┤α╣êα╕íα╕₧α╕Ñα╕▒α╕çα╕çα╕▓α╕Öα╕éα╕¡α╕ç N"
+  [SR] #216  english_name="Ultra Ball"  thai="α╣äα╕«α╣Çα╕¢α╕¡α╕úα╣îα╕Üα╕¡α╕Ñ"
+  [SR] #222  english_name="Jamming Tower"  thai="α╣üα╕êα╕íα╕íα╕┤α╕çα╕ùα╕▓α╕ºα╣Çα╕ºα╕¡α╕úα╣î"
+  [SR] #215  english_name="Glass Trumpet"  thai="α╕ùα╕úα╕▒α╕íα╣Çα╕¢α╣çα╕òα╣üα╕üα╣ëα╕º"
+  [SR] #221  english_name="Verbena & Helena"  thai="α╣Çα╕ºα╕¡α╕úα╣îα╕Üα╕╡α╕Öα╕▓α╕üα╕▒α╕Üα╣Çα╕«α╣Çα╕Ñα╕Öα╕▓"
+  [SR] #220  english_name="Karate Pro Training"  thai="α╕üα╕▓α╕úα╕¥α╕╢α╕üα╕ïα╣ëα╕¡α╕íα╕éα╕¡α╕çα╣éα╕¢α╕úα╕äα╕▓α╕úα╕▓α╣Çα╕òα╣ë"
+
+=== Already mapped: 52, Unmapped: 5 ===
+  UNMAPPED [AR] "Mimikyu-disguised" (#205)
+  UNMAPPED [SAR] "Morgrem ex" (#243)
+  UNMAPPED [SR] "N's Elixir" (#214)
+  UNMAPPED [SR] "Verbena & Helena" (#221)
+  UNMAPPED [SR] "Karate Pro Training" (#220)
+
+=== Searching EN database for unmapped cards ===
+  [AR] "Mimikyu-disguised" ΓåÆ best EN: "undefined" (undefined) in undefined, sim=0.00
+  [SAR] "Morgrem ex" ΓåÆ best EN: "Morgrem" (U) in swsh9, sim=0.70
+  [SR] "N's Elixir" ΓåÆ best EN: "N's Klink" (C) in sv09, sim=0.60
+  [SR] "Verbena & Helena" ΓåÆ best EN: "undefined" (undefined) in undefined, sim=0.00
+  [SR] "Karate Pro Training" ΓåÆ best EN: "Karate Belt" (U) in sm11, sim=0.42

@@ -21,6 +21,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [phone, setPhone] = useState('');
 
     const supabase = createClient();
@@ -106,6 +107,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     data: {
                         full_name: name,
                         phone_number: phone,
+                        username: username,
                     },
                     emailRedirectTo: `${window.location.origin}/api/auth/callback`,
                 },
@@ -253,6 +255,26 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                         <form onSubmit={mode === 'signin' ? handleEmailSignIn : handleEmailSignUp} className="space-y-4">
                             {mode === 'signup' && (
                                 <>
+                                    {/* Username Field */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                                            <User className="w-3 h-3" />
+                                            Username
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            placeholder="Enter a unique username"
+                                            required
+                                            minLength={3}
+                                            maxLength={20}
+                                            pattern="[a-zA-Z0-9_]+"
+                                            title="Letters, numbers, and underscores only"
+                                            className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
+                                        />
+                                    </div>
+
                                     {/* Name Field */}
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">

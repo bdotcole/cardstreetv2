@@ -133,6 +133,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   // Edit states
   const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState({ address: '', district: '', state: '', province: '', postcode: '' });
   const [profileData, setProfileData] = useState<any>(null);
@@ -307,23 +308,33 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const saveProfile = async () => {
     setIsLoading(true);
     try {
-      await fetch('/api/profile', {
+      const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           display_name: editName,
+          username: editUsername,
           phone_number: editPhone,
           ...editAddress
         })
       });
-      setProfileData((prev: any) => ({
-        ...prev,
-        display_name: editName,
-        phone_number: editPhone,
-        ...editAddress
-      }));
+
+      const data = await res.json();
+      if (res.ok) {
+          setProfileData((prev: any) => ({
+            ...prev,
+            display_name: editName,
+            username: editUsername,
+            phone_number: editPhone,
+            ...editAddress
+          }));
+          showToast('Profile updated successfully', 'success');
+      } else {
+          showToast(data.error || 'Failed to update profile', 'error');
+      }
     } catch (error) {
       console.error('Error saving profile:', error);
+      showToast('An unexpected error occurred', 'error');
     }
     setIsLoading(false);
   };
@@ -346,6 +357,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {
       setEditName(user.name);
+      setEditUsername(profileData?.username || '');
       setEditPhone(profileData?.phone_number || '');
       setEditAddress({
         address: profileData?.address || '',
@@ -485,8 +497,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
-
-                <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest pt-2">{user.email}</p>
+                {user.provider !== 'guest' ? (
+                   <p className="text-sm text-brand-cyan font-bold leading-none">
+                     @{profileData?.username || user.email?.split('@')[0]}
+                   </p>
+                ) : (
+                   <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">
+                     Temporary Director
+                   </p>
+                )}
               </div>
 
 
@@ -562,6 +581,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
                     placeholder="Your name"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <User className="w-3 h-3" /> Username
+                  </label>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
+                    placeholder="Enter a unique username"
+                    maxLength={20}
+                  />
+                  {profileData?.username_updated_at && (
+                     <p className="text-[10px] text-slate-500 mt-1">
+                        Usernames can only be changed once every 30 days.
+                     </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
