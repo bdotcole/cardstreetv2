@@ -292,7 +292,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               {/* Price & Action */}
               <div className="flex flex-col justify-between items-end border-l border-white/5 pl-3 min-w-[80px]">
                 <div className="text-right">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">Ask Price</p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{t('card.askPrice')}</p>
                   <p className="text-lg font-black text-brand-cyan leading-none">
                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
                     {(listing.price * exchangeRate) < 1

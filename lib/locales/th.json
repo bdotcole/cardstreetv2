@@ -29,8 +29,8 @@
     "marketplace": {
         "title": "ตลาด",
         "globalExchange": "ตลาดโลก",
-        "market": "ตลาด",
-        "live": "สด",
+        "market": "ราคาตลาด",
+        "live": "ล่าสุด",
         "searchPlaceholder": "ค้นหาชื่อการ์ดหรือชุด...",
         "filters": "ตัวกรอง",
         "game": "เกม",
