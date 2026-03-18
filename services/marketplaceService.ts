@@ -71,7 +71,7 @@ export const marketplaceService = {
                     status,
                     created_at,
                     updated_at,
-                    seller:profiles(id, display_name, avatar_url, partner_tier, rating)
+                    seller:profiles(id, display_name, avatar_url, partner_tier)
                 `)
                 .eq('status', 'active');
 
@@ -150,7 +150,7 @@ export const marketplaceService = {
                 })
                 .select(`
                     *,
-                    seller:profiles(id, display_name, avatar_url, partner_tier, rating)
+                    seller:profiles(id, display_name, avatar_url, partner_tier)
                 `)
                 .single();
 

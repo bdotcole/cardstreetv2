@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
             is_graded,
             status,
             created_at,
-            seller:profiles(id, display_name, avatar_url, partner_tier, rating)
+            seller:profiles(id, display_name, avatar_url, partner_tier)
         `)
         .eq('status', 'active')
 
