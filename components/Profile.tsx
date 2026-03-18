@@ -363,8 +363,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       title: t('profile.account'),
       items: [
         { name: t('profile.editProfile'), icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' },
-        { name: t('profile.paymentMethods'), icon: CreditCard, panel: 'payment' as ActivePanel, color: 'text-emerald-400' },
-        { name: t('profile.rewards'), icon: Gift, panel: 'rewards' as ActivePanel, color: 'text-amber-400' }
+        { name: t('profile.paymentMethods'), icon: CreditCard, panel: 'payment' as ActivePanel, color: 'text-emerald-400' }
       ]
     },
     {
@@ -483,30 +482,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
                   <img src={user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
                 </div>
-                <div className={`absolute -bottom-1 -right-1 w-9 h-9 rounded-2xl flex items-center justify-center border-4 border-[#121212] shadow-lg bg-gradient-to-br ${tierConfig[rewards.tier].color}`}>
-                  <TierIcon className="w-4 h-4 text-white" />
-                </div>
               </div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
-                <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">
-                  {user.provider === 'guest' ? 'Temporary Director' : `${rewards.tier.toUpperCase()} MEMBER`}
-                </p>
+
                 <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest pt-2">{user.email}</p>
               </div>
 
-              {/* Quick Rewards Preview */}
-              {user.provider !== 'guest' && (
-                <button
-                  onClick={() => openPanel('rewards')}
-                  className="mt-4 mx-auto flex items-center gap-3 px-4 py-2 glass rounded-2xl border border-amber-500/20 hover:border-amber-500/40 transition-colors"
-                >
-                  <Gift className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-bold text-white">{rewards.points_balance.toLocaleString()}</span>
-                  <span className="text-[9px] uppercase tracking-wider text-slate-500">{t('common.points')}</span>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                </button>
-              )}
+
             </div>
 
             {/* Menu Sections */}
