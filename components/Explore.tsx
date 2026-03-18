@@ -186,7 +186,12 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         {/* Database Selectors - Language → Game → Set */}
         <div className="space-y-4">
           <div className="flex justify-between items-end">
-            <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">{t('explore.cardDatabase').split(' ')[0]} <span className="text-brand-cyan">{t('explore.cardDatabase').split(' ')[1] || 'Database'}</span></h2>
+            <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">
+              {t('explore.cardDatabase').split(' ')[0]}
+              {t('explore.cardDatabase').split(' ')[1] && (
+                <span className="text-brand-cyan"> {t('explore.cardDatabase').split(' ')[1]}</span>
+              )}
+            </h2>
           </div>
 
           <div className="grid grid-cols-3 gap-2 z-30 relative">

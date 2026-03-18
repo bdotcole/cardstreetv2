@@ -292,10 +292,10 @@ const Vault: React.FC<VaultProps> = ({
 
   const getSortLabel = () => {
     switch (sortOption) {
-      case 'price_desc': return 'Price: High to Low';
-      case 'price_asc': return 'Price: Low to High';
-      case 'name_asc': return 'Name: A-Z';
-      default: return 'Recently Added';
+      case 'price_desc': return 'ราคา (สูง-ต่ำ)';
+      case 'price_asc': return 'ราคา (ต่ำ-สูง)';
+      case 'name_asc': return 'ชื่อ (ก-ฮ)';
+      default: return 'วางขายล่าสุด';
     }
   };
 
@@ -392,13 +392,13 @@ const Vault: React.FC<VaultProps> = ({
           <button onClick={() => setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </button>
-          <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">Active Listings</h3>
+          <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">กำลังประกาศขาย</h3>
         </div>
         <button
           onClick={() => setIsSelectingForListing(true)}
           className="px-6 h-10 bg-brand-cyan text-brand-darker rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-brand-cyan/10 whitespace-nowrap"
         >
-          New Listing
+          ประกาศขายใหม่
         </button>
       </div>
 
@@ -457,10 +457,10 @@ const Vault: React.FC<VaultProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
-                    <span className="text-[8px] text-brand-green font-black uppercase tracking-widest">Live on Market</span>
+                    <span className="text-[8px] text-brand-green font-black uppercase tracking-widest">วางขายในตลาด</span>
                   </div>
                   <h4 className="text-white text-base font-black truncate">{card.name}</h4>
-                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} Unit(s)</p>
+                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} ใบ</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-black text-brand-cyan">{currencySymbol}{item.listingPrice?.toLocaleString()}</p>
@@ -477,7 +477,7 @@ const Vault: React.FC<VaultProps> = ({
                   }}
                   className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                 >
-                  Edit Listing
+                  แก้ไข
                 </button>
                 <button
                   onClick={() => {
@@ -493,7 +493,7 @@ const Vault: React.FC<VaultProps> = ({
                   }}
                   className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-brand-red/60 hover:text-brand-red transition-colors"
                 >
-                  Remove
+                  ลบ
                 </button>
               </div>
             </div>
@@ -593,14 +593,14 @@ const Vault: React.FC<VaultProps> = ({
             {isSortMenuOpen && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
                 <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">Sort By</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">จัดเรียงตาม</span>
                 </div>
                 <div className="p-1">
                   {[
-                    { id: 'date_desc', label: 'Recently Added' },
-                    { id: 'name_asc', label: 'Name (A-Z)' },
-                    { id: 'price_desc', label: 'Price (High-Low)' },
-                    { id: 'price_asc', label: 'Price (Low-High)' },
+                    { id: 'date_desc', label: 'วางขายล่าสุด' },
+                    { id: 'name_asc', label: 'ชื่อ (ก-ฮ)' },
+                    { id: 'price_desc', label: 'ราคา (สูง-ต่ำ)' },
+                    { id: 'price_asc', label: 'ราคา (ต่ำ-สูง)' },
                   ].map((opt) => (
                     <button
                       key={opt.id}
@@ -621,7 +621,7 @@ const Vault: React.FC<VaultProps> = ({
 
         {/* Current Sort Indicator */}
         <div className="flex justify-end -mt-2">
-          <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Sorted by: {getSortLabel()}</span>
+          <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">จัดเรียงตาม: {getSortLabel()}</span>
         </div>
 
         {/* Card List */}
@@ -657,7 +657,7 @@ const Vault: React.FC<VaultProps> = ({
                     <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
                       <i className="fa-regular fa-clock text-[8px] text-slate-500"></i>
                       <span className="text-[8px] text-slate-400 font-bold">
-                        {new Date(item.addedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {new Date(item.addedAt).toLocaleDateString(currency === 'THB' ? 'th-TH' : undefined, { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                     <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{item.condition}</span>
@@ -723,7 +723,7 @@ const Vault: React.FC<VaultProps> = ({
                 className="w-full h-14 mt-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-tag"></i>
-                Sell Asset
+                ลงขายสินสินค้า
               </button>
             ) : (
               <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs py-4">

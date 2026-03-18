@@ -79,7 +79,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           <i className="fa-solid fa-chevron-left text-sm"></i>
         </button>
         <div className="text-center">
-          <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">Asset Details</span>
+          <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">ข้อมูลเชิงลึก</span>
           <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{card.number}</span>
         </div>
         <button
@@ -130,7 +130,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Spot Price</p>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ราคาปัจจุบัน</p>
               <p className="text-2xl font-black text-white">
                 {formatPrice(card.prices?.market || card.marketPrice)}
               </p>
@@ -139,11 +139,11 @@ const CardDetails: React.FC<CardDetailsProps> = ({
               </div>
             </div>
             <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Market High</p>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ราคาสูงสุด</p>
               <p className="text-2xl font-black text-brand-red">
                 {formatPrice(card.prices?.high || 45000)}
               </p>
-              <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">Peak</div>
+              <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">สูงสุด</div>
             </div>
           </div>
 
@@ -155,7 +155,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <>
               {/* Marketplace Listings (Individual Sellers) */}
               <div className="space-y-4">
-                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">Marketplace Availability</h3>
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">สถานะการวางขาย</h3>
                 <div className="space-y-2">
                   {listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length > 0 ? (
                     listings
@@ -205,7 +205,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                       ))
                   ) : (
                     <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
-                      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No listings available for this item</p>
+                      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">ไม่มีรายการขายในขณะนี้</p>
                       <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
                     </div>
                   )}
@@ -214,7 +214,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
               {/* Graded Section */}
               <div className="space-y-4">
-                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">Graded Dashboard</h3>
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">แดชบอร์ดการ์ดเกรด</h3>
                 <div className="space-y-2">
                   {[
                     { label: "PSA 10", grade: "Gem Mint", multiplier: 3.5, color: "text-brand-cyan" },
@@ -253,7 +253,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
           >
             <i className="fa-solid fa-vault text-brand-cyan group-hover:scale-110 transition-transform"></i>
-            ADD TO VAULT
+            เพิ่มเข้าคลัง
           </button>
           <button
             onClick={() => {
@@ -268,7 +268,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             className="flex-1 h-14 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-store"></i>
-            SHOP NOW
+            ช้อปเลย
           </button>
         </div>
       )}

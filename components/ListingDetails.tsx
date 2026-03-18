@@ -40,7 +40,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     <i className="fa-solid fa-chevron-left text-sm"></i>
                 </button>
                 <div className="text-center">
-                    <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-green block">Listing Details</span>
+                    <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-green block">รายละเอียดสินค้า</span>
                     <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{card.number}</span>
                 </div>
                 <div className="w-10"></div> {/* Spacer */}
@@ -66,7 +66,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     <div className="glass p-6 rounded-3xl border border-brand-green/20 space-y-4">
                         <div className="flex justify-between items-center border-b border-white/5 pb-4">
                             <div>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Asking Price</p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">ราคาขาย</p>
                                 <p className="text-4xl font-black text-brand-cyan">
                                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
                                     {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
@@ -87,7 +87,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                 <img src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} className="w-full h-full object-cover" />
                             </div>
                             <div>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">Seller</p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">ผู้ขาย</p>
                                 <p className="text-white font-bold group-hover:text-brand-cyan transition-colors">{listing.seller.display_name}</p>
                                 <div className="flex items-center gap-1 text-[10px]">
                                     <i className="fa-solid fa-star text-yellow-500"></i>
@@ -105,13 +105,13 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
                 >
                     <i className="fa-solid fa-cart-plus text-brand-cyan group-hover:scale-110 transition-transform text-lg"></i>
-                    ADD TO CART
+                    เพิ่มลงรถเข็น
                 </button>
                 <button
                     onClick={onBuyNow}
                     className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
                 >
-                    BUY NOW
+                    ซื้อเลย
                     <i className="fa-solid fa-arrow-right"></i>
                 </button>
             </div>

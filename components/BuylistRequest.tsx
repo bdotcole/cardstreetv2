@@ -52,7 +52,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                 if (response.status === 401) {
                     setError('Please sign in to add items to your buylist.');
                 } else {
-                    setError(data.error || 'Failed to create buylist request');
+                    setError(data.error || 'สร้างรายการขอซื้อไม่สำเร็จ');
                 }
                 setIsLoading(false);
                 return;
@@ -84,8 +84,8 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                     <i className="fa-solid fa-chevron-left text-sm"></i>
                 </button>
                 <div className="text-center">
-                    <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">Buylist Request</span>
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">No listings available</span>
+                    <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">รายการขอซื้อ</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">ไม่มีรายการวางขาย</span>
                 </div>
                 <div className="w-10"></div>
             </div>
@@ -118,9 +118,9 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                         <i className="fa-solid fa-store-slash text-brand-red"></i>
                                     </div>
                                     <div>
-                                        <h4 className="text-white font-black text-sm mb-1">No Active Listings</h4>
+                                        <h4 className="text-white font-black text-sm mb-1">ไม่มีรายการวางขายในขณะนี้</h4>
                                         <p className="text-slate-400 text-xs leading-relaxed">
-                                            This card isn't currently available on the marketplace. Add it to the Cardstreet buylist and we'll notify sellers to list it for you!
+                                            ขออภัย ขณะนี้ยังไม่มีสินค้านี้ในตลาด กรุณาเพิ่มสินค้าลงในรายการขอซื้อ แล้วเราจะแจ้งเตือนผู้ขายให้คุณ
                                         </p>
                                     </div>
                                 </div>
@@ -131,7 +131,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                 {/* Condition */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block">
-                                        Desired Condition
+                                        สภาพที่ต้องการ
                                     </label>
                                     <div className="grid grid-cols-4 gap-2">
                                         {['M', 'NM', 'LP', 'MP'].map((cond) => (
@@ -153,7 +153,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                 {/* Max Price */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block">
-                                        Maximum Price ({currencySymbol})
+                                        ราคาสูงสุด ({currencySymbol})
                                     </label>
                                     <input
                                         type="number"
@@ -168,7 +168,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                 {/* Quantity */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block">
-                                        Quantity Needed
+                                        จำนวนที่ต้องการ
                                     </label>
                                     <input
                                         type="number"
@@ -183,8 +183,8 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                 {/* Notification Toggle */}
                                 <div className="flex items-center justify-between bg-white/[0.03] p-4 rounded-xl border border-white/5">
                                     <div>
-                                        <p className="text-white font-bold text-sm">Notify on availability</p>
-                                        <p className="text-slate-500 text-xs mt-0.5">Get alerts when this card is listed</p>
+                                        <p className="text-white font-bold text-sm">แจ้งเตือนเมื่อมีสินค้า</p>
+                                        <p className="text-slate-500 text-xs mt-0.5">รับการแจ้งเตือนเมื่อการ์ดพร้อมวางขาย</p>
                                     </div>
                                     <button
                                         type="button"
@@ -205,7 +205,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                                 <i className="fa-solid fa-exclamation text-brand-red text-sm"></i>
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-white font-bold text-xs mb-0.5">Error</p>
+                                                <p className="text-white font-bold text-xs mb-0.5">ข้อผิดพลาด</p>
                                                 <p className="text-slate-400 text-xs leading-relaxed">{error}</p>
                                             </div>
                                         </div>
@@ -227,7 +227,7 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                                     ) : (
                                         <>
                                             <i className="fa-solid fa-list-check"></i>
-                                            Add to Buylist
+                                            เพิ่มลงรายการขอซื้อ
                                         </>
                                     )}
                                 </button>

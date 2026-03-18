@@ -713,7 +713,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 {paymentMethods.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <CreditCard className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">No payment methods saved</p>
+                    <p className="text-slate-500 text-sm">ยังไม่มีข้อมูลการชำระเงิน</p>
                   </div>
                 ) : (
                   paymentMethods.map((method) => (
@@ -748,7 +748,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 {/* Add New Card Button */}
                 <button className="w-full h-16 border-2 border-dashed border-white/10 rounded-2xl flex items-center justify-center gap-3 text-slate-500 hover:text-white hover:border-brand-cyan/30 transition-colors group">
                   <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  <span className="font-semibold">Add New Card</span>
+                  <span className="font-semibold">เพิ่มการ์ดใหม่</span>
                 </button>
               </div>
             </div>
@@ -834,18 +834,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Settings</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">ตั้งค่า</h2>
               </div>
 
               {/* Security Section */}
               <div className="space-y-3">
-                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">Security</h4>
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">ความปลอดภัย</h4>
                 <div className="glass rounded-2xl border border-white/5 overflow-hidden">
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Shield className={`w-5 h-5 ${settings.two_factor_enabled ? 'text-brand-green' : 'text-slate-500'}`} />
                       <div>
-                        <p className="text-white font-semibold text-sm">Two-Factor Authentication</p>
+                        <p className="text-white font-semibold text-sm">การยืนยันตัวตนแบบสองชั้น</p>
                         <p className="text-slate-500 text-xs flex items-center gap-1">
                           {settings.two_factor_enabled ? (
                             <>
@@ -855,7 +855,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           ) : (
                             <>
                               <AlertCircle className="w-3 h-3 text-amber-500" />
-                              <span className="text-amber-500">Not enabled</span>
+                              <span className="text-amber-500">ยังไม่ได้เปิดใช้งาน</span>
                             </>
                           )}
                         </p>
@@ -876,12 +876,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
               {/* Notifications Section */}
               <div className="space-y-3">
-                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">Notifications</h4>
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">การแจ้งเตือน</h4>
                 <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                   {[
-                    { key: 'notify_price_drops', label: 'Price Drop Alerts', desc: 'Get notified when wishlist items drop' },
-                    { key: 'notify_order_updates', label: 'Order Updates', desc: 'Shipping and delivery notifications' },
-                    { key: 'notify_marketing', label: 'Marketing', desc: 'Promotions and special offers' }
+                    { key: 'notify_price_drops', label: 'แจ้งเตือนเมื่อราคาลดลง', desc: 'แจ้งเตือนเมื่อรายการโปรดลดรา' },
+                    { key: 'notify_order_updates', label: 'สถานะคำสั่งซื้อ', desc: 'แจ้งเตือนการจัดส่งสินค้า' },
+                    { key: 'notify_marketing', label: 'ข่าวสารและกิจกรรม', desc: 'โปรโมชันและข้อเสนอพิเศษ' }
                   ].map((item) => (
                     <div key={item.key} className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -923,7 +923,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Track Orders</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">ติดตามคำสั่งซื้อ</h2>
               </div>
 
               <div className="space-y-4">
@@ -973,7 +973,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                                   {step === 'delivered' && <CheckCircle className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
                                 </div>
                                 <span className={`text-[8px] uppercase tracking-wider ${isCurrent ? 'text-brand-green font-bold' : 'text-slate-600'}`}>
-                                  {step.replace('_', ' ')}
+                                  {{ processing: 'กำลังดำเนินการ', shipped: 'จัดส่งแล้ว', out_for_delivery: 'กำลังนำจ่าย', delivered: 'จัดส่งสำเร็จ' }[step as string] || step.replace('_', ' ')}
                                 </span>
                               </div>
                               {idx < 3 && (
@@ -997,7 +997,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           onClick={() => handleCompleteOrder(order.id)}
                           className="w-full h-10 mt-2 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors"
                         >
-                          Confirm Delivery & Review
+                          ยืนยันการรับพัสดุและรีวิว
                         </button>
                       )}
                     </div>
@@ -1085,15 +1085,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Pending Shipments</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">รายการรอจัดส่ง</h2>
               </div>
 
               <div className="space-y-3">
                 {shipments.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <Truck className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">No pending shipments</p>
-                    <p className="text-slate-600 text-xs">When buyers purchase your cards, they will appear here to be shipped.</p>
+                    <p className="text-slate-500 text-sm">ไม่มีรายการรอจัดส่ง</p>
+                    <p className="text-slate-600 text-xs">เมื่อมีผู้ซื้อสั่งซื้อการ์ดของคุณ รายการจะปรากฏที่นี่เพื่อรอการจัดส่ง</p>
                   </div>
                 ) : (
                   shipments.map((shipment) => (
@@ -1115,7 +1115,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           </p>
                           <p className="text-slate-500 text-xs">{shipment.listing?.condition}</p>
                           <p className="text-brand-orange font-bold text-sm mt-1">
-                            Status: <span className="uppercase tracking-wider text-[10px]">{shipment.status.replace('_', ' ')}</span>
+                            สถานะ: <span className="uppercase tracking-wider text-[10px]">{shipment.status.replace('_', ' ')}</span>
                           </p>
                         </div>
                       </div>
@@ -1125,7 +1125,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         <button
                           onClick={() => handleShipOrder(shipment.id)}
                           className="w-full h-10 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors">
-                          Generate Label & Ship
+                          สร้างป้ายชื่อและจัดส่ง
                         </button>
                       )}
                       {shipment.shipping_labels?.[0]?.label_url && shipment.shipping_labels[0].label_url !== 'N/A' && (
@@ -1134,7 +1134,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full h-10 flex items-center justify-center bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors">
-                          Print Shipping Label
+                          พิมพ์ป้ายชื่อจัดส่ง
                         </a>
                       )}
                     </div>
@@ -1211,7 +1211,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-cyan to-brand-green"></div>
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
-                  Confirm<br />Shipment
+                  ยืนยัน<br />การจัดส่ง
                 </h3>
                 <button
                   onClick={() => setShippingModalOrderId(null)}
@@ -1222,8 +1222,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                This will automatically generate a tracking number and shipping label via SHIPPOP for this order.
-                Are you ready to box and drop off the package?
+                ระบบจะสร้างหมายเลขติดตามและป้ายจัดส่งผ่าน SHIPPOP สำหรับคำสั่งซื้อนี้โดยอัตโนมัติ คุณพร้อมที่จะแพ็คและนำพัสดุไปส่งแล้วหรือยัง?
               </p>
 
               <button
@@ -1231,7 +1230,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 disabled={isProcessingAction}
                 className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker font-black text-sm uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessingAction ? 'Processing...' : 'Generate Auto-Label'}
+                {isProcessingAction ? 'กำลังดำเนินการ...' : 'สร้างป้ายชื่อจัดส่งอัตโนมัติ'}
               </button>
             </motion.div>
           </motion.div>
@@ -1253,7 +1252,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-orange to-amber-500"></div>
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
-                  Confirm<br />Delivery
+                  ยืนยัน<br />การรับพัสดุ
                 </h3>
                 <button
                   onClick={() => setReviewModalOrderId(null)}
@@ -1264,12 +1263,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                Has this order safely arrived in your hands? Confirming will finalize the transaction and release the funds from escrow to the seller.
+                สินค้าชิ้นนี้ถึงมือคุณอย่างปลอดภัยแล้วใช่หรือไม่? การยืนยันจะถือเป็นการสิ้นสุดการทำธุรกรรมและจะทำการโอนเงินให้กับผู้ขาย
               </p>
 
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Leave a Rating</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ให้คะแนน</label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map(star => (
                       <button
@@ -1284,12 +1283,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Review Comment (Optional)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ความคิดเห็น (ไม่บังคับ)</label>
                   <textarea
                     value={reviewComment}
                     onChange={e => setReviewComment(e.target.value)}
                     className="w-full h-24 bg-black/50 border border-white/10 rounded-xl p-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-brand-orange/50 resize-none"
-                    placeholder="Great packaging, card arrived mint!"
+                    placeholder="แพ็คเกจดีมาก การ์ดสภาพสมบูรณ์!"
                   />
                 </div>
               </div>
@@ -1299,7 +1298,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 disabled={isProcessingAction}
                 className="w-full h-12 rounded-xl bg-brand-orange text-white font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brand-darker active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessingAction ? 'Processing...' : 'Confirm Received'}
+                {isProcessingAction ? 'กำลังดำเนินการ...' : 'ยืนยันรับพัสดุ'}
               </button>
             </motion.div>
           </motion.div>

@@ -167,8 +167,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 {/* Header */}
                 <div className="bg-gradient-to-r from-brand-darker to-[#1e293b] p-6 border-b border-white/5 flex justify-between items-center">
                     <div>
-                        <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">Secure Checkout</h3>
-                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">Encrypted Payment</p>
+                        <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">ชำระเงินอย่างปลอดภัย</h3>
+                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">ชำระเงินผ่านระบบเข้ารหัส</p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-slate-400">
                         <i className="fa-solid fa-xmark"></i>
@@ -177,7 +177,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 <div className="p-6">
                     <div className="mb-6 flex justify-between items-center bg-white/5 rounded-xl p-3">
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Amount</span>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">ยอดรวมสุทธิ</span>
                         <div className="text-right">
                             <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
                             {method === 'paypal' && currency === 'THB' && (
