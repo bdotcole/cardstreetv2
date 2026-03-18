@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface ListingFormProps {
   card: Card;
@@ -11,6 +12,7 @@ interface ListingFormProps {
 }
 
 const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
+  const { isThai } = useTranslation();
   const [price, setPrice] = useState<string>('');
   const [condition, setCondition] = useState<CardCondition>(initialCondition || CardCondition.NM);
   const [isGraded, setIsGraded] = useState(false);
@@ -70,7 +72,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
       <div className="relative w-full max-w-md bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
         {/* Header */}
         <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center">
-          <h3 className="text-white font-black italic skew-x-[-5deg] text-lg uppercase">รายการขาย</h3>
+          <h3 className="text-white font-black italic skew-x-[-5deg] text-lg uppercase">{isThai ? 'รายการขาย' : 'List for Sale'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
@@ -86,7 +88,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               <h4 className="text-white font-bold truncate">{card.name}</h4>
               <p className="text-xs text-slate-400">{card.set} #{card.number}</p>
               <div className="mt-2 text-xs text-brand-green font-bold bg-brand-green/10 inline-block px-2 py-1 rounded">
-                ตลาด: ฿{card.marketPrice?.toLocaleString() || '-'}
+                {isThai ? 'ตลาด' : 'Market'}: ฿{card.marketPrice?.toLocaleString() || '-'}
               </div>
             </div>
           </div>
@@ -95,7 +97,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
             {/* Price Input */}
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase">ราคาขาย (THB)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase">{isThai ? 'ราคาขาย' : 'Asking Price'} (THB)</label>
                 {recommendedPrice > 0 && (
                   <button
                     type="button"
@@ -122,7 +124,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
             {/* Condition */}
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">สภาพการ์ด</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'สภาพการ์ด' : 'Condition'}</label>
               <div className="grid grid-cols-3 gap-2">
                 {Object.values(CardCondition).map((cond) => (
                   <button
@@ -149,7 +151,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               >
                 <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${isGraded ? 'translate-x-6' : 'translate-x-0'}`}></div>
               </button>
-              <span className="text-sm font-bold text-white">การ์ดใบนี้ได้รับการเกรดอย่างเป็นทางการ</span>
+              <span className="text-sm font-bold text-white">{isThai ? 'การ์ดใบนี้ได้รับการเกรดอย่างเป็นทางการ' : 'This card is professionally graded'}</span>
             </div>
 
             {isGraded && (
@@ -198,7 +200,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               ) : (
                 <>
                   <i className="fa-solid fa-tag"></i>
-                  รายการขาย
+                  {isThai ? 'รายการขาย' : 'List for Sale'}
                 </>
               )}
             </button>

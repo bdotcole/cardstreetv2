@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '../types';
 import PriceChart from './PriceChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface CardDetailsProps {
   card: Card;
@@ -36,6 +37,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   isVaultView = false,
   vaultActionButtons
 }) => {
+  const { isThai } = useTranslation();
 
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -79,7 +81,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           <i className="fa-solid fa-chevron-left text-sm"></i>
         </button>
         <div className="text-center">
-          <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">ข้อมูลเชิงลึก</span>
+          <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">{isThai ? 'ข้อมูลเชิงลึก' : 'Asset Details'}</span>
           <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{card.number}</span>
         </div>
         <button
@@ -100,7 +102,10 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <div className="absolute inset-0 flex items-center justify-center z-0">
               <div className="w-[280px] aspect-[3/4] glass rounded-xl animate-pulse flex items-center justify-center border border-white/10 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-white/10 to-transparent"></div>
-                <i className="fa-solid fa-image text-white/10 text-4xl"></i>
+                <i className="fa-solid fa-folder-plus text-base font-normal"></i>
+                <div className="flex flex-col items-center">
+                  {isThai ? 'เพิ่มเข้าคลัง' : 'Add to Vault'}
+                </div>
               </div>
             </div>
           )}
@@ -130,7 +135,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ราคาปัจจุบัน</p>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาปัจจุบัน' : 'Current Price'}</p>
               <p className="text-2xl font-black text-white">
                 {formatPrice(card.prices?.market || card.marketPrice)}
               </p>
@@ -139,11 +144,11 @@ const CardDetails: React.FC<CardDetailsProps> = ({
               </div>
             </div>
             <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ราคาสูงสุด</p>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาสูงสุด' : 'Market High'}</p>
               <p className="text-2xl font-black text-brand-red">
                 {formatPrice(card.prices?.high || 45000)}
               </p>
-              <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">สูงสุด</div>
+              <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'สูงสุด' : 'High'}</div>
             </div>
           </div>
 
@@ -155,7 +160,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <>
               {/* Marketplace Listings (Individual Sellers) */}
               <div className="space-y-4">
-                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">สถานะการวางขาย</h3>
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">{isThai ? 'สถานะการวางขาย' : 'Marketplace Listings'}</h3>
                 <div className="space-y-2">
                   {listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length > 0 ? (
                     listings
@@ -205,7 +210,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                       ))
                   ) : (
                     <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
-                      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">ไม่มีรายการขายในขณะนี้</p>
+                      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">{isThai ? 'ไม่มีรายการขายในขณะนี้' : 'No listings available for this item'}</p>
                       <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
                     </div>
                   )}
@@ -214,7 +219,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
               {/* Graded Section */}
               <div className="space-y-4">
-                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">แดชบอร์ดการ์ดเกรด</h3>
+                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">{isThai ? 'แดชบอร์ดการ์ดเกรด' : 'Graded Dashboard'}</h3>
                 <div className="space-y-2">
                   {[
                     { label: "PSA 10", grade: "Gem Mint", multiplier: 3.5, color: "text-brand-cyan" },
@@ -253,7 +258,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
           >
             <i className="fa-solid fa-vault text-brand-cyan group-hover:scale-110 transition-transform"></i>
-            เพิ่มเข้าคลัง
+            {isThai ? 'เพิ่มเข้าคลัง' : 'Add to Vault'}
           </button>
           <button
             onClick={() => {
@@ -268,7 +273,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             className="flex-1 h-14 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-store"></i>
-            ช้อปเลย
+            {isThai ? 'ช้อปเลย' : 'Shop Now'}
           </button>
         </div>
       )}
