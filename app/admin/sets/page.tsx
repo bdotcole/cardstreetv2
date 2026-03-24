@@ -108,15 +108,19 @@ export default function AdminSetsPage() {
                                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">Loading...</td>
                                 </tr>
                             ) : bridges.map((row) => (
-                                <tr key={row.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                <tr 
+                                    key={row.id} 
+                                    className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                                    onClick={() => router.push(`/admin/sets/${row.thai_set_id}`)}
+                                >
                                     <td className="px-6 py-4 font-bold text-white">{row.thai_set_id}</td>
                                     <td className="px-6 py-4">{row.english_set_id}</td>
                                     <td className="px-6 py-4 font-mono text-xs text-brand-cyan/80">
                                         {row.justtcg_slug}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="text-slate-500 hover:text-white transition">
-                                            <i className="fa-solid fa-ellipsis-vertical" />
+                                        <button className="text-slate-500 hover:text-white transition group-hover:text-brand-cyan">
+                                            <i className="fa-solid fa-chevron-right" />
                                         </button>
                                     </td>
                                 </tr>

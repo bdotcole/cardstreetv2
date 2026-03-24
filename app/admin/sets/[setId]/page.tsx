@@ -2,14 +2,19 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 
-export default function AdminMappingsPage() {
+export default function SetInboxPage() {
+    const params = useParams()
+    const router = useRouter()
+    const setId = typeof params?.setId === 'string' ? params.setId : ''
+    
     const supabase = createClient()
     
-    const [thaiSets, setThaiSets] = useState<string[]>([])
-    const [selectedSet, setSelectedSet] = useState<string>('')
     const [cards, setCards] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
+    const [runningMatcher, setRunningMatcher] = useState(false)
+    const [showVerified, setShowVerified] = useState(false)
 
     // Remap Modal State
     const [remapTarget, setRemapTarget] = useState<any>(null)
@@ -18,22 +23,10 @@ export default function AdminMappingsPage() {
     const [searching, setSearching] = useState(false)
 
     useEffect(() => {
-        loadSets()
-    }, [])
+        if (setId) loadCards()
+    }, [setId, showVerified])
 
-    useEffect(() => {
-        if (selectedSet) loadCards(selectedSet)
-    }, [selectedSet])
-
-    async function loadSets() {
-        // Just get all distinct thai set ids from set_bridge
-        const { data } = await supabase.from('set_bridge').select('thai_set_id')
-        const unique = [...new Set((data || []).map(r => r.thai_set_id))]
-        setThaiSets(unique.sort())
-        if (unique.length > 0) setSelectedSet(unique[0])
-    }
-
-    async function loadCards(setId: string) {
+    async function loadCards() {
         setLoading(true)
         
         // 1. Get all Thai cards for this set
@@ -44,8 +37,14 @@ export default function AdminMappingsPage() {
             .eq('set_id', setId)
             .order('number_int', { ascending: true })
 
+        if (!thCards || thCards.length === 0) {
+            setCards([])
+            setLoading(false)
+            return
+        }
+
         // 2. Get their mappings
-        const ids = (thCards || []).map(c => c.id)
+        const ids = thCards.map(c => c.id)
         const { data: mappings } = await supabase
             .from('card_mappings')
             .select('*')
@@ -62,7 +61,7 @@ export default function AdminMappingsPage() {
 
         const enDict = new Map(enCards?.map(c => [c.id, c]))
 
-        const merged = (thCards || []).map(th => {
+        let merged = thCards.map(th => {
             const mapping = mapDict.get(th.id)
             const en = mapping ? enDict.get(mapping.card_id_en) : null
             return {
@@ -72,8 +71,47 @@ export default function AdminMappingsPage() {
             }
         })
 
+        // 4. Filter out verified cards unless "showVerified" is true
+        if (!showVerified) {
+            merged = merged.filter(row => !row.mapping?.verified)
+        }
+
         setCards(merged)
         setLoading(false)
+    }
+
+    async function verifyMatch(row: any) {
+        if (!row.mapping?.card_id_en) {
+            alert('Cannot verify an unmapped card. Please remap it first.')
+            return
+        }
+
+        const { error } = await supabase.from('card_mappings').update({
+            verified: true
+        }).eq('card_id_th', row.th.id)
+
+        if (!error) {
+            loadCards()
+        } else {
+            alert('Failed to verify card.')
+        }
+    }
+
+    async function triggerAutoMatcher() {
+        if (!confirm(`Run Auto-Matcher for set ${setId}? This will attempt to find matching English cards for all unmapped Thai cards.`)) return
+        
+        setRunningMatcher(true)
+        const { data, error } = await supabase.functions.invoke('match-thai-cards', {
+            body: { thaiSetId: setId }
+        })
+
+        setRunningMatcher(false)
+        if (error) {
+            alert('Failed to run auto-matcher: ' + error.message)
+        } else {
+            alert(`Auto-matcher complete! Processed ${data?.processedCards || '0'} cards.`)
+            loadCards()
+        }
     }
 
     async function searchEnglishCards(e: React.FormEvent) {
@@ -105,9 +143,7 @@ export default function AdminMappingsPage() {
 
         if (!error) {
             setRemapTarget(null)
-            loadCards(selectedSet)
-            // Note: In an ideal world we'd trigger daily-market-update here
-            alert('Mapping updated! The market price will recalculate automatically on the next pricing cycle.')
+            loadCards()
         } else {
             alert('Error updating mapping')
         }
@@ -116,32 +152,62 @@ export default function AdminMappingsPage() {
     return (
         <div className="space-y-6 animate-fadeIn">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Card Mappings QC</h1>
-                    <p className="text-slate-500 text-sm mt-1">Verify and override automatic card translations</p>
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => router.push('/admin/sets')}
+                        className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+                    >
+                        <i className="fa-solid fa-arrow-left" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">
+                            Set Inbox: <span className="text-brand-cyan">{setId.toUpperCase()}</span>
+                        </h1>
+                        <p className="text-slate-500 text-sm mt-1">Verify matches or fix incorrect mappings to clear the queue.</p>
+                    </div>
                 </div>
                 
-                <select 
-                    value={selectedSet}
-                    onChange={e => setSelectedSet(e.target.value)}
-                    className="bg-[#0f1419] border border-white/10 rounded-xl px-4 py-2 text-white font-bold text-sm focus:outline-none focus:border-brand-cyan"
-                >
-                    {thaiSets.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
-                </select>
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={triggerAutoMatcher}
+                        disabled={runningMatcher}
+                        className="text-xs px-4 py-2 rounded-xl font-bold transition-colors bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 disabled:opacity-50"
+                    >
+                        {runningMatcher ? (
+                            <><i className="fa-solid fa-spinner fa-spin mr-2" /> Matching...</>
+                        ) : (
+                            <><i className="fa-solid fa-wand-magic-sparkles mr-2" /> Run Auto-Matcher</>
+                        )}
+                    </button>
+                    <button 
+                        onClick={() => setShowVerified(!showVerified)}
+                        className={`text-xs px-4 py-2 rounded-xl font-bold transition-colors ${
+                            showVerified ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30' : 'bg-[#0f1419] text-slate-400 border border-white/10 hover:text-white'
+                        }`}
+                    >
+                        {showVerified ? 'Viewing All Cards' : 'Viewing Unverified Only'}
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
                 {loading ? (
-                    <div className="glass rounded-2xl p-12 text-center text-slate-500">Loading cards...</div>
+                    <div className="glass rounded-2xl p-12 text-center text-slate-500">Loading inbox...</div>
+                ) : cards.length === 0 ? (
+                    <div className="glass rounded-2xl p-12 text-center flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-brand-cyan/10 flex items-center justify-center text-brand-cyan mb-4">
+                            <i className="fa-solid fa-check-double text-2xl" />
+                        </div>
+                        <h3 className="text-white font-black text-lg">Inbox Zero</h3>
+                        <p className="text-slate-500 mt-1">All matches for this set have been verified.</p>
+                    </div>
                 ) : cards.map((row) => (
                     <div key={row.th.id} className="glass rounded-2xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch">
                         
                         {/* Thai Card */}
                         <div className="flex-1 p-4 bg-white/5 flex items-center gap-4">
                             <img src={`https://jyrfplsuwgcivwvwbvhw.supabase.co/storage/v1/object/public/images/thai/${row.th.set_id}/${encodeURIComponent(row.th.number)}.webp`} 
-                                className="w-16 h-24 object-contain rounded drop-shadow-md" 
+                                className="w-16 h-24 object-contain rounded drop-shadow-md bg-black/20" 
                                 onError={(e) => { e.currentTarget.src = 'https://cardstreet.com/placeholder.png' }}
                             />
                             <div>
@@ -152,14 +218,20 @@ export default function AdminMappingsPage() {
                         </div>
 
                         {/* Match Status Pivot */}
-                        <div className="w-full md:w-32 bg-[#0a0d12] border-y md:border-y-0 md:border-x border-white/5 flex flex-col items-center justify-center py-4 gap-2 shrink-0 relative">
+                        <div className="w-full md:w-32 bg-[#0a0d12] border-y md:border-y-0 md:border-x border-white/5 flex flex-col items-center justify-center py-4 gap-2 shrink-0 relative group">
                             {row.en ? (
                                 <>
-                                    <div className="w-8 h-8 rounded-full bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan">
-                                        <i className="fa-solid fa-link text-xs" />
-                                    </div>
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                        {row.mapping.match_method}
+                                    {row.mapping?.verified ? (
+                                        <div className="w-8 h-8 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-500">
+                                            <i className="fa-solid fa-check text-xs" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan">
+                                            <i className="fa-solid fa-link text-xs" />
+                                        </div>
+                                    )}
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 text-center px-2">
+                                        {row.mapping?.verified ? 'Verified' : row.mapping?.match_method}
                                     </span>
                                 </>
                             ) : (
@@ -172,12 +244,23 @@ export default function AdminMappingsPage() {
                                     </span>
                                 </>
                             )}
-                            <button 
-                                onClick={() => setRemapTarget(row)}
-                                className="absolute bottom-2 right-2 md:relative md:bottom-0 md:right-0 mt-2 text-[10px] bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full font-bold transition-colors"
-                            >
-                                Remap
-                            </button>
+                            
+                            <div className="absolute inset-0 bg-[#0a0d12] flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2">
+                                {row.en && !row.mapping?.verified && (
+                                    <button 
+                                        onClick={() => verifyMatch(row)}
+                                        className="w-full bg-brand-cyan text-black px-3 py-1.5 rounded-lg text-[10px] font-black hover:scale-105 transition-transform"
+                                    >
+                                        VERIFY
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => setRemapTarget(row)}
+                                    className="w-full bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors"
+                                >
+                                    REMAP
+                                </button>
+                            </div>
                         </div>
 
                         {/* English Card */}
@@ -190,7 +273,7 @@ export default function AdminMappingsPage() {
                                         <p className="text-xs text-slate-400 mt-1">{row.en.set_id} #{row.en.number} · {row.en.rarity}</p>
                                     </div>
                                     {row.en.images?.small && (
-                                        <img src={row.en.images.small} className="w-16 h-24 object-contain rounded drop-shadow-md" />
+                                        <img src={row.en.images.small} className="w-16 h-24 object-contain rounded drop-shadow-md bg-black/20" />
                                     )}
                                 </>
                             ) : (
