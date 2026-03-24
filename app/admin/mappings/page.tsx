@@ -1,10 +1,10 @@
 'use client'
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 
 export default function AdminMappingsPage() {
-    const supabase = createClientComponentClient()
+    const supabase = createClient()
     
     const [thaiSets, setThaiSets] = useState<string[]>([])
     const [selectedSet, setSelectedSet] = useState<string>('')
