@@ -15,117 +15,7 @@ const JUSTTCG_API_KEY = Deno.env.get('JUSTTCG_API_KEY') ?? '';
 const JUSTTCG_BASE = 'https://api.justtcg.com/v1';
 const DELAY_MS = 1300; // safe under 50 req/min
 
-// Our DB set_id → JustTCG set ID mapping
-const SET_ID_MAP: Record<string, string> = {
-    'sv8pt5': 'sv-prismatic-evolutions-pokemon',
-    'sv08pt5': 'sv08-surging-sparks-pokemon',
-    'sv08': 'sv08-surging-sparks-pokemon',
-    'sv09': 'sv09-journey-together-pokemon',
-    'sv10': 'sv10-destined-rivals-pokemon',
-    'sv10.5b': 'sv-black-bolt-pokemon',
-    'sv10.5w': 'sv-white-flare-pokemon',
-    'me02.5': 'me-ascended-heroes-pokemon',
-    'sv07': 'sv07-stellar-crown-pokemon',
-    'sv06.5': 'sv-shrouded-fable-pokemon',
-    'sv06': 'sv06-twilight-masquerade-pokemon',
-    'sv05': 'sv05-temporal-forces-pokemon',
-    'sv04.5': 'sv-paldean-fates-pokemon',
-    'sv04': 'sv04-paradox-rift-pokemon',
-    'sv03.5': 'sv-scarlet-violet-151-pokemon',
-    'sv03': 'sv03-obsidian-flames-pokemon',
-    'sv02': 'sv02-paldea-evolved-pokemon',
-    'sv01': 'sv01-scarlet-violet-base-set-pokemon',
-    'swsh12.5': 'crown-zenith-pokemon',
-    'swsh12': 'swsh12-silver-tempest-pokemon',
-    'swsh11': 'swsh11-lost-origin-pokemon',
-    'swsh10.5': 'pokemon-go-pokemon',
-    'swsh10': 'swsh10-astral-radiance-pokemon',
-    'swsh9': 'swsh09-brilliant-stars-pokemon',
-    'swsh8': 'swsh08-fusion-strike-pokemon',
-    'swsh7': 'swsh07-evolving-skies-pokemon',
-    'swsh6': 'swsh06-chilling-reign-pokemon',
-    'swsh5': 'swsh05-battle-styles-pokemon',
-    'swsh4.5': 'shining-fates-pokemon',
-    'swsh4': 'swsh04-vivid-voltage-pokemon',
-    'swsh35': 'champion-s-path-pokemon',
-    'swsh3': 'swsh03-darkness-ablaze-pokemon',
-    'swsh2': 'swsh02-rebel-clash-pokemon',
-    'swsh1': 'swsh01-sword-shield-base-set-pokemon',
-    'cel25': 'celebrations-pokemon',
-    'sm12': 'sm-cosmic-eclipse-pokemon',
-    'sm11': 'sm-unified-minds-pokemon',
-    'sm10': 'sm-unbroken-bonds-pokemon',
-    'sm9': 'sm-team-up-pokemon',
-    'sm8': 'sm-lost-thunder-pokemon',
-    'sm75': 'dragon-majesty-pokemon',
-    'sm7': 'sm-celestial-storm-pokemon',
-    'sm6': 'sm-forbidden-light-pokemon',
-    'sm5': 'sm-ultra-prism-pokemon',
-    'sm4': 'sm-crimson-invasion-pokemon',
-    'sm35': 'shining-legends-pokemon',
-    'sm3': 'sm-burning-shadows-pokemon',
-    'sm2': 'sm-guardians-rising-pokemon',
-    'sm1': 'sm-base-set-pokemon',
-    'xy12': 'xy-evolutions-pokemon',
-    'xy11': 'xy-steam-siege-pokemon',
-    'xy10': 'xy-fates-collide-pokemon',
-    'xy9': 'xy-breakpoint-pokemon',
-    'xy8': 'xy-breakthrough-pokemon',
-    'xy75': 'xy-ancient-origins-pokemon',
-    'xy7': 'xy-roaring-skies-pokemon',
-    'xy6': 'xy-primal-clash-pokemon',
-    'xy4': 'xy-phantom-forces-pokemon',
-    'xy3': 'xy-furious-fists-pokemon',
-    'xy2': 'xy-flashfire-pokemon',
-    'xy1': 'xy-base-set-pokemon',
-    'bw11': 'legendary-treasures-pokemon',
-    'bw10': 'plasma-blast-pokemon',
-    'bw9': 'plasma-freeze-pokemon',
-    'bw8': 'plasma-storm-pokemon',
-    'bw7': 'boundaries-crossed-pokemon',
-    'bw6': 'dragons-exalted-pokemon',
-    'bw5': 'dark-explorers-pokemon',
-    'bw4': 'next-destinies-pokemon',
-    'bw3': 'noble-victories-pokemon',
-    'bw2': 'emerging-powers-pokemon',
-    'bw1': 'black-and-white-pokemon',
-    'hgss4': 'triumphant-pokemon',
-    'hgss3': 'undaunted-pokemon',
-    'hgss2': 'unleashed-pokemon',
-    'hgss1': 'heartgold-soulsilver-pokemon',
 
-    // Vintage / e-Card Sets
-    'gym2': 'gym-challenge-pokemon',
-    'gym1': 'gym-heroes-pokemon',
-    'ecard3': 'skyridge-pokemon',
-    'si1': 'southern-islands-pokemon',
-    'lc': 'legendary-collection-pokemon',
-    'ecard1': 'expedition-pokemon',
-    'ecard2': 'aquapolis-pokemon',
-
-    'pl4': 'arceus-pokemon',
-    'pl3': 'supreme-victors-pokemon',
-    'pl2': 'rising-rivals-pokemon',
-    'pl1': 'platinum-pokemon',
-    'dp7': 'stormfront-pokemon',
-    'dp6': 'legends-awakened-pokemon',
-    'dp5': 'majestic-dawn-pokemon',
-    'dp4': 'great-encounters-pokemon',
-    'dp3': 'secret-wonders-pokemon',
-    'dp2': 'mysterious-treasures-pokemon',
-    'dp1': 'diamond-and-pearl-pokemon',
-    'base1': 'base-set-pokemon',
-    'base2': 'jungle-pokemon',
-    'base3': 'fossil-pokemon',
-    'base4': 'base-set-2-pokemon',
-    'base5': 'team-rocket-pokemon',
-    'base6': 'gym-heroes-pokemon',
-    'base7': 'gym-challenge-pokemon',
-    'neo1': 'neo-genesis-pokemon',
-    'neo2': 'neo-discovery-pokemon',
-    'neo3': 'neo-revelation-pokemon',
-    'neo4': 'neo-destiny-pokemon',
-};
 
 function norm(s: string) {
     return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -175,6 +65,17 @@ Deno.serve(async (req) => {
             }
             console.log(`[${jobId}] ${dbSetIds.length} English sets to price`);
 
+            // Fetch dynamic slugs from DB
+            const { data: configs, error: configErr } = await supabase
+                .from('marketplace_configs')
+                .select('set_id, justtcg_slug');
+            if (configErr) throw new Error(`Config query failed: ${configErr.message}`);
+            
+            const dbSetIdMap: Record<string, string> = {};
+            for (const row of configs || []) {
+                dbSetIdMap[row.set_id] = row.justtcg_slug;
+            }
+
             let totalPriced = 0;
             let apiCalls = 0;
             const MAX_API_CALLS = 950;
@@ -182,7 +83,7 @@ Deno.serve(async (req) => {
             for (const dbSetId of dbSetIds) {
                 if (apiCalls >= MAX_API_CALLS) { console.log('[limit] API call limit reached'); break; }
 
-                const jtcgId = targetJustTCGId ?? SET_ID_MAP[dbSetId] ?? null;
+                const jtcgId = targetJustTCGId ?? dbSetIdMap[dbSetId] ?? null;
                 if (!jtcgId) {
                     console.warn(`[skip] No JustTCG mapping for "${dbSetId}"`);
                     continue;

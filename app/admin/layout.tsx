@@ -8,8 +8,11 @@ const NAV_ITEMS = [
     { href: '/admin', label: 'Overview', icon: 'fa-solid fa-chart-line' },
     { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-user' },
     { href: '/admin/partners', label: 'Partners', icon: 'fa-solid fa-handshake' },
+    { href: '/admin/reports', label: 'Reports', icon: 'fa-solid fa-flag' },
     { href: '/admin/tickets', label: 'Support Tickets', icon: 'fa-solid fa-ticket' },
     { href: '/admin/downloads', label: 'Download Analytics', icon: 'fa-solid fa-download' },
+    { href: '/admin/sets', label: 'Set Management', icon: 'fa-solid fa-layer-group' },
+    { href: '/admin/mappings', label: 'Card Mappings', icon: 'fa-solid fa-link' },
 ]
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

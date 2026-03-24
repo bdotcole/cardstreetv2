@@ -15,6 +15,7 @@ const EXCHANGE_RATE = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 // Client-side search cache
 const searchIndex = new Map<string, Card[]>();
 const setsCache = new Map<string, { data: ApiSet[], totalCount: number }>();
+let allSetsDbCache: { id: string, name: string }[] | null = null;
 
 export interface ApiSet {
     id: string;
@@ -76,39 +77,59 @@ export const pokemonService = {
         }
     },
 
-    async findCardByMetadata(name: string, set: string, number: string): Promise<Card[]> {
+    async findCardByMetadata(name: string, setHint: string, numberStr: string, languageHint: string = 'en'): Promise<Card[]> {
         try {
             const supabase = createClient();
 
-            const cleanNumber = number.split('/')[0].trim();
-            const cleanName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+            // Clean inputs for resilient ILIKE matching
+            const cleanNumber = (numberStr || '').split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim(); 
+            const cleanName = (name || '').replace(/[^a-zA-Z0-9 ]/g, '').trim();
+            const cleanSet = (setHint || '').replace(/[^a-zA-Z0-9]/g, '').trim();
 
-            // Try exact match first (searching both name and english_name)
-            // Use RAW SQL-like filter for OR condition with AND on number
-            let { data: cards, error } = await supabase
-                .from('pokemon_cards')
-                .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
-                .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
-                .eq('number', cleanNumber)
-                .limit(5);
+            const baseSelect = '*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+            const nameSearch = `name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`;
 
-            // If no results, try broader search
-            if (!cards || cards.length === 0) {
-                const { data: fallbackCards } = await supabase
-                    .from('pokemon_cards')
-                    .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
-                    .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
-                    .limit(5);
-
-                cards = fallbackCards;
+            // TIER 1: The "Perfect" Strict Match (Name + Number + Set + Language)
+            if (cleanSet && cleanNumber) {
+                let strictQuery = supabase.from('pokemon_cards').select(baseSelect)
+                    .or(nameSearch)
+                    .or(`number.eq.${cleanNumber},number.ilike.${cleanNumber}/%`)
+                    .ilike('set_id', `%${cleanSet}%`);
+                if (languageHint && languageHint !== 'other') strictQuery = strictQuery.eq('language', languageHint);
+                
+                const { data: cards, error } = await strictQuery.limit(5);
+                if (cards && cards.length > 0) return cards.map(c => this.mapSupabaseCardToInternal(c));
             }
 
+            // TIER 2: Missing/Hallucinated Set Code (Name + Number + Language)
+            if (cleanNumber) {
+                let numQuery = supabase.from('pokemon_cards').select(baseSelect)
+                    .or(nameSearch)
+                    .or(`number.eq.${cleanNumber},number.ilike.${cleanNumber}/%`);
+                if (languageHint && languageHint !== 'other') numQuery = numQuery.eq('language', languageHint);
+                
+                const { data: fallbackCards } = await numQuery.limit(5);
+                if (fallbackCards && fallbackCards.length > 0) return fallbackCards.map(c => this.mapSupabaseCardToInternal(c));
+            }
+
+            // TIER 3: Missing/Hallucinated Number (Name + Set Code + Language)
+            if (cleanSet) {
+                let setQuery = supabase.from('pokemon_cards').select(baseSelect).or(nameSearch).ilike('set_id', `%${cleanSet}%`);
+                if (languageHint && languageHint !== 'other') setQuery = setQuery.eq('language', languageHint);
+                
+                const { data: setFallback } = await setQuery.limit(5);
+                if (setFallback && setFallback.length > 0) return setFallback.map(c => this.mapSupabaseCardToInternal(c));
+            }
+
+            // TIER 4: Absolute Broadest Fallback (Name Only, cross-language)
+            const { data: broadFallback, error } = await supabase.from('pokemon_cards').select(baseSelect).or(nameSearch).limit(5);
+            
             if (error) {
                 console.error('Supabase error searching cards:', error);
                 return [];
             }
 
-            return (cards || []).map(c => this.mapSupabaseCardToInternal(c));
+            return (broadFallback || []).map(c => this.mapSupabaseCardToInternal(c));
         } catch (error) {
             console.error("Metadata match failed:", error);
             return [];
@@ -128,18 +149,78 @@ export const pokemonService = {
             const supabase = createClient();
             const cleanQuery = query.toLowerCase().trim();
 
+            // 1. Fetch all set names to extract set from query
+            if (!allSetsDbCache) {
+                const { data } = await supabase.from('pokemon_sets').select('id, name');
+                allSetsDbCache = data || [];
+            }
+            
+            let matchedSetIds: string[] = [];
+            let queryWithoutSet = cleanQuery;
+            
+            if (allSetsDbCache && allSetsDbCache.length > 0) {
+                // Sort by name length descending to match longest set names first
+                const sortedSets = [...allSetsDbCache].sort((a, b) => b.name.length - a.name.length);
+                
+                for (const set of sortedSets) {
+                    const setNameLower = set.name.toLowerCase();
+                    const setIdLower = set.id.toLowerCase();
+                    
+                    // Exact match on set name or ID
+                    if (cleanQuery === setNameLower || cleanQuery === setIdLower) {
+                        matchedSetIds.push(set.id);
+                        queryWithoutSet = '';
+                        break;
+                    }
+                    
+                    // Substring match with word boundary on Set ID (e.g., "sv4a")
+                    const idRegex = new RegExp(`\\b${setIdLower}\\b`, 'i');
+                    if (idRegex.test(cleanQuery)) {
+                        matchedSetIds.push(set.id);
+                        queryWithoutSet = cleanQuery.replace(idRegex, '').trim();
+                        break;
+                    }
+                    
+                    // Substring match with word boundary on Set Name
+                    const escapedSetName = setNameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const nameRegex = new RegExp(`\\b${escapedSetName}\\b`, 'i');
+                    if (nameRegex.test(cleanQuery)) {
+                        matchedSetIds.push(set.id);
+                        queryWithoutSet = cleanQuery.replace(nameRegex, '').trim();
+                        break;
+                    }
+                }
+            }
+
             // CROSS-LANGUAGE SEARCH: Search both 'name' and 'english_name' fields
             // This allows English users to find Thai cards and vice versa
-            const { data: cards, error } = await supabase
+            let dbQuery = supabase
                 .from('pokemon_cards')
                 .select(`
                     id, name, english_name, set_id, number, supertype, subtypes, 
                     rarity, hp, types, image_small, image_large, language, raw_data,
                     market_values(market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
-                `)
-                .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
-                .limit(100);
+                `);
+
+            if (matchedSetIds.length > 0) {
+                dbQuery = dbQuery.in('set_id', matchedSetIds);
+                if (queryWithoutSet.length > 0) {
+                    dbQuery = dbQuery.or(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
+                }
+            } else {
+                // Fallback: check if the query is a partial set name
+                const { data: partialSets } = await supabase.from('pokemon_sets').select('id').ilike('name', `%${cleanQuery}%`);
+                const partialSetIds = partialSets?.map(s => s.id) || [];
+                
+                let orStr = `name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`;
+                if (partialSetIds.length > 0) {
+                    orStr += `,set_id.in.(${partialSetIds.join(',')})`;
+                }
+                dbQuery = dbQuery.or(orStr);
+            }
+
+            const { data: cards, error } = await dbQuery.limit(100);
 
             if (error) {
                 console.error('Search error:', error);

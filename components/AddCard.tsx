@@ -141,16 +141,16 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
   );
 
   const renderOptions = () => (
-    <div className="space-y-8 animate-fadeIn pt-4 pb-12">
+    <div className="space-y-8 animate-fadeIn pt-12 pb-12">
       <div className="text-center space-y-3 mb-12 px-4">
         <h2 className="text-3xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('scan.registryEntry')}</h2>
-        <p className="text-[10px] text-slate-600 font-black tracking-[0.3em] uppercase">{t('scan.digitizeCollection')}</p>
+        <p className="text-xs text-slate-600 font-black tracking-[0.3em] uppercase">TRACK YOUR TCG COLLECTION</p>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
         <button
           onClick={onScanClick}
-          className="glass min-h-[180px] rounded-[2.5rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative overflow-hidden"
+          className="glass min-h-[220px] pt-10 pb-6 rounded-[3rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative overflow-hidden"
         >
           <div className="absolute inset-0 bg-brand-cyan/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="w-20 h-20 rounded-3xl bg-brand-cyan flex items-center justify-center shadow-2xl shadow-brand-cyan/20 transform group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500 z-10">
@@ -158,20 +158,20 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
           </div>
           <div className="text-center z-10">
             <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">{t('scan.scanCard')}</span>
-            <span className="text-[9px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] mt-1">{t('scan.realtimeVisionAI')}</span>
+            <span className="text-[10px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] mt-1">{t('scan.realtimeVisionAI')}</span>
           </div>
         </button>
 
         <button
           onClick={() => setView('manual')}
-          className="glass min-h-[180px] rounded-[2.5rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative"
+          className="glass min-h-[220px] pt-10 pb-6 rounded-[3rem] border-white/10 flex flex-col items-center justify-center gap-5 active:scale-95 transition-all group relative"
         >
           <div className="w-20 h-20 rounded-3xl glass border-white/10 flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500 z-10">
             <i className="fa-solid fa-keyboard text-slate-400 text-2xl"></i>
           </div>
           <div className="text-center z-10">
             <span className="text-xl font-black text-white uppercase tracking-[0.2em] block">{t('scan.searchRegistry')}</span>
-            <span className="text-[9px] text-slate-600 font-black uppercase tracking-[0.4em] mt-1">{t('scan.globalArchives')}</span>
+            <span className="text-[10px] text-slate-600 font-black uppercase tracking-[0.4em] mt-1">{t('scan.globalArchives')}</span>
           </div>
         </button>
       </div>

@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
-    // if "next" is in param, use it as the redirect URL
-    const next = searchParams.get('next') ?? '/'
+    
+    // Check for cookie intention in case Supabase strips query params on fallback
+    const cookieStore = await cookies()
+    const storedNext = cookieStore.get('cardstreet_auth_redirect')?.value
+    
+    // if "next" is in param, use it; otherwise fallback to cookie, then '/'
+    const next = searchParams.get('next') ?? storedNext ?? '/'
 
     if (code) {
         const supabase = await createClient()

@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.cardstreet.app',
+  appId: 'com.cardstreet.tcg',
   appName: 'CardStreet',
   webDir: 'out',
 
@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   // This works because the Next.js app has API routes that require a server.
   // Remove this block to load from bundled static files (if you switch to static export later).
   server: {
-    url: 'https://cardstreet-tcg.vercel.app',
+    url: 'https://cardstreet.app',
     cleartext: true,
     androidScheme: 'https'
   },

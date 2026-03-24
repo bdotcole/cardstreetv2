@@ -76,8 +76,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         setIsLoadingSets(false);
         return;
       }
-      // Reduced 300 → 50: drastically cuts first-load payload
-      const result = await pokemonService.fetchSets(selectedLanguage, 1, 50);
+      // Restored from 50 -> 300 to ensure all physical sets are accessible
+      // Edge caching (s-maxage=3600) prevents this from hurting load times
+      const result = await pokemonService.fetchSets(selectedLanguage, 1, 300);
       setsCache.current.set(cacheKey, result.data);
       setSets(result.data);
       if (result.data.length > 0) setSelectedSetId(result.data[0].id);

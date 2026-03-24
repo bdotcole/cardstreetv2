@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { CartItem } from '../types';
+import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useConditionTranslation } from '@/lib/hooks/useCardTranslations';
 
 interface CartDrawerProps {
     isOpen: boolean;
@@ -18,6 +20,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     onCheckout,
     currencySymbol
 }) => {
+    const { t } = useTranslation();
+    const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
 
     if (!isOpen) return null;
@@ -35,7 +39,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center bg-brand-darker/50">
                     <h2 className="text-xl font-black italic skew-x-[-10deg] text-white uppercase tracking-tight">
-                        รถเข็น <span className="text-brand-cyan text-sm not-italic ml-2">({cart.length})</span>
+                        {t('cart.title')} <span className="text-brand-cyan text-sm not-italic ml-2">({cart.length})</span>
                     </h2>
                     <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors">
                         <i className="fa-solid fa-xmark text-slate-400"></i>
@@ -47,7 +51,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                             <i className="fa-solid fa-cart-shopping text-4xl mb-4"></i>
-                            <p className="text-xs font-black uppercase tracking-widest">Cart is Empty</p>
+                            <p className="text-xs font-black uppercase tracking-widest">{t('cart.empty')}</p>
                         </div>
                     ) : (
                         cart.map((item) => (
@@ -57,7 +61,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                 </div>
                                 <div className="flex-1 min-w-0 py-1">
                                     <h4 className="text-white text-sm font-bold truncate pr-6">{item.card.name}</h4>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{item.condition} • {item.sellerName}</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{translateCondition(item.condition)} • {item.sellerName}</p>
                                     <p className="text-brand-cyan font-black">{currencySymbol}{item.price.toLocaleString()}</p>
                                 </div>
                                 <button
@@ -74,7 +78,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 {/* Footer */}
                 <div className="p-6 bg-brand-darker/80 border-t border-white/5 backdrop-blur-xl">
                     <div className="flex justify-between items-end mb-4">
-                        <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">ราคา</span>
+                        <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">{t('cart.price')}</span>
                         <span className="text-2xl font-black text-white">{currencySymbol}{total.toLocaleString()}</span>
                     </div>
                     <button
@@ -82,7 +86,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         disabled={cart.length === 0}
                         className="w-full h-14 bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 hover:bg-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                        ชำระเงิน <i className="fa-solid fa-arrow-right"></i>
+                        {t('cart.checkout')} <i className="fa-solid fa-arrow-right"></i>
                     </button>
                 </div>
             </div>

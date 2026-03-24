@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '../types';
+import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 interface ListingDetailsProps {
     listing: {
         id: string;
@@ -10,6 +11,8 @@ interface ListingDetailsProps {
         condition: string;
         seller: any;
         card_data: Card;
+        image_front_url?: string;
+        image_back_url?: string;
     };
     onClose: () => void;
     onBuyNow: () => void;
@@ -30,6 +33,15 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
 }) => {
     const { isThai } = useTranslation();
     const card = listing.card_data;
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [activeSlide, setActiveSlide] = useState(0);
+    
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const scrollLeft = e.currentTarget.scrollLeft;
+        const width = e.currentTarget.offsetWidth;
+        const newIndex = Math.round(scrollLeft / width);
+        setActiveSlide(newIndex);
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
@@ -45,17 +57,68 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-green block">{isThai ? 'รายละเอียดสินค้า' : 'Listing Details'}</span>
                     <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{card.number}</span>
                 </div>
-                <div className="w-10"></div> {/* Spacer */}
+                <button 
+                    onClick={() => setIsReportModalOpen(true)}
+                    title="Report Listing"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/5 hover:text-brand-red text-slate-500 transition-all border border-transparent hover:border-white/5"
+                >
+                    <i className="fa-solid fa-flag text-sm"></i>
+                </button>
             </div>
 
             <div className="flex-1 overflow-y-auto pb-40 scrollbar-hide">
-                <div className="p-8 flex justify-center relative">
-                    <div className="absolute inset-0 bg-gradient-to-b from-brand-green/5 to-transparent pointer-events-none"></div>
-                    <img
-                        src={card.imageUrl}
-                        alt={card.name}
-                        className="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] z-10"
-                    />
+                {/* Swipeable Image Gallery */}
+                <div className="relative w-full">
+                    <div className="absolute inset-0 bg-gradient-to-b from-brand-green/5 to-transparent pointer-events-none z-0"></div>
+                    
+                    <div 
+                        className="flex w-full overflow-x-auto snap-x snap-mandatory scrollbar-hide relative z-10"
+                        onScroll={handleScroll}
+                    >
+                        {/* Slide 1: Digital Image */}
+                        <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
+                            <img
+                                src={card.imageUrl}
+                                alt={card.name}
+                                className="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]"
+                            />
+                        </div>
+
+                        {/* Slide 2: Real Front Photo */}
+                        {listing.image_front_url && (
+                            <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
+                                <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
+                                    <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
+                                        <img src={listing.image_front_url} alt="Front condition" className="w-full object-contain bg-black/50" />
+                                    </TransformComponent>
+                                </TransformWrapper>
+                            </div>
+                        )}
+
+                        {/* Slide 3: Real Back Photo */}
+                        {listing.image_back_url && (
+                            <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
+                                <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
+                                    <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
+                                        <img src={listing.image_back_url} alt="Back condition" className="w-full object-contain bg-black/50" />
+                                    </TransformComponent>
+                                </TransformWrapper>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Pagination Dots */}
+                    {(listing.image_front_url || listing.image_back_url) && (
+                        <div className="flex justify-center gap-2 pb-4">
+                            <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 0 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
+                            {listing.image_front_url && (
+                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 1 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
+                            )}
+                            {listing.image_back_url && (
+                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 2 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <div className="px-6 space-y-6">
@@ -117,6 +180,14 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     <i className="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
+
+            <ReportModal 
+                isOpen={isReportModalOpen} 
+                onClose={() => setIsReportModalOpen(false)} 
+                entityType="listing" 
+                entityId={listing.id} 
+                entityName={`${card.name} (${listing.condition})`} 
+            />
         </div>
     );
 };

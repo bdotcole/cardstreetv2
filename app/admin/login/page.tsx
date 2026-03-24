@@ -15,13 +15,20 @@ function LoginContent() {
     const handleGoogleLogin = async () => {
         setLoading(true)
         setError(null)
+        // 1. Set a cookie to remember we want to go back to admin page
+        document.cookie = "cardstreet_auth_redirect=/admin; path=/; max-age=3600; SameSite=Lax; Secure";
+        
+        // Force web redirect URL for admin since they should be on desktop web
+        let redirectUrl = `https://cardstreet.app/api/auth/callback?next=/admin`;
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            redirectUrl = `http://localhost:3000/api/auth/callback?next=/admin`;
+        }
+
         const supabase = createClient()
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                // After auth, exchange the code at /auth/callback and then
-                // redirect to /admin so the middleware can verify the cookie session
-                redirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+                redirectTo: redirectUrl,
             },
         })
         if (error) {

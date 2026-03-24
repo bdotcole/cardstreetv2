@@ -3,7 +3,7 @@ import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
@@ -21,7 +21,16 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recommendedPrice, setRecommendedPrice] = useState<number>(0);
+  
+  // Photo states
+  const [frontImageBlob, setFrontImageBlob] = useState<Blob | null>(null);
+  const [frontImagePreview, setFrontImagePreview] = useState<string | null>(null);
+  const [backImageBlob, setBackImageBlob] = useState<Blob | null>(null);
+  const [backImagePreview, setBackImagePreview] = useState<string | null>(null);
+  
   const isSubmittingRef = useRef(false);
+  const frontFileInputRef = useRef<HTMLInputElement>(null);
+  const backFileInputRef = useRef<HTMLInputElement>(null);
 
   // Recalculate recommendation when inputs change
   React.useEffect(() => {
@@ -35,8 +44,55 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     setRecommendedPrice(rec);
   }, [card.marketPrice, condition, isGraded, gradingCompany, grade]);
 
+  const takePhoto = async (side: 'front' | 'back') => {
+    try {
+      const image = await Camera.getPhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Camera // Force camera
+      });
+
+      if (image.webPath) {
+        const response = await fetch(image.webPath);
+        const blob = await response.blob();
+        if (side === 'front') {
+          setFrontImageBlob(blob);
+          setFrontImagePreview(image.webPath);
+        } else {
+          setBackImageBlob(blob);
+          setBackImagePreview(image.webPath);
+        }
+      }
+    } catch (e: any) {
+      console.log('Camera error or cancelled:', e);
+      // Fallback to hidden file inputs on web or if camera fails
+      if (side === 'front') frontFileInputRef.current?.click();
+      if (side === 'back') backFileInputRef.current?.click();
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    if (side === 'front') {
+      setFrontImageBlob(file);
+      setFrontImagePreview(previewUrl);
+    } else {
+      setBackImageBlob(file);
+      setBackImagePreview(previewUrl);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!frontImageBlob || !backImageBlob) {
+      setError(isThai ? 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด' : 'Please provide both front and back photos of the card.');
+      return;
+    }
+    
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -47,6 +103,28 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
       // Defer database insertion to the parent component (page.tsx)
       // which uses marketplaceService and handles global state updates
 
+      let front_url: string | null = null;
+      let back_url: string | null = null;
+      const supabase = createClient();
+
+      // Upload Front Image
+      const frontPath = `listings/${card.id}/${Date.now()}_front.jpg`;
+      const { data: frontData, error: frontError } = await supabase.storage
+        .from('listing-images')
+        .upload(frontPath, frontImageBlob, { contentType: 'image/jpeg' });
+      
+      if (frontError) throw new Error("Failed to upload front image: " + frontError.message);
+      front_url = supabase.storage.from('listing-images').getPublicUrl(frontData.path).data.publicUrl;
+
+      // Upload Back Image
+      const backPath = `listings/${card.id}/${Date.now()}_back.jpg`;
+      const { data: backData, error: backError } = await supabase.storage
+        .from('listing-images')
+        .upload(backPath, backImageBlob, { contentType: 'image/jpeg' });
+        
+      if (backError) throw new Error("Failed to upload back image: " + backError.message);
+      back_url = supabase.storage.from('listing-images').getPublicUrl(backData.path).data.publicUrl;
+
       const listingData = {
         card_id: card.id,
         price: parseFloat(price),
@@ -54,6 +132,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
         is_graded: isGraded,
         grading_company: isGraded ? gradingCompany : null,
         grade: isGraded ? parseFloat(grade) : null,
+        image_front_url: front_url,
+        image_back_url: back_url
       };
 
       await onSuccess(listingData);
@@ -78,7 +158,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[80vh]">
+        <div className="p-6 overflow-y-auto max-h-[80vh] pb-40">
           {/* Card Preview */}
           <div className="flex gap-4 mb-6">
             <div className="w-20 h-28 bg-brand-darker rounded-lg border border-white/10 overflow-hidden flex-shrink-0">
@@ -182,6 +262,73 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                 </div>
               </div>
             )}
+
+            {/* Mandatory Photos Section */}
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                {isThai ? 'รูปถ่ายจริง (บังคับ)' : 'Real Photos (Required)'}
+              </label>
+              
+              <div className="flex gap-4">
+                {/* Front Photo */}
+                <div className="flex-1">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    ref={frontFileInputRef} 
+                    className="hidden" 
+                    onChange={(e) => handleFileUpload(e, 'front')} 
+                  />
+                  <div 
+                    onClick={() => takePhoto('front')}
+                    className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/20 bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:border-brand-cyan hover:bg-white/10 transition-colors overflow-hidden group relative"
+                  >
+                    {frontImagePreview ? (
+                      <>
+                        <img src={frontImagePreview} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <i className="fa-solid fa-camera text-white text-xl"></i>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-2">
+                        <i className="fa-solid fa-camera text-slate-400 text-2xl mb-2 group-hover:text-brand-cyan transition-colors"></i>
+                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isThai ? 'ด้านหน้า' : 'Front'}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Back Photo */}
+                <div className="flex-1">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    ref={backFileInputRef} 
+                    className="hidden" 
+                    onChange={(e) => handleFileUpload(e, 'back')} 
+                  />
+                  <div 
+                    onClick={() => takePhoto('back')}
+                    className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/20 bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:border-brand-cyan hover:bg-white/10 transition-colors overflow-hidden group relative"
+                  >
+                    {backImagePreview ? (
+                      <>
+                        <img src={backImagePreview} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <i className="fa-solid fa-camera text-white text-xl"></i>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-2">
+                        <i className="fa-solid fa-camera text-slate-400 text-2xl mb-2 group-hover:text-brand-cyan transition-colors"></i>
+                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isThai ? 'ด้านหลัง' : 'Back'}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold flex items-center gap-2">

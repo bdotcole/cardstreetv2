@@ -10,9 +10,9 @@ export async function POST(req: Request) {
     try {
         const { amount, currency, token, metadata } = await req.json();
 
-        const baseUrl = process.env.NODE_ENV === 'development'
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'development'
             ? 'http://localhost:3000'
-            : 'https://cardstreet-tcg.vercel.app';
+            : 'https://cardstreet.app');
 
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(amount * 100), // Convert to subunits (Cents/Stang)

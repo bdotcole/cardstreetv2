@@ -11,11 +11,12 @@ interface StatCard {
 async function getOverviewStats() {
     const supabase = createAdminClient()
 
-    const [usersRes, partnersRes, ticketsRes, downloadsRes] = await Promise.all([
+    const [usersRes, partnersRes, ticketsRes, downloadsRes, reportsRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'partner'),
         supabase.from('support_tickets').select('id, status', { count: 'exact' }).neq('status', 'Resolved'),
         supabase.from('profiles').select('total_downloads').eq('role', 'partner'),
+        supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
     ])
 
     const totalDownloads = (downloadsRes.data ?? []).reduce((s, p) => s + (p.total_downloads ?? 0), 0)
@@ -24,6 +25,7 @@ async function getOverviewStats() {
         totalUsers: usersRes.count ?? 0,
         activePartners: partnersRes.count ?? 0,
         openTickets: ticketsRes.count ?? 0,
+        openReports: reportsRes.count ?? 0,
         totalDownloads,
     }
 }
@@ -71,6 +73,7 @@ export default async function AdminOverviewPage() {
         { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts' },
         { label: 'Active Partners', value: stats.activePartners.toLocaleString(), icon: 'fa-solid fa-handshake', color: 'text-yellow-400', sub: 'With partner role' },
         { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention' },
+        { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review' },
         { label: 'Total Downloads', value: stats.totalDownloads.toLocaleString(), icon: 'fa-solid fa-download', color: 'text-brand-green', sub: 'Via partner QR codes' },
     ]
 

@@ -30,13 +30,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setLoading(true);
         setError(null);
         try {
-            let redirectUrl = `https://cardstreet-tcg.vercel.app/api/auth/callback`;
+            let redirectUrl = `https://cardstreet.app/api/auth/callback`;
             let isNative = false;
 
             try {
                 const { Capacitor } = await import('@capacitor/core');
                 if (Capacitor.isNativePlatform()) {
-                    redirectUrl = 'https://cardstreet-tcg.vercel.app/mobile-redirect';
+                    redirectUrl = 'https://cardstreet.app/mobile-redirect';
                     isNative = true;
                 }
             } catch (e) {

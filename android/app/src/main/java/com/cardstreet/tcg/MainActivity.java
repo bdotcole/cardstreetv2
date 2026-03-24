@@ -1,4 +1,4 @@
-package com.cardstreet.app;
+package com.cardstreet.tcg;
 
 import com.getcapacitor.BridgeActivity;
 

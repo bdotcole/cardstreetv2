@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface MasterSetPickerProps {
   onBack: () => void;
@@ -41,18 +42,20 @@ const GAMES = [
 ];
 
 const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame }) => {
+  const { isThai } = useTranslation();
+
   return (
     <div className="space-y-8 animate-fadeIn pb-20">
       <div className="flex items-center gap-4 pt-4">
         <button onClick={onBack} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
           <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
         </button>
-        <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">Master Sets</h3>
+        <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{isThai ? 'มาสเตอร์เซ็ต' : 'Master Sets'}</h3>
       </div>
 
       <div className="space-y-2 px-2">
-        <h2 className="text-3xl font-black text-white italic skew-x-[-10deg] uppercase tracking-tighter">Select Region</h2>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Choose your registry database</p>
+        <h2 className="text-3xl font-black text-white italic skew-x-[-10deg] uppercase tracking-tighter">{isThai ? 'เลือกภูมิภาค' : 'Select Region'}</h2>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">{isThai ? 'เลือกฐานข้อมูลของคุณ' : 'Choose your registry database'}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
@@ -77,7 +80,7 @@ const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame 
               <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full backdrop-blur-md bg-white/20 border border-white/20 shadow-lg`}>
                 <img src={game.flagUrl} alt={game.region} className="w-6 h-4 object-cover rounded shadow-sm" />
                 <span className={`text-[10px] font-black uppercase tracking-widest ${game.id === 'pokemon-th' ? 'text-white' : 'text-slate-800'}`}>
-                  {game.region}
+                  {game.id === 'pokemon-th' ? (isThai ? 'ไทย' : 'Thai') : (isThai ? 'อังกฤษ' : 'English')}
                 </span>
               </div>
             </div>
@@ -90,7 +93,7 @@ const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame 
         {/* Coming Soon */}
         <div className="h-32 rounded-[2.5rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 opacity-30 bg-white/[0.02]">
           <i className="fa-solid fa-plus text-2xl text-slate-600"></i>
-          <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">More Regions Soon</span>
+          <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">{isThai ? 'ภูมิภาคอื่นๆ เร็วๆ นี้' : 'More Regions Soon'}</span>
         </div>
       </div>
     </div>

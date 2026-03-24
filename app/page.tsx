@@ -15,6 +15,7 @@ import CartDrawer from '@/components/CartDrawer';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import PaymentModal from '@/components/PaymentModal';
 import ListingDetails from '@/components/ListingDetails';
+import WebLiveScanner from '@/components/WebLiveScanner';
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
@@ -91,6 +92,7 @@ export default function HomePage() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [searchRequest, setSearchRequest] = useState<{ term: string, timestamp: number } | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const [isWebScannerOpen, setIsWebScannerOpen] = useState(false);
 
     const [safeArea, setSafeArea] = useState({ top: 0, bottom: 0 });
 
@@ -295,55 +297,14 @@ export default function HomePage() {
     };
 
     const handleScanCard = async () => {
+        setIsWebScannerOpen(true);
+    };
+
+    const handleWebLiveScanMatch = async (scanData: any) => {
+        setIsWebScannerOpen(false);
         setIsAiLoading(true);
         try {
-            // Dynamically import Capacitor Camera to avoid SSR issues
-            const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera');
-            const { Capacitor } = await import('@capacitor/core');
-
-            let base64String: string;
-
-            if (Capacitor.isNativePlatform()) {
-                // Native: use Capacitor Camera plugin with permission handling
-                const photo = await Camera.getPhoto({
-                    quality: 90,
-                    allowEditing: false,
-                    resultType: CameraResultType.Base64,
-                    source: CameraSource.Camera,
-                    width: 1200,
-                    height: 1600,
-                    correctOrientation: true,
-                });
-                base64String = photo.base64String || '';
-            } else {
-                // Web fallback: use file input
-                base64String = await new Promise<string>((resolve, reject) => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.capture = 'environment';
-                    input.onchange = (e) => {
-                        const file = (e.target as HTMLInputElement).files?.[0];
-                        if (!file) { reject('No file selected'); return; }
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            resolve((reader.result as string).split(',')[1]);
-                        };
-                        reader.readAsDataURL(file);
-                    };
-                    input.click();
-                });
-            }
-
-            if (!base64String) {
-                console.warn('[Scan] Empty base64 string from camera');
-                return;
-            }
-
-            // Step 1: Send image to Gemini AI for identification
-            console.log('[Scan] Sending image to Gemini AI...');
-            const scanData = await geminiService.identifyCardFromImage(base64String);
-            console.log('[Scan] Gemini response:', scanData);
+            console.log('[Scan] Received match from WebLiveScanner:', scanData);
 
             if (!scanData || !scanData.primary?.name) {
                 showToast('Could not identify the card. Please try again with better lighting or angle.', 'error');
@@ -361,7 +322,8 @@ export default function HomePage() {
             let matches = await pokemonService.findCardByMetadata(
                 scanData.primary.name,
                 setIdentifier,
-                scanData.primary.number
+                scanData.primary.number,
+                detectedLanguage
             );
             console.log(`[Scan] Metadata search returned ${matches.length} matches`);
 
@@ -449,7 +411,9 @@ export default function HomePage() {
                 condition: listingData.condition,
                 isGraded: listingData.is_graded,
                 gradingCompany: listingData.grading_company,
-                grade: listingData.grade
+                grade: listingData.grade,
+                image_front_url: listingData.image_front_url,
+                image_back_url: listingData.image_back_url
             });
 
             // 2. Refresh global marketplace listings
@@ -641,6 +605,14 @@ export default function HomePage() {
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
             }}>
+            
+            {isWebScannerOpen && (
+                <WebLiveScanner 
+                    onClose={() => setIsWebScannerOpen(false)} 
+                    onMatch={handleWebLiveScanMatch} 
+                />
+            )}
+
             <div className="w-full max-w-[480px] bg-brand-darker h-full flex flex-col relative border-x border-white/5 shadow-2xl overflow-hidden">
 
                 {/* Background Gradients for depth (Now safely pushed below status bar) */}

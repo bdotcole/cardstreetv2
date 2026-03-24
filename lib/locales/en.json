@@ -104,5 +104,11 @@
         "hp": "HP",
         "dmg": "DMG",
         "askPrice": "Ask Price"
+    },
+    "cart": {
+        "title": "Cart",
+        "empty": "Cart is Empty",
+        "price": "Total",
+        "checkout": "Checkout"
     }
 }

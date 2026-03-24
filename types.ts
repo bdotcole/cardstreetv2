@@ -130,3 +130,26 @@ export interface CartItem {
   sellerName: string;
   condition: string;
 }
+
+export type ReportStatus = 'Open' | 'Reviewed' | 'Resolved' | 'Dismissed';
+export type ReportEntityType = 'listing' | 'seller' | 'other';
+
+export interface Report {
+  id: string;
+  reporter_id: string;
+  entity_type: ReportEntityType;
+  entity_id: string;
+  entity_name?: string;
+  reason: string;
+  description?: string;
+  status: ReportStatus;
+  created_at: string;
+  updated_at: string;
+  
+  // Joined fields
+  reporter_details?: {
+    display_name?: string;
+    avatar_url?: string;
+  };
+}
+

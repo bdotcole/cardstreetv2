@@ -21,6 +21,8 @@ export interface MarketplaceListing {
     is_graded: boolean;
     grading_company?: string;
     grade?: number;
+    image_front_url?: string;
+    image_back_url?: string;
     status: 'active' | 'sold' | 'cancelled';
     created_at: string;
     sold_at?: string;
@@ -68,6 +70,8 @@ export const marketplaceService = {
                     is_graded,
                     grading_company,
                     grade,
+                    image_front_url,
+                    image_back_url,
                     status,
                     created_at,
                     updated_at,
@@ -128,6 +132,8 @@ export const marketplaceService = {
         isGraded?: boolean;
         gradingCompany?: string;
         grade?: number;
+        image_front_url?: string;
+        image_back_url?: string;
     }): Promise<MarketplaceListing | null> {
         const supabase = createClient();
 
@@ -146,6 +152,8 @@ export const marketplaceService = {
                     is_graded: params.isGraded || false,
                     grading_company: params.gradingCompany || null,
                     grade: params.grade || null,
+                    image_front_url: params.image_front_url || null,
+                    image_back_url: params.image_back_url || null,
                     status: 'active'
                 })
                 .select(`

@@ -27,8 +27,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="cardstreet-tcg.vercel.app" />
-                <data android:scheme="http" android:host="cardstreet-tcg.vercel.app" />
+                <data android:scheme="https" android:host="cardstreet.app" />
+                <data android:scheme="http" android:host="cardstreet.app" />
             </intent-filter>
 
             <!-- Custom URL Scheme for Native Auth -->

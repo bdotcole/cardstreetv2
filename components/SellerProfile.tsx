@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile, Review, Card } from '@/types';
 import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
+import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
 
 interface SellerProfileProps {
@@ -16,6 +17,7 @@ interface SellerProfileProps {
 
 const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectCard, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -79,6 +81,12 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     </button>
                     <button className="h-10 w-10 glass rounded-xl flex items-center justify-center text-brand-cyan hover:bg-brand-cyan/10 transition-colors">
                         <i className="fa-regular fa-comment-dots"></i>
+                    </button>
+                    <button 
+                        onClick={() => setIsReportModalOpen(true)}
+                        title="Report Seller"
+                        className="h-10 w-10 glass rounded-xl flex items-center justify-center text-slate-400 hover:text-brand-red hover:bg-brand-red/10 transition-colors">
+                        <i className="fa-solid fa-flag"></i>
                     </button>
                 </div>
             </div>
@@ -144,6 +152,13 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     </div>
                 )}
             </div>
+            <ReportModal 
+                isOpen={isReportModalOpen} 
+                onClose={() => setIsReportModalOpen(false)} 
+                entityType="seller" 
+                entityId={seller.id} 
+                entityName={seller.name} 
+            />
         </div>
     );
 };
