@@ -31,10 +31,23 @@ class ErrorBoundary extends React.Component<any, any> {
 // Helper to fix old TCGdex image missing extensions
 export function resolveImageUrl(url: string | null | undefined): string {
     if (!url) return 'https://cardstreet.com/placeholder.png'
-    if (url.includes('tcgdex.net') && !url.endsWith('.webp') && !url.endsWith('.png') && !url.endsWith('.jpg')) {
-        return `${url}.webp`
+    
+    // If it's already a full HTTP URL (like new modern API inserts)
+    if (url.startsWith('http')) {
+        if (url.includes('tcgdex.net') && !url.endsWith('.webp') && !url.endsWith('.png') && !url.endsWith('.jpg')) {
+            return `${url}.webp`
+        }
+        return url
     }
-    return url
+    
+    // If it's a legacy relative string fragment like "base1/40/low"
+    // Route it securely to the official Pokemon TCG API CDN which does not require series taxonomies
+    const parts = url.split('/')
+    if (parts.length >= 2) {
+        return `https://images.pokemontcg.io/${parts[0]}/${parts[1]}.png`
+    }
+    
+    return 'https://cardstreet.com/placeholder.png'
 }
 
 //
