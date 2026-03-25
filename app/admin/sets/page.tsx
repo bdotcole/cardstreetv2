@@ -87,7 +87,7 @@ export default function GlobalSetInboxPage() {
             .from('pokemon_cards')
             .select('*')
             .eq('language', 'th')
-            .eq('set_id', setId)
+            .ilike('set_id', setId)
             .order('number_int', { ascending: true })
 
         if (!thCards || thCards.length === 0) {

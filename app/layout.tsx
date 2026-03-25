@@ -4,7 +4,7 @@ import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
-
+import { GoogleAnalytics } from '@next/third-parties/google'
 export const metadata: Metadata = {
     title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
     description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan cards with AI, track your collection value, and trade with verified sellers.',
@@ -32,6 +32,9 @@ export default function RootLayout({
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
             </head>
             <body>
+                {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+                    <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+                )}
                 <UserSettingsProvider>
                     <PayPalProvider>
                         <ToastProvider>
