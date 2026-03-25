@@ -188,7 +188,7 @@ function SetAccordion({
                                     
                                     {/* Thai Card Data */}
                                     <div className="flex-1 p-3 flex flex-col md:flex-row items-center md:items-start gap-4">
-                                        <img src={row.th.image_small || row.th.image_large || \'https://cardstreet.com/placeholder.png\'} 
+                                        <img src={row.th.image_small || row.th.image_large || 'https://cardstreet.com/placeholder.png'} 
                                             className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 shrink-0" 
                                             onError={(e) => { e.currentTarget.src = 'https://cardstreet.com/placeholder.png' }}
                                         />
