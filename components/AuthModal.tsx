@@ -125,10 +125,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const handleGuestContinue = () => {
-        localStorage.setItem('cardstreet-guest', 'true');
-        window.location.reload();
-    };
+
 
     if (!isOpen) return null;
 
@@ -360,23 +357,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                                 )}
                             </button>
                         </form>
-
-                        {/* Guest Option */}
-                        <div className="relative flex py-2 items-center">
-                            <div className="flex-grow border-t border-slate-700"></div>
-                            <span className="flex-shrink-0 mx-4 text-[10px] text-slate-500 uppercase font-bold tracking-widest">
-                                Or
-                            </span>
-                            <div className="flex-grow border-t border-slate-700"></div>
-                        </div>
-
-                        <button
-                            onClick={handleGuestContinue}
-                            className="w-full h-12 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-xl flex items-center justify-center gap-3 transition-all font-semibold text-slate-300 border border-white/10"
-                        >
-                            <i className="fa-solid fa-user-secret text-lg"></i>
-                            <span>Continue as Guest</span>
-                        </button>
 
                         {/* Terms */}
                         <p className="text-[10px] text-slate-500 text-center leading-relaxed">

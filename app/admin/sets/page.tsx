@@ -28,6 +28,16 @@ class ErrorBoundary extends React.Component<any, any> {
 }
 
 //
+// Helper to fix old TCGdex image missing extensions
+export function resolveImageUrl(url: string | null | undefined): string {
+    if (!url) return 'https://cardstreet.com/placeholder.png'
+    if (url.includes('tcgdex.net') && !url.endsWith('.webp') && !url.endsWith('.png') && !url.endsWith('.jpg')) {
+        return `${url}.webp`
+    }
+    return url
+}
+
+//
 // Individual Set Accordion Component
 // Handles its own lazy-loading of cards to prevent DOM locking entirely
 //
@@ -224,7 +234,7 @@ function SetAccordion({
                                                 
                                                 {row.en.image_small && (
                                                     <div className="shrink-0 relative cursor-pointer group/img" onClick={() => openRemapModal(row, () => loadCards())}>
-                                                        <img src={row.en.image_small} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 transition-all group-hover/img:brightness-50" />
+                                                        <img src={resolveImageUrl(row.en.image_small)} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 transition-all group-hover/img:brightness-50" />
                                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity">
                                                             <i className="fa-solid fa-magnifying-glass text-white drop-shadow-md" />
                                                         </div>
@@ -465,8 +475,8 @@ function GlobalSetInboxPage() {
                                     <div key={c.id} className="bg-[#0f1419] rounded-xl p-3 border border-white/5 flex items-center justify-between hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer transition-all group/item" onClick={() => saveRemap(c.id)}>
                                         <div className="flex items-center gap-4 min-w-0 pr-4">
                                             {c.image_small ? (
-                                                <img src={c.image_small} className="w-12 h-16 object-contain rounded drop-shadow bg-black/50" />
-                                            ) : (
+                                        <img src={resolveImageUrl(c.image_small)} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 shrink-0" />
+                                    ) : (
                                                 <div className="w-12 h-16 bg-white/5 rounded flex items-center justify-center">?</div>
                                             )}
                                             <div className="min-w-0">

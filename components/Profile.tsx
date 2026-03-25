@@ -370,7 +370,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   };
 
   // Menu sections
-  const menuSections = [
+  const baseMenuSections = [
     {
       title: t('profile.account'),
       items: [
@@ -393,18 +393,23 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       ]
     },
     {
-      title: t('profile.operations'),
-      items: [
-        { name: t('profile.partnerDashboard'), icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
-      ]
-    },
-    {
       title: t('profile.support'),
       items: [
         { name: 'Support Center', icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
       ]
     }
   ];
+
+  const menuSections = user?.isPartner ? [
+    ...baseMenuSections.slice(0, 3),
+    {
+      title: t('profile.operations'),
+      items: [
+        { name: t('profile.partnerDashboard'), icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
+      ]
+    },
+    ...baseMenuSections.slice(3)
+  ] : baseMenuSections;
 
   // Guest/Logged out view
   if (!user) {
@@ -446,26 +451,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <span>Already have an account? Sign in</span>
             </button>
 
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-700"></div>
-              <span className="flex-shrink-0 mx-4 text-[10px] text-slate-600 uppercase font-bold tracking-widest">Or</span>
-              <div className="flex-grow border-t border-slate-700"></div>
-            </div>
-
-            <button
-              onClick={onGuestLogin}
-              className="w-full py-3 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-2"
-            >
-              Continue as Guest
-              <User className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="text-center px-4 max-w-xs">
-            <p className="text-[10px] text-slate-600 leading-relaxed">
-              Guest mode: Collections stored locally only.
-              <span className="block mt-1 text-brand-cyan/70">Create an account for cloud sync.</span>
-            </p>
           </div>
         </motion.div>
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
