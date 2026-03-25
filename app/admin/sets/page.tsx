@@ -29,7 +29,7 @@ class ErrorBoundary extends React.Component<any, any> {
 
 //
 // Helper to fix old TCGdex image missing extensions
-export function resolveImageUrl(url: string | null | undefined): string {
+function resolveImageUrl(url: string | null | undefined): string {
     if (!url) return 'https://cardstreet.com/placeholder.png'
     
     // If it's already a full HTTP URL (like new modern API inserts)
