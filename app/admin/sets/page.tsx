@@ -167,9 +167,11 @@ function SetAccordion({
             {/* Accordion Body */}
             {isExpanded && (
                 <div className="border-t border-white/5 bg-[#0a0d12]/50 p-4">
-                    {loading ? (
+                    {loading && (
                         <div className="py-12 text-center text-slate-500 animate-pulse">Loading cards for {config.thai_set_id}...</div>
-                    ) : cards.length === 0 ? (
+                    )}
+                    
+                    {!loading && cards.length === 0 && (
                         <div className="py-12 text-center flex flex-col items-center">
                             <div className="w-16 h-16 rounded-full bg-brand-cyan/10 text-brand-cyan flex items-center justify-center mb-4">
                                 <i className="fa-solid fa-check-double text-2xl" />
@@ -177,7 +179,9 @@ function SetAccordion({
                             <h3 className="text-lg font-black text-white">Queue Empty</h3>
                             <p className="text-slate-400 mt-1 text-sm">All loaded cards for {config.thai_set_id} are verified or missing.</p>
                         </div>
-                    ) : (
+                    )}
+
+                    {!loading && cards.length > 0 && (
                         <div className="grid grid-cols-1 gap-3">
                             {cards.map((row) => (
                                 <div key={row.th.id} className="bg-[#0f1419] rounded-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch hover:border-brand-cyan/30 transition-colors group relative shadow-md">
@@ -193,7 +197,7 @@ function SetAccordion({
                                                 <span className="bg-brand-cyan/10 text-brand-cyan px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-cyan/20">TH</span>
                                                 <span className="text-xs font-mono text-slate-400 font-bold">{row.th.set_id} #{row.th.number}</span>
                                             </div>
-                                            <h3 className="font-bold text-white text-sm leading-tight truncate px-2 md:px-0">{row.th.name}</h3>
+                                            <h3 className="font-bold text-white text-sm leading-tight truncate px-2 md:px-0">{row.th.name || 'Unknown'}</h3>
                                             {row.th.name_en && row.th.name_en !== row.th.name && (
                                                 <p className="text-[10px] text-slate-500 truncate mt-0.5">{row.th.name_en}</p>
                                             )}
@@ -202,19 +206,19 @@ function SetAccordion({
 
                                     {/* English Card Match */}
                                     <div className="flex-[1.2] p-3 flex items-center justify-between gap-4 bg-white/[0.02] border-t md:border-t-0 md:border-l border-white/5 pr-16 relative">
-                                        {row.en ? (
+                                        {row.en && (
                                             <>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="bg-slate-500/20 text-slate-300 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">EN</span>
                                                         <span className="text-xs font-mono text-slate-400 font-bold">{row.en.set_id} #{row.en.number}</span>
-                                                        <span className="text-[9px] text-slate-500 uppercase tracking-widest ml-auto">{row.mapping?.match_method}</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase tracking-widest ml-auto">{row.mapping?.match_method || 'NA'}</span>
                                                     </div>
                                                     <h3 
                                                         className="font-bold text-white text-sm leading-tight truncate cursor-pointer hover:text-brand-cyan hover:underline transition-all" 
                                                         onClick={() => openRemapModal(row, () => loadCards())}
                                                     >
-                                                        {row.en.name}
+                                                        {row.en.name || 'Unknown'}
                                                     </h3>
                                                 </div>
                                                 
@@ -227,7 +231,9 @@ function SetAccordion({
                                                     </div>
                                                 )}
                                             </>
-                                        ) : (
+                                        )}
+
+                                        {!row.en && (
                                             <div 
                                                 className="flex-1 h-full min-h-[66px] flex flex-col items-center justify-center gap-1 border border-dashed border-white/10 rounded-lg hover:border-brand-cyan/50 hover:bg-brand-cyan/5 transition-all cursor-pointer group/empty"
                                                 onClick={() => openRemapModal(row, () => loadCards())}
@@ -359,24 +365,27 @@ function GlobalSetInboxPage() {
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto">
-                {configs.length === 0 ? (
+            <div className="max-w-6xl mx-auto" translate="no">
+                {configs.length === 0 && (
                     <div className="text-center p-12 text-slate-500">Loading configurations...</div>
-                ) : (
-                    configs.map(config => (
-                        <SetAccordion 
-                            key={config.thai_set_id}
-                            config={config}
-                            supabase={supabase}
-                            openRemapModal={(row: any, callback: any) => {
-                                setRemapTarget(row)
-                                setRemapCallback(() => callback)
-                            }}
-                            globalShowVerified={globalShowVerified}
-                            isExpanded={expandedSetId === config.thai_set_id}
-                            toggleExpanded={() => setExpandedSetId(expandedSetId === config.thai_set_id ? null : config.thai_set_id)}
-                        />
-                    ))
+                )}
+                {configs.length > 0 && (
+                    <div className="w-full">
+                        {configs.map(config => (
+                            <SetAccordion 
+                                key={config.thai_set_id}
+                                config={config}
+                                supabase={supabase}
+                                openRemapModal={(row: any, callback: any) => {
+                                    setRemapTarget(row)
+                                    setRemapCallback(() => callback)
+                                }}
+                                globalShowVerified={globalShowVerified}
+                                isExpanded={expandedSetId === config.thai_set_id}
+                                toggleExpanded={() => setExpandedSetId(expandedSetId === config.thai_set_id ? null : config.thai_set_id)}
+                            />
+                        ))}
+                    </div>
                 )}
             </div>
 
