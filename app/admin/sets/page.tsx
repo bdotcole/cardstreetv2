@@ -188,7 +188,7 @@ function SetAccordion({
                                     
                                     {/* Thai Card Data */}
                                     <div className="flex-1 p-3 flex flex-col md:flex-row items-center md:items-start gap-4">
-                                        <img src={`https://jyrfplsuwgcivwvwbvhw.supabase.co/storage/v1/object/public/images/thai/${row.th.set_id}/${encodeURIComponent(row.th.number)}.webp`} 
+                                        <img src={row.th.image_small || row.th.image_large || \'https://cardstreet.com/placeholder.png\'} 
                                             className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 shrink-0" 
                                             onError={(e) => { e.currentTarget.src = 'https://cardstreet.com/placeholder.png' }}
                                         />
@@ -222,9 +222,9 @@ function SetAccordion({
                                                     </h3>
                                                 </div>
                                                 
-                                                {row.en.images?.small && (
+                                                {row.en.image_small && (
                                                     <div className="shrink-0 relative cursor-pointer group/img" onClick={() => openRemapModal(row, () => loadCards())}>
-                                                        <img src={row.en.images.small} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 transition-all group-hover/img:brightness-50" />
+                                                        <img src={row.en.image_small} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 transition-all group-hover/img:brightness-50" />
                                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity">
                                                             <i className="fa-solid fa-magnifying-glass text-white drop-shadow-md" />
                                                         </div>
@@ -464,8 +464,8 @@ function GlobalSetInboxPage() {
                                 {searchResults.map(c => (
                                     <div key={c.id} className="bg-[#0f1419] rounded-xl p-3 border border-white/5 flex items-center justify-between hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer transition-all group/item" onClick={() => saveRemap(c.id)}>
                                         <div className="flex items-center gap-4 min-w-0 pr-4">
-                                            {c.images?.small ? (
-                                                <img src={c.images.small} className="w-12 h-16 object-contain rounded drop-shadow bg-black/50" />
+                                            {c.image_small ? (
+                                                <img src={c.image_small} className="w-12 h-16 object-contain rounded drop-shadow bg-black/50" />
                                             ) : (
                                                 <div className="w-12 h-16 bg-white/5 rounded flex items-center justify-center">?</div>
                                             )}
