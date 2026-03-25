@@ -2,41 +2,266 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+
+//
+// Individual Set Accordion Component
+// Handles its own lazy-loading of cards to prevent DOM locking entirely
+//
+function SetAccordion({ 
+    config, 
+    supabase, 
+    openRemapModal, 
+    globalShowVerified,
+    isExpanded,
+    toggleExpanded
+}: any) {
+    const [cards, setCards] = useState<any[]>([])
+    const [loading, setLoading] = useState(false)
+    const [hasLoaded, setHasLoaded] = useState(false)
+    const [runningMatcher, setRunningMatcher] = useState(false)
+
+    useEffect(() => {
+        if (isExpanded) {
+            loadCards()
+        }
+    }, [isExpanded, globalShowVerified])
+
+    async function loadCards() {
+        setLoading(true)
+        const { data: thCards } = await supabase
+            .from('pokemon_cards')
+            .select('*')
+            .eq('language', 'th')
+            .ilike('set_id', config.thai_set_id)
+            .order('number_int', { ascending: true })
+
+        if (!thCards || thCards.length === 0) {
+            setCards([])
+            setLoading(false)
+            setHasLoaded(true)
+            return
+        }
+
+        const ids = thCards.map((c: any) => c.id)
+        const { data: mappings } = await supabase
+            .from('card_mappings')
+            .select('*')
+            .in('card_id_th', ids)
+
+        const mapDict = new Map<string, any>((mappings || []).map((m: any) => [m.card_id_th, m]))
+        const enIds = [...new Set((mappings || []).map((m: any) => m.card_id_en).filter(Boolean))]
+        
+        const { data: enCards } = await supabase
+            .from('pokemon_cards')
+            .select('*')
+            .in('id', enIds)
+
+        const enDict = new Map<string, any>((enCards || []).map((c: any) => [c.id, c]))
+
+        let merged = thCards.map((th: any) => {
+            const mapping = mapDict.get(th.id)
+            const en = mapping ? enDict.get(mapping.card_id_en) : null
+            return { th, mapping, en }
+        })
+
+        if (!globalShowVerified) {
+            merged = merged.filter((row: any) => !row.mapping?.verified)
+        }
+
+        setCards(merged)
+        setLoading(false)
+        setHasLoaded(true)
+    }
+
+    async function triggerAutoMatcher(e: React.MouseEvent) {
+        e.stopPropagation()
+        if (!confirm(`Run Auto-Matcher for set ${config.thai_set_id}? This maps unmapped Thai cards.`)) return
+        
+        setRunningMatcher(true)
+        const { error } = await supabase.functions.invoke('match-thai-cards', {
+            body: { thaiSetId: config.thai_set_id }
+        })
+
+        setRunningMatcher(false)
+        if (error) {
+            alert('Failed: ' + error.message)
+        } else {
+            loadCards()
+        }
+    }
+
+    async function toggleVerify(row: any) {
+        if (!row.mapping?.card_id_en) {
+            alert('Cannot verify an unmapped card. Please remap it first.')
+            return
+        }
+
+        const newVerifiedStatus = !row.mapping?.verified
+        const { error } = await supabase.from('card_mappings').update({
+            verified: newVerifiedStatus
+        }).eq('card_id_th', row.th.id)
+
+        if (!error) {
+            loadCards()
+        }
+    }
+
+    return (
+        <div className="glass rounded-xl border border-white/10 overflow-hidden shadow-lg mb-4 transition-all">
+            {/* Accordion Header */}
+            <div 
+                className="p-5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                onClick={toggleExpanded}
+            >
+                <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/20 transition-transform ${isExpanded ? 'rotate-90 bg-brand-cyan text-black border-brand-cyan' : 'bg-[#0f1419] text-white'}`}>
+                        <i className="fa-solid fa-chevron-right text-sm" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-white italic">Thai Set: {config.thai_set_id.toUpperCase()}</h2>
+                        <p className="text-slate-400 text-xs">Mapped to English: {config.english_set_id}</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={triggerAutoMatcher}
+                        disabled={runningMatcher}
+                        className="bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50 text-xs z-10"
+                    >
+                        {runningMatcher ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-wand-magic-sparkles mr-2" />} 
+                        Auto-Match
+                    </button>
+                    {hasLoaded && !loading && (
+                        <div className="bg-white/5 text-slate-300 font-mono text-xs px-3 py-1.5 rounded-lg border border-white/10">
+                            {cards.length} {globalShowVerified ? 'cards total' : 'cards remaining'}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Accordion Body */}
+            {isExpanded && (
+                <div className="border-t border-white/5 bg-[#0a0d12]/50 p-4">
+                    {loading ? (
+                        <div className="py-12 text-center text-slate-500 animate-pulse">Loading cards for {config.thai_set_id}...</div>
+                    ) : cards.length === 0 ? (
+                        <div className="py-12 text-center flex flex-col items-center">
+                            <div className="w-16 h-16 rounded-full bg-brand-cyan/10 text-brand-cyan flex items-center justify-center mb-4">
+                                <i className="fa-solid fa-check-double text-2xl" />
+                            </div>
+                            <h3 className="text-lg font-black text-white">Queue Empty</h3>
+                            <p className="text-slate-400 mt-1 text-sm">All loaded cards for {config.thai_set_id} are verified or missing.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-3">
+                            {cards.map((row) => (
+                                <div key={row.th.id} className="bg-[#0f1419] rounded-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch hover:border-brand-cyan/30 transition-colors group relative shadow-md">
+                                    
+                                    {/* Thai Card Data */}
+                                    <div className="flex-1 p-3 flex flex-col md:flex-row items-center md:items-start gap-4">
+                                        <img src={`https://jyrfplsuwgcivwvwbvhw.supabase.co/storage/v1/object/public/images/thai/${row.th.set_id}/${encodeURIComponent(row.th.number)}.webp`} 
+                                            className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 shrink-0" 
+                                            onError={(e) => { e.currentTarget.src = 'https://cardstreet.com/placeholder.png' }}
+                                        />
+                                        <div className="flex-1 min-w-0 pt-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="bg-brand-cyan/10 text-brand-cyan px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-cyan/20">TH</span>
+                                                <span className="text-xs font-mono text-slate-400 font-bold">{row.th.set_id} #{row.th.number}</span>
+                                            </div>
+                                            <h3 className="font-bold text-white text-sm leading-tight truncate px-2 md:px-0">{row.th.name}</h3>
+                                            {row.th.name_en && row.th.name_en !== row.th.name && (
+                                                <p className="text-[10px] text-slate-500 truncate mt-0.5">{row.th.name_en}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* English Card Match */}
+                                    <div className="flex-[1.2] p-3 flex items-center justify-between gap-4 bg-white/[0.02] border-t md:border-t-0 md:border-l border-white/5 pr-16 relative">
+                                        {row.en ? (
+                                            <>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="bg-slate-500/20 text-slate-300 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">EN</span>
+                                                        <span className="text-xs font-mono text-slate-400 font-bold">{row.en.set_id} #{row.en.number}</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase tracking-widest ml-auto">{row.mapping?.match_method}</span>
+                                                    </div>
+                                                    <h3 
+                                                        className="font-bold text-white text-sm leading-tight truncate cursor-pointer hover:text-brand-cyan hover:underline transition-all" 
+                                                        onClick={() => openRemapModal(row, () => loadCards())}
+                                                    >
+                                                        {row.en.name}
+                                                    </h3>
+                                                </div>
+                                                
+                                                {row.en.images?.small && (
+                                                    <div className="shrink-0 relative cursor-pointer group/img" onClick={() => openRemapModal(row, () => loadCards())}>
+                                                        <img src={row.en.images.small} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 transition-all group-hover/img:brightness-50" />
+                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                            <i className="fa-solid fa-magnifying-glass text-white drop-shadow-md" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div 
+                                                className="flex-1 h-full min-h-[66px] flex flex-col items-center justify-center gap-1 border border-dashed border-white/10 rounded-lg hover:border-brand-cyan/50 hover:bg-brand-cyan/5 transition-all cursor-pointer group/empty"
+                                                onClick={() => openRemapModal(row, () => loadCards())}
+                                            >
+                                                <span className="text-[10px] font-bold text-slate-500 group-hover/empty:text-brand-cyan uppercase tracking-widest"><i className="fa-solid fa-link-slash mr-1" /> Click to map match</span>
+                                            </div>
+                                        )}
+
+                                        {/* Verification Checkbox */}
+                                        {row.en && (
+                                            <div className="absolute right-0 top-0 bottom-0 w-14 bg-[#0a0d12]/50 border-l border-white/10 flex items-center justify-center group-hover:bg-black/60 transition-colors z-10">
+                                                <label className="relative flex items-center justify-center cursor-pointer w-full h-full">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={!!row.mapping?.verified}
+                                                        onChange={() => toggleVerify(row)}
+                                                        className="peer sr-only"
+                                                    />
+                                                    <div className="w-6 h-6 rounded-md border-2 border-white/20 peer-checked:bg-green-500 peer-checked:border-green-500 flex items-center justify-center text-transparent peer-checked:text-black transition-all hover:scale-110 peer-checked:shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+                                                        <i className="fa-solid fa-check text-xs font-black" />
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
 
 export default function GlobalSetInboxPage() {
     const supabase = createClient()
-    const router = useRouter()
     
-    // Core Data
     const [configs, setConfigs] = useState<any[]>([])
-    const [activeSetId, setActiveSetId] = useState<string | null>(null)
-    
-    // Card State
-    const [cards, setCards] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
-    const [runningMatcher, setRunningMatcher] = useState(false)
-    const [showVerified, setShowVerified] = useState(false)
-
-    // Remap State
-    const [remapTarget, setRemapTarget] = useState<any>(null)
-    const [searchQuery, setSearchQuery] = useState('')
-    const [searchResults, setSearchResults] = useState<any[]>([])
-    const [searching, setSearching] = useState(false)
-
-    // Modal State
+    const [expandedSetId, setExpandedSetId] = useState<string | null>(null)
+    const [globalShowVerified, setGlobalShowVerified] = useState(false)
     const [showAddSetMode, setShowAddSetMode] = useState(false)
+
+    // Add Set form state
     const [newThaiSet, setNewThaiSet] = useState('')
     const [newEngSet, setNewEngSet] = useState('')
     const [newSlug, setNewSlug] = useState('')
 
+    // Remap Modal State
+    const [remapTarget, setRemapTarget] = useState<any>(null)
+    const [remapCallback, setRemapCallback] = useState<any>(null)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchResults, setSearchResults] = useState<any[]>([])
+    const [searching, setSearching] = useState(false)
+
     useEffect(() => {
         loadConfigs()
     }, [])
-
-    useEffect(() => {
-        if (activeSetId) loadCards(activeSetId)
-    }, [activeSetId, showVerified])
 
     async function loadConfigs() {
         const { data: bridges } = await supabase.from('set_bridge').select('*')
@@ -50,118 +275,35 @@ export default function GlobalSetInboxPage() {
             }
         }) || []
 
-        setConfigs(merged.sort((a,b) => a.thai_set_id.localeCompare(b.thai_set_id)))
+        const sorted = merged.sort((a,b) => a.thai_set_id.localeCompare(b.thai_set_id))
+        setConfigs(sorted)
         
-        if (merged.length > 0 && !activeSetId) {
-            setActiveSetId(merged[0].thai_set_id)
-        } else if (merged.length === 0) {
-            setLoading(false)
+        if (sorted.length > 0 && !expandedSetId) {
+            setExpandedSetId(sorted[0].thai_set_id)
         }
     }
 
     async function saveNewSet(e: React.FormEvent) {
         e.preventDefault()
         if (!newThaiSet || !newEngSet || !newSlug) return
-
-        // Insert / Update market config first
-        await supabase.from('marketplace_configs').upsert({
-            set_id: newEngSet,
-            justtcg_slug: newSlug
-        })
-
-        // Insert bridge
-        await supabase.from('set_bridge').upsert({
-            thai_set_id: newThaiSet,
-            english_set_id: newEngSet
-        }, { onConflict: 'thai_set_id' })
-
+        await supabase.from('marketplace_configs').upsert({ set_id: newEngSet, justtcg_slug: newSlug })
+        await supabase.from('set_bridge').upsert({ thai_set_id: newThaiSet, english_set_id: newEngSet }, { onConflict: 'thai_set_id' })
         setShowAddSetMode(false)
         setNewThaiSet(''); setNewEngSet(''); setNewSlug('')
         loadConfigs()
-    }
-
-    async function loadCards(setId: string) {
-        setLoading(true)
-        
-        const { data: thCards } = await supabase
-            .from('pokemon_cards')
-            .select('*')
-            .eq('language', 'th')
-            .ilike('set_id', setId)
-            .order('number_int', { ascending: true })
-
-        if (!thCards || thCards.length === 0) {
-            setCards([])
-            setLoading(false)
-            return
-        }
-
-        const ids = thCards.map(c => c.id)
-        const { data: mappings } = await supabase
-            .from('card_mappings')
-            .select('*')
-            .in('card_id_th', ids)
-
-        const mapDict = new Map((mappings || []).map(m => [m.card_id_th, m]))
-        const enIds = [...new Set((mappings || []).map(m => m.card_id_en).filter(Boolean))]
-        
-        const { data: enCards } = await supabase
-            .from('pokemon_cards')
-            .select('*')
-            .in('id', enIds)
-
-        const enDict = new Map((enCards || []).map(c => [c.id, c]))
-
-        let merged = thCards.map(th => {
-            const mapping = mapDict.get(th.id)
-            const en = mapping ? enDict.get(mapping.card_id_en) : null
-            return { th, mapping, en }
-        })
-
-        if (!showVerified) {
-            merged = merged.filter(row => !row.mapping?.verified)
-        }
-
-        setCards(merged)
-        setLoading(false)
-    }
-
-    async function toggleVerify(row: any) {
-        if (!row.mapping?.card_id_en) {
-            alert('Cannot verify an unmapped card. Please remap it first.')
-            return
-        }
-
-        const newVerifiedStatus = !row.mapping?.verified
-        
-        const { error } = await supabase.from('card_mappings').update({
-            verified: newVerifiedStatus
-        }).eq('card_id_th', row.th.id)
-
-        if (!error) {
-            if (activeSetId) loadCards(activeSetId)
-        }
     }
 
     async function searchEnglishCards(e: React.FormEvent) {
         e.preventDefault()
         if (!searchQuery) return
         setSearching(true)
-        
-        const { data } = await supabase
-            .from('pokemon_cards')
-            .select('*')
-            .eq('language', 'en')
-            .ilike('name', `%${searchQuery}%`)
-            .limit(20)
-
+        const { data } = await supabase.from('pokemon_cards').select('*').eq('language', 'en').ilike('name', `%${searchQuery}%`).limit(20)
         setSearchResults(data || [])
         setSearching(false)
     }
 
     async function saveRemap(enCardId: string) {
         if (!remapTarget) return
-        
         const { error } = await supabase.from('card_mappings').upsert({
             card_id_th: remapTarget.th.id,
             card_id_en: enCardId,
@@ -172,176 +314,46 @@ export default function GlobalSetInboxPage() {
 
         if (!error) {
             setRemapTarget(null)
-            if (activeSetId) loadCards(activeSetId)
-        }
-    }
-
-    async function triggerAutoMatcher() {
-        if (!activeSetId) return
-        if (!confirm(`Run Auto-Matcher for set ${activeSetId}? This maps unmapped Thai cards.`)) return
-        
-        setRunningMatcher(true)
-        const { data, error } = await supabase.functions.invoke('match-thai-cards', {
-            body: { thaiSetId: activeSetId }
-        })
-
-        setRunningMatcher(false)
-        if (error) {
-            alert('Failed: ' + error.message)
-        } else {
-            alert(`Auto-matcher complete! Processed cards.`)
-            loadCards(activeSetId)
+            if (remapCallback) remapCallback()
         }
     }
 
     return (
         <div className="space-y-6 animate-fadeIn pb-24">
-            {/* Header & Set Selector */}
-            <div className="glass p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 bg-[#0a0d12]/95 backdrop-blur py-4 border-b border-white/5">
                 <div>
-                    <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">
-                        Card QC Workspace
-                    </h1>
-                    <p className="text-slate-400 text-sm mt-1">Review matches, select an English card to swap, and check the box to verify.</p>
+                    <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Card QC Workspace</h1>
+                    <p className="text-slate-400 text-sm mt-1">Review Thai sets, click an English card to swap it, and verify matches seamlessly.</p>
                 </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
-                    <select 
-                        value={activeSetId || ''}
-                        onChange={(e) => setActiveSetId(e.target.value)}
-                        className="bg-[#0f1419] border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold focus:outline-none focus:border-brand-cyan md:w-64 w-full"
-                    >
-                        {configs.length === 0 && <option value="">No Sets Configured</option>}
-                        {configs.map(c => (
-                            <option key={c.thai_set_id} value={c.thai_set_id}>
-                                Set: {c.thai_set_id.toUpperCase()} ({c.english_set_id})
-                            </option>
-                        ))}
-                    </select>
-                    
-                    <button 
-                        onClick={() => setShowAddSetMode(true)}
-                        className="border border-white/10 hover:bg-white/5 text-white p-2.5 rounded-xl transition-colors shrink-0"
-                        title="Add New Set Configuration"
-                    >
-                        <i className="fa-solid fa-folder-plus" />
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setShowAddSetMode(true)} className="border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-xl transition-colors text-sm font-bold flex items-center">
+                        <i className="fa-solid fa-folder-plus mr-2" /> Add Set
                     </button>
-                    
-                    {activeSetId && (
-                        <>
-                            <button 
-                                onClick={triggerAutoMatcher}
-                                disabled={runningMatcher}
-                                className="bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 px-4 py-2.5 rounded-xl font-bold transition-colors disabled:opacity-50 text-sm shrink-0 shadow-lg shadow-purple-500/10"
-                            >
-                                {runningMatcher ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-wand-magic-sparkles" />} 
-                            </button>
-                            
-                            <button 
-                                onClick={() => setShowVerified(!showVerified)}
-                                className={`px-4 py-2.5 rounded-xl font-bold transition-colors text-sm shrink-0 border ${
-                                    showVerified ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30' : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
-                                }`}
-                            >
-                                {showVerified ? 'Showing All' : 'Unverified Only'}
-                            </button>
-                        </>
-                    )}
+                    <button onClick={() => setGlobalShowVerified(!globalShowVerified)} className={`px-4 py-2 rounded-xl font-bold transition-colors text-sm border ${globalShowVerified ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30' : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'}`}>
+                        {globalShowVerified ? 'Viewing All' : 'Unverified Only'}
+                    </button>
                 </div>
             </div>
 
-            {/* List View */}
-            <div className="space-y-3">
-                {loading ? (
-                    <div className="glass rounded-2xl p-12 text-center text-slate-500 animate-pulse">Loading cards...</div>
-                ) : cards.length === 0 ? (
-                    <div className="glass rounded-2xl p-16 text-center flex flex-col items-center">
-                        <div className="w-20 h-20 rounded-full bg-brand-cyan/10 text-brand-cyan flex items-center justify-center mb-4">
-                            <i className="fa-solid fa-check-double text-3xl" />
-                        </div>
-                        <h3 className="text-xl font-black text-white">Queue Empty</h3>
-                        <p className="text-slate-400 mt-2">All loaded cards for {activeSetId} have been verified or no cards exist yet.</p>
-                        <p className="text-xs text-slate-500 mt-4">(Make sure to run the upload scripts first to insert Thai cards into the DB)</p>
-                    </div>
-                ) : cards.map((row) => (
-                    <div key={row.th.id} className="glass rounded-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch hover:border-brand-cyan/30 transition-colors group relative">
-                        
-                        {/* Thai Card Data */}
-                        <div className="flex-1 p-4 bg-white/5 flex flex-col md:flex-row items-center md:items-start gap-4 text-center md:text-left">
-                            <img src={`https://jyrfplsuwgcivwvwbvhw.supabase.co/storage/v1/object/public/images/thai/${row.th.set_id}/${encodeURIComponent(row.th.number)}.webp`} 
-                                className="w-16 h-[88px] object-contain rounded drop-shadow bg-[#0a0d12] shrink-0" 
-                                onError={(e) => { e.currentTarget.src = 'https://cardstreet.com/placeholder.png' }}
-                            />
-                            <div className="flex-1 min-w-0">
-                                <div className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1">Thai Source</div>
-                                <h3 className="font-bold text-white leading-tight truncate px-2 md:px-0 text-lg">{row.th.name}</h3>
-                                {row.th.name_en && row.th.name_en !== row.th.name && (
-                                    <p className="text-xs text-slate-400 truncate opacity-80">{row.th.name_en}</p>
-                                )}
-                                <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
-                                    <span className="bg-[#0f1419] px-2 py-0.5 rounded border border-white/10 text-xs font-mono text-brand-cyan font-bold">{row.th.set_id} #{row.th.number}</span>
-                                    <span className="text-xs text-slate-400 font-bold px-1">{row.th.rarity || 'NA'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* English Card Match OR Search Button */}
-                        <div className="flex-[1.2] p-4 flex items-center justify-between gap-4 bg-[#0a0d12]/50 border-t md:border-t-0 md:border-l border-white/5 pr-20">
-                            {row.en ? (
-                                <>
-                                    <div className="flex-1 min-w-0 pr-4">
-                                        <div className="text-[10px] font-black uppercase tracking-wider mb-1 flex items-center gap-2">
-                                            <span className="text-brand-cyan">English Match</span>
-                                            <span className="text-slate-600">·</span>
-                                            <span className="text-slate-500 text-[9px]">{row.mapping?.match_method}</span>
-                                        </div>
-                                        <h3 className="font-bold text-white leading-tight truncate text-lg cursor-pointer hover:text-brand-cyan underline-offset-4 decoration-white/20 hover:underline transition-all" onClick={() => setRemapTarget(row)}>
-                                            {row.en.name}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <span className="bg-[#0f1419] px-2 py-0.5 rounded border border-white/10 text-xs font-mono text-slate-300 font-bold">{row.en.set_id} #{row.en.number}</span>
-                                            <span className="text-xs text-slate-400 font-bold px-1">{row.en.rarity || 'NA'}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    {row.en.images?.small && (
-                                        <div className="shrink-0 relative cursor-pointer group/img" onClick={() => setRemapTarget(row)}>
-                                            <img src={row.en.images.small} className="w-16 h-[88px] object-contain rounded drop-shadow bg-black/20 transition-all group-hover/img:brightness-50" />
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity">
-                                                <i className="fa-solid fa-magnifying-glass text-white text-xl drop-shadow-md" />
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <div 
-                                    className="flex-1 h-full min-h-[88px] flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/10 rounded-xl hover:border-brand-cyan/50 hover:bg-brand-cyan/5 transition-all cursor-pointer group/empty"
-                                    onClick={() => setRemapTarget(row)}
-                                >
-                                    <i className="fa-solid fa-link-slash text-brand-red group-hover/empty:text-brand-cyan transition-colors" />
-                                    <span className="text-xs font-bold text-slate-500 group-hover/empty:text-white uppercase tracking-widest">Click to map card</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Verification Checkbox Absolute Right */}
-                        {row.en && (
-                            <div className="absolute right-0 top-0 bottom-0 w-16 bg-[#0a0d12] border-l border-white/10 flex items-center justify-center group-hover:bg-black/40 transition-colors z-10 shadow-[-8px_0_16px_rgba(0,0,0,0.3)]">
-                                <label className="relative flex items-center justify-center cursor-pointer w-full h-full">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={!!row.mapping?.verified}
-                                        onChange={() => toggleVerify(row)}
-                                        className="peer sr-only"
-                                    />
-                                    <div className="w-8 h-8 rounded-lg border-2 border-white/20 peer-checked:bg-green-500 peer-checked:border-green-500 flex items-center justify-center text-transparent peer-checked:text-black transition-all hover:scale-110 peer-checked:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-                                        <i className="fa-solid fa-check text-sm font-black" />
-                                    </div>
-                                </label>
-                            </div>
-                        )}
-                    </div>
-                ))}
+            <div className="max-w-6xl mx-auto">
+                {configs.length === 0 ? (
+                    <div className="text-center p-12 text-slate-500">Loading configurations...</div>
+                ) : (
+                    configs.map(config => (
+                        <SetAccordion 
+                            key={config.thai_set_id}
+                            config={config}
+                            supabase={supabase}
+                            openRemapModal={(row: any, callback: any) => {
+                                setRemapTarget(row)
+                                setRemapCallback(() => callback)
+                            }}
+                            globalShowVerified={globalShowVerified}
+                            isExpanded={expandedSetId === config.thai_set_id}
+                            toggleExpanded={() => setExpandedSetId(expandedSetId === config.thai_set_id ? null : config.thai_set_id)}
+                        />
+                    ))
+                )}
             </div>
 
             {/* Config Addition Modal */}
@@ -350,27 +362,23 @@ export default function GlobalSetInboxPage() {
                     <form onSubmit={saveNewSet} className="glass border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-black text-white italic">Add Set Config</h2>
-                            <button type="button" onClick={() => setShowAddSetMode(false)} className="text-slate-500 hover:text-white">
-                                <i className="fa-solid fa-xmark text-xl" />
-                            </button>
+                            <button type="button" onClick={() => setShowAddSetMode(false)} className="text-slate-500 hover:text-white"><i className="fa-solid fa-xmark text-xl" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Thai Set ID (e.g. sv8a)</label>
-                                <input required value={newThaiSet} onChange={e=>setNewThaiSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-cyan font-mono" />
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Thai Set ID (e.g. sv8a)</label>
+                                <input required value={newThaiSet} onChange={e=>setNewThaiSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">English Mapping ID (e.g. sv8.5)</label>
-                                <input required value={newEngSet} onChange={e=>setNewEngSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-cyan font-mono" />
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">English ID (e.g. sv8.5)</label>
+                                <input required value={newEngSet} onChange={e=>setNewEngSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">JustTCG English Slug</label>
-                                <input required value={newSlug} onChange={e=>setNewSlug(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-cyan font-mono" />
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">JustTCG Slug</label>
+                                <input required value={newSlug} onChange={e=>setNewSlug(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                         </div>
-                        <button type="submit" className="w-full bg-brand-cyan text-black font-black uppercase tracking-widest py-4 rounded-xl mt-8 hover:bg-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all">
-                            Save Config
-                        </button>
+                        <button type="submit" className="w-full bg-brand-cyan text-black font-black uppercase tracking-widest py-3 rounded-lg mt-6 hover:bg-white transition-colors">Save</button>
                     </form>
                 </div>
             )}
@@ -384,9 +392,7 @@ export default function GlobalSetInboxPage() {
                                 <h2 className="text-xl font-black text-white italic">Search English Card</h2>
                                 <div className="flex items-center gap-3 mt-3">
                                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Remapping:</span>
-                                    <span className="bg-brand-cyan/20 text-brand-cyan px-2 py-0.5 rounded text-xs font-mono border border-brand-cyan/30">
-                                        {remapTarget.th.set_id} #{remapTarget.th.number}
-                                    </span>
+                                    <span className="bg-brand-cyan/20 text-brand-cyan px-2 py-0.5 rounded text-xs font-mono border border-brand-cyan/30">{remapTarget.th.set_id} #{remapTarget.th.number}</span>
                                     <span className="text-white font-bold text-sm tracking-wide">{remapTarget.th.name}</span>
                                 </div>
                             </div>
