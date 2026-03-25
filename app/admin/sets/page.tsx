@@ -33,7 +33,7 @@ function SetAccordion({
             .select('*')
             .eq('language', 'th')
             .ilike('set_id', config.thai_set_id)
-            .order('number_int', { ascending: true })
+            .order('number', { ascending: true })
 
         if (!thCards || thCards.length === 0) {
             setCards([])
