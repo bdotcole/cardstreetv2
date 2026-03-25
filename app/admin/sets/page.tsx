@@ -1,7 +1,31 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
+
+class ErrorBoundary extends React.Component<any, any> {
+    constructor(props: any) {
+      super(props);
+      this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error: any) {
+      return { hasError: true, error };
+    }
+    render() {
+      if (this.state.hasError) {
+        return (
+          <div className="p-10 bg-red-900 text-white min-h-screen">
+            <h1 className="text-2xl font-bold">Client Crash Details:</h1>
+            <pre className="mt-4 p-4 bg-black rounded text-sm overflow-auto whitespace-pre-wrap">
+              {this.state.error?.stack || this.state.error?.toString()}
+            </pre>
+            <button onClick={() => window.location.reload()} className="bg-white text-black px-4 py-2 mt-4 rounded">Reload Page</button>
+          </div>
+        );
+      }
+      return this.props.children;
+    }
+}
 
 //
 // Individual Set Accordion Component
@@ -239,7 +263,7 @@ function SetAccordion({
     )
 }
 
-export default function GlobalSetInboxPage() {
+function GlobalSetInboxPage() {
     const supabase = createClient()
     
     const [configs, setConfigs] = useState<any[]>([])
@@ -457,3 +481,12 @@ export default function GlobalSetInboxPage() {
         </div>
     )
 }
+
+export default function ErrorBoundaryWrapper() {
+  return (
+    <ErrorBoundary>
+      <GlobalSetInboxPage />
+    </ErrorBoundary>
+  )
+}
+
