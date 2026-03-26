@@ -162,6 +162,90 @@ export default function HomePage() {
         return () => subscription.unsubscribe();
     }, []);
 
+    // ONE-TIME OFFLINE DATA MIGRATION (CAPICATOR -> SUPABASE)
+    useEffect(() => {
+        if (!user) return;
+        const hasMigrated = localStorage.getItem(`cardstreet-migrated-${user.id}`);
+        if (hasMigrated === 'true') return;
+
+        const migrateOfflineData = async () => {
+            let migratedAnything = false;
+            const supabase = createClient();
+            console.log('[Migration] Checking for stranded Capacitor data...');
+
+            try {
+                // 1. Migrate Wishlist
+                const wlKeys = ['cardstreet-wishlist', 'wishlist'];
+                for (const key of wlKeys) {
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            const inserts = parsed.map((c: any) => ({
+                                user_id: user.id,
+                                card_id: c.id || c,
+                                added_at: new Date().toISOString()
+                            }));
+                            const { error } = await supabase.from('wishlists').upsert(inserts, { onConflict: 'user_id,card_id' });
+                            if (!error) {
+                                console.log(`[Migration] Rescued ${parsed.length} wishlist items.`);
+                                migratedAnything = true;
+                            }
+                        }
+                    }
+                }
+
+                // 2. Migrate Collections (Vault)
+                const colKeys = ['cardstreet-collections', 'cardstreet-collection', 'collections', 'vault'];
+                for (const key of colKeys) {
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            // Extract all items from all custom collections
+                            const allItems: any[] = [];
+                            parsed.forEach(col => {
+                                if (col.items && Array.isArray(col.items)) {
+                                    col.items.forEach((item: any) => {
+                                        allItems.push({
+                                            user_id: user.id,
+                                            card_id: item.cardId || item.id,
+                                            collection_name: col.name || 'default',
+                                            condition: item.condition || 'NM',
+                                            purchase_price: item.purchasePrice || 0,
+                                            quantity: item.quantity || 1,
+                                            added_at: new Date().toISOString()
+                                        });
+                                    });
+                                }
+                            });
+                            
+                            if (allItems.length > 0) {
+                                const { error } = await supabase.from('collections').upsert(allItems, { onConflict: 'user_id,card_id,collection_name' });
+                                if (!error) {
+                                    console.log(`[Migration] Rescued ${allItems.length} collection items.`);
+                                    migratedAnything = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Mark flag
+                localStorage.setItem(`cardstreet-migrated-${user.id}`, 'true');
+                if (migratedAnything) {
+                    setTimeout(() => {
+                        window.location.reload(); // Force full reload to pull cloud data into view
+                    }, 500);
+                }
+            } catch (e) {
+                console.error('[Migration] Critical failure rescuing offline data:', e);
+            }
+        };
+
+        migrateOfflineData();
+    }, [user]);
+
     // Persist cart to localStorage
     useEffect(() => {
         if (cart.length > 0) {
