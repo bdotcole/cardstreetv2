@@ -30,7 +30,8 @@ async function getNotificationPreferences(userId: string) {
             label_email: true,
             label_push: true,
             shipped_email: true,
-            shipped_push: true
+            shipped_push: true,
+            fcm_token: null
         };
     }
     return prefs;
@@ -61,8 +62,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
             message: {
                 to: {
                     email: email,
-                    // If FCM push tokens were stored, they'd be added here if prefs.sold_push is true.
-                    // e.g., firebaseToken: pushToken
+                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
                 },
                 content: {
                     title: "CardStreet: You have a new sale!",
@@ -96,7 +96,10 @@ export async function sendLabelGeneratedNotification(sellerId: string, orderDeta
     try {
         await courier.send.message({
             message: {
-                to: { email: email },
+                to: {
+                    email: email,
+                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
+                },
                 content: {
                     title: "CardStreet: Shipping Label Generated",
                     body: `Your shipping label for order ${orderDetails.id} is ready. You can print it here: ${labelUrl}`,
@@ -129,7 +132,10 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
     try {
         await courier.send.message({
             message: {
-                to: { email: email },
+                to: {
+                    email: email,
+                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
+                },
                 content: {
                     title: "CardStreet: Order Shipped!",
                     body: `Your order ${orderDetails.id} is on the way! Track it here: ${trackingUrl}`,
@@ -163,7 +169,10 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
     try {
         await courier.send.message({
             message: {
-                to: { email: email },
+                to: {
+                    email: email,
+                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
+                },
                 content: {
                     title: "CardStreet: Order Confirmed!",
                     body: `Thank you for your purchase! We've received your order for ฿${orderDetails.total_amount}. The seller has been notified to start shipping.`,

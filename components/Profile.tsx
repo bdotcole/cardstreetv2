@@ -1108,7 +1108,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       {/* Action Required */}
                       {(shipment.status === 'paid' || shipment.status === 'pending') && (
                         <button
-                          onClick={() => handleShipOrder(shipment.id)}
+                          onClick={() => {
+                            console.log('Opening shipping modal for order:', shipment.id);
+                            handleShipOrder(shipment.id);
+                          }}
                           className="w-full h-10 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors">
                           {isThai ? 'สร้างป้ายชื่อและจัดส่ง' : 'Create Label & Ship'}
                         </button>
@@ -1182,10 +1185,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       <AnimatePresence>
         {shippingModalOrderId && (
           <motion.div
+            key="shipping-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -1223,10 +1227,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
         {reviewModalOrderId && (
           <motion.div
+            key="review-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}

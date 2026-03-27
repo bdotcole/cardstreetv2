@@ -1,5 +1,7 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs';
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem } from '@/types';
 import { EXCHANGE_RATES } from '@/constants';
@@ -134,6 +136,7 @@ export default function HomePage() {
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
+                Sentry.setUser({ id: session.user.id, email: session.user.email });
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
@@ -147,6 +150,7 @@ export default function HomePage() {
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
+                Sentry.setUser({ id: session.user.id, email: session.user.email });
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
@@ -155,6 +159,7 @@ export default function HomePage() {
                     provider: session.user.app_metadata.provider as any || 'email'
                 });
             } else {
+                Sentry.setUser(null);
                 setUser(null);
             }
         });

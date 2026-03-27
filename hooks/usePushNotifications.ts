@@ -25,10 +25,23 @@ export const usePushNotifications = () => {
         };
 
         // Add listeners
-        PushNotifications.addListener('registration', (token: Token) => {
+        PushNotifications.addListener('registration', async (token: Token) => {
             console.log('Push registration success, token:', token.value);
             setFcmToken(token.value);
-            // In a real app, you would send this token to Supabase or Firebase DB
+            
+            // Send token to backend
+            try {
+                const response = await fetch('/api/users/fcm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fcmToken: token.value })
+                });
+                if (!response.ok) {
+                    console.error('Failed to save FCM token to backend');
+                }
+            } catch (err) {
+                console.error('Error saving FCM token:', err);
+            }
         });
 
         PushNotifications.addListener('registrationError', (error: any) => {

@@ -350,7 +350,17 @@ function GlobalSetInboxPage() {
         e.preventDefault()
         if (!searchQuery) return
         setSearching(true)
-        const { data } = await supabase.from('pokemon_cards').select('*').eq('language', 'en').ilike('name', `%${searchQuery}%`).limit(20)
+        
+        let query = supabase.from('pokemon_cards').select('*').eq('language', 'en')
+        const terms = searchQuery.trim().split(/\s+/)
+        
+        // Multi-term omni-search: Every term must match at least one column (name, set_id, or number)
+        terms.forEach(term => {
+            query = query.or(`name.ilike.%${term}%,set_id.ilike.%${term}%,number.ilike.%${term}%`)
+        })
+
+        const { data } = await query.limit(150).order('set_id', { ascending: false })
+        
         setSearchResults(data || [])
         setSearching(false)
     }
