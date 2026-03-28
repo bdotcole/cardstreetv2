@@ -398,33 +398,36 @@ serve(async (req) => {
                         if (mapping) {
                             // 1. Try English Price (via mapping)
                             if (mapping.card_id_en) {
-                                const { data: enCard } = await supabase
-                                    .from('pokemon_cards')
-                                    .select('name, set_id, number')
-                                    .eq('id', mapping.card_id_en)
+                                // Direct DB check first (Massive accuracy & speed boost)
+                                const { data: enMarketVal } = await supabase
+                                    .from('market_values')
+                                    .select('market_avg')
+                                    .eq('card_id', mapping.card_id_en)
                                     .single();
 
-                                if (enCard) {
-                                    const isSpecialSet = ['me01', 'me02', 'sv09', 'sv10'].includes(enCard.set_id);
-                                    const setIdToPass = isSpecialSet ? enCard.set_id : undefined;
-                                    
-                                    const [justTcgPriceEn, pokeDataPrice] = await Promise.all([
-                                        fetchJustTCGPrice(enCard.name, 'en', setIdToPass, enCard.number),
-                                        Promise.resolve(null),
-                                    ]);
-
-                                    const prices = [];
-                                    if (justTcgPriceEn) prices.push({ price: justTcgPriceEn, weight: 0.6 });
-                                    if (pokeDataPrice) prices.push({ price: pokeDataPrice, weight: 0.4 });
-
-                                    if (prices.length > 0) {
-                                        const totalWeight = prices.reduce((sum, p) => sum + p.weight, 0);
-                                        const weightedSum = prices.reduce((sum, p) => sum + (p.price * p.weight), 0);
-                                        const enAvg = weightedSum / totalWeight;
-                                        calculatedPrice = enAvg * 0.55 * 35.85; // USD -> THB (approx rate) * 0.55 factor
-                                        pricingMethod = 'en_0.55x';
-                                        sourceLinks = ['JustTCG', 'PokeData++'];
-                                        console.log(`Price found for ${card.name} (EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                if (enMarketVal && enMarketVal.market_avg > 0) {
+                                    calculatedPrice = enMarketVal.market_avg * 0.55 * 35.85; 
+                                    pricingMethod = 'en_mapped_db';
+                                    sourceLinks = ['Database English Match'];
+                                    console.log(`Price found for ${card.name} (DB EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                } else {
+                                    const { data: enCard } = await supabase
+                                        .from('pokemon_cards')
+                                        .select('name, set_id, number')
+                                        .eq('id', mapping.card_id_en)
+                                        .single();
+    
+                                    if (enCard) {
+                                        // Just pass the strict integer portion to JustTCG
+                                        const cleanNum = enCard.number?.split('/')[0].replace(/[^0-9]/g, '');
+                                        const justTcgPriceEn = await fetchJustTCGPrice(enCard.name, 'en', undefined, cleanNum);
+                                        
+                                        if (justTcgPriceEn && justTcgPriceEn > 0) {
+                                            calculatedPrice = justTcgPriceEn * 0.55 * 35.85; 
+                                            pricingMethod = 'en_mapped_api';
+                                            sourceLinks = ['JustTCG'];
+                                            console.log(`Price found for ${card.name} (API EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                        }
                                     }
                                 }
                             }
@@ -433,12 +436,13 @@ serve(async (req) => {
                             if (calculatedPrice === 0 && mapping.card_id_jp) {
                                 const { data: jpCard } = await supabase
                                     .from('pokemon_cards')
-                                    .select('name, set_id, number')
+                                    .select('name, number')
                                     .eq('id', mapping.card_id_jp)
                                     .single();
 
                                 if (jpCard) {
-                                    const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, jpCard.number);
+                                    const cleanNum = jpCard.number?.split('/')[0].replace(/[^0-9]/g, '');
+                                    const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, cleanNum);
                                     if (jpPrice) {
                                         calculatedPrice = jpPrice * 0.8 * 0.23; // JPY -> THB (approx rate) * 0.8 factor
                                         pricingMethod = 'jp_0.8x';
