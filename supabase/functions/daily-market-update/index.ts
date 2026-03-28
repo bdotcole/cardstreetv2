@@ -400,13 +400,16 @@ serve(async (req) => {
                             if (mapping.card_id_en) {
                                 const { data: enCard } = await supabase
                                     .from('pokemon_cards')
-                                    .select('name')
+                                    .select('name, set_id, number')
                                     .eq('id', mapping.card_id_en)
                                     .single();
 
                                 if (enCard) {
+                                    const isSpecialSet = ['me01', 'me02', 'sv09', 'sv10'].includes(enCard.set_id);
+                                    const setIdToPass = isSpecialSet ? enCard.set_id : undefined;
+                                    
                                     const [justTcgPriceEn, pokeDataPrice] = await Promise.all([
-                                        fetchJustTCGPrice(enCard.name, 'en'),
+                                        fetchJustTCGPrice(enCard.name, 'en', setIdToPass, enCard.number),
                                         Promise.resolve(null),
                                     ]);
 
@@ -430,12 +433,12 @@ serve(async (req) => {
                             if (calculatedPrice === 0 && mapping.card_id_jp) {
                                 const { data: jpCard } = await supabase
                                     .from('pokemon_cards')
-                                    .select('name')
+                                    .select('name, set_id, number')
                                     .eq('id', mapping.card_id_jp)
                                     .single();
 
                                 if (jpCard) {
-                                    const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp');
+                                    const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, jpCard.number);
                                     if (jpPrice) {
                                         calculatedPrice = jpPrice * 0.8 * 0.23; // JPY -> THB (approx rate) * 0.8 factor
                                         pricingMethod = 'jp_0.8x';
