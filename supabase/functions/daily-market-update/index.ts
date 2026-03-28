@@ -435,20 +435,37 @@ serve(async (req) => {
 
                             // 2. Fallback to Japanese Price
                             if (calculatedPrice === 0 && mapping.card_id_jp) {
-                                const { data: jpCard } = await supabase
-                                    .from('pokemon_cards')
-                                    .select('name, number')
-                                    .eq('id', mapping.card_id_jp)
+                                const { data: jpMarketVal } = await supabase
+                                    .from('market_values')
+                                    .select('market_avg, currency')
+                                    .eq('card_id', mapping.card_id_jp)
                                     .single();
 
-                                if (jpCard) {
-                                    const cleanNum = jpCard.number?.split('/')[0].replace(/[^0-9]/g, '');
-                                    const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, cleanNum);
-                                    if (jpPrice) {
-                                        calculatedPrice = jpPrice * 0.8 * 0.23; // JPY -> THB (approx rate) * 0.8 factor
-                                        pricingMethod = 'jp_0.8x';
-                                        sourceLinks = ['JustTCG (JP)'];
-                                        console.log(`Price found for ${card.name} (JP Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                if (jpMarketVal && jpMarketVal.market_avg > 0) {
+                                    let thbPrice = jpMarketVal.market_avg * 0.8;
+                                    if (jpMarketVal.currency === 'JPY') thbPrice = thbPrice * 0.23;
+                                    else if (jpMarketVal.currency === 'USD') thbPrice = thbPrice * 35.85;
+                                    
+                                    calculatedPrice = Math.max(10, thbPrice);
+                                    pricingMethod = 'jp_mapped_db';
+                                    sourceLinks = ['Database JP Match'];
+                                    console.log(`Price found for ${card.name} (DB JP Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                } else {
+                                    const { data: jpCard } = await supabase
+                                        .from('pokemon_cards')
+                                        .select('name, number')
+                                        .eq('id', mapping.card_id_jp)
+                                        .single();
+    
+                                    if (jpCard) {
+                                        const cleanNum = jpCard.number?.split('/')[0].replace(/[^0-9]/g, '');
+                                        const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, cleanNum);
+                                        if (jpPrice) {
+                                            calculatedPrice = Math.max(10, jpPrice * 0.8 * 0.23); 
+                                            pricingMethod = 'jp_mapped_api';
+                                            sourceLinks = ['JustTCG (JP)'];
+                                            console.log(`Price found for ${card.name} (API JP Mapped): ${calculatedPrice.toFixed(2)} THB`);
+                                        }
                                     }
                                 }
                             }
