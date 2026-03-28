@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const defaultCacheControl = 'public, s-maxage=3600, stale-while-revalidate=86400';
+const defaultCacheControl = 'public, s-maxage=300, stale-while-revalidate=3600';
 
 export async function GET(request: Request, props: { params: Promise<{ setId: string }> }) {
     try {
