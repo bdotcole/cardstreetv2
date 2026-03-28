@@ -434,10 +434,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
                 {/* Back to Top Button */}
                 {showBackToTop && (
-                  <div className="sticky bottom-4 flex justify-end pointer-events-none pb-4 pr-6 z-50">
+                  <div className="flex justify-center py-10 pb-20 w-full pointer-events-none">
                     <button
                       onClick={scrollToTop}
-                      className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-brand-cyan text-brand-darker rounded-full font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-cyan/30 hover:bg-white active:scale-95 transition-all"
+                      className="pointer-events-auto flex items-center gap-2 px-6 py-3 bg-brand-cyan text-brand-darker rounded-full font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-cyan/30 hover:bg-white active:scale-95 transition-all"
                     >
                       <i className="fa-solid fa-arrow-up text-xs"></i>
                       {t('common.backToTop') || 'Back to Top'}

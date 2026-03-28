@@ -398,15 +398,16 @@ serve(async (req) => {
                         if (mapping) {
                             // 1. Try English Price (via mapping)
                             if (mapping.card_id_en) {
-                                // Direct DB check first (Massive accuracy & speed boost)
                                 const { data: enMarketVal } = await supabase
                                     .from('market_values')
-                                    .select('market_avg')
+                                    .select('market_avg, currency')
                                     .eq('card_id', mapping.card_id_en)
                                     .single();
 
                                 if (enMarketVal && enMarketVal.market_avg > 0) {
-                                    calculatedPrice = enMarketVal.market_avg * 0.55 * 35.85; 
+                                    let thbPrice = enMarketVal.market_avg * 0.55;
+                                    if (enMarketVal.currency === 'USD') thbPrice = thbPrice * 35.85;
+                                    calculatedPrice = Math.max(10, thbPrice); 
                                     pricingMethod = 'en_mapped_db';
                                     sourceLinks = ['Database English Match'];
                                     console.log(`Price found for ${card.name} (DB EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
