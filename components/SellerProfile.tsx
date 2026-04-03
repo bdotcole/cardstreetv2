@@ -4,6 +4,7 @@ import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
 import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -18,6 +19,7 @@ interface SellerProfileProps {
 const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectCard, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const { t } = useTranslation();
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -36,7 +38,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                 <button onClick={onBack} className="w-10 h-10 rounded-xl glass flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                     <i className="fa-solid fa-arrow-left"></i>
                 </button>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Seller Profile</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t('seller.profileTitle')}</span>
             </div>
 
             {/* Profile Header */}
@@ -58,7 +60,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                             <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                                 {badge}
                             </span>
-                        )) || <span className="px-2 py-0.5 rounded bg-brand-purple/10 border border-brand-purple/20 text-[9px] font-bold text-brand-purple uppercase tracking-wider">Verified Pro</span>}
+                        )) || <span className="px-2 py-0.5 rounded bg-brand-purple/10 border border-brand-purple/20 text-[9px] font-bold text-brand-purple uppercase tracking-wider">{t('seller.verifiedPro')}</span>}
                     </div>
 
                     <div className="flex justify-center items-center gap-6">
@@ -69,7 +71,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         <div className="w-[1px] h-8 bg-white/10"></div>
                         <div className="text-center">
                             <p className="text-lg font-black text-white">{totalSales}</p>
-                            <p className="text-[8px] font-bold text-slate-500 uppercase">Sales</p>
+                            <p className="text-[8px] font-bold text-slate-500 uppercase">{t('seller.sales')}</p>
                         </div>
                     </div>
                 </div>
@@ -77,7 +79,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                 {/* Action Buttons */}
                 <div className="flex gap-2 justify-center">
                     <button className="h-10 px-6 bg-white text-brand-darker font-black text-xs uppercase tracking-widest rounded-xl hover:scale-105 transition-transform">
-                        Follow
+                        {t('seller.follow')}
                     </button>
                     <button className="h-10 w-10 glass rounded-xl flex items-center justify-center text-brand-cyan hover:bg-brand-cyan/10 transition-colors">
                         <i className="fa-regular fa-comment-dots"></i>
@@ -100,7 +102,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${activeTab === tab ? 'text-white' : 'text-slate-600 hover:text-slate-400'
                             }`}
                     >
-                        {tab}
+                        {t(`seller.${tab}`)}
                         {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-brand-cyan"></div>}
                     </button>
                 ))}
@@ -137,15 +139,15 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     <div className="glass p-6 rounded-2xl border border-white/5 space-y-4 text-center">
                         <i className="fa-solid fa-quote-left text-brand-cyan text-2xl opacity-50"></i>
                         <p className="text-sm text-slate-300 italic leading-relaxed">
-                            {seller.bio || "Welcome to my CardStreet shop!"}
+                            {seller.bio || t('seller.defaultBio')}
                         </p>
                         <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
                             <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-bold uppercase">Member Since</span>
-                                <span className="text-white font-mono">{seller.joinedAt || "New Member"}</span>
+                                <span className="text-slate-500 font-bold uppercase">{t('seller.memberSince')}</span>
+                                <span className="text-white font-mono">{seller.joinedAt || t('seller.newMember')}</span>
                             </div>
                             <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-bold uppercase">Avg Ship Time</span>
+                                <span className="text-slate-500 font-bold uppercase">{t('seller.avgShipTime')}</span>
                                 <span className="text-brand-green font-mono">N/A</span>
                             </div>
                         </div>

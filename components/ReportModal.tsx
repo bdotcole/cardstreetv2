@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ReportEntityType } from '@/types';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface ReportModalProps {
     isOpen: boolean;
@@ -20,11 +21,21 @@ const REPORT_REASONS = [
 ];
 
 const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, entityId, entityName }) => {
+    const { t } = useTranslation();
     const [selectedReason, setSelectedReason] = useState(REPORT_REASONS[0]);
     const [description, setDescription] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+
+    const REASON_KEYS: Record<string, string> = {
+        "Inappropriate content or language": "inappropriateContent",
+        "Counterfeit or fake item": "counterfeit",
+        "Misleading description": "misleading",
+        "Prohibited item": "prohibited",
+        "Scam or fraudulent activity": "scam",
+        "Other": "other"
+    };
 
     if (!isOpen) return null;
 
@@ -38,7 +49,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
             const { data: userData, error: userError } = await supabase.auth.getUser();
             
             if (userError || !userData.user) {
-                setErrorMessage('You must be logged in to submit a report.');
+                setErrorMessage(t('report.loginRequired'));
                 setIsSubmitting(false);
                 return;
             }
@@ -54,9 +65,9 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
 
             if (insertError) {
                 console.error("Report insertion failed:", insertError);
-                setErrorMessage('Failed to submit report. Please try again.');
+                setErrorMessage(t('report.failed'));
             } else {
-                setSuccessMessage('Report submitted successfully. We will review it shortly.');
+                setSuccessMessage(t('report.successMessage'));
                 setTimeout(() => {
                     setSuccessMessage('');
                     onClose();
@@ -64,7 +75,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
             }
         } catch (err) {
             console.error(err);
-            setErrorMessage('An unexpected error occurred.');
+            setErrorMessage(t('report.error'));
         } finally {
             setIsSubmitting(false);
         }
@@ -76,10 +87,10 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
             <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-scaleIn">
                 <div className="p-6 border-b border-white/5">
                     <h3 className="text-xl font-black text-white italic skew-x-[-5deg]">
-                        Report {entityType === 'seller' ? 'Seller' : 'Listing'}
+                        {entityType === 'seller' ? t('report.reportSeller') : t('report.reportListing')}
                     </h3>
                     {entityName && (
-                        <p className="text-sm text-slate-400 mt-1 truncate">Target: {entityName}</p>
+                        <p className="text-sm text-slate-400 mt-1 truncate">{t('report.target')}: {entityName}</p>
                     )}
                 </div>
 
@@ -100,7 +111,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                         
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                Reason
+                                {t('report.reason')}
                             </label>
                             <div className="relative">
                                 <select 
@@ -109,7 +120,9 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                                     onChange={(e) => setSelectedReason(e.target.value)}
                                 >
                                     {REPORT_REASONS.map(reason => (
-                                        <option key={reason} value={reason} className="bg-[#0f1419]">{reason}</option>
+                                        <option key={reason} value={reason} className="bg-[#0f1419]">
+                                            {t(`report.reasons.${REASON_KEYS[reason]}`)}
+                                        </option>
                                     ))}
                                 </select>
                                 <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
@@ -118,11 +131,11 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
 
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                Additional Details
+                                {t('report.additionalDetails')}
                             </label>
                             <textarea 
                                 className="w-full h-24 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-cyan resize-none"
-                                placeholder="Provide more context..."
+                                placeholder={t('report.provideContext')}
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 required
@@ -135,7 +148,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                                 onClick={onClose}
                                 className="flex-1 h-12 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-colors"
                             >
-                                Cancel
+                                {t('report.cancel')}
                             </button>
                             <button 
                                 type="submit"
@@ -146,7 +159,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                                     <i className="fa-solid fa-spinner fa-spin"></i>
                                 ) : (
                                     <>
-                                        <i className="fa-solid fa-flag"></i> Submit
+                                        <i className="fa-solid fa-flag"></i> {t('report.submit')}
                                     </>
                                 )}
                             </button>

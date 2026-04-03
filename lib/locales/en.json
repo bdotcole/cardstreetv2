@@ -110,5 +110,40 @@
         "empty": "Cart is Empty",
         "price": "Total",
         "checkout": "Checkout"
+    },
+    "seller": {
+        "profileTitle": "Seller Profile",
+        "verifiedPro": "Verified Pro",
+        "sales": "Sales",
+        "follow": "Follow",
+        "shop": "Shop",
+        "reviews": "Reviews",
+        "about": "About",
+        "defaultBio": "Welcome to my CardStreet shop!",
+        "memberSince": "Member Since",
+        "avgShipTime": "Avg Ship Time",
+        "newMember": "New Member"
+    },
+    "report": {
+        "reportSeller": "Report Seller",
+        "reportListing": "Report Listing",
+        "target": "Target",
+        "reason": "Reason",
+        "additionalDetails": "Additional Details",
+        "provideContext": "Provide more context...",
+        "cancel": "Cancel",
+        "submit": "Submit",
+        "successMessage": "Report submitted successfully. We will review it shortly.",
+        "loginRequired": "You must be logged in to submit a report.",
+        "failed": "Failed to submit report. Please try again.",
+        "error": "An unexpected error occurred.",
+        "reasons": {
+            "inappropriateContent": "Inappropriate content or language",
+            "counterfeit": "Counterfeit or fake item",
+            "misleading": "Misleading description",
+            "prohibited": "Prohibited item",
+            "scam": "Scam or fraudulent activity",
+            "other": "Other"
+        }
     }
 }
