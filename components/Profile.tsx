@@ -1077,8 +1077,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 {shipments.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <Truck className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">{isThai ? 'ไม่มีรายการรอจัดส่ง' : 'No pending shipments'}</p>
-                    <p className="text-slate-600 text-xs">{isThai ? 'เมื่อมีผู้ซื้อสั่งซื้อการ์ดของคุณ รายการจะปรากฏที่นี่เพื่อรอการจัดส่ง' : 'When your items are purchased, they will appear here.'}</p>
+                    <p className="text-slate-500 text-sm">{t('profile.noPendingShipments')}</p>
+                    <p className="text-slate-600 text-xs">{t('profile.pendingShipmentsDesc')}</p>
                   </div>
                 ) : (
                   shipments.map((shipment) => (
@@ -1096,11 +1096,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold text-sm truncate">
-                            {shipment.listing?.card_data?.name || 'Card Order'}
+                            {shipment.listing?.card_data?.name || t('profile.cardOrder')}
                           </p>
                           <p className="text-slate-500 text-xs">{shipment.listing?.condition}</p>
                           <p className="text-brand-orange font-bold text-sm mt-1">
-                            {isThai ? 'สถานะ' : 'Status'}: <span className="uppercase tracking-wider text-[10px]">{isThai ? ({ processing: 'กำลังดำเนินการ', shipped: 'จัดส่งแล้ว', out_for_delivery: 'กำลังนำจ่าย', delivered: 'จัดส่งสำเร็จ', paid: 'รอจัดส่ง', pending: 'รอชำระเงิน' }[shipment.status as string] || shipment.status.replace('_', ' ')) : (shipment.status.replace('_', ' '))}</span>
+                            {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${shipment.status.toLowerCase()}`) || shipment.status.replace('_', ' ')}</span>
                           </p>
                         </div>
                       </div>
@@ -1113,7 +1113,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                             handleShipOrder(shipment.id);
                           }}
                           className="w-full h-10 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors">
-                          {isThai ? 'สร้างป้ายชื่อและจัดส่ง' : 'Create Label & Ship'}
+                          {t('profile.createLabelAndShip')}
                         </button>
                       )}
                       {shipment.shipping_labels?.[0]?.label_url && shipment.shipping_labels[0].label_url !== 'N/A' && (
@@ -1122,7 +1122,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full h-10 flex items-center justify-center bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors">
-                          {isThai ? 'พิมพ์ป้ายชื่อจัดส่ง' : 'Print Shipping Label'}
+                          {t('profile.printShippingLabel')}
                         </a>
                       )}
                     </div>
@@ -1200,7 +1200,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-cyan to-brand-green"></div>
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
-                  {isThai ? 'ยืนยันการจัดส่ง' : 'Confirm Shipment'}
+                  {t('profile.confirmShipment')}
                 </h3>
                 <button
                   onClick={() => setShippingModalOrderId(null)}
@@ -1211,15 +1211,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                {isThai ? 'ระบบจะสร้างหมายเลขติดตามและป้ายจัดส่งผ่าน SHIPPOP สำหรับคำสั่งซื้อนี้โดยอัตโนมัติ คุณพร้อมที่จะแพ็คและนำพัสดุไปส่งแล้วหรือยัง?' : 'The system will automatically generate a tracking number and shipping label via SHIPPOP. Are you ready to pack and drop off the shipment?'}
+                {t('profile.generateShippingLabelMsg')}
               </p>
 
               <button
                 onClick={executeShipOrder}
                 disabled={isProcessingAction}
-                className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker font-black text-sm uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker font-bold text-sm uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessingAction ? (isThai ? 'กำลังดำเนินการ...' : 'Processing...') : (isThai ? 'สร้างป้ายชื่อจัดส่งอัตโนมัติ' : 'Generate Shipping Label')}
+                {isProcessingAction ? t('profile.processing') : t('profile.generateShippingLabelBtn')}
               </button>
             </motion.div>
           </motion.div>
@@ -1242,7 +1242,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-orange to-amber-500"></div>
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-black text-white uppercase tracking-widest leading-tight">
-                  {isThai ? 'ยืนยันการรับพัสดุ' : 'Confirm Delivery'}
+                  {t('profile.confirmDelivery')}
                 </h3>
                 <button
                   onClick={() => setReviewModalOrderId(null)}
@@ -1253,12 +1253,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                {isThai ? 'สินค้าชิ้นนี้ถึงมือคุณอย่างปลอดภัยแล้วใช่หรือไม่? การยืนยันจะถือเป็นการสิ้นสุดการทำธุรกรรมและจะทำการโอนเงินให้กับผู้ขาย' : 'Has this item arrived safely? Confirming will finalize the transaction and transfer funds to the seller.'}
+                {t('profile.confirmDeliveryMsg')}
               </p>
 
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{isThai ? 'ให้คะแนน' : 'Rating'}</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('profile.rating')}</label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map(star => (
                       <button
@@ -1273,12 +1273,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{isThai ? 'ความคิดเห็น (ไม่บังคับ)' : 'Review Comment (Optional)'}</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('profile.reviewCommentOptional')}</label>
                   <textarea
                     value={reviewComment}
                     onChange={e => setReviewComment(e.target.value)}
                     className="w-full h-24 bg-black/50 border border-white/10 rounded-xl p-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-brand-orange/50 resize-none"
-                    placeholder={isThai ? 'แพ็คเกจดีมาก การ์ดสภาพสมบูรณ์!' : 'Great packaging, perfect condition!'}
+                    placeholder={t('profile.reviewPlaceholder')}
                   />
                 </div>
               </div>
@@ -1288,7 +1288,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 disabled={isProcessingAction}
                 className="w-full h-12 rounded-xl bg-brand-orange text-white font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brand-darker active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessingAction ? (isThai ? 'กำลังดำเนินการ...' : 'Processing...') : (isThai ? 'ยืนยันรับพัสดุ' : 'Confirm Delivery')}
+                {isProcessingAction ? t('profile.processing') : t('profile.confirmDelivery')}
               </button>
             </motion.div>
           </motion.div>
