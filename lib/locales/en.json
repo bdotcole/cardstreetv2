@@ -92,7 +92,10 @@
         "statePlaceholder": "State / District",
         "provincePlaceholder": "Province",
         "postalCodePlaceholder": "Postal Code",
-        "saveChanges": "Save Changes"
+        "saveChanges": "Save Changes",
+        "totalEarnings": "Total Earnings",
+        "noSalesYet": "No sales yet",
+        "cardSale": "Card Sale"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

@@ -1008,12 +1008,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Sales History</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.salesHistory')}</h2>
               </div>
 
               {/* Total Earnings */}
               <div className="glass p-4 rounded-2xl border border-brand-green/20 bg-brand-green/5">
-                <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">Total Earnings</p>
+                <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">{t('profile.totalEarnings')}</p>
                 <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
               </div>
 
@@ -1021,7 +1021,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 {sales.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <History className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">No sales yet</p>
+                    <p className="text-slate-500 text-sm">{t('profile.noSalesYet')}</p>
                   </div>
                 ) : (
                   sales.map((sale) => (
@@ -1037,7 +1037,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-semibold text-sm truncate">
-                          {sale.listing?.card_data?.name || 'Card Sale'}
+                          {sale.listing?.card_data?.name || t('profile.cardSale')}
                         </p>
                         <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
                       </div>

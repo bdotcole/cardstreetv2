@@ -92,7 +92,10 @@
         "statePlaceholder": "เขต/อำเภอ",
         "provincePlaceholder": "จังหวัด",
         "postalCodePlaceholder": "รหัสไปรษณีย์",
-        "saveChanges": "บันทึกการเปลี่ยนแปลง"
+        "saveChanges": "บันทึกการเปลี่ยนแปลง",
+        "totalEarnings": "รายได้ทั้งหมด",
+        "noSalesYet": "ยังไม่มีการขาย",
+        "cardSale": "การขายการ์ด"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",
