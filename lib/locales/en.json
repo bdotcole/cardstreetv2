@@ -95,7 +95,20 @@
         "collectionEmpty": "Collection is Empty",
         "noMatches": "No matches found",
         "currentlyListed": "Currently Listed on Market",
-        "sellAsset": "Sell Asset"
+        "sellAsset": "Sell Asset",
+        "setsFound": "Found",
+        "sets": "Sets",
+        "searchSets": "Search sets by name...",
+        "sortBy": "Sort by",
+        "sortOptions": "Sort Options",
+        "newestFirst": "Newest First",
+        "oldestFirst": "Oldest First",
+        "mostComplete": "Most Complete",
+        "leastComplete": "Least Complete",
+        "recentlyUpdated": "Recently Updated",
+        "noSetsFoundMatching": "No sets found matching",
+        "noSetsAvailable": "No sets available",
+        "endOfRegistry": "End of Registry"
     },
     "scan": {
         "registryEntry": "Registry Entry",

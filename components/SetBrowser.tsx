@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface SetBrowserProps {
   region: string;
@@ -24,6 +25,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const { t, isThai } = useTranslation();
 
   // Close sort menu when clicking outside
   useEffect(() => {
@@ -139,20 +141,20 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
 
   const getRegionTitle = () => {
     switch (region) {
-      case 'pokemon-jp': return 'Japanese Sets';
-      case 'pokemon-th': return 'Thai Sets';
-      default: return 'English Sets';
+      case 'pokemon-jp': return isThai ? 'ชุดการ์ดญี่ปุ่น' : 'Japanese Sets';
+      case 'pokemon-th': return isThai ? 'ชุดการ์ดไทย' : 'Thai Sets';
+      default: return isThai ? 'ชุดการ์ดอังกฤษ' : 'English Sets';
     }
   };
 
   const getSortLabel = () => {
     switch (sortBy) {
-      case 'oldest': return 'Oldest First';
-      case 'newest': return 'Newest First';
-      case 'completion-desc': return 'Most Complete';
-      case 'completion-asc': return 'Least Complete';
-      case 'recent-update': return 'Recently Updated';
-      default: return 'Newest First';
+      case 'oldest': return t('vault.oldestFirst');
+      case 'newest': return t('vault.newestFirst');
+      case 'completion-desc': return t('vault.mostComplete');
+      case 'completion-asc': return t('vault.leastComplete');
+      case 'recent-update': return t('vault.recentlyUpdated');
+      default: return t('vault.newestFirst');
     }
   };
 
@@ -167,7 +169,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
           <div className="flex-1">
             <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{getRegionTitle()}</h3>
             <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-              {processedSets.length} {searchQuery ? 'Found' : 'Sets'}
+              {processedSets.length} {searchQuery ? t('vault.setsFound') : t('vault.sets')}
             </p>
           </div>
         </div>
@@ -179,7 +181,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
             <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-cyan transition-colors z-10"></i>
             <input
               type="text"
-              placeholder="Search sets by name..."
+              placeholder={t('vault.searchSets')}
               className="w-full h-11 pl-11 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -196,7 +198,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
 
           {/* Sort Dropdown */}
           <div className="flex items-center justify-between">
-            <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Sort by: {getSortLabel()}</span>
+            <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{t('vault.sortBy')}: {getSortLabel()}</span>
             <div className="relative" ref={sortMenuRef}>
               <button
                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
@@ -210,14 +212,14 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
               {isSortMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
                   <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">Sort Options</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('vault.sortOptions')}</span>
                   </div>
                   <div className="p-1">
                     {[
-                      { id: 'newest', label: 'Newest First', icon: 'fa-calendar-days' },
-                      { id: 'oldest', label: 'Oldest First', icon: 'fa-clock-rotate-left' },
-                      { id: 'completion-desc', label: 'Most Complete', icon: 'fa-chart-line' },
-                      { id: 'recent-update', label: 'Recently Updated', icon: 'fa-rotate' },
+                      { id: 'newest', label: t('vault.newestFirst'), icon: 'fa-calendar-days' },
+                      { id: 'oldest', label: t('vault.oldestFirst'), icon: 'fa-clock-rotate-left' },
+                      { id: 'completion-desc', label: t('vault.mostComplete'), icon: 'fa-chart-line' },
+                      { id: 'recent-update', label: t('vault.recentlyUpdated'), icon: 'fa-rotate' },
                     ].map((opt) => (
                       <button
                         key={opt.id}
@@ -246,7 +248,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
           <div className="text-center py-32 glass rounded-[2.5rem] border-dashed border-white/5 mx-1">
             <i className="fa-solid fa-box-open text-4xl text-slate-800 mb-6"></i>
             <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] px-12 leading-relaxed">
-              {searchQuery ? `No sets found matching "${searchQuery}"` : 'No sets available'}
+              {searchQuery ? `${t('vault.noSetsFoundMatching')} "${searchQuery}"` : t('vault.noSetsAvailable')}
             </p>
           </div>
         ) : (
@@ -323,7 +325,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
 
         {!hasMore && sets.length > 0 && (
           <div className="text-center py-8 opacity-40">
-            <span className="text-[9px] uppercase tracking-widest font-black text-slate-500">End of Registry</span>
+            <span className="text-[9px] uppercase tracking-widest font-black text-slate-500">{t('vault.endOfRegistry')}</span>
           </div>
         )}
       </div>

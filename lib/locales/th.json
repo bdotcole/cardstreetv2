@@ -95,7 +95,20 @@
         "collectionEmpty": "คอลเลกชันว่างเปล่า",
         "noMatches": "ไม่พบสิ่งที่ตรงกัน",
         "currentlyListed": "กำลังประกาศขายอยู่ในตลาด",
-        "sellAsset": "ลงขายสินทรัพย์"
+        "sellAsset": "ลงขายสินทรัพย์",
+        "setsFound": "พบ",
+        "sets": "ชุดการ์ด",
+        "searchSets": "ค้นหาชื่อชุด...",
+        "sortBy": "จัดเรียงตาม",
+        "sortOptions": "ตัวเลือกการจัดเรียง",
+        "newestFirst": "ใหม่ล่าสุดก่อน",
+        "oldestFirst": "เก่าที่สุดก่อน",
+        "mostComplete": "สมบูรณ์ที่สุด",
+        "leastComplete": "สมบูรณ์น้อยที่สุด",
+        "recentlyUpdated": "อัปเดตล่าสุด",
+        "noSetsFoundMatching": "ไม่พบชุดที่ตรงกับ",
+        "noSetsAvailable": "ไม่มีชุดการ์ดที่ใช้ได้",
+        "endOfRegistry": "สิ้นสุดคลังข้อมูล"
     },
     "scan": {
         "registryEntry": "ลงทะเบียนการ์ด",
