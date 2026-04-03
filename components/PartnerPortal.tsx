@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, PartnerStats } from '@/types';
 
 interface PartnerPortalProps {
@@ -100,13 +100,81 @@ const PARTNER_TIERS: PartnerTier[] = [
 ];
 
 const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
-    const stats = user.partnerStats || {
+    const [stats, setStats] = useState({
         totalDownloads: 0,
         totalEarnings: 0,
         currentFee: 5.0,
-        referralCode: `CARDSTREET-${user.name.toUpperCase().slice(0, 5)}`,
+        referralCode: `CARDSTREET-${user?.name?.toUpperCase().slice(0, 5) || 'PARTNER'}`,
         level: 1
-    };
+    });
+
+    useEffect(() => {
+        const loadStats = async () => {
+            try {
+                // Fetch profile data
+                const profileRes = await fetch('/api/profile');
+                let downloads = 0;
+                let userLevelStr = 'bronze';
+                
+                if (profileRes.ok) {
+                    const data = await profileRes.json();
+                    if (data.profile) {
+                        downloads = data.profile.total_downloads || 0;
+                        userLevelStr = data.profile.partner_level || 'bronze';
+                    }
+                }
+
+                // Fetch earnings
+                let earnings = 0;
+                const salesRes = await fetch('/api/profile/sales');
+                if (salesRes.ok) {
+                    const salesData = await salesRes.json();
+                    earnings = salesData.totalEarnings || 0;
+                }
+
+                // Map admin string to exact level index, or fallback to auto-computed from downloads
+                let activeLevel = 1;
+                const strMap: Record<string, number> = {
+                    'bronze': 1,
+                    'silver': 2,
+                    'gold': 3,
+                    'platinum': 4,
+                    'sapphire': 5,
+                    'ruby': 6,
+                    'emerald': 7,
+                    'diamond': 8,
+                    'pink_diamond': 9,
+                    'heart': 9,
+                    'pink diamond': 9
+                };
+
+                const matchedTier = strMap[userLevelStr.toLowerCase()];
+                if (matchedTier) {
+                    activeLevel = matchedTier;
+                } else {
+                    const sortedTiers = [...PARTNER_TIERS].reverse(); 
+                    const calculatedTier = sortedTiers.find(t => downloads >= t.minDownloads);
+                    if (calculatedTier) activeLevel = calculatedTier.level;
+                }
+
+                const activeFee = PARTNER_TIERS.find(t => t.level === activeLevel)?.fee || 5.0;
+
+                setStats({
+                    totalDownloads: downloads,
+                    totalEarnings: earnings,
+                    currentFee: activeFee,
+                    referralCode: `CARDSTREET-${user?.name?.toUpperCase().slice(0, 5) || 'PARTNER'}`,
+                    level: activeLevel
+                });
+            } catch (err) {
+                console.error("Failed to load partner stats:", err);
+            }
+        };
+
+        if (user) {
+            loadStats();
+        }
+    }, [user]);
 
     const currentTierIndex = PARTNER_TIERS.findIndex(t => t.level === stats.level);
     const currentTier = PARTNER_TIERS[currentTierIndex];

@@ -31,11 +31,17 @@ export async function POST(req: Request) {
             for (const profile of sellerProfiles) {
                 let fee = 0.09; // Default 9%
                 if (profile.role === 'partner') {
-                    switch (profile.partner_level?.toLowerCase()) {
+                    switch (profile.partner_level?.toLowerCase().replace(' ', '_')) {
                         case 'bronze': fee = 0.05; break;
-                        case 'silver': fee = 0.04; break;
-                        case 'gold': fee = 0.03; break;
-                        case 'platinum': fee = 0.02; break;
+                        case 'silver': fee = 0.045; break;
+                        case 'gold': fee = 0.04; break;
+                        case 'platinum': fee = 0.035; break;
+                        case 'sapphire': fee = 0.03; break;
+                        case 'ruby': fee = 0.0275; break;
+                        case 'emerald': fee = 0.025; break;
+                        case 'diamond': fee = 0.0225; break;
+                        case 'pink_diamond': fee = 0.02; break;
+                        case 'heart': fee = 0.02; break;
                         default: fee = 0.05; break; // Baseline partner rate
                     }
                 }
