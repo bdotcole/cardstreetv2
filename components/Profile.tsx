@@ -388,14 +388,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       title: t('profile.ordersSales'),
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
-        { name: 'Pending Shipments', icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
+        { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
         { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' }
       ]
     },
     {
       title: t('profile.support'),
       items: [
-        { name: 'Support Center', icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
+        { name: t('profile.supportCenter'), icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
       ]
     }
   ];

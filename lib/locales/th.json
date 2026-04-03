@@ -95,7 +95,9 @@
         "saveChanges": "บันทึกการเปลี่ยนแปลง",
         "totalEarnings": "รายได้ทั้งหมด",
         "noSalesYet": "ยังไม่มีการขาย",
-        "cardSale": "การขายการ์ด"
+        "cardSale": "การขายการ์ด",
+        "pendingShipments": "รายการรอจัดส่ง",
+        "supportCenter": "ศูนย์ช่วยเหลือ"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

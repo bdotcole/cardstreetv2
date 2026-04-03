@@ -95,7 +95,9 @@
         "saveChanges": "Save Changes",
         "totalEarnings": "Total Earnings",
         "noSalesYet": "No sales yet",
-        "cardSale": "Card Sale"
+        "cardSale": "Card Sale",
+        "pendingShipments": "Pending Shipments",
+        "supportCenter": "Support Center"
     },
     "vault": {
         "myPortfolio": "My Portfolio",
