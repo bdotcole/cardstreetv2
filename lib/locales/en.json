@@ -73,7 +73,11 @@
         "operations": "Operations",
         "partnerDashboard": "Partner Dashboard",
         "support": "Support",
-        "signOut": "Sign Out"
+        "signOut": "Sign Out",
+        "joinCardStreet": "Join",
+        "createAccountDesc": "Create an account to sync your collection across all devices",
+        "createAccountBtn": "Create Account",
+        "alreadyHaveAccount": "Already have an account? Sign in"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

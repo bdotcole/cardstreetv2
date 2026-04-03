@@ -73,7 +73,11 @@
         "operations": "การดำเนินงาน",
         "partnerDashboard": "แดชบอร์ดพาร์ทเนอร์",
         "support": "ฝ่ายสนับสนุน",
-        "signOut": "ออกจากระบบ"
+        "signOut": "ออกจากระบบ",
+        "joinCardStreet": "เข้าร่วม",
+        "createAccountDesc": "สร้างบัญชีเพื่อซิงค์คอลเลกชันของคุณในทุกอุปกรณ์",
+        "createAccountBtn": "สร้างบัญชีผู้ใช้",
+        "alreadyHaveAccount": "มีบัญชีอยู่แล้ว? เข้าสู่ระบบ"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

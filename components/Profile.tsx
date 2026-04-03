@@ -427,10 +427,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             </div>
             <div className="space-y-2 px-4">
               <h2 className="text-3xl font-black text-white tracking-tight uppercase leading-tight italic skew-x-[-10deg]">
-                Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">CardStreet</span>
+                {t('profile.joinCardStreet')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">CardStreet</span>
               </h2>
               <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-[280px] mx-auto">
-                Create an account to sync your collection across all devices
+                {t('profile.createAccountDesc')}
               </p>
             </div>
           </div>
@@ -440,7 +440,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               onClick={() => setIsAuthModalOpen(true)}
               className="w-full h-14 bg-gradient-to-r from-brand-cyan to-brand-green hover:shadow-lg hover:shadow-brand-cyan/30 active:scale-95 rounded-2xl flex items-center justify-center gap-3 transition-all group font-black text-brand-darker uppercase tracking-wide text-sm"
             >
-              <span>Create Account</span>
+              <span>{t('profile.createAccountBtn')}</span>
               <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 
@@ -448,7 +448,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               onClick={() => setIsAuthModalOpen(true)}
               className="w-full h-12 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-xl flex items-center justify-center gap-2 transition-all border border-white/10 text-slate-300 font-semibold"
             >
-              <span>Already have an account? Sign in</span>
+              <span>{t('profile.alreadyHaveAccount')}</span>
             </button>
 
           </div>
