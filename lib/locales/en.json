@@ -77,7 +77,22 @@
         "joinCardStreet": "Join",
         "createAccountDesc": "Create an account to sync your collection across all devices",
         "createAccountBtn": "Create Account",
-        "alreadyHaveAccount": "Already have an account? Sign in"
+        "alreadyHaveAccount": "Already have an account? Sign in",
+        "name": "Name",
+        "yourName": "Your name",
+        "username": "Username",
+        "enterUniqueUsername": "Enter a unique username",
+        "usernameChangeRule": "Usernames can only be changed once every 30 days.",
+        "email": "Email",
+        "phoneNumber": "Phone Number",
+        "phonePlaceholder": "+66 xxx xxx xxxx",
+        "shippingAddress": "Shipping Address",
+        "streetPlaceholder": "House/Building Number, Street",
+        "districtPlaceholder": "District / Sub-district",
+        "statePlaceholder": "State / District",
+        "provincePlaceholder": "Province",
+        "postalCodePlaceholder": "Postal Code",
+        "saveChanges": "Save Changes"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

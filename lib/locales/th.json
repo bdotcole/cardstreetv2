@@ -77,7 +77,22 @@
         "joinCardStreet": "เข้าร่วม",
         "createAccountDesc": "สร้างบัญชีเพื่อซิงค์คอลเลกชันของคุณในทุกอุปกรณ์",
         "createAccountBtn": "สร้างบัญชีผู้ใช้",
-        "alreadyHaveAccount": "มีบัญชีอยู่แล้ว? เข้าสู่ระบบ"
+        "alreadyHaveAccount": "มีบัญชีอยู่แล้ว? เข้าสู่ระบบ",
+        "name": "ชื่อ",
+        "yourName": "ชื่อของคุณ",
+        "username": "ชื่อผู้ใช้",
+        "enterUniqueUsername": "ป้อนชื่อผู้ใช้ที่ไม่ซ้ำกัน",
+        "usernameChangeRule": "ชื่อผู้ใช้สามารถเปลี่ยนได้ทุกๆ 30 วันเท่านั้น",
+        "email": "อีเมล",
+        "phoneNumber": "เบอร์โทรศัพท์",
+        "phonePlaceholder": "+66 xxx xxx xxxx",
+        "shippingAddress": "ที่อยู่สำหรับจัดส่ง",
+        "streetPlaceholder": "บ้านเลขที่/อาคาร, ถนน",
+        "districtPlaceholder": "แขวง/ตำบล",
+        "statePlaceholder": "เขต/อำเภอ",
+        "provincePlaceholder": "จังหวัด",
+        "postalCodePlaceholder": "รหัสไปรษณีย์",
+        "saveChanges": "บันทึกการเปลี่ยนแปลง"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

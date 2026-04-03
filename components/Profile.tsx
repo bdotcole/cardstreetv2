@@ -551,45 +551,45 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Edit Profile</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.editProfile')}</h2>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <User className="w-3 h-3" /> Name
+                    <User className="w-3 h-3" /> {t('profile.name')}
                   </label>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                    placeholder="Your name"
+                    placeholder={t('profile.yourName')}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <User className="w-3 h-3" /> Username
+                    <User className="w-3 h-3" /> {t('profile.username')}
                   </label>
                   <input
                     type="text"
                     value={editUsername}
                     onChange={(e) => setEditUsername(e.target.value)}
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                    placeholder="Enter a unique username"
+                    placeholder={t('profile.enterUniqueUsername')}
                     maxLength={20}
                   />
                   {profileData?.username_updated_at && (
                      <p className="text-[10px] text-slate-500 mt-1">
-                        Usernames can only be changed once every 30 days.
+                        {t('profile.usernameChangeRule')}
                      </p>
                   )}
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <Mail className="w-3 h-3" /> Email
+                    <Mail className="w-3 h-3" /> {t('profile.email')}
                   </label>
                   <input
                     type="email"
@@ -601,27 +601,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <Phone className="w-3 h-3" /> Phone Number
+                    <Phone className="w-3 h-3" /> {t('profile.phoneNumber')}
                   </label>
                   <input
                     type="tel"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                    placeholder="+66 xxx xxx xxxx"
+                    placeholder={t('profile.phonePlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <MapPin className="w-3 h-3" /> Shipping Address
+                    <MapPin className="w-3 h-3" /> {t('profile.shippingAddress')}
                   </label>
                   <input
                     type="text"
                     value={editAddress.address}
                     onChange={(e) => setEditAddress(prev => ({ ...prev, address: e.target.value }))}
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                    placeholder="House/Building Number, Street"
+                    placeholder={t('profile.streetPlaceholder')}
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -629,14 +629,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       value={editAddress.district}
                       onChange={(e) => setEditAddress(prev => ({ ...prev, district: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="District / Sub-district"
+                      placeholder={t('profile.districtPlaceholder')}
                     />
                     <input
                       type="text"
                       value={editAddress.state}
                       onChange={(e) => setEditAddress(prev => ({ ...prev, state: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="State / District"
+                      placeholder={t('profile.statePlaceholder')}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -645,14 +645,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       value={editAddress.province}
                       onChange={(e) => setEditAddress(prev => ({ ...prev, province: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="Province"
+                      placeholder={t('profile.provincePlaceholder')}
                     />
                     <input
                       type="text"
                       value={editAddress.postcode}
                       onChange={(e) => setEditAddress(prev => ({ ...prev, postcode: e.target.value }))}
                       className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder="Postal Code"
+                      placeholder={t('profile.postalCodePlaceholder')}
                     />
                   </div>
                 </div>
@@ -668,7 +668,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 ) : (
                   <>
                     <Check className="w-5 h-5" />
-                    Save Changes
+                    {t('profile.saveChanges')}
                   </>
                 )}
               </button>
