@@ -405,13 +405,13 @@ const Vault: React.FC<VaultProps> = ({
       {isSelectingForListing ? (
         <div className="space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between px-2">
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Select an Asset from your Vault</p>
-            <button onClick={() => setIsSelectingForListing(false)} className="text-[9px] text-brand-red font-black uppercase tracking-widest">Cancel</button>
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('vault.selectAsset')}</p>
+            <button onClick={() => setIsSelectingForListing(false)} className="text-[9px] text-brand-red font-black uppercase tracking-widest">{t('report.cancel')}</button>
           </div>
           <div className="space-y-3">
             {allVaultItems.filter(({ item }) => !item.isListing).length === 0 ? (
               <div className="py-20 text-center glass rounded-[2.5rem] border-dashed border-white/5">
-                <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest">No unlisted assets available</p>
+                <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest">{t('vault.noUnlisted')}</p>
               </div>
             ) : (
               allVaultItems.filter(({ item }) => !item.isListing).map(({ colId, item, card }) => (
@@ -438,12 +438,12 @@ const Vault: React.FC<VaultProps> = ({
       ) : myVaultListings.length === 0 ? (
         <div className="text-center py-32 glass rounded-[2.5rem] border-dashed border-white/5">
           <i className="fa-solid fa-tag text-4xl text-slate-800 mb-6"></i>
-          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] px-12 leading-relaxed">You currently have no active sales listings in the CardStreet market.</p>
+          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] px-12 leading-relaxed">{t('vault.noActiveListings')}</p>
           <button
             onClick={() => setIsSelectingForListing(true)}
             className="mt-8 px-8 h-12 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors"
           >
-            Start Selling
+            {t('vault.startSelling')}
           </button>
         </div>
       ) : (
@@ -530,7 +530,7 @@ const Vault: React.FC<VaultProps> = ({
         {wishlist.length === 0 ? (
           <div className="text-center py-20 opacity-20">
             <i className="fa-solid fa-heart text-4xl mb-4"></i>
-            <p className="text-xs font-black uppercase tracking-widest">Wishlist is Empty</p>
+            <p className="text-xs font-black uppercase tracking-widest">{t('vault.wishlistEmpty')}</p>
           </div>
         ) : (
           wishlist.map(card => (
@@ -575,7 +575,7 @@ const Vault: React.FC<VaultProps> = ({
             <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-green transition-colors"></i>
             <input
               type="text"
-              placeholder="Search your cards..."
+              placeholder={t('vault.searchCards')}
               className="w-full h-12 pl-10 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-green outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
               value={collectionSearchQuery}
               onChange={(e) => setCollectionSearchQuery(e.target.value)}
@@ -630,7 +630,7 @@ const Vault: React.FC<VaultProps> = ({
             <div className="text-center py-20 opacity-20">
               <i className="fa-solid fa-layer-group text-4xl mb-4"></i>
               <p className="text-xs font-black uppercase tracking-widest">
-                {collectionSearchQuery ? 'No matches found' : 'Collection is Empty'}
+                {collectionSearchQuery ? t('vault.noMatches') : t('vault.collectionEmpty')}
               </p>
             </div>
           ) : (
@@ -723,12 +723,12 @@ const Vault: React.FC<VaultProps> = ({
                 className="w-full h-14 mt-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-cyan/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-tag"></i>
-                {isThai ? 'ลงขายสินสินค้า' : 'Sell Asset'}
+                {t('vault.sellAsset')}
               </button>
             ) : (
               <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs py-4">
                 <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
-                Currently Listed on Market
+                {t('vault.currentlyListed')}
               </div>
             )
           }

@@ -81,7 +81,17 @@
         "listings": "รายการขาย",
         "wishlist": "รายการที่ต้องการ",
         "masterSets": "ชุดหลัก",
-        "items": "รายการ"
+        "items": "รายการ",
+        "noActiveListings": "ปัจจุบันคุณยังไม่มีรายการประกาศขายในตลาด CardStreet",
+        "startSelling": "เริ่มขาย",
+        "wishlistEmpty": "รายการที่ต้องการว่างเปล่า",
+        "noUnlisted": "ไม่มีรายการที่ยังไม่ประกาศขาย",
+        "selectAsset": "เลือกรายการจากคลังของคุณ",
+        "searchCards": "ค้นหาการ์ดของคุณ...",
+        "collectionEmpty": "คอลเลกชันว่างเปล่า",
+        "noMatches": "ไม่พบสิ่งที่ตรงกัน",
+        "currentlyListed": "กำลังประกาศขายอยู่ในตลาด",
+        "sellAsset": "ลงขายสินทรัพย์"
     },
     "scan": {
         "registryEntry": "ลงทะเบียนการ์ด",
