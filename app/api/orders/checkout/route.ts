@@ -19,15 +19,40 @@ export async function POST(req: Request) {
         const ordersToInsert: any[] = [];
         const listingIdsToUpdate: string[] = [];
 
+        // Fetch seller profiles for dynamic fee computation
+        const sellerIds = [...new Set(items.map((i: any) => i.sellerId))];
+        const { data: sellerProfiles } = await supabase
+            .from('profiles')
+            .select('id, role, partner_level')
+            .in('id', sellerIds);
+
+        const feeMap = new Map();
+        if (sellerProfiles) {
+            for (const profile of sellerProfiles) {
+                let fee = 0.09; // Default 9%
+                if (profile.role === 'partner') {
+                    switch (profile.partner_level?.toLowerCase()) {
+                        case 'bronze': fee = 0.05; break;
+                        case 'silver': fee = 0.04; break;
+                        case 'gold': fee = 0.03; break;
+                        case 'platinum': fee = 0.02; break;
+                        default: fee = 0.05; break; // Baseline partner rate
+                    }
+                }
+                feeMap.set(profile.id, fee);
+            }
+        }
+
         // 1. Prepare Orders
         for (const item of items) {
+            const feePercentage = feeMap.get(item.sellerId) || 0.09;
             ordersToInsert.push({
                 listing_id: item.id,
                 buyer_id: buyerId,
                 seller_id: item.sellerId,
                 status: 'paid', // Skip pending if we're hitting this after Stripe/PayPal success
                 total_amount: item.price,
-                platform_fee: item.price * 0.05, // 5% example fee
+                platform_fee: item.price * feePercentage,
                 escrow_status: 'held',
                 payment_method: paymentMethod || 'credit_card',
                 payment_id: paymentId || 'mock_payment_id',

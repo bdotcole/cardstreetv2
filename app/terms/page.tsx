@@ -59,7 +59,7 @@ export default function TermsPage() {
             <div className="space-y-4">
               <div>
                 <strong className="text-white block mb-1">Transaction Fees:</strong>
-                <p>Cardstreet charges a 7.0% transaction fee on all successful sales. This fee is deducted automatically from the sale price before payout.</p>
+                <p>Cardstreet charges a 9.0% transaction fee on all successful sales (reduced for Partner tier sellers starting at 5%). This fee is deducted automatically from the sale price before payout.</p>
               </div>
               <div>
                 <strong className="text-white block mb-1">Payment Processing:</strong>
