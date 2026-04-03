@@ -118,7 +118,19 @@
         "confirmDeliveryMsg": "สินค้าชิ้นนี้ถึงมือคุณอย่างปลอดภัยแล้วใช่หรือไม่? การยืนยันจะถือเป็นการสิ้นสุดการทำธุรกรรมและจะทำการโอนเงินให้กับผู้ขาย",
         "rating": "ให้คะแนน",
         "reviewCommentOptional": "ความคิดเห็น (ไม่บังคับ)",
-        "reviewPlaceholder": "แพ็คเกจดีมาก การ์ดสภาพสมบูรณ์!"
+        "reviewPlaceholder": "แพ็คเกจดีมาก การ์ดสภาพสมบูรณ์!",
+        "settingsPanel": "ตั้งค่า",
+        "security": "ความปลอดภัย",
+        "twoFactorAuth": "การยืนยันตัวตนแบบสองชั้น",
+        "secured": "ปลอดภัย",
+        "notEnabled": "ยังไม่ได้เปิดใช้งาน",
+        "notifications": "การแจ้งเตือน",
+        "priceDropAlerts": "แจ้งเตือนเมื่อราคาลดลง",
+        "priceDropAlertsDesc": "เตือนรายการโปรดลดราคา",
+        "orderUpdatesAlerts": "สถานะคำสั่งซื้อ",
+        "orderUpdatesAlertsDesc": "แจ้งเตือนการจัดส่งสินค้า",
+        "marketingAlerts": "ข่าวสารและกิจกรรม",
+        "marketingAlertsDesc": "โปรโมชันและข้อเสนอพิเศษ"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

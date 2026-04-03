@@ -118,7 +118,19 @@
         "confirmDeliveryMsg": "Has this item arrived safely? Confirming will finalize the transaction and transfer funds to the seller.",
         "rating": "Rating",
         "reviewCommentOptional": "Review Comment (Optional)",
-        "reviewPlaceholder": "Great packaging, perfect condition!"
+        "reviewPlaceholder": "Great packaging, perfect condition!",
+        "settingsPanel": "Settings",
+        "security": "Security",
+        "twoFactorAuth": "Two-Factor Authentication",
+        "secured": "Secured",
+        "notEnabled": "Not Enabled",
+        "notifications": "Notifications",
+        "priceDropAlerts": "Price Drop Alerts",
+        "priceDropAlertsDesc": "Get notified when wishlist items drop",
+        "orderUpdatesAlerts": "Order Updates",
+        "orderUpdatesAlertsDesc": "Shipping and delivery notifications",
+        "marketingAlerts": "Marketing",
+        "marketingAlertsDesc": "Promotions and special offers"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

@@ -819,28 +819,28 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">{isThai ? 'ตั้งค่า' : 'Settings'}</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.settingsPanel')}</h2>
               </div>
 
               {/* Security Section */}
               <div className="space-y-3">
-                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{isThai ? 'ความปลอดภัย' : 'Security'}</h4>
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{t('profile.security')}</h4>
                 <div className="glass rounded-2xl border border-white/5 overflow-hidden">
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Shield className={`w-5 h-5 ${settings.two_factor_enabled ? 'text-brand-green' : 'text-slate-500'}`} />
                       <div>
-                        <p className="text-white font-semibold text-sm">{isThai ? 'การยืนยันตัวตนแบบสองชั้น' : 'Two-Factor Authentication'}</p>
+                        <p className="text-white font-semibold text-sm">{t('profile.twoFactorAuth')}</p>
                         <p className="text-slate-500 text-xs flex items-center gap-1">
                           {settings.two_factor_enabled ? (
                             <>
                               <CheckCircle className="w-3 h-3 text-brand-green" />
-                              <span className="text-brand-green">Secured</span>
+                              <span className="text-brand-green">{t('profile.secured')}</span>
                             </>
                           ) : (
                             <>
                               <AlertCircle className="w-3 h-3 text-amber-500" />
-                              <span className="text-amber-500">{isThai ? 'ยังไม่ได้เปิดใช้งาน' : 'Not Enabled'}</span>
+                              <span className="text-amber-500">{t('profile.notEnabled')}</span>
                             </>
                           )}
                         </p>
@@ -861,12 +861,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
               {/* Notifications Section */}
               <div className="space-y-3">
-                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{isThai ? 'การแจ้งเตือน' : 'Notifications'}</h4>
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{t('profile.notifications')}</h4>
                 <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                   {[
-                    { key: 'notify_price_drops', label: isThai ? 'แจ้งเตือนเมื่อราคาลดลง' : 'Price Drop Alerts', desc: isThai ? 'แจ้งเตือนเมื่อรายการโปรดลดรา' : 'Get notified when wishlist items drop' },
-                    { key: 'notify_order_updates', label: isThai ? 'สถานะคำสั่งซื้อ' : 'Order Updates', desc: isThai ? 'แจ้งเตือนการจัดส่งสินค้า' : 'Shipping and delivery notifications' },
-                    { key: 'notify_marketing', label: isThai ? 'ข่าวสารและกิจกรรม' : 'Marketing', desc: isThai ? 'โปรโมชันและข้อเสนอพิเศษ' : 'Promotions and special offers' }
+                    { key: 'notify_price_drops', label: t('profile.priceDropAlerts'), desc: t('profile.priceDropAlertsDesc') },
+                    { key: 'notify_order_updates', label: t('profile.orderUpdatesAlerts'), desc: t('profile.orderUpdatesAlertsDesc') },
+                    { key: 'notify_marketing', label: t('profile.marketingAlerts'), desc: t('profile.marketingAlertsDesc') }
                   ].map((item) => (
                     <div key={item.key} className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
