@@ -20,7 +20,7 @@ export default function PrivacyPage() {
             <p>We collect information to provide a secure marketplace experience:</p>
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li><strong className="text-white">Personal Data:</strong> Name, email address, physical shipping address, and phone number.</li>
-              <li><strong className="text-white">Verification Data:</strong> We may collect government-issued ID images to verify "Verified Seller" status.</li>
+              <li><strong className="text-white">Verification Data:</strong> We may collect government-issued ID images to verify &quot;Verified Seller&quot; status.</li>
               <li><strong className="text-white">Transaction Data:</strong> Payment details processed through Stripe/PayPal (we do not store full credit card numbers on our servers).</li>
               <li><strong className="text-white">Media:</strong> Photos of cards uploaded for listings.</li>
             </ul>

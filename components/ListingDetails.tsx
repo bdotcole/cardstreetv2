@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Card } from '../types';
 import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
@@ -77,9 +78,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     >
                         {/* Slide 1: Digital Image */}
                         <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
-                            <img
-                                src={card.imageUrl}
+                            <Image
+                                src={card.imageUrl || ""}
                                 alt={card.name}
+                                width={280}
+                                height={392}
                                 className="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]"
                             />
                         </div>
@@ -89,7 +92,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
                                 <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
                                     <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
-                                        <img src={listing.image_front_url} alt="Front condition" className="w-full object-contain bg-black/50" />
+                                        <Image src={listing.image_front_url} alt="Front condition" width={280} height={392} className="w-full object-contain bg-black/50" />
                                     </TransformComponent>
                                 </TransformWrapper>
                             </div>
@@ -100,7 +103,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
                                 <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
                                     <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
-                                        <img src={listing.image_back_url} alt="Back condition" className="w-full object-contain bg-black/50" />
+                                        <Image src={listing.image_back_url} alt="Back condition" width={280} height={392} className="w-full object-contain bg-black/50" />
                                     </TransformComponent>
                                 </TransformWrapper>
                             </div>
@@ -149,7 +152,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             onClick={() => onSellerClick(listing.seller)}
                         >
                             <div className="w-12 h-12 rounded-2xl bg-slate-800 overflow-hidden border border-white/10 group-hover:border-brand-cyan transition-colors relative z-10">
-                                <img src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} className="w-full h-full object-cover" />
+                                <Image src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} alt="Seller Avatar" width={48} height={48} className="w-full h-full object-cover" />
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">{isThai ? 'ผู้ขาย' : 'Seller'}</p>

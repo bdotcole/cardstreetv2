@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
         // 4. Transfer Inventory Models (from seller collection to buyer vault)
         // Find the buyer's default Vault (create one if missing)
-        let { data: buyerCollections } = await supabase
+        const { data: buyerCollections } = await supabase
             .from('collections')
             .select('id')
             .eq('user_id', buyerId)

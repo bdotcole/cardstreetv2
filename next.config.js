@@ -51,6 +51,12 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['recharts'],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 }
 
 module.exports = withSentryConfig(

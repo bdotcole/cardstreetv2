@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-
+import Link from 'next/link'
 function LoginContent() {
     const searchParams = useSearchParams()
     const notAdmin = searchParams?.get('error') === 'not_admin'
@@ -83,9 +83,9 @@ function LoginContent() {
             </div>
 
             <p className="text-center mt-6">
-                <a href="/" className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
+                <Link href="/" className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
                     ← Back to CardStreet
-                </a>
+                </Link>
             </p>
         </div>
     )

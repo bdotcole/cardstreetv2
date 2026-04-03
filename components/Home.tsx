@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import PriceChart from './PriceChart';
 import { pokemonService, ApiSet } from '@/services/pokemonService';
 import { Card } from '@/types';
@@ -161,7 +162,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
                         +{card.change7d}%
                       </div>
                     </div>
-                    <img src={card.imageUrl} className="w-full h-full object-contain filter drop-shadow-md group-hover:scale-105 transition-transform duration-300" alt={card.name} />
+                    <Image src={card.imageUrl || ""} sizes="(max-width: 768px) 160px, 160px" fill className="object-contain filter drop-shadow-md group-hover:scale-105 transition-transform duration-300" alt={card.name} />
                   </div>
                 </div>
 

@@ -18,7 +18,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-black text-white uppercase tracking-wider text-brand-cyan">1. Acceptance of Terms</h2>
             <p>
-              By accessing or using the Cardstreet mobile application and website (the "Service"), operated by ELC Global Ventures, LLC d.b.a Cardstreet ("Company," "we," "us," or "our"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.
+              By accessing or using the Cardstreet mobile application and website (the &quot;Service&quot;), operated by ELC Global Ventures, LLC d.b.a Cardstreet (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.
             </p>
           </section>
 
@@ -45,7 +45,7 @@ export default function TermsPage() {
               </div>
               <div>
                 <strong className="text-white block mb-1">Counterfeit Policy:</strong>
-                <p>The sale of "proxy," "reproduction," "fake," or "counterfeit" cards is strictly prohibited. Any user found listing such items will face immediate account suspension and potential forfeiture of pending funds.</p>
+                <p>The sale of &quot;proxy,&quot; &quot;reproduction,&quot; &quot;fake,&quot; or &quot;counterfeit&quot; cards is strictly prohibited. Any user found listing such items will face immediate account suspension and potential forfeiture of pending funds.</p>
               </div>
               <div>
                 <strong className="text-white block mb-1">Condition Accuracy:</strong>
@@ -89,7 +89,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-black text-white uppercase tracking-wider text-brand-cyan">6. Limitation of Liability</h2>
             <p>
-              ELC Global Ventures, LLC provides the platform "as-is." We are not responsible for the quality, safety, or legality of the items advertised, nor the truth or accuracy of the listings. Our total liability is limited to the amount of fees paid to us by the user in the 12 months prior to the claim.
+              ELC Global Ventures, LLC provides the platform &quot;as-is.&quot; We are not responsible for the quality, safety, or legality of the items advertised, nor the truth or accuracy of the listings. Our total liability is limited to the amount of fees paid to us by the user in the 12 months prior to the claim.
             </p>
           </section>
         </div>

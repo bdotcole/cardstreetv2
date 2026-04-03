@@ -140,7 +140,7 @@ export default function TestCardMatching() {
                     <p className="text-gray-600 mb-8">Test the Thai-to-English card matching Edge Function</p>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
-                        <strong>⚠️ Configuration:</strong> This test interface uses your environment's Supabase credentials.
+                        <strong>⚠️ Configuration:</strong> This test interface uses your environment&apos;s Supabase credentials.
                     </div>
 
                     <div className="flex gap-4 mb-8">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Card } from '../types';
 import PriceChart from './PriceChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
@@ -111,11 +112,11 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           )}
 
           {/* Main Image with Lazy Loading */}
-          <img
-            src={displayImageUrl}
+          <Image
+            src={displayImageUrl || ""}
             alt={card.name}
-            loading="lazy"
-            decoding="async"
+            width={280}
+            height={392}
             onLoad={() => setImageLoaded(true)}
             className={`w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] transition-all duration-700 ease-out z-10 ${imageLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-sm'}`}
           />
@@ -170,7 +171,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 flex-shrink-0">
                               {listing.seller?.avatar_url ? (
-                                <img src={listing.seller.avatar_url} className="w-full h-full object-cover" />
+                                <Image src={listing.seller.avatar_url} alt="Seller Avatar" width={40} height={40} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500">?</div>
                               )}
