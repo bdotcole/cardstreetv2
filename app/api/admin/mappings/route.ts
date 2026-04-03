@@ -12,8 +12,9 @@ export async function POST(request: Request) {
         }
 
         if (action === 'verify') {
+            const isVerified = body.verified !== undefined ? body.verified : true
             const { error } = await supabase.from('card_mappings').update({
-                verified: true
+                verified: isVerified
             }).eq('card_id_th', card_id_th)
 
             if (error) throw error

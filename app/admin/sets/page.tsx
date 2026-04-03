@@ -144,12 +144,22 @@ function SetAccordion({
         }
 
         const newVerifiedStatus = !row.mapping?.verified
-        const { error } = await supabase.from('card_mappings').update({
-            verified: newVerifiedStatus
-        }).eq('card_id_th', row.th.id)
+        
+        const res = await fetch('/api/admin/mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                action: 'verify', 
+                card_id_th: row.th.id,
+                verified: newVerifiedStatus
+            })
+        })
 
-        if (!error) {
+        if (res.ok) {
             loadCards()
+        } else {
+            const data = await res.json()
+            alert('Error updating status: ' + data.error)
         }
     }
 
@@ -367,17 +377,23 @@ function GlobalSetInboxPage() {
 
     async function saveRemap(enCardId: string) {
         if (!remapTarget) return
-        const { error } = await supabase.from('card_mappings').upsert({
-            card_id_th: remapTarget.th.id,
-            card_id_en: enCardId,
-            match_method: 'manual_qc',
-            confidence_score: 1.0,
-            verified: true
-        }, { onConflict: 'card_id_th' })
+        
+        const res = await fetch('/api/admin/mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                action: 'remap', 
+                card_id_th: remapTarget.th.id,
+                card_id_en: enCardId 
+            })
+        })
 
-        if (!error) {
+        if (res.ok) {
             setRemapTarget(null)
             if (remapCallback) remapCallback()
+        } else {
+            const data = await res.json()
+            alert('Error updating mapping: ' + data.error)
         }
     }
 
