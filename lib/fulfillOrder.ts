@@ -10,7 +10,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createShipment, generateLabel, requestPickup } from '@/lib/flashExpress';
+import { createShipment, generateLabel, requestPickup, isRegionError } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -268,9 +268,41 @@ export async function fulfillOrdersByTransferGroup(
                     .in('id', sellerOrders.map(o => o.id));
 
             } catch (flashErr: any) {
-                console.error(`[Fulfillment] Flash Express error for seller ${sellerId}:`, flashErr);
-                result.errors.push(`Flash Express error for seller ${sellerId}: ${flashErr.message}`);
-                // Orders stay as 'paid' — seller can manually ship via the dashboard
+                if (isRegionError(flashErr)) {
+                    // Training sandbox rejects most non-Bangkok addresses. Insert a
+                    // placeholder label so the order can move forward and the seller
+                    // is notified; the label will be created manually.
+                    console.warn(
+                        `[Fulfillment] Flash Express region mismatch for seller ${sellerId} — ` +
+                        `inserting manual-label placeholder so order flow can continue. ` +
+                        `Original error: ${flashErr.message}`
+                    );
+                    for (const order of sellerOrders) {
+                        labelsToInsert.push({
+                            order_id: order.id,
+                            tracking_number: 'MANUAL',
+                            carrier_name: 'Flash Express',
+                            status: 'awaiting_manual',
+                            label_url: '',
+                            flash_order_id: null,
+                            flash_sort_code: null,
+                            pickup_id: null,
+                            pickup_status: 'manual',
+                            courier_tracking_url: null,
+                        });
+                    }
+                    await supabase
+                        .from('orders')
+                        .update({ status: 'label_generated' })
+                        .in('id', sellerOrders.map(o => o.id));
+                    result.errors.push(
+                        `Flash Express region mismatch for seller ${sellerId} — manual label required`
+                    );
+                } else {
+                    console.error(`[Fulfillment] Flash Express error for seller ${sellerId}:`, flashErr);
+                    result.errors.push(`Flash Express error for seller ${sellerId}: ${flashErr.message}`);
+                    // Orders stay as 'paid' — seller can manually ship via the dashboard
+                }
             }
         }
 

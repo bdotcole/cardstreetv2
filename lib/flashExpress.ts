@@ -485,6 +485,21 @@ export function mapFlashStateToStatus(flashState: number): {
 }
 
 /**
+ * Identifies Flash Express region/area mismatch errors.
+ *
+ * Why: the training sandbox accepts only a narrow set of Thai province/district
+ * combinations and rejects everything else with code 40004 / 40005. Callers
+ * need to distinguish these (which warrant graceful degradation in training)
+ * from hard failures like bad credentials or network outages.
+ */
+export function isRegionError(err: unknown): boolean {
+    if (!err) return false;
+    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+    if (/code:\s*4000[45]\b/.test(msg)) return true;
+    return /\b(region|area|province|district)\b/.test(msg);
+}
+
+/**
  * Verifies the signature on an incoming Flash Express webhook payload.
  */
 export function verifyWebhookSignature(payload: Record<string, any>): boolean {

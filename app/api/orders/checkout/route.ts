@@ -15,7 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { estimateRate } from '@/lib/flashExpress';
+import { estimateRate, isRegionError } from '@/lib/flashExpress';
 
 export async function POST(req: Request) {
     try {
@@ -93,7 +93,18 @@ export async function POST(req: Request) {
                 });
                 sellerShippingMap.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
             } catch (err) {
-                console.error(`[Orders/Checkout] Flash Express estimate error for seller ${sellerId}:`, err);
+                if (isRegionError(err)) {
+                    console.warn(
+                        `[Orders/Checkout] Flash Express region mismatch for seller ${sellerId} — ` +
+                        `falling back to ฿${FALLBACK_RATE_THB} flat rate. ` +
+                        `Original error: ${(err as Error).message}`
+                    );
+                } else {
+                    console.error(
+                        `[Orders/Checkout] Unexpected Flash Express estimate error for seller ${sellerId}:`,
+                        err
+                    );
+                }
                 sellerShippingMap.set(sellerId, FALLBACK_RATE_THB);
             }
         }
