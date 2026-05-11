@@ -1,13 +1,19 @@
 import CourierClient from "@trycourier/courier";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Courier client
+// Initialize Courier client — fail-closed.
+// A missing token falls back to null, and every send helper guards against it,
+// logging a warning and returning early instead of making authenticated requests
+// with "mock_token" that would always result in 403 errors from Courier's API.
 const courierToken = (process.env.COURIER_AUTH_TOKEN || "").trim();
+if (!courierToken) {
+    console.warn('[Courier] ⚠️  COURIER_AUTH_TOKEN is not set — all notification sends will be skipped.');
+}
 console.log(`[Courier] Initializing with token: ${courierToken ? courierToken.substring(0, 8) + '...' : 'MISSING'}`);
 
-const courier = new CourierClient({
-    apiKey: courierToken || "mock_token"
-});
+const courier = courierToken
+    ? new CourierClient({ apiKey: courierToken })
+    : null;
 
 // Initialize Supabase admin client for fetching user details/preferences
 const supabaseAdmin = createClient(
@@ -72,6 +78,7 @@ function buildRouting(wantEmail: boolean, wantPush: boolean) {
  * Notifies the seller when their item is sold.
  */
 export async function sendSoldNotification(sellerId: string, orderDetails: any) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping sold notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     if (!prefs.sold_email && !prefs.sold_push) return;
     if (!email && !fcmToken) {
@@ -109,6 +116,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
  * Notifies the seller that a shipping label is ready.
  */
 export async function sendLabelGeneratedNotification(sellerId: string, orderDetails: any, labelUrl: string) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping label notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     if (!prefs.label_email && !prefs.label_push) return;
     if (!email && !fcmToken) {
@@ -146,6 +154,7 @@ export async function sendLabelGeneratedNotification(sellerId: string, orderDeta
  * Notifies the buyer that their item has shipped.
  */
 export async function sendShippedNotification(buyerId: string, orderDetails: any, trackingUrl: string) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping shipped notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
     if (!prefs.shipped_email && !prefs.shipped_push) return;
     if (!email && !fcmToken) {
@@ -182,6 +191,7 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
  * Notifies the buyer that their order was confirmed, with tracking info.
  */
 export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any, trackingNumbers: string[] = []) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping order confirmation'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
     // Order confirmations are transactional receipts — buyers should always get
     // them unless they've explicitly opted out. Use a dedicated preference pair
@@ -230,6 +240,7 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
  * Notifies the seller that the buyer completed and confirmed receipt of their order.
  */
 export async function sendPurchaseCompletedNotification(sellerId: string, orderDetails: any) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping purchase completed notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     if (!prefs.sold_email && !prefs.sold_push) return;
     if (!email && !fcmToken) {
@@ -266,6 +277,7 @@ export async function sendPurchaseCompletedNotification(sellerId: string, orderD
  * Notifies the seller that their payout transfer has been initiated via Stripe.
  */
 export async function sendPayoutCompletedNotification(sellerId: string, orderId: string, amount: number) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping payout notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     
     // Default to true if not explicitly set in the preferences
@@ -307,6 +319,7 @@ export async function sendPayoutCompletedNotification(sellerId: string, orderId:
  * Notifies the buyer that their package has been delivered by Flash Express.
  */
 export async function sendPackageDeliveredNotification(buyerId: string, orderId: string, trackingNumber: string) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping package delivered notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
     
     // Default to true if not explicitly set in the preferences

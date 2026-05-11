@@ -186,6 +186,7 @@ export async function POST(req: Request) {
                 .select('id, collections!inner(user_id)')
                 .eq('card_id', item.cardId)
                 .eq('collections.user_id', item.sellerId)
+                .order('id', { ascending: true }) // Bug #C fix: deterministic row selection
                 .limit(1);
 
             if (sellerItems && sellerItems.length > 0) {
