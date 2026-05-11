@@ -11,9 +11,12 @@ interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     amount: number;
+    shippingFee?: number;
     currency: string;
     items: any[];
-    onPaymentSuccess: () => void;
+    apiEndpoint?: string; // New prop
+    extraData?: any; // New prop
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
 }
 
@@ -22,9 +25,11 @@ const StripeCardForm: React.FC<{
     amount: number;
     currency: string;
     items: any[];
-    onPaymentSuccess: () => void;
+    apiEndpoint?: string;
+    extraData?: any;
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
-}> = ({ amount, currency, items, onPaymentSuccess, onPaymentFailed }) => {
+}> = ({ amount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed }) => {
     const stripe = useStripe();
     const elements = useElements();
     const [loading, setLoading] = useState(false);
@@ -44,6 +49,7 @@ const StripeCardForm: React.FC<{
         setLoading(true);
 
         try {
+            // Step 1: Create Stripe PaymentMethod from card details
             const { error, paymentMethod } = await stripe.createPaymentMethod({
                 type: 'card',
                 card: cardElement,
@@ -55,15 +61,55 @@ const StripeCardForm: React.FC<{
                 return;
             }
 
-            const res = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            // Step 2: Create orders FIRST to get a transfer_group
+            // This prevents "zombie payments" — orders exist before money is charged
+            let transferGroup: string | undefined;
+
+            if (apiEndpoint === '/api/checkout') {
+                const orderRes = await fetch('/api/orders/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items,
+                        paymentMethod: 'credit_card',
+                        buyerId: extraData.buyerId,
+                    }),
+                });
+
+                const orderData = await orderRes.json();
+
+                if (!orderRes.ok || !orderData.success) {
+                    onPaymentFailed(orderData.error || 'Failed to create orders');
+                    setLoading(false);
+                    return;
+                }
+
+                transferGroup = orderData.transferGroup;
+                console.log('[PaymentModal] Orders created with transfer_group:', transferGroup);
+            }
+
+            // Step 3: Charge the card via Stripe
+            const payload = apiEndpoint === '/api/checkout' 
+                ? {
                     amount,
                     currency,
                     token: paymentMethod.id,
-                    metadata: { items: JSON.stringify(items.map(i => i.id)) },
-                }),
+                    metadata: {
+                        items: JSON.stringify(items.map(i => i.id)),
+                        transfer_group: transferGroup,
+                        buyer_id: extraData?.buyerId || '',
+                    },
+                }
+                : {
+                    orderId: items[0]?.id,
+                    paymentMethodId: paymentMethod.id,
+                    ...extraData
+                };
+
+            const res = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json();
@@ -73,7 +119,7 @@ const StripeCardForm: React.FC<{
             }
 
             if (data.status === 'succeeded') {
-                onPaymentSuccess();
+                onPaymentSuccess({ paymentMethod: 'card', paymentId: data.id, transferGroup: data.transfer_group || transferGroup });
             } else if (data.status === 'requires_action' && data.next_action?.redirect_to_url) {
                 window.location.href = data.next_action.redirect_to_url.url;
             } else {
@@ -123,8 +169,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     isOpen,
     onClose,
     amount,
+    shippingFee = 0,
     currency,
     items,
+    apiEndpoint,
+    extraData,
     onPaymentSuccess,
     onPaymentFailed
 }) => {
@@ -153,7 +202,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         });
         const captureData = await response.json();
         if (captureData.success) {
-            onPaymentSuccess();
+            onPaymentSuccess({ paymentMethod: 'paypal', paymentId: captureData.orderID });
         } else {
             onPaymentFailed(captureData.message || 'PayPal payment capture failed');
         }
@@ -176,13 +225,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
 
                 <div className="p-6">
-                    <div className="mb-6 flex justify-between items-center bg-white/5 rounded-xl p-3">
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">ยอดรวมสุทธิ</span>
-                        <div className="text-right">
-                            <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
-                            {method === 'paypal' && currency === 'THB' && (
-                                <p className="text-[10px] text-slate-500">≈ ${paypalAmount} USD</p>
-                            )}
+                    <div className="mb-6 bg-white/5 rounded-xl p-4 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Subtotal</span>
+                            <span className="text-sm font-bold text-slate-300">{currency === 'THB' ? '฿' : '$'}{(amount - shippingFee).toLocaleString()}</span>
+                        </div>
+                        {shippingFee > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
+                                <span className="text-sm font-bold text-brand-cyan">+{currency === 'THB' ? '฿' : '$'}{shippingFee.toLocaleString()}</span>
+                            </div>
+                        )}
+                        <div className="h-[1px] w-full bg-white/10 my-2"></div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
+                            <div className="text-right">
+                                <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
+                                {method === 'paypal' && currency === 'THB' && (
+                                    <p className="text-[10px] text-slate-500">≈ ${paypalAmount} USD</p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -212,6 +274,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     amount={amount}
                                     currency={currency}
                                     items={items}
+                                    apiEndpoint={apiEndpoint}
+                                    extraData={extraData}
                                     onPaymentSuccess={onPaymentSuccess}
                                     onPaymentFailed={onPaymentFailed}
                                 />
