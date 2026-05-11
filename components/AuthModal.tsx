@@ -30,7 +30,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setLoading(true);
         setError(null);
         try {
-            let redirectUrl = `https://cardstreet.app/api/auth/callback`;
+            // For web (browser), derive the callback from the current origin so the
+            // OAuth flow returns to the same origin the user started from. This
+            // makes localhost and Vercel preview deployments work without code
+            // changes — the prior hardcoded production URL caused PKCE verifier
+            // mismatch errors anywhere off-prod because the verifier is stored
+            // per-origin in browser localStorage.
+            //
+            // Native (Capacitor) keeps the prod URL because the deep-link scheme
+            // is registered against cardstreet.app — that one MUST stay absolute.
+            let redirectUrl = `${window.location.origin}/api/auth/callback`;
             let isNative = false;
 
             try {
@@ -40,7 +49,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     isNative = true;
                 }
             } catch (e) {
-                // Ignore, fallback to web URL
+                // Ignore, fallback to dynamic-origin web URL
             }
 
             console.log('[Auth] Initiating Google Login. Native:', isNative, 'Redirect:', redirectUrl);
