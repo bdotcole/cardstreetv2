@@ -1,10 +1,19 @@
 import CourierClient from "@trycourier/courier";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Courier client
-const courier = new CourierClient({
-    apiKey: process.env.COURIER_AUTH_TOKEN || "mock_token"
-});
+// Initialize Courier client — fail-closed.
+// A missing token falls back to null, and every send helper guards against it,
+// logging a warning and returning early instead of making authenticated requests
+// with "mock_token" that would always result in 403 errors from Courier's API.
+const courierToken = (process.env.COURIER_AUTH_TOKEN || "").trim();
+if (!courierToken) {
+    console.warn('[Courier] ⚠️  COURIER_AUTH_TOKEN is not set — all notification sends will be skipped.');
+}
+console.log(`[Courier] Initializing with token: ${courierToken ? courierToken.substring(0, 8) + '...' : 'MISSING'}`);
+
+const courier = courierToken
+    ? new CourierClient({ apiKey: courierToken })
+    : null;
 
 // Initialize Supabase admin client for fetching user details/preferences
 const supabaseAdmin = createClient(
@@ -13,73 +22,93 @@ const supabaseAdmin = createClient(
 );
 
 /**
- * Helper to fetch a user's notification preferences.
+ * Helper to fetch a user's notification preferences AND email in one call.
  */
-async function getNotificationPreferences(userId: string) {
-    const { data: prefs, error } = await supabaseAdmin
+async function getUserNotifContext(userId: string): Promise<{
+    email: string | null;
+    fcmToken: string | null;
+    prefs: Record<string, boolean>;
+}> {
+    // Fetch email from auth
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = (!authErr && user?.email) ? user.email : null;
+
+    // Fetch prefs + FCM token
+    const { data: prefs } = await supabaseAdmin
         .from('notification_preferences')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-    if (error || !prefs) {
-        // Default to all true if not found/error
-        return {
-            sold_email: true,
-            sold_push: true,
-            label_email: true,
-            label_push: true,
-            shipped_email: true,
-            shipped_push: true,
-            fcm_token: null
-        };
-    }
-    return prefs;
+    const defaults = {
+        sold_email: true, sold_push: true,
+        label_email: true, label_push: true,
+        shipped_email: true, shipped_push: true,
+    };
+
+    return {
+        email,
+        fcmToken: prefs?.fcm_token || null,
+        prefs: prefs ? { ...defaults, ...prefs } : defaults,
+    };
 }
 
 /**
- * Helper to get a user's email address from auth table.
+ * Build Courier recipient object. Supports email and/or Firebase push.
  */
-async function getUserEmail(userId: string): Promise<string | null> {
-    const { data: { user }, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (error || !user) return null;
-    return user.email || null;
+function buildRecipient(email: string | null, fcmToken: string | null) {
+    const recipient: any = {};
+    if (email) recipient.email = email;
+    // Courier FCM push requires the token in the `data` field as `firebaseToken`
+    if (fcmToken) recipient.firebaseToken = fcmToken;
+    return recipient;
 }
 
+/**
+ * Build the routing config based on user prefs.
+ */
+function buildRouting(wantEmail: boolean, wantPush: boolean) {
+    const channels: string[] = [];
+    if (wantEmail) channels.push("email");
+    if (wantPush) channels.push("push");
+    return { method: "all" as const, channels };
+}
 
 /**
  * Notifies the seller when their item is sold.
  */
 export async function sendSoldNotification(sellerId: string, orderDetails: any) {
-    const prefs = await getNotificationPreferences(sellerId);
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping sold notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     if (!prefs.sold_email && !prefs.sold_push) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for seller ${sellerId} — skipping sold notification`);
+        return;
+    }
 
-    const email = await getUserEmail(sellerId);
-    if (!email) return;
+    const recipient = buildRecipient(
+        prefs.sold_email ? email : null,
+        prefs.sold_push ? fcmToken : null
+    );
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken);
+    if (routing.channels.length === 0) return;
 
     try {
-        await courier.send.message({
+        console.log(`[Courier] Sending 'Sold' notification to recipient:`, JSON.stringify(recipient));
+        const { messageId } = await courier.send.message({
             message: {
-                to: {
-                    email: email,
-                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
-                },
+                to: recipient,
                 content: {
-                    title: "CardStreet: You have a new sale!",
-                    body: `Great news! Your item has been sold for ฿${orderDetails.total_amount}. Please check your orders dashboard to arrange shipping.`,
+                    title: "CardStreet: You have a new sale! 🎉",
+                    body: `Your item has been sold for ฿${orderDetails.total_amount.toLocaleString()}. The buyer has paid for shipping — check your email for the Flash Express label to print.`,
                 },
-                routing: {
-                    method: "all",
-                    channels: [
-                        ...(prefs.sold_email ? ["email"] : []),
-                        ...(prefs.sold_push ? ["push"] : [])
-                    ]
-                }
+                routing,
+                data: { orderId: orderDetails.id, type: 'sold' }
             }
         });
-        console.log(`[Courier] 'Sold' notification sent to seller ${sellerId}`);
+        console.log(`[Courier] ✅ 'Sold' notification sent. Message ID: ${messageId}`);
     } catch (error) {
-        console.error(`[Courier] Error sending 'Sold' notification:`, error);
+        console.error(`[Courier] ❌ Error sending 'Sold' notification to ${sellerId}:`, error);
     }
 }
 
@@ -87,35 +116,37 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
  * Notifies the seller that a shipping label is ready.
  */
 export async function sendLabelGeneratedNotification(sellerId: string, orderDetails: any, labelUrl: string) {
-    const prefs = await getNotificationPreferences(sellerId);
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping label notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
     if (!prefs.label_email && !prefs.label_push) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for seller ${sellerId} — skipping label notification`);
+        return;
+    }
 
-    const email = await getUserEmail(sellerId);
-    if (!email) return;
+    const recipient = buildRecipient(
+        prefs.label_email ? email : null,
+        prefs.label_push ? fcmToken : null
+    );
+    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken);
+    if (routing.channels.length === 0) return;
 
     try {
-        await courier.send.message({
+        console.log(`[Courier] Sending 'Label Generated' notification to recipient:`, JSON.stringify(recipient));
+        const { messageId } = await courier.send.message({
             message: {
-                to: {
-                    email: email,
-                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
-                },
+                to: recipient,
                 content: {
-                    title: "CardStreet: Shipping Label Generated",
-                    body: `Your shipping label for order ${orderDetails.id} is ready. You can print it here: ${labelUrl}`,
+                    title: "CardStreet: Shipping Label Ready 📦",
+                    body: `Your Flash Express label for order ${orderDetails.id} is ready. Print it here: ${labelUrl}`,
                 },
-                routing: {
-                    method: "all",
-                    channels: [
-                        ...(prefs.label_email ? ["email"] : []),
-                        ...(prefs.label_push ? ["push"] : [])
-                    ]
-                }
+                routing,
+                data: { orderId: orderDetails.id, type: 'label_generated', labelUrl }
             }
         });
-        console.log(`[Courier] 'Label Generated' notification sent to seller ${sellerId}`);
+        console.log(`[Courier] ✅ 'Label Generated' notification sent. Message ID: ${messageId}`);
     } catch (error) {
-        console.error(`[Courier] Error sending 'Label Generated' notification:`, error);
+        console.error(`[Courier] ❌ Error sending 'Label Generated' notification to ${sellerId}:`, error);
     }
 }
 
@@ -123,71 +154,205 @@ export async function sendLabelGeneratedNotification(sellerId: string, orderDeta
  * Notifies the buyer that their item has shipped.
  */
 export async function sendShippedNotification(buyerId: string, orderDetails: any, trackingUrl: string) {
-    const prefs = await getNotificationPreferences(buyerId);
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping shipped notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
     if (!prefs.shipped_email && !prefs.shipped_push) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for buyer ${buyerId} — skipping shipped notification`);
+        return;
+    }
 
-    const email = await getUserEmail(buyerId);
-    if (!email) return;
+    const recipient = buildRecipient(
+        prefs.shipped_email ? email : null,
+        prefs.shipped_push ? fcmToken : null
+    );
+    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken);
+    if (routing.channels.length === 0) return;
 
     try {
         await courier.send.message({
             message: {
-                to: {
-                    email: email,
-                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
-                },
+                to: recipient,
                 content: {
-                    title: "CardStreet: Order Shipped!",
-                    body: `Your order ${orderDetails.id} is on the way! Track it here: ${trackingUrl}`,
+                    title: "CardStreet: Your order has shipped! 🚀",
+                    body: `Order ${orderDetails.id} is on its way via Flash Express! Track it at: https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`,
                 },
-                routing: {
-                    method: "all",
-                    channels: [
-                        ...(prefs.shipped_email ? ["email"] : []),
-                        ...(prefs.shipped_push ? ["push"] : [])
-                    ]
-                }
+                routing,
+                data: { orderId: orderDetails.id, type: 'shipped', trackingUrl }
             }
         });
-        console.log(`[Courier] 'Shipped' notification sent to buyer ${buyerId}`);
+        console.log(`[Courier] ✅ 'Shipped' notification sent to buyer ${buyerId}`);
     } catch (error) {
-        console.error(`[Courier] Error sending 'Shipped' notification:`, error);
+        console.error(`[Courier] ❌ Error sending 'Shipped' notification to ${buyerId}:`, error);
     }
 }
 
 /**
- * Notifies the buyer that their order was successfully placed.
+ * Notifies the buyer that their order was confirmed, with tracking info.
  */
-export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any) {
-    // Re-use shipped preferences or add order_email to DB later, using shipped_email for now
-    const prefs = await getNotificationPreferences(buyerId);
-    if (!prefs.shipped_email && !prefs.shipped_push) return;
+export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any, trackingNumbers: string[] = []) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping order confirmation'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
+    // Order confirmations are transactional receipts — buyers should always get
+    // them unless they've explicitly opted out. Use a dedicated preference pair
+    // (`confirmation_email` / `confirmation_push`) instead of `shipped_*`, so
+    // muting shipping-update spam doesn't also silence the receipt.
+    // Default is opt-in: `!== false` treats undefined/missing as opted-in,
+    // matching the convention used by `payout_*` and `delivered_*` below.
+    const wantEmail = prefs.confirmation_email !== false;
+    const wantPush = prefs.confirmation_push !== false;
+    if (!wantEmail && !wantPush) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for buyer ${buyerId} — skipping order confirmation`);
+        return;
+    }
 
-    const email = await getUserEmail(buyerId);
-    if (!email) return;
+    const trackingText = trackingNumbers.length > 0
+        ? `\n\nFlash Express tracking number(s): ${trackingNumbers.join(', ')}`
+        : '\n\nYour seller will be notified to ship your item shortly.';
+
+    const recipient = buildRecipient(
+        wantEmail ? email : null,
+        wantPush ? fcmToken : null
+    );
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    if (routing.channels.length === 0) return;
 
     try {
         await courier.send.message({
             message: {
-                to: {
-                    email: email,
-                    ...(prefs.fcm_token ? { firebaseToken: prefs.fcm_token } : {})
-                },
+                to: recipient,
                 content: {
-                    title: "CardStreet: Order Confirmed!",
-                    body: `Thank you for your purchase! We've received your order for ฿${orderDetails.total_amount}. The seller has been notified to start shipping.`,
+                    title: "CardStreet: Order Confirmed! ✅",
+                    body: `Thank you for your purchase of ฿${orderDetails.total_amount?.toLocaleString() || ''}. Your items are being prepared for shipment.${trackingText}`,
                 },
-                routing: {
-                    method: "all",
-                    channels: [
-                        ...(prefs.shipped_email ? ["email"] : []),
-                        ...(prefs.shipped_push ? ["push"] : [])
-                    ]
-                }
+                routing,
+                data: { orderId: orderDetails.id, type: 'order_confirmation', trackingNumbers }
             }
         });
-        console.log(`[Courier] 'Order Confirmation' notification sent to buyer ${buyerId}`);
+        console.log(`[Courier] ✅ 'Order Confirmation' notification sent to buyer ${buyerId}`);
     } catch (error) {
-        console.error(`[Courier] Error sending 'Order Confirmation' notification:`, error);
+        console.error(`[Courier] ❌ Error sending 'Order Confirmation' notification to ${buyerId}:`, error);
+    }
+}
+
+/**
+ * Notifies the seller that the buyer completed and confirmed receipt of their order.
+ */
+export async function sendPurchaseCompletedNotification(sellerId: string, orderDetails: any) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping purchase completed notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    if (!prefs.sold_email && !prefs.sold_push) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for seller ${sellerId} — skipping purchase completed notification`);
+        return;
+    }
+
+    const recipient = buildRecipient(
+        prefs.sold_email ? email : null,
+        prefs.sold_push ? fcmToken : null
+    );
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken);
+    if (routing.channels.length === 0) return;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: recipient,
+                content: {
+                    title: "CardStreet: Purchase Completed! 💰",
+                    body: `The buyer has confirmed receipt of order ${orderDetails.id}. Your funds are being released to your account!`,
+                },
+                routing,
+                data: { orderId: orderDetails.id, type: 'purchase_completed' }
+            }
+        });
+        console.log(`[Courier] ✅ 'Purchase Completed' notification sent to seller ${sellerId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Purchase Completed' notification to ${sellerId}:`, error);
+    }
+}
+
+/**
+ * Notifies the seller that their payout transfer has been initiated via Stripe.
+ */
+export async function sendPayoutCompletedNotification(sellerId: string, orderId: string, amount: number) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping payout notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    
+    // Default to true if not explicitly set in the preferences
+    const wantEmail = prefs.payout_email !== false;
+    const wantPush = prefs.payout_push !== false;
+    
+    if (!wantEmail && !wantPush) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for seller ${sellerId} — skipping payout completed notification`);
+        return;
+    }
+
+    const recipient = buildRecipient(
+        wantEmail ? email : null,
+        wantPush ? fcmToken : null
+    );
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    if (routing.channels.length === 0) return;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: recipient,
+                content: {
+                    title: "CardStreet: Payout Sent! 💸",
+                    body: `Your payout of ฿${amount.toLocaleString()} for order ${orderId} has been successfully transferred to your Stripe account.`,
+                },
+                routing,
+                data: { orderId, type: 'payout_completed', amount }
+            }
+        });
+        console.log(`[Courier] ✅ 'Payout Completed' notification sent to seller ${sellerId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Payout Completed' notification to ${sellerId}:`, error);
+    }
+}
+
+/**
+ * Notifies the buyer that their package has been delivered by Flash Express.
+ */
+export async function sendPackageDeliveredNotification(buyerId: string, orderId: string, trackingNumber: string) {
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping package delivered notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
+    
+    // Default to true if not explicitly set in the preferences
+    const wantEmail = prefs.delivered_email !== false;
+    const wantPush = prefs.delivered_push !== false;
+    
+    if (!wantEmail && !wantPush) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for buyer ${buyerId} — skipping package delivered notification`);
+        return;
+    }
+
+    const recipient = buildRecipient(
+        wantEmail ? email : null,
+        wantPush ? fcmToken : null
+    );
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    if (routing.channels.length === 0) return;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: recipient,
+                content: {
+                    title: "CardStreet: Package Delivered! 📦",
+                    body: `Your Flash Express package (${trackingNumber}) for order ${orderId} has been delivered. Please confirm receipt in the app to release funds to the seller.`,
+                },
+                routing,
+                data: { orderId, type: 'package_delivered', trackingNumber }
+            }
+        });
+        console.log(`[Courier] ✅ 'Package Delivered' notification sent to buyer ${buyerId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Package Delivered' notification to ${buyerId}:`, error);
     }
 }
