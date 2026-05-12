@@ -151,6 +151,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activePanel]);
 
+  // Auto-open the payouts panel when Stripe redirects back from Connect
+  // onboarding. The StripeConnectSection's own useEffect strips the query
+  // param after handling it (refresh-from-Stripe on 'complete', restart-link
+  // on 'refresh'), so this only fires once per redirect.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const cn = new URLSearchParams(window.location.search).get('stripe_connect');
+    if (cn === 'complete' || cn === 'refresh') {
+      setActivePanel('payouts');
+    }
+  }, []);
+
   // Fetch profile data on mount
   useEffect(() => {
     if (user && user.provider !== 'guest') {

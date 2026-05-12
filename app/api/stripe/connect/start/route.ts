@@ -13,6 +13,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getStripe, getAppBaseUrl } from '@/lib/stripe';
@@ -102,11 +103,19 @@ export async function POST() {
         }
 
         // Step 2: Generate the onboarding AccountLink.
-        const baseUrl = getAppBaseUrl();
+        // Derive baseUrl from the actual request host so it works on any
+        // domain (custom, vercel.app, preview deploys, localhost) without
+        // requiring NEXT_PUBLIC_APP_URL to be set. Falls back to the env
+        // var / hardcoded default if we can't read the headers.
+        const headersList = await headers();
+        const host = headersList.get('host');
+        const proto = headersList.get('x-forwarded-proto') || 'https';
+        const baseUrl = host ? `${proto}://${host}` : getAppBaseUrl();
+
         const accountLink = await stripe.accountLinks.create({
             account: accountId!,
-            refresh_url: `${baseUrl}/profile?stripe_connect=refresh`,
-            return_url: `${baseUrl}/profile?stripe_connect=complete`,
+            refresh_url: `${baseUrl}/?stripe_connect=refresh`,
+            return_url: `${baseUrl}/?stripe_connect=complete`,
             type: 'account_onboarding',
         });
 

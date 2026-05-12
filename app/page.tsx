@@ -38,6 +38,18 @@ export default function HomePage() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
+
+    // Deep-link handling for Stripe Connect onboarding redirects.
+    // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
+    // the Profile component handles the rest — but the user needs to actually
+    // be on the Profile tab for that to mount. Switch them there on arrival.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const cn = new URLSearchParams(window.location.search).get('stripe_connect');
+        if (cn === 'complete' || cn === 'refresh') {
+            setActiveTab('profile');
+        }
+    }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
