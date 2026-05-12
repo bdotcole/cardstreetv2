@@ -49,6 +49,20 @@ export async function POST() {
         let accountId = profile.stripe_account_id as string | null;
 
         // Step 1: Create the Express account if we don't already have one.
+        //
+        // For Thailand-based Connect accounts, Stripe requires us to either:
+        //   (a) also request `card_payments` (full service agreement — seller is
+        //       merchant of record, accepts card payments themselves), or
+        //   (b) explicitly accept the `recipient` service agreement (seller only
+        //       receives transfers from the platform; CardStreet is merchant of
+        //       record).
+        //
+        // CardStreet's "separate charges and transfers" architecture matches (b)
+        // exactly: buyers pay the platform Stripe account, release-funds later
+        // transfers to the seller. Recipient agreements also give sellers a
+        // lighter KYC flow since they aren't processing payments.
+        //
+        // Docs: https://stripe.com/docs/connect/service-agreement-types
         if (!accountId) {
             const account = await stripe.accounts.create({
                 type: 'express',
@@ -58,6 +72,9 @@ export async function POST() {
                     transfers: { requested: true },
                 },
                 business_type: 'individual',
+                tos_acceptance: {
+                    service_agreement: 'recipient',
+                },
                 metadata: {
                     cardstreet_user_id: user.id,
                     cardstreet_display_name: profile.display_name || '',
