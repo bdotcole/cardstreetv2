@@ -1004,6 +1004,8 @@ export default function HomePage() {
                     amount={cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate)}
                     currency={currency}
                     items={cart}
+                    apiEndpoint="/api/checkout"
+                    extraData={{ buyerId: user?.id }}
                     onPaymentSuccess={handlePaymentSuccess}
                     onPaymentFailed={(err) => alert("Payment Failed: " + err)}
                 />

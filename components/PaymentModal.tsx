@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -48,6 +48,9 @@ const StripeCardForm: React.FC<{
 
         setLoading(true);
 
+        // Charge amount may be overridden by the server in step 2 below.
+        let chargeAmount = amount;
+
         try {
             // Step 1: Create Stripe PaymentMethod from card details
             const { error, paymentMethod } = await stripe.createPaymentMethod({
@@ -85,13 +88,20 @@ const StripeCardForm: React.FC<{
                 }
 
                 transferGroup = orderData.transferGroup;
-                console.log('[PaymentModal] Orders created with transfer_group:', transferGroup);
+                // The server is authoritative on the final total (it computes
+                // shipping with Flash). Use its number for the Stripe charge —
+                // otherwise the buyer's card statement won't match the order
+                // records, and refunds get fiddly.
+                if (typeof orderData.totalAmount === 'number') {
+                    chargeAmount = orderData.totalAmount;
+                }
+                console.log('[PaymentModal] Orders created with transfer_group:', transferGroup, 'totalAmount:', chargeAmount);
             }
 
             // Step 3: Charge the card via Stripe
-            const payload = apiEndpoint === '/api/checkout' 
+            const payload = apiEndpoint === '/api/checkout'
                 ? {
-                    amount,
+                    amount: chargeAmount,
                     currency,
                     token: paymentMethod.id,
                     metadata: {
@@ -179,8 +189,58 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
     const [method, setMethod] = useState<'card' | 'paypal'>('card');
 
+    // Server-computed estimate (shipping + total). Fetched on modal open via
+    // /api/orders/estimate, which runs the same shipping math as
+    // /api/orders/checkout but writes no rows. When this resolves we override
+    // the prop amount/shippingFee so the displayed total matches what the
+    // buyer will actually be charged.
+    const [estimate, setEstimate] = useState<{ subtotal: number; shipping: number; total: number } | null>(null);
+    const [estimateLoading, setEstimateLoading] = useState(false);
+    const [estimateError, setEstimateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setEstimate(null);
+            setEstimateError(null);
+            return;
+        }
+        if (!items?.length || !extraData?.buyerId) return;
+
+        let cancelled = false;
+        setEstimateLoading(true);
+        setEstimateError(null);
+
+        fetch('/api/orders/estimate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, buyerId: extraData.buyerId }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (cancelled) return;
+                if (!data.success) {
+                    setEstimateError(data.error || 'Failed to estimate total');
+                    return;
+                }
+                setEstimate({ subtotal: data.subtotal, shipping: data.shipping, total: data.total });
+            })
+            .catch(err => {
+                if (!cancelled) setEstimateError(err.message || 'Failed to estimate total');
+            })
+            .finally(() => {
+                if (!cancelled) setEstimateLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [isOpen, items, extraData?.buyerId]);
+
+    // Effective display values — prefer the server estimate, fall back to the
+    // prop amount (cart subtotal) before the estimate arrives.
+    const effectiveAmount = estimate?.total ?? amount;
+    const effectiveShipping = estimate?.shipping ?? shippingFee;
+
     // Convert THB to USD for PayPal (approximate rate)
-    const paypalAmount = currency === 'THB' ? (amount * 0.028).toFixed(2) : amount.toFixed(2);
+    const paypalAmount = currency === 'THB' ? (effectiveAmount * 0.028).toFixed(2) : effectiveAmount.toFixed(2);
 
     // PayPal handlers
     const createPayPalOrder = async () => {
@@ -228,19 +288,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="mb-6 bg-white/5 rounded-xl p-4 space-y-2">
                         <div className="flex justify-between items-center">
                             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Subtotal</span>
-                            <span className="text-sm font-bold text-slate-300">{currency === 'THB' ? '฿' : '$'}{(amount - shippingFee).toLocaleString()}</span>
+                            <span className="text-sm font-bold text-slate-300">{currency === 'THB' ? '฿' : '$'}{(effectiveAmount - effectiveShipping).toLocaleString()}</span>
                         </div>
-                        {shippingFee > 0 && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
-                                <span className="text-sm font-bold text-brand-cyan">+{currency === 'THB' ? '฿' : '$'}{shippingFee.toLocaleString()}</span>
-                            </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
+                            <span className="text-sm font-bold text-brand-cyan">
+                                {estimateLoading
+                                    ? 'Calculating…'
+                                    : effectiveShipping > 0
+                                        ? `+${currency === 'THB' ? '฿' : '$'}${effectiveShipping.toLocaleString()}`
+                                        : `${currency === 'THB' ? '฿' : '$'}0`}
+                            </span>
+                        </div>
+                        {estimateError && (
+                            <p className="text-[10px] text-amber-400 italic">
+                                Could not calculate shipping — showing subtotal only. Final amount will reflect actual shipping.
+                            </p>
                         )}
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
                             <div className="text-right">
-                                <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{amount.toLocaleString()}</span>
+                                <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{effectiveAmount.toLocaleString()}</span>
                                 {method === 'paypal' && currency === 'THB' && (
                                     <p className="text-[10px] text-slate-500">≈ ${paypalAmount} USD</p>
                                 )}
@@ -271,7 +340,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         <div className="space-y-3">
                             <Elements stripe={stripePromise}>
                                 <StripeCardForm
-                                    amount={amount}
+                                    amount={effectiveAmount}
                                     currency={currency}
                                     items={items}
                                     apiEndpoint={apiEndpoint}
