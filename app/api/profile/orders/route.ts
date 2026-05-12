@@ -31,6 +31,14 @@ export async function GET(request: NextRequest) {
                 listing:listings(
                     card_data,
                     condition
+                ),
+                shipping_labels(
+                    tracking_number,
+                    carrier_name,
+                    label_url,
+                    courier_tracking_url,
+                    estimated_delivery_date,
+                    status
                 )
             `, { count: 'exact' })
             .eq('buyer_id', user.id)

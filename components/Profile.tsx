@@ -71,8 +71,6 @@ interface PaymentMethod {
 interface Order {
   id: string;
   status: 'pending' | 'paid' | 'label_generated' | 'processing' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
-  tracking_number: string | null;
-  carrier: string | null;
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
@@ -80,7 +78,17 @@ interface Order {
     card_data: any;
     condition: string;
   };
-  shipping_labels?: { label_url: string }[];
+  // Tracking lives on shipping_labels (one-to-one with orders). The pre-Flash
+  // Order shape had top-level tracking_number/carrier columns; those never
+  // existed in the DB, they were always meant to come from the join.
+  shipping_labels?: {
+    tracking_number?: string | null;
+    carrier_name?: string | null;
+    label_url?: string | null;
+    courier_tracking_url?: string | null;
+    estimated_delivery_date?: string | null;
+    status?: string | null;
+  }[];
 }
 
 interface Sale {
@@ -932,11 +940,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         </div>
                       </div>
 
-                      {/* Order Timeline */}
+                      {/* Order Timeline. The real DB statuses (paid,
+                          label_generated, shipped, in_transit, out_for_delivery,
+                          delivered) don't map 1:1 to the four timeline steps,
+                          so collapse them: paid/label_generated → processing,
+                          in_transit → shipped. Without this mapping the
+                          timeline shows blank for the first part of the
+                          order's life. */}
                       <div className="flex items-center justify-between">
                         {['processing', 'shipped', 'out_for_delivery', 'delivered'].map((step, idx) => {
                           const stepOrder = ['processing', 'shipped', 'out_for_delivery', 'delivered'];
-                          const currentIdx = stepOrder.indexOf(order.status);
+                          const timelineStatus =
+                            order.status === 'paid' || order.status === 'label_generated' || order.status === 'processing'
+                              ? 'processing'
+                              : order.status === 'shipped' || order.status === 'in_transit'
+                                ? 'shipped'
+                                : order.status === 'out_for_delivery'
+                                  ? 'out_for_delivery'
+                                  : order.status === 'delivered' || order.status === 'completed'
+                                    ? 'delivered'
+                                    : 'processing';
+                          const currentIdx = stepOrder.indexOf(timelineStatus);
                           const isComplete = idx <= currentIdx;
                           const isCurrent = idx === currentIdx;
 
@@ -961,12 +985,43 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         })}
                       </div>
 
-                      {order.tracking_number && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-slate-500">Tracking:</span>
-                          <span className="text-white font-mono">{order.tracking_number}</span>
-                        </div>
-                      )}
+                      {/* Tracking — pulled from the shipping_labels join.
+                          MANUAL is the sentinel value Bug #D's region-error
+                          fallback uses; show a different message for those
+                          orders since the buyer can't actually track them. */}
+                      {(() => {
+                        const label = order.shipping_labels?.[0];
+                        if (!label?.tracking_number) return null;
+                        if (label.tracking_number === 'MANUAL') {
+                          return (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-slate-500">Tracking:</span>
+                              <span className="text-amber-300 italic">Manual handling — support will be in touch</span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center gap-2 text-xs flex-wrap">
+                            <span className="text-slate-500">Tracking:</span>
+                            <span className="text-white font-mono">{label.tracking_number}</span>
+                            {label.courier_tracking_url && (
+                              <a
+                                href={label.courier_tracking_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-brand-cyan hover:underline text-[10px] uppercase tracking-widest font-bold"
+                              >
+                                Track ↗
+                              </a>
+                            )}
+                            {label.carrier_name && (
+                              <span className="text-slate-600 text-[10px] uppercase tracking-widest">
+                                via {label.carrier_name}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Buyer Action required */}
                       {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (
