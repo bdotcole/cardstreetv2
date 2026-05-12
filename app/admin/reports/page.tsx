@@ -1,6 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
+// Same reasoning as app/admin/page.tsx — service-role DB call at render time
+// means we can't prerender at build.
+export const dynamic = 'force-dynamic';
+
 async function getReports() {
     const supabase = createAdminClient();
     const { data } = await supabase

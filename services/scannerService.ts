@@ -1,14 +1,27 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { createClient as createAdminClient, SupabaseClient } from '@supabase/supabase-js';
 
-// We must use backend-only env vars. If these are empty, we gracefully fail.
-const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+// Lazy-init both clients. createAdminClient throws at construction time when
+// SUPABASE_URL is empty (which is true during `next build` page-data collection
+// in environments without env vars). Lazy init defers that to the first
+// request, so the build can complete.
+let _ai: GoogleGenAI | null | undefined;
+function getAi(): GoogleGenAI | null {
+    if (_ai !== undefined) return _ai;
+    const apiKey = process.env.GEMINI_API_KEY || '';
+    _ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+    return _ai;
+}
 
-// Secure admin client for uploading the temporary image for Google Lens (SerpApi)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+let _supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+    if (_supabase) return _supabase;
+    _supabase = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+    return _supabase;
+}
 
 export interface ScanResult {
   primary: {
@@ -31,6 +44,7 @@ export interface ScanResult {
 export const scannerService = {
   async scanCard(payload: { image?: string; text?: string }): Promise<ScanResult> {
     const serpApiKey = process.env.SERPAPI_API_KEY;
+    const ai = getAi();
     const hasGemini = !!ai;
 
     if (!serpApiKey && !hasGemini) {
@@ -78,6 +92,8 @@ export const scannerService = {
   },
 
   async lensScan(base64Image: string, serpApiKey: string): Promise<ScanResult | null> {
+    const supabase = getSupabase();
+    const ai = getAi();
     // 1. SerpApi requires a URL. We upload the base64 to Supabase temp bucket 'listings'.
     // Remove the data URI prefix if it exists
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
@@ -168,6 +184,7 @@ If the titles are garbage or unrelated to Pokemon, return a low confidence.`,
   },
 
   async geminiScan(base64Image: string, modelName: string = 'gemini-2.5-pro'): Promise<ScanResult> {
+    const ai = getAi();
     if (!ai) throw new Error("Gemini API key not configured");
     
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
@@ -230,6 +247,7 @@ CRITICAL OCR INSTRUCTIONS:
   },
 
   async geminiTextScan(ocrText: string): Promise<ScanResult> {
+    const ai = getAi();
     if (!ai) throw new Error("Gemini API key not configured");
     
     const response = await ai.models.generateContent({

@@ -1,5 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// The admin dashboard queries Supabase at render time via the service-role
+// client. Prerendering it at build would require Supabase env vars to be
+// present at build time — but Vercel only injects them at runtime for server
+// components. Force dynamic so this page is only ever rendered per request.
+export const dynamic = 'force-dynamic'
+
 interface StatCard {
     label: string
     value: string | number

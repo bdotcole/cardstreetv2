@@ -1,18 +1,13 @@
 
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    httpClient: Stripe.createFetchHttpClient()
-});
+import { getStripe, getAppBaseUrl } from '@/lib/stripe';
 
 export async function POST(req: Request) {
     try {
         const { amount, currency, token, metadata } = await req.json();
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'development'
-            ? 'http://localhost:3000'
-            : 'https://cardstreet.app');
+        const stripe = getStripe();
+        const baseUrl = getAppBaseUrl();
 
         // The transfer_group MUST be provided by the orders/checkout route (created before payment).
         // This links the PaymentIntent to the pending orders in the database.

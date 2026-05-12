@@ -11,12 +11,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    httpClient: Stripe.createFetchHttpClient(),
-});
+import { getStripe } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
+    const stripe = getStripe();
     let event: Stripe.Event;
 
     try {
@@ -118,6 +116,51 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
+                break;
+            }
+
+            case 'account.updated': {
+                // Stripe Connect: seller's account capabilities / requirements changed.
+                // Sync into profiles so the UI and release-funds cron see fresh state.
+                const account = event.data.object as Stripe.Account;
+                try {
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const { deriveConnectStatus } = await import('@/lib/stripe');
+                    const supabase = createClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.SUPABASE_SERVICE_ROLE_KEY!
+                    );
+
+                    const status = deriveConnectStatus(account);
+
+                    const { error: updErr, data: updRows } = await supabase
+                        .from('profiles')
+                        .update({
+                            stripe_account_status: status,
+                            stripe_charges_enabled: account.charges_enabled ?? false,
+                            stripe_payouts_enabled: account.payouts_enabled ?? false,
+                            stripe_details_submitted: account.details_submitted ?? false,
+                            stripe_account_updated_at: new Date().toISOString(),
+                        })
+                        .eq('stripe_account_id', account.id)
+                        .select('id');
+
+                    if (updErr) {
+                        console.error('[StripeWebhook] account.updated DB write failed:', updErr);
+                    } else if (!updRows || updRows.length === 0) {
+                        console.warn(
+                            `[StripeWebhook] account.updated for ${account.id} matched no profile — ` +
+                            `Connect account exists in Stripe but is not linked to any seller.`
+                        );
+                    } else {
+                        console.log(
+                            `[StripeWebhook] Synced Connect account ${account.id} → status=${status}, ` +
+                            `charges=${account.charges_enabled}, payouts=${account.payouts_enabled}`
+                        );
+                    }
+                } catch (syncErr) {
+                    console.error('[StripeWebhook] account.updated handler error:', syncErr);
+                }
                 break;
             }
 
