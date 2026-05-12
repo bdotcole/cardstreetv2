@@ -141,6 +141,36 @@ const StripeCardForm: React.FC<{
             }
 
             if (data.status === 'succeeded') {
+                // Client-triggered fulfillment fallback. The Stripe webhook
+                // is the canonical post-payment path, but if it's misconfigured
+                // or delivery fails, orders would stay stuck at pending_payment
+                // and never reach the seller's "Pending Shipments" view.
+                // /api/orders/finalize re-verifies the payment with Stripe and
+                // runs the same idempotent fulfillment — CAS guard inside
+                // fulfillOrdersByTransferGroup prevents double-processing if
+                // the webhook ALSO fires.
+                if (apiEndpoint === '/api/checkout' && transferGroup) {
+                    try {
+                        const finalizeRes = await fetch('/api/orders/finalize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                transferGroup,
+                                paymentIntentId: data.id,
+                            }),
+                        });
+                        const finalizeData = await finalizeRes.json().catch(() => ({}));
+                        if (!finalizeRes.ok) {
+                            console.warn('[PaymentModal] Finalize fallback returned an error (webhook may still fulfill):', finalizeData.error);
+                        } else {
+                            console.log('[PaymentModal] Finalize fallback complete:', finalizeData);
+                        }
+                    } catch (finalizeErr) {
+                        // Don't block the user — the webhook is still the
+                        // canonical path, this is just a safety net.
+                        console.warn('[PaymentModal] Finalize fallback threw (webhook should still fulfill):', finalizeErr);
+                    }
+                }
                 onPaymentSuccess({ paymentMethod: 'card', paymentId: data.id, transferGroup: data.transfer_group || transferGroup });
             } else if (data.status === 'requires_action' && data.next_action?.redirect_to_url) {
                 window.location.href = data.next_action.redirect_to_url.url;
