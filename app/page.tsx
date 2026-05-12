@@ -361,40 +361,35 @@ export default function HomePage() {
     };
 
     const handleCheckout = () => {
+        // Buyers must be authenticated — the /api/orders/checkout route requires
+        // a real buyer profile id, and the modal would otherwise fail server-side
+        // with a generic "missing required fields" message that's hard to debug.
+        if (!requireAuth('complete your purchase')) return;
+        if (user?.provider === 'guest') {
+            showToast('Please sign in with a full account to complete a purchase.', 'error');
+            setActiveTab('profile');
+            return;
+        }
         setIsCartOpen(false);
         setIsPaymentModalOpen(true);
     };
 
-    const handlePaymentSuccess = async (paymentMethod = 'card', paymentId = 'simulated_success') => {
+    // Post-payment cleanup. The order creation + Stripe charge already happened
+    // inside PaymentModal; this just resets UI state and refreshes local data.
+    // (Earlier versions of this handler re-POSTed to /api/orders/checkout — that
+    // was leftover from before the modal owned that step, and would have
+    // created duplicate orders on top of the ones the modal already inserted.)
+    const handlePaymentSuccess = async (_paymentMethod = 'card', _paymentId = 'simulated_success') => {
         if (!user) return;
 
-        try {
-            const res = await fetch('/api/orders/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    items: cart,
-                    paymentMethod,
-                    paymentId,
-                    buyerId: user.id
-                })
-            });
+        setIsPaymentModalOpen(false);
+        setCart([]);
 
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error);
+        // Refresh local state aggressively to hide sold items and show new vault items
+        fetchGlobalListings();
+        refreshCollections();
 
-            setIsPaymentModalOpen(false);
-            setCart([]);
-
-            // Refresh local state aggressively to hide sold items and show new vault items
-            fetchGlobalListings();
-            refreshCollections();
-
-            showToast(`Payment Successful! Thank you for your purchase.`, 'success');
-        } catch (err: any) {
-            console.error('Checkout failed:', err);
-            alert(`Payment succeeded but checkout failed: ${err.message}`);
-        }
+        showToast(`Payment Successful! Thank you for your purchase.`, 'success');
     };
 
     const handleScanCard = async () => {

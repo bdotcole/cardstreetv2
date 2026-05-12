@@ -46,6 +46,18 @@ const StripeCardForm: React.FC<{
             return;
         }
 
+        // Belt-and-suspenders: surface a clear error if the parent rendered us
+        // without the required context, instead of letting the server return a
+        // generic "missing required fields" message.
+        if (apiEndpoint === '/api/checkout' && !extraData?.buyerId) {
+            onPaymentFailed('You must be signed in to complete a purchase.');
+            return;
+        }
+        if (!items || items.length === 0) {
+            onPaymentFailed('Your cart is empty.');
+            return;
+        }
+
         setLoading(true);
 
         // Charge amount may be overridden by the server in step 2 below.
