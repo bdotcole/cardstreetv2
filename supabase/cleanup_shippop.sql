@@ -28,11 +28,12 @@ BEGIN;
 ALTER TABLE public.shipping_labels
     DROP COLUMN IF EXISTS shippop_purchase_id;
 
--- 2. Drop the shipping_addresses table and its supporting objects
---    (function + trigger are cascaded by DROP TABLE)
-DROP TRIGGER IF EXISTS ensure_single_default_address_trigger ON public.shipping_addresses;
-DROP FUNCTION IF EXISTS public.ensure_single_default_address();
+-- 2. Drop the shipping_addresses table (and any dependent trigger via CASCADE).
+--    Order matters: `DROP TRIGGER IF EXISTS ... ON <table>` still requires the
+--    table to exist, so we drop the table first and let CASCADE clear its
+--    trigger. The function is dropped separately and is idempotent.
 DROP TABLE IF EXISTS public.shipping_addresses CASCADE;
+DROP FUNCTION IF EXISTS public.ensure_single_default_address();
 
 -- 3. Drop the orphaned FK column on orders that referenced shipping_addresses
 ALTER TABLE public.orders
