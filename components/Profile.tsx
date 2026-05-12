@@ -6,7 +6,8 @@ import {
   User, Mail, Phone, MapPin, CreditCard, Gift, Shield, Bell,
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Plus, Trash2, Check, X, Truck, Clock, CheckCircle,
-  AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag
+  AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
+  Wallet
 } from 'lucide-react';
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
@@ -94,7 +95,7 @@ interface Sale {
   };
 }
 
-type ActivePanel = 'none' | 'account' | 'payment' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support';
+type ActivePanel = 'none' | 'account' | 'payment' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts';
 
 const tierConfig = {
   bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
@@ -367,7 +368,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
-        { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' }
+        { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
+        { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
       ]
     },
     {
@@ -1092,12 +1094,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           for long, fulfillment hit an error and support is on it. */}
                       {(shipment.status === 'paid' || shipment.status === 'pending') && (
                         <div className="w-full h-10 bg-slate-800 text-slate-400 border border-white/5 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center">
-                          {t('profile.labelBeingPrepared') || 'Label being prepared…'}
+                          {t('profile.labelBeingPrepared')}
                         </div>
                       )}
                       {shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
                         <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
-                          {t('profile.manualLabelRequired') || 'Manual label — support will contact you'}
+                          {t('profile.manualLabelRequired')}
                         </div>
                       )}
                       {shipment.shipping_labels?.[0]?.label_url && shipment.shipping_labels[0].label_url !== 'N/A' && shipment.shipping_labels[0].label_url !== '' && (
@@ -1113,6 +1115,29 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   ))
                 )}
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Seller Payouts Panel — Stripe Connect onboarding & management */}
+        {activePanel === 'payouts' && (
+          <motion.div
+            key="payouts"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+          >
+            <div className="p-4 pt-16 space-y-6">
+              <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-slate-400" />
+                </button>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.sellerPayouts')}</h2>
+              </div>
+
+              <StripeConnectSection />
             </div>
           </motion.div>
         )}
