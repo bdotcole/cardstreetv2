@@ -24,11 +24,16 @@ interface FlashConfig {
 }
 
 function getFlashConfig(): FlashConfig {
-    const env = process.env.FLASH_EXPRESS_ENV || 'training';
+    // Trim all env values defensively. Vercel's env var UI sometimes captures
+    // trailing whitespace / \r\n from pasted values; Flash signs the request
+    // body byte-for-byte, so a stray newline turns "CBG5424" into something
+    // Flash can't find ("Customer not found", code 1001) even though every-
+    // thing else is correct.
+    const env = (process.env.FLASH_EXPRESS_ENV || 'training').trim();
 
     if (env === 'production') {
-        const mchId = process.env.FLASH_EXPRESS_MCH_ID_PRODUCTION;
-        const apiKey = process.env.FLASH_EXPRESS_KEY_PRODUCTION;
+        const mchId = process.env.FLASH_EXPRESS_MCH_ID_PRODUCTION?.trim();
+        const apiKey = process.env.FLASH_EXPRESS_KEY_PRODUCTION?.trim();
 
         if (!mchId || !apiKey) {
             throw new Error('[FlashExpress] Missing Production Credentials (FLASH_EXPRESS_MCH_ID_PRODUCTION or FLASH_EXPRESS_KEY_PRODUCTION)');
@@ -36,14 +41,14 @@ function getFlashConfig(): FlashConfig {
 
         return {
             baseUrl: 'https://open-api.flashexpress.com',
-            mchId: mchId,
-            apiKey: apiKey,
+            mchId,
+            apiKey,
         };
     }
 
     // Training environment — also requires explicit credentials
-    const mchId = process.env.FLASH_EXPRESS_MCH_ID_TRAINING;
-    const apiKey = process.env.FLASH_EXPRESS_KEY_TRAINING;
+    const mchId = process.env.FLASH_EXPRESS_MCH_ID_TRAINING?.trim();
+    const apiKey = process.env.FLASH_EXPRESS_KEY_TRAINING?.trim();
 
     if (!mchId || !apiKey) {
         throw new Error('[FlashExpress] Missing Training Credentials (FLASH_EXPRESS_MCH_ID_TRAINING or FLASH_EXPRESS_KEY_TRAINING). Set these environment variables or switch FLASH_EXPRESS_ENV to production.');
@@ -51,8 +56,8 @@ function getFlashConfig(): FlashConfig {
 
     return {
         baseUrl: 'https://open-api-tra.flashexpress.com',
-        mchId: mchId,
-        apiKey: apiKey,
+        mchId,
+        apiKey,
     };
 }
 
