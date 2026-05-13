@@ -311,16 +311,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         return;
       }
 
-      // Step 3: trigger the actual download. The label route now sets
-      // Content-Disposition: attachment, so:
-      //   - Android Capacitor WebView routes this to DownloadManager →
-      //     file lands in the device's Downloads folder, system
-      //     notification appears, app stays where it is.
-      //   - Web browsers trigger a normal download.
-      //   - iOS WKWebView is the awkward case (no DownloadManager
-      //     equivalent without a native plugin) — would need follow-up.
+      // Step 3: trigger the actual download.
+      //
+      // Capacitor's Android WebView registers a default DownloadListener
+      // that forwards the URL to a system Intent — which looks for an app
+      // that "handles" PDFs and silently does nothing if none is set as
+      // default. That's why window.location.href to an attachment URL
+      // doesn't actually save anything.
+      //
+      // Workaround: hand the URL to the @capacitor/browser plugin instead,
+      // which launches Chrome Custom Tabs. Chrome's own download flow sees
+      // Content-Disposition: attachment, routes the response into Android's
+      // DownloadManager, and the file lands in the Downloads folder with
+      // a system notification. The user can dismiss the Chrome tab after.
+      //
+      // On web, attachment header + same-window nav triggers a normal
+      // browser download.
       setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
-      window.location.href = signedUrl;
+
+      const isCapacitor =
+        typeof window !== 'undefined' &&
+        !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
+      if (isCapacitor) {
+        try {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url: signedUrl });
+        } catch (browserErr: any) {
+          console.error('[Label] @capacitor/browser open failed, falling back to navigation:', browserErr);
+          // Last-resort fallback — usually fails on Android as described
+          // above, but it's better to attempt something than to do nothing.
+          window.location.href = signedUrl;
+        }
+      } else {
+        window.location.href = signedUrl;
+      }
     } catch (err: any) {
       setLabelModal({
         orderId,
