@@ -274,50 +274,53 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const openLabel = async (orderId: string) => {
     setLabelModal({ orderId, pdfUrl: null, loading: true, error: null });
     try {
-      // Pre-check: fetch the endpoint with cookies to surface server-side
-      // errors (Flash recovery failures, address issues, etc.) in the modal
-      // rather than letting the user navigate to a raw JSON error page.
-      const res = await fetch(`/api/orders/${orderId}/label`, {
+      // Step 1: request a signed URL from the server (cookies attached so
+      // we can prove the caller is the order's seller). The response is a
+      // self-authenticating URL valid for ~5 minutes that the WebView's
+      // DownloadManager can fetch without needing our session cookie.
+      const urlRes = await fetch(`/api/orders/${orderId}/label/url`, {
+        method: 'POST',
         credentials: 'include',
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+      if (!urlRes.ok) {
+        const data = await urlRes.json().catch(() => ({}));
         setLabelModal({
           orderId,
           pdfUrl: null,
           loading: false,
-          error: data.error || `Server returned ${res.status}`,
+          error: data.error || `Server returned ${urlRes.status}`,
+        });
+        return;
+      }
+      const { url: signedUrl } = await urlRes.json();
+
+      // Step 2: hit the signed URL once with cookies to surface any Flash
+      // recovery errors (bad addresses, region issues) in our modal rather
+      // than letting them show up as a raw JSON page in DownloadManager.
+      // The route is idempotent — once the shipping_labels row exists, the
+      // second request (from DownloadManager / browser) hits the fast path.
+      const preflight = await fetch(signedUrl, { credentials: 'include' });
+      if (!preflight.ok) {
+        const data = await preflight.json().catch(() => ({}));
+        setLabelModal({
+          orderId,
+          pdfUrl: null,
+          loading: false,
+          error: data.error || `Server returned ${preflight.status}`,
         });
         return;
       }
 
-      // Detect Capacitor — different rendering strategies needed.
-      const isCapacitor = typeof window !== 'undefined' &&
-        !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
-
-      if (isCapacitor) {
-        // iOS WKWebView and Android WebView both render PDFs inline at
-        // top-level navigation (with native share / print / save controls
-        // available via the system UI), but NOT inside <iframe>/<object>
-        // with blob URLs. Navigate directly. The pre-check above guaranteed
-        // the route returns a PDF this time, so the user lands on the
-        // viewer rather than a JSON error.
-        setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
-        window.location.href = `/api/orders/${orderId}/label`;
-        return;
-      }
-
-      // Web: load the PDF inside an iframe pointed at the API URL. The
-      // browser's built-in PDF viewer provides Download / Print toolbar
-      // controls. Using the URL (not a blob URL) is faster for the user
-      // and we already paid the recovery cost in the pre-check above —
-      // the iframe's request will hit the fast path.
-      setLabelModal({
-        orderId,
-        pdfUrl: `/api/orders/${orderId}/label`,
-        loading: false,
-        error: null,
-      });
+      // Step 3: trigger the actual download. The label route now sets
+      // Content-Disposition: attachment, so:
+      //   - Android Capacitor WebView routes this to DownloadManager →
+      //     file lands in the device's Downloads folder, system
+      //     notification appears, app stays where it is.
+      //   - Web browsers trigger a normal download.
+      //   - iOS WKWebView is the awkward case (no DownloadManager
+      //     equivalent without a native plugin) — would need follow-up.
+      setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
+      window.location.href = signedUrl;
     } catch (err: any) {
       setLabelModal({
         orderId,
@@ -1361,14 +1364,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         )}
       </AnimatePresence>
 
-      {/* Shipping label preview modal. Used on web only — on Capacitor we
-          navigate the webview directly to the PDF URL (above in openLabel)
-          because iOS WKWebView won't render PDFs inside iframes/objects.
-          On web, an <iframe> with the API URL works: the browser's built-in
-          PDF viewer renders the document and provides its own Download /
-          Print toolbar controls, so we don't need our own. */}
+      {/* Label download status modal. Shows the spinner while we resolve
+          the signed URL + run the Flash recovery preflight, and shows any
+          server error if the recovery fails. Success closes the modal
+          immediately — the browser/WebView takes the download from there
+          (Android DownloadManager → Downloads folder + notification; web
+          browser → standard download). */}
       <AnimatePresence>
-        {(labelModal.loading || labelModal.pdfUrl || labelModal.error) && (
+        {(labelModal.loading || labelModal.error) && (
           <motion.div
             key="label-modal"
             initial={{ opacity: 0 }}
@@ -1391,7 +1394,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             {labelModal.loading && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-cyan" />
-                <p className="text-sm">Fetching label from Flash Express…</p>
+                <p className="text-sm">Preparing label from Flash Express…</p>
               </div>
             )}
 
@@ -1403,14 +1406,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 </p>
                 <p className="text-slate-400 text-xs max-w-md leading-relaxed">{labelModal.error}</p>
               </div>
-            )}
-
-            {labelModal.pdfUrl && (
-              <iframe
-                src={labelModal.pdfUrl}
-                className="flex-1 w-full bg-white"
-                title="Shipping Label"
-              />
             )}
           </motion.div>
         )}

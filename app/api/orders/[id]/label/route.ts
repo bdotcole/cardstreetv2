@@ -20,12 +20,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { createShipment, generateLabel } from '@/lib/flashExpress';
+import { verifyLabelToken } from '@/lib/labelToken';
 
 // Statuses where a Flash label should exist (or be recoverable).
 const LABEL_EXPECTED_STATUSES = ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
 
 export async function GET(
-    _req: NextRequest,
+    req: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
     const { id: orderId } = await context.params;
@@ -35,18 +36,50 @@ export async function GET(
     }
 
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        // Service-role client to bypass RLS for the join + any recovery writes
-        // we may need to do below. Authorization is enforced immediately after.
+        // Service-role client used for the joined SELECT and any recovery
+        // writes below. Authorization is enforced via one of two paths first:
+        //   1. Signed token in the query string (used when the request comes
+        //      from Android's DownloadManager or any context where cookies
+        //      can't be attached — see /api/orders/[id]/label/url which
+        //      issues these tokens to authenticated sellers).
+        //   2. Cookie-based session as the order's seller (used by
+        //      first-party pre-checks + direct web access).
         const admin = createAdminClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
+
+        const sig = req.nextUrl.searchParams.get('sig');
+        const expRaw = req.nextUrl.searchParams.get('exp');
+
+        if (sig && expRaw) {
+            // Signed-token auth path
+            const exp = parseInt(expRaw, 10);
+            if (!Number.isFinite(exp) || !verifyLabelToken(orderId, exp, sig)) {
+                return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 });
+            }
+            // Authorization derives from the signed token alone — caller
+            // already proved ownership when /label/url issued the URL.
+        } else {
+            // Cookie-based auth path
+            const supabase = await createClient();
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+
+            const { data: orderForAuth, error: orderErr } = await admin
+                .from('orders')
+                .select('seller_id')
+                .eq('id', orderId)
+                .single();
+            if (orderErr || !orderForAuth) {
+                return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+            }
+            if (orderForAuth.seller_id !== user.id) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+        }
 
         const { data: order, error: orderErr } = await admin
             .from('orders')
@@ -56,10 +89,6 @@ export async function GET(
 
         if (orderErr || !order) {
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-        }
-
-        if (order.seller_id !== user.id) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const labels = order.shipping_labels as { tracking_number: string | null }[] | null;
@@ -183,7 +212,13 @@ export async function GET(
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `inline; filename="cardstreet-${orderId}-${trackingNumber}.pdf"`,
+                // attachment (not inline) — Android Capacitor WebView only
+                // hands the response to DownloadManager (and thus actually
+                // saves the file to the device) when it sees attachment.
+                // Web browsers also honor this by triggering a download
+                // instead of opening an in-tab preview, which matches the
+                // expected "Print Label" flow.
+                'Content-Disposition': `attachment; filename="cardstreet-${orderId}-${trackingNumber}.pdf"`,
                 'Cache-Control': 'private, max-age=300',
             },
         });
