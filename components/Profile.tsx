@@ -136,6 +136,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   });
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [shipments, setShipments] = useState<Order[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
@@ -205,14 +206,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   };
 
   const fetchOrders = async () => {
+    setOrdersError(null);
     try {
-      const res = await fetch('/api/profile/orders?status=active');
+      const res = await fetch('/api/profile/orders?status=active', {
+        // Capacitor mobile webview sometimes doesn't include cookies on
+        // same-origin requests by default — force it so the session is
+        // attached on iOS/Android builds.
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders);
+        setOrders(data.orders || []);
+      } else {
+        const msg = data.error || `Server returned ${res.status}`;
+        console.error('Error fetching orders:', msg);
+        setOrdersError(msg);
+        setOrders([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching orders:', error);
+      setOrdersError(error?.message || 'Network error');
+      setOrders([]);
     }
   };
 
@@ -915,7 +929,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 {orders.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <Package className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">No active orders</p>
+                    {ordersError ? (
+                      <>
+                        <p className="text-red-400 text-sm">Couldn&apos;t load orders</p>
+                        <p className="text-slate-500 text-xs px-4">{ordersError}</p>
+                      </>
+                    ) : (
+                      <p className="text-slate-500 text-sm">No active orders</p>
+                    )}
                   </div>
                 ) : (
                   orders.map((order) => (
