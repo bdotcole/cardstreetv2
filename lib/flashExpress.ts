@@ -485,6 +485,34 @@ export function mapFlashStateToStatus(flashState: number): {
 }
 
 /**
+ * Set Webhook Service — POST /open/v1/setting/web_hook_service
+ *
+ * Registers (or disables) the callback URL for one webhook event type on
+ * the merchant's account. Flash requires this to be called separately for
+ * each event type — there's no "register all" call.
+ *
+ * webhookApiCode values per Flash Open API docs:
+ *   0 = status (state changes: picked up, in transit, delivered, etc.)
+ *   1 = weight (actual weight after Flash measures the parcel)
+ *   2 = price (price adjustment after weighing)
+ *   3 = courier (driver assignment info)
+ *   4 = routes (scan/route events)
+ */
+export type FlashWebhookApiCode = 0 | 1 | 2 | 3 | 4;
+
+export async function setWebhookService(params: {
+    webhookApiCode: FlashWebhookApiCode;
+    url: string;
+    enabled?: boolean; // default true
+}): Promise<void> {
+    await makeFlashRequest('/open/v1/setting/web_hook_service', {
+        serviceCategory: params.enabled === false ? '0' : '1',
+        url: params.url,
+        webhookApiCode: String(params.webhookApiCode),
+    });
+}
+
+/**
  * Identifies Flash Express region/area mismatch errors.
  *
  * Why: the training sandbox accepts only a narrow set of Thai province/district
