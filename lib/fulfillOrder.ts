@@ -141,6 +141,14 @@ export async function fulfillOrdersByTransferGroup(
             .single();
 
         const labelsToInsert: any[] = [];
+        // Order IDs whose label rows were successfully prepared. We only flip
+        // these to 'label_generated' AFTER the shipping_labels upsert succeeds
+        // — otherwise an insert failure (missing column, RLS, constraint, etc.)
+        // would leave orders at label_generated with no actual label row, and
+        // the seller has no way to print or track. Better to keep the order
+        // at 'paid' so the recovery path is "rerun fulfillment" rather than
+        // "manually reconstruct a shipping_labels row."
+        const ordersToFlipToLabelGenerated: string[] = [];
         const sellerLabelMap = new Map<string, string>();
 
         for (const sellerId of sellerIds) {
@@ -244,7 +252,7 @@ export async function fulfillOrdersByTransferGroup(
                     pickupStatus = 'manual';
                 }
 
-                // Prepare label records
+                // Prepare label records (insert happens after the loop)
                 const courierTrackingUrl = `https://www.flashexpress.com/fle/tracking?se=${flashOrder.pno}`;
                 for (const order of sellerOrders) {
                     labelsToInsert.push({
@@ -259,13 +267,8 @@ export async function fulfillOrdersByTransferGroup(
                         pickup_status: pickupStatus,
                         courier_tracking_url: courierTrackingUrl,
                     });
+                    ordersToFlipToLabelGenerated.push(order.id);
                 }
-
-                // Update these orders to label_generated
-                await supabase
-                    .from('orders')
-                    .update({ status: 'label_generated' })
-                    .in('id', sellerOrders.map(o => o.id));
 
             } catch (flashErr: any) {
                 if (isRegionError(flashErr)) {
@@ -290,11 +293,8 @@ export async function fulfillOrdersByTransferGroup(
                             pickup_status: 'manual',
                             courier_tracking_url: null,
                         });
+                        ordersToFlipToLabelGenerated.push(order.id);
                     }
-                    await supabase
-                        .from('orders')
-                        .update({ status: 'label_generated' })
-                        .in('id', sellerOrders.map(o => o.id));
                     result.errors.push(
                         `Flash Express region mismatch for seller ${sellerId} — manual label required`
                     );
@@ -306,15 +306,33 @@ export async function fulfillOrdersByTransferGroup(
             }
         }
 
-        // ─── Insert shipping labels ───
+        // ─── Insert shipping labels FIRST, then advance order status ───
+        // Reversing the previous order: if the upsert fails (missing column,
+        // RLS, constraint, etc.) the order stays at 'paid' and a retry can
+        // recover it. The old code advanced the order to 'label_generated'
+        // before this insert ran, which permanently desynced the two tables
+        // when the insert later failed.
+        let labelsInserted = true;
         if (labelsToInsert.length > 0) {
             const { error: labelInsertError } = await supabase
                 .from('shipping_labels')
                 .upsert(labelsToInsert, { onConflict: 'order_id' });
 
             if (labelInsertError) {
+                labelsInserted = false;
                 console.error('[Fulfillment] Failed to insert shipping labels:', labelInsertError);
                 result.errors.push(`Label insert error: ${labelInsertError.message}`);
+            }
+        }
+
+        if (labelsInserted && ordersToFlipToLabelGenerated.length > 0) {
+            const { error: statusErr } = await supabase
+                .from('orders')
+                .update({ status: 'label_generated' })
+                .in('id', ordersToFlipToLabelGenerated);
+            if (statusErr) {
+                console.error('[Fulfillment] Failed to advance orders to label_generated:', statusErr);
+                result.errors.push(`Order status update error: ${statusErr.message}`);
             }
         }
 
