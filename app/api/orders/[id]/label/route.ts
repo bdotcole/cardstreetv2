@@ -19,7 +19,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { generateLabel } from '@/lib/flashExpress';
+import { createShipment, generateLabel } from '@/lib/flashExpress';
+
+// Statuses where a Flash label should exist (or be recoverable).
+const LABEL_EXPECTED_STATUSES = ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
 
 export async function GET(
     _req: NextRequest,
@@ -38,8 +41,8 @@ export async function GET(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Service-role client to bypass RLS on the join — we do our own
-        // authorization check immediately after.
+        // Service-role client to bypass RLS for the join + any recovery writes
+        // we may need to do below. Authorization is enforced immediately after.
         const admin = createAdminClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -47,7 +50,7 @@ export async function GET(
 
         const { data: order, error: orderErr } = await admin
             .from('orders')
-            .select('id, seller_id, shipping_labels(tracking_number)')
+            .select('id, seller_id, buyer_id, status, shipping_labels(tracking_number)')
             .eq('id', orderId)
             .single();
 
@@ -60,18 +63,120 @@ export async function GET(
         }
 
         const labels = order.shipping_labels as { tracking_number: string | null }[] | null;
-        const trackingNumber = labels?.[0]?.tracking_number;
+        let trackingNumber = labels?.[0]?.tracking_number || null;
+
+        // ─── Recovery path ───
+        // If the order has reached a status where a label should exist but
+        // shipping_labels has no usable row (e.g., earlier fulfillment failed
+        // to insert because of the missing courier_tracking_url column), call
+        // Flash again with the same outTradeNo. Flash treats outTradeNo as an
+        // idempotency key — if a shipment already exists for this order id,
+        // it returns the same pno rather than creating a duplicate. If for
+        // some reason none exists yet, this creates one. Either way, we end
+        // up with a valid pno and a fresh shipping_labels row.
+        const needsRecovery =
+            (!trackingNumber || trackingNumber === 'MANUAL') &&
+            LABEL_EXPECTED_STATUSES.includes(order.status);
+
+        if (needsRecovery) {
+            console.log(`[Orders/Label] No tracking number for order ${orderId} at status ${order.status} — attempting Flash recovery`);
+
+            const { data: profiles } = await admin
+                .from('profiles')
+                .select('*')
+                .in('id', [order.seller_id, order.buyer_id]);
+
+            const seller = profiles?.find(p => p.id === order.seller_id);
+            const buyer = profiles?.find(p => p.id === order.buyer_id);
+
+            if (!seller || !buyer) {
+                return NextResponse.json(
+                    { error: 'Seller or buyer profile missing — cannot recover label. Contact support.' },
+                    { status: 500 }
+                );
+            }
+
+            try {
+                const flashOrder = await createShipment({
+                    outTradeNo: order.id,
+                    srcName: seller.display_name || 'CardStreet Seller',
+                    srcPhone: seller.phone_number || '0000000000',
+                    srcProvinceName: seller.province || 'กรุงเทพมหานคร',
+                    srcCityName: seller.state || seller.district || 'เขตบางรัก',
+                    srcDistrictName: seller.sub_district || seller.district || 'บางรัก',
+                    srcPostalCode: seller.postcode || '10500',
+                    srcDetailAddress: seller.address || 'CardStreet Platform',
+                    dstName: buyer.display_name || 'CardStreet Buyer',
+                    dstPhone: buyer.phone_number || '0000000000',
+                    dstProvinceName: buyer.province || 'กรุงเทพมหานคร',
+                    dstCityName: buyer.state || buyer.district || 'เขตบางรัก',
+                    dstDistrictName: buyer.sub_district || buyer.district || 'บางรัก',
+                    dstPostalCode: buyer.postcode || '10500',
+                    dstDetailAddress: buyer.address || 'CardStreet Platform',
+                    weight: 500,
+                    expressCategory: 1,
+                    articleCategory: 3,
+                    remark: 'CardStreet TCG - Handle with care',
+                });
+
+                // Persist so future clicks skip the recovery path and so the
+                // buyer's Track Orders picks up the tracking link.
+                const courierTrackingUrl = `https://www.flashexpress.com/fle/tracking?se=${flashOrder.pno}`;
+                const { error: upsertErr } = await admin
+                    .from('shipping_labels')
+                    .upsert(
+                        {
+                            order_id: order.id,
+                            tracking_number: flashOrder.pno,
+                            carrier_name: 'Flash Express',
+                            status: 'created',
+                            label_url: 'N/A',
+                            flash_order_id: flashOrder.outTradeNo,
+                            flash_sort_code: flashOrder.sortCode,
+                            pickup_id: null,
+                            pickup_status: 'pending',
+                            courier_tracking_url: courierTrackingUrl,
+                        },
+                        { onConflict: 'order_id' }
+                    );
+
+                if (upsertErr) {
+                    // Not fatal for serving the PDF — we still have the pno.
+                    // Just means the next click will recover again instead of
+                    // hitting the fast path. Log so it can be investigated.
+                    console.error('[Orders/Label] Recovery upsert failed:', upsertErr);
+                }
+
+                trackingNumber = flashOrder.pno;
+            } catch (recoveryErr: any) {
+                console.error('[Orders/Label] Flash recovery failed:', recoveryErr);
+                return NextResponse.json(
+                    {
+                        error:
+                            `Could not retrieve label from Flash: ${recoveryErr.message}. ` +
+                            `This usually means the seller or buyer address is invalid for Flash, ` +
+                            `or Flash production credentials need attention. Contact support.`,
+                    },
+                    { status: 502 }
+                );
+            }
+        }
 
         if (!trackingNumber || trackingNumber === 'MANUAL') {
             return NextResponse.json(
-                { error: 'No shipping label available for this order yet. If this persists, contact support.' },
+                {
+                    error:
+                        trackingNumber === 'MANUAL'
+                            ? 'This shipment requires manual handling — support will be in touch.'
+                            : 'No shipping label available for this order yet.',
+                },
                 { status: 404 }
             );
         }
 
-        // Fetch the PDF directly from Flash. This is a fresh call every time
-        // — not cached. Flash pre_print is idempotent and fast (~1s), so
-        // serving on demand is fine for a print action that's clicked rarely.
+        // Fetch the PDF directly from Flash. Fresh call every time — Flash
+        // pre_print is idempotent and ~1s, so on-demand is fine for a button
+        // that's clicked rarely.
         const pdfBuffer = await generateLabel(trackingNumber);
 
         return new Response(new Uint8Array(pdfBuffer), {

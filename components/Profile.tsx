@@ -1190,15 +1190,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           {t('profile.manualLabelRequired')}
                         </div>
                       )}
-                      {/* Print Shipping Label button. We now always route
-                          through the server-side /api/orders/[id]/label
-                          endpoint instead of using the stored label_url
-                          directly. That endpoint regenerates the PDF from
-                          Flash on demand, so the button works even when the
-                          original upload to Supabase Storage failed (missing
-                          bucket, RLS, etc.) — which was leaving sellers with
-                          a paid order but no way to print. */}
-                      {shipment.shipping_labels?.[0]?.tracking_number && shipment.shipping_labels[0].tracking_number !== 'MANUAL' && (
+                      {/* Print Shipping Label button. Visible whenever the
+                          order is at a status where a Flash label should
+                          exist — even if shipping_labels has no row yet (a
+                          recovery path in /api/orders/[id]/label calls Flash
+                          again with the same outTradeNo to retrieve the
+                          existing shipment). Hidden only when this is a
+                          MANUAL placeholder, which the block above already
+                          handles with its own UI. */}
+                      {['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(shipment.status) &&
+                       shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' && (
                         <a
                           href={`/api/orders/${shipment.id}/label`}
                           target="_blank"
