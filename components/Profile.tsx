@@ -7,7 +7,7 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Plus, Trash2, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Download
+  Wallet, Loader2
 } from 'lucide-react';
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
@@ -274,9 +274,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const openLabel = async (orderId: string) => {
     setLabelModal({ orderId, pdfUrl: null, loading: true, error: null });
     try {
+      // Pre-check: fetch the endpoint with cookies to surface server-side
+      // errors (Flash recovery failures, address issues, etc.) in the modal
+      // rather than letting the user navigate to a raw JSON error page.
       const res = await fetch(`/api/orders/${orderId}/label`, {
-        // Force cookies — Capacitor mobile webview sometimes omits them on
-        // same-origin fetch otherwise, which leads to a 401 from the route.
         credentials: 'include',
       });
       if (!res.ok) {
@@ -289,9 +290,34 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         });
         return;
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setLabelModal({ orderId, pdfUrl: url, loading: false, error: null });
+
+      // Detect Capacitor — different rendering strategies needed.
+      const isCapacitor = typeof window !== 'undefined' &&
+        !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
+      if (isCapacitor) {
+        // iOS WKWebView and Android WebView both render PDFs inline at
+        // top-level navigation (with native share / print / save controls
+        // available via the system UI), but NOT inside <iframe>/<object>
+        // with blob URLs. Navigate directly. The pre-check above guaranteed
+        // the route returns a PDF this time, so the user lands on the
+        // viewer rather than a JSON error.
+        setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
+        window.location.href = `/api/orders/${orderId}/label`;
+        return;
+      }
+
+      // Web: load the PDF inside an iframe pointed at the API URL. The
+      // browser's built-in PDF viewer provides Download / Print toolbar
+      // controls. Using the URL (not a blob URL) is faster for the user
+      // and we already paid the recovery cost in the pre-check above —
+      // the iframe's request will hit the fast path.
+      setLabelModal({
+        orderId,
+        pdfUrl: `/api/orders/${orderId}/label`,
+        loading: false,
+        error: null,
+      });
     } catch (err: any) {
       setLabelModal({
         orderId,
@@ -303,7 +329,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   };
 
   const closeLabel = () => {
-    if (labelModal.pdfUrl) URL.revokeObjectURL(labelModal.pdfUrl);
     setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
   };
 
@@ -1336,11 +1361,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         )}
       </AnimatePresence>
 
-      {/* Shipping label preview modal. Renders the Flash PDF in-app via
-          a blob URL so the user doesn't have to leave the webview. iOS
-          and Android WKWebView both render PDFs inside an <object>/<iframe>;
-          for the rare case the embed doesn't render, the Download button
-          falls back to triggering a browser-native download. */}
+      {/* Shipping label preview modal. Used on web only — on Capacitor we
+          navigate the webview directly to the PDF URL (above in openLabel)
+          because iOS WKWebView won't render PDFs inside iframes/objects.
+          On web, an <iframe> with the API URL works: the browser's built-in
+          PDF viewer renders the document and provides its own Download /
+          Print toolbar controls, so we don't need our own. */}
       <AnimatePresence>
         {(labelModal.loading || labelModal.pdfUrl || labelModal.error) && (
           <motion.div
@@ -1348,7 +1374,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex flex-col bg-brand-darker"
+            className="fixed inset-0 z-[10000] flex flex-col bg-brand-darker"
           >
             <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <h3 className="text-white font-black uppercase tracking-widest text-sm">
@@ -1380,28 +1406,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             )}
 
             {labelModal.pdfUrl && (
-              <>
-                <object
-                  data={labelModal.pdfUrl}
-                  type="application/pdf"
-                  className="flex-1 w-full bg-white"
-                  aria-label="Shipping Label"
-                >
-                  <div className="flex items-center justify-center h-full p-6 text-center text-slate-400 text-sm">
-                    Your device can&apos;t preview PDFs inline. Tap Download below to save the label.
-                  </div>
-                </object>
-                <div className="p-4 border-t border-white/5 shrink-0">
-                  <a
-                    href={labelModal.pdfUrl}
-                    download={`cardstreet-label-${labelModal.orderId}.pdf`}
-                    className="w-full h-12 flex items-center justify-center gap-2 bg-brand-cyan text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download PDF
-                  </a>
-                </div>
-              </>
+              <iframe
+                src={labelModal.pdfUrl}
+                className="flex-1 w-full bg-white"
+                title="Shipping Label"
+              />
             )}
           </motion.div>
         )}
