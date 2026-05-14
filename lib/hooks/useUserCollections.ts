@@ -34,6 +34,11 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 return;
             }
 
+            // Heal legacy accounts that signed up before the profile/default-collection
+            // trigger existed (or where it silently failed). Without this, those users
+            // see an empty Vault forever because they have no rows in `collections`.
+            await ensureUserProfile();
+
             // Fetch collections with their items
             const { data: collectionsData, error: collectionsError } = await supabase
                 .from('collections')
@@ -124,7 +129,20 @@ export function useUserCollections(): UseUserCollectionsReturn {
     };
 
     useEffect(() => {
+        const supabase = createClient();
         loadCollections();
+
+        // Re-load whenever the auth session changes. Without this, a user who
+        // signs in *after* this hook mounts (the common case on cold start,
+        // because auth restoration is async) never sees their collections.
+        // Skip noisy events that don't change user identity (token refreshes
+        // every hour would otherwise cause redundant reloads).
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
+            loadCollections();
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const addCollection = async (name: string, includeInPortfolio: boolean = true): Promise<string> => {

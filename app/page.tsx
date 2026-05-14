@@ -396,6 +396,14 @@ export default function HomePage() {
         setIsWebScannerOpen(true);
     };
 
+    // Fall back to manual marketplace search when the scan flow can't resolve a
+    // single card. Pre-fills the search bar with whatever hint we do have.
+    const redirectScanToSearch = (term: string, toastMessage: string) => {
+        showToast(toastMessage, 'error');
+        setActiveTab('marketplace');
+        setSearchRequest({ term, timestamp: Date.now() });
+    };
+
     const handleWebLiveScanMatch = async (scanData: any) => {
         setIsWebScannerOpen(false);
         setIsAiLoading(true);
@@ -403,7 +411,7 @@ export default function HomePage() {
             console.log('[Scan] Received match from WebLiveScanner:', scanData);
 
             if (!scanData || !scanData.primary?.name) {
-                showToast('Could not identify the card. Please try again with better lighting or angle.', 'error');
+                redirectScanToSearch('', "Couldn't identify the card. Search for it manually instead.");
                 return;
             }
 
@@ -440,7 +448,12 @@ export default function HomePage() {
             } else if (matches.length > 1) {
                 setScanCandidates(matches);
             } else {
-                showToast(`AI identified: "${scanData.primary.name}" from set "${scanData.primary.set}", but no matching card was found in the database.`, 'error');
+                // AI saw a card but the DB doesn't have it — drop the user into
+                // manual search with the detected name pre-filled.
+                redirectScanToSearch(
+                    scanData.primary.name,
+                    `AI identified "${scanData.primary.name}" but it isn't in our database. Try refining your search.`
+                );
             }
         } catch (error: any) {
             // Check for user cancellation (Capacitor camera cancel or file input cancel)
@@ -450,7 +463,7 @@ export default function HomePage() {
                 console.log('[Scan] User cancelled camera');
             } else {
                 console.error('[Scan] Error:', error);
-                showToast(`Scan failed: ${msg || 'Unknown error'}. Please try again.`, 'error');
+                redirectScanToSearch('', `Scan failed: ${msg || 'Unknown error'}. Search for the card manually instead.`);
             }
         } finally {
             setIsAiLoading(false);
@@ -703,9 +716,18 @@ export default function HomePage() {
             }}>
             
             {isWebScannerOpen && (
-                <WebLiveScanner 
-                    onClose={() => setIsWebScannerOpen(false)} 
-                    onMatch={handleWebLiveScanMatch} 
+                <WebLiveScanner
+                    onClose={() => setIsWebScannerOpen(false)}
+                    onMatch={handleWebLiveScanMatch}
+                    onScanFailed={(reason) => {
+                        setIsWebScannerOpen(false);
+                        const msg = reason === 'timeout'
+                            ? "Scan took too long. Search for the card manually instead."
+                            : reason === 'network'
+                                ? "Couldn't reach the scanner. Search for the card manually instead."
+                                : "Couldn't identify the card. Search for it manually instead.";
+                        redirectScanToSearch('', msg);
+                    }}
                 />
             )}
 

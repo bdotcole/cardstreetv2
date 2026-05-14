@@ -7,9 +7,27 @@ import { Ocr } from '@jcesarmobile/capacitor-ocr';
 interface WebLiveScannerProps {
     onClose: () => void;
     onMatch: (scanData: any) => void;
+    // Called when the scan can't identify the card (timeout, network error, no match).
+    // The host should close the scanner and route the user to manual search.
+    onScanFailed?: (reason: 'timeout' | 'network' | 'no_match') => void;
 }
 
-export default function WebLiveScanner({ onClose, onMatch }: WebLiveScannerProps) {
+// Hard ceiling for a single /api/scan request. The route's maxDuration is 60s,
+// but in practice Flash returns in 1-5s. If we're still waiting at 25s
+// something is wrong — bail out to manual search instead of leaving the user
+// staring at "Extracting visual DNA…" indefinitely.
+const SCAN_REQUEST_TIMEOUT_MS = 25_000;
+
+async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
+    return fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal,
+    });
+}
+
+export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLiveScannerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
@@ -117,44 +135,38 @@ export default function WebLiveScanner({ onClose, onMatch }: WebLiveScannerProps
                 return;
             }
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), SCAN_REQUEST_TIMEOUT_MS);
+
             let scanResponse: Response;
 
-            if (Capacitor.isNativePlatform()) {
-                console.log('Running Fast Native ML Kit OCR...');
-                try {
-                    const ocrRes = await Ocr.process({ image: base64DataUrl });
-                    const texts = ocrRes.results.map(r => r.text).join(' | ');
-                    console.log('Extracted Native OCR Text:', texts);
-                    
-                    if (texts.trim().length > 0) {
-                        scanResponse = await fetch('/api/scan', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ text: texts })
-                        });
-                    } else {
-                         throw new Error("Native OCR found no text.");
+            try {
+                if (Capacitor.isNativePlatform()) {
+                    console.log('Running Fast Native ML Kit OCR...');
+                    let texts = '';
+                    try {
+                        const ocrRes = await Ocr.process({ image: base64DataUrl });
+                        texts = ocrRes.results.map(r => r.text).join(' | ');
+                        console.log('Extracted Native OCR Text:', texts);
+                    } catch (e) {
+                        console.warn("Native OCR failed, will fall back to image scan...", e);
                     }
-                } catch(e) {
-                    console.warn("Native OCR failed, falling back to pure image scan...", e);
-                    scanResponse = await fetch('/api/scan', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image: base64Image })
-                    });
+
+                    if (texts.trim().length > 0) {
+                        scanResponse = await fetchScan({ text: texts }, controller.signal);
+                    } else {
+                        scanResponse = await fetchScan({ image: base64Image }, controller.signal);
+                    }
+                } else {
+                    // Web fallback: send the cropped image straight to Gemini Flash.
+                    scanResponse = await fetchScan({ image: base64Image }, controller.signal);
                 }
-            } else {
-                // Fallback for Vercel Web Preview (Standard Image Scan to Gemini Pro)
-                scanResponse = await fetch('/api/scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64Image })
-                });
+            } finally {
+                clearTimeout(timeoutId);
             }
-            
+
             const scanData = await scanResponse.json();
 
-            // Gemini Pro might not return confidence, so just check for a valid primary match
             if (scanResponse.ok && scanData?.primary) {
                 setIsScanning(false);
                 if (stream) {
@@ -163,12 +175,26 @@ export default function WebLiveScanner({ onClose, onMatch }: WebLiveScannerProps
                 onMatch(scanData);
             } else {
                 console.error("Scan failed or invalid JSON:", scanData);
-                alert("Failed to analyze card details. Please make sure the text is crisp and try again.");
-                resetScan();
+                handleScanFailure('no_match');
             }
-        } catch (error) {
-            console.error(error);
-            alert("Network error while scanning. Please try again.");
+        } catch (error: any) {
+            const isAbort = error?.name === 'AbortError';
+            console.error('[Scanner] Scan request failed:', error);
+            handleScanFailure(isAbort ? 'timeout' : 'network');
+        }
+    };
+
+    const handleScanFailure = (reason: 'timeout' | 'network' | 'no_match') => {
+        // Stop the camera and tear down the scanner UI — the host will route
+        // the user to manual search where they can try again on their terms.
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        setIsScanning(false);
+        if (onScanFailed) {
+            onScanFailed(reason);
+        } else {
+            // Legacy fallback: keep the camera running and let the user retry.
             resetScan();
         }
     };

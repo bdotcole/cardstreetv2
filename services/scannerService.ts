@@ -65,13 +65,14 @@ export const scannerService = {
     const base64Image = payload.image as string;
     if (!base64Image) throw new Error("Image payload missing and Native Text failed.");
 
-    // The user explicitly prefers the bulletproof accuracy of the PRO model over raw latency.
+    // Use Gemini 2.5 Flash for image scans — accurate enough for card OCR/identification
+    // and ~5–10x faster than Pro, which was making scans feel broken in practice.
     if (hasGemini) {
         try {
-            console.log('[ScannerService] Engaging Gemini Pro (Maximum Accuracy Cropped OCR Image Sequence)...');
-            return await this.geminiScan(base64Image, 'gemini-2.5-pro');
+            console.log('[ScannerService] Engaging Gemini Flash (Fast Cropped OCR Image Sequence)...');
+            return await this.geminiScan(base64Image, 'gemini-2.5-flash');
         } catch (e) {
-            console.warn('[ScannerService] Gemini Pro failed, falling back to Lens:', e);
+            console.warn('[ScannerService] Gemini Flash failed, falling back to Lens:', e);
         }
     }
 
@@ -135,7 +136,7 @@ export const scannerService = {
 
         if (ai) {
              const parseRes = await ai.models.generateContent({
-                 model: 'gemini-3-flash-preview',
+                 model: 'gemini-2.5-flash',
                  contents: `Act as a Pokémon TCG expert. Google Lens just identified an image with these titles: ${JSON.stringify(titles)}. 
                  
 Identify the EXACT Pokémon card (Name, Set Code, Number, Rarity) they represent. 
