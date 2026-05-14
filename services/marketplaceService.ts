@@ -1,5 +1,12 @@
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
+import { normalizeCard } from '@/lib/utils/normalizeCard';
+
+// Coerce a raw listing row's `card_data` JSONB into a fully-populated Card so
+// downstream rendering can never crash on a null `set` / `number` / `marketPrice`.
+function normalizeListing<T extends { card_id: string; card_data: any }>(row: T): T {
+    return { ...row, card_data: normalizeCard(row.card_data, row.card_id) };
+}
 
 // Shape returned from profiles table join (Supabase column names, not UserProfile)
 export interface SellerProfile {
@@ -114,7 +121,7 @@ export const marketplaceService = {
 
             const { data, error } = await query;
             if (error) throw error;
-            return (data || []) as unknown as MarketplaceListing[];
+            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
         } catch (error) {
             console.error('Error fetching active listings:', error);
             return [];
@@ -141,12 +148,16 @@ export const marketplaceService = {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Must be signed in to create a listing');
 
+            // Normalize on write so card_data can never be stored with null
+            // required fields, even if the caller passed a partial Card.
+            const safeCard = normalizeCard(params.cardData, params.cardId);
+
             const { data, error } = await supabase
                 .from('listings')
                 .insert({
                     seller_id: user.id,
                     card_id: params.cardId,
-                    card_data: params.cardData,
+                    card_data: safeCard,
                     price: params.price,
                     condition: params.condition,
                     is_graded: params.isGraded || false,
@@ -163,7 +174,7 @@ export const marketplaceService = {
                 .single();
 
             if (error) throw error;
-            return data as MarketplaceListing;
+            return normalizeListing(data as MarketplaceListing);
         } catch (error) {
             console.error('Error creating listing:', error);
             throw error;

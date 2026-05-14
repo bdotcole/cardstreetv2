@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, UserCollectionItem, CardCondition, CustomCollection } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
+import { normalizeCard } from '@/lib/utils/normalizeCard';
 
 interface UseUserCollectionsReturn {
     collections: CustomCollection[];
@@ -104,7 +105,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
                         return {
                             id: item.id,
                             cardId: item.card_id,
-                            card: item.card_data as Card,
+                            // Normalize: legacy rows can have null `set` / `number` /
+                            // `marketPrice` in card_data, which crashed the Vault.
+                            card: normalizeCard(item.card_data, item.card_id),
                             quantity: item.quantity,
                             condition: item.condition as CardCondition,
                             purchasePrice: parseFloat(item.purchase_price || '0'),
@@ -239,15 +242,19 @@ export function useUserCollections(): UseUserCollectionsReturn {
             // Ensure user profile exists (for legacy users)
             await ensureUserProfile();
 
+            // Normalize on the write side too — guarantees nothing with null
+            // required fields ever lands in card_data, regardless of caller.
+            const safeCard = normalizeCard(card, card.id);
+
             const { data, error } = await supabase
                 .from('collection_items')
                 .insert({
                     collection_id: collectionId,
-                    card_id: card.id,
-                    card_data: card,
+                    card_id: safeCard.id,
+                    card_data: safeCard,
                     quantity: details?.quantity || 1,
                     condition: details?.condition || CardCondition.NM,
-                    purchase_price: details?.purchasePrice || card.marketPrice || 0
+                    purchase_price: details?.purchasePrice || safeCard.marketPrice || 0
                 })
                 .select()
                 .single();
@@ -262,7 +269,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
                         items: [...col.items, {
                             id: data.id,
                             cardId: data.card_id,
-                            card: data.card_data as Card,
+                            card: normalizeCard(data.card_data, data.card_id),
                             quantity: data.quantity,
                             condition: data.condition as CardCondition,
                             purchasePrice: parseFloat(data.purchase_price),
