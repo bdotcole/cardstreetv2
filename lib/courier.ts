@@ -123,8 +123,20 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
 
 /**
  * Notifies the seller that a shipping label is ready.
+ *
+ * When `labelPdfBase64` is provided, the PDF is attached to the email via a
+ * Postmark provider override — Courier's project here is configured against
+ * Postmark, whose attachment schema is { Name, Content, ContentType } inside
+ * an `Attachments` array. The email body always links to the seller's
+ * CardStreet dashboard as a backup so the message is useful even if the
+ * recipient's mail client strips the attachment (or for the push channel
+ * where attachments don't apply).
  */
-export async function sendLabelGeneratedNotification(sellerId: string, orderDetails: any, labelUrl: string) {
+export async function sendLabelGeneratedNotification(
+    sellerId: string,
+    orderDetails: { id: string },
+    labelPdfBase64?: string | null,
+) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping label notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
@@ -141,20 +153,48 @@ export async function sendLabelGeneratedNotification(sellerId: string, orderDeta
     const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken);
     if (routing.channels.length === 0) return;
 
+    const dashboardUrl = 'https://cardstreet.app/profile';
+    const hasAttachment = !!labelPdfBase64;
+    const body = hasAttachment
+        ? `Your Flash Express label for order ${orderDetails.id} is ready — the PDF is attached to this email. Print it and drop your package at any Flash Express location. You can also re-download it anytime from your CardStreet seller dashboard: ${dashboardUrl}`
+        : `Your Flash Express label for order ${orderDetails.id} is ready. Open it from your CardStreet seller dashboard: ${dashboardUrl}`;
+
+    // Postmark attachment goes through Courier's per-provider override. The
+    // override body is merged into Postmark's email API request, so any
+    // standard Postmark field (Attachments included) is accepted there.
+    const providers = hasAttachment
+        ? {
+              postmark: {
+                  override: {
+                      body: {
+                          Attachments: [
+                              {
+                                  Name: `cardstreet-label-${orderDetails.id}.pdf`,
+                                  Content: labelPdfBase64,
+                                  ContentType: 'application/pdf',
+                              },
+                          ],
+                      },
+                  },
+              },
+          }
+        : undefined;
+
     try {
-        console.log(`[Courier] Sending 'Label Generated' notification to recipient:`, JSON.stringify(recipient));
-        const { messageId } = await courier.send.message({
+        console.log(`[Courier] Sending 'Label Generated' notification to recipient:`, JSON.stringify(recipient), `(attachment: ${hasAttachment ? 'yes' : 'no'})`);
+        const { requestId } = await courier.send.message({
             message: {
                 to: recipient,
                 content: {
                     title: "CardStreet: Shipping Label Ready 📦",
-                    body: `Your Flash Express label for order ${orderDetails.id} is ready. Print it here: ${labelUrl}`,
+                    body,
                 },
                 routing,
-                data: { orderId: orderDetails.id, type: 'label_generated', labelUrl }
-            }
+                ...(providers ? { providers } : {}),
+                data: { orderId: orderDetails.id, type: 'label_generated' },
+            },
         });
-        console.log(`[Courier] ✅ 'Label Generated' notification sent. Message ID: ${messageId}`);
+        console.log(`[Courier] ✅ 'Label Generated' notification sent. Request ID: ${requestId}`);
     } catch (error) {
         console.error(`[Courier] ❌ Error sending 'Label Generated' notification to ${sellerId}:`, error);
     }

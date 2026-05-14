@@ -150,6 +150,11 @@ export async function fulfillOrdersByTransferGroup(
         // "manually reconstruct a shipping_labels row."
         const ordersToFlipToLabelGenerated: string[] = [];
         const sellerLabelMap = new Map<string, string>();
+        // base64-encoded label PDFs per seller, so the "label generated" email
+        // can ship the actual PDF as an attachment instead of relying on a
+        // working public URL (Supabase Storage upload is currently failing in
+        // prod, which used to leave the email with a useless Flash API link).
+        const sellerLabelPdfMap = new Map<string, string>();
 
         for (const sellerId of sellerIds) {
             const sellerOrders = orders.filter(o => o.seller_id === sellerId);
@@ -209,6 +214,10 @@ export async function fulfillOrdersByTransferGroup(
                 let labelUrl = '';
                 try {
                     const labelPdf = await generateLabel(flashOrder.pno);
+                    // Stash base64 for the email attachment regardless of
+                    // whether the storage upload below succeeds.
+                    sellerLabelPdfMap.set(sellerId, labelPdf.toString('base64'));
+
                     const fileName = `shipping-labels/${primaryOrder.id}_${flashOrder.pno}.pdf`;
                     const { error: uploadError } = await supabase
                         .storage
@@ -216,10 +225,14 @@ export async function fulfillOrdersByTransferGroup(
                         .upload(fileName, labelPdf, { contentType: 'application/pdf', upsert: true });
 
                     if (uploadError) {
-                        const flashBase = process.env.FLASH_EXPRESS_ENV === 'production'
-                            ? 'https://open-api.flashexpress.com'
-                            : 'https://open-api-tra.flashexpress.com';
-                        labelUrl = `${flashBase}/open/v1/orders/${flashOrder.pno}/pre_print`;
+                        // Storage upload failed (typically the 'public-assets'
+                        // bucket is missing or service-role can't write to it).
+                        // Don't fall back to the Flash API URL here — that's a
+                        // POST-only API endpoint and 405s in a browser. Leave
+                        // labelUrl blank; the in-app print flow recovers via
+                        // /api/orders/[id]/label, and the email gets the PDF
+                        // as an attachment via sellerLabelPdfMap.
+                        console.error('[Fulfillment] Label storage upload failed (non-fatal):', uploadError);
                     } else {
                         const { data: publicUrl } = supabase.storage.from('public-assets').getPublicUrl(fileName);
                         labelUrl = publicUrl.publicUrl;
@@ -353,9 +366,14 @@ export async function fulfillOrdersByTransferGroup(
 
                 await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal });
 
-                const labelUrl = sellerLabelMap.get(sellerId);
-                if (labelUrl) {
-                    await sendLabelGeneratedNotification(sellerId, { id: sellerOrders[0].id }, labelUrl);
+                // Send the label-ready email regardless of whether the
+                // storage upload succeeded — the PDF travels as an attachment.
+                // sellerLabelPdfMap is populated by generateLabel() above; the
+                // function falls back to a dashboard-link-only email if it's
+                // missing (e.g. Flash createShipment threw earlier).
+                const labelPdfBase64 = sellerLabelPdfMap.get(sellerId) || null;
+                if (labelPdfBase64 || sellerLabelMap.has(sellerId)) {
+                    await sendLabelGeneratedNotification(sellerId, { id: sellerOrders[0].id }, labelPdfBase64);
                 }
             }
         } catch (notifErr) {
