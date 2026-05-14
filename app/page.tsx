@@ -20,7 +20,12 @@ import ListingDetails from '@/components/ListingDetails';
 import WebLiveScanner from '@/components/WebLiveScanner';
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
-import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
+import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
+import {
+    SELLER_REQUIRED_PROFILE_FIELDS,
+    checkSellerProfileComplete,
+    PROFILE_INCOMPLETE_TOAST,
+} from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -473,6 +478,39 @@ export default function HomePage() {
     // Listing State (New)
     const [listingTarget, setListingTarget] = useState<{ colId: string, item: UserCollectionItem, card: Card } | null>(null);
 
+    // Click-time gate on listing creation. We check the seller's shipping
+    // fields before opening ListingForm so they don't fill out price /
+    // condition / photos only to be rejected at submit. The same check is
+    // mirrored in services/marketplaceService.createListing (real write
+    // path) and /api/listings POST (defense in depth).
+    const handleStartListing = async (colId: string, item: UserCollectionItem, card: Card) => {
+        if (!user || user.provider === 'guest') {
+            showToast('Please sign in to list a card', 'error');
+            setActiveTab('profile');
+            return;
+        }
+        try {
+            const supabase = createClient();
+            const { data: profile, error } = await supabase
+                .from('profiles')
+                .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                .eq('id', user.id)
+                .single<Record<string, string | null>>();
+            if (error) throw error;
+            const completeness = checkSellerProfileComplete(profile);
+            if (!completeness.complete) {
+                showToast(PROFILE_INCOMPLETE_TOAST, 'error');
+                setActiveTab('profile');
+                return;
+            }
+        } catch (err) {
+            // Don't block listing on a transient profile-read failure —
+            // marketplaceService.createListing will re-check on submit.
+            console.warn('[Listing gate] Profile completeness check failed, falling through:', err);
+        }
+        setListingTarget({ colId, item, card });
+    };
+
     // Global Active Listings state powered by Supabase
     const [activeListings, setActiveListings] = useState<MarketplaceListing[]>([]);
 
@@ -539,8 +577,17 @@ export default function HomePage() {
             setListingTarget(null);
             showToast('Listing successfully published to the market!', 'success');
         } catch (error) {
+            if (error instanceof ProfileIncompleteError) {
+                // Race against the click-time gate: profile became
+                // incomplete between click and submit. Close the form,
+                // route to Profile.
+                setListingTarget(null);
+                showToast(PROFILE_INCOMPLETE_TOAST, 'error');
+                setActiveTab('profile');
+                return;
+            }
             console.error('Failed to publish listing:', error);
-            alert('Failed to publish listing. Please try again.');
+            showToast('Failed to publish listing. Please try again.', 'error');
         }
     };
 
@@ -832,7 +879,7 @@ export default function HomePage() {
                                 onRemoveFromCollection={removeCardFromCollection}
                                 onToggleWishlist={handleToggleWishlist}
                                 onAddToCollection={handleAddToCollection}
-                                onListCard={(colId, item, card) => setListingTarget({ colId, item, card })}
+                                onListCard={handleStartListing}
                                 listingTarget={listingTarget}
                                 onCancelListing={() => setListingTarget(null)}
                                 onPublishListing={handlePublishListing}

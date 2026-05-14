@@ -1,6 +1,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import {
+    SELLER_REQUIRED_PROFILE_FIELDS,
+    checkSellerProfileComplete,
+    PROFILE_INCOMPLETE_TOAST,
+    PROFILE_INCOMPLETE_ERROR_CODE,
+} from '@/lib/profileValidation'
 
 export async function GET(request: NextRequest) {
     const supabase = await createClient()
@@ -76,6 +82,27 @@ export async function POST(request: NextRequest) {
 
         if (!body.card_id || !body.price || !body.condition) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        }
+
+        // Same gate as services/marketplaceService.createListing — refuse to
+        // create a listing for a seller who can't be shipped from. Returns a
+        // structured error so the client can route the user to Profile.
+        const { data: sellerProfile, error: profileErr } = await supabase
+            .from('profiles')
+            .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+            .eq('id', user.id)
+            .single<Record<string, string | null>>()
+        if (profileErr) throw profileErr
+        const completeness = checkSellerProfileComplete(sellerProfile)
+        if (!completeness.complete) {
+            return NextResponse.json(
+                {
+                    error: PROFILE_INCOMPLETE_TOAST,
+                    code: PROFILE_INCOMPLETE_ERROR_CODE,
+                    missing: completeness.missing,
+                },
+                { status: 400 },
+            )
         }
 
         const { data: listing, error } = await supabase

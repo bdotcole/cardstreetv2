@@ -1,6 +1,27 @@
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
+import {
+    SELLER_REQUIRED_PROFILE_FIELDS,
+    checkSellerProfileComplete,
+    PROFILE_INCOMPLETE_TOAST,
+    PROFILE_INCOMPLETE_ERROR_CODE,
+} from '@/lib/profileValidation';
+
+/**
+ * Thrown when a seller tries to create a listing while their profile is
+ * missing required shipping fields. Callers can match on `.code` to
+ * distinguish this from generic Supabase errors and surface a redirect.
+ */
+export class ProfileIncompleteError extends Error {
+    readonly code = PROFILE_INCOMPLETE_ERROR_CODE;
+    readonly missing: string[];
+    constructor(missing: string[]) {
+        super(PROFILE_INCOMPLETE_TOAST);
+        this.name = 'ProfileIncompleteError';
+        this.missing = missing;
+    }
+}
 
 // Coerce a raw listing row's `card_data` JSONB into a fully-populated Card so
 // downstream rendering can never crash on a null `set` / `number` / `marketPrice`.
@@ -147,6 +168,23 @@ export const marketplaceService = {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Must be signed in to create a listing');
+
+            // Block listing creation if the seller's profile is missing the
+            // shipping fields Flash Express needs. Without this, fulfillment
+            // falls back to Bangkok placeholders and Flash rejects the
+            // shipment as a region mismatch. The UI also pre-checks at
+            // click-time, but this is the real write path and the last line
+            // of defense.
+            const { data: sellerProfile, error: profileErr } = await supabase
+                .from('profiles')
+                .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                .eq('id', user.id)
+                .single<Record<string, string | null>>();
+            if (profileErr) throw profileErr;
+            const completeness = checkSellerProfileComplete(sellerProfile);
+            if (!completeness.complete) {
+                throw new ProfileIncompleteError(completeness.missing);
+            }
 
             // Normalize on write so card_data can never be stored with null
             // required fields, even if the caller passed a partial Card.
