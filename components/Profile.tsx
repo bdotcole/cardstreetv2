@@ -152,16 +152,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // Modal states
   const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
 
-  // Shipping-label preview modal. We fetch the PDF as a blob (cookies travel
-  // with same-origin fetch), show it in an in-app modal, and let the user
-  // download it. Avoids the Capacitor WKWebView problem where `target="_blank"`
-  // silently fails because the wrapper has no UI delegate for new windows.
+  // Shipping-label download modal. On Android (Capacitor) we fetch the PDF
+  // ourselves and write it to the device with @capacitor/filesystem, then
+  // offer an Open/Print affordance via @capacitor/share — keeping the user
+  // inside the app instead of bouncing them to Chrome Custom Tabs.
+  // On web we keep the traditional attachment-header download.
   const [labelModal, setLabelModal] = useState<{
     orderId: string | null;
-    pdfUrl: string | null;
+    savedUri: string | null;
+    savedFilename: string | null;
     loading: boolean;
     error: string | null;
-  }>({ orderId: null, pdfUrl: null, loading: false, error: null });
+  }>({ orderId: null, savedUri: null, savedFilename: null, loading: false, error: null });
   const [reviewScore, setReviewScore] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState<string>('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
@@ -272,12 +274,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // shows up in the support queue instead of being a seller action.
 
   const openLabel = async (orderId: string) => {
-    setLabelModal({ orderId, pdfUrl: null, loading: true, error: null });
+    setLabelModal({ orderId, savedUri: null, savedFilename: null, loading: true, error: null });
     try {
       // Step 1: request a signed URL from the server (cookies attached so
       // we can prove the caller is the order's seller). The response is a
-      // self-authenticating URL valid for ~5 minutes that the WebView's
-      // DownloadManager can fetch without needing our session cookie.
+      // self-authenticating URL valid for ~5 minutes — it lets the eventual
+      // PDF fetch authenticate by query-string token instead of cookies.
       const urlRes = await fetch(`/api/orders/${orderId}/label/url`, {
         method: 'POST',
         credentials: 'include',
@@ -286,7 +288,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         const data = await urlRes.json().catch(() => ({}));
         setLabelModal({
           orderId,
-          pdfUrl: null,
+          savedUri: null,
+          savedFilename: null,
           loading: false,
           error: data.error || `Server returned ${urlRes.status}`,
         });
@@ -294,70 +297,123 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       }
       const { url: signedUrl } = await urlRes.json();
 
-      // Step 2: hit the signed URL once with cookies to surface any Flash
-      // recovery errors (bad addresses, region issues) in our modal rather
-      // than letting them show up as a raw JSON page in DownloadManager.
-      // The route is idempotent — once the shipping_labels row exists, the
-      // second request (from DownloadManager / browser) hits the fast path.
-      const preflight = await fetch(signedUrl, { credentials: 'include' });
-      if (!preflight.ok) {
-        const data = await preflight.json().catch(() => ({}));
-        setLabelModal({
-          orderId,
-          pdfUrl: null,
-          loading: false,
-          error: data.error || `Server returned ${preflight.status}`,
-        });
-        return;
-      }
-
-      // Step 3: trigger the actual download.
-      //
-      // Capacitor's Android WebView registers a default DownloadListener
-      // that forwards the URL to a system Intent — which looks for an app
-      // that "handles" PDFs and silently does nothing if none is set as
-      // default. That's why window.location.href to an attachment URL
-      // doesn't actually save anything.
-      //
-      // Workaround: hand the URL to the @capacitor/browser plugin instead,
-      // which launches Chrome Custom Tabs. Chrome's own download flow sees
-      // Content-Disposition: attachment, routes the response into Android's
-      // DownloadManager, and the file lands in the Downloads folder with
-      // a system notification. The user can dismiss the Chrome tab after.
-      //
-      // On web, attachment header + same-window nav triggers a normal
-      // browser download.
-      setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
-
       const isCapacitor =
         typeof window !== 'undefined' &&
         !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
 
-      if (isCapacitor) {
-        try {
-          const { Browser } = await import('@capacitor/browser');
-          await Browser.open({ url: signedUrl });
-        } catch (browserErr: any) {
-          console.error('[Label] @capacitor/browser open failed, falling back to navigation:', browserErr);
-          // Last-resort fallback — usually fails on Android as described
-          // above, but it's better to attempt something than to do nothing.
-          window.location.href = signedUrl;
+      // Web branch: the response's Content-Disposition: attachment header
+      // makes browsers trigger their native download flow on same-window
+      // navigation. Nothing else needed.
+      if (!isCapacitor) {
+        // Preflight first so Flash recovery errors land in the modal rather
+        // than as a raw JSON page in the download bar.
+        const preflight = await fetch(signedUrl, { credentials: 'include' });
+        if (!preflight.ok) {
+          const data = await preflight.json().catch(() => ({}));
+          setLabelModal({
+            orderId,
+            savedUri: null,
+            savedFilename: null,
+            loading: false,
+            error: data.error || `Server returned ${preflight.status}`,
+          });
+          return;
         }
-      } else {
+        setLabelModal({ orderId: null, savedUri: null, savedFilename: null, loading: false, error: null });
         window.location.href = signedUrl;
+        return;
       }
+
+      // Native (Android) branch: pull the PDF into JS as a blob, write it to
+      // app-private Documents via @capacitor/filesystem, then surface an
+      // Open/Print affordance that hands the saved file to the system share
+      // sheet (Android exposes Print there as a target).
+      //
+      // Why not WebView DownloadManager: Capacitor's default download
+      // listener forwards the URL to a generic system Intent and silently
+      // no-ops if no default PDF viewer is registered. Writing the bytes
+      // ourselves bypasses that and never leaves the app.
+      const pdfRes = await fetch(signedUrl, { credentials: 'include' });
+      if (!pdfRes.ok) {
+        const data = await pdfRes.json().catch(() => ({}));
+        setLabelModal({
+          orderId,
+          savedUri: null,
+          savedFilename: null,
+          loading: false,
+          error: data.error || `Server returned ${pdfRes.status}`,
+        });
+        return;
+      }
+
+      const blob = await pdfRes.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Strip the "data:application/pdf;base64," prefix — Filesystem
+          // expects raw base64.
+          resolve(result.split(',')[1] || '');
+        };
+        reader.onerror = () => reject(reader.error || new Error('Failed to read PDF blob'));
+        reader.readAsDataURL(blob);
+      });
+
+      // Prefer the server's filename when available so it matches the
+      // name the seller would see if they downloaded on web.
+      const cd = pdfRes.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="?([^";]+)"?/i);
+      const filename = m?.[1] || `cardstreet-${orderId}.pdf`;
+
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const result = await Filesystem.writeFile({
+        path: `cardstreet/labels/${filename}`,
+        data: base64,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      setLabelModal({
+        orderId,
+        savedUri: result.uri,
+        savedFilename: filename,
+        loading: false,
+        error: null,
+      });
+      showToast('Label saved to your device', 'success');
     } catch (err: any) {
       setLabelModal({
         orderId,
-        pdfUrl: null,
+        savedUri: null,
+        savedFilename: null,
         loading: false,
         error: err?.message || 'Network error',
       });
     }
   };
 
+  const openSavedLabel = async () => {
+    if (!labelModal.savedUri) return;
+    try {
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title: 'Shipping Label',
+        text: labelModal.savedFilename || 'Shipping label',
+        url: labelModal.savedUri,
+        dialogTitle: 'Open or print label',
+      });
+    } catch (err: any) {
+      // User cancelling the share sheet throws; ignore that and only
+      // surface real failures.
+      if (err?.message && !/cancel/i.test(err.message)) {
+        console.error('[Label] Share/open failed:', err);
+        showToast(err.message, 'error');
+      }
+    }
+  };
+
   const closeLabel = () => {
-    setLabelModal({ orderId: null, pdfUrl: null, loading: false, error: null });
+    setLabelModal({ orderId: null, savedUri: null, savedFilename: null, loading: false, error: null });
   };
 
   const handleCompleteOrder = (orderId: string) => {
@@ -1389,14 +1445,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         )}
       </AnimatePresence>
 
-      {/* Label download status modal. Shows the spinner while we resolve
-          the signed URL + run the Flash recovery preflight, and shows any
-          server error if the recovery fails. Success closes the modal
-          immediately — the browser/WebView takes the download from there
-          (Android DownloadManager → Downloads folder + notification; web
-          browser → standard download). */}
+      {/* Label download status modal. Three states:
+          - loading: fetching signed URL, downloading PDF, writing to disk.
+          - error: anything along the way failed (Flash recovery, network,
+            Filesystem write).
+          - success: PDF saved on device — show filename and Open/Print
+            (system share sheet) + Done buttons. Web users never reach the
+            success state because the browser handles the attachment-header
+            download natively and the modal closes immediately. */}
       <AnimatePresence>
-        {(labelModal.loading || labelModal.error) && (
+        {(labelModal.loading || labelModal.error || labelModal.savedUri) && (
           <motion.div
             key="label-modal"
             initial={{ opacity: 0 }}
@@ -1419,7 +1477,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             {labelModal.loading && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-cyan" />
-                <p className="text-sm">Preparing label from Flash Express…</p>
+                <p className="text-sm">Saving label…</p>
               </div>
             )}
 
@@ -1430,6 +1488,39 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   Couldn&apos;t load label
                 </p>
                 <p className="text-slate-400 text-xs max-w-md leading-relaxed">{labelModal.error}</p>
+              </div>
+            )}
+
+            {!labelModal.loading && !labelModal.error && labelModal.savedUri && (
+              <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-brand-green/15 flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-brand-green" />
+                </div>
+                <p className="text-white font-black uppercase tracking-widest text-sm">
+                  Label saved
+                </p>
+                <p className="text-slate-400 text-xs max-w-md leading-relaxed">
+                  Saved to Documents/cardstreet/labels on your device.
+                </p>
+                {labelModal.savedFilename && (
+                  <p className="text-slate-500 text-[11px] font-mono break-all max-w-md">
+                    {labelModal.savedFilename}
+                  </p>
+                )}
+                <div className="flex flex-col w-full max-w-xs gap-2 mt-2">
+                  <button
+                    onClick={openSavedLabel}
+                    className="w-full h-12 rounded-xl bg-brand-green text-white font-black text-xs uppercase tracking-widest hover:bg-brand-green/90 active:scale-[0.98] transition-all"
+                  >
+                    Open / Print
+                  </button>
+                  <button
+                    onClick={closeLabel}
+                    className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             )}
           </motion.div>
