@@ -49,13 +49,17 @@ const nextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ['recharts'],
+    optimizePackageImports: ['recharts', 'lucide-react'],
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    // Re-enabled: lint must pass at build time. Run `npm run lint` locally
+    // before pushing to catch issues before CI does.
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // Typecheck must pass at build. Run `npm run typecheck` locally to see
+    // errors before pushing; CI will reject builds that have type errors.
+    ignoreBuildErrors: false,
   },
 }
 
