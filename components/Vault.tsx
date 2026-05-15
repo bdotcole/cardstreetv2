@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { CustomCollection, Card, UserCollectionItem } from '../types';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
 import ListingForm from './ListingForm';
@@ -7,9 +8,16 @@ import SetBrowser from './SetBrowser';
 import MasterSetDetail from './MasterSetDetail';
 import { ApiSet } from '../services/pokemonService';
 import CardDetails from './CardDetails';
-import PriceChart from './PriceChart';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+
+// recharts is ~100KB. Defer until the chart actually renders.
+const PriceChart = dynamic(() => import('./PriceChart'), {
+    ssr: false,
+    loading: () => (
+        <div className="w-full h-64 rounded-lg bg-brand-darker/40 animate-pulse" />
+    ),
+});
 
 interface VaultProps {
   customCollections: CustomCollection[];
@@ -275,9 +283,10 @@ const Vault: React.FC<VaultProps> = ({
         try {
           await onRemoveFromCollection(colId, itemId);
           showToast('Card removed successfully.', 'success');
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to remove card:', error);
-          showToast('Failed to remove card from vault.', 'error');
+          const detail = error?.message ? `: ${error.message}` : '';
+          showToast(`Couldn't remove the card${detail}. Try refreshing your Vault.`, 'error');
         }
       } else {
         // Fallback for legacy

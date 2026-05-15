@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -81,13 +82,14 @@ const StripeCardForm: React.FC<{
             let transferGroup: string | undefined;
 
             if (apiEndpoint === '/api/checkout') {
+                // buyerId is derived from the session server-side — never send
+                // it from the client.
                 const orderRes = await fetch('/api/orders/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         items,
                         paymentMethod: 'credit_card',
-                        buyerId: extraData.buyerId,
                     }),
                 });
 
@@ -107,19 +109,19 @@ const StripeCardForm: React.FC<{
                 if (typeof orderData.totalAmount === 'number') {
                     chargeAmount = orderData.totalAmount;
                 }
-                console.log('[PaymentModal] Orders created with transfer_group:', transferGroup, 'totalAmount:', chargeAmount);
+                // Intentionally not logging transfer_group / amount in client console.
             }
 
             // Step 3: Charge the card via Stripe
             const payload = apiEndpoint === '/api/checkout'
                 ? {
+                    // amount is ignored server-side (computed from DB) — kept
+                    // only for legacy logging compatibility.
                     amount: chargeAmount,
                     currency,
                     token: paymentMethod.id,
                     metadata: {
-                        items: JSON.stringify(items.map(i => i.id)),
                         transfer_group: transferGroup,
-                        buyer_id: extraData?.buyerId || '',
                     },
                 }
                 : {
@@ -161,9 +163,7 @@ const StripeCardForm: React.FC<{
                         });
                         const finalizeData = await finalizeRes.json().catch(() => ({}));
                         if (!finalizeRes.ok) {
-                            console.warn('[PaymentModal] Finalize fallback returned an error (webhook may still fulfill):', finalizeData.error);
-                        } else {
-                            console.log('[PaymentModal] Finalize fallback complete:', finalizeData);
+                            console.warn('[PaymentModal] Finalize fallback returned an error (webhook may still fulfill)');
                         }
                     } catch (finalizeErr) {
                         // Don't block the user — the webhook is still the
@@ -231,12 +231,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
     const [method, setMethod] = useState<'card' | 'paypal'>('card');
 
+    const { t } = useTranslation();
+
     // Server-computed estimate (shipping + total). Fetched on modal open via
     // /api/orders/estimate, which runs the same shipping math as
     // /api/orders/checkout but writes no rows. When this resolves we override
     // the prop amount/shippingFee so the displayed total matches what the
     // buyer will actually be charged.
-    const [estimate, setEstimate] = useState<{ subtotal: number; shipping: number; total: number } | null>(null);
+    const [estimate, setEstimate] = useState<{
+        subtotal: number;
+        shipping: number;
+        total: number;
+        shippingIsEstimate: boolean;
+    } | null>(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [estimateError, setEstimateError] = useState<string | null>(null);
 
@@ -246,16 +253,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             setEstimateError(null);
             return;
         }
-        if (!items?.length || !extraData?.buyerId) return;
+        if (!items?.length) return;
 
         let cancelled = false;
         setEstimateLoading(true);
         setEstimateError(null);
 
+        // Auth comes from cookie session. Only the listing ids are sent — the
+        // server re-derives sellers and prices from the DB.
         fetch('/api/orders/estimate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items, buyerId: extraData.buyerId }),
+            body: JSON.stringify({ items: items.map(i => ({ id: i.id })) }),
         })
             .then(r => r.json())
             .then(data => {
@@ -264,7 +273,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     setEstimateError(data.error || 'Failed to estimate total');
                     return;
                 }
-                setEstimate({ subtotal: data.subtotal, shipping: data.shipping, total: data.total });
+                setEstimate({
+                    subtotal: data.subtotal,
+                    shipping: data.shipping,
+                    total: data.total,
+                    shippingIsEstimate: !!data.shippingIsEstimate,
+                });
             })
             .catch(err => {
                 if (!cancelled) setEstimateError(err.message || 'Failed to estimate total');
@@ -274,22 +288,48 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             });
 
         return () => { cancelled = true; };
-    }, [isOpen, items, extraData?.buyerId]);
+    }, [isOpen, items]);
 
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
     const effectiveAmount = estimate?.total ?? amount;
     const effectiveShipping = estimate?.shipping ?? shippingFee;
 
-    // Convert THB to USD for PayPal (approximate rate)
+    // Convert THB to USD for PayPal (approximate rate); displayed only.
     const paypalAmount = currency === 'THB' ? (effectiveAmount * 0.028).toFixed(2) : effectiveAmount.toFixed(2);
 
-    // PayPal handlers
+    // PayPal creates the order against a transfer_group of pending_payment
+    // orders that we create *first*, mirroring the Stripe flow. The server
+    // computes the actual charge amount from those orders; the client cannot
+    // influence it.
+    const paypalTransferGroupRef = useRef<string | null>(null);
+
     const createPayPalOrder = async () => {
+        // Step 1: create pending_payment orders if we haven't already.
+        if (!paypalTransferGroupRef.current) {
+            const orderRes = await fetch('/api/orders/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items,
+                    paymentMethod: 'paypal',
+                }),
+            });
+            const orderData = await orderRes.json();
+            if (!orderRes.ok || !orderData.success) {
+                throw new Error(orderData.error || 'Failed to create orders');
+            }
+            paypalTransferGroupRef.current = orderData.transferGroup;
+        }
+
+        // Step 2: ask PayPal for an order id bound to that transfer_group.
         const response = await fetch('/api/paypal/create-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: parseFloat(paypalAmount), currency: 'USD' }),
+            body: JSON.stringify({
+                transferGroup: paypalTransferGroupRef.current,
+                currency: 'USD',
+            }),
         });
         const data = await response.json();
         if (data.error) throw new Error(data.error);
@@ -304,7 +344,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         });
         const captureData = await response.json();
         if (captureData.success) {
-            onPaymentSuccess({ paymentMethod: 'paypal', paymentId: captureData.orderID });
+            onPaymentSuccess({
+                paymentMethod: 'paypal',
+                paymentId: captureData.orderID,
+                transferGroup: paypalTransferGroupRef.current || undefined,
+            });
         } else {
             onPaymentFailed(captureData.message || 'PayPal payment capture failed');
         }
@@ -345,6 +389,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         {estimateError && (
                             <p className="text-[10px] text-amber-400 italic">
                                 Could not calculate shipping — showing subtotal only. Final amount will reflect actual shipping.
+                            </p>
+                        )}
+                        {!estimateError && estimate?.shippingIsEstimate && (
+                            <p className="text-[10px] text-amber-400 italic">
+                                {t('paymentFlow.shippingEstimate')
+                                    || 'Shipping is an estimate — the final amount is calculated at checkout.'}
                             </p>
                         )}
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>

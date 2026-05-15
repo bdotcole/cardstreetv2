@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Ocr } from '@jcesarmobile/capacitor-ocr';
+import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface WebLiveScannerProps {
     onClose: () => void;
@@ -30,7 +32,9 @@ async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
 export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLiveScannerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    
+    const { t } = useTranslation();
+    const { showToast } = useToast();
+
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [isScanning, setIsScanning] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
@@ -57,7 +61,11 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLi
                 }
             } catch (err) {
                 console.error('Camera access denied:', err);
-                alert('Please allow camera access to use the live scanner.');
+                showToast(
+                    t('paymentFlow.cameraPermission')
+                        || 'Please allow camera access in your browser settings to use the scanner.',
+                    'error',
+                );
                 onClose();
             }
         };

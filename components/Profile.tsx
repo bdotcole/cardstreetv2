@@ -501,9 +501,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       } else {
           showToast(data.error || 'Failed to update profile', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving profile:', error);
-      showToast('An unexpected error occurred', 'error');
+      const detail = error?.message ? `: ${error.message}` : '';
+      showToast(`Couldn't save your profile${detail}. Please try again, or contact support if it keeps happening.`, 'error');
     }
     setIsLoading(false);
   };

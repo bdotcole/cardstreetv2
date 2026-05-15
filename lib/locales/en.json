@@ -234,5 +234,14 @@
             "scam": "Scam or fraudulent activity",
             "other": "Other"
         }
+    },
+    "paymentFlow": {
+        "signInRequired": "Please sign in with a full account to complete a purchase.",
+        "signInToList": "Please sign in to list a card.",
+        "listingPublished": "Listing successfully published to the market!",
+        "listingFailed": "Failed to publish listing. Please try again.",
+        "paymentFailed": "Payment failed",
+        "cameraPermission": "Please allow camera access in your browser settings to use the scanner.",
+        "shippingEstimate": "Shipping is an estimate — the final amount is calculated at checkout."
     }
 }

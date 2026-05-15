@@ -102,9 +102,14 @@ export default function ShippingLabelPrint({ orderId }: ShippingLabelPrintProps)
     }
 
     if (error) {
+        // Surface only a short user-readable message. The raw error is in the
+        // console for support to inspect; don't render server payloads verbatim
+        // because they sometimes include internal field names.
         return (
             <div className="shipping-label-container">
-                <div className="error">Error: {error}</div>
+                <div className="error">
+                    Couldn't load the shipping label. Try again, or contact support if the issue persists.
+                </div>
             </div>
         )
     }

@@ -3,6 +3,8 @@
 import * as Sentry from '@sentry/nextjs';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem } from '@/types';
 import { EXCHANGE_RATES } from '@/constants';
 import CurrencySwitcher from '@/components/CurrencySwitcher';
@@ -15,9 +17,12 @@ import Profile from '@/components/Profile';
 import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
-import PaymentModal from '@/components/PaymentModal';
 import ListingDetails from '@/components/ListingDetails';
-import WebLiveScanner from '@/components/WebLiveScanner';
+
+// Lazy-loaded — these carry heavy deps (Stripe Elements, camera plugin) we
+// don't need until the user actually opens checkout or the scanner.
+const PaymentModal = dynamic(() => import('@/components/PaymentModal'), { ssr: false });
+const WebLiveScanner = dynamic(() => import('@/components/WebLiveScanner'), { ssr: false });
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
@@ -371,7 +376,7 @@ export default function HomePage() {
         // with a generic "missing required fields" message that's hard to debug.
         if (!requireAuth('complete your purchase')) return;
         if (user?.provider === 'guest') {
-            showToast('Please sign in with a full account to complete a purchase.', 'error');
+            showToast(t('paymentFlow.signInRequired') || 'Please sign in with a full account to complete a purchase.', 'error');
             setActiveTab('profile');
             return;
         }
@@ -384,7 +389,11 @@ export default function HomePage() {
     // (Earlier versions of this handler re-POSTed to /api/orders/checkout — that
     // was leftover from before the modal owned that step, and would have
     // created duplicate orders on top of the ones the modal already inserted.)
-    const handlePaymentSuccess = async (_paymentMethod = 'card', _paymentId = 'simulated_success') => {
+    const handlePaymentSuccess = async (_details: {
+        paymentMethod: string;
+        paymentId: string;
+        transferGroup?: string;
+    }) => {
         if (!user) return;
 
         setIsPaymentModalOpen(false);
@@ -485,7 +494,7 @@ export default function HomePage() {
     // path) and /api/listings POST (defense in depth).
     const handleStartListing = async (colId: string, item: UserCollectionItem, card: Card) => {
         if (!user || user.provider === 'guest') {
-            showToast('Please sign in to list a card', 'error');
+            showToast(t('paymentFlow.signInToList') || 'Please sign in to list a card', 'error');
             setActiveTab('profile');
             return;
         }
@@ -525,24 +534,37 @@ export default function HomePage() {
         }
     };
 
-    // Initial fetch + Realtime subscription for live marketplace updates
+    // Initial fetch + Realtime subscription for live marketplace updates.
+    // The realtime channel fires once per listing INSERT/UPDATE/DELETE; with
+    // burst activity that's a refetch per row, which thrashes the network and
+    // re-renders the whole overlay. Trailing-edge debounce coalesces a burst
+    // into one refetch ~1.5s after the last event.
     useEffect(() => {
         fetchGlobalListings();
 
         const supabase = createClient();
+        let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleRefetch = () => {
+            if (refetchTimer) clearTimeout(refetchTimer);
+            refetchTimer = setTimeout(() => {
+                refetchTimer = null;
+                fetchGlobalListings();
+            }, 1500);
+        };
+
         const channel = supabase
             .channel('listings-realtime')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'listings' },
-                () => {
-                    // Re-fetch the slim overlay set whenever any listing changes
-                    fetchGlobalListings();
-                }
+                scheduleRefetch,
             )
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            if (refetchTimer) clearTimeout(refetchTimer);
+            supabase.removeChannel(channel);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -575,7 +597,7 @@ export default function HomePage() {
             });
 
             setListingTarget(null);
-            showToast('Listing successfully published to the market!', 'success');
+            showToast(t('paymentFlow.listingPublished') || 'Listing successfully published to the market!', 'success');
         } catch (error) {
             if (error instanceof ProfileIncompleteError) {
                 // Race against the click-time gate: profile became
@@ -587,7 +609,7 @@ export default function HomePage() {
                 return;
             }
             console.error('Failed to publish listing:', error);
-            showToast('Failed to publish listing. Please try again.', 'error');
+            showToast(t('paymentFlow.listingFailed') || 'Failed to publish listing. Please try again.', 'error');
         }
     };
 
@@ -699,7 +721,7 @@ export default function HomePage() {
                                 console.error('[DeepLink] Exchange Failed:', sessionError);
                                 showToast(`Login Failed: ${sessionError.message}`, 'error');
                             } else {
-                                console.log('[DeepLink] Exchange Success!', sessionData);
+                                console.log('[DeepLink] Exchange Success for user:', sessionData?.user?.id);
                                 // Session is set, UI will update via onAuthStateChange
                                 showToast('Successfully signed in!', 'success');
                                 // Force reload if needed or just let state update
@@ -795,9 +817,12 @@ export default function HomePage() {
                                 onClick={() => setActiveTab('marketplace')}
                                 className="relative w-[54px] h-[54px] flex-shrink-0 hover:scale-105 transition-transform"
                             >
-                                <img
+                                <Image
                                     src="/logo.png"
                                     alt="CardStreet"
+                                    width={54}
+                                    height={54}
+                                    priority
                                     className="w-full h-full object-contain"
                                 />
                             </button>
@@ -1071,7 +1096,7 @@ export default function HomePage() {
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
                     onPaymentSuccess={handlePaymentSuccess}
-                    onPaymentFailed={(err) => alert("Payment Failed: " + err)}
+                    onPaymentFailed={(err) => showToast(`${t('paymentFlow.paymentFailed') || 'Payment failed'}: ${err}`, 'error')}
                 />
             </div>
         </div>
