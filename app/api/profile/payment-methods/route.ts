@@ -1,5 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const PaymentMethodSchema = z.object({
+    card_type: z.enum(['Visa', 'Mastercard', 'JCB', 'AmericanExpress', 'UnionPay', 'Other']),
+    last_four: z.string().regex(/^\d{4}$/, 'last_four must be exactly 4 digits'),
+    expiry_month: z.number().int().min(1).max(12),
+    expiry_year: z.number().int().min(2024).max(2099),
+    cardholder_name: z.string().trim().min(1).max(120).optional(),
+    is_default: z.boolean().optional(),
+})
 
 // GET - List user's saved payment methods
 export async function GET() {
@@ -35,13 +45,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const body = await request.json()
-        const { card_type, last_four, expiry_month, expiry_year, cardholder_name, is_default } = body
-
-        // Validate required fields
-        if (!card_type || !last_four || !expiry_month || !expiry_year) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        const parsed = PaymentMethodSchema.safeParse(await request.json())
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Invalid payment method', details: parsed.error.flatten() },
+                { status: 400 },
+            )
         }
+        const { card_type, last_four, expiry_month, expiry_year, cardholder_name, is_default } = parsed.data
 
         // If setting as default, unset other defaults first
         if (is_default) {

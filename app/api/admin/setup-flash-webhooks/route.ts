@@ -27,6 +27,7 @@
 
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import crypto from 'crypto';
 import { setWebhookService, FlashWebhookApiCode } from '@/lib/flashExpress';
 
 const WEBHOOK_TYPES: { code: FlashWebhookApiCode; name: string }[] = [
@@ -47,7 +48,12 @@ export async function POST(req: Request) {
             { status: 500 }
         );
     }
-    if (auth !== `Bearer ${expected}`) {
+    const presented = Buffer.from(auth, 'utf8');
+    const expectedBuf = Buffer.from(`Bearer ${expected}`, 'utf8');
+    const ok =
+        presented.length === expectedBuf.length &&
+        crypto.timingSafeEqual(presented, expectedBuf);
+    if (!ok) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

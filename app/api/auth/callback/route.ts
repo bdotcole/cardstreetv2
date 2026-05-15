@@ -32,13 +32,15 @@ export async function GET(request: Request) {
                 return NextResponse.redirect(`${origin}${next}`)
             }
         } else {
-            // Log the error and pass it to the frontend
+            // Log the real error server-side; show the user only a static code.
+            // Reflecting error.message into the redirect URL is an XSS / phishing
+            // surface (an attacker can craft a code that produces a chosen string).
             console.error('[Auth Callback] Code exchange failed:', error.message)
-            return NextResponse.redirect(`${origin}/?error=auth_failed&details=${encodeURIComponent(error.message)}`)
+            return NextResponse.redirect(`${origin}/?error=auth_failed&code=exchange_failed`)
         }
     }
 
     // return the user to an error page with instructions
     console.error('[Auth Callback] Code missing')
-    return NextResponse.redirect(`${origin}/?error=auth_failed&details=missing_code`)
+    return NextResponse.redirect(`${origin}/?error=auth_failed&code=missing_code`)
 }

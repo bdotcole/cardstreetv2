@@ -9,31 +9,66 @@
  * Used by PaymentModal on open to show the buyer the real total (subtotal +
  * shipping) before they enter card details. The actual order rows are only
  * inserted when /api/orders/checkout runs at pay time.
+ *
+ * Auth: caller must be the buyer.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { estimateRate, isRegionError } from '@/lib/flashExpress';
 
 const FALLBACK_RATE_THB = 40;
 
+const EstimateBodySchema = z.object({
+    items: z
+        .array(
+            z.object({
+                id: z.string().min(1),
+            }),
+        )
+        .min(1)
+        .max(50),
+});
+
 export async function POST(req: Request) {
     try {
-        const { items, buyerId } = await req.json();
-
-        if (!items || !items.length || !buyerId) {
-            return NextResponse.json(
-                { error: 'Missing required fields (items, buyerId)' },
-                { status: 400 }
-            );
+        const cookieSupabase = await createServerClient();
+        const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser();
+        if (authErr || !user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const supabase = createClient(
+        const parsed = EstimateBodySchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Invalid estimate request', details: parsed.error.flatten() },
+                { status: 400 },
+            );
+        }
+        const { items } = parsed.data;
+
+        const supabase = createAdminClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
         );
 
-        const sellerIds = [...new Set(items.map((i: any) => i.sellerId))] as string[];
+        // Re-derive seller + price from the DB. Estimate must match what we
+        // will actually charge at /api/orders/checkout.
+        const { data: listings } = await supabase
+            .from('listings')
+            .select('id, seller_id, price, status')
+            .in('id', items.map(i => i.id));
+
+        if (!listings || listings.length !== items.length) {
+            return NextResponse.json({ error: 'One or more listings no longer exist' }, { status: 400 });
+        }
+        if (listings.some(l => l.status !== 'active')) {
+            return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });
+        }
+
+        const sellerIds = [...new Set(listings.map(l => l.seller_id))];
 
         const { data: sellerProfiles } = await supabase
             .from('profiles')
@@ -43,12 +78,13 @@ export async function POST(req: Request) {
         const { data: buyerProfile } = await supabase
             .from('profiles')
             .select('province, state, district, postcode')
-            .eq('id', buyerId)
+            .eq('id', user.id)
             .single();
 
         // Per-seller shipping. One charge per seller, regardless of how many
         // of their cards are in the cart — matches /api/orders/checkout.
-        const sellerShippingMap = new Map<string, number>();
+        const sellerShipping = new Map<string, number>();
+        const sellerShippingIsFallback = new Map<string, boolean>();
 
         for (const sellerId of sellerIds) {
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
@@ -65,36 +101,43 @@ export async function POST(req: Request) {
                     length: 15,
                     height: 2,
                 });
-                sellerShippingMap.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
+                sellerShipping.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
+                sellerShippingIsFallback.set(sellerId, false);
             } catch (err) {
                 if (isRegionError(err)) {
                     console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — using ฿${FALLBACK_RATE_THB} fallback`
+                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${FALLBACK_RATE_THB}`,
                     );
                 } else {
-                    console.error(`[Orders/Estimate] Unexpected Flash error for seller ${sellerId}:`, err);
+                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId}:`, err);
                 }
-                sellerShippingMap.set(sellerId, FALLBACK_RATE_THB);
+                sellerShipping.set(sellerId, FALLBACK_RATE_THB);
+                sellerShippingIsFallback.set(sellerId, true);
             }
         }
 
-        const subtotal = items.reduce((sum: number, i: any) => sum + (i.price || 0), 0);
-        const shipping = Array.from(sellerShippingMap.values()).reduce((s, n) => s + n, 0);
+        const subtotal = listings.reduce((sum, l) => sum + Number(l.price || 0), 0);
+        const shipping = Array.from(sellerShipping.values()).reduce((s, n) => s + n, 0);
         const total = subtotal + shipping;
+        const shippingIsEstimate = Array.from(sellerShippingIsFallback.values()).some(Boolean);
 
         return NextResponse.json({
             success: true,
             subtotal,
             shipping,
             total,
-            // Optional per-seller breakdown for UIs that want to show it
-            perSellerShipping: Object.fromEntries(sellerShippingMap),
+            // True if any seller's shipping line uses the fallback (Flash didn't
+            // return a real rate). UI should flag the total as "approx" so the
+            // buyer knows it may shift slightly at checkout.
+            shippingIsEstimate,
+            perSellerShipping: Object.fromEntries(sellerShipping),
+            perSellerShippingIsFallback: Object.fromEntries(sellerShippingIsFallback),
         });
     } catch (err: any) {
         console.error('[Orders/Estimate] Error:', err);
         return NextResponse.json(
             { error: err.message || 'Failed to estimate order total' },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }

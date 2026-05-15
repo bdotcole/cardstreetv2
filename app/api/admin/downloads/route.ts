@@ -1,8 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin } from '@/lib/adminAuth'
 import { NextResponse } from 'next/server'
 
 // GET /api/admin/downloads — download analytics data
 export async function GET() {
+    const gate = await requireAdmin()
+    if (gate) return gate
+
     const supabase = createAdminClient()
 
     // Top 10 partners by total_downloads

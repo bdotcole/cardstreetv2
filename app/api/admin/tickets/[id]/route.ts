@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin } from '@/lib/adminAuth'
 import { NextResponse } from 'next/server'
 
 // PATCH /api/admin/tickets/[id] — update status, add admin reply
@@ -6,6 +7,9 @@ export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const gate = await requireAdmin()
+    if (gate) return gate
+
     const { id } = await params
     const supabase = createAdminClient()
     const body = await request.json()

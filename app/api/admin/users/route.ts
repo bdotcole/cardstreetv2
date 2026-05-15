@@ -1,8 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin } from '@/lib/adminAuth'
 import { NextResponse } from 'next/server'
 
 // GET /api/admin/users — fetch all users with profile data
 export async function GET(request: Request) {
+    const gate = await requireAdmin()
+    if (gate) return gate
+
     const supabase = createAdminClient()
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') ?? '1')

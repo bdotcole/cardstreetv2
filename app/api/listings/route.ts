@@ -1,12 +1,23 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
     PROFILE_INCOMPLETE_TOAST,
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation'
+
+const ListingBodySchema = z.object({
+    card_id: z.string().min(1).max(128),
+    card_data: z.record(z.unknown()),
+    price: z.number().positive().max(10_000_000),
+    condition: z.enum(['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']),
+    is_graded: z.boolean().optional(),
+    grading_company: z.enum(['PSA', 'BGS', 'CGC', 'ARS']).nullable().optional(),
+    grade: z.number().min(1).max(10).nullable().optional(),
+})
 
 export async function GET(request: NextRequest) {
     const supabase = await createClient()
@@ -78,11 +89,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const body = await request.json()
-
-        if (!body.card_id || !body.price || !body.condition) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        const parsed = ListingBodySchema.safeParse(await request.json())
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Invalid listing payload', details: parsed.error.flatten() },
+                { status: 400 },
+            )
         }
+        const body = parsed.data
 
         // Same gate as services/marketplaceService.createListing — refuse to
         // create a listing for a seller who can't be shipped from. Returns a

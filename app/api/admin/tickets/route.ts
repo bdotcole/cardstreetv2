@@ -1,8 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/adminAuth'
 import { NextResponse } from 'next/server'
 
-// GET /api/admin/tickets
+// GET /api/admin/tickets — admin only
 export async function GET(request: Request) {
+    const gate = await requireAdmin()
+    if (gate) return gate
+
     const supabase = createAdminClient()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -27,19 +32,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ tickets: data ?? [], total: count ?? 0 })
 }
 
-// POST /api/admin/tickets — create a support ticket (for the user-facing app too)
+// POST /api/admin/tickets — user-facing "open a ticket" entry point.
+// Any authenticated user can open a ticket, but only for themselves —
+// `user_id` is taken from the session, not the body.
 export async function POST(request: Request) {
-    const supabase = createAdminClient()
-    const body = await request.json()
-    const { user_id, subject, description, category } = body
-
-    if (!user_id || !subject || !description) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    const cookieSupabase = await createServerClient()
+    const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser()
+    if (authErr || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const body = await request.json().catch(() => ({}))
+    const { subject, description, category } = body || {}
+
+    if (typeof subject !== 'string' || typeof description !== 'string' || !subject.trim() || !description.trim()) {
+        return NextResponse.json({ error: 'subject and description are required' }, { status: 400 })
+    }
+    if (subject.length > 200 || description.length > 5000) {
+        return NextResponse.json({ error: 'subject or description too long' }, { status: 400 })
+    }
+
+    const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('support_tickets')
-        .insert({ user_id, subject, description, category: category ?? 'General' })
+        .insert({
+            user_id: user.id,
+            subject: subject.trim(),
+            description: description.trim(),
+            category: typeof category === 'string' && category.trim() ? category.trim() : 'General',
+        })
         .select()
         .single()
 

@@ -1,88 +1,134 @@
 /**
  * Orders Checkout Route — Phase 1 (Synchronous)
- * 
+ *
  * Creates orders with status 'pending_payment' and reserves inventory.
  * This runs BEFORE the Stripe PaymentIntent is created.
- * 
+ *
  * Flow:
  *   1. Client calls POST /api/orders/checkout → orders created, listings reserved
  *   2. Client calls POST /api/checkout with transfer_group → Stripe charges card
  *   3. Stripe webhook fires payment_intent.succeeded → fulfillOrder() runs
- * 
- * This architecture prevents "zombie payments" where money is charged
- * but no order record exists.
+ *
+ * Security:
+ *   - The buyer is the authenticated user (cookie session), never trusted from the body.
+ *   - Prices come from the listings table, never trusted from the body.
+ *   - Listing reservation is a compare-and-swap on status='active' so a second
+ *     checkout for the same listing fails closed.
+ *   - The inventory move (collection_items rows) was previously done here BEFORE
+ *     payment; it is now deferred to fulfillOrdersByTransferGroup so a failed
+ *     or abandoned payment can't transfer cards.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { estimateRate, isRegionError } from '@/lib/flashExpress';
+
+interface CheckoutItem {
+    id: string; // listing id
+}
 
 export async function POST(req: Request) {
     try {
-        const { items, paymentMethod, buyerId } = await req.json();
+        // ─── Auth: caller is the buyer, period. ───
+        const cookieSupabase = await createServerClient();
+        const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser();
+        if (authErr || !user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const buyerId = user.id;
 
-        if (!items || !items.length || !buyerId) {
-            return NextResponse.json({ error: 'Missing required fields (items, buyerId)' }, { status: 400 });
+        const body = await req.json().catch(() => ({}));
+        const items: CheckoutItem[] = Array.isArray(body?.items) ? body.items : [];
+        const paymentMethod: string = typeof body?.paymentMethod === 'string' ? body.paymentMethod : 'credit_card';
+
+        if (items.length === 0) {
+            return NextResponse.json({ error: 'No items provided' }, { status: 400 });
+        }
+        if (items.length > 50) {
+            return NextResponse.json({ error: 'Too many items in a single checkout' }, { status: 400 });
         }
 
-        const supabase = createClient(
+        const listingIds = items.map(i => i?.id).filter((x): x is string => typeof x === 'string');
+        if (listingIds.length !== items.length) {
+            return NextResponse.json({ error: 'Each item must have an id (listing id)' }, { status: 400 });
+        }
+
+        const supabase = createAdminClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
-        // ─── Generate transfer_group upfront ───
-        // This is the key that links orders → PaymentIntent → webhook fulfillment
-        const transferGroup = `order_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        // ─── Look up real listings + prices from the DB. Never trust the body. ───
+        const { data: listings, error: listingsErr } = await supabase
+            .from('listings')
+            .select('id, seller_id, card_id, card_data, price, condition, status')
+            .in('id', listingIds);
 
-        // ─── Fetch profiles ───
-        const sellerIds = [...new Set(items.map((i: any) => i.sellerId))] as string[];
+        if (listingsErr || !listings) {
+            console.error('[Orders/Checkout] Failed to fetch listings:', listingsErr);
+            return NextResponse.json({ error: 'Failed to fetch listings' }, { status: 500 });
+        }
+        if (listings.length !== listingIds.length) {
+            return NextResponse.json({ error: 'One or more listings no longer exist' }, { status: 400 });
+        }
+        if (listings.some(l => l.status !== 'active')) {
+            return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });
+        }
+        if (listings.some(l => l.seller_id === buyerId)) {
+            return NextResponse.json({ error: "You can't buy your own listing" }, { status: 400 });
+        }
+
+        const transferGroup = `order_${randomUUID()}`;
+
+        // ─── Fetch profiles (sellers for fees + addresses, buyer for shipping) ───
+        const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, role, partner_level, province, state, district, postcode')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
             .from('profiles')
-            .select('*')
+            .select('province, state, district, postcode')
             .eq('id', buyerId)
             .single();
 
-        // ─── Calculate platform fees per seller ───
+        // ─── Platform fee tier ───
         const feeMap = new Map<string, number>();
-        if (sellerProfiles) {
-            for (const profile of sellerProfiles) {
-                let fee = 0.09; // Default 9%
-                if (profile.role === 'partner') {
-                    const level = String(profile.partner_level || 'standard').toLowerCase().replace(' ', '_');
-                    switch (level) {
-                        case 'bronze': fee = 0.05; break;
-                        case 'silver': fee = 0.045; break;
-                        case 'gold': fee = 0.04; break;
-                        case 'platinum': fee = 0.035; break;
-                        case 'sapphire': fee = 0.03; break;
-                        case 'ruby': fee = 0.0275; break;
-                        case 'emerald': fee = 0.025; break;
-                        case 'diamond': fee = 0.0225; break;
-                        case 'pink_diamond': fee = 0.02; break;
-                        case 'heart': fee = 0.02; break;
-                        default: fee = 0.05; break;
-                    }
+        for (const profile of sellerProfiles || []) {
+            let fee = 0.09;
+            if (profile.role === 'partner') {
+                const level = String(profile.partner_level || 'standard').toLowerCase().replace(' ', '_');
+                switch (level) {
+                    case 'bronze': fee = 0.05; break;
+                    case 'silver': fee = 0.045; break;
+                    case 'gold': fee = 0.04; break;
+                    case 'platinum': fee = 0.035; break;
+                    case 'sapphire': fee = 0.03; break;
+                    case 'ruby': fee = 0.0275; break;
+                    case 'emerald': fee = 0.025; break;
+                    case 'diamond': fee = 0.0225; break;
+                    case 'pink_diamond':
+                    case 'heart': fee = 0.02; break;
+                    default: fee = 0.05; break;
                 }
-                feeMap.set(profile.id, fee);
             }
+            feeMap.set(profile.id, fee);
         }
 
-        // ─── Calculate shipping estimates per seller ───
-        const FALLBACK_RATE_THB = 40;
-        const sellerShippingMap = new Map<string, number>();
+        // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
+        const FALLBACK_SATANG = 40 * 100; // ฿40
+        const sellerShippingSatang = new Map<string, number>();
 
         for (const sellerId of sellerIds) {
-            const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
+            const sp = sellerProfiles?.find(p => p.id === sellerId);
             try {
                 const quote = await estimateRate({
-                    srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
-                    srcCityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
-                    srcPostalCode: sellerProfile?.postcode || '10500',
+                    srcProvinceName: sp?.province || 'กรุงเทพมหานคร',
+                    srcCityName: sp?.state || sp?.district || 'เขตบางรัก',
+                    srcPostalCode: sp?.postcode || '10500',
                     dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
@@ -91,134 +137,106 @@ export async function POST(req: Request) {
                     length: 15,
                     height: 2,
                 });
-                sellerShippingMap.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
+                // Flash returns satang (cents) directly.
+                sellerShippingSatang.set(sellerId, quote.estimatePrice + quote.upCountryAmount);
             } catch (err) {
                 if (isRegionError(err)) {
-                    console.warn(
-                        `[Orders/Checkout] Flash Express region mismatch for seller ${sellerId} — ` +
-                        `falling back to ฿${FALLBACK_RATE_THB} flat rate. ` +
-                        `Original error: ${(err as Error).message}`
-                    );
+                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿40`);
                 } else {
-                    console.error(
-                        `[Orders/Checkout] Unexpected Flash Express estimate error for seller ${sellerId}:`,
-                        err
-                    );
+                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId}:`, err);
                 }
-                sellerShippingMap.set(sellerId, FALLBACK_RATE_THB);
+                sellerShippingSatang.set(sellerId, FALLBACK_SATANG);
             }
         }
 
-        // ─── Build order records ───
-        const ordersToInsert: any[] = [];
-        const listingIdsToUpdate: string[] = [];
-        const shippingApplied = new Set<string>(); // Track which sellers already had shipping applied
+        // ─── Build orders. Prices come from the DB; shipping is charged once per seller. ───
+        const ordersToInsert: Record<string, unknown>[] = [];
+        const shippingApplied = new Set<string>();
 
-        for (const item of items) {
-            const feePercentage = feeMap.get(item.sellerId) || 0.09;
+        for (const listing of listings) {
+            const feePct = feeMap.get(listing.seller_id) || 0.09;
+            const priceSatang = Math.round(Number(listing.price) * 100);
+            const platformFeeSatang = Math.round(priceSatang * feePct);
 
-            // Apply shipping fee only once per seller
-            let itemShippingFee = 0;
-            if (!shippingApplied.has(item.sellerId)) {
-                itemShippingFee = sellerShippingMap.get(item.sellerId) || FALLBACK_RATE_THB;
-                shippingApplied.add(item.sellerId);
+            let shippingSatang = 0;
+            if (!shippingApplied.has(listing.seller_id)) {
+                shippingSatang = sellerShippingSatang.get(listing.seller_id) ?? FALLBACK_SATANG;
+                shippingApplied.add(listing.seller_id);
             }
 
             ordersToInsert.push({
-                listing_id: item.id,
+                listing_id: listing.id,
                 buyer_id: buyerId,
-                seller_id: item.sellerId,
-                status: 'pending_payment', // ← Key change: not 'paid' yet
-                total_amount: item.price,
-                platform_fee: item.price * feePercentage,
-                shipping_fee: itemShippingFee,
+                seller_id: listing.seller_id,
+                status: 'pending_payment',
+                total_amount: priceSatang / 100,
+                platform_fee: platformFeeSatang / 100,
+                shipping_fee: shippingSatang / 100,
                 escrow_status: 'held',
-                payment_method: paymentMethod || 'credit_card',
+                payment_method: paymentMethod,
                 transfer_group: transferGroup,
             });
-            listingIdsToUpdate.push(item.id);
         }
 
-        // ─── Insert orders ───
-        const { data: insertedOrders, error: insertError } = await supabase
+        // ─── Reserve listings via CAS on status='active' BEFORE creating orders. ───
+        // If any listing was already sold by a concurrent checkout, .update returns
+        // fewer rows and we abort without inserting orders.
+        const { data: reserved, error: reserveErr } = await supabase
+            .from('listings')
+            .update({ status: 'sold' })
+            .in('id', listingIds)
+            .eq('status', 'active')
+            .select('id');
+
+        if (reserveErr) {
+            console.error('[Orders/Checkout] Reservation update failed:', reserveErr);
+            return NextResponse.json({ error: 'Failed to reserve listings' }, { status: 500 });
+        }
+
+        if (!reserved || reserved.length !== listingIds.length) {
+            // Roll back any partial reservation by flipping winners back to active.
+            const reservedIds = (reserved || []).map(r => r.id);
+            if (reservedIds.length > 0) {
+                await supabase.from('listings').update({ status: 'active' }).in('id', reservedIds);
+            }
+            return NextResponse.json(
+                { error: 'One or more listings were just sold by another buyer' },
+                { status: 409 }
+            );
+        }
+
+        // ─── Insert orders. If this fails, roll back the reservation. ───
+        const { data: insertedOrders, error: insertErr } = await supabase
             .from('orders')
             .insert(ordersToInsert)
             .select();
 
-        if (insertError || !insertedOrders) {
-            console.error('[Orders/Checkout] Failed to create orders:', insertError);
-            throw new Error('Failed to create orders in database');
+        if (insertErr || !insertedOrders) {
+            console.error('[Orders/Checkout] Order insert failed:', insertErr);
+            await supabase.from('listings').update({ status: 'active' }).in('id', listingIds);
+            return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
         }
 
-        console.log(`[Orders/Checkout] Created ${insertedOrders.length} orders with transfer_group: ${transferGroup}`);
+        // Inventory move happens post-payment in fulfillOrdersByTransferGroup.
+        // It re-reads the listings table by listing_id — listings.status is now
+        // 'sold' but the row is still readable.
 
-        // ─── Reserve listings (mark as sold to prevent double-selling) ───
-        const { error: listingsUpdateError } = await supabase
-            .from('listings')
-            .update({ status: 'sold' })
-            .in('id', listingIdsToUpdate);
-
-        if (listingsUpdateError) {
-            console.error('[Orders/Checkout] Failed to reserve listings:', listingsUpdateError);
-            // Non-fatal but concerning
-        }
-
-        // ─── Transfer inventory to buyer ───
-        const { data: buyerCollections } = await supabase
-            .from('collections')
-            .select('id')
-            .eq('user_id', buyerId)
-            .limit(1);
-
-        let targetCollectionId: string;
-        if (!buyerCollections || buyerCollections.length === 0) {
-            const { data: newCollection } = await supabase
-                .from('collections')
-                .insert({ user_id: buyerId, name: 'Main Vault', include_in_portfolio: true })
-                .select()
-                .single();
-            targetCollectionId = newCollection!.id;
-        } else {
-            targetCollectionId = buyerCollections[0].id;
-        }
-
-        for (const item of items) {
-            await supabase.from('collection_items').insert({
-                collection_id: targetCollectionId,
-                card_id: item.cardId,
-                card_data: item.card,
-                quantity: 1,
-                condition: item.condition,
-                purchase_price: item.price,
-            });
-
-            const { data: sellerItems } = await supabase
-                .from('collection_items')
-                .select('id, collections!inner(user_id)')
-                .eq('card_id', item.cardId)
-                .eq('collections.user_id', item.sellerId)
-                .order('id', { ascending: true }) // Bug #C fix: deterministic row selection
-                .limit(1);
-
-            if (sellerItems && sellerItems.length > 0) {
-                await supabase.from('collection_items').delete().eq('id', sellerItems[0].id);
-            }
-        }
-
-        // ─── Calculate total for the client ───
-        const totalAmount = items.reduce((sum: number, i: any) => sum + i.price, 0)
-            + insertedOrders.reduce((sum: number, o: any) => sum + (o.shipping_fee || 0), 0);
+        const totalSatang = ordersToInsert.reduce(
+            (sum, o) => sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100),
+            0,
+        );
 
         return NextResponse.json({
             success: true,
             transferGroup,
             orderIds: insertedOrders.map(o => o.id),
-            totalAmount,
+            // Single source of truth for the amount Stripe will charge.
+            totalAmount: totalSatang / 100,
+            totalSatang,
             message: 'Orders created with pending_payment status. Proceed to payment.',
         });
-
     } catch (err: any) {
         console.error('[Orders/Checkout] Error:', err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json({ error: err.message || 'Checkout failed' }, { status: 500 });
     }
 }
