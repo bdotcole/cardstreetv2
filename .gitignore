@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Environment files — never commit. Any file matching .env* is ignored
+# except .env.example (which must contain placeholders only).
+.env
+.env.*
+!.env.example
+
+# Legacy env-handling files that have historically contained real secrets.
+# Keep them out of the repo permanently.
+VERCEL_ENV_SETUP.txt
+fix_env.js
+scripts/push_env.js
+setup-vercel-env.bat
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -25,6 +38,12 @@ dist-ssr
 
 .vercel
 .next
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
+# Claude Code worktree state — local-only
+.claude/
 
 # Capacitor
 android/app/build
