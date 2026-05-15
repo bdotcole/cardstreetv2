@@ -534,25 +534,39 @@ export function isRegionError(err: unknown): boolean {
 
 /**
  * Verifies the signature on an incoming Flash Express webhook payload.
+ *
+ * Flash's webhook callback signs every top-level non-empty primitive field
+ * (notifyType, mchId, nonceStr, dataJson, etc.) using the same key=value&
+ * sort + SHA256 algorithm as outbound requests. The verbatim `dataJson`
+ * string is what gets signed (NOT the parsed `data` object), so we include
+ * `dataJson` when present and skip the parsed `data` object.
  */
 export function verifyWebhookSignature(payload: Record<string, any>): boolean {
     const config = getFlashConfig();
     const { sign, ...rest } = payload;
 
-    if (!sign) return false;
+    if (!sign || typeof sign !== 'string') return false;
 
-    // Flatten data object into the params for signature check
     const params: Record<string, string> = {};
     for (const [k, v] of Object.entries(rest)) {
-        if (k === 'data' && typeof v === 'object') {
-            // Data fields are included via dataJson for signing
-            continue;
-        }
-        if (v !== undefined && v !== null && String(v).trim() !== '') {
-            params[k] = String(v);
-        }
+        // Skip the parsed object — Flash signs `dataJson` (the raw string).
+        if (k === 'data' && typeof v === 'object') continue;
+        if (v === undefined || v === null) continue;
+        const s = String(v);
+        if (s.trim() === '') continue;
+        params[k] = s;
     }
 
     const computed = generateSignature(params, config.apiKey);
-    return computed === sign;
+
+    // Constant-time compare to avoid leaking the signature byte-by-byte.
+    if (computed.length !== sign.length) return false;
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(computed, 'utf8'),
+            Buffer.from(sign, 'utf8'),
+        );
+    } catch {
+        return false;
+    }
 }

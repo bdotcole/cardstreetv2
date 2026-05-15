@@ -27,6 +27,14 @@ export async function GET(request: NextRequest) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
+        type ConnectProfile = {
+            stripe_account_id: string | null;
+            stripe_account_status: string | null;
+            stripe_charges_enabled: boolean | null;
+            stripe_payouts_enabled: boolean | null;
+            stripe_details_submitted: boolean | null;
+        };
+
         const { data: profile } = await admin
             .from('profiles')
             .select(
@@ -34,7 +42,7 @@ export async function GET(request: NextRequest) {
                 'stripe_payouts_enabled, stripe_details_submitted'
             )
             .eq('id', user.id)
-            .single();
+            .single<ConnectProfile>();
 
         if (!profile) {
             return NextResponse.json({ error: 'Profile not found' }, { status: 404 });

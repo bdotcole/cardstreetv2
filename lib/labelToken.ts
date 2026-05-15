@@ -15,11 +15,14 @@
 import crypto from 'crypto';
 
 function getSigningSecret(): string {
-    const s = process.env.CRON_SECRET;
+    // Dedicated secret. Previously reused CRON_SECRET, which meant one leak
+    // compromised two unrelated trust boundaries (cron auth + label URLs).
+    const s = process.env.LABEL_SIGNING_SECRET;
     if (!s) {
         throw new Error(
-            '[labelToken] CRON_SECRET is not configured — signed label URLs ' +
-            'cannot be issued. Set it in Vercel and redeploy.'
+            '[labelToken] LABEL_SIGNING_SECRET is not configured — signed label URLs ' +
+            'cannot be issued. Set it in Vercel (a long random string, distinct from ' +
+            'CRON_SECRET) and redeploy.'
         );
     }
     return s.trim();

@@ -17,10 +17,12 @@ export async function POST(request: NextRequest) {
 
         console.log('[FlashWebhook] Received:', JSON.stringify(payload).substring(0, 500))
 
-        // Verify signature
+        // Verify signature. Return 401 on failure — Flash retries on non-2xx,
+        // which is what we want for a transient credential / clock-skew issue.
+        // Returning 200 here silently dropped real events.
         if (!verifyWebhookSignature(payload)) {
             console.warn('[FlashWebhook] Invalid signature')
-            return NextResponse.json({ errorCode: '0' }, { status: 200 })
+            return NextResponse.json({ errorCode: '0', error: 'Invalid signature' }, { status: 401 })
         }
 
         const supabase = createClient(
