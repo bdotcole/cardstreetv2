@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 import { getStripe } from '@/lib/stripe';
 
@@ -61,6 +62,11 @@ export async function POST(request: NextRequest) {
 
                 if (!result.success) {
                     console.error('[StripeWebhook] Fulfillment had errors:', result.errors);
+                    Sentry.captureMessage('Stripe webhook fulfillment errors', {
+                        level: 'error',
+                        tags: { handler: 'stripe-webhook', event: 'payment_intent.succeeded' },
+                        extra: { transferGroup, paymentId, errors: result.errors },
+                    });
                     // Still return 200 to prevent Stripe retries — errors are logged
                 } else {
                     console.log(`[StripeWebhook] Fulfillment complete: ${result.ordersUpdated} orders, ${result.trackingNumbers.length} shipments`);
@@ -173,6 +179,7 @@ export async function POST(request: NextRequest) {
 
     } catch (err: any) {
         console.error('[StripeWebhook] Unexpected error:', err);
+        Sentry.captureException(err, { tags: { handler: 'stripe-webhook' } });
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

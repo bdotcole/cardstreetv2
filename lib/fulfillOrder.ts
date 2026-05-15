@@ -10,6 +10,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/nextjs';
 import { createShipment, generateLabel, requestPickup, isRegionError } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
@@ -63,7 +64,7 @@ export async function fulfillOrdersByTransferGroup(
         // ─── Step 1: Find pending orders ───
         const { data: orders, error: fetchError } = await supabase
             .from('orders')
-            .select('*')
+            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group')
             .eq('transfer_group', transferGroup)
             .eq('status', 'pending_payment');
 
@@ -124,19 +125,93 @@ export async function fulfillOrdersByTransferGroup(
 
         result.ordersUpdated = winningCount;
 
+        // All orders in a transfer_group share a buyer; pin it now so both the
+        // inventory-transfer block (below) and the seller/buyer profile lookups
+        // (further down) can use it.
+        const buyerId = orders[0].buyer_id;
+
+        // ─── Inventory transfer (now post-payment, was pre-payment) ───
+        // Re-read each listing by id so we move the actual sold cards into the
+        // buyer's collection only after payment is confirmed. Failures here are
+        // non-fatal to shipping (we'll still create the label and email) but
+        // are recorded in result.errors so the order can be reconciled.
+        try {
+            const listingIdsForTransfer = orders
+                .map(o => o.listing_id)
+                .filter((v): v is string => typeof v === 'string');
+
+            if (listingIdsForTransfer.length > 0) {
+                const { data: soldListings } = await supabase
+                    .from('listings')
+                    .select('id, seller_id, card_id, card_data, condition, price')
+                    .in('id', listingIdsForTransfer);
+
+                if (soldListings && soldListings.length > 0) {
+                    // Ensure the buyer has a destination collection.
+                    const { data: existingCollections } = await supabase
+                        .from('collections')
+                        .select('id')
+                        .eq('user_id', buyerId)
+                        .limit(1);
+
+                    let targetCollectionId: string;
+                    if (!existingCollections || existingCollections.length === 0) {
+                        const { data: newCollection } = await supabase
+                            .from('collections')
+                            .insert({ user_id: buyerId, name: 'Main Vault', include_in_portfolio: true })
+                            .select('id')
+                            .single();
+                        targetCollectionId = newCollection!.id;
+                    } else {
+                        targetCollectionId = existingCollections[0].id;
+                    }
+
+                    for (const listing of soldListings) {
+                        await supabase.from('collection_items').insert({
+                            collection_id: targetCollectionId,
+                            card_id: listing.card_id,
+                            card_data: listing.card_data,
+                            quantity: 1,
+                            condition: listing.condition,
+                            purchase_price: listing.price,
+                        });
+
+                        // Remove a matching copy from the seller's collection,
+                        // if present. Deterministic by id ASC.
+                        const { data: sellerItems } = await supabase
+                            .from('collection_items')
+                            .select('id, collections!inner(user_id)')
+                            .eq('card_id', listing.card_id)
+                            .eq('collections.user_id', listing.seller_id)
+                            .order('id', { ascending: true })
+                            .limit(1);
+
+                        if (sellerItems && sellerItems.length > 0) {
+                            await supabase.from('collection_items').delete().eq('id', sellerItems[0].id);
+                        }
+                    }
+                }
+            }
+        } catch (invErr: any) {
+            console.error('[Fulfillment] Inventory transfer error (non-fatal):', invErr);
+            result.errors.push(`Inventory transfer error: ${invErr.message}`);
+        }
+
         // ─── Step 3-6: Flash Express per seller ───
         const sellerIds = [...new Set(orders.map(o => o.seller_id))];
 
+        const SHIPPING_PROFILE_COLS =
+            'id, display_name, phone_number, province, state, district, sub_district, postcode, address';
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('*')
+            .select(SHIPPING_PROFILE_COLS)
             .in('id', sellerIds);
 
-        // Get buyer profile (all orders in a transfer_group share a buyer)
-        const buyerId = orders[0].buyer_id;
+        // Get buyer profile (all orders in a transfer_group share a buyer;
+        // buyerId was pinned up at the top of the function).
         const { data: buyerProfile } = await supabase
             .from('profiles')
-            .select('*')
+            .select(SHIPPING_PROFILE_COLS)
             .eq('id', buyerId)
             .single();
 
@@ -386,6 +461,10 @@ export async function fulfillOrdersByTransferGroup(
 
     } catch (err: any) {
         console.error('[Fulfillment] Fatal error:', err);
+        Sentry.captureException(err, {
+            tags: { handler: 'fulfill-order' },
+            extra: { transferGroup, paymentId },
+        });
         result.errors.push(`Fatal: ${err.message}`);
     }
 

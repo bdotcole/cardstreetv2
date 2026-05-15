@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { createShipment, generateLabel } from '@/lib/flashExpress';
@@ -112,7 +113,7 @@ export async function GET(
 
             const { data: profiles } = await admin
                 .from('profiles')
-                .select('*')
+                .select('id, display_name, phone_number, province, state, district, sub_district, postcode, address')
                 .in('id', [order.seller_id, order.buyer_id]);
 
             const seller = profiles?.find(p => p.id === order.seller_id);
@@ -224,6 +225,10 @@ export async function GET(
         });
     } catch (err: any) {
         console.error('[Orders/Label] Error:', err);
+        Sentry.captureException(err, {
+            tags: { handler: 'orders-label' },
+            extra: { orderId },
+        });
         return NextResponse.json(
             { error: err.message || 'Failed to fetch shipping label' },
             { status: 500 }

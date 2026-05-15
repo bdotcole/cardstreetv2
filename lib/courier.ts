@@ -104,7 +104,9 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
 
     try {
         console.log(`[Courier] Sending 'Sold' notification to recipient:`, JSON.stringify(recipient));
-        const { messageId } = await courier.send.message({
+        // Courier SDK v7 returns `requestId`, not `messageId`. Either way we
+        // only need to log it for support traceability.
+        const sendResult = await courier.send.message({
             message: {
                 to: recipient,
                 content: {
@@ -115,7 +117,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
                 data: { orderId: orderDetails.id, type: 'sold' }
             }
         });
-        console.log(`[Courier] ✅ 'Sold' notification sent. Message ID: ${messageId}`);
+        console.log(`[Courier] ✅ 'Sold' notification sent. Request ID: ${(sendResult as { requestId?: string }).requestId}`);
     } catch (error) {
         console.error(`[Courier] ❌ Error sending 'Sold' notification to ${sellerId}:`, error);
     }

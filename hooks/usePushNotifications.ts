@@ -26,7 +26,9 @@ export const usePushNotifications = () => {
 
         // Add listeners
         PushNotifications.addListener('registration', async (token: Token) => {
-            console.log('Push registration success, token:', token.value);
+            // Do not log the raw token — it grants the holder the ability to
+            // address push notifications to this device.
+            console.log('Push registration success');
             setFcmToken(token.value);
             
             // Send token to backend
