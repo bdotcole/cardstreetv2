@@ -48,3 +48,11 @@ tsconfig.tsbuildinfo
 # Capacitor
 android/app/build
 ios/App/Pods
+
+# Android signing — never commit. Keystore + credentials live on the
+# developer's machine only. See android/keystore.properties.example.
+android/keystore.properties
+android/*.jks
+android/*.keystore
+android/app/*.jks
+android/app/*.keystore

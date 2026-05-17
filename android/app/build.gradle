@@ -1,5 +1,17 @@
 apply plugin: 'com.android.application'
 
+// Signing credentials live in android/keystore.properties (gitignored).
+// Create one with:
+//   storeFile=cardstreet_key.jks
+//   storePassword=...
+//   keyAlias=cardstreet
+//   keyPassword=...
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.cardstreet.tcg"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -18,10 +30,15 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('../cardstreet_key.jks')
-            storePassword 'Cardstreet2709$'
-            keyAlias 'cardstreet'
-            keyPassword 'Cardstreet2709$'
+            // Only configure release signing if keystore.properties exists.
+            // This lets the project build without it (debug builds, CI without
+            // signing) instead of failing the Gradle configure phase.
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties.getProperty('storeFile'))
+                storePassword keystoreProperties.getProperty('storePassword')
+                keyAlias keystoreProperties.getProperty('keyAlias')
+                keyPassword keystoreProperties.getProperty('keyPassword')
+            }
         }
     }
 
@@ -29,7 +46,9 @@ android {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
