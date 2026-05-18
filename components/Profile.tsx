@@ -701,6 +701,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <LogOut className="w-4 h-4" />
               {t('profile.signOut')}
             </button>
+
+            {/* DBD Registration Banner — Thailand Department of Business
+                Development e-commerce trust mark. Legal requirement for Thai
+                online merchants; the linked page lets the public verify the
+                business at dbdregistered.dbd.go.th. */}
+            <div className="flex justify-center mt-10 pb-6">
+              <a
+                href="https://dbdregistered.dbd.go.th/api/public/shopinfo?param=264F801AB2642972F5E2CFBD3345A5B9F80CC9E827CEC2581CF516701D187501"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://dbdregistered.dbd.go.th/api/public/banner?param=264F801AB2642972F5E2CFBD3345A5B9F80CC9E827CEC2581CF516701D187501"
+                  alt="DBD Registered"
+                  className="h-12 w-auto"
+                />
+              </a>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
