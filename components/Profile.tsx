@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Mail, Phone, MapPin, CreditCard, Gift, Shield, Bell,
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
-  ChevronLeft, Plus, Trash2, Check, X, Truck, Clock, CheckCircle,
+  ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
   Wallet, Loader2
 } from 'lucide-react';
@@ -58,16 +58,6 @@ interface Rewards {
   tier_progress: number;
 }
 
-interface PaymentMethod {
-  id: string;
-  card_type: string;
-  last_four: string;
-  expiry_month: number;
-  expiry_year: number;
-  cardholder_name: string;
-  is_default: boolean;
-}
-
 interface Order {
   id: string;
   status: 'pending' | 'paid' | 'label_generated' | 'processing' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
@@ -103,7 +93,7 @@ interface Sale {
   };
 }
 
-type ActivePanel = 'none' | 'account' | 'payment' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts';
+type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts';
 
 const tierConfig = {
   bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
@@ -134,7 +124,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     lifetime_points: 0,
     tier_progress: 0
   });
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -186,9 +175,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   }, []);
 
   // Fetch profile data on mount
+  // Fetch profile data on mount / when the authenticated user changes.
+  // We clear profileData first so a previous user's data (or a stale
+  // email-prefix fallback) doesn't flash before the new data arrives.
   useEffect(() => {
     if (user && user.provider !== 'guest') {
+      setProfileData(null);
       fetchProfileData();
+    } else {
+      setProfileData(null);
     }
   }, [user]);
 
@@ -203,18 +198,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-    }
-  };
-
-  const fetchPaymentMethods = async () => {
-    try {
-      const res = await fetch('/api/profile/payment-methods');
-      if (res.ok) {
-        const data = await res.json();
-        setPaymentMethods(data);
-      }
-    } catch (error) {
-      console.error('Error fetching payment methods:', error);
     }
   };
 
@@ -456,6 +439,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     } else {
       await supabase.auth.signOut();
     }
+    // Clear per-session client state so the next signed-out / signed-in user
+    // doesn't see the previous account's cart on first render.
+    localStorage.removeItem('cardstreet-cart');
     window.location.reload();
   };
 
@@ -509,19 +495,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     setIsLoading(false);
   };
 
-  const deletePaymentMethod = async (id: string) => {
-    try {
-      await fetch(`/api/profile/payment-methods?id=${id}`, { method: 'DELETE' });
-      setPaymentMethods(prev => prev.filter(m => m.id !== id));
-    } catch (error) {
-      console.error('Error deleting payment method:', error);
-    }
-  };
-
   // Open panel handlers
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
-    if (panel === 'payment') fetchPaymentMethods();
     if (panel === 'orders') fetchOrders();
     if (panel === 'sales') fetchSales();
     if (panel === 'shipments') fetchShipments();
@@ -544,8 +520,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     {
       title: t('profile.account'),
       items: [
-        { name: t('profile.editProfile'), icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' },
-        { name: t('profile.paymentMethods'), icon: CreditCard, panel: 'payment' as ActivePanel, color: 'text-emerald-400' }
+        { name: t('profile.editProfile'), icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' }
       ]
     },
     {
@@ -654,8 +629,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
                 {user.provider !== 'guest' ? (
-                   <p className="text-sm text-brand-cyan font-bold leading-none">
-                     @{profileData?.username || user.email?.split('@')[0]}
+                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem]">
+                     {profileData?.username ? `@${profileData.username}` : ' '}
                    </p>
                 ) : (
                    <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">
@@ -867,69 +842,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         )}
 
         {/* Payment Methods Panel */}
-        {activePanel === 'payment' && (
-          <motion.div
-            key="payment"
-            variants={slideVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
-          >
-            <div className="p-4 pt-16 space-y-6">
-              <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-slate-400" />
-                </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Payment Methods</h2>
-              </div>
-
-              <div className="space-y-3">
-                {paymentMethods.length === 0 ? (
-                  <div className="text-center py-12 space-y-4">
-                    <CreditCard className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">{isThai ? 'ยังไม่มีข้อมูลการชำระเงิน' : 'No payment methods saved'}</p>
-                  </div>
-                ) : (
-                  paymentMethods.map((method) => (
-                    <div
-                      key={method.id}
-                      className="glass px-4 py-3 rounded-2xl border border-white/5 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${method.card_type === 'visa' ? 'bg-blue-600' : method.card_type === 'mastercard' ? 'bg-orange-500' : 'bg-slate-600'}`}>
-                          <CreditCard className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-white font-semibold text-sm flex items-center gap-2">
-                            •••• {method.last_four}
-                            {method.is_default && (
-                              <span className="text-[8px] px-2 py-0.5 bg-brand-cyan/20 text-brand-cyan rounded-full uppercase">Default</span>
-                            )}
-                          </p>
-                          <p className="text-slate-500 text-xs">{method.expiry_month}/{method.expiry_year}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => deletePaymentMethod(method.id)}
-                        className="p-2 hover:bg-red-500/20 rounded-xl transition-colors group"
-                      >
-                        <Trash2 className="w-4 h-4 text-slate-600 group-hover:text-red-400" />
-                      </button>
-                    </div>
-                  ))
-                )}
-
-                {/* Add New Card Button */}
-                <button className="w-full h-16 border-2 border-dashed border-white/10 rounded-2xl flex items-center justify-center gap-3 text-slate-500 hover:text-white hover:border-brand-cyan/30 transition-colors group">
-                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  <span className="font-semibold">{isThai ? 'เพิ่มการ์ดใหม่' : 'Add New Card'}</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* Rewards Panel */}
         {activePanel === 'rewards' && (
           <motion.div

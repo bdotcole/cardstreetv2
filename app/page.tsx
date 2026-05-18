@@ -186,6 +186,13 @@ export default function HomePage() {
             } else {
                 Sentry.setUser(null);
                 setUser(null);
+                // Defensive: if session expires (token refresh failure, remote sign-out,
+                // etc.) without going through handleLogout, still wipe the cart so the
+                // next user doesn't inherit it from localStorage.
+                setCart([]);
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('cardstreet-cart');
+                }
             }
         });
 
