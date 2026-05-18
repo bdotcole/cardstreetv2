@@ -30,6 +30,9 @@ import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
     PROFILE_INCOMPLETE_TOAST,
+    BUYER_REQUIRED_PROFILE_FIELDS,
+    checkBuyerProfileComplete,
+    BUYER_PROFILE_INCOMPLETE_TOAST,
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
@@ -370,7 +373,7 @@ export default function HomePage() {
         setCart(prev => prev.filter(item => item.id !== id));
     };
 
-    const handleCheckout = () => {
+    const handleCheckout = async () => {
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
         // with a generic "missing required fields" message that's hard to debug.
@@ -380,6 +383,34 @@ export default function HomePage() {
             setActiveTab('profile');
             return;
         }
+
+        // Pre-check buyer shipping profile so users hit a clean "fill your
+        // address" UX instead of getting bounced halfway through the payment
+        // modal. The server-side gate in /api/orders/checkout is the
+        // authoritative check; this is just a friendlier client-side mirror.
+        // requireAuth() above guarantees user is non-null here.
+        if (!user) return;
+        try {
+            const supabase = createClient();
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select(BUYER_REQUIRED_PROFILE_FIELDS.join(','))
+                .eq('id', user.id)
+                .single<Record<string, string | null>>();
+            const completeness = checkBuyerProfileComplete(profile);
+            if (!completeness.complete) {
+                showToast(BUYER_PROFILE_INCOMPLETE_TOAST, 'error');
+                setIsCartOpen(false);
+                setActiveTab('profile');
+                return;
+            }
+        } catch (err) {
+            // Don't block on the pre-check failing — the server-side gate
+            // still enforces it, and the modal will surface that error if
+            // it triggers.
+            console.warn('[Checkout] Buyer profile pre-check failed:', err);
+        }
+
         setIsCartOpen(false);
         setIsPaymentModalOpen(true);
     };
@@ -504,7 +535,7 @@ export default function HomePage() {
                 .from('profiles')
                 .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
                 .eq('id', user.id)
-                .single<Record<string, string | null>>();
+                .single<Record<string, string | boolean | null>>();
             if (error) throw error;
             const completeness = checkSellerProfileComplete(profile);
             if (!completeness.complete) {

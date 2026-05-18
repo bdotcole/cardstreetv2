@@ -18,6 +18,12 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import {
+    BUYER_REQUIRED_PROFILE_FIELDS,
+    checkBuyerProfileComplete,
+    BUYER_PROFILE_INCOMPLETE_TOAST,
+    BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+} from '@/lib/profileValidation';
 
 const FALLBACK_RATE_THB = 40;
 
@@ -53,6 +59,34 @@ export async function POST(req: Request) {
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!,
         );
+
+        // ─── Gate: buyer must have a complete shipping profile ───
+        // Matches the gate in /api/orders/checkout so the estimate UI can't
+        // imply a buyer is allowed to proceed when they're not.
+        const { data: buyerProfileGate, error: buyerProfileErr } = await supabase
+            .from('profiles')
+            .select(BUYER_REQUIRED_PROFILE_FIELDS.join(','))
+            .eq('id', user.id)
+            .single<Record<string, string | null>>();
+
+        if (buyerProfileErr || !buyerProfileGate) {
+            return NextResponse.json(
+                { error: 'Buyer profile not found' },
+                { status: 404 },
+            );
+        }
+
+        const buyerCompleteness = checkBuyerProfileComplete(buyerProfileGate);
+        if (!buyerCompleteness.complete) {
+            return NextResponse.json(
+                {
+                    error: BUYER_PROFILE_INCOMPLETE_TOAST,
+                    code: BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+                    missing: buyerCompleteness.missing,
+                },
+                { status: 400 },
+            );
+        }
 
         // Re-derive seller + price from the DB. Estimate must match what we
         // will actually charge at /api/orders/checkout.

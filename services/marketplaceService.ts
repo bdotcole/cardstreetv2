@@ -179,7 +179,7 @@ export const marketplaceService = {
                 .from('profiles')
                 .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
                 .eq('id', user.id)
-                .single<Record<string, string | null>>();
+                .single<Record<string, string | boolean | null>>();
             if (profileErr) throw profileErr;
             const completeness = checkSellerProfileComplete(sellerProfile);
             if (!completeness.complete) {

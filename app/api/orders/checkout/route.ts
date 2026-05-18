@@ -24,6 +24,12 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import {
+    BUYER_REQUIRED_PROFILE_FIELDS,
+    checkBuyerProfileComplete,
+    BUYER_PROFILE_INCOMPLETE_TOAST,
+    BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+} from '@/lib/profileValidation';
 
 interface CheckoutItem {
     id: string; // listing id
@@ -59,6 +65,37 @@ export async function POST(req: Request) {
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
+
+        // ─── Gate: buyer must have a complete shipping profile ───
+        // Mirrors the seller-side gate in lib/profileValidation.ts. Without
+        // this, fulfillOrder would substitute Bangkok placeholders into Flash
+        // Express and the order would either fail validation or ship to the
+        // wrong address. Returns a structured error the client uses to bounce
+        // the user to Profile.
+        const { data: buyerProfileGate, error: buyerProfileErr } = await supabase
+            .from('profiles')
+            .select(BUYER_REQUIRED_PROFILE_FIELDS.join(','))
+            .eq('id', buyerId)
+            .single<Record<string, string | null>>();
+
+        if (buyerProfileErr || !buyerProfileGate) {
+            return NextResponse.json(
+                { error: 'Buyer profile not found' },
+                { status: 404 },
+            );
+        }
+
+        const buyerCompleteness = checkBuyerProfileComplete(buyerProfileGate);
+        if (!buyerCompleteness.complete) {
+            return NextResponse.json(
+                {
+                    error: BUYER_PROFILE_INCOMPLETE_TOAST,
+                    code: BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+                    missing: buyerCompleteness.missing,
+                },
+                { status: 400 },
+            );
+        }
 
         // ─── Look up real listings + prices from the DB. Never trust the body. ───
         const { data: listings, error: listingsErr } = await supabase

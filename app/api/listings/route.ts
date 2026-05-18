@@ -99,13 +99,14 @@ export async function POST(request: NextRequest) {
         const body = parsed.data
 
         // Same gate as services/marketplaceService.createListing — refuse to
-        // create a listing for a seller who can't be shipped from. Returns a
-        // structured error so the client can route the user to Profile.
+        // create a listing for a seller who can't be shipped from or who hasn't
+        // connected payouts yet. Returns a structured error so the client can
+        // route the user to Profile.
         const { data: sellerProfile, error: profileErr } = await supabase
             .from('profiles')
             .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
             .eq('id', user.id)
-            .single<Record<string, string | null>>()
+            .single<Record<string, string | boolean | null>>()
         if (profileErr) throw profileErr
         const completeness = checkSellerProfileComplete(sellerProfile)
         if (!completeness.complete) {
