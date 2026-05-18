@@ -51,31 +51,22 @@ export async function POST() {
 
         // Step 1: Create the Express account if we don't already have one.
         //
-        // For Thailand-based Connect accounts, Stripe requires us to either:
-        //   (a) also request `card_payments` (full service agreement — seller is
-        //       merchant of record, accepts card payments themselves), or
-        //   (b) explicitly accept the `recipient` service agreement (seller only
-        //       receives transfers from the platform; CardStreet is merchant of
-        //       record).
+        // Country is US for the beta — the platform Stripe account is US-based
+        // pending Thailand approval. When Thailand approval comes through and
+        // the platform Stripe account is migrated, flip this to 'TH' and
+        // re-add `tos_acceptance: { service_agreement: 'recipient' }` (Thailand-
+        // specific; not needed for US Express accounts).
         //
-        // CardStreet's "separate charges and transfers" architecture matches (b)
-        // exactly: buyers pay the platform Stripe account, release-funds later
-        // transfers to the seller. Recipient agreements also give sellers a
-        // lighter KYC flow since they aren't processing payments.
-        //
-        // Docs: https://stripe.com/docs/connect/service-agreement-types
+        // Docs: https://stripe.com/docs/connect/express-accounts
         if (!accountId) {
             const account = await stripe.accounts.create({
                 type: 'express',
-                country: 'TH',
+                country: 'US',
                 email: user.email || undefined,
                 capabilities: {
                     transfers: { requested: true },
                 },
                 business_type: 'individual',
-                tos_acceptance: {
-                    service_agreement: 'recipient',
-                },
                 metadata: {
                     cardstreet_user_id: user.id,
                     cardstreet_display_name: profile.display_name || '',
