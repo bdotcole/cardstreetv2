@@ -121,20 +121,17 @@ async function processRow(row) {
 }
 
 async function fetchPage(lastId, take) {
-  // No OFFSET when filtering on `phash IS NULL`: rows drop out of the result set as we
-  // hash them, so an offset would silently skip unhashed rows. We drain between pages
-  // so the inflight set is empty before each query — no risk of re-fetching rows that
-  // are about to be updated.
+  // Always paginate by id, regardless of mode. In non-force mode we ALSO require
+  // `phash IS NULL` so already-hashed rows don't reappear — but the id cursor is
+  // what stops us from looping forever on skip-no-url rows (which keep their NULL
+  // phash but can never be hashed).
   let q = supabase
     .from('pokemon_cards')
     .select('id, image_small, image_large, raw_data, language')
     .order('id', { ascending: true })
     .limit(take);
-  if (!FORCE) {
-    q = q.is('phash', null);
-  } else if (lastId) {
-    q = q.gt('id', lastId);
-  }
+  if (!FORCE) q = q.is('phash', null);
+  if (lastId) q = q.gt('id', lastId);
   if (LANGUAGE) q = q.eq('language', LANGUAGE);
   const { data, error } = await q;
   if (error) throw error;
