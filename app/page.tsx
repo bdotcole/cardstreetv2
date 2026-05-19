@@ -101,14 +101,15 @@ export default function HomePage() {
     const currency = settings.currency;
     const language = settings.language;
 
-    // Cart State (still using localStorage for now)
-    const [cart, setCart] = useState<CartItem[]>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('cardstreet-cart');
-            if (saved) return JSON.parse(saved);
-        }
-        return [];
-    });
+    // Cart State — persisted to localStorage under a USER-SCOPED key so two
+    // accounts on the same device never see each other's items. The cart is
+    // hydrated by an effect once the auth listener resolves the current user
+    // (the previous global `cardstreet-cart` key leaked between accounts).
+    const [cart, setCart] = useState<CartItem[]>([]);
+    // Tracks which user the in-memory cart belongs to. Used by the persist
+    // effect to guarantee writes only go to the active user's key, even if
+    // cart and user.id change in the same render cycle.
+    const cartOwnerRef = useRef<string | null>(null);
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -186,13 +187,10 @@ export default function HomePage() {
             } else {
                 Sentry.setUser(null);
                 setUser(null);
-                // Defensive: if session expires (token refresh failure, remote sign-out,
-                // etc.) without going through handleLogout, still wipe the cart so the
-                // next user doesn't inherit it from localStorage.
-                setCart([]);
-                if (typeof window !== 'undefined') {
-                    localStorage.removeItem('cardstreet-cart');
-                }
+                // The cart-load effect (keyed on user?.id) handles resetting
+                // the in-memory cart to [] when the user becomes null. We do
+                // NOT remove `cardstreet-cart-${prevUserId}` here — we keep
+                // each user's cart so they get it back on next sign-in.
             }
         });
 
@@ -283,10 +281,44 @@ export default function HomePage() {
         migrateOfflineData();
     }, [user]);
 
-    // Persist cart to localStorage
+    // Hydrate the cart from localStorage whenever the active user changes.
+    // Empty cart for signed-out state; user-scoped key for signed-in users.
+    // Also drops the legacy global `cardstreet-cart` key (one-time cleanup)
+    // so it can't be re-hydrated by stale code paths.
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const userId = user?.id ?? null;
+        if (cartOwnerRef.current === userId) return; // already loaded for this user
+
+        // Legacy cleanup — the un-scoped key is the source of the cross-account leak.
+        localStorage.removeItem('cardstreet-cart');
+
+        cartOwnerRef.current = userId;
+        if (!userId) {
+            setCart([]);
+            return;
+        }
+        const saved = localStorage.getItem(`cardstreet-cart-${userId}`);
+        try {
+            setCart(saved ? JSON.parse(saved) : []);
+        } catch {
+            setCart([]);
+        }
+    }, [user?.id]);
+
+    // Persist cart to the active user's scoped key. Guarded by cartOwnerRef
+    // so a stale cart from user A can't be written to user B's key during
+    // the brief window where the user change has fired but the load effect
+    // hasn't yet reset cart state.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const userId = cartOwnerRef.current;
+        if (!userId) return; // no write while signed out
+        const key = `cardstreet-cart-${userId}`;
         if (cart.length > 0) {
-            localStorage.setItem('cardstreet-cart', JSON.stringify(cart));
+            localStorage.setItem(key, JSON.stringify(cart));
+        } else {
+            localStorage.removeItem(key);
         }
     }, [cart]);
 
