@@ -120,26 +120,25 @@ async function processRow(row) {
   }
 }
 
-async function* paginate() {
-  let from = 0;
-  let processed = 0;
-  while (processed < LIMIT) {
-    const take = Math.min(PAGE_SIZE, LIMIT - processed);
-    let q = supabase
-      .from('pokemon_cards')
-      .select('id, image_small, image_large, raw_data, language')
-      .order('id', { ascending: true })
-      .range(from, from + take - 1);
-    if (!FORCE) q = q.is('phash', null);
-    if (LANGUAGE) q = q.eq('language', LANGUAGE);
-    const { data, error } = await q;
-    if (error) throw error;
-    if (!data || data.length === 0) return;
-    for (const row of data) yield row;
-    from += data.length;
-    processed += data.length;
-    if (data.length < take) return;
+async function fetchPage(lastId, take) {
+  // No OFFSET when filtering on `phash IS NULL`: rows drop out of the result set as we
+  // hash them, so an offset would silently skip unhashed rows. We drain between pages
+  // so the inflight set is empty before each query — no risk of re-fetching rows that
+  // are about to be updated.
+  let q = supabase
+    .from('pokemon_cards')
+    .select('id, image_small, image_large, raw_data, language')
+    .order('id', { ascending: true })
+    .limit(take);
+  if (!FORCE) {
+    q = q.is('phash', null);
+  } else if (lastId) {
+    q = q.gt('id', lastId);
   }
+  if (LANGUAGE) q = q.eq('language', LANGUAGE);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
 }
 
 async function main() {
@@ -151,29 +150,39 @@ async function main() {
   console.log('');
 
   const counts = { ok: 0, fail: 0, 'skip-no-url': 0 };
-  const inflight = new Set();
   let total = 0;
+  let lastId = '';
   const t0 = Date.now();
 
-  const wait = async () => {
-    if (inflight.size >= CONCURRENCY) await Promise.race(inflight);
-  };
+  while (total < LIMIT) {
+    const take = Math.min(PAGE_SIZE, LIMIT - total);
+    const page = await fetchPage(lastId, take);
+    if (page.length === 0) break;
 
-  for await (const row of paginate()) {
-    await wait();
-    const p = processRow(row).then((res) => {
-      counts[res.status] = (counts[res.status] || 0) + 1;
-      total++;
-      if (res.status === 'fail') console.warn(`  fail ${res.id}: ${res.error}`);
-      if (total % 100 === 0) {
-        const rate = total / ((Date.now() - t0) / 1000);
-        console.log(`  ${total} processed | ok=${counts.ok} fail=${counts.fail} skip=${counts['skip-no-url']} | ${rate.toFixed(1)}/s`);
-      }
-      inflight.delete(p);
-    });
-    inflight.add(p);
+    const inflight = new Set();
+    const wait = async () => {
+      if (inflight.size >= CONCURRENCY) await Promise.race(inflight);
+    };
+
+    for (const row of page) {
+      await wait();
+      const p = processRow(row).then((res) => {
+        counts[res.status] = (counts[res.status] || 0) + 1;
+        total++;
+        if (res.status === 'fail') console.warn(`  fail ${res.id}: ${res.error}`);
+        if (total % 100 === 0) {
+          const rate = total / ((Date.now() - t0) / 1000);
+          console.log(`  ${total} processed | ok=${counts.ok} fail=${counts.fail} skip=${counts['skip-no-url']} | ${rate.toFixed(1)}/s`);
+        }
+        inflight.delete(p);
+      });
+      inflight.add(p);
+    }
+    await Promise.all(inflight);
+
+    lastId = page[page.length - 1].id;
+    if (page.length < take) break;
   }
-  await Promise.all(inflight);
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`\nDone in ${elapsed}s. ok=${counts.ok} fail=${counts.fail} skip=${counts['skip-no-url']}`);
