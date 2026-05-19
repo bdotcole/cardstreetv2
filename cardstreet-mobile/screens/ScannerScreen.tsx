@@ -28,45 +28,57 @@ export default function ScannerScreen() {
         }, [])
     );
 
-    // Edge-Cloud Hybrid Loop: Take a highly compressed frame every 1.5s
+    // Auto-capture loop. Server-side pHash + Flash fallback now lives in /api/scan,
+    // so each round-trip is ~300-700ms even on misses. Slow the cadence accordingly to
+    // avoid stacking requests and burning the user's mobile data.
     React.useEffect(() => {
         let interval: NodeJS.Timeout;
-        
+
         const captureFrame = async () => {
              if (!cameraRef.current) return;
              try {
-                 // Fast capture with extremely low quality to reduce latency to ~50ms
+                 // Mid-quality JPEG gives sharp the detail it needs for a reliable pHash.
+                 // The previous 0.1 quality lost so much edge information that pHash distances
+                 // were unstable across consecutive frames.
                  const photo = await cameraRef.current.takePictureAsync({
                      base64: true,
-                     quality: 0.1,
+                     quality: 0.6,
                      skipProcessing: true
                  });
-                 
+
                  if (!photo?.base64) return;
-                 
-                 // Fire frame to the secure Gemini Flash edge route
+
                  const response = await fetch(`${API_URL}/api/scan`, {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ image: photo.base64 })
                  });
-                 
+
                  const data = await response.json();
-                 
+
+                 // Prefer the pHash path: matches[] is pre-resolved Card data, no client-side reconcile needed.
+                 if (Array.isArray(data?.matches) && data.matches.length > 0 && (data.matchDistance ?? 99) <= 14) {
+                     setIsAutoScanning(false);
+                     setScanResult({
+                         ...data.matches[0],
+                         _matches: data.matches,
+                         _matchDistance: data.matchDistance,
+                     });
+                     return;
+                 }
+
                  if (data?.primary && data.primary.confidence > 0.6) {
-                     // High confidence match! Pause the loop.
                      setIsAutoScanning(false);
                      setScanResult(data.primary);
                  }
              } catch (e) {
-                 // Ignore frame drop gracefully so UI doesn't hitch
+                 // Frame drop is fine — next interval tries again.
              }
         };
 
         if (isActive && isAutoScanning) {
-            // Instantly grab first frame, then initiate interval
             captureFrame();
-            interval = setInterval(captureFrame, 1500);
+            interval = setInterval(captureFrame, 2500);
         }
 
         return () => clearInterval(interval);

@@ -15,10 +15,17 @@ interface WebLiveScannerProps {
 }
 
 // Hard ceiling for a single /api/scan request. The route's maxDuration is 60s,
-// but in practice Flash returns in 1-5s. If we're still waiting at 25s
-// something is wrong — bail out to manual search instead of leaving the user
-// staring at "Extracting visual DNA…" indefinitely.
+// but in practice the pHash + Flash pipeline returns in <3s. If we're still waiting
+// at 25s something is wrong — bail out to manual search.
 const SCAN_REQUEST_TIMEOUT_MS = 25_000;
+
+// Tuning for the auto-capture loop. Picked empirically.
+const ANALYSIS_FPS = 3;                // Frame-analysis cadence. Stability > motion, so 3fps is plenty.
+const ANALYSIS_W = 80;                 // Tiny grayscale buffer (80x112, 2.5:3.5). All checks run on this.
+const ANALYSIS_H = 112;
+const FOCUS_VARIANCE_THRESHOLD = 120;  // Laplacian variance above this = sharp enough to OCR.
+const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still.
+const STABLE_FRAMES_REQUIRED = 2;      // Need this many consecutive stable+focused frames before firing.
 
 async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
     return fetch('/api/scan', {
@@ -32,33 +39,33 @@ async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
 export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLiveScannerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const analysisCanvasRef = useRef<HTMLCanvasElement>(null);
+    const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
+    const stableCountRef = useRef(0);
+    const isProcessingRef = useRef(false);
+    const streamRef = useRef<MediaStream | null>(null);
+
     const { t } = useTranslation();
     const { showToast } = useToast();
 
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-    const [isScanning, setIsScanning] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
-    const [stream, setStream] = useState<MediaStream | null>(null);
+    const [statusHint, setStatusHint] = useState<'searching' | 'aligning' | 'sharpen' | 'scanning'>('searching');
 
-    const isProcessingRef = useRef(false);
-
-    // Initialize Camera
     useEffect(() => {
         let activeStream: MediaStream | null = null;
         const startCamera = async () => {
             try {
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
+                    video: {
                         facingMode: 'environment',
                         width: { ideal: 1920 },
-                        height: { ideal: 1080 } 
+                        height: { ideal: 1080 }
                     }
                 });
                 activeStream = mediaStream;
-                setStream(mediaStream);
-                if (videoRef.current) {
-                    videoRef.current.srcObject = mediaStream;
-                }
+                streamRef.current = mediaStream;
+                if (videoRef.current) videoRef.current.srcObject = mediaStream;
             } catch (err) {
                 console.error('Camera access denied:', err);
                 showToast(
@@ -69,120 +76,122 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLi
                 onClose();
             }
         };
-
         startCamera();
-
         return () => {
-            if (activeStream) {
-                activeStream.getTracks().forEach(track => track.stop());
-            }
+            if (activeStream) activeStream.getTracks().forEach(t => t.stop());
         };
     }, [onClose]);
 
-    const handleManualCapture = () => {
-        if (!isLocked && !isProcessingRef.current) {
-            setIsLocked(true);
-            // Instantly freeze the camera feed to show a snapshot was taken
-            if (videoRef.current) {
-                videoRef.current.pause();
-            }
-            triggerHighQualityScan();
-        }
-    };
+    // Continuous analysis loop: focus + stability checks on a small grayscale buffer.
+    useEffect(() => {
+        if (!isVideoLoaded || isLocked) return;
+        const intervalMs = Math.round(1000 / ANALYSIS_FPS);
 
-    const triggerHighQualityScan = async () => {
+        const tick = () => {
+            if (isProcessingRef.current) return;
+            const video = videoRef.current;
+            const acanvas = analysisCanvasRef.current;
+            if (!video || !acanvas || video.readyState < 2) return;
+
+            acanvas.width = ANALYSIS_W;
+            acanvas.height = ANALYSIS_H;
+            const actx = acanvas.getContext('2d', { willReadFrequently: true });
+            if (!actx) return;
+
+            const crop = computeCardCrop(video, window.innerWidth, window.innerHeight);
+            actx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ANALYSIS_W, ANALYSIS_H);
+            const rgba = actx.getImageData(0, 0, ANALYSIS_W, ANALYSIS_H).data;
+
+            const gray = toGrayscale(rgba, ANALYSIS_W, ANALYSIS_H);
+            const focus = laplacianVariance(gray, ANALYSIS_W, ANALYSIS_H);
+            const isSharp = focus >= FOCUS_VARIANCE_THRESHOLD;
+
+            let isStable = false;
+            if (prevFrameRef.current && prevFrameRef.current.length === gray.length) {
+                isStable = meanAbsDiff(gray, prevFrameRef.current) < STABILITY_DIFF_THRESHOLD;
+            }
+            prevFrameRef.current = gray;
+
+            if (isSharp && isStable) {
+                stableCountRef.current += 1;
+                setStatusHint('aligning');
+                if (stableCountRef.current >= STABLE_FRAMES_REQUIRED) {
+                    stableCountRef.current = 0;
+                    triggerScan();
+                }
+            } else {
+                stableCountRef.current = 0;
+                setStatusHint(isSharp ? 'aligning' : 'sharpen');
+            }
+        };
+
+        const id = window.setInterval(tick, intervalMs);
+        return () => window.clearInterval(id);
+    }, [isVideoLoaded, isLocked]);
+
+    const triggerScan = async () => {
+        if (isProcessingRef.current || isLocked) return;
         isProcessingRef.current = true;
+        setIsLocked(true);
+        setStatusHint('scanning');
+
         try {
             const video = videoRef.current;
             const canvas = canvasRef.current;
-            if (!video || !canvas) return;
+            if (!video || !canvas) {
+                resetScan();
+                return;
+            }
 
-            // Give UI text a tiny fraction of a second to render flash
-            await new Promise(r => setTimeout(r, 50));
-
-            // Calculate precise mathematical layout for cropping out the background
-            const Vw = video.videoWidth;
-            const Vh = video.videoHeight;
-            const Sw = window.innerWidth;
-            const Sh = window.innerHeight;
-
-            // object-cover scaling
-            const S = Math.max(Sw / Vw, Sh / Vh);
-            const Rw = Vw * S;
-            const Rh = Vh * S;
-            const OffsetX = (Sw - Rw) / 2;
-            const OffsetY = (Sh - Rh) / 2;
-
-            // The cutout box dimensions perfectly matched to UI styling logic
-            const Cw = Math.min(0.7 * Sw, 280);
-            const Ch = Cw * (3.5 / 2.5);
-            const BoxX = (Sw - Cw) / 2;
-            const BoxY = (Sh - Ch) / 2;
-
-            // Mapping Screen Coordinates back directly into internal Native Video space
-            const NativeX = Math.max(0, (BoxX - OffsetX) / S);
-            const NativeY = Math.max(0, (BoxY - OffsetY) / S);
-            const NativeW = Math.min(Vw - NativeX, Cw / S);
-            const NativeH = Math.min(Vh - NativeY, Ch / S);
-
-            // Set canvas precisely to the extracted card boundaries
-            canvas.width = NativeW;
-            canvas.height = NativeH;
+            const crop = computeCardCrop(video, window.innerWidth, window.innerHeight);
+            canvas.width = crop.w;
+            canvas.height = crop.h;
             const ctx = canvas.getContext('2d');
-            if (!ctx) return;
+            if (!ctx) {
+                resetScan();
+                return;
+            }
+            ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
 
-            // Extrapolate the core document frame instantly WITHOUT OpenCV
-            ctx.drawImage(video, NativeX, NativeY, NativeW, NativeH, 0, 0, NativeW, NativeH);
-            
-            // High compression JPEG is fine now because it's ONLY the card, text is massive
-            const base64DataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            const base64Image = base64DataUrl.split(',')[1];
-            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const base64Image = dataUrl.split(',')[1];
             if (!base64Image) {
                 resetScan();
                 return;
             }
 
+            // On native we additionally run on-device OCR. The server uses pHash first; OCR text
+            // only matters when pHash misses, so we send both and let the server pick the best path.
+            let ocrText: string | undefined;
+            if (Capacitor.isNativePlatform()) {
+                try {
+                    const ocrRes = await Ocr.process({ image: dataUrl });
+                    ocrText = ocrRes.results.map((r) => r.text).join(' | ').trim() || undefined;
+                } catch (e) {
+                    console.warn('Native OCR failed (non-fatal):', e);
+                }
+            }
+
+            const body: any = { image: base64Image };
+            if (ocrText) body.text = ocrText;
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), SCAN_REQUEST_TIMEOUT_MS);
 
-            let scanResponse: Response;
-
+            let res: Response;
             try {
-                if (Capacitor.isNativePlatform()) {
-                    console.log('Running Fast Native ML Kit OCR...');
-                    let texts = '';
-                    try {
-                        const ocrRes = await Ocr.process({ image: base64DataUrl });
-                        texts = ocrRes.results.map(r => r.text).join(' | ');
-                        console.log('Extracted Native OCR Text:', texts);
-                    } catch (e) {
-                        console.warn("Native OCR failed, will fall back to image scan...", e);
-                    }
-
-                    if (texts.trim().length > 0) {
-                        scanResponse = await fetchScan({ text: texts }, controller.signal);
-                    } else {
-                        scanResponse = await fetchScan({ image: base64Image }, controller.signal);
-                    }
-                } else {
-                    // Web fallback: send the cropped image straight to Gemini Flash.
-                    scanResponse = await fetchScan({ image: base64Image }, controller.signal);
-                }
+                res = await fetchScan(body, controller.signal);
             } finally {
                 clearTimeout(timeoutId);
             }
 
-            const scanData = await scanResponse.json();
+            const scanData = await res.json();
 
-            if (scanResponse.ok && scanData?.primary) {
-                setIsScanning(false);
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
+            if (res.ok && (scanData?.matches?.length || scanData?.primary?.name)) {
+                streamRef.current?.getTracks().forEach((t) => t.stop());
                 onMatch(scanData);
             } else {
-                console.error("Scan failed or invalid JSON:", scanData);
+                console.error('Scan failed:', scanData);
                 handleScanFailure('no_match');
             }
         } catch (error: any) {
@@ -193,88 +202,69 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLi
     };
 
     const handleScanFailure = (reason: 'timeout' | 'network' | 'no_match') => {
-        // Stop the camera and tear down the scanner UI — the host will route
-        // the user to manual search where they can try again on their terms.
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-        setIsScanning(false);
+        streamRef.current?.getTracks().forEach((t) => t.stop());
         if (onScanFailed) {
             onScanFailed(reason);
         } else {
-            // Legacy fallback: keep the camera running and let the user retry.
             resetScan();
         }
     };
 
     const resetScan = () => {
-        setIsLocked(false);
         isProcessingRef.current = false;
-        // Unfreeze camera if scan failed
-        if (videoRef.current) {
-            videoRef.current.play().catch(e => console.error("Playback failed", e));
-        }
+        stableCountRef.current = 0;
+        prevFrameRef.current = null;
+        setIsLocked(false);
+        setStatusHint('searching');
     };
 
     return (
         <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-            {/* CSS to ruthlessly hide Chrome/Capacitor video default play buttons */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style dangerouslySetInnerHTML={{ __html: `
                 video::-webkit-media-controls { display: none !important; }
                 video::-webkit-media-controls-start-playback-button { display: none !important; opacity: 0; }
-            `}} />
+            ` }} />
 
-            {/* Native Video Element */}
-            <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
                 muted
                 disablePictureInPicture
                 disableRemotePlayback
                 onPlaying={() => setIsVideoLoaded(true)}
                 className={`absolute inset-0 w-full h-[100dvh] object-cover transition-opacity duration-300 ${isVideoLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
-            
-            {/* Hidden Canvases for HQ Frame Capture */}
-            <canvas ref={canvasRef} className="hidden" />
 
-            {/* Loading Placeholder while camera boots (Prevents Play Icon flash) */}
+            <canvas ref={canvasRef} className="hidden" />
+            <canvas ref={analysisCanvasRef} className="hidden" />
+
             {!isVideoLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center bg-brand-darker">
                     <div className="w-8 h-8 rounded-full border-4 border-brand-cyan border-t-transparent animate-spin"></div>
                 </div>
             )}
 
-            {/* Google Lens Style Overlay - True 2.5:3.5 Cutout */}
             {isVideoLoaded && (
                 <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-                    <div 
+                    <div
                         className={`relative w-[70vw] max-w-[280px] aspect-[2.5/3.5] rounded-xl overflow-hidden transition-all duration-300 ${isLocked ? 'scale-[1.02] border-brand-cyan/30' : 'scale-100'}`}
-                        style={{
-                            boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)',
-                        }}
+                        style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)' }}
                     >
-                        {/* Flashing overlay on Lock */}
                         {isLocked && <div className="absolute inset-0 bg-white/20 animate-pulse z-0" />}
-
-                        {/* Corner Brackets that snap tight when "Locked" */}
                         <div className={`absolute transition-all duration-300 ${isLocked ? 'top-2 left-2 w-6 h-6 border-white/80' : 'top-0 left-0 w-8 h-8 border-brand-cyan'} border-t-[5px] border-l-[5px] rounded-tl-xl z-10`} />
                         <div className={`absolute transition-all duration-300 ${isLocked ? 'top-2 right-2 w-6 h-6 border-white/80' : 'top-0 right-0 w-8 h-8 border-brand-cyan'} border-t-[5px] border-r-[5px] rounded-tr-xl z-10`} />
                         <div className={`absolute transition-all duration-300 ${isLocked ? 'bottom-2 left-2 w-6 h-6 border-white/80' : 'bottom-0 left-0 w-8 h-8 border-brand-cyan'} border-b-[5px] border-l-[5px] rounded-bl-xl z-10`} />
                         <div className={`absolute transition-all duration-300 ${isLocked ? 'bottom-2 right-2 w-6 h-6 border-white/80' : 'bottom-0 right-0 w-8 h-8 border-brand-cyan'} border-b-[5px] border-r-[5px] rounded-br-xl z-10`} />
-                        
-                        {/* Lasers tracking effect (dissolves when locked) */}
-                        {!isLocked && isScanning && (
+                        {!isLocked && (
                             <div className="absolute inset-x-0 h-[2px] bg-brand-cyan/80 blur-[1px] rounded-full top-1/2 -mt-[1px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] shadow-[0_0_15px_#00e5ff]" />
                         )}
                     </div>
                 </div>
             )}
 
-            {/* UI Header / Text */}
             <div className={`absolute top-12 w-full px-6 flex justify-between items-center z-20 transition-opacity duration-300 ${isVideoLoaded ? 'opacity-100' : 'opacity-0'}`}>
-                <button 
+                <button
                     onClick={onClose}
                     className="w-12 h-12 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-white pointer-events-auto shadow-lg"
                 >
@@ -282,23 +272,23 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLi
                 </button>
                 <div className={`bg-black/60 backdrop-blur-md px-4 py-2 rounded-full transition-colors ${isLocked ? 'border border-brand-cyan/50' : ''}`}>
                     <span className={`text-sm font-bold tracking-widest uppercase ${isLocked ? 'text-brand-cyan' : 'text-white'}`}>
-                        {isLocked ? 'Scanning AI...' : 'Frame Card'}
+                        {statusHintLabel(statusHint)}
                     </span>
                 </div>
-                <div className="w-12" /> {/* Spacer */}
+                <div className="w-12" />
             </div>
 
-            {/* Camera Controls Footer */}
             <div className={`absolute bottom-12 w-full flex flex-col items-center justify-center z-20 transition-opacity duration-300 ${isVideoLoaded ? 'opacity-100' : 'opacity-0'}`}>
                 {isLocked ? (
                     <div className="px-6 py-3 rounded-full bg-brand-cyan/20 text-brand-cyan font-semibold inline-flex items-center gap-2 backdrop-blur-md">
                         <i className="fa-solid fa-spinner animate-spin"></i>
-                        Extracting visual DNA...
+                        Matching against catalog...
                     </div>
                 ) : (
-                    <button 
-                        onClick={handleManualCapture}
+                    <button
+                        onClick={triggerScan}
                         className="w-20 h-20 rounded-full border-4 border-white/80 p-1 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
+                        aria-label="Capture now"
                     >
                         <div className="w-full h-full bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)]"></div>
                     </button>
@@ -306,4 +296,64 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed }: WebLi
             </div>
         </div>
     );
+}
+
+function statusHintLabel(hint: 'searching' | 'aligning' | 'sharpen' | 'scanning') {
+    switch (hint) {
+        case 'searching': return 'Frame Card';
+        case 'sharpen':   return 'Hold Steady';
+        case 'aligning':  return 'Locking In';
+        case 'scanning':  return 'Scanning AI…';
+    }
+}
+
+function computeCardCrop(video: HTMLVideoElement, screenW: number, screenH: number) {
+    const Vw = video.videoWidth;
+    const Vh = video.videoHeight;
+    const S = Math.max(screenW / Vw, screenH / Vh);
+    const Rw = Vw * S;
+    const Rh = Vh * S;
+    const OffsetX = (screenW - Rw) / 2;
+    const OffsetY = (screenH - Rh) / 2;
+    const Cw = Math.min(0.7 * screenW, 280);
+    const Ch = Cw * (3.5 / 2.5);
+    const BoxX = (screenW - Cw) / 2;
+    const BoxY = (screenH - Ch) / 2;
+    const x = Math.max(0, (BoxX - OffsetX) / S);
+    const y = Math.max(0, (BoxY - OffsetY) / S);
+    const w = Math.min(Vw - x, Cw / S);
+    const h = Math.min(Vh - y, Ch / S);
+    return { x, y, w, h };
+}
+
+function toGrayscale(rgba: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
+    const gray = new Uint8ClampedArray(w * h);
+    for (let i = 0, j = 0; j < gray.length; i += 4, j += 1) {
+        gray[j] = (rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114) | 0;
+    }
+    return gray;
+}
+
+// Variance of Laplacian — classic blur detector. Sharp edges produce high variance.
+function laplacianVariance(gray: Uint8ClampedArray, w: number, h: number): number {
+    let sum = 0;
+    let sumSq = 0;
+    let n = 0;
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
+            sum += lap;
+            sumSq += lap * lap;
+            n += 1;
+        }
+    }
+    const mean = sum / n;
+    return sumSq / n - mean * mean;
+}
+
+function meanAbsDiff(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
+    let total = 0;
+    for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
+    return total / a.length;
 }

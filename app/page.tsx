@@ -494,6 +494,19 @@ export default function HomePage() {
         try {
             console.log('[Scan] Received match from WebLiveScanner:', scanData);
 
+            // Fast path: the server already resolved pHash matches to full Card[].
+            // Skip the metadata search entirely when we have direct hits.
+            if (Array.isArray(scanData?.matches) && scanData.matches.length > 0) {
+                console.log(`[Scan] pHash path: ${scanData.matches.length} candidates (top distance ${scanData.matchDistance})`);
+                const phashMatches: Card[] = scanData.matches;
+                if (phashMatches.length === 1 || (scanData.matchDistance ?? 99) <= 4) {
+                    setSelectedCard(phashMatches[0]);
+                } else {
+                    setScanCandidates(phashMatches);
+                }
+                return;
+            }
+
             if (!scanData || !scanData.primary?.name) {
                 redirectScanToSearch('', "Couldn't identify the card. Search for it manually instead.");
                 return;

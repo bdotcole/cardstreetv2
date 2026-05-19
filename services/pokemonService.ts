@@ -8,9 +8,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { geminiService, SearchIntent } from './geminiService';
 import { Card } from '../types';
-import { EXCHANGE_RATES } from '@/constants';
-
-const EXCHANGE_RATE = 1 / (EXCHANGE_RATES['USD'] || 0.028);
+import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 
 // Client-side search cache
 const searchIndex = new Map<string, Card[]>();
@@ -334,134 +332,30 @@ export const pokemonService = {
     },
 
     mapSupabaseCardToInternal(supabaseCard: any): Card {
-        // Extract price data from raw_data JSONB field (contains full API response)
-        const rawData = supabaseCard.raw_data || {};
-        const tcgData = rawData.tcgplayer;
-        const pricesTypes = tcgData?.prices || {};
-        const pricesObj = pricesTypes.holofoil || pricesTypes.normal || Object.values(pricesTypes)[0] || {};
+        return mapSupabaseCardToInternal(supabaseCard);
+    },
 
-        // Use live market_values if available, otherwise fallback to raw_data
-        let marketThb = 0;
-        let lastUpdated = '';
-
-        // Check if market_values joined data exists (it might be an array or single object depending on relationship)
-        const marketValueData = Array.isArray(supabaseCard.market_values)
-            ? supabaseCard.market_values[0]
-            : supabaseCard.market_values;
-
-        if (marketValueData && marketValueData.market_avg > 0) {
-            let avg = marketValueData.market_avg;
-            if (marketValueData.currency === 'USD') {
-                avg = avg * EXCHANGE_RATE; // Convert to base THB
+    async fetchCardsByIds(ids: string[]): Promise<Card[]> {
+        if (!ids || ids.length === 0) return [];
+        try {
+            const supabase = createClient();
+            const { data, error } = await supabase
+                .from('pokemon_cards')
+                .select(`
+                    *,
+                    market_values(market_avg, currency, last_updated),
+                    pokemon_sets(name, printed_total, total)
+                `)
+                .in('id', ids);
+            if (error) {
+                console.error('fetchCardsByIds error:', error);
+                return [];
             }
-            marketThb = avg;
-            lastUpdated = marketValueData.last_updated;
-        } else {
-            // Fallback to approximated old data (likely USD)
-            const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 0;
-            marketThb = Math.round(marketUsd * EXCHANGE_RATE);
+            const byId = new Map((data || []).map(r => [r.id, r]));
+            return ids.map(id => byId.get(id)).filter(Boolean).map(r => mapSupabaseCardToInternal(r));
+        } catch (e) {
+            console.error('fetchCardsByIds failed:', e);
+            return [];
         }
-
-        // Helper function to ensure TCGdex URLs have .png extension
-        const fixTcgdexUrl = (url: string | null): string => {
-            if (!url) return '';
-            // TCGdex requires .png extension (e.g., /high.png not just /high)
-            if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp)$/i)) {
-                return `${url}.png`;
-            }
-            return url;
-        };
-
-        // Fix image URLs - Handle both TCGdex and Pokemon TCG API formats
-        let imageUrl = '';
-        let imageSmall = '';
-
-        // TCGdex format: URLs need .png extension appended
-        if (supabaseCard.image_large) {
-            imageUrl = fixTcgdexUrl(supabaseCard.image_large);
-        } else if (supabaseCard.image_small) {
-            imageUrl = fixTcgdexUrl(supabaseCard.image_small);
-        }
-        // Pokemon TCG API format: use raw_data.images
-        else if (rawData.images?.large) {
-            imageUrl = rawData.images.large;
-            imageSmall = rawData.images.small;
-        }
-        // Fallback to raw_data.image (TCGdex base URL)
-        else if (rawData.image) {
-            const baseUrl = rawData.image.includes('http') ? rawData.image : `${rawData.image}/high`;
-            imageUrl = fixTcgdexUrl(baseUrl);
-        }
-        // Ultimate fallback: placeholder
-        else {
-            imageUrl = 'https://images.pokemontcg.io/placeholder.png';
-        }
-
-        // Fix imageSmall too
-        if (supabaseCard.image_small && !imageSmall) {
-            imageSmall = fixTcgdexUrl(supabaseCard.image_small);
-        }
-
-        let setName = supabaseCard.pokemon_sets?.name || rawData.set?.name || 'Unknown Set';
-
-        // Add dual-language wrapper for Thai sets to ensure filtering and visibility
-        if (supabaseCard.language === 'th') {
-            const thaiSetMap: Record<string, string> = {
-                'SV1V': 'Violet ex',
-                'SV1S': 'Scarlet ex',
-                'SV2D': 'Clay Burst',
-                'SV2P': 'Snow Hazard',
-                'SV5K': 'Wild Force',
-                'SV5M': 'Cyber Judge',
-                'MA1': 'Mega Evolution',
-                'MA2': 'Crimson Haze',
-                'MA3': 'Mega Evolution Dream ex',
-                'SV10s': 'The Unbeatable Hero',
-                'SV9s': 'Destiny Threads',
-                // Keep extending as needed
-            };
-            const engName = thaiSetMap[supabaseCard.set_id];
-            if (engName && !setName.includes(engName)) {
-                setName = `${engName} (${setName})`;
-            }
-        }
-
-        // Try to get printed_total from joined pokemon_sets, fallback to total, then rawData
-        const setTotal = supabaseCard.pokemon_sets?.printed_total
-            || supabaseCard.pokemon_sets?.total
-            || rawData.set?.printedTotal
-            || '??';
-
-        return {
-            id: supabaseCard.id,
-            name: supabaseCard.name,
-            thaiName: supabaseCard.english_name || supabaseCard.name, // Try to store both
-            set: setName,
-            language: supabaseCard.language || 'en',
-            number: supabaseCard.number ? `${supabaseCard.number.split('/')[0]}/${setTotal}` : '??',
-            rarity: supabaseCard.rarity || 'Common',
-            imageUrl: imageUrl,
-            images: {
-                small: imageSmall || imageUrl,
-                large: imageUrl
-            },
-            marketPrice: marketThb,
-            tcgplayerUrl: supabaseCard.tcgplayer_url,
-            prices: {
-                market: marketThb,
-                low: Math.round(marketThb * 0.9),
-                mid: marketThb,
-                high: Math.round(marketThb * 1.1),
-                lastUpdated: lastUpdated || tcgData?.updatedAt || new Date().toISOString()
-            },
-            change7d: parseFloat((Math.random() * 15 - 5).toFixed(1)),
-            priceHistory: [
-                { date: '1D', price: Math.round(marketThb * (0.95 + Math.random() * 0.1)) },
-                { date: '7D', price: Math.round(marketThb * (0.9 + Math.random() * 0.1)) },
-                { date: '1M', price: Math.round(marketThb * (0.8 + Math.random() * 0.2)) },
-                { date: '3M', price: Math.round(marketThb * (0.7 + Math.random() * 0.3)) },
-                { date: '6M', price: marketThb }
-            ]
-        };
     }
 };
