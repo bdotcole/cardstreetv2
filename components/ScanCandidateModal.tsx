@@ -36,6 +36,9 @@ const ScanCandidateModal: React.FC<ScanCandidateModalProps> = ({ candidates, onS
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[8px] bg-white/10 text-slate-400 px-2 py-0.5 rounded-full">{card.rarity}</span>
                   <span className="text-[8px] text-slate-600">#{card.number}</span>
+                  {card.language && card.language !== 'en' && (
+                    <span className="text-[8px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2 py-0.5 rounded-full tracking-widest">{card.language}</span>
+                  )}
                 </div>
               </div>
             </button>

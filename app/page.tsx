@@ -871,6 +871,7 @@ export default function HomePage() {
                 <WebLiveScanner
                     onClose={() => setIsWebScannerOpen(false)}
                     onMatch={handleWebLiveScanMatch}
+                    languageHint={settings.language === 'TH' ? 'th' : 'en'}
                     onScanFailed={(reason) => {
                         setIsWebScannerOpen(false);
                         const msg = reason === 'timeout'

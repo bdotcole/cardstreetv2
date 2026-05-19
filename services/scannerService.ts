@@ -133,17 +133,37 @@ export const scannerService = {
     const hash = await computeDHash(imageBuffer);
     const hex = bufferToPostgresBytea(hash);
 
-    const { data: rows, error } = await supabase.rpc('search_pokemon_by_phash', {
-      query_phash: hex,
-      max_distance: DIST_CANDIDATE_CEILING,
-      result_limit: 10,
-      language_filter: null,
-    });
+    // Hard-filter by language when the caller hints one. The same artwork produces nearly
+    // identical hashes across regional prints, so without a filter a JA card can outrank a
+    // TH card even when the user scanned a TH card.
+    const filter = languageHint && languageHint !== 'other' ? languageHint : null;
 
+    const runRpc = (lang: string | null) =>
+      supabase.rpc('search_pokemon_by_phash', {
+        query_phash: hex,
+        max_distance: DIST_CANDIDATE_CEILING,
+        result_limit: 10,
+        language_filter: lang,
+      });
+
+    let { data: rows, error } = await runRpc(filter);
     if (error) {
       console.error('[ScannerService] phash RPC error:', error);
       return null;
     }
+
+    // Two-pass: if the hinted language returned nothing, retry without the filter so
+    // we still serve a result. Common case: user has app set to TH but scans an EN card.
+    if (filter && (!rows || rows.length === 0)) {
+      console.log(`[ScannerService] phash: 0 matches in lang=${filter}, retrying unfiltered`);
+      const retry = await runRpc(null);
+      if (retry.error) {
+        console.error('[ScannerService] phash retry error:', retry.error);
+        return null;
+      }
+      rows = retry.data;
+    }
+
     if (!rows || rows.length === 0) return null;
 
     const ids = rows.map((r: any) => r.id);
