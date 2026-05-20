@@ -32,8 +32,11 @@ export default function CardDetailsScreen() {
 
                     <Image
                         source={{ uri: card.imageUrl }}
+                        placeholder={card.images?.small ? { uri: card.images.small } : undefined}
                         className="w-full h-full"
                         contentFit="contain"
+                        cachePolicy="memory-disk"
+                        transition={150}
                     />
                 </View>
 

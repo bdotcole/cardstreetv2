@@ -135,6 +135,47 @@ cd .. && git worktree remove cs-<name> --force && git worktree prune
 
 This keeps unrelated WIP out of production and avoids accidental clobbering of teammate commits on `main`.
 
+## Performance: card and set load speed
+
+Tested and confirmed effective on 2026-05-20. Preserve these patterns when touching grid/list views or the pokemonService layer in either web or `cardstreet-mobile/`.
+
+### Always thumbnail with `image_small`, never `image_large`
+
+`pokemon_cards` has both `image_small` and `image_large` columns. Grid/list views must use `image_small`; only the card detail screen should hit `image_large`. The mobile mapper in [cardstreet-mobile/services/pokemonService.ts](cardstreet-mobile/services/pokemonService.ts) returns both as `card.images.small` and `card.images.large` — components must pick the right one. Loading the large image as a thumbnail was the single biggest cause of slow set loads.
+
+### Origin-specific thumbnail URL transforms
+
+`image_small` from the DB may be a base URL with no quality suffix. Two origins need explicit thumbnail variants:
+
+- **TCGdex** (`tcgdex.net`): strip any trailing `/(low|high)(\.ext)?` or `.ext`, then append `/low.webp` for thumbs, `/high.webp` for full.
+- **pokemontcg.io**: `foo.png` is small, `foo_hires.png` is large. Strip `_hires` for thumbs.
+
+Web: implemented in [lib/imageUtils.ts](lib/imageUtils.ts) (`getThumbnailUrl`, `getPreviewUrl`, `getOptimizedImageUrl`). Mobile: inline in the card mapper since `next/image` isn't available.
+
+The legacy `fixTcgdexUrl` helpers that append `.png` only work for *full-size* fetches — never use them on a path destined for the thumbnail grid.
+
+### Don't `select('*')` from `pokemon_cards`
+
+The `raw_data` JSONB column is large (~tens of KB per row). For list queries, select explicit columns plus only the joins the mapper needs:
+
+```ts
+.select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+```
+
+The `raw_data->tcgplayer` JSONB path keeps the price fallback without pulling the rest of the blob. The web `/api/sets/[setId]/cards` route and the mobile `fetchCardsBySet`/`searchCards` both follow this pattern.
+
+### `.eq('set_id', ...)` — never `.ilike` without wildcards
+
+`.ilike` without wildcards defeats the b-tree index on `set_id` and forces a sequential scan. If you hit a case-mismatch issue, normalize at write time, not query time.
+
+### `expo-image` cache policy + prefetch (mobile)
+
+All `<Image>` components in `cardstreet-mobile/` should pass `cachePolicy="memory-disk"` so images survive screen unmounts. When a set is selected, call `Image.prefetch(...)` on the first ~30 small-image URLs and on all set logos so the second visit feels instant. The detail screen uses the cached small image as `placeholder` for the large one, eliminating the blank-flash transition.
+
+### Persistent set/card cache (mobile)
+
+In `cardstreet-mobile/services/pokemonService.ts`, `setsCache` and `cardsCache` are in-memory Maps **backed by AsyncStorage** with TTL — 24h for sets, 6h for cards. Cache key prefix is `pokemonCache:v1:` — bump the version segment if the schema of a cached value changes (e.g. you add a new field to `Card` that consumers now require). Without the version bump, returning users will hit stale shapes from disk and crash.
+
 ## Conventions
 
 - Avoid emojis in code, comments, and UI unless the user explicitly asks for them.

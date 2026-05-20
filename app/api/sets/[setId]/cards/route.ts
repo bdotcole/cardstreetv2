@@ -25,7 +25,7 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
         const { data: cards, error } = await supabase
             .from('pokemon_cards')
             .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, tcgplayer_url, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)')
-            .ilike('set_id', setId)
+            .eq('set_id', setId)
             .order('number', { ascending: true });
 
         if (error) {

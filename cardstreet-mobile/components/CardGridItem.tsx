@@ -25,10 +25,12 @@ export const CardGridItem: React.FC<CardGridItemProps> = ({
         >
             <View className="aspect-[2.5/3.5] bg-brand-darker relative">
                 <Image
-                    source={{ uri: card.imageUrl }}
+                    source={{ uri: card.images?.small || card.imageUrl }}
                     className="w-full h-full"
                     contentFit="contain"
                     transition={200}
+                    cachePolicy="memory-disk"
+                    recyclingKey={card.id}
                 />
                 {/* Price Tag Overlay */}
                 <View className="absolute bottom-0 right-0 bg-brand-darker/90 px-2 py-1 rounded-tl-lg border-t border-l border-white/10">

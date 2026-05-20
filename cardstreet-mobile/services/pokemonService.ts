@@ -4,8 +4,33 @@
 
 import { supabase } from '@/lib/supabase/client';
 import { geminiService, SearchIntent } from './geminiService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Define Card type locally or import if shared types specific file exists
 // For now, mirroring the web interface locally to avoid complex monorepo sharing setup
+
+const SETS_TTL_MS = 24 * 60 * 60 * 1000; // 24h — set lists rarely change
+const CARDS_TTL_MS = 6 * 60 * 60 * 1000; // 6h — card lists per set
+const STORAGE_PREFIX = 'pokemonCache:v1:';
+
+async function readPersistent<T>(key: string, ttlMs: number): Promise<T | null> {
+    try {
+        const raw = await AsyncStorage.getItem(STORAGE_PREFIX + key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { t: number; v: T };
+        if (Date.now() - parsed.t > ttlMs) return null;
+        return parsed.v;
+    } catch {
+        return null;
+    }
+}
+
+async function writePersistent<T>(key: string, value: T): Promise<void> {
+    try {
+        await AsyncStorage.setItem(STORAGE_PREFIX + key, JSON.stringify({ t: Date.now(), v: value }));
+    } catch {
+        // Swallow — cache write failures should never break the UI
+    }
+}
 
 export interface Card {
     id: string;
@@ -48,9 +73,10 @@ export interface ApiSet {
 
 const EXCHANGE_RATE = 35.85;
 
-// Client-side search cache
+// In-memory caches (fast path) — backed by AsyncStorage for persistence across restarts
 const searchIndex = new Map<string, Card[]>();
 const setsCache = new Map<string, { data: ApiSet[], totalCount: number }>();
+const cardsCache = new Map<string, Card[]>();
 
 export const pokemonService = {
     async fetchSets(
@@ -61,6 +87,11 @@ export const pokemonService = {
         const cacheKey = `sets-${language}-${page}-${pageSize}`;
         if (setsCache.has(cacheKey)) {
             return setsCache.get(cacheKey)!;
+        }
+        const persisted = await readPersistent<{ data: ApiSet[], totalCount: number }>(cacheKey, SETS_TTL_MS);
+        if (persisted) {
+            setsCache.set(cacheKey, persisted);
+            return persisted;
         }
 
         try {
@@ -113,6 +144,7 @@ export const pokemonService = {
 
             const result = { data: transformedSets, totalCount: count || 0 };
             setsCache.set(cacheKey, result);
+            writePersistent(cacheKey, result);
             return result;
         } catch (error) {
             console.error("Failed to fetch sets from Supabase:", error);
@@ -121,14 +153,25 @@ export const pokemonService = {
     },
 
     async fetchCardsBySet(setId: string, language?: 'en' | 'jp' | 'th') {
+        const cacheKey = `cards-${setId}-${language || 'any'}`;
+        if (cardsCache.has(cacheKey)) {
+            return cardsCache.get(cacheKey)!;
+        }
+        const persisted = await readPersistent<Card[]>(cacheKey, CARDS_TTL_MS);
+        if (persisted) {
+            cardsCache.set(cacheKey, persisted);
+            return persisted;
+        }
         try {
             console.log('[fetchCardsBySet] Querying for set_id:', setId, 'language:', language);
 
-            // Query cards by set_id with market_values join
+            // Only the columns the grid renders — drops the large raw_data JSONB blob.
+            // pokemon_sets join + raw_data->tcgplayer JSONB path keep payload small while
+            // preserving the set name/total and the price fallback that the mapper uses.
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('*, market_values(market_avg, last_updated)')
-                .ilike('set_id', setId)
+                .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+                .eq('set_id', setId)
                 .order('number', { ascending: true });
 
             if (error) {
@@ -151,7 +194,10 @@ export const pokemonService = {
                 }
             }
 
-            return filteredCards.map(c => this.mapSupabaseCardToInternal(c));
+            const mapped = filteredCards.map(c => this.mapSupabaseCardToInternal(c));
+            cardsCache.set(cacheKey, mapped);
+            writePersistent(cacheKey, mapped);
+            return mapped;
         } catch (error) {
             console.error("Failed to fetch cards from Supabase:", error);
             return [];
@@ -172,8 +218,10 @@ export const pokemonService = {
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
                 .select(`
-                    id, name, english_name, set_id, number, supertype, subtypes, 
-                    rarity, hp, types, image_small, image_large, language, raw_data,
+                    id, name, english_name, set_id, number,
+                    rarity, image_small, image_large, language,
+                    raw_data->tcgplayer,
+                    pokemon_sets(name, printed_total, total),
                     market_values(market_avg, last_updated)
                 `)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
@@ -215,8 +263,9 @@ export const pokemonService = {
     },
 
     mapSupabaseCardToInternal(supabaseCard: any): Card {
-        const rawData = supabaseCard.raw_data || {};
-        const tcgData = rawData.tcgplayer;
+        // raw_data->tcgplayer is selected via JSONB path, so it lands on the row as `tcgplayer`
+        const tcgData = supabaseCard.tcgplayer;
+        const setRel = supabaseCard.pokemon_sets;
 
         let marketThb = 0;
         let lastUpdated = '';
@@ -235,30 +284,50 @@ export const pokemonService = {
             marketThb = Math.round(marketUsd * EXCHANGE_RATE);
         }
 
-        const fixTcgdexUrl = (url: string | null): string => {
+        // TCGdex URLs have a "/{quality}/{ext}" convention — for thumbnails we want /low.webp,
+        // for the full card we want /high.webp. Older rows may already include the extension.
+        const buildTcgdexUrl = (url: string | null, quality: 'low' | 'high'): string => {
             if (!url) return '';
-            if (url.includes('tcgdex.net') && !url.match(/\.(png|jpg|jpeg|webp)$/i)) {
-                return `${url}.png`;
-            }
-            return url;
+            if (!url.includes('tcgdex.net')) return url;
+            // Strip an existing quality/extension suffix if present, then append the desired one
+            const stripped = url.replace(/\/(low|high)(\.(png|jpg|jpeg|webp))?$/i, '')
+                                .replace(/\.(png|jpg|jpeg|webp)$/i, '');
+            return `${stripped}/${quality}.webp`;
         };
 
-        let imageUrl = '';
-        if (supabaseCard.image_large) imageUrl = fixTcgdexUrl(supabaseCard.image_large);
-        else if (supabaseCard.image_small) imageUrl = fixTcgdexUrl(supabaseCard.image_small);
-        else if (rawData.images?.large) imageUrl = rawData.images.large;
-        else imageUrl = 'https://images.pokemontcg.io/placeholder.png';
+        // pokemontcg.io: foo.png is small, foo_hires.png is large — strip _hires for the thumbnail
+        const toSmallPokemonTcg = (url: string): string => {
+            if (!url.includes('pokemontcg.io')) return url;
+            return url.replace(/_hires(\.(png|jpg|jpeg|webp))/i, '$1');
+        };
+
+        const resolveImage = (rawUrl: string | null, quality: 'low' | 'high'): string => {
+            if (!rawUrl) return '';
+            if (rawUrl.includes('tcgdex.net')) return buildTcgdexUrl(rawUrl, quality);
+            if (rawUrl.includes('pokemontcg.io')) {
+                return quality === 'low' ? toSmallPokemonTcg(rawUrl) : rawUrl;
+            }
+            return rawUrl;
+        };
+
+        const largeRaw = supabaseCard.image_large || supabaseCard.image_small;
+        const smallRaw = supabaseCard.image_small || supabaseCard.image_large;
+
+        const imageUrl = largeRaw ? resolveImage(largeRaw, 'high') : 'https://images.pokemontcg.io/placeholder.png';
+        const imageSmall = smallRaw ? resolveImage(smallRaw, 'low') : imageUrl;
+
+        const setTotal = setRel?.printed_total || setRel?.total || '??';
 
         return {
             id: supabaseCard.id,
             name: supabaseCard.name,
             thaiName: supabaseCard.name,
-            set: rawData.set?.name || 'Unknown Set',
-            number: supabaseCard.number ? `${supabaseCard.number}/${rawData.set?.printedTotal || '??'}` : '??',
+            set: setRel?.name || 'Unknown Set',
+            number: supabaseCard.number ? `${supabaseCard.number}/${setTotal}` : '??',
             rarity: supabaseCard.rarity || 'Common',
             imageUrl: imageUrl,
             images: {
-                small: imageUrl, // Simplified for mobile
+                small: imageSmall,
                 large: imageUrl
             },
             marketPrice: marketThb,

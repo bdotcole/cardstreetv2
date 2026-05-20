@@ -36,6 +36,9 @@ export default function ExploreScreen() {
             setSelectedSetId(result.data[0].id);
         }
         setIsLoadingSets(false);
+        // Set logos are tiny — prefetch them all so the horizontal picker is instant
+        const logoUrls = result.data.map(s => s.images?.logo).filter(Boolean) as string[];
+        if (logoUrls.length > 0) Image.prefetch(logoUrls);
     };
 
     // Fetch Cards
@@ -54,6 +57,9 @@ export default function ExploreScreen() {
         const results = await pokemonService.fetchCardsBySet(selectedSetId);
         setCards(results);
         setIsLoadingCards(false);
+        // Warm the disk cache for the first screen of cards so scrolling feels instant
+        const urls = results.slice(0, 30).map(c => c.images?.small || c.imageUrl).filter(Boolean);
+        if (urls.length > 0) Image.prefetch(urls);
     };
 
     const performSearch = async () => {
@@ -107,7 +113,7 @@ export default function ExploreScreen() {
         >
             <View className="w-10 h-10">
                 {item.images.logo ? (
-                    <Image source={{ uri: item.images.logo }} className="w-full h-full" contentFit="contain" />
+                    <Image source={{ uri: item.images.logo }} className="w-full h-full" contentFit="contain" cachePolicy="memory-disk" />
                 ) : (
                     <View className="w-full h-full bg-slate-700 rounded-full" />
                 )}
