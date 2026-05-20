@@ -46,18 +46,19 @@ Each row may have `image_large`, `image_small`, and `raw_data` (full original AP
 
 Tier order. Each tier falls through to the next on failure:
 
-1. **Pro identification + set/number lookup** — `extractCardMetadata` sends two images (full card + bottom-strip crop) to **Gemini 2.5 Pro** with a structured-output prompt asking for `name`, `setCode`, `cardNumber`, `language`, `rarity`, `confidence`. When both `setCode` and `cardNumber` parse, deterministic lookup `WHERE set_id ILIKE :setCode AND number IN (:n, :n/...) AND language = :lang`. A Thai card printing `MA3 087/198` maps 1:1 to a Thai-language row. Confidence 0.97.
-2. **Name + language fallback** — when the set code is unreadable (glare, fingerprint, oblique angle) but Pro got the name and language right, look up `WHERE (name ILIKE :n OR english_name ILIKE :n) AND language = :lang`, optionally narrowed by number. Rank by pHash distance; ship only when the best print is within 14 bits.
-3. **pHash search** — fallback when both Pro lookups failed. Filtered by the OCR-detected language; retries unfiltered if zero matches.
-4. **OCR text + Gemini Flash** — full-card text path when the device sent native MLKit OCR text.
-5. **Image + Gemini Flash** — last LLM fallback.
-6. **Google Lens via SerpApi** — final fallback. Slow (>5s).
+1. **Set code + number → deterministic DB lookup**. `extractCardMetadata` sends two images (full card + bottom-strip crop) to **Gemini 2.5 Flash** with a structured-output prompt asking for `name`, `setCode`, `cardNumber`, `language`, `rarity`. When both `setCode` and `cardNumber` parse cleanly, deterministic lookup `WHERE set_id ILIKE :setCode AND number IN (:n, :n/...) AND language = :lang`. A Thai card printing `MA3 087/198` maps 1:1 to a Thai-language row. The OCR'd set code is split on whitespace first to strip the regional suffix Thai cards print (`"SV8s T"` → `"SV8s"`).
+2. **Name + language → pHash disambiguator**. When the set code is unreadable but Flash got the name and language right. Look up `WHERE (name ILIKE :n OR english_name ILIKE :n) AND language = :lang`, optionally narrowed by number, then rank candidates by pHash distance. Ships only when the best print is within 14 bits.
+3. **Language + number → pHash disambiguator**. The safety net. Diagnostics on Thai cards show Flash hits **100% on language and 100% on card number** even when the set-code OCR misreads `"8s"` as `"bs"`/`"B5"`/etc. Language + number narrows the catalog to <20 candidates, then pHash picks the right one. Ships when the best print is within 18 bits.
+4. **pHash search** — language-filtered when known, retries unfiltered if zero matches.
+5. **OCR text + Gemini Flash** — full-card text path when the device sent native MLKit OCR text.
+6. **Image + Gemini Flash** — last LLM fallback.
+7. **Google Lens via SerpApi** — final fallback. Slow (>5s).
 
-Tiers 1-3 share a single Pro call and a single dHash compute, **run in parallel** with `Promise.all`. Wall clock ≈ max of the two legs (~3-7s, bounded by Pro).
+Tiers 1-3 share a single Flash call and a single dHash compute, **run in parallel** with `Promise.all`. Wall clock ≈ max of the two legs (~4-8s, bounded by Flash).
 
-**Why Pro and not Flash here**: Flash's OCR on non-Latin scripts (Thai especially) is unreliable, and it can't cross-reference signals — it sees a Latin set code and outputs `language: "en"` even when the attack box is in Thai. Pro reads Thai script reliably, attends to multiple card regions at once, and produces well-calibrated confidence. Cost: ~$0.003/scan. Latency: 3-6s typical, ~7s worst case — under the 8s budget.
+**Why Flash, not Pro**: Pro 2.5 mandates thinking tokens that count against the output budget. On multi-field structured outputs this regularly causes truncation or 30 KB degenerate strings (one diagnostic card spent 185 s producing `"sv8s T H sv8s T H sv8s T..."`). Flash has no thinking, ~2-3× faster, ~30× cheaper, and *more reliable* on this specific task — 10/10 vs 4/10 on a 10-card sample. The Flash set-OCR shortfall (5/10) is fully absorbed by tier 3.
 
-**Why set code is the kingpin signal**: a printed set ID is a deterministic language tag and narrows the catalog from 32k cards to typically 1-5. `MA3` only exists for `language='th'`. `swsh3` only for `'en'`. No classifier guessing.
+**Why set code is the kingpin signal when it does parse**: a printed set ID is a deterministic language tag and narrows the catalog from 32k cards to typically 1-5. `MA3` only exists for `language='th'`. `swsh3` only for `'en'`. No classifier guessing.
 
 When native OCR text already contains the set code or Thai/Japanese script (cheap regex check via `parseMetadataFromOcrText`), the Pro call is skipped entirely.
 
