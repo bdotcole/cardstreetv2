@@ -46,17 +46,20 @@ Each row may have `image_large`, `image_small`, and `raw_data` (full original AP
 
 Tier order. Each tier falls through to the next on failure:
 
-1. **Set-code OCR + direct DB lookup** — `extractCardMetadata` crops the bottom ~22% of the captured frame via `sharp` and asks Gemini Flash for `setCode` + `cardNumber` + `language`. If both fields parse, we do a deterministic lookup `WHERE set_id ILIKE :setCode AND number IN (:n, :n/...) AND language = :lang`. A Thai card printing `MA3 087/198` maps 1:1 to a Thai-language row in `pokemon_cards`. Confidence 0.97. **This is the kingpin signal for Thai and Japanese cards** — `MA3` only exists for `language='th'`, period.
-2. **pHash search** — server computes dHash via `sharp` and queries the `search_pokemon_by_phash` RPC, filtered by the OCR-detected language. Used as the primary path when the set-code OCR didn't yield a hit, and as the variant disambiguator (holo vs reverse-holo vs normal) when the set+number lookup returned multiple rows.
-3. **OCR text + Gemini Flash** — full-card text path when pHash misses and the device sent native MLKit OCR text.
-4. **Image + Gemini Flash** — last LLM fallback. Flash, not Pro.
-5. **Google Lens via SerpApi** — final fallback. Slow (>5s).
+1. **Pro identification + set/number lookup** — `extractCardMetadata` sends two images (full card + bottom-strip crop) to **Gemini 2.5 Pro** with a structured-output prompt asking for `name`, `setCode`, `cardNumber`, `language`, `rarity`, `confidence`. When both `setCode` and `cardNumber` parse, deterministic lookup `WHERE set_id ILIKE :setCode AND number IN (:n, :n/...) AND language = :lang`. A Thai card printing `MA3 087/198` maps 1:1 to a Thai-language row. Confidence 0.97.
+2. **Name + language fallback** — when the set code is unreadable (glare, fingerprint, oblique angle) but Pro got the name and language right, look up `WHERE (name ILIKE :n OR english_name ILIKE :n) AND language = :lang`, optionally narrowed by number. Rank by pHash distance; ship only when the best print is within 14 bits.
+3. **pHash search** — fallback when both Pro lookups failed. Filtered by the OCR-detected language; retries unfiltered if zero matches.
+4. **OCR text + Gemini Flash** — full-card text path when the device sent native MLKit OCR text.
+5. **Image + Gemini Flash** — last LLM fallback.
+6. **Google Lens via SerpApi** — final fallback. Slow (>5s).
 
-Steps 1 and 2 share a single Gemini Flash call (`extractCardMetadata`) and a single dHash compute, **run in parallel** with `Promise.all`. Wall clock ≈ max of the two legs (~400-600ms), not sum.
+Tiers 1-3 share a single Pro call and a single dHash compute, **run in parallel** with `Promise.all`. Wall clock ≈ max of the two legs (~3-7s, bounded by Pro).
 
-**Why set-code OCR beats a visual language classifier**: a printed set ID is a deterministic language tag and narrows the candidate space from 32k cards down to typically 1-5. A visual classifier can guess wrong; the set ID can't.
+**Why Pro and not Flash here**: Flash's OCR on non-Latin scripts (Thai especially) is unreliable, and it can't cross-reference signals — it sees a Latin set code and outputs `language: "en"` even when the attack box is in Thai. Pro reads Thai script reliably, attends to multiple card regions at once, and produces well-calibrated confidence. Cost: ~$0.003/scan. Latency: 3-6s typical, ~7s worst case — under the 8s budget.
 
-When native OCR text already contains the set code or Thai/Japanese script (cheap regex check via `parseMetadataFromOcrText`), the Flash call is skipped entirely.
+**Why set code is the kingpin signal**: a printed set ID is a deterministic language tag and narrows the catalog from 32k cards to typically 1-5. `MA3` only exists for `language='th'`. `swsh3` only for `'en'`. No classifier guessing.
+
+When native OCR text already contains the set code or Thai/Japanese script (cheap regex check via `parseMetadataFromOcrText`), the Pro call is skipped entirely.
 
 The user's app locale is **not** a filter at any tier — it's only a tiebreaker when pHash distances are tied across regional prints. Multi-language collectors get correct results regardless of their UI language.
 

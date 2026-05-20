@@ -163,6 +163,22 @@ export const scannerService = {
       }
     }
 
+    // -------- Tier 1b: name-based lookup when set code was unreadable --------
+    // Pro often reads the Pokémon name correctly even when the set code is obscured
+    // (glare, fingerprint, oblique angle). Cross-checking name + number + language
+    // narrows the catalog to a handful of candidates; pHash picks the right one.
+    if (ocr?.name && ocr?.language && (ocr?.cardNumber || ocr?.setCode)) {
+      const byName = await this.lookupByNameAndLanguage(ocr.name, ocr.language, ocr.cardNumber);
+      if (byName && byName.length > 0) {
+        const ranked = await this.rankByPhash(byName, hex);
+        // Only ship this tier if the best print is reasonably close visually —
+        // a low-confidence name match without dHash backing it can be confidently wrong.
+        if ((ranked[0].distance ?? 99) <= 14) {
+          return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+        }
+      }
+    }
+
     // -------- Tier 2: pHash search, filtered by detected language --------
     const filter = ocr?.language ?? null;
 
@@ -243,6 +259,44 @@ export const scannerService = {
     const { data, error } = await q.limit(5);
     if (error) {
       console.warn('[ScannerService] lookupBySetAndNumber error:', error);
+      return null;
+    }
+    return data && data.length > 0 ? data : null;
+  },
+
+  // Fallback lookup for when the set code didn't OCR cleanly but Pro identified the
+  // Pokémon name. We restrict by language so we only return cards the user actually
+  // could have been scanning (e.g. a Thai-locale collector who held up a Thai card).
+  // When the number is also known we further narrow by number — name + number + lang
+  // is essentially unique up to print variants.
+  async lookupByNameAndLanguage(
+    name: string,
+    language: 'en' | 'th' | 'jp',
+    cardNumber?: string | null,
+  ): Promise<any[] | null> {
+    const supabase = getSupabase();
+    const cleanName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    if (!cleanName) return null;
+
+    let q = supabase
+      .from('pokemon_cards')
+      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
+      .eq('language', language);
+
+    if (cardNumber) {
+      const numerator = cardNumber.split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
+      if (numerator) {
+        const stripped = numerator.replace(/^0+/, '') || numerator;
+        q = q.or(
+          `number.eq.${numerator},number.eq.${stripped},number.ilike.${numerator}/%,number.ilike.${stripped}/%`,
+        );
+      }
+    }
+
+    const { data, error } = await q.limit(10);
+    if (error) {
+      console.warn('[ScannerService] lookupByNameAndLanguage error:', error);
       return null;
     }
     return data && data.length > 0 ? data : null;
@@ -336,21 +390,32 @@ export const scannerService = {
     };
   },
 
-  // Bottom-strip OCR. Crops the bottom ~22% of the captured frame — that's where the
-  // printed set code (e.g. "MA3", "SV5K", "sv4pt5") and card number (e.g. "087/198")
-  // always live on modern Pokémon cards. Also classifies the language from the same
-  // image, which is essentially free given we're already calling the model.
+  // Full-card identification using Gemini 2.5 Pro. Multi-image input: the full card
+  // plus a bottom-strip crop so the model has both the artwork context AND a high-
+  // resolution view of the set code / card number printed at the bottom.
   //
-  // This call replaces what used to be a single-token language classifier. Same cost
-  // (~$0.0003/scan, ~300-500ms), strictly more useful output: a set+number combination
-  // that uniquely identifies a card via direct DB lookup, no fuzzy pHash matching
-  // needed when the bottom text is readable.
+  // Why Pro and not Flash here: Flash's OCR on non-Latin scripts (Thai especially) is
+  // unreliable, and it can't cross-reference signals — e.g. it sees a Latin set code
+  // and outputs `language: "en"` even when the attack box is in Thai. Pro reads Thai
+  // script reliably, can attend to multiple card regions in one pass, and produces
+  // well-calibrated confidence values.
+  //
+  // Cost: ~$0.003/scan (two ~1MB images in, ~150 tokens out). Latency: 3-6s typical,
+  // ~7s worst case. The compute leg of pHash runs in parallel for free.
+  //
+  // Free-of-charge fast path: if the device already sent us native MLKit OCR text and
+  // a quick regex parse extracts everything we need, we skip the Pro call.
   async extractCardMetadata(
     base64Image: string,
     ocrText?: string,
-  ): Promise<{ setCode: string | null; cardNumber: string | null; language: 'en' | 'th' | 'jp' | null } | null> {
-    // Free-of-charge fast path: if native OCR text is already in hand, scan it for
-    // the regex'able pieces (set code, number, language script). Saves a Flash call.
+  ): Promise<{
+    setCode: string | null;
+    cardNumber: string | null;
+    language: 'en' | 'th' | 'jp' | null;
+    name?: string | null;
+    rarity?: string | null;
+    confidence?: number;
+  } | null> {
     const fromOcrText = parseMetadataFromOcrText(ocrText);
     if (fromOcrText && fromOcrText.setCode && fromOcrText.cardNumber && fromOcrText.language) {
       return fromOcrText;
@@ -359,39 +424,50 @@ export const scannerService = {
     const ai = getAi();
     if (!ai) return fromOcrText;
 
-    // Crop the bottom strip via sharp. Tighter input → much more reliable text OCR
-    // than handing the model the whole card, and saves on input tokens too.
-    let cropBase64: string;
+    // Prepare two image inputs: full card, and bottom strip. Pro handles multi-image
+    // input well — the bottom crop emphasises the set code without losing whole-card
+    // context (set symbol, language of attack box text, rarity icon, etc.).
+    let fullBase64: string;
+    let bottomBase64: string;
     try {
       const buf = base64ToBuffer(base64Image);
       const meta = await sharp(buf).metadata();
       if (!meta.height || !meta.width) return fromOcrText;
+      // Re-encode the full image with a sane quality ceiling — incoming frames are
+      // sometimes oversized JPEGs that waste input tokens.
+      const fullJpeg = await sharp(buf).resize({ width: 800, withoutEnlargement: true }).jpeg({ quality: 88 }).toBuffer();
+      fullBase64 = fullJpeg.toString('base64');
+
       const cropTop = Math.floor(meta.height * 0.78);
-      const cropped = await sharp(buf)
+      const bottom = await sharp(buf)
         .extract({ left: 0, top: cropTop, width: meta.width, height: meta.height - cropTop })
-        .jpeg({ quality: 88 })
+        .jpeg({ quality: 92 })
         .toBuffer();
-      cropBase64 = cropped.toString('base64');
+      bottomBase64 = bottom.toString('base64');
     } catch (e) {
-      console.warn('[ScannerService] bottom-crop failed:', e);
+      console.warn('[ScannerService] image prep for Pro failed:', e);
       return fromOcrText;
     }
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-pro',
         contents: [
           {
             parts: [
-              { inlineData: { data: cropBase64, mimeType: 'image/jpeg' } },
+              { inlineData: { data: fullBase64, mimeType: 'image/jpeg' } },
+              { inlineData: { data: bottomBase64, mimeType: 'image/jpeg' } },
               {
-                text: `This image is the bottom strip of a Pokémon trading card. Extract three values:
+                text: `You are a Pokémon TCG identification expert. Two images are provided: the full card, then a magnified view of its bottom edge.
 
-1. SET CODE — the short alphanumeric printed in a corner, in Latin characters. Examples: "MA3", "MA2", "SV5K", "SV4a", "sv4pt5", "swsh3", "PROMO", "s12a". Preserve the original casing exactly. If unreadable, return null.
+Extract the following fields. Cross-reference visual signals; do not guess from any single region in isolation.
 
-2. CARD NUMBER — digits, sometimes with a forward slash. Examples: "087/198", "132/190", "14/214", "SV001". Return exactly what's printed. If unreadable, return null.
-
-3. LANGUAGE — what language is the body text (attacks, abilities, flavour) printed in? "th" if any Thai script is visible, "ja" if any hiragana/katakana/kanji is visible, "en" otherwise.
+- name: The Pokémon's name in English. Even if the card is Thai or Japanese, return the canonical ENGLISH name (e.g. "Charizard ex", "Pikachu V").
+- setCode: The short alphanumeric printed near the bottom corners. Examples: "MA3", "MA2", "SV5K", "SV4a", "sv4pt5", "swsh3", "PROMO", "s12a", "s9a". Preserve exact casing. Look at the magnified bottom view carefully. If unreadable, return null.
+- cardNumber: The card number as printed, usually digits with a forward slash. Examples: "087/198", "132/190", "14/214", "SV001". If unreadable, return null.
+- language: The language of the BODY TEXT (attack descriptions, abilities, flavour text). Return "th" if ANY Thai script is visible anywhere on the card. Return "jp" if ANY hiragana, katakana, or kanji is visible. Return "en" only if all body text is in Latin/English. The set code being Latin does NOT make a card English — Thai and Japanese cards use Latin set codes too.
+- rarity: One of "C", "U", "R", "RR", "RRR", "SR", "AR", "SAR", "UR", "PB", "EH", "MA", "MUR", or "Common"/"Uncommon"/"Rare" etc. Best effort.
+- confidence: Your overall confidence in the identification, 0.0 to 1.0.
 
 Return JSON only.`,
               },
@@ -399,14 +475,16 @@ Return JSON only.`,
           },
         ],
         config: {
-          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              name: { type: Type.STRING },
               setCode: { type: Type.STRING },
               cardNumber: { type: Type.STRING },
               language: { type: Type.STRING, enum: ['en', 'th', 'ja'] },
+              rarity: { type: Type.STRING },
+              confidence: { type: Type.NUMBER },
             },
           },
         },
@@ -414,13 +492,23 @@ Return JSON only.`,
       const parsed = JSON.parse(response.text || '{}');
       const language =
         parsed.language === 'ja' ? 'jp' : parsed.language === 'th' || parsed.language === 'en' ? parsed.language : null;
+      console.log('[ScannerService] Pro extraction:', {
+        name: parsed.name,
+        setCode: parsed.setCode,
+        cardNumber: parsed.cardNumber,
+        language,
+        confidence: parsed.confidence,
+      });
       return {
         setCode: parsed.setCode || fromOcrText?.setCode || null,
         cardNumber: parsed.cardNumber || fromOcrText?.cardNumber || null,
         language: language ?? fromOcrText?.language ?? null,
+        name: parsed.name ?? null,
+        rarity: parsed.rarity ?? null,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : undefined,
       };
     } catch (e) {
-      console.warn('[ScannerService] extractCardMetadata failed:', e);
+      console.warn('[ScannerService] Pro extraction failed:', e);
       return fromOcrText;
     }
   },
