@@ -66,6 +66,23 @@ The user's app locale is **not** a filter at any tier — it's only a tiebreaker
 
 Relevant files: `services/scannerService.ts`, `lib/phash.ts`, `lib/cardMapper.ts`, `app/api/scan/route.ts`.
 
+## Debugging the scanner
+
+**Measure before iterating.** The scanning pipeline went through four rebuilds before I built a diagnostic; three of those rebuilds were wrong because I was guessing at root causes. A 30-minute diagnostic harness would have prevented all of them.
+
+The pattern is in `scripts/test-scan-thai.mjs` (intentionally untracked — local-only). It:
+
+1. Pulls N random rows from `pokemon_cards` in a given language.
+2. Downloads each card's `image_large`.
+3. Runs them through the same `extractCardMetadata` prompt the production code uses.
+4. Reports per-field accuracy (lang/set/num/name) and latency.
+
+Use it whenever you're tempted to change the model, the prompt, the bottom-crop ratio, or the tier order. **Don't ship scanner changes without running it.**
+
+Production logs the structured output as `[ScannerService] Flash extraction: { name, setCode, cardNumber, language, confidence }` on every scan — search Vercel logs for that line when a user reports a misidentification, and you'll see exactly what the model saw.
+
+The pipeline is intentionally redundant (3 lookup tiers off the same Flash call) so individual field failures don't tank the result. Don't remove a tier without checking the diagnostic against it first.
+
 ## Continuous capture (`components/WebLiveScanner.tsx`)
 
 Auto-fires a scan when the camera frame is sharp + stable for 2 consecutive frames at 3fps:
@@ -126,6 +143,7 @@ This keeps unrelated WIP out of production and avoids accidental clobbering of t
 - Migrations are timestamped `YYYYMMDD_short_description.sql`.
 - Service-role keys, payment secrets, and SerpAPI keys live only in server code / env, never in `'use client'` modules.
 - Server-side scanner / migration scripts read env from `.env.local` directly (see `scripts/backfill-phashes.mjs` for the convention).
+- **Homegrown dotenv parsers must strip surrounding quotes.** Values in `.env.local` are often wrapped in `"..."`; Next.js strips those automatically (per the dotenv spec), but the naive `process.env[k] = v` parser used in `scripts/*.mjs` does not. A `GEMINI_API_KEY="AIza..."` line passed through unstripped sends Google a literal quoted string and you get `API_KEY_INVALID` on every call. If a script's API calls fail with auth errors when production works, this is almost certainly why.
 
 ## Useful breadcrumbs
 
