@@ -12,24 +12,11 @@ interface WebLiveScannerProps {
     // Called when the scan can't identify the card (timeout, network error, no match).
     // The host should close the scanner and route the user to manual search.
     onScanFailed?: (reason: 'timeout' | 'network' | 'no_match') => void;
-    // Used as the language filter for pHash search, with fallback to all-languages
-    // if zero matches. The component overrides this with a value derived from the OCR
-    // text whenever native OCR runs and detects Thai/Japanese script.
+    // User's app locale. Sent as a soft preference: server uses it only as a tiebreaker
+    // when two prints of the same card have identical pHash distance. The card's actual
+    // language is detected server-side from OCR or an image classifier — so a Thai user
+    // scanning a Japanese card still gets Japanese candidates back.
     languageHint?: 'en' | 'th' | 'jp';
-}
-
-// Quick script-based language detection. Cheap, reliable on OCR output, no model needed.
-const RE_THAI = /[฀-๿]/;
-const RE_JP_KANA = /[぀-ヿ]/;          // Hiragana + Katakana — uniquely Japanese
-const RE_CJK = /[一-鿿]/;              // Han chars: Japanese kanji OR Chinese.
-function detectLanguageFromText(text: string): 'en' | 'th' | 'jp' | undefined {
-    if (!text) return undefined;
-    if (RE_THAI.test(text)) return 'th';
-    if (RE_JP_KANA.test(text)) return 'jp';
-    // Han alone (no kana) is unusual on Pokémon cards — treat as JP since Chinese cards
-    // aren't in the catalog.
-    if (RE_CJK.test(text)) return 'jp';
-    return 'en';
 }
 
 // Hard ceiling for a single /api/scan request. The route's maxDuration is 60s,
@@ -190,14 +177,11 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 }
             }
 
-            // Prefer language detected from OCR (reflects the actual card) over the
-            // user's app-locale preference (reflects what they usually scan).
-            const detectedLang = ocrText ? detectLanguageFromText(ocrText) : undefined;
-            const resolvedLang = detectedLang ?? languageHint;
-
+            // The server detects the card's actual language from OCR text (preferred) or
+            // an image classifier. We just pass the user's app locale as a tiebreaker.
             const body: any = { image: base64Image };
             if (ocrText) body.text = ocrText;
-            if (resolvedLang) body.languageHint = resolvedLang;
+            if (languageHint) body.languageHint = languageHint;
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), SCAN_REQUEST_TIMEOUT_MS);

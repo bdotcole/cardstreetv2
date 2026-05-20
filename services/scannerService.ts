@@ -71,7 +71,10 @@ export const scannerService = {
     // than any LLM call when the card has been backfilled into the catalog.
     if (hasImage) {
       try {
-        const phashResult = await this.phashScan(payload.image as string, payload.languageHint);
+        const phashResult = await this.phashScan(payload.image as string, {
+          ocrText: payload.text,
+          userLocale: payload.languageHint,
+        });
         if (phashResult && phashResult.matches && phashResult.matches.length > 0) {
           const bestDist = phashResult.matchDistance ?? 99;
           if (bestDist <= DIST_CANDIDATE_CEILING) return phashResult;
@@ -127,16 +130,26 @@ export const scannerService = {
     throw new Error('All scan paths failed. Try a sharper, well-lit image.');
   },
 
-  async phashScan(base64Image: string, languageHint?: string): Promise<ScanResult | null> {
+  async phashScan(
+    base64Image: string,
+    opts: { ocrText?: string; userLocale?: string } = {}
+  ): Promise<ScanResult | null> {
     const supabase = getSupabase();
     const imageBuffer = base64ToBuffer(base64Image);
-    const hash = await computeDHash(imageBuffer);
+
+    // Compute the dHash and detect the *card's* language in parallel. The classifier
+    // call is the slow leg (~300-500ms on Flash), the hash compute is the fast leg
+    // (~50-100ms via sharp), so the wall clock = max of the two.
+    const [hash, cardLanguage] = await Promise.all([
+      computeDHash(imageBuffer),
+      this.detectCardLanguage(base64Image, opts.ocrText),
+    ]);
     const hex = bufferToPostgresBytea(hash);
 
-    // Hard-filter by language when the caller hints one. The same artwork produces nearly
-    // identical hashes across regional prints, so without a filter a JA card can outrank a
-    // TH card even when the user scanned a TH card.
-    const filter = languageHint && languageHint !== 'other' ? languageHint : null;
+    // The detected language is the *card's* language (what's printed on it), independent
+    // of the user's app locale. Hard-filtering by it is correct even for multi-language
+    // collectors: a Thai user scanning a JP card should see JP candidates, not TH ones.
+    const filter = cardLanguage ?? null;
 
     const runRpc = (lang: string | null) =>
       supabase.rpc('search_pokemon_by_phash', {
@@ -152,8 +165,8 @@ export const scannerService = {
       return null;
     }
 
-    // Two-pass: if the hinted language returned nothing, retry without the filter so
-    // we still serve a result. Common case: user has app set to TH but scans an EN card.
+    // If the detected language returned nothing, the detection may have been wrong
+    // (e.g. a Thai card with English flavour text). Retry unfiltered.
     if (filter && (!rows || rows.length === 0)) {
       console.log(`[ScannerService] phash: 0 matches in lang=${filter}, retrying unfiltered`);
       const retry = await runRpc(null);
@@ -181,12 +194,14 @@ export const scannerService = {
     const setById = new Map<string, any>();
     for (const s of setRows ?? []) setById.set(s.id, s);
 
-    // Re-rank: prefer language hint within the same distance band so the user's region surfaces first.
+    // Re-rank: when two prints tie on distance, prefer the user's app-locale region.
+    // This is purely cosmetic ordering — the candidate list already spans languages
+    // when distances are spread, and the user always sees the language chip in the UI.
     const ranked = [...rows].sort((a: any, b: any) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      if (languageHint && languageHint !== 'other') {
-        const al = a.language === languageHint ? 0 : 1;
-        const bl = b.language === languageHint ? 0 : 1;
+      if (opts.userLocale && opts.userLocale !== 'other') {
+        const al = a.language === opts.userLocale ? 0 : 1;
+        const bl = b.language === opts.userLocale ? 0 : 1;
         if (al !== bl) return al - bl;
       }
       return 0;
@@ -227,6 +242,62 @@ export const scannerService = {
       matchDistance: distance,
       source: 'phash',
     };
+  },
+
+  // Identifies the language printed on the scanned card. Two-tier:
+  //   1. If OCR text is provided (native path), use script-based detection — free and
+  //      reliable because Pokémon cards are single-language prints.
+  //   2. Otherwise, ask Gemini Flash to classify the image. Single-token output, no
+  //      thinking, image input ~1-2k tokens → ~$0.0003/scan, ~300-500ms latency.
+  // Returns null when we can't decide — caller treats that as "search all languages".
+  async detectCardLanguage(
+    base64Image: string,
+    ocrText?: string
+  ): Promise<'en' | 'th' | 'jp' | null> {
+    if (ocrText && ocrText.trim().length > 0) {
+      // Thai script is unique to Thai cards.
+      if (/[฀-๿]/.test(ocrText)) return 'th';
+      // Hiragana or Katakana → Japanese.
+      if (/[぀-ヿ]/.test(ocrText)) return 'jp';
+      // Han alone (no kana) on a Pokémon card is JP kanji (Chinese cards aren't catalogued).
+      if (/[一-鿿]/.test(ocrText)) return 'jp';
+      // Latin letters present and no other scripts → English.
+      if (/[A-Za-z]/.test(ocrText)) return 'en';
+    }
+
+    const ai = getAi();
+    if (!ai) return null;
+
+    try {
+      const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            parts: [
+              { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
+              {
+                text: 'What language is the printed text on this Pokémon card? Reply with EXACTLY one token: "en" for English, "th" for Thai, or "ja" for Japanese. No explanation, no punctuation.',
+              },
+            ],
+          },
+        ],
+        config: {
+          // No JSON, no thinking — single-token classification.
+          thinkingConfig: { thinkingBudget: 0 },
+          maxOutputTokens: 8,
+        },
+      });
+      const raw = (response.text || '').trim().toLowerCase();
+      if (raw.startsWith('th')) return 'th';
+      if (raw.startsWith('ja') || raw.startsWith('jp')) return 'jp';
+      if (raw.startsWith('en')) return 'en';
+      console.warn('[ScannerService] language classifier returned unrecognised token:', raw);
+      return null;
+    } catch (e) {
+      console.warn('[ScannerService] language classifier failed:', e);
+      return null;
+    }
   },
 
   async lensScan(base64Image: string, serpApiKey: string): Promise<ScanResult | null> {
