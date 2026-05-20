@@ -229,20 +229,26 @@ export const scannerService = {
 
   // Look up cards by printed set code + card number. The combination is globally
   // unique within a language, so a hit here is essentially ground truth — set IDs in
-  // the DB match the printed codes one-to-one (MA3, SV5K, swsh3, sv4pt5, etc.). When
-  // the set_id is shared across regions (SV5K exists in JA and TH), language narrows
-  // it; if the OCR didn't return a language, we leave that to the pHash tie-breaker.
+  // the DB match the printed codes one-to-one (MA3, SV5K, swsh3, sv4pt5, etc.).
+  //
+  // Regional reprints sometimes append a language indicator to the printed set code:
+  // Thai cards print "SV8s T", "MA3 T", etc. The DB column stores only the canonical
+  // "SV8s" / "MA3" — language is its own column. We strip any whitespace-delimited
+  // suffix tokens before the lookup so OCR'd "SV8s T" still matches DB "SV8s".
   async lookupBySetAndNumber(
     setCode: string,
     cardNumber: string,
     language?: 'en' | 'th' | 'jp' | null,
   ): Promise<any[] | null> {
     const supabase = getSupabase();
-    const cleanSet = setCode.replace(/[^a-zA-Z0-9]/g, '').trim();
+    // Take the first whitespace-delimited token, then drop non-alphanumerics.
+    // Examples: "SV8s T" → "SV8s", "MA3 T" → "MA3", "sv4pt5" → "sv4pt5".
+    const firstToken = setCode.trim().split(/\s+/)[0] ?? '';
+    const cleanSet = firstToken.replace(/[^a-zA-Z0-9]/g, '').trim();
     if (!cleanSet) return null;
     // Card numbers are usually "087/198"; we only need the numerator. Strip any
-    // leading zeros for the exact match leg; keep the original for the prefix leg
-    // because the DB sometimes stores e.g. "087/198" verbatim.
+    // leading zeros for one leg; keep the original for the prefix leg because the DB
+    // sometimes stores e.g. "087/198" verbatim.
     const numeratorRaw = cardNumber.split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
     const numeratorStripped = numeratorRaw.replace(/^0+/, '') || numeratorRaw;
     if (!numeratorRaw) return null;
@@ -261,7 +267,25 @@ export const scannerService = {
       console.warn('[ScannerService] lookupBySetAndNumber error:', error);
       return null;
     }
-    return data && data.length > 0 ? data : null;
+    if (data && data.length > 0) return data;
+
+    // Defensive retry: some Thai sets are stored with extra characters in pokemon_sets
+    // but the bulk of rows live under the canonical id. Try an ILIKE prefix match if
+    // an exact match found nothing.
+    let q2 = supabase
+      .from('pokemon_cards')
+      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .ilike('set_id', `${cleanSet}%`)
+      .or(
+        `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`
+      );
+    if (language) q2 = q2.eq('language', language);
+    const retry = await q2.limit(5);
+    if (retry.error) {
+      console.warn('[ScannerService] lookupBySetAndNumber prefix retry error:', retry.error);
+      return null;
+    }
+    return retry.data && retry.data.length > 0 ? retry.data : null;
   },
 
   // Fallback lookup for when the set code didn't OCR cleanly but Pro identified the
