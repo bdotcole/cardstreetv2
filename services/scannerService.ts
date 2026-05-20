@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient as createAdminClient, SupabaseClient } from '@supabase/supabase-js';
+import sharp from 'sharp';
 import { computeDHash, base64ToBuffer, bufferToPostgresBytea } from '@/lib/phash';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { Card } from '../types';
@@ -50,7 +51,7 @@ export interface ScanResult {
   // Distance of the top pHash match, when present. Lower = better.
   matchDistance?: number;
   // Which path produced the result, for telemetry.
-  source?: 'phash' | 'gemini-text' | 'gemini-image' | 'lens';
+  source?: 'set-code-ocr' | 'phash' | 'gemini-text' | 'gemini-image' | 'lens';
 }
 
 export interface ScanPayload {
@@ -137,19 +138,33 @@ export const scannerService = {
     const supabase = getSupabase();
     const imageBuffer = base64ToBuffer(base64Image);
 
-    // Compute the dHash and detect the *card's* language in parallel. The classifier
-    // call is the slow leg (~300-500ms on Flash), the hash compute is the fast leg
-    // (~50-100ms via sharp), so the wall clock = max of the two.
-    const [hash, cardLanguage] = await Promise.all([
+    // Compute the dHash AND extract the printed set code / number / language from the
+    // bottom of the card, in parallel. Both legs take 200-500ms; wall clock = max.
+    //
+    // The set-code+number OCR is the kingpin signal: when readable, the combination is
+    // globally unique within a language, and the matched set's `language` field is a
+    // ground-truth language tag (no visual classifier guessing). This is what unlocks
+    // accurate Thai/Japanese scans, since those cards share artwork with their EN/JP
+    // counterparts and confuse dHash on its own.
+    const [hash, ocr] = await Promise.all([
       computeDHash(imageBuffer),
-      this.detectCardLanguage(base64Image, opts.ocrText),
+      this.extractCardMetadata(base64Image, opts.ocrText),
     ]);
     const hex = bufferToPostgresBytea(hash);
 
-    // The detected language is the *card's* language (what's printed on it), independent
-    // of the user's app locale. Hard-filtering by it is correct even for multi-language
-    // collectors: a Thai user scanning a JP card should see JP candidates, not TH ones.
-    const filter = cardLanguage ?? null;
+    // -------- Tier 1: deterministic (set_id, number) lookup --------
+    if (ocr?.setCode && ocr?.cardNumber) {
+      const direct = await this.lookupBySetAndNumber(ocr.setCode, ocr.cardNumber, ocr.language);
+      if (direct && direct.length > 0) {
+        // Multiple matches happen for variant prints (holo/reverse holo/full-art at the
+        // same number). Rank them by dHash distance so the user's actual print surfaces.
+        const ranked = await this.rankByPhash(direct, hex);
+        return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+      }
+    }
+
+    // -------- Tier 2: pHash search, filtered by detected language --------
+    const filter = ocr?.language ?? null;
 
     const runRpc = (lang: string | null) =>
       supabase.rpc('search_pokemon_by_phash', {
@@ -166,7 +181,7 @@ export const scannerService = {
     }
 
     // If the detected language returned nothing, the detection may have been wrong
-    // (e.g. a Thai card with English flavour text). Retry unfiltered.
+    // (e.g. partial OCR). Retry unfiltered.
     if (filter && (!rows || rows.length === 0)) {
       console.log(`[ScannerService] phash: 0 matches in lang=${filter}, retrying unfiltered`);
       const retry = await runRpc(null);
@@ -179,24 +194,9 @@ export const scannerService = {
 
     if (!rows || rows.length === 0) return null;
 
-    const ids = rows.map((r: any) => r.id);
-    const { data: marketRows } = await supabase
-      .from('market_values')
-      .select('card_id, market_avg, currency, last_updated')
-      .in('card_id', ids);
-    const marketByCard = new Map<string, any>();
-    for (const m of marketRows ?? []) marketByCard.set(m.card_id, m);
-
-    const { data: setRows } = await supabase
-      .from('pokemon_sets')
-      .select('id, name, printed_total, total')
-      .in('id', Array.from(new Set(rows.map((r: any) => r.set_id).filter(Boolean))));
-    const setById = new Map<string, any>();
-    for (const s of setRows ?? []) setById.set(s.id, s);
-
     // Re-rank: when two prints tie on distance, prefer the user's app-locale region.
-    // This is purely cosmetic ordering — the candidate list already spans languages
-    // when distances are spread, and the user always sees the language chip in the UI.
+    // Purely cosmetic ordering — the candidate list already spans languages when
+    // distances are spread, and the user sees the language chip in the UI.
     const ranked = [...rows].sort((a: any, b: any) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       if (opts.userLocale && opts.userLocale !== 'other') {
@@ -207,96 +207,221 @@ export const scannerService = {
       return 0;
     });
 
-    const matches: Card[] = ranked.map((r: any) =>
-      mapSupabaseCardToInternal({
-        ...r,
-        market_values: marketByCard.get(r.id) ?? null,
-        pokemon_sets: setById.get(r.set_id) ?? null,
-      })
-    );
+    const hydrated = await this.hydrateCards(ranked);
+    return this.buildScanResult(hydrated, ranked[0].distance, 'phash');
+  },
 
-    const best = ranked[0];
-    const distance = best.distance as number;
-    const confidence = distance <= DIST_HIGH_CONFIDENCE ? 0.95 : distance <= 14 ? 0.7 : 0.4;
+  // Look up cards by printed set code + card number. The combination is globally
+  // unique within a language, so a hit here is essentially ground truth — set IDs in
+  // the DB match the printed codes one-to-one (MA3, SV5K, swsh3, sv4pt5, etc.). When
+  // the set_id is shared across regions (SV5K exists in JA and TH), language narrows
+  // it; if the OCR didn't return a language, we leave that to the pHash tie-breaker.
+  async lookupBySetAndNumber(
+    setCode: string,
+    cardNumber: string,
+    language?: 'en' | 'th' | 'jp' | null,
+  ): Promise<any[] | null> {
+    const supabase = getSupabase();
+    const cleanSet = setCode.replace(/[^a-zA-Z0-9]/g, '').trim();
+    if (!cleanSet) return null;
+    // Card numbers are usually "087/198"; we only need the numerator. Strip any
+    // leading zeros for the exact match leg; keep the original for the prefix leg
+    // because the DB sometimes stores e.g. "087/198" verbatim.
+    const numeratorRaw = cardNumber.split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
+    const numeratorStripped = numeratorRaw.replace(/^0+/, '') || numeratorRaw;
+    if (!numeratorRaw) return null;
 
+    let q = supabase
+      .from('pokemon_cards')
+      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .ilike('set_id', cleanSet)
+      .or(
+        `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`
+      );
+    if (language) q = q.eq('language', language);
+
+    const { data, error } = await q.limit(5);
+    if (error) {
+      console.warn('[ScannerService] lookupBySetAndNumber error:', error);
+      return null;
+    }
+    return data && data.length > 0 ? data : null;
+  },
+
+  // Compute pHash distance for each candidate to pick the best print of a card
+  // (e.g. holo vs normal vs reverse-holo all share id/number; the print on the table
+  // is whichever has the lowest dHash distance to the captured frame).
+  async rankByPhash(cards: any[], queryHex: string): Promise<Array<any & { distance: number }>> {
+    const supabase = getSupabase();
+    if (cards.length === 1) return [{ ...cards[0], distance: 0 }];
+
+    const ids = cards.map((c) => c.id);
+    const { data, error } = await supabase
+      .from('pokemon_cards')
+      .select('id, phash')
+      .in('id', ids);
+    if (error || !data) return cards.map((c) => ({ ...c, distance: 0 }));
+
+    // Decode bytea hex (supabase returns it as \x...) and Hamming-compare to query.
+    const queryBytes = hexToBytes(queryHex);
+    const distById = new Map<string, number>();
+    for (const row of data) {
+      if (!row.phash) {
+        distById.set(row.id, 999);
+        continue;
+      }
+      const cardBytes = decodeSupabaseBytea(row.phash);
+      distById.set(row.id, cardBytes ? hammingDistance(queryBytes, cardBytes) : 999);
+    }
+
+    return cards
+      .map((c) => ({ ...c, distance: distById.get(c.id) ?? 999 }))
+      .sort((a, b) => a.distance - b.distance);
+  },
+
+  async hydrateCards(rows: any[]): Promise<any[]> {
+    const supabase = getSupabase();
+    const ids = rows.map((r) => r.id);
+    const [marketRes, setsRes] = await Promise.all([
+      supabase.from('market_values').select('card_id, market_avg, currency, last_updated').in('card_id', ids),
+      supabase.from('pokemon_sets').select('id, name, printed_total, total')
+        .in('id', Array.from(new Set(rows.map((r) => r.set_id).filter(Boolean)))),
+    ]);
+    const marketBy = new Map<string, any>();
+    for (const m of marketRes.data ?? []) marketBy.set(m.card_id, m);
+    const setBy = new Map<string, any>();
+    for (const s of setsRes.data ?? []) setBy.set(s.id, s);
+    return rows.map((r) => ({
+      ...r,
+      market_values: marketBy.get(r.id) ?? r.market_values ?? null,
+      pokemon_sets: setBy.get(r.set_id) ?? r.pokemon_sets ?? null,
+    }));
+  },
+
+  buildScanResult(
+    ranked: any[],
+    distance: number,
+    source: 'phash' | 'set-code-ocr',
+  ): ScanResult {
+    const matches: Card[] = ranked.map((r) => mapSupabaseCardToInternal(r));
+    const confidence =
+      source === 'set-code-ocr'
+        ? 0.97
+        : distance <= DIST_HIGH_CONFIDENCE
+        ? 0.95
+        : distance <= 14
+        ? 0.7
+        : 0.4;
     const top = matches[0];
     const primary: ScanResultPrimary = {
       name: top.name,
       set: top.set,
-      setHint: best.set_id,
+      setHint: ranked[0].set_id,
       number: top.number,
       rarity: top.rarity,
       language: (top.language as any) || 'en',
       confidence,
     };
-
     return {
       primary,
       candidates: matches.slice(1, 5).map((c) => ({
         name: c.name,
         set: c.set,
         number: c.number,
-        reason: 'pHash neighbour',
+        reason: source === 'set-code-ocr' ? 'same set+number variant' : 'pHash neighbour',
       })),
       matches,
       matchDistance: distance,
-      source: 'phash',
+      source,
     };
   },
 
-  // Identifies the language printed on the scanned card. Two-tier:
-  //   1. If OCR text is provided (native path), use script-based detection — free and
-  //      reliable because Pokémon cards are single-language prints.
-  //   2. Otherwise, ask Gemini Flash to classify the image. Single-token output, no
-  //      thinking, image input ~1-2k tokens → ~$0.0003/scan, ~300-500ms latency.
-  // Returns null when we can't decide — caller treats that as "search all languages".
-  async detectCardLanguage(
+  // Bottom-strip OCR. Crops the bottom ~22% of the captured frame — that's where the
+  // printed set code (e.g. "MA3", "SV5K", "sv4pt5") and card number (e.g. "087/198")
+  // always live on modern Pokémon cards. Also classifies the language from the same
+  // image, which is essentially free given we're already calling the model.
+  //
+  // This call replaces what used to be a single-token language classifier. Same cost
+  // (~$0.0003/scan, ~300-500ms), strictly more useful output: a set+number combination
+  // that uniquely identifies a card via direct DB lookup, no fuzzy pHash matching
+  // needed when the bottom text is readable.
+  async extractCardMetadata(
     base64Image: string,
-    ocrText?: string
-  ): Promise<'en' | 'th' | 'jp' | null> {
-    if (ocrText && ocrText.trim().length > 0) {
-      // Thai script is unique to Thai cards.
-      if (/[฀-๿]/.test(ocrText)) return 'th';
-      // Hiragana or Katakana → Japanese.
-      if (/[぀-ヿ]/.test(ocrText)) return 'jp';
-      // Han alone (no kana) on a Pokémon card is JP kanji (Chinese cards aren't catalogued).
-      if (/[一-鿿]/.test(ocrText)) return 'jp';
-      // Latin letters present and no other scripts → English.
-      if (/[A-Za-z]/.test(ocrText)) return 'en';
+    ocrText?: string,
+  ): Promise<{ setCode: string | null; cardNumber: string | null; language: 'en' | 'th' | 'jp' | null } | null> {
+    // Free-of-charge fast path: if native OCR text is already in hand, scan it for
+    // the regex'able pieces (set code, number, language script). Saves a Flash call.
+    const fromOcrText = parseMetadataFromOcrText(ocrText);
+    if (fromOcrText && fromOcrText.setCode && fromOcrText.cardNumber && fromOcrText.language) {
+      return fromOcrText;
     }
 
     const ai = getAi();
-    if (!ai) return null;
+    if (!ai) return fromOcrText;
+
+    // Crop the bottom strip via sharp. Tighter input → much more reliable text OCR
+    // than handing the model the whole card, and saves on input tokens too.
+    let cropBase64: string;
+    try {
+      const buf = base64ToBuffer(base64Image);
+      const meta = await sharp(buf).metadata();
+      if (!meta.height || !meta.width) return fromOcrText;
+      const cropTop = Math.floor(meta.height * 0.78);
+      const cropped = await sharp(buf)
+        .extract({ left: 0, top: cropTop, width: meta.width, height: meta.height - cropTop })
+        .jpeg({ quality: 88 })
+        .toBuffer();
+      cropBase64 = cropped.toString('base64');
+    } catch (e) {
+      console.warn('[ScannerService] bottom-crop failed:', e);
+      return fromOcrText;
+    }
 
     try {
-      const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
           {
             parts: [
-              { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
+              { inlineData: { data: cropBase64, mimeType: 'image/jpeg' } },
               {
-                text: 'What language is the printed text on this Pokémon card? Reply with EXACTLY one token: "en" for English, "th" for Thai, or "ja" for Japanese. No explanation, no punctuation.',
+                text: `This image is the bottom strip of a Pokémon trading card. Extract three values:
+
+1. SET CODE — the short alphanumeric printed in a corner, in Latin characters. Examples: "MA3", "MA2", "SV5K", "SV4a", "sv4pt5", "swsh3", "PROMO", "s12a". Preserve the original casing exactly. If unreadable, return null.
+
+2. CARD NUMBER — digits, sometimes with a forward slash. Examples: "087/198", "132/190", "14/214", "SV001". Return exactly what's printed. If unreadable, return null.
+
+3. LANGUAGE — what language is the body text (attacks, abilities, flavour) printed in? "th" if any Thai script is visible, "ja" if any hiragana/katakana/kanji is visible, "en" otherwise.
+
+Return JSON only.`,
               },
             ],
           },
         ],
         config: {
-          // No JSON, no thinking — single-token classification.
           thinkingConfig: { thinkingBudget: 0 },
-          maxOutputTokens: 8,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              setCode: { type: Type.STRING },
+              cardNumber: { type: Type.STRING },
+              language: { type: Type.STRING, enum: ['en', 'th', 'ja'] },
+            },
+          },
         },
       });
-      const raw = (response.text || '').trim().toLowerCase();
-      if (raw.startsWith('th')) return 'th';
-      if (raw.startsWith('ja') || raw.startsWith('jp')) return 'jp';
-      if (raw.startsWith('en')) return 'en';
-      console.warn('[ScannerService] language classifier returned unrecognised token:', raw);
-      return null;
+      const parsed = JSON.parse(response.text || '{}');
+      const language =
+        parsed.language === 'ja' ? 'jp' : parsed.language === 'th' || parsed.language === 'en' ? parsed.language : null;
+      return {
+        setCode: parsed.setCode || fromOcrText?.setCode || null,
+        cardNumber: parsed.cardNumber || fromOcrText?.cardNumber || null,
+        language: language ?? fromOcrText?.language ?? null,
+      };
     } catch (e) {
-      console.warn('[ScannerService] language classifier failed:', e);
-      return null;
+      console.warn('[ScannerService] extractCardMetadata failed:', e);
+      return fromOcrText;
     }
   },
 
@@ -434,4 +559,57 @@ function scanResultSchema() {
             }
         }
     };
+}
+
+// Quick regex scan over native-OCR text. Free, runs first whenever we have OCR text.
+// Misses are common — text is often jumbled and the model picks up things the
+// regex can't parse — so we still fall through to the Flash call when fields are
+// missing. The point is to skip the LLM hop when the OCR is clean.
+const RE_SET_CODE = /\b(MA[0-9]{1,2}|SV[0-9][a-zA-Z0-9]*|sv[0-9][a-zA-Z0-9]*|swsh[0-9]{1,3}|sm[0-9]{1,3}|s[0-9]{1,3}[a-z]?|PROMO)\b/;
+const RE_CARD_NUMBER = /\b([0-9]{1,3}\/[0-9]{1,3})\b/;
+function parseMetadataFromOcrText(ocrText?: string) {
+    if (!ocrText || ocrText.trim().length === 0) return null;
+    const setMatch = ocrText.match(RE_SET_CODE);
+    const numMatch = ocrText.match(RE_CARD_NUMBER);
+    let language: 'en' | 'th' | 'jp' | null = null;
+    if (/[฀-๿]/.test(ocrText)) language = 'th';
+    else if (/[぀-ヿ一-鿿]/.test(ocrText)) language = 'jp';
+    else if (/[A-Za-z]/.test(ocrText)) language = 'en';
+    if (!setMatch && !numMatch && !language) return null;
+    return {
+        setCode: setMatch ? setMatch[1] : null,
+        cardNumber: numMatch ? numMatch[1] : null,
+        language,
+    };
+}
+
+// Bytea decode/Hamming for the in-Node pHash distance ranking (variant disambiguation).
+// Supabase-js returns bytea as a "\\x..." prefixed hex string when selected as a column.
+function decodeSupabaseBytea(value: string): Uint8Array | null {
+    if (typeof value !== 'string') return null;
+    const hex = value.startsWith('\\x') ? value.slice(2) : value;
+    if (hex.length === 0 || hex.length % 2 !== 0) return null;
+    const out = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+    const stripped = hex.startsWith('\\x') ? hex.slice(2) : hex;
+    const out = new Uint8Array(stripped.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(stripped.substr(i * 2, 2), 16);
+    return out;
+}
+
+function hammingDistance(a: Uint8Array, b: Uint8Array): number {
+    if (a.length !== b.length) return 64;
+    let total = 0;
+    for (let i = 0; i < a.length; i++) {
+        let x = a[i] ^ b[i];
+        // popcount byte
+        x = x - ((x >> 1) & 0x55);
+        x = (x & 0x33) + ((x >> 2) & 0x33);
+        total += (x + (x >> 4)) & 0x0f;
+    }
+    return total;
 }

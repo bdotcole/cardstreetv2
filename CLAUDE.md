@@ -44,19 +44,21 @@ Each row may have `image_large`, `image_small`, and `raw_data` (full original AP
 
 > **The route must run `nodejs` runtime, not Edge.** `sharp` is a native module.
 
-Pipeline order (each tier falls through to the next on failure):
+Tier order. Each tier falls through to the next on failure:
 
-1. **pHash search** — server computes dHash of the captured frame via `sharp` and queries the `search_pokemon_by_phash` RPC. Filtered by *detected card language*. Fast (~400–600ms typical) and the most accurate path.
-2. **OCR text + Gemini Flash** — if pHash misses and the device sent native OCR text.
-3. **Image + Gemini Flash** — last LLM fallback. (Was Pro originally; Flash is plenty.)
-4. **Google Lens via SerpApi** — final fallback. Slow (>5s) but kept around for catalog gaps.
+1. **Set-code OCR + direct DB lookup** — `extractCardMetadata` crops the bottom ~22% of the captured frame via `sharp` and asks Gemini Flash for `setCode` + `cardNumber` + `language`. If both fields parse, we do a deterministic lookup `WHERE set_id ILIKE :setCode AND number IN (:n, :n/...) AND language = :lang`. A Thai card printing `MA3 087/198` maps 1:1 to a Thai-language row in `pokemon_cards`. Confidence 0.97. **This is the kingpin signal for Thai and Japanese cards** — `MA3` only exists for `language='th'`, period.
+2. **pHash search** — server computes dHash via `sharp` and queries the `search_pokemon_by_phash` RPC, filtered by the OCR-detected language. Used as the primary path when the set-code OCR didn't yield a hit, and as the variant disambiguator (holo vs reverse-holo vs normal) when the set+number lookup returned multiple rows.
+3. **OCR text + Gemini Flash** — full-card text path when pHash misses and the device sent native MLKit OCR text.
+4. **Image + Gemini Flash** — last LLM fallback. Flash, not Pro.
+5. **Google Lens via SerpApi** — final fallback. Slow (>5s).
 
-Language detection runs **inside** the pHash step, in parallel with the hash compute (`Promise.all` so the wall clock = max, not sum):
+Steps 1 and 2 share a single Gemini Flash call (`extractCardMetadata`) and a single dHash compute, **run in parallel** with `Promise.all`. Wall clock ≈ max of the two legs (~400-600ms), not sum.
 
-- If OCR text is provided, inspect script directly: Thai chars → `th`, Hiragana/Katakana/Han → `jp`, Latin → `en`. Pokémon cards are single-language prints so this is unambiguous.
-- Otherwise call Gemini 2.5 Flash with a one-shot classifier prompt (single-token output, `thinkingBudget: 0`, ~400ms).
+**Why set-code OCR beats a visual language classifier**: a printed set ID is a deterministic language tag and narrows the candidate space from 32k cards down to typically 1-5. A visual classifier can guess wrong; the set ID can't.
 
-The user's app locale is **not** a filter — it's only a tiebreaker when two prints have identical pHash distance. Multi-language collectors get correct results regardless of their UI language.
+When native OCR text already contains the set code or Thai/Japanese script (cheap regex check via `parseMetadataFromOcrText`), the Flash call is skipped entirely.
+
+The user's app locale is **not** a filter at any tier — it's only a tiebreaker when pHash distances are tied across regional prints. Multi-language collectors get correct results regardless of their UI language.
 
 Relevant files: `services/scannerService.ts`, `lib/phash.ts`, `lib/cardMapper.ts`, `app/api/scan/route.ts`.
 
