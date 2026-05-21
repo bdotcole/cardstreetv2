@@ -12,6 +12,8 @@ import {
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
 import StripeConnectSection from './StripeConnectSection';
+import GooglePlacesAddressInput from './GooglePlacesAddressInput';
+import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -781,6 +783,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <MapPin className="w-3 h-3" /> {t('profile.shippingAddress')}
                   </label>
+
+                  <GooglePlacesAddressInput
+                    id="profile-address-autocomplete"
+                    defaultValue=""
+                    placeholder={isThai ? 'พิมพ์ที่อยู่เพื่อค้นหาอัตโนมัติ...' : 'Search address to auto-fill...'}
+                    className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
+                    onAddressParsed={(parsed: ParsedThaiAddress) => {
+                      setEditAddress(prev => ({
+                        ...prev,
+                        address: parsed.detail_address || prev.address,
+                        district: parsed.sub_district || prev.district,
+                        state: parsed.district || prev.state,
+                        province: parsed.province || prev.province,
+                        postcode: parsed.postal_code || prev.postcode,
+                      }));
+                    }}
+                  />
+                  <p className="text-[10px] text-slate-600 mt-0.5">
+                    {isThai ? 'เลือกจากรายการ แล้วแก้ไขด้านล่างได้' : 'Select from suggestions, then edit below if needed'}
+                  </p>
+
                   <input
                     type="text"
                     value={editAddress.address}

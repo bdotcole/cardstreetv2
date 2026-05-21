@@ -29,10 +29,8 @@ import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
-    PROFILE_INCOMPLETE_TOAST,
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
-    BUYER_PROFILE_INCOMPLETE_TOAST,
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
@@ -438,7 +436,7 @@ export default function HomePage() {
                 .single<Record<string, string | null>>();
             const completeness = checkBuyerProfileComplete(profile);
             if (!completeness.complete) {
-                showToast(BUYER_PROFILE_INCOMPLETE_TOAST, 'error');
+                showToast(t('profile.incompleteBuyer'), 'error');
                 setIsCartOpen(false);
                 setActiveTab('profile');
                 return;
@@ -591,7 +589,7 @@ export default function HomePage() {
             if (error) throw error;
             const completeness = checkSellerProfileComplete(profile);
             if (!completeness.complete) {
-                showToast(PROFILE_INCOMPLETE_TOAST, 'error');
+                showToast(t('profile.incompleteSeller'), 'error');
                 setActiveTab('profile');
                 return;
             }
@@ -687,7 +685,7 @@ export default function HomePage() {
                 // incomplete between click and submit. Close the form,
                 // route to Profile.
                 setListingTarget(null);
-                showToast(PROFILE_INCOMPLETE_TOAST, 'error');
+                showToast(t('profile.incompleteSeller'), 'error');
                 setActiveTab('profile');
                 return;
             }
