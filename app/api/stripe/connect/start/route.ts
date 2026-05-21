@@ -146,18 +146,18 @@ export async function POST(request: Request) {
         //     workaround isn't needed.
         //
         // Docs: https://stripe.com/docs/connect/service-agreement-types
-        if (!accountId) {
+        async function createFreshAccount(): Promise<string> {
             const createParams: Stripe.AccountCreateParams = {
                 type: 'express',
                 country: 'TH',
-                email: user.email || undefined,
+                email: user!.email || undefined,
                 capabilities: {
                     transfers: { requested: true },
                 },
                 business_type: 'individual',
                 metadata: {
-                    cardstreet_user_id: user.id,
-                    cardstreet_display_name: profile.display_name || '',
+                    cardstreet_user_id: user!.id,
+                    cardstreet_display_name: profile!.display_name || '',
                     cardstreet_region: region,
                 },
             };
@@ -167,12 +167,15 @@ export async function POST(request: Request) {
             }
 
             const account = await stripe.accounts.create(createParams);
-            accountId = account.id;
 
             const updates: Record<string, unknown> = {
-                stripe_account_id: accountId,
+                stripe_account_id: account.id,
                 stripe_region: region,
                 stripe_account_status: 'pending',
+                // Reset cached capability flags from any stale prior account.
+                stripe_charges_enabled: false,
+                stripe_payouts_enabled: false,
+                stripe_details_submitted: false,
                 stripe_account_updated_at: new Date().toISOString(),
             };
             // If the UI provided an explicit currency choice, persist it so
@@ -182,15 +185,18 @@ export async function POST(request: Request) {
             const { error: saveErr } = await admin
                 .from('profiles')
                 .update(updates)
-                .eq('id', user.id);
+                .eq('id', user!.id);
 
             if (saveErr) {
                 console.error('[Connect/Start] Failed to persist stripe_account_id:', saveErr);
-                return NextResponse.json(
-                    { error: 'Failed to save Stripe account' },
-                    { status: 500 }
-                );
+                throw new Error('Failed to save Stripe account');
             }
+
+            return account.id;
+        }
+
+        if (!accountId) {
+            accountId = await createFreshAccount();
         }
 
         // Step 2: Generate the onboarding AccountLink.
@@ -208,12 +214,48 @@ export async function POST(request: Request) {
         const returnUrl = bodyReturnUrl ?? `${baseUrl}/?stripe_connect=complete`;
         const refreshUrl = bodyRefreshUrl ?? `${baseUrl}/?stripe_connect=refresh`;
 
-        const accountLink = await stripe.accountLinks.create({
-            account: accountId!,
-            refresh_url: refreshUrl,
-            return_url: returnUrl,
-            type: 'account_onboarding',
-        });
+        // Self-heal a stale stripe_account_id. This happens when the stored
+        // account ID was created against a different Stripe platform than the
+        // one currently configured — e.g. test/live key swap, key rotation
+        // back to a different platform account, or a manual deletion in the
+        // Stripe Dashboard. Stripe responds with code='account_invalid' /
+        // 'resource_missing' and a message like "account ... is not connected
+        // to your platform or does not exist". Rather than dead-ending the
+        // seller, we clear the row and onboard them on a fresh account.
+        async function isStaleAccountError(err: unknown): Promise<boolean> {
+            const e = err as { code?: string; message?: string; type?: string };
+            if (e?.code === 'resource_missing' || e?.code === 'account_invalid') return true;
+            const msg = (e?.message || '').toLowerCase();
+            return (
+                msg.includes('not connected to your platform') ||
+                msg.includes('does not exist')
+            );
+        }
+
+        let accountLink: Stripe.AccountLink;
+        try {
+            accountLink = await stripe.accountLinks.create({
+                account: accountId!,
+                refresh_url: refreshUrl,
+                return_url: returnUrl,
+                type: 'account_onboarding',
+            });
+        } catch (linkErr) {
+            if (!(await isStaleAccountError(linkErr))) throw linkErr;
+
+            console.warn(
+                `[Connect/Start] Stale stripe_account_id ${accountId} for user ${user.id} on ${region} — ` +
+                `clearing and creating a fresh account.`
+            );
+
+            accountId = await createFreshAccount();
+            accountLink = await stripe.accountLinks.create({
+                account: accountId!,
+                refresh_url: refreshUrl,
+                return_url: returnUrl,
+                type: 'account_onboarding',
+            });
+        }
 
         return NextResponse.json({ url: accountLink.url, accountId, region });
     } catch (err: any) {
