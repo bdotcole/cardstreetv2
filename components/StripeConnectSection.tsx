@@ -97,10 +97,24 @@ export default function StripeConnectSection() {
         setActionLoading(true);
         setError(null);
         try {
+            // Pass the current origin so Stripe returns the seller to the
+            // exact deploy they started from (web, preview, localhost). The
+            // server validates the host against an allowlist; on the Android
+            // Capacitor app `window.location.origin` is https://cardstreet.app
+            // which App Links intercepts back into the native shell.
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
             const res = await fetch('/api/stripe/connect/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(currency ? { currency } : {}),
+                body: JSON.stringify({
+                    ...(currency ? { currency } : {}),
+                    ...(origin
+                        ? {
+                            returnUrl: `${origin}/?stripe_connect=complete`,
+                            refreshUrl: `${origin}/?stripe_connect=refresh`,
+                        }
+                        : {}),
+                }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to start onboarding');

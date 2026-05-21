@@ -18,7 +18,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import {
@@ -33,6 +32,35 @@ function regionForCurrency(currency: string | null | undefined): StripeRegion {
     return currency === 'thb' ? 'th' : 'us';
 }
 
+/**
+ * Origins we'll let Stripe redirect the seller back to after onboarding.
+ * Stripe accountLinks require absolute https URLs (or http://localhost for
+ * dev), so we validate any client-supplied returnUrl against this allowlist
+ * to prevent open-redirects.
+ *
+ * `cardstreet.app` is always permitted because that's the host the Android
+ * Capacitor app registers via App Links (autoVerify in AndroidManifest.xml).
+ * Sending Stripe there means the post-onboarding click on "Return to
+ * CardStreet" deep-links straight into the native app instead of bouncing
+ * the seller to a browser tab on the Vercel preview URL.
+ */
+function isPermittedReturnOrigin(url: string): boolean {
+    try {
+        const u = new URL(url);
+        const allowed = new Set<string>(['cardstreet.app']);
+        try {
+            allowed.add(new URL(getAppBaseUrl()).host);
+        } catch {
+            // getAppBaseUrl always returns a parseable URL; defensive only.
+        }
+        if (u.hostname === 'localhost' && u.protocol === 'http:') return true;
+        if (u.protocol !== 'https:') return false;
+        return allowed.has(u.host);
+    } catch {
+        return false;
+    }
+}
+
 export async function POST(request: Request) {
     try {
         const supabase = await createClient();
@@ -42,17 +70,30 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Optional body override for first-time onboarding: the UI lets the
-        // seller pick which currency / platform they want to onboard on. If
-        // they already have an account, this is ignored and we use the
-        // persisted region (Stripe accounts can't move between platforms).
+        // Optional body overrides for first-time onboarding. The UI passes:
+        //   - `currency`: which platform (US/TH) to onboard on
+        //   - `returnUrl` / `refreshUrl`: where Stripe should redirect the
+        //     seller back to. Validated against the allowlist below; an
+        //     out-of-list value is ignored and we fall back to the canonical
+        //     getAppBaseUrl() (which the Android app App-Links-intercepts).
+        //
+        // If the seller already has an account, currency is ignored and we use
+        // the persisted region (Stripe accounts can't move between platforms).
         let bodyCurrency: 'usd' | 'thb' | null = null;
+        let bodyReturnUrl: string | null = null;
+        let bodyRefreshUrl: string | null = null;
         try {
             const body = await request.json().catch(() => null);
             const c = body?.currency;
             if (c === 'usd' || c === 'thb') bodyCurrency = c;
+            if (typeof body?.returnUrl === 'string' && isPermittedReturnOrigin(body.returnUrl)) {
+                bodyReturnUrl = body.returnUrl;
+            }
+            if (typeof body?.refreshUrl === 'string' && isPermittedReturnOrigin(body.refreshUrl)) {
+                bodyRefreshUrl = body.refreshUrl;
+            }
         } catch {
-            // No body / malformed body — fall back to profile.preferred_currency.
+            // No body / malformed body — fall back to defaults below.
         }
 
         // Use the service-role client for writes so the seller doesn't need RLS
@@ -153,19 +194,24 @@ export async function POST(request: Request) {
         }
 
         // Step 2: Generate the onboarding AccountLink.
-        // Derive baseUrl from the actual request host so it works on any
-        // domain (custom, vercel.app, preview deploys, localhost) without
-        // requiring NEXT_PUBLIC_APP_URL to be set. Falls back to the env
-        // var / hardcoded default if we can't read the headers.
-        const headersList = await headers();
-        const host = headersList.get('host');
-        const proto = headersList.get('x-forwarded-proto') || 'https';
-        const baseUrl = host ? `${proto}://${host}` : getAppBaseUrl();
+        //
+        // Use getAppBaseUrl() (cardstreet.app or NEXT_PUBLIC_APP_URL) as the
+        // default — NOT the request host. The Android Capacitor app only
+        // App-Links-intercepts cardstreet.app, so sending Stripe back to a
+        // Vercel preview hostname would dead-end the seller in a browser tab
+        // and they'd never make it back to the native app to refresh status.
+        //
+        // Client can override via body.returnUrl/refreshUrl (already
+        // allowlist-validated above) — this lets the web build pass
+        // window.location.origin for non-cardstreet.app domains.
+        const baseUrl = getAppBaseUrl();
+        const returnUrl = bodyReturnUrl ?? `${baseUrl}/?stripe_connect=complete`;
+        const refreshUrl = bodyRefreshUrl ?? `${baseUrl}/?stripe_connect=refresh`;
 
         const accountLink = await stripe.accountLinks.create({
             account: accountId!,
-            refresh_url: `${baseUrl}/?stripe_connect=refresh`,
-            return_url: `${baseUrl}/?stripe_connect=complete`,
+            refresh_url: refreshUrl,
+            return_url: returnUrl,
             type: 'account_onboarding',
         });
 
