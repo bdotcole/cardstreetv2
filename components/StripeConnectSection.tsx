@@ -9,15 +9,15 @@
  *   - Account active → "Manage payouts" (opens Express Dashboard) + green check
  *   - Account restricted → "Update payout info" + amber warning
  *
- * Before first onboarding, the seller picks the currency they want to be paid
- * in. THB routes to the Stripe Thailand platform (PromptPay-enabled); USD
- * routes to the US platform (cards only). Stripe accounts can't move between
- * platforms after creation, so this choice is sticky.
+ * Single-platform for now: every new account is created on Stripe Thailand
+ * (which handles both cards and PromptPay). The dual-platform region routing
+ * in lib/stripe.ts and app/api/stripe/connect/start/route.ts is preserved
+ * server-side so we can layer a US platform back on later without a UI
+ * rewrite — at that point we'll re-add a currency picker here.
  *
- * After currency selection but before Stripe's hosted flow, a bilingual
- * pre-screen lists what Stripe will ask for (ID, bank, address, phone) so
- * users know what they're walking into. Skipped on resume — the user has
- * already seen it.
+ * Before Stripe's hosted flow, a bilingual pre-screen lists what Stripe will
+ * ask for (ID, bank, address, phone) so users know what they're walking
+ * into. Skipped on resume — the user has already seen it.
  *
  * Handles the ?stripe_connect=complete|refresh query string Stripe redirects
  * back to: refreshes status from Stripe and clears the param.
@@ -38,8 +38,6 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
-type Currency = 'usd' | 'thb';
-
 interface ConnectStatus {
     connected: boolean;
     accountId: string | null;
@@ -50,20 +48,12 @@ interface ConnectStatus {
     detailsSubmitted: boolean;
 }
 
-// Mirror lib/stripe.ts: TH path only renders if the platform is configured.
-// The server route falls back to 'us' if the seller picks THB but the key is
-// missing — exposing this flag here keeps the UI consistent with that behavior.
-const TH_PAYOUTS_ENABLED = process.env.NEXT_PUBLIC_STRIPE_TH_ENABLED === '1';
-
 export default function StripeConnectSection() {
     const { t } = useTranslation();
     const [status, setStatus] = useState<ConnectStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [pickedCurrency, setPickedCurrency] = useState<Currency>(
-        TH_PAYOUTS_ENABLED ? 'thb' : 'usd'
-    );
     const [showPreScreen, setShowPreScreen] = useState(false);
 
     const fetchStatus = useCallback(async (refresh = false) => {
@@ -82,7 +72,7 @@ export default function StripeConnectSection() {
         }
     }, []);
 
-    const startOnboarding = useCallback(async (currency?: Currency) => {
+    const startOnboarding = useCallback(async () => {
         setActionLoading(true);
         setError(null);
         try {
@@ -95,15 +85,14 @@ export default function StripeConnectSection() {
             const res = await fetch('/api/stripe/connect/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...(currency ? { currency } : {}),
-                    ...(origin
+                body: JSON.stringify(
+                    origin
                         ? {
                             returnUrl: `${origin}/?stripe_connect=complete`,
                             refreshUrl: `${origin}/?stripe_connect=refresh`,
                         }
-                        : {}),
-                }),
+                        : {}
+                ),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to start onboarding');
@@ -130,9 +119,9 @@ export default function StripeConnectSection() {
             );
 
             if (cn === 'refresh') {
-                // Link expired — kick off a new one. Currency choice doesn't
-                // matter here: the account already exists, so the server will
-                // ignore the body and use the persisted region.
+                // Link expired — kick off a new one. The server uses the
+                // persisted region for existing accounts; for fresh ones it
+                // defaults to TH via preferred_currency.
                 startOnboarding();
                 return;
             }
@@ -232,39 +221,6 @@ export default function StripeConnectSection() {
                     </div>
                 )}
 
-                {!status?.connected && TH_PAYOUTS_ENABLED && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                            {t('profile.stripeCurrencyPickerLabel')}
-                        </p>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setPickedCurrency('thb')}
-                                disabled={actionLoading}
-                                className={`flex-1 h-10 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors ${pickedCurrency === 'thb'
-                                    ? 'bg-brand-cyan/10 border-brand-cyan text-brand-cyan'
-                                    : 'bg-white/5 border-transparent text-slate-400 hover:bg-white/10'
-                                    }`}
-                            >
-                                {t('profile.stripeCurrencyThb')}
-                            </button>
-                            <button
-                                onClick={() => setPickedCurrency('usd')}
-                                disabled={actionLoading}
-                                className={`flex-1 h-10 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors ${pickedCurrency === 'usd'
-                                    ? 'bg-brand-cyan/10 border-brand-cyan text-brand-cyan'
-                                    : 'bg-white/5 border-transparent text-slate-400 hover:bg-white/10'
-                                    }`}
-                            >
-                                {t('profile.stripeCurrencyUsd')}
-                            </button>
-                        </div>
-                        <p className="text-[10px] text-slate-500 italic">
-                            {t('profile.stripeCurrencyLockedNote')}
-                        </p>
-                    </div>
-                )}
-
                 {!status?.connected && (
                     <button
                         onClick={onSetUpClick}
@@ -321,7 +277,7 @@ export default function StripeConnectSection() {
                     onCancel={() => setShowPreScreen(false)}
                     onContinue={() => {
                         setShowPreScreen(false);
-                        startOnboarding(TH_PAYOUTS_ENABLED ? pickedCurrency : undefined);
+                        startOnboarding();
                     }}
                     loading={actionLoading}
                 />
