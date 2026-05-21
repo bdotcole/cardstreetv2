@@ -21,7 +21,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li><strong className="text-white">Personal Data:</strong> Name, email address, physical shipping address, and phone number.</li>
               <li><strong className="text-white">Verification Data:</strong> We may collect government-issued ID images to verify &quot;Verified Seller&quot; status.</li>
-              <li><strong className="text-white">Transaction Data:</strong> Payment details processed through Stripe/PayPal (we do not store full credit card numbers on our servers).</li>
+              <li><strong className="text-white">Transaction Data:</strong> Payment details processed through Stripe (we do not store full credit card numbers on our servers).</li>
               <li><strong className="text-white">Media:</strong> Photos of cards uploaded for listings.</li>
             </ul>
           </section>
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
             <p>We share your data with trusted service providers only as necessary:</p>
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li><strong className="text-white">Infrastructure:</strong> Firebase (Google) for data storage and authentication.</li>
-              <li><strong className="text-white">Payments:</strong> Stripe and PayPal for secure transaction processing.</li>
+              <li><strong className="text-white">Payments:</strong> Stripe for secure transaction processing.</li>
               <li><strong className="text-white">Compliance:</strong> We may disclose information if required by US law or to protect the safety of our users.</li>
             </ul>
           </section>

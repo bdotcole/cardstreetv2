@@ -63,7 +63,7 @@ export default function TermsPage() {
               </div>
               <div>
                 <strong className="text-white block mb-1">Payment Processing:</strong>
-                <p>We use Stripe and PayPal to process payments. By using the Service, you also agree to the terms and conditions of these third-party processors.</p>
+                <p>We use Stripe to process payments. By using the Service, you also agree to the terms and conditions of this third-party processor.</p>
               </div>
               <div>
                 <strong className="text-white block mb-1">Taxes:</strong>

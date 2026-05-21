@@ -17,6 +17,11 @@
  *   - The inventory move (collection_items rows) was previously done here BEFORE
  *     payment; it is now deferred to fulfillOrdersByTransferGroup so a failed
  *     or abandoned payment can't transfer cards.
+ *
+ * Dual-platform: every order is stamped with the seller's `stripe_region` so
+ * downstream — /api/checkout, the webhook, release-funds — can route the
+ * PaymentIntent and seller transfer through the correct Stripe platform. A
+ * cart that mixes sellers across regions is rejected; check out per region.
  */
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -123,7 +128,7 @@ export async function POST(req: Request) {
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('id, role, partner_level, province, state, district, postcode')
+            .select('id, role, partner_level, province, state, district, postcode, stripe_region')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
@@ -131,6 +136,29 @@ export async function POST(req: Request) {
             .select('province, state, district, postcode')
             .eq('id', buyerId)
             .single();
+
+        // ─── Determine the order's processing region ───
+        // Every seller in the cart must be on the same Stripe platform — a
+        // single PaymentIntent on platform A can't transfer to a connected
+        // account on platform B. Mixed-region carts have to be split by
+        // currency. Legacy sellers without a region default to 'us'.
+        const sellerRegions = (sellerProfiles ?? []).map(p => {
+            const r = p.stripe_region;
+            return (r === 'us' || r === 'th') ? r : 'us';
+        });
+        const uniqueRegions = [...new Set(sellerRegions)];
+        if (uniqueRegions.length > 1) {
+            // Roll the listings nothing yet — return before any side effects.
+            return NextResponse.json(
+                {
+                    error:
+                        'Cart contains sellers in different currencies. Check out one ' +
+                        'currency at a time.',
+                },
+                { status: 400 }
+            );
+        }
+        const orderRegion = (uniqueRegions[0] ?? 'us') as 'us' | 'th';
 
         // ─── Platform fee tier ───
         const feeMap = new Map<string, number>();
@@ -212,6 +240,7 @@ export async function POST(req: Request) {
                 escrow_status: 'held',
                 payment_method: paymentMethod,
                 transfer_group: transferGroup,
+                stripe_region: orderRegion,
             });
         }
 
@@ -270,6 +299,7 @@ export async function POST(req: Request) {
             // Single source of truth for the amount Stripe will charge.
             totalAmount: totalSatang / 100,
             totalSatang,
+            region: orderRegion,
             message: 'Orders created with pending_payment status. Proceed to payment.',
         });
     } catch (err: any) {

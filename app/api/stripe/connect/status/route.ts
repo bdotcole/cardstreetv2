@@ -6,12 +6,16 @@
  *
  * The webhook keeps the cache up-to-date most of the time, but on the return
  * from onboarding we want an immediate refresh.
+ *
+ * Dual-platform: the seller's profiles.stripe_region picks which Stripe
+ * client to query. If the seller has no account yet, region is null and we
+ * just report "not connected".
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { getStripe, deriveConnectStatus } from '@/lib/stripe';
+import { getStripeForRegion, deriveConnectStatus, type StripeRegion } from '@/lib/stripe';
 
 export async function GET(request: NextRequest) {
     try {
@@ -29,6 +33,7 @@ export async function GET(request: NextRequest) {
 
         type ConnectProfile = {
             stripe_account_id: string | null;
+            stripe_region: string | null;
             stripe_account_status: string | null;
             stripe_charges_enabled: boolean | null;
             stripe_payouts_enabled: boolean | null;
@@ -38,7 +43,7 @@ export async function GET(request: NextRequest) {
         const { data: profile } = await admin
             .from('profiles')
             .select(
-                'stripe_account_id, stripe_account_status, stripe_charges_enabled, ' +
+                'stripe_account_id, stripe_region, stripe_account_status, stripe_charges_enabled, ' +
                 'stripe_payouts_enabled, stripe_details_submitted'
             )
             .eq('id', user.id)
@@ -49,11 +54,15 @@ export async function GET(request: NextRequest) {
         }
 
         const shouldRefresh = request.nextUrl.searchParams.get('refresh') === '1';
+        const region: StripeRegion | null =
+            profile.stripe_region === 'us' || profile.stripe_region === 'th'
+                ? (profile.stripe_region as StripeRegion)
+                : null;
 
         // Refresh from Stripe if requested and we have an account on file.
-        if (shouldRefresh && profile.stripe_account_id) {
+        if (shouldRefresh && profile.stripe_account_id && region) {
             try {
-                const stripe = getStripe();
+                const stripe = getStripeForRegion(region);
                 const account = await stripe.accounts.retrieve(profile.stripe_account_id);
 
                 const status = deriveConnectStatus(account);
@@ -72,6 +81,7 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({
                     connected: true,
                     accountId: profile.stripe_account_id,
+                    region,
                     status,
                     chargesEnabled: account.charges_enabled,
                     payoutsEnabled: account.payouts_enabled,
@@ -86,6 +96,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             connected: !!profile.stripe_account_id,
             accountId: profile.stripe_account_id,
+            region,
             status: profile.stripe_account_status,
             chargesEnabled: profile.stripe_charges_enabled,
             payoutsEnabled: profile.stripe_payouts_enabled,

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import PayPalProvider from '@/components/PayPalProvider'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
@@ -36,12 +35,10 @@ export default function RootLayout({
                     <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
                 )}
                 <UserSettingsProvider>
-                    <PayPalProvider>
-                        <ToastProvider>
-                            <PushNotificationManager />
-                            {children}
-                        </ToastProvider>
-                    </PayPalProvider>
+                    <ToastProvider>
+                        <PushNotificationManager />
+                        {children}
+                    </ToastProvider>
                 </UserSettingsProvider>
 
             </body>

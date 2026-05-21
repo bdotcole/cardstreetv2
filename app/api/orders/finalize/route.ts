@@ -19,7 +19,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { getStripe } from '@/lib/stripe';
+import { getStripeForRegion, type StripeRegion } from '@/lib/stripe';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 
 export async function POST(req: Request) {
@@ -38,8 +38,28 @@ export async function POST(req: Request) {
             );
         }
 
-        // Verify with Stripe — never trust a client-supplied "payment succeeded".
-        const stripe = getStripe();
+        // Look up the order region first — the PaymentIntent lives on the
+        // platform that originally charged the buyer, so we must verify it
+        // through the matching Stripe client.
+        const admin = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const { data: orders } = await admin
+            .from('orders')
+            .select('buyer_id, stripe_region')
+            .eq('transfer_group', transferGroup);
+
+        if (!orders || orders.length === 0) {
+            return NextResponse.json(
+                { error: 'No orders found for this transfer_group' },
+                { status: 404 }
+            );
+        }
+
+        const region: StripeRegion = orders[0].stripe_region === 'th' ? 'th' : 'us';
+        const stripe = getStripeForRegion(region);
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
         if (paymentIntent.status !== 'succeeded') {
@@ -53,26 +73,6 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 { error: 'PaymentIntent transfer_group does not match' },
                 { status: 400 }
-            );
-        }
-
-        // Verify the caller is actually the buyer for these orders. Without
-        // this check, any logged-in user who knew a transfer_group + PI id
-        // could trigger someone else's fulfillment (or replay it).
-        const admin = createAdminClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
-
-        const { data: orders } = await admin
-            .from('orders')
-            .select('buyer_id')
-            .eq('transfer_group', transferGroup);
-
-        if (!orders || orders.length === 0) {
-            return NextResponse.json(
-                { error: 'No orders found for this transfer_group' },
-                { status: 404 }
             );
         }
 

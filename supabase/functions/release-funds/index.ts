@@ -2,22 +2,49 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.14.0?target=deno'
 
-serve(async (req) => {
+// Dual-platform Stripe clients, keyed by the order's stripe_region.
+//   - 'us' → STRIPE_SECRET_KEY (existing US platform)
+//   - 'th' → STRIPE_SECRET_KEY_TH (Stripe Thailand platform)
+//
+// A given order is processed on exactly one platform — whichever charged the
+// buyer — so the transfer at payout time MUST happen on that same platform.
+// The seller's connected account only exists on the originating platform.
+type Region = 'us' | 'th'
+
+const stripeClients: Partial<Record<Region, Stripe>> = {}
+
+function envKeyFor(region: Region): string {
+    return region === 'th' ? 'STRIPE_SECRET_KEY_TH' : 'STRIPE_SECRET_KEY'
+}
+
+function currencyFor(region: Region): string {
+    return region === 'th' ? 'thb' : 'usd'
+}
+
+function getStripeForRegion(region: Region): Stripe {
+    const cached = stripeClients[region]
+    if (cached) return cached
+
+    const envKey = envKeyFor(region)
+    const stripeKey = Deno.env.get(envKey)
+    if (!stripeKey) {
+        throw new Error(`${envKey} environment variable is not set`)
+    }
+
+    const client = new Stripe(stripeKey, {
+        apiVersion: '2023-10-16',
+        httpClient: Stripe.createFetchHttpClient(),
+    })
+    stripeClients[region] = client
+    return client
+}
+
+serve(async (_req) => {
     try {
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL')!,
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         )
-
-        const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-        if (!stripeKey) {
-            throw new Error('STRIPE_SECRET_KEY environment variable is not set')
-        }
-
-        const stripe = new Stripe(stripeKey, {
-            apiVersion: '2023-10-16',
-            httpClient: Stripe.createFetchHttpClient(),
-        })
 
         console.log('[release-funds] Running funds release job...')
 
@@ -60,10 +87,33 @@ serve(async (req) => {
             try {
                 console.log(`[release-funds] Processing order ${order.id}...`)
 
+                const orderRegion: Region = order.stripe_region === 'th' ? 'th' : 'us'
+
+                // Acquire the platform's Stripe client. If the key isn't
+                // configured for this region we skip the order (rather than
+                // failing the whole batch) so the cron keeps making progress
+                // on the other region. Once the env var lands, retries pick
+                // these up automatically.
+                let stripe: Stripe
+                try {
+                    stripe = getStripeForRegion(orderRegion)
+                } catch (envErr: any) {
+                    console.warn(
+                        `[release-funds] Stripe ${orderRegion.toUpperCase()} not configured — ` +
+                        `skipping order ${order.id} until the key is set. ${envErr.message}`
+                    )
+                    results.push({
+                        orderId: order.id,
+                        status: 'skipped',
+                        error: `Stripe ${orderRegion.toUpperCase()} not configured`,
+                    })
+                    continue
+                }
+
                 // ─── Step 1: Fetch seller's Stripe Connect account ───
                 const { data: sellerProfile, error: profileError } = await supabase
                     .from('profiles')
-                    .select('stripe_account_id, display_name')
+                    .select('stripe_account_id, stripe_region, display_name')
                     .eq('id', order.seller_id)
                     .single()
 
@@ -81,6 +131,25 @@ serve(async (req) => {
                     continue
                 }
 
+                // Cross-platform mismatch: the order was charged on platform X
+                // but the seller's connected account lives on platform Y. We
+                // can't transfer across platforms — skip and surface it for
+                // manual reconciliation rather than silently ledger-leaking.
+                if (sellerProfile.stripe_region && sellerProfile.stripe_region !== orderRegion) {
+                    console.error(
+                        `[release-funds] Region mismatch: order ${order.id} processed on ${orderRegion} ` +
+                        `but seller ${order.seller_id} is on ${sellerProfile.stripe_region}. ` +
+                        `Manual payout required.`
+                    )
+                    results.push({
+                        orderId: order.id,
+                        status: 'skipped',
+                        error: `Seller region (${sellerProfile.stripe_region}) doesn't match order region (${orderRegion})`,
+                    })
+                    failed++
+                    continue
+                }
+
                 // ─── Step 2: Calculate transfer amount ───
                 const totalAmountCents = Math.round((order.total_amount || 0) * 100)
                 const platformFeeCents = Math.round((order.platform_fee || 0) * 100)
@@ -94,7 +163,8 @@ serve(async (req) => {
                 }
 
                 // ─── Step 3: Execute Stripe Transfer ───
-                console.log(`[release-funds] Transferring ${transferAmountCents} THB stang to ${sellerProfile.stripe_account_id} for order ${order.id}...`)
+                const transferCurrency = currencyFor(orderRegion)
+                console.log(`[release-funds] Transferring ${transferAmountCents} ${transferCurrency} subunits to ${sellerProfile.stripe_account_id} for order ${order.id} on ${orderRegion} platform...`)
 
                 // Stripe Idempotency-Key keyed on order.id closes two race windows:
                 //   1. Transfer succeeds, but the subsequent DB update (line ~115)
@@ -109,13 +179,14 @@ serve(async (req) => {
                 const transfer = await stripe.transfers.create(
                     {
                         amount: transferAmountCents,
-                        currency: 'thb',
+                        currency: transferCurrency,
                         destination: sellerProfile.stripe_account_id,
                         transfer_group: order.transfer_group || undefined,
                         metadata: {
                             order_id: order.id,
                             seller_id: order.seller_id,
                             release_type: 'auto_escrow',
+                            stripe_region: orderRegion,
                         },
                     },
                     {
@@ -154,7 +225,7 @@ serve(async (req) => {
                     if (courierToken) {
                         const { CourierClient } = await import('https://esm.sh/@trycourier/courier')
                         const courier = new CourierClient({ authorizationToken: courierToken })
-                        
+
                         // Fetch email and preferences
                         const { data: userAuth, error: authErr } = await supabase.auth.admin.getUserById(order.seller_id)
                         const email = (!authErr && userAuth?.user?.email) ? userAuth.user.email : null
@@ -182,15 +253,16 @@ serve(async (req) => {
                                 channels.push("push")
                             }
 
+                            const currencySymbol = orderRegion === 'th' ? '฿' : '$'
                             await courier.send({
                                 message: {
                                     to: recipient,
                                     content: {
                                         title: "CardStreet: Payout Sent! 💸",
-                                        body: `Your payout of ฿${(transferAmountCents / 100).toLocaleString()} for order ${order.id} has been successfully transferred to your Stripe account.`,
+                                        body: `Your payout of ${currencySymbol}${(transferAmountCents / 100).toLocaleString()} for order ${order.id} has been successfully transferred to your Stripe account.`,
                                     },
                                     routing: { method: "all", channels },
-                                    data: { orderId: order.id, type: 'payout_completed', amount: transferAmountCents / 100 }
+                                    data: { orderId: order.id, type: 'payout_completed', amount: transferAmountCents / 100, currency: transferCurrency }
                                 }
                             })
                             console.log(`[release-funds] Sent payout_completed notification to seller ${order.seller_id}`)

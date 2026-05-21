@@ -15,7 +15,12 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { getStripe, getAppBaseUrl } from '@/lib/stripe';
+import {
+    getStripeForRegion,
+    getAppBaseUrl,
+    defaultCurrencyForRegion,
+    type StripeRegion,
+} from '@/lib/stripe';
 
 export async function POST(req: Request) {
     try {
@@ -38,9 +43,8 @@ export async function POST(req: Request) {
         if (!token || typeof token !== 'string') {
             return NextResponse.json({ error: 'Stripe payment method id (token) is required' }, { status: 400 });
         }
-        if (!currency || typeof currency !== 'string') {
-            return NextResponse.json({ error: 'currency is required' }, { status: 400 });
-        }
+        // Currency is optional now — if omitted, falls back to the region's
+        // default (USD on the US platform, THB on TH).
 
         // ─── Load the pending orders and verify ownership ───
         const admin = createAdminClient(
@@ -50,7 +54,7 @@ export async function POST(req: Request) {
 
         const { data: orders, error: ordersErr } = await admin
             .from('orders')
-            .select('id, buyer_id, status, total_amount, shipping_fee')
+            .select('id, buyer_id, status, total_amount, shipping_fee, stripe_region')
             .eq('transfer_group', transferGroup);
 
         if (ordersErr || !orders || orders.length === 0) {
@@ -78,8 +82,17 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Order total is zero — refusing to charge' }, { status: 400 });
         }
 
-        const stripe = getStripe();
+        // ─── Route to the correct Stripe platform. ───
+        // The region is sticky on the order rows (set when orders were created),
+        // so a re-attempt can't be routed through the wrong platform.
+        const region: StripeRegion = orders[0].stripe_region === 'th' ? 'th' : 'us';
+        const stripe = getStripeForRegion(region);
         const baseUrl = getAppBaseUrl();
+        const chargeCurrency = (
+            typeof currency === 'string' && currency.length > 0
+                ? currency
+                : defaultCurrencyForRegion(region)
+        ).toLowerCase();
 
         // Idempotency key bound to the order group so a retry of the same
         // checkout request will not create or confirm a second PaymentIntent.
@@ -88,13 +101,14 @@ export async function POST(req: Request) {
         const paymentIntent = await stripe.paymentIntents.create(
             {
                 amount: amountSatang,
-                currency: currency.toLowerCase(),
+                currency: chargeCurrency,
                 payment_method: token,
                 confirm: true,
                 return_url: `${baseUrl}/?payment_status=complete`,
                 metadata: {
                     transfer_group: transferGroup,
                     buyer_id: user.id,
+                    stripe_region: region,
                 },
                 transfer_group: transferGroup,
             },
@@ -105,6 +119,7 @@ export async function POST(req: Request) {
             status: paymentIntent.status,
             id: paymentIntent.id,
             transfer_group: transferGroup,
+            region,
         });
     } catch (error: any) {
         console.error('[Checkout] Stripe PaymentIntent Error:', error);

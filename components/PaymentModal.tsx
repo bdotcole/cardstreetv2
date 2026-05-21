@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { PayPalButtons } from '@paypal/react-paypal-js';
+import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -229,8 +228,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentSuccess,
     onPaymentFailed
 }) => {
-    const [method, setMethod] = useState<'card' | 'paypal'>('card');
-
     const { t } = useTranslation();
 
     // Server-computed estimate (shipping + total). Fetched on modal open via
@@ -295,65 +292,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const effectiveAmount = estimate?.total ?? amount;
     const effectiveShipping = estimate?.shipping ?? shippingFee;
 
-    // Convert THB to USD for PayPal (approximate rate); displayed only.
-    const paypalAmount = currency === 'THB' ? (effectiveAmount * 0.028).toFixed(2) : effectiveAmount.toFixed(2);
-
-    // PayPal creates the order against a transfer_group of pending_payment
-    // orders that we create *first*, mirroring the Stripe flow. The server
-    // computes the actual charge amount from those orders; the client cannot
-    // influence it.
-    const paypalTransferGroupRef = useRef<string | null>(null);
-
-    const createPayPalOrder = async () => {
-        // Step 1: create pending_payment orders if we haven't already.
-        if (!paypalTransferGroupRef.current) {
-            const orderRes = await fetch('/api/orders/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    items,
-                    paymentMethod: 'paypal',
-                }),
-            });
-            const orderData = await orderRes.json();
-            if (!orderRes.ok || !orderData.success) {
-                throw new Error(orderData.error || 'Failed to create orders');
-            }
-            paypalTransferGroupRef.current = orderData.transferGroup;
-        }
-
-        // Step 2: ask PayPal for an order id bound to that transfer_group.
-        const response = await fetch('/api/paypal/create-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                transferGroup: paypalTransferGroupRef.current,
-                currency: 'USD',
-            }),
-        });
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-        return data.orderID;
-    };
-
-    const onPayPalApprove = async (data: any) => {
-        const response = await fetch('/api/paypal/capture-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderID: data.orderID }),
-        });
-        const captureData = await response.json();
-        if (captureData.success) {
-            onPaymentSuccess({
-                paymentMethod: 'paypal',
-                paymentId: captureData.orderID,
-                transferGroup: paypalTransferGroupRef.current || undefined,
-            });
-        } else {
-            onPaymentFailed(captureData.message || 'PayPal payment capture failed');
-        }
-    };
-
     if (!isOpen) return null;
 
     return (
@@ -400,74 +338,27 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
-                            <div className="text-right">
-                                <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{effectiveAmount.toLocaleString()}</span>
-                                {method === 'paypal' && currency === 'THB' && (
-                                    <p className="text-[10px] text-slate-500">≈ ${paypalAmount} USD</p>
-                                )}
-                            </div>
+                            <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{effectiveAmount.toLocaleString()}</span>
                         </div>
                     </div>
 
-                    {/* Method Selection */}
-                    <div className="flex gap-2 mb-6">
-                        <button
-                            onClick={() => setMethod('card')}
-                            className={`flex-1 py-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${method === 'card' ? 'bg-brand-purple/10 border-brand-purple text-brand-purple' : 'bg-white/5 border-transparent text-slate-500'}`}
-                        >
-                            <i className="fa-brands fa-stripe text-xl leading-none"></i>
-                            <span className="text-[9px] font-black uppercase tracking-widest">Card</span>
-                        </button>
-                        <button
-                            onClick={() => setMethod('paypal')}
-                            className={`flex-1 py-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${method === 'paypal' ? 'bg-[#0070ba]/10 border-[#0070ba] text-[#0070ba]' : 'bg-white/5 border-transparent text-slate-500'}`}
-                        >
-                            <i className="fa-brands fa-paypal text-xl leading-none"></i>
-                            <span className="text-[9px] font-black uppercase tracking-widest">PayPal</span>
-                        </button>
+                    <div className="space-y-3">
+                        <Elements stripe={stripePromise}>
+                            <StripeCardForm
+                                amount={effectiveAmount}
+                                currency={currency}
+                                items={items}
+                                apiEndpoint={apiEndpoint}
+                                extraData={extraData}
+                                onPaymentSuccess={onPaymentSuccess}
+                                onPaymentFailed={onPaymentFailed}
+                            />
+                        </Elements>
+                        <p className="text-center text-[10px] text-slate-600 flex items-center justify-center gap-1 mt-2">
+                            <i className="fa-brands fa-stripe text-slate-500 text-sm"></i>
+                            Secured by Stripe
+                        </p>
                     </div>
-
-                    {/* Forms */}
-                    {method === 'card' ? (
-                        <div className="space-y-3">
-                            <Elements stripe={stripePromise}>
-                                <StripeCardForm
-                                    amount={effectiveAmount}
-                                    currency={currency}
-                                    items={items}
-                                    apiEndpoint={apiEndpoint}
-                                    extraData={extraData}
-                                    onPaymentSuccess={onPaymentSuccess}
-                                    onPaymentFailed={onPaymentFailed}
-                                />
-                            </Elements>
-                            <p className="text-center text-[10px] text-slate-600 flex items-center justify-center gap-1 mt-2">
-                                <i className="fa-brands fa-stripe text-slate-500 text-sm"></i>
-                                Secured by Stripe
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="text-center py-4 bg-white/5 rounded-2xl border border-dashed border-white/10">
-                                <div className="w-16 h-10 bg-white rounded-lg mx-auto mb-2 flex items-center justify-center">
-                                    <i className="fa-brands fa-paypal text-[#0070ba] text-2xl"></i>
-                                </div>
-                                <p className="text-[10px] text-slate-400">Pay securely with PayPal</p>
-                            </div>
-                            <div className="paypal-button-container">
-                                <PayPalButtons
-                                    style={{ layout: 'vertical', color: 'blue', shape: 'rect', label: 'paypal', height: 45 }}
-                                    createOrder={createPayPalOrder}
-                                    onApprove={onPayPalApprove}
-                                    onError={(err) => {
-                                        console.error('PayPal Error:', err);
-                                        onPaymentFailed('PayPal payment failed');
-                                    }}
-                                    onCancel={() => console.log('PayPal payment cancelled')}
-                                />
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
