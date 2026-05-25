@@ -389,7 +389,13 @@ export default function HomePage() {
                 await removeFromWishlist(card.id);
             }
 
-            setActiveTab('vault');
+            // Keep the user on the Explore set they were browsing — jumping to
+            // the vault interrupts a "add several cards from this set" flow.
+            // Scan/search flows still jump to vault since those land on a single
+            // card and the user typically wants to confirm it landed.
+            if (activeTab !== 'explore') {
+                setActiveTab('vault');
+            }
         } catch (error: any) {
             console.error('Failed to add card to collection:', error);
             // Show more detailed error for debugging
