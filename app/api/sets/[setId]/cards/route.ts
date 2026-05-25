@@ -42,12 +42,16 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
             };
 
             if (language === 'jp') {
-                filteredCards = cards.filter(c => hasJapaneseChars(c.name || ''));
+                filteredCards = cards.filter(c => c.language === 'ja' || hasJapaneseChars(c.name || ''));
             } else if (language === 'th') {
-                // For Thai: prefer cards with language='th', exclude pure Japanese-language cards
-                filteredCards = cards.filter(c => c.language === 'th' || (!hasJapaneseChars(c.name || '') && c.language !== 'ja'));
+                // Strict: Thai mode only shows language='th' rows. The old permissive
+                // filter (also include any non-Japanese card) let English-print rows
+                // from sets like me02.5 leak in when a race condition pinned the stale
+                // setId during a language switch — those rows carry English rarity
+                // strings, breaking the Thai-rarity normalization in cardMapper.
+                filteredCards = cards.filter(c => c.language === 'th');
             } else {
-                filteredCards = cards.filter(c => !hasJapaneseChars(c.name || ''));
+                filteredCards = cards.filter(c => c.language === 'en' || (!hasJapaneseChars(c.name || '') && c.language !== 'ja' && c.language !== 'th'));
             }
         }
 

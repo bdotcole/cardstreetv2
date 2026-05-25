@@ -91,37 +91,44 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     loadSets();
   }, [selectedLanguage, selectedGame]);
 
-  // Fetch Cards when set changes
+  // Fetch Cards when set changes.
+  // Sequence guard: when language flips, the sets-loading effect also flips
+  // selectedSetId asynchronously. Two fetches end up in flight (stale setId +
+  // new language, then new setId + new language). Without a guard, whichever
+  // response arrives last wins, which can leak English cards into the Thai
+  // view (the visible "rarities still wrong" bug). The ref-counted req id
+  // discards anything but the latest.
+  const cardsReqIdRef = useRef(0);
   useEffect(() => {
     if (!selectedSetId || debouncedSearchTerm.length > 2) return;
-    const loadCards = async () => {
-      setIsLoadingCards(true);
-      const apiCards = await pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage);
+    const myReq = ++cardsReqIdRef.current;
+    setIsLoadingCards(true);
+    pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage).then(apiCards => {
+      if (myReq !== cardsReqIdRef.current) return; // a newer fetch has superseded this one
       setCards(apiCards);
       cardListRef.current?.scrollTo({ top: 0 });
       setIsLoadingCards(false);
-    };
-    loadCards();
+    });
   }, [selectedSetId, debouncedSearchTerm, selectedLanguage]);
 
-  // Perform search when debounced term changes
+  // Perform search when debounced term changes (same sequence guard — see cardsReqIdRef above)
   useEffect(() => {
     if (debouncedSearchTerm.length > 2) {
-      const performSearch = async () => {
-        setIsLoadingCards(true);
-        const results = await pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage);
+      const myReq = ++cardsReqIdRef.current;
+      setIsLoadingCards(true);
+      pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage).then(results => {
+        if (myReq !== cardsReqIdRef.current) return;
         setCards(results);
         setIsLoadingCards(false);
-      };
-      performSearch();
+      });
     } else if (debouncedSearchTerm.length === 0 && selectedSetId) {
-      const loadCards = async () => {
-        setIsLoadingCards(true);
-        const apiCards = await pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage);
+      const myReq = ++cardsReqIdRef.current;
+      setIsLoadingCards(true);
+      pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage).then(apiCards => {
+        if (myReq !== cardsReqIdRef.current) return;
         setCards(apiCards);
         setIsLoadingCards(false);
-      };
-      loadCards();
+      });
     }
   }, [debouncedSearchTerm, selectedSetId, selectedLanguage]);
 
