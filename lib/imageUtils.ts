@@ -65,6 +65,20 @@ export function getThumbnailUrl(url: string | null | undefined): string {
 }
 
 /**
+ * Whether to skip Next.js image optimization for a given URL.
+ *
+ * - TCGdex with /low.webp: already a tiny pre-sized webp (~13KB) — the optimizer
+ *   round-trip just adds latency.
+ * - Other URLs (pokemontcg.io, asia.pokemon-card.com): full-size PNGs that
+ *   benefit enormously from Vercel's transcode + edge cache.
+ */
+export function shouldSkipNextOptimization(url: string | null | undefined): boolean {
+    if (!url) return false;
+    if (url.includes('assets.tcgdex.net') && /\/(low|high)\.webp(\?|$)/.test(url)) return true;
+    return false;
+}
+
+/**
  * Gets a medium preview URL suitable for grids
  */
 export function getPreviewUrl(url: string | null | undefined): string {

@@ -3,6 +3,9 @@ import { pokemonService, ApiSet } from '../services/pokemonService';
 import { Card } from '../types';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import Image from 'next/image';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
@@ -167,6 +170,14 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     }
   }, [cards, sortOption]);
 
+  // Virtualizer setup
+  const rowVirtualizer = useVirtualizer({
+    count: sortedCards.length,
+    getScrollElement: () => cardListRef.current,
+    estimateSize: () => 112, // approx row height
+    overscan: 8,
+  });
+
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
@@ -277,17 +288,16 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
                           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                         >
-                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10">
+                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
                             {set.images.logo ? (
-                              <img
+                              <Image
                                 src={set.images.logo}
-                                alt=""
-                                width={32}
-                                height={32}
-                                loading="lazy"
-                                decoding="async"
-                                className="max-h-8 max-w-8 object-contain"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                alt={set.name}
+                                fill
+                                sizes="40px"
+                                unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
+                                className="object-contain p-1"
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />
                             ) : (
                               <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
@@ -317,13 +327,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       <div className="flex-1 overflow-hidden px-6 pb-4">
         <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
           {isLoadingCards ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
+            <div className="p-6 space-y-5">
+              {[1, 2, 3, 4, 5].map(i => (
                 <div key={i} className="flex gap-4 items-center">
-                  <div className="w-10 h-14 skeleton rounded-lg opacity-20"></div>
+                  <div className="w-14 h-20 skeleton rounded-md opacity-20"></div>
                   <div className="flex-1 space-y-2">
-                    <div className="h-2 w-32 skeleton rounded opacity-20"></div>
-                    <div className="h-1.5 w-20 skeleton rounded opacity-20"></div>
+                    <div className="h-3 w-32 skeleton rounded opacity-20"></div>
+                    <div className="h-2 w-20 skeleton rounded opacity-20"></div>
                   </div>
                 </div>
               ))}
@@ -366,72 +376,84 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 <span className="w-8">{/* add button placeholder */}</span>
               </div>
 
-              {/* Scrollable Card List — with CSS content-visibility for layout performance */}
+              {/* Scrollable Card List — Virtualized */}
               <div
                 ref={cardListRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto divide-y divide-white/[0.03] relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                className="flex-1 overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                 style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}
               >
-                {sortedCards.map((card, idx) => {
-                  const listing = listingMap.get(card.id);
-                  return (
-                    <div
-                      key={card.id}
-                      className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3 active:bg-white/[0.05] transition-colors group cursor-pointer"
-                      // content-visibility: auto skips rendering off-screen rows in layout engine
-                      // contain-intrinsic-size provides a placeholder height so scrollbar stays accurate
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 72px' } as React.CSSProperties}
-                      onClick={() => onSelectCard(card)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-14 bg-brand-darker rounded overflow-hidden flex-shrink-0 border border-white/5">
-                          <img
-                            src={card.imageUrl}
-                            width={40}
-                            height={56}
-                            loading={idx < 10 ? 'eager' : 'lazy'}
-                            decoding="async"
-                            className="w-full h-full object-contain"
-                            alt={card.name}
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-white text-xs font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
-                            <span className="text-[9px] text-slate-600 font-bold">#{card.number}</span>
+                <div
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                    const card = sortedCards[virtualItem.index];
+                    const listing = listingMap.get(card.id);
+                    return (
+                      <div
+                        key={virtualItem.key}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualItem.size}px`,
+                          transform: `translateY(${virtualItem.start}px)`,
+                        }}
+                        className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-4 active:bg-white/[0.05] transition-colors group cursor-pointer border-b border-white/[0.03]"
+                        onClick={() => onSelectCard(card)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-20 bg-brand-darker rounded-md overflow-hidden flex-shrink-0 border border-white/5 relative">
+                            <Image
+                              src={getThumbnailUrl(card.images?.small || card.imageUrl)}
+                              fill
+                              sizes="56px"
+                              unoptimized={shouldSkipNextOptimization(card.images?.small || card.imageUrl)}
+                              className="object-contain"
+                              alt={card.name}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-white text-sm font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
+                              <span className="text-[10px] text-slate-600 font-bold">#{card.number}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="text-right">
-                        {listing ? (
-                          <>
-                            <p className="text-brand-green text-sm font-black tracking-tight">Buy from {currencySymbol}{Math.round((listing.minPrice || 0) * exchangeRate).toLocaleString()}</p>
-                            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{listing.count} {t('explore.listings')}</p>
-                          </>
-                        ) : (
-                          <p className="text-white text-sm font-black tracking-tight">
-                            {(!card.marketPrice || card.marketPrice === 0)
-                              ? 'N/A'
-                              : currency === 'USD'
-                                ? `${currencySymbol}${(card.marketPrice * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                : `${currencySymbol}${Math.round(card.marketPrice * exchangeRate).toLocaleString()}`
-                            }
-                          </p>
-                        )}
-                      </div>
+                        <div className="text-right">
+                          {listing ? (
+                            <>
+                              <p className="text-brand-green text-base font-black tracking-tight">Buy from {currencySymbol}{Math.round((listing.minPrice || 0) * exchangeRate).toLocaleString()}</p>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{listing.count} {t('explore.listings')}</p>
+                            </>
+                          ) : (
+                            <p className="text-white text-base font-black tracking-tight">
+                              {(!card.marketPrice || card.marketPrice === 0)
+                                ? 'N/A'
+                                : currency === 'USD'
+                                  ? `${currencySymbol}${(card.marketPrice * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  : `${currencySymbol}${Math.round(card.marketPrice * exchangeRate).toLocaleString()}`
+                              }
+                            </p>
+                          )}
+                        </div>
 
-                      <div className="text-right">
-                        <button className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${listing ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
-                          {listing ? <i className="fa-solid fa-cart-shopping text-[10px]"></i> : <i className="fa-solid fa-plus text-[10px]"></i>}
-                        </button>
+                        <div className="text-right">
+                          <button className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${listing ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
+                            {listing ? <i className="fa-solid fa-cart-shopping text-xs"></i> : <i className="fa-solid fa-plus text-xs"></i>}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-
+                    );
+                  })}
+                </div>
                 {/* Back to Top Button */}
                 {showBackToTop && (
                   <div className="flex justify-center py-10 pb-20 w-full pointer-events-none">

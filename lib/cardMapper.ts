@@ -11,6 +11,38 @@ const fixTcgdexUrl = (url: string | null): string => {
   return url;
 };
 
+// Thai cards historically had English rarity strings ("Illustration Rare", "Double Rare", ...).
+// Display them as Japanese-style codes (AR, RR, ...) which is the convention Thai collectors use.
+// The DB is being migrated; this map is the display-time fallback for any rows still in English.
+const THAI_RARITY_DISPLAY: Record<string, string> = {
+  'common': 'C',
+  'uncommon': 'U',
+  'rare': 'R',
+  'double rare': 'RR',
+  'ultra rare': 'SR',
+  'illustration rare': 'AR',
+  'special illustration rare': 'SAR',
+  'hyper rare': 'UR',
+  'shiny rare': 'AR',
+  'shiny ultra rare': 'UR',
+  'mega hyper rare': 'UR',
+  'ace spec rare': 'ACE',
+  'black & white rare': 'R',
+  'rare holo': 'R',
+  'rare holo v': 'RR',
+  'rare holo vmax': 'RR',
+  'rare holo vstar': 'RR',
+  'secret rare': 'SAR',
+  'radiant rare': 'SR',
+  'amazing rare': 'SR',
+};
+
+function normalizeThaiRarity(rarity: string | null | undefined): string {
+  if (!rarity) return 'C';
+  const lookup = THAI_RARITY_DISPLAY[rarity.toLowerCase().trim()];
+  return lookup || rarity;
+}
+
 const THAI_SET_MAP: Record<string, string> = {
   SV1V: 'Violet ex',
   SV1S: 'Scarlet ex',
@@ -87,7 +119,9 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     set: setName,
     language: supabaseCard.language || 'en',
     number: supabaseCard.number ? `${supabaseCard.number.split('/')[0]}/${setTotal}` : '??',
-    rarity: supabaseCard.rarity || 'Common',
+    rarity: supabaseCard.language === 'th'
+      ? normalizeThaiRarity(supabaseCard.rarity)
+      : (supabaseCard.rarity || 'Common'),
     imageUrl,
     images: { small: imageSmall || imageUrl, large: imageUrl },
     marketPrice: marketThb,
