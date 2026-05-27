@@ -19,6 +19,7 @@ import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 import {
     getStripeForRegion,
     getWebhookSecretForRegion,
+    isRegionConfigured,
     deriveConnectStatus,
     type StripeRegion,
 } from '@/lib/stripe';
@@ -27,11 +28,27 @@ export async function handleStripeWebhook(
     request: NextRequest,
     region: StripeRegion
 ): Promise<NextResponse> {
-    const stripe = getStripeForRegion(region);
-    let event: Stripe.Event;
     const logPrefix = `[StripeWebhook:${region}]`;
 
+    // Bail early if this platform isn't configured on this deploy. Without
+    // this, getStripeForRegion below throws a missing-key error before we
+    // reach the try/catch, returning a bare 500 with empty body — confusing
+    // in Vercel logs and in any external monitoring that probes the URL.
+    // 410 Gone tells Stripe (and curious scanners) the endpoint exists but
+    // is intentionally disabled, while keeping the response cheap.
+    if (!isRegionConfigured(region)) {
+        console.warn(`${logPrefix} Webhook received but ${region.toUpperCase()} platform is not configured on this deploy`);
+        return NextResponse.json(
+            { error: `Stripe ${region.toUpperCase()} platform is not active on this deploy.` },
+            { status: 410 }
+        );
+    }
+
+    let event: Stripe.Event;
+    let stripe: Stripe;
+
     try {
+        stripe = getStripeForRegion(region);
         // ─── Step 1: Verify webhook signature ───
         const body = await request.text();
         const signature = request.headers.get('stripe-signature');
