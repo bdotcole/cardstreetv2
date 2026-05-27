@@ -75,6 +75,39 @@ export function getWebhookSecretForRegion(region: StripeRegion): string {
 }
 
 /**
+ * Returns every webhook signing secret configured for the given region —
+ * primary plus any "Connect" companion secrets. We use direct charges on
+ * the TH platform, which means payment_intent.* events fire on the
+ * connected account (a separate event destination in the Stripe Dashboard
+ * with its own signing secret) while account.updated still fires on the
+ * platform (the original event destination's secret). To serve both
+ * destinations on one endpoint, we try each secret in turn when verifying.
+ *
+ * Env layout:
+ *   STRIPE_WEBHOOK_SECRET_TH         - platform-account events (account.updated, etc.)
+ *   STRIPE_WEBHOOK_SECRET_TH_CONNECT - connected-account events (payment_intent.*)
+ *
+ * The CONNECT variant is optional; if unset, only the primary secret is
+ * tried (back-compat with the old single-destination setup).
+ */
+export function getAllWebhookSecretsForRegion(region: StripeRegion): string[] {
+    const secrets: string[] = [];
+    const primary = process.env[webhookSecretEnvKeyFor(region)]?.trim();
+    if (primary) secrets.push(primary);
+
+    const connectEnvKey = region === 'th'
+        ? 'STRIPE_WEBHOOK_SECRET_TH_CONNECT'
+        : 'STRIPE_WEBHOOK_SECRET_CONNECT';
+    const connect = process.env[connectEnvKey]?.trim();
+    if (connect) secrets.push(connect);
+
+    if (secrets.length === 0) {
+        throw new Error(`[Stripe] No webhook secret configured for region ${region}.`);
+    }
+    return secrets;
+}
+
+/**
  * Back-compat alias: the existing US platform. All historical callers used
  * this; new code should prefer getStripeForRegion(region) with an explicit
  * region argument so the platform routing is visible.

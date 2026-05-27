@@ -18,7 +18,7 @@ import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 import {
     getStripeForRegion,
-    getWebhookSecretForRegion,
+    getAllWebhookSecretsForRegion,
     isRegionConfigured,
     deriveConnectStatus,
     type StripeRegion,
@@ -58,20 +58,34 @@ export async function handleStripeWebhook(
             return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
         }
 
-        let webhookSecret: string;
+        // Direct charges fire payment_intent.* events on the connected
+        // account; account.updated and platform events fire on the platform.
+        // Each is configured as a separate "Event destination" in the Stripe
+        // Dashboard with its own signing secret. We accept all of them on
+        // one endpoint by trying each configured secret in turn.
+        let webhookSecrets: string[];
         try {
-            webhookSecret = getWebhookSecretForRegion(region);
+            webhookSecrets = getAllWebhookSecretsForRegion(region);
         } catch (err: any) {
-            console.error(`${logPrefix} Webhook secret not configured:`, err.message);
+            console.error(`${logPrefix} No webhook secret configured:`, err.message);
             return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
         }
 
-        try {
-            event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-        } catch (err: any) {
-            console.error(`${logPrefix} Signature verification failed:`, err.message);
+        let verifiedEvent: Stripe.Event | null = null;
+        let lastVerifyError: string | null = null;
+        for (const secret of webhookSecrets) {
+            try {
+                verifiedEvent = stripe.webhooks.constructEvent(body, signature, secret);
+                break;
+            } catch (err: any) {
+                lastVerifyError = err.message;
+            }
+        }
+        if (!verifiedEvent) {
+            console.error(`${logPrefix} Signature verification failed against ${webhookSecrets.length} secret(s):`, lastVerifyError);
             return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
         }
+        event = verifiedEvent;
 
         // event.account is set on Connect events (events that originated on a
         // connected account, like payment_intent.succeeded for a direct charge).
