@@ -4,6 +4,19 @@
  * Creates and confirms a Stripe PaymentIntent for an already-created
  * transfer_group of pending_payment orders.
  *
+ * Charge model depends on the order's stripe_region:
+ *   - 'th' (current): destination-charge PaymentIntent. transfer_data.destination
+ *     and on_behalf_of point at the seller's connected account, so the seller
+ *     is merchant of record (Stripe TH requirement — platforms can't be
+ *     loss-liable). The platform takes an application_fee_amount equal to the
+ *     summed platform_fee on the orders. Buyer's funds settle into the
+ *     seller's Stripe balance with payouts disabled; release-funds pushes
+ *     them to the seller's bank later. Single-seller cart only.
+ *
+ *   - 'us' (legacy): separate-charges-and-transfers PaymentIntent on the
+ *     platform balance. release-funds creates a Transfer to the seller.
+ *     Multi-seller carts allowed.
+ *
  * Security model:
  *   - Caller must be authenticated and be the buyer for every order in the group.
  *   - The amount comes from the DB (sum of total_amount + shipping_fee on
@@ -21,6 +34,7 @@ import {
     defaultCurrencyForRegion,
     type StripeRegion,
 } from '@/lib/stripe';
+import type Stripe from 'stripe';
 
 export async function POST(req: Request) {
     try {
@@ -52,10 +66,25 @@ export async function POST(req: Request) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
+        type OrderRow = {
+            id: string;
+            buyer_id: string;
+            seller_id: string;
+            status: string;
+            total_amount: number | null;
+            shipping_fee: number | null;
+            platform_fee: number | null;
+            stripe_region: string | null;
+        };
+
         const { data: orders, error: ordersErr } = await admin
             .from('orders')
-            .select('id, buyer_id, status, total_amount, shipping_fee, stripe_region')
-            .eq('transfer_group', transferGroup);
+            .select(
+                'id, buyer_id, seller_id, status, total_amount, shipping_fee, ' +
+                'platform_fee, stripe_region'
+            )
+            .eq('transfer_group', transferGroup)
+            .returns<OrderRow[]>();
 
         if (ordersErr || !orders || orders.length === 0) {
             return NextResponse.json({ error: 'No orders for this transfer_group' }, { status: 404 });
@@ -84,7 +113,7 @@ export async function POST(req: Request) {
 
         // ─── Route to the correct Stripe platform. ───
         // The region is sticky on the order rows (set when orders were created),
-        // so a re-attempt can't be routed through the wrong platform.
+        // so a re-attempted payment can't be routed through the wrong platform.
         const region: StripeRegion = orders[0].stripe_region === 'th' ? 'th' : 'us';
         const stripe = getStripeForRegion(region);
         const baseUrl = getAppBaseUrl();
@@ -94,26 +123,91 @@ export async function POST(req: Request) {
                 : defaultCurrencyForRegion(region)
         ).toLowerCase();
 
-        // Idempotency key bound to the order group so a retry of the same
-        // checkout request will not create or confirm a second PaymentIntent.
+        // ─── Build PaymentIntent params per region. ───
         const idempotencyKey = `checkout:${transferGroup}`;
-
-        const paymentIntent = await stripe.paymentIntents.create(
-            {
-                amount: amountSatang,
-                currency: chargeCurrency,
-                payment_method: token,
-                confirm: true,
-                return_url: `${baseUrl}/?payment_status=complete`,
-                metadata: {
-                    transfer_group: transferGroup,
-                    buyer_id: user.id,
-                    stripe_region: region,
-                },
+        const piParams: Stripe.PaymentIntentCreateParams = {
+            amount: amountSatang,
+            currency: chargeCurrency,
+            payment_method: token,
+            confirm: true,
+            return_url: `${baseUrl}/?payment_status=complete`,
+            metadata: {
                 transfer_group: transferGroup,
+                buyer_id: user.id,
+                stripe_region: region,
             },
-            { idempotencyKey },
-        );
+            transfer_group: transferGroup,
+        };
+
+        if (region === 'th') {
+            // Destination charge: settle directly into the seller's connected
+            // account. Single seller per cart is enforced at /api/orders/checkout
+            // — this is a defensive secondary check.
+            const sellerIds = [...new Set(orders.map(o => o.seller_id))];
+            if (sellerIds.length !== 1) {
+                return NextResponse.json(
+                    {
+                        error:
+                            'Multi-seller carts are not supported on the Thailand platform. ' +
+                            'Check out one seller at a time.',
+                    },
+                    { status: 400 }
+                );
+            }
+            const sellerId = sellerIds[0];
+
+            // Resolve the seller's connected Stripe account.
+            const { data: seller, error: sellerErr } = await admin
+                .from('profiles')
+                .select('stripe_account_id, stripe_charges_enabled, stripe_region')
+                .eq('id', sellerId)
+                .single<{
+                    stripe_account_id: string | null;
+                    stripe_charges_enabled: boolean | null;
+                    stripe_region: string | null;
+                }>();
+
+            if (sellerErr || !seller?.stripe_account_id) {
+                return NextResponse.json(
+                    { error: 'Seller has not finished Stripe onboarding — cannot charge yet.' },
+                    { status: 409 }
+                );
+            }
+            if (seller.stripe_region !== 'th') {
+                return NextResponse.json(
+                    { error: 'Seller account is not on the Thailand Stripe platform.' },
+                    { status: 409 }
+                );
+            }
+            if (!seller.stripe_charges_enabled) {
+                return NextResponse.json(
+                    {
+                        error:
+                            "Seller's payouts are not yet active — Stripe is still verifying " +
+                            'them. Please try again later.',
+                    },
+                    { status: 409 }
+                );
+            }
+
+            // Sum the platform_fee column across the cart's orders. Stored as
+            // a float in THB; convert to satang and re-floor to avoid 0.5-stang
+            // rounding drift accumulating across many small items.
+            const applicationFeeSatang = orders.reduce(
+                (sum, o) => sum + Math.round(Number(o.platform_fee || 0) * 100),
+                0,
+            );
+
+            piParams.transfer_data = { destination: seller.stripe_account_id };
+            piParams.on_behalf_of = seller.stripe_account_id;
+            if (applicationFeeSatang > 0 && applicationFeeSatang < amountSatang) {
+                piParams.application_fee_amount = applicationFeeSatang;
+            }
+        }
+
+        const paymentIntent = await stripe.paymentIntents.create(piParams, {
+            idempotencyKey,
+        });
 
         return NextResponse.json({
             status: paymentIntent.status,

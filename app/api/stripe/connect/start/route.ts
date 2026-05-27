@@ -137,30 +137,79 @@ export async function POST(request: Request) {
         // Step 1: Create the Express account if we don't already have one.
         //
         // Two account shapes depending on platform:
-        //   - US platform: country='TH', service_agreement='recipient'. The
-        //     seller only receives transfers from CardStreet (the platform is
-        //     merchant of record). Lighter KYC. Matches the pre-dual-platform
-        //     setup exactly.
-        //   - TH platform: country='TH', standard merchant agreement. The
-        //     seller is local to the platform's jurisdiction, so the recipient
-        //     workaround isn't needed.
+        //   - US platform: country='TH', service_agreement='recipient', only the
+        //     `transfers` capability. The seller is just a recipient of
+        //     transfers from CardStreet (platform = MOR, separate charges and
+        //     transfers). Lighter KYC. Legacy pre-dual-platform shape.
         //
-        // Docs: https://stripe.com/docs/connect/service-agreement-types
+        //   - TH platform: country='TH', standard merchant agreement, BOTH
+        //     `card_payments` and `transfers` capabilities. Stripe Thailand
+        //     does not permit platform-loss-liable connected accounts, so the
+        //     seller has to be MOR — that requires card_payments. We charge
+        //     via destination-charge PaymentIntents (transfer_data.destination
+        //     + application_fee_amount) and hold the seller's funds by
+        //     disabling automatic payouts; release-funds later pushes via
+        //     stripe.payouts.create on the connected account.
+        //
+        // Pre-filling business_profile (url, product_description, mcc) lets
+        // Stripe skip those fields in the hosted Express onboarding so
+        // individual sellers without a website aren't blocked on a required
+        // URL field.
+        //
+        // Docs:
+        //   https://stripe.com/docs/connect/destination-charges
+        //   https://stripe.com/docs/connect/manual-payouts
         async function createFreshAccount(): Promise<string> {
+            const wantsCardPayments = region === 'th';
+
+            const sellerPublicUrl = `${getAppBaseUrl()}/profile/${user!.id}`;
+
             const createParams: Stripe.AccountCreateParams = {
                 type: 'express',
                 country: 'TH',
                 email: user!.email || undefined,
-                capabilities: {
-                    transfers: { requested: true },
-                },
+                capabilities: wantsCardPayments
+                    ? {
+                        card_payments: { requested: true },
+                        transfers: { requested: true },
+                    }
+                    : {
+                        transfers: { requested: true },
+                    },
                 business_type: 'individual',
+                business_profile: {
+                    // Pre-filled so individual sellers without a website
+                    // aren't blocked on a required URL field. The seller's
+                    // CardStreet profile page is the closest analog to a
+                    // business URL.
+                    url: sellerPublicUrl,
+                    product_description: 'Trading card sales on CardStreet marketplace',
+                    // 5945 = Hobby, Toy, and Game Shops — closest MCC for TCG
+                    // sales. Influences Stripe risk scoring and the buyer's
+                    // statement descriptor.
+                    mcc: '5945',
+                },
                 metadata: {
                     cardstreet_user_id: user!.id,
                     cardstreet_display_name: profile!.display_name || '',
                     cardstreet_region: region,
                 },
             };
+
+            // Hold funds in the seller's Stripe balance until release-funds
+            // authorizes a payout. Without this, charges would auto-pay out
+            // to the seller's bank on Stripe's default schedule and we'd lose
+            // the escrow window for buyer-protection / dispute handling.
+            // Only applies on the TH (destination-charge) path; the legacy
+            // US path is "separate charges and transfers" — there is no
+            // money in the connected account to schedule payouts from.
+            if (wantsCardPayments) {
+                createParams.settings = {
+                    payouts: {
+                        schedule: { interval: 'manual' },
+                    },
+                };
+            }
 
             if (region === 'us') {
                 createParams.tos_acceptance = { service_agreement: 'recipient' };

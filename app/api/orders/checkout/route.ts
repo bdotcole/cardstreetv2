@@ -160,6 +160,26 @@ export async function POST(req: Request) {
         }
         const orderRegion = (uniqueRegions[0] ?? 'us') as 'us' | 'th';
 
+        // ─── Single-seller carts on the TH platform ───
+        // Destination charges (region='th') have exactly one destination
+        // account per PaymentIntent, so a TH cart can only target one seller.
+        // The legacy US flow (separate charges + transfers) can still pool
+        // multiple sellers under one PaymentIntent because the transfer step
+        // happens later, per-seller.
+        if (orderRegion === 'th') {
+            const sellerIdsInCart = [...new Set(listings.map(l => l.seller_id))];
+            if (sellerIdsInCart.length > 1) {
+                return NextResponse.json(
+                    {
+                        error:
+                            'Multi-seller carts are not yet supported. Please check out ' +
+                            'one seller at a time.',
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
         // ─── Platform fee tier ───
         const feeMap = new Map<string, number>();
         for (const profile of sellerProfiles || []) {

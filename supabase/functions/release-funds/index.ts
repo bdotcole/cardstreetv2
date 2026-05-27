@@ -150,7 +150,13 @@ serve(async (_req) => {
                     continue
                 }
 
-                // ─── Step 2: Calculate transfer amount ───
+                // ─── Step 2: Calculate payout amount ───
+                // For both region paths, the seller receives total_amount
+                // minus the platform fee. On TH the application_fee was already
+                // taken by Stripe at charge time, so the seller's balance is
+                // already (total - app_fee); we payout that whole amount. On
+                // US (legacy separate charges + transfers) we explicitly
+                // transfer (total - platform_fee) from the platform.
                 const totalAmountCents = Math.round((order.total_amount || 0) * 100)
                 const platformFeeCents = Math.round((order.platform_fee || 0) * 100)
                 const transferAmountCents = totalAmountCents - platformFeeCents
@@ -162,39 +168,72 @@ serve(async (_req) => {
                     continue
                 }
 
-                // ─── Step 3: Execute Stripe Transfer ───
+                // ─── Step 3: Release funds — region-specific mechanism ───
+                // TH: funds are already in the seller's connected account from
+                //     the destination charge. We create a Payout ON the seller
+                //     account (stripeAccount option) to push that balance to
+                //     their bank. With manual payouts on their account, this
+                //     is the only way money flows out.
+                //
+                // US (legacy): platform holds the buyer's payment in its own
+                //     balance. We Transfer to the seller's connected account,
+                //     which then auto-pays to their bank on Stripe's default
+                //     schedule.
                 const transferCurrency = currencyFor(orderRegion)
-                console.log(`[release-funds] Transferring ${transferAmountCents} ${transferCurrency} subunits to ${sellerProfile.stripe_account_id} for order ${order.id} on ${orderRegion} platform...`)
+                let payoutOrTransferId: string
 
-                // Stripe Idempotency-Key keyed on order.id closes two race windows:
-                //   1. Transfer succeeds, but the subsequent DB update (line ~115)
-                //      fails. Next cron tick sees stripe_payout_id IS NULL and
-                //      retries — without an idempotency key, that would create a
-                //      SECOND transfer. With this key, Stripe returns the original.
-                //   2. Two concurrent cron invocations both pass the SELECT and
-                //      both call transfers.create before either does the DB CAS.
-                //      Stripe dedupes on the key and only one transfer is created.
-                // Stripe stores idempotency keys for 24 hours; that's well within
-                // any reasonable retry window for this job.
-                const transfer = await stripe.transfers.create(
-                    {
-                        amount: transferAmountCents,
-                        currency: transferCurrency,
-                        destination: sellerProfile.stripe_account_id,
-                        transfer_group: order.transfer_group || undefined,
-                        metadata: {
-                            order_id: order.id,
-                            seller_id: order.seller_id,
-                            release_type: 'auto_escrow',
-                            stripe_region: orderRegion,
+                if (orderRegion === 'th') {
+                    console.log(`[release-funds] Creating payout of ${transferAmountCents} ${transferCurrency} subunits on seller ${sellerProfile.stripe_account_id} for order ${order.id}...`)
+                    const payout = await stripe.payouts.create(
+                        {
+                            amount: transferAmountCents,
+                            currency: transferCurrency,
+                            metadata: {
+                                order_id: order.id,
+                                seller_id: order.seller_id,
+                                release_type: 'auto_escrow',
+                                stripe_region: orderRegion,
+                            },
                         },
-                    },
-                    {
-                        idempotencyKey: `payout_${order.id}`,
-                    }
-                )
-
-                console.log(`[release-funds] Stripe Transfer ${transfer.id} created for order ${order.id}`)
+                        {
+                            idempotencyKey: `payout_${order.id}`,
+                            stripeAccount: sellerProfile.stripe_account_id,
+                        }
+                    )
+                    payoutOrTransferId = payout.id
+                    console.log(`[release-funds] Stripe Payout ${payout.id} created on seller account for order ${order.id}`)
+                } else {
+                    console.log(`[release-funds] Transferring ${transferAmountCents} ${transferCurrency} subunits to ${sellerProfile.stripe_account_id} for order ${order.id} on US platform...`)
+                    // Stripe Idempotency-Key keyed on order.id closes two race windows:
+                    //   1. Transfer succeeds, but the subsequent DB update fails.
+                    //      Next cron tick sees stripe_payout_id IS NULL and retries —
+                    //      without an idempotency key, that would create a SECOND
+                    //      transfer. With this key, Stripe returns the original.
+                    //   2. Two concurrent cron invocations both pass the SELECT and
+                    //      both call transfers.create before either does the DB CAS.
+                    //      Stripe dedupes on the key and only one transfer is created.
+                    // Stripe stores idempotency keys for 24 hours; that's well within
+                    // any reasonable retry window for this job.
+                    const transfer = await stripe.transfers.create(
+                        {
+                            amount: transferAmountCents,
+                            currency: transferCurrency,
+                            destination: sellerProfile.stripe_account_id,
+                            transfer_group: order.transfer_group || undefined,
+                            metadata: {
+                                order_id: order.id,
+                                seller_id: order.seller_id,
+                                release_type: 'auto_escrow',
+                                stripe_region: orderRegion,
+                            },
+                        },
+                        {
+                            idempotencyKey: `payout_${order.id}`,
+                        }
+                    )
+                    payoutOrTransferId = transfer.id
+                    console.log(`[release-funds] Stripe Transfer ${transfer.id} created for order ${order.id}`)
+                }
 
                 // ─── Step 4: Update order record ───
                 const { error: updateError } = await supabase
@@ -203,19 +242,19 @@ serve(async (_req) => {
                         escrow_status: 'released',
                         status: 'completed',
                         completed_at: new Date().toISOString(),
-                        stripe_payout_id: transfer.id,
+                        stripe_payout_id: payoutOrTransferId,
                     })
                     .eq('id', order.id)
                     .eq('escrow_status', 'held') // Double-check: only update if still held (race condition guard)
 
                 if (updateError) {
-                    console.error(`[release-funds] Failed to update order ${order.id} after transfer:`, updateError)
+                    console.error(`[release-funds] Failed to update order ${order.id} after payout:`, updateError)
                     results.push({ orderId: order.id, status: 'transfer_ok_db_failed', error: updateError.message })
                     failed++
                     continue
                 }
 
-                console.log(`[release-funds] Successfully released funds for order ${order.id} → Transfer ${transfer.id}`)
+                console.log(`[release-funds] Successfully released funds for order ${order.id} → ${payoutOrTransferId}`)
                 results.push({ orderId: order.id, status: 'success' })
                 processed++
 
