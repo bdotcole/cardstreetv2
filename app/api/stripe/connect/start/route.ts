@@ -134,48 +134,40 @@ export async function POST(request: Request) {
         const stripe = getStripeForRegion(region);
         let accountId = profile.stripe_account_id as string | null;
 
-        // Step 1: Create the Express account if we don't already have one.
+        // Step 1: Create the connected account if we don't already have one.
         //
-        // Two account shapes depending on platform:
-        //   - US platform: country='TH', service_agreement='recipient', only the
-        //     `transfers` capability. The seller is just a recipient of
-        //     transfers from CardStreet (platform = MOR, separate charges and
-        //     transfers). Lighter KYC. Legacy pre-dual-platform shape.
+        // This platform is configured (Connect → Platform setup) as:
+        //   - Business model: direct charges (sellers collect payments directly)
+        //   - Losses: Stripe is responsible (defaults.responsibilities.losses_collector = stripe)
+        //   - Fees: collected from seller (defaults.responsibilities.fees_collector = account)
+        //   - Dashboard: full Stripe Dashboard (defaults.dashboard = full)
+        //   - Accounts v2 enabled
         //
-        //   - TH platform: country='TH', standard merchant agreement, BOTH
-        //     `card_payments` and `transfers` capabilities. Stripe Thailand
-        //     does not permit platform-loss-liable connected accounts, so the
-        //     seller has to be MOR — that requires card_payments. We charge
-        //     via destination-charge PaymentIntents (transfer_data.destination
-        //     + application_fee_amount) and hold the seller's funds by
-        //     disabling automatic payouts; release-funds later pushes via
-        //     stripe.payouts.create on the connected account.
+        // Given that platform setup, we do NOT pass `type: 'express'` (which
+        // would create a v1 Express account incompatible with v2 controller
+        // defaults — Stripe rejects with "Platforms in TH cannot create
+        // accounts where the platform is loss-liable"). We let Stripe use
+        // the platform's default controller config and just request the
+        // capabilities the seller needs: card_payments (to accept charges
+        // directly) and transfers (so we can take an application_fee_amount).
         //
         // Pre-filling business_profile (url, product_description, mcc) lets
-        // Stripe skip those fields in the hosted Express onboarding so
-        // individual sellers without a website aren't blocked on a required
-        // URL field.
+        // Stripe skip those fields in the hosted onboarding so individual
+        // sellers without a website aren't blocked on a required URL field.
         //
         // Docs:
-        //   https://stripe.com/docs/connect/destination-charges
-        //   https://stripe.com/docs/connect/manual-payouts
+        //   https://stripe.com/docs/connect/direct-charges
+        //   https://stripe.com/docs/connect/account-controllers
         async function createFreshAccount(): Promise<string> {
-            const wantsCardPayments = region === 'th';
-
             const sellerPublicUrl = `${getAppBaseUrl()}/profile/${user!.id}`;
 
             const createParams: Stripe.AccountCreateParams = {
-                type: 'express',
                 country: 'TH',
                 email: user!.email || undefined,
-                capabilities: wantsCardPayments
-                    ? {
-                        card_payments: { requested: true },
-                        transfers: { requested: true },
-                    }
-                    : {
-                        transfers: { requested: true },
-                    },
+                capabilities: {
+                    card_payments: { requested: true },
+                    transfers: { requested: true },
+                },
                 business_type: 'individual',
                 business_profile: {
                     // Pre-filled so individual sellers without a website
@@ -196,22 +188,11 @@ export async function POST(request: Request) {
                 },
             };
 
-            // Hold funds in the seller's Stripe balance until release-funds
-            // authorizes a payout. Without this, charges would auto-pay out
-            // to the seller's bank on Stripe's default schedule and we'd lose
-            // the escrow window for buyer-protection / dispute handling.
-            // Only applies on the TH (destination-charge) path; the legacy
-            // US path is "separate charges and transfers" — there is no
-            // money in the connected account to schedule payouts from.
-            if (wantsCardPayments) {
-                createParams.settings = {
-                    payouts: {
-                        schedule: { interval: 'manual' },
-                    },
-                };
-            }
-
+            // Legacy US path (kept for the back-compat dual-platform code
+            // path even though we don't currently operate the US platform):
+            // recipient agreement = platform is MOR. Not used today.
             if (region === 'us') {
+                createParams.type = 'express';
                 createParams.tos_acceptance = { service_agreement: 'recipient' };
             }
 

@@ -73,7 +73,11 @@ export async function handleStripeWebhook(
             return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
         }
 
-        console.log(`${logPrefix} Received event: ${event.type} (${event.id})`);
+        // event.account is set on Connect events (events that originated on a
+        // connected account, like payment_intent.succeeded for a direct charge).
+        // Platform-account events (e.g. account.updated) have it undefined.
+        const connectedAccount = event.account || null;
+        console.log(`${logPrefix} Received event: ${event.type} (${event.id})${connectedAccount ? ` from connected account ${connectedAccount}` : ''}`);
 
         // ─── Step 2: Handle events ───
         switch (event.type) {
@@ -82,7 +86,7 @@ export async function handleStripeWebhook(
                 const transferGroup = paymentIntent.transfer_group;
                 const paymentId = paymentIntent.id;
 
-                console.log(`${logPrefix} PaymentIntent succeeded: ${paymentId}, transfer_group: ${transferGroup}`);
+                console.log(`${logPrefix} PaymentIntent succeeded: ${paymentId}, transfer_group: ${transferGroup}${connectedAccount ? `, account: ${connectedAccount}` : ''}`);
 
                 if (!transferGroup) {
                     console.warn(`${logPrefix} PaymentIntent has no transfer_group — cannot link to orders`);

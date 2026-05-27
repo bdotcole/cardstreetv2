@@ -139,10 +139,20 @@ export async function POST(req: Request) {
             transfer_group: transferGroup,
         };
 
+        // Request options for the PaymentIntent create call. On TH this gets
+        // `stripeAccount` set so the charge is created directly on the
+        // seller's connected account (direct charge model — Stripe TH platform
+        // setup specifies sellers collect payments directly). On US (legacy)
+        // it stays empty and the charge lands on the platform.
+        const requestOptions: { idempotencyKey: string; stripeAccount?: string } = {
+            idempotencyKey,
+        };
+
         if (region === 'th') {
-            // Destination charge: settle directly into the seller's connected
-            // account. Single seller per cart is enforced at /api/orders/checkout
-            // — this is a defensive secondary check.
+            // Direct charge: PaymentIntent is created ON the seller's connected
+            // account. Funds settle into that account; the platform takes an
+            // application_fee_amount. Single seller per cart is enforced at
+            // /api/orders/checkout — this is a defensive secondary check.
             const sellerIds = [...new Set(orders.map(o => o.seller_id))];
             if (sellerIds.length !== 1) {
                 return NextResponse.json(
@@ -183,8 +193,8 @@ export async function POST(req: Request) {
                 return NextResponse.json(
                     {
                         error:
-                            "Seller's payouts are not yet active — Stripe is still verifying " +
-                            'them. Please try again later.',
+                            "Seller's Stripe account is still being verified. Please try " +
+                            'again later.',
                     },
                     { status: 409 }
                 );
@@ -198,20 +208,21 @@ export async function POST(req: Request) {
                 0,
             );
 
-            piParams.transfer_data = { destination: seller.stripe_account_id };
-            piParams.on_behalf_of = seller.stripe_account_id;
             if (applicationFeeSatang > 0 && applicationFeeSatang < amountSatang) {
                 piParams.application_fee_amount = applicationFeeSatang;
             }
+
+            // The defining bit of a direct charge: create the PaymentIntent
+            // on the seller's connected account, not the platform.
+            requestOptions.stripeAccount = seller.stripe_account_id;
         }
 
-        const paymentIntent = await stripe.paymentIntents.create(piParams, {
-            idempotencyKey,
-        });
+        const paymentIntent = await stripe.paymentIntents.create(piParams, requestOptions);
 
         return NextResponse.json({
             status: paymentIntent.status,
             id: paymentIntent.id,
+            client_secret: paymentIntent.client_secret,
             transfer_group: transferGroup,
             region,
         });

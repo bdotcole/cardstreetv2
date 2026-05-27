@@ -46,10 +46,17 @@ export async function POST(req: Request) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
+        type OrderRow = {
+            buyer_id: string;
+            seller_id: string;
+            stripe_region: string | null;
+        };
+
         const { data: orders } = await admin
             .from('orders')
-            .select('buyer_id, stripe_region')
-            .eq('transfer_group', transferGroup);
+            .select('buyer_id, seller_id, stripe_region')
+            .eq('transfer_group', transferGroup)
+            .returns<OrderRow[]>();
 
         if (!orders || orders.length === 0) {
             return NextResponse.json(
@@ -60,7 +67,29 @@ export async function POST(req: Request) {
 
         const region: StripeRegion = orders[0].stripe_region === 'th' ? 'th' : 'us';
         const stripe = getStripeForRegion(region);
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        // On TH (direct charges) the PaymentIntent lives on the seller's
+        // connected account, not the platform. Retrieve it via the
+        // stripeAccount option so Stripe knows which account to query.
+        let paymentIntentLookupOptions: { stripeAccount?: string } | undefined;
+        if (region === 'th') {
+            const sellerIds = [...new Set(orders.map(o => o.seller_id))];
+            if (sellerIds.length === 1) {
+                const { data: seller } = await admin
+                    .from('profiles')
+                    .select('stripe_account_id')
+                    .eq('id', sellerIds[0])
+                    .single<{ stripe_account_id: string | null }>();
+                if (seller?.stripe_account_id) {
+                    paymentIntentLookupOptions = { stripeAccount: seller.stripe_account_id };
+                }
+            }
+        }
+
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+            paymentIntentId,
+            paymentIntentLookupOptions
+        );
 
         if (paymentIntent.status !== 'succeeded') {
             return NextResponse.json(

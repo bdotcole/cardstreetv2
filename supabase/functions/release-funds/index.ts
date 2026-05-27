@@ -169,39 +169,29 @@ serve(async (_req) => {
                 }
 
                 // ─── Step 3: Release funds — region-specific mechanism ───
-                // TH: funds are already in the seller's connected account from
-                //     the destination charge. We create a Payout ON the seller
-                //     account (stripeAccount option) to push that balance to
-                //     their bank. With manual payouts on their account, this
-                //     is the only way money flows out.
+                // TH (direct charges): funds went directly to the seller's
+                //     Stripe account at charge time. There's no platform
+                //     escrow to release — Stripe pays the seller out on
+                //     their account's automatic payout schedule. This cron
+                //     just marks the order completed and notifies the seller.
+                //     No stripe.payouts.create call needed; touching the
+                //     payout schedule would require the seller to grant the
+                //     platform permission since they own the full dashboard.
                 //
-                // US (legacy): platform holds the buyer's payment in its own
-                //     balance. We Transfer to the seller's connected account,
-                //     which then auto-pays to their bank on Stripe's default
-                //     schedule.
+                // US (legacy, dormant): platform holds the buyer's payment in
+                //     its own balance. We Transfer to the seller's connected
+                //     account, which then auto-pays out on Stripe's default
+                //     schedule. Same idempotency key strategy.
                 const transferCurrency = currencyFor(orderRegion)
                 let payoutOrTransferId: string
 
                 if (orderRegion === 'th') {
-                    console.log(`[release-funds] Creating payout of ${transferAmountCents} ${transferCurrency} subunits on seller ${sellerProfile.stripe_account_id} for order ${order.id}...`)
-                    const payout = await stripe.payouts.create(
-                        {
-                            amount: transferAmountCents,
-                            currency: transferCurrency,
-                            metadata: {
-                                order_id: order.id,
-                                seller_id: order.seller_id,
-                                release_type: 'auto_escrow',
-                                stripe_region: orderRegion,
-                            },
-                        },
-                        {
-                            idempotencyKey: `payout_${order.id}`,
-                            stripeAccount: sellerProfile.stripe_account_id,
-                        }
-                    )
-                    payoutOrTransferId = payout.id
-                    console.log(`[release-funds] Stripe Payout ${payout.id} created on seller account for order ${order.id}`)
+                    // No Stripe call. Funds are already with the seller.
+                    // Use the order id as the "synthetic" payout id so the
+                    // DB write below remains idempotent and we keep the
+                    // stripe_payout_id IS NULL guard meaningful for retries.
+                    payoutOrTransferId = `direct_charge_${order.id}`
+                    console.log(`[release-funds] Marking order ${order.id} completed (TH direct charge — funds already with seller)`)
                 } else {
                     console.log(`[release-funds] Transferring ${transferAmountCents} ${transferCurrency} subunits to ${sellerProfile.stripe_account_id} for order ${order.id} on US platform...`)
                     // Stripe Idempotency-Key keyed on order.id closes two race windows:
