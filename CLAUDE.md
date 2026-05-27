@@ -7,7 +7,7 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 - **Next.js 15 (App Router) + React 19 + TypeScript 5.8**
 - **Supabase (Postgres 15)** — auth, storage, DB. RLS on most tables.
 - **Capacitor 8 (Android only)** — wraps the Next.js web app into a native shell.
-- **Stripe + PayPal** — checkout. **Flash Express** — Thailand shipping fulfillment.
+- **Stripe Connect (Express)** — checkout + seller payouts. Dual-platform (US + TH); currently TH-only. **Flash Express** — Thailand shipping fulfillment.
 - **Gemini SDK (`@google/genai`)** — card scanning, search-intent resolution, market insights.
 - **Tailwind v4 + Framer Motion + Recharts**
 - **Sentry (`@sentry/nextjs`)** for error tracking.
@@ -93,6 +93,88 @@ Auto-fires a scan when the camera frame is sharp + stable for 2 consecutive fram
 All checks run on a tiny 80×112 grayscale buffer (constants at top of file). If auto-capture fires too eagerly or never fires, those thresholds are the knobs.
 
 The manual shutter button is retained as an override.
+
+## Payments + Stripe Connect
+
+CardStreet is a marketplace built on **Stripe Connect with Express accounts**. The codebase supports two Stripe platforms under one organization but is currently running TH-only.
+
+### Why two platforms
+
+Stripe Thailand does **not permit platform-loss-liable Connect accounts** — the platform cannot be merchant of record (MOR) for charges; the seller must be. This rules out the "separate charges and transfers" pattern on TH (platform charges buyer, transfers to seller). Stripe US allows that pattern via the `recipient` service agreement for TH-country connected accounts. To support both, the code branches on `stripe_region`:
+
+| Region | Model | Seller capabilities | MOR | Cart shape |
+|---|---|---|---|---|
+| `th` (active) | Destination charges + `application_fee_amount` + manual payouts | `card_payments` + `transfers` | Seller | Single-seller only |
+| `us` (dormant) | Separate charges and transfers + `recipient` agreement | `transfers` only | Platform | Multi-seller OK |
+
+`profiles.stripe_region` and `orders.stripe_region` pin each entity to its platform — Express accounts can't move between platforms after creation, so the column is sticky.
+
+### File map
+
+- `lib/stripe.ts` — region-aware client factory. `getStripeForRegion('us'|'th')`, `isRegionConfigured`, `getWebhookSecretForRegion`, `defaultCurrencyForRegion`, `paymentMethodTypesForRegion`. Lazy-init so unset keys don't crash module load.
+- `lib/stripeWebhook.ts` — shared webhook handler. Returns `410 Gone` if the region isn't configured; otherwise verifies the signature with the region's secret and dispatches on event type.
+- `app/api/webhooks/stripe/route.ts` — US endpoint, thin shim over the shared handler.
+- `app/api/webhooks/stripe/th/route.ts` — TH endpoint, same shim with `region='th'`.
+- `app/api/stripe/connect/{start,status,dashboard}/route.ts` — onboarding + status routes, all region-aware. `start` self-heals stale `stripe_account_id` rows by creating a fresh account when Stripe returns `resource_missing`.
+- `app/api/checkout/route.ts` — PaymentIntent creation. Region-branched (destination charge for TH, plain platform charge for US).
+- `app/api/orders/checkout/route.ts` — order creation. Enforces single-seller carts on TH and rejects mixed-region carts everywhere.
+- `app/api/orders/finalize/route.ts` — client-side webhook fallback; verifies the PaymentIntent on the correct platform.
+- `supabase/functions/release-funds/index.ts` — hourly payout cron. On TH uses `stripe.payouts.create({...}, {stripeAccount: sellerId})` to push the seller's already-credited balance to their bank. On US uses `stripe.transfers.create` to move money out of the platform's balance.
+- `supabase/migrations/20260515_stripe_region_dual_platform.sql` — adds `stripe_region` + `preferred_currency` columns + backfill.
+
+### Env vars
+
+```
+STRIPE_SECRET_KEY_TH         # sk_live_... or sk_test_...
+STRIPE_WEBHOOK_SECRET_TH     # whsec_... from the TH webhook endpoint
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY   # TH publishable pk_...
+
+# Only needed if/when the US platform comes back online:
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
+```
+
+Each platform's webhook URL must be set in its respective Stripe Dashboard:
+- TH: `https://cardstreet.app/api/webhooks/stripe/th`
+- US: `https://cardstreet.app/api/webhooks/stripe`
+
+Subscribed events for both: `payment_intent.succeeded`, `payment_intent.payment_failed`, `account.updated`.
+
+### Seller onboarding (TH path)
+
+`app/api/stripe/connect/start/route.ts` creates connected accounts with:
+- `country: 'TH'`, `business_type: 'individual'`
+- Capabilities: `card_payments` + `transfers` (both required — `card_payments` makes the seller capable of being MOR; `transfers` lets the platform take an application fee)
+- `settings.payouts.schedule.interval = 'manual'` — funds accumulate in the seller's Stripe balance instead of auto-paying out, so `release-funds` is our explicit escrow gate
+- Pre-filled `business_profile.{url, product_description, mcc=5945}` so individual sellers without a website don't get blocked on a required URL field in Stripe's hosted onboarding
+
+**Self-heal**: if `accountLinks.create` (or any other Stripe call) returns `resource_missing` / `account_invalid` (stale account ID from a deleted account or rotated keys), the start route clears `stripe_account_id` + capability flags and creates a fresh account in the same request. No manual SQL cleanup needed for orphaned rows.
+
+**Return URL hardening**: `return_url`/`refresh_url` default to `getAppBaseUrl()` (cardstreet.app), **not** the request host. Stripe's "Return to CardStreet" button then deep-links into the Capacitor app via Android App Links (autoVerify on `cardstreet.app` per `AndroidManifest.xml`). Client can override via `returnUrl`/`refreshUrl` in the body, validated against an allowlist (cardstreet.app, NEXT_PUBLIC_APP_URL host, localhost).
+
+### Charges (TH path)
+
+`/api/checkout` builds a PaymentIntent with:
+- `transfer_data.destination: sellerAccountId`
+- `on_behalf_of: sellerAccountId`
+- `application_fee_amount: Σ orders.platform_fee` in satang
+
+Funds settle directly into the seller's Stripe balance. The Stripe processing fee comes off the seller's balance (standard for destination charges). With manual payouts enabled, the seller can't withdraw until `release-funds` pushes the balance to their bank.
+
+### Payouts
+
+`release-funds` (Supabase Edge Function) finds orders where `status='delivered'`, `escrow_status='held'`, `funds_release_at <= NOW()`, `stripe_payout_id IS NULL`, and:
+
+- TH: `stripe.payouts.create({...}, {stripeAccount: sellerId, idempotencyKey: 'payout_' + order.id})` — pushes the seller's balance to their bank.
+- US: `stripe.transfers.create(...)` — moves money from the platform's balance to the seller's connected account, which then auto-pays-out on Stripe's default schedule.
+
+Same `payout_${order.id}` idempotency key in both paths so a retry never double-charges.
+
+### Cart constraints
+
+- **Mixed-region carts**: rejected at `/api/orders/checkout` with 400 (a PaymentIntent on platform A can't transfer to an account on platform B).
+- **Multi-seller carts on TH**: rejected at `/api/orders/checkout` with 400 (destination charges support exactly one destination per PaymentIntent). Multi-seller-as-N-charges is a future improvement.
+- Both checks fire BEFORE any DB writes or listing reservations, so a rejected cart leaves no side effects to roll back.
 
 ## pHash backfill
 
@@ -192,4 +274,4 @@ In `cardstreet-mobile/services/pokemonService.ts`, `setsCache` and `cardsCache` 
 - pHash thresholds (`DIST_HIGH_CONFIDENCE = 8`, `DIST_CANDIDATE_CEILING = 20`): top of `services/scannerService.ts`.
 - Hamming-distance SQL function and the search RPC: `supabase/migrations/20260519_phash_card_scanning.sql`.
 - Flash Express integration: `lib/flashExpress.ts`, `supabase/migrations/20260502_flash_express_migration.sql`.
-- Stripe Connect onboarding: `supabase/migrations/20260412120000_add_stripe_account_id.sql` and `app/api/profile/stripe/`.
+- Stripe Connect architecture evolution: `23835f9` (dual-platform skeleton), `a129fff` (TH destination-charge refactor), `6b8251d` (self-heal stale account IDs), `1e00ac0` (return URL allowlist), `6bfef54` (webhook 410 fallback for unconfigured regions). Initial `stripe_account_id` schema: `supabase/migrations/20260412120000_add_stripe_account_id.sql`. Dual-platform columns: `supabase/migrations/20260515_stripe_region_dual_platform.sql`.
