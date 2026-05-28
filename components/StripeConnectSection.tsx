@@ -76,27 +76,57 @@ export default function StripeConnectSection() {
         setActionLoading(true);
         setError(null);
         try {
-            // Pass the current origin so Stripe returns the seller to the
-            // exact deploy they started from (web, preview, localhost). The
-            // server validates the host against an allowlist; on the Android
-            // Capacitor app `window.location.origin` is https://cardstreet.app
-            // which App Links intercepts back into the native shell.
+            // Detect the Capacitor native shell. On native, Stripe's hosted
+            // onboarding opens in an external browser; its return_url must
+            // deep-link back into the app. App Links on cardstreet.app are
+            // unreliable (and depend on assetlinks verification), so we mirror
+            // the OAuth login flow: send Stripe to /mobile-redirect, an HTTPS
+            // page that bounces to the cardstreet:// custom scheme — which the
+            // manifest always intercepts regardless of App Links state.
+            let isNative = false;
+            try {
+                const { Capacitor } = await import('@capacitor/core');
+                isNative = Capacitor.isNativePlatform();
+            } catch {
+                // Not in a Capacitor context — treat as web.
+            }
+
+            // Web: return to the current origin (works on localhost / previews
+            // / prod). Native: return through the mobile-redirect bounce.
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const returnUrl = isNative
+                ? 'https://cardstreet.app/mobile-redirect?stripe_connect=complete'
+                : origin ? `${origin}/?stripe_connect=complete` : undefined;
+            const refreshUrl = isNative
+                ? 'https://cardstreet.app/mobile-redirect?stripe_connect=refresh'
+                : origin ? `${origin}/?stripe_connect=refresh` : undefined;
+
             const res = await fetch('/api/stripe/connect/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(
-                    origin
-                        ? {
-                            returnUrl: `${origin}/?stripe_connect=complete`,
-                            refreshUrl: `${origin}/?stripe_connect=refresh`,
-                        }
-                        : {}
+                    returnUrl ? { returnUrl, refreshUrl } : {}
                 ),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to start onboarding');
-            window.location.href = data.url;
+
+            if (isNative) {
+                // Open in the in-app browser (Custom Tab) so the deep-link
+                // return can dismiss it via Browser.close() in the appUrlOpen
+                // handler, exactly like the OAuth login flow.
+                try {
+                    const { Browser } = await import('@capacitor/browser');
+                    await Browser.open({ url: data.url });
+                } catch {
+                    window.open(data.url, '_system');
+                }
+                // Leave actionLoading true: the page stays mounted while the
+                // user is in the browser. The stripe-connect-return event
+                // resets it when they come back.
+            } else {
+                window.location.href = data.url;
+            }
         } catch (e: any) {
             setError(e.message);
             setActionLoading(false);
@@ -134,6 +164,27 @@ export default function StripeConnectSection() {
         fetchStatus(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Native return path: the WebView never navigates to ?stripe_connect=...
+    // (Stripe redirects an external browser, not the WebView), so the mount
+    // effect above never sees it. Instead the appUrlOpen deep-link handler in
+    // app/page.tsx fires this event when the cardstreet:// scheme brings the
+    // app back to the foreground. 'refresh' restarts onboarding; otherwise we
+    // re-pull status from Stripe.
+    useEffect(() => {
+        const onReturn = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            setActionLoading(false);
+            if (detail === 'refresh') {
+                startOnboarding();
+            } else {
+                setLoading(true);
+                fetchStatus(true);
+            }
+        };
+        window.addEventListener('stripe-connect-return', onReturn);
+        return () => window.removeEventListener('stripe-connect-return', onReturn);
+    }, [fetchStatus, startOnboarding]);
 
     const openDashboard = async () => {
         setActionLoading(true);

@@ -8,6 +8,11 @@ export default function RedirectContent() {
     const [url, setUrl] = useState('cardstreet://login-callback');
     const [intentUrl, setIntentUrl] = useState('intent://login-callback#Intent;scheme=cardstreet;package=com.cardstreet.app;end');
 
+    // This page is the deep-link bounce target for both OAuth login and Stripe
+    // Connect onboarding returns. The forwarding logic is identical; only the
+    // heading differs so a returning seller doesn't see "Login Successful!".
+    const isStripeReturn = !!searchParams?.get('stripe_connect');
+
     useEffect(() => {
         // Construct the full deeplink including access tokens in the hash and code in the search
         const hash = window.location.hash || '';
@@ -43,7 +48,9 @@ export default function RedirectContent() {
                 </svg>
             </div>
 
-            <h1 className="text-3xl font-black mb-4 text-center">Login Successful!</h1>
+            <h1 className="text-3xl font-black mb-4 text-center">
+                {isStripeReturn ? 'All set!' : 'Login Successful!'}
+            </h1>
 
             <p className="text-slate-400 text-center mb-10 max-w-sm leading-relaxed">
                 If you are not automatically redirected, please tap the button below to return to the app.

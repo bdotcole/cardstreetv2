@@ -789,6 +789,21 @@ export default function HomePage() {
 
                     try {
                         const url = new URL(data.url);
+
+                        // Stripe Connect return bounce: /mobile-redirect →
+                        // cardstreet://login-callback?stripe_connect=complete|refresh.
+                        // No auth code involved — just notify the seller payouts
+                        // panel to refresh its status (or resume an expired
+                        // onboarding link). Handled before the auth parsing below.
+                        const stripeConnect = url.searchParams.get('stripe_connect');
+                        if (stripeConnect) {
+                            console.log('[DeepLink] Stripe Connect return:', stripeConnect);
+                            window.dispatchEvent(
+                                new CustomEvent('stripe-connect-return', { detail: stripeConnect })
+                            );
+                            return;
+                        }
+
                         const code = url.searchParams.get('code');
                         const error = url.searchParams.get('error');
                         const errorDescription = url.searchParams.get('error_description');
