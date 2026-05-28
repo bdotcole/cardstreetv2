@@ -48,6 +48,61 @@ interface ConnectStatus {
     detailsSubmitted: boolean;
 }
 
+// Detect the Capacitor native shell. Resolves false in any non-Capacitor
+// (web) context — including SSR.
+async function detectNativePlatform(): Promise<boolean> {
+    try {
+        const { Capacitor } = await import('@capacitor/core');
+        return Capacitor.isNativePlatform();
+    } catch {
+        return false;
+    }
+}
+
+// Where Stripe should send the seller back to after a hosted flow.
+//   - Native: bounce through /mobile-redirect, which forwards to the
+//     cardstreet:// custom scheme the app intercepts. App Links on
+//     cardstreet.app are unreliable, so we never rely on them. The
+//     appUrlOpen handler in app/page.tsx turns that deep link into a
+//     'stripe-connect-return' event (listened for below).
+//   - Web: return to the current origin (localhost / preview / prod).
+function stripeReturnUrls(isNative: boolean): { returnUrl?: string; refreshUrl?: string } {
+    if (isNative) {
+        return {
+            returnUrl: 'https://cardstreet.app/mobile-redirect?stripe_connect=complete',
+            refreshUrl: 'https://cardstreet.app/mobile-redirect?stripe_connect=refresh',
+        };
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (!origin) return {};
+    return {
+        returnUrl: `${origin}/?stripe_connect=complete`,
+        refreshUrl: `${origin}/?stripe_connect=refresh`,
+    };
+}
+
+// Open a Stripe-hosted URL the right way for the platform. On native we use
+// the in-app browser (Custom Tab) so the deep-link return can dismiss it via
+// Browser.close() in the appUrlOpen handler, exactly like the OAuth login
+// flow. On web: 'navigate' replaces the current page (onboarding), 'newtab'
+// opens a separate tab (dashboard/manage).
+async function openStripeUrl(url: string, isNative: boolean, webMode: 'navigate' | 'newtab') {
+    if (isNative) {
+        try {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.open({ url });
+        } catch {
+            window.open(url, '_system');
+        }
+        return;
+    }
+    if (webMode === 'navigate') {
+        window.location.href = url;
+    } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+}
+
 export default function StripeConnectSection() {
     const { t } = useTranslation();
     const [status, setStatus] = useState<ConnectStatus | null>(null);
@@ -72,61 +127,27 @@ export default function StripeConnectSection() {
         }
     }, []);
 
+    // Begin/resume the hosted onboarding flow. Used for fresh accounts and to
+    // resolve a restricted account's outstanding requirements (account_onboarding
+    // works for full-dashboard v2 accounts; a login link does not).
     const startOnboarding = useCallback(async () => {
         setActionLoading(true);
         setError(null);
         try {
-            // Detect the Capacitor native shell. On native, Stripe's hosted
-            // onboarding opens in an external browser; its return_url must
-            // deep-link back into the app. App Links on cardstreet.app are
-            // unreliable (and depend on assetlinks verification), so we mirror
-            // the OAuth login flow: send Stripe to /mobile-redirect, an HTTPS
-            // page that bounces to the cardstreet:// custom scheme — which the
-            // manifest always intercepts regardless of App Links state.
-            let isNative = false;
-            try {
-                const { Capacitor } = await import('@capacitor/core');
-                isNative = Capacitor.isNativePlatform();
-            } catch {
-                // Not in a Capacitor context — treat as web.
-            }
-
-            // Web: return to the current origin (works on localhost / previews
-            // / prod). Native: return through the mobile-redirect bounce.
-            const origin = typeof window !== 'undefined' ? window.location.origin : '';
-            const returnUrl = isNative
-                ? 'https://cardstreet.app/mobile-redirect?stripe_connect=complete'
-                : origin ? `${origin}/?stripe_connect=complete` : undefined;
-            const refreshUrl = isNative
-                ? 'https://cardstreet.app/mobile-redirect?stripe_connect=refresh'
-                : origin ? `${origin}/?stripe_connect=refresh` : undefined;
-
+            const isNative = await detectNativePlatform();
+            const urls = stripeReturnUrls(isNative);
             const res = await fetch('/api/stripe/connect/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(
-                    returnUrl ? { returnUrl, refreshUrl } : {}
-                ),
+                body: JSON.stringify(urls.returnUrl ? urls : {}),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to start onboarding');
-
-            if (isNative) {
-                // Open in the in-app browser (Custom Tab) so the deep-link
-                // return can dismiss it via Browser.close() in the appUrlOpen
-                // handler, exactly like the OAuth login flow.
-                try {
-                    const { Browser } = await import('@capacitor/browser');
-                    await Browser.open({ url: data.url });
-                } catch {
-                    window.open(data.url, '_system');
-                }
-                // Leave actionLoading true: the page stays mounted while the
-                // user is in the browser. The stripe-connect-return event
-                // resets it when they come back.
-            } else {
-                window.location.href = data.url;
-            }
+            await openStripeUrl(data.url, isNative, 'navigate');
+            // Native: leave actionLoading true — the page stays mounted while
+            // the user is in the browser, and the stripe-connect-return event
+            // resets it on the way back. Web: we've navigated away.
+            if (!isNative) setActionLoading(false);
         } catch (e: any) {
             setError(e.message);
             setActionLoading(false);
@@ -186,20 +207,34 @@ export default function StripeConnectSection() {
         return () => window.removeEventListener('stripe-connect-return', onReturn);
     }, [fetchStatus, startOnboarding]);
 
-    const openDashboard = async () => {
+    // Open the seller's account management. For legacy Express accounts this
+    // is a single-use Express Dashboard login link; for full-dashboard v2
+    // accounts (no Express Dashboard) the server falls back to a hosted
+    // account_update AccountLink, which needs return URLs and the native
+    // deep-link bounce just like onboarding.
+    const openDashboard = useCallback(async () => {
         setActionLoading(true);
         setError(null);
         try {
-            const res = await fetch('/api/stripe/connect/dashboard', { method: 'POST' });
+            const isNative = await detectNativePlatform();
+            const urls = stripeReturnUrls(isNative);
+            const res = await fetch('/api/stripe/connect/dashboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(urls.returnUrl ? urls : {}),
+            });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to open dashboard');
-            window.open(data.url, '_blank', 'noopener,noreferrer');
+            await openStripeUrl(data.url, isNative, 'newtab');
+            // Native: the stripe-connect-return event resets actionLoading when
+            // an account_update flow deep-links back (a plain login link won't,
+            // but it's terminal anyway). Web: nothing kept us blocked.
+            if (!isNative) setActionLoading(false);
         } catch (e: any) {
             setError(e.message);
-        } finally {
             setActionLoading(false);
         }
-    };
+    }, []);
 
     if (loading) {
         return (
@@ -296,7 +331,7 @@ export default function StripeConnectSection() {
 
                 {isRestricted && (
                     <button
-                        onClick={openDashboard}
+                        onClick={() => startOnboarding()}
                         disabled={actionLoading}
                         className="w-full h-11 bg-amber-400 text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-amber-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
