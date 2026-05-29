@@ -54,8 +54,16 @@ export async function POST(req: Request) {
                 { status: 400 }
             );
         }
-        if (!token || typeof token !== 'string') {
-            return NextResponse.json({ error: 'Stripe payment method id (token) is required' }, { status: 400 });
+        // Two charge flows are supported:
+        //   - PaymentElement (current): no `token`. We create an unconfirmed
+        //     PaymentIntent and return its client_secret; the client confirms
+        //     with stripe.confirmPayment, which also unlocks non-card methods
+        //     like PromptPay. This is the path the app uses.
+        //   - Legacy card token: `token` is a card PaymentMethod id we confirm
+        //     server-side. Kept for back-compat with any older client.
+        const usePaymentElement = !token;
+        if (token && typeof token !== 'string') {
+            return NextResponse.json({ error: 'Invalid payment method token' }, { status: 400 });
         }
         // Currency is optional now — if omitted, falls back to the region's
         // default (USD on the US platform, THB on TH).
@@ -128,9 +136,6 @@ export async function POST(req: Request) {
         const piParams: Stripe.PaymentIntentCreateParams = {
             amount: amountSatang,
             currency: chargeCurrency,
-            payment_method: token,
-            confirm: true,
-            return_url: `${baseUrl}/?payment_status=complete`,
             metadata: {
                 transfer_group: transferGroup,
                 buyer_id: user.id,
@@ -138,6 +143,18 @@ export async function POST(req: Request) {
             },
             transfer_group: transferGroup,
         };
+
+        if (usePaymentElement) {
+            // Let Stripe surface every method enabled on the account (card +
+            // PromptPay on the TH platform). The client confirms with
+            // stripe.confirmPayment(), supplying the return_url then.
+            piParams.automatic_payment_methods = { enabled: true };
+        } else {
+            // Legacy server-side card confirmation.
+            piParams.payment_method = token;
+            piParams.confirm = true;
+            piParams.return_url = `${baseUrl}/?payment_status=complete`;
+        }
 
         // Request options for the PaymentIntent create call. On TH this gets
         // `stripeAccount` set so the charge is created directly on the

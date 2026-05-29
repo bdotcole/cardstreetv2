@@ -167,6 +167,11 @@ export async function POST(request: Request) {
                 capabilities: {
                     card_payments: { requested: true },
                     transfers: { requested: true },
+                    // PromptPay is Thailand's dominant payment method. Requesting
+                    // it here lets the buyer-side PaymentElement offer PromptPay
+                    // on this seller's direct charges. TH-only capability; on the
+                    // legacy US path below it's simply never requested.
+                    ...(region === 'th' ? { promptpay_payments: { requested: true } } : {}),
                 },
                 business_type: 'individual',
                 business_profile: {
@@ -227,6 +232,18 @@ export async function POST(request: Request) {
 
         if (!accountId) {
             accountId = await createFreshAccount();
+        } else if (region === 'th') {
+            // Existing TH account created before PromptPay support: request the
+            // capability so the buyer-side PaymentElement can offer PromptPay.
+            // Best-effort and idempotent — requesting an already-active
+            // capability is a no-op. Never block onboarding if it fails.
+            try {
+                await stripe.accounts.update(accountId, {
+                    capabilities: { promptpay_payments: { requested: true } },
+                });
+            } catch (capErr) {
+                console.warn('[Connect/Start] Could not request promptpay_payments capability:', capErr);
+            }
         }
 
         // Step 2: Generate the onboarding AccountLink.

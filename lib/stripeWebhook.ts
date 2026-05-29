@@ -125,11 +125,15 @@ export async function handleStripeWebhook(
                 break;
             }
 
+            // PromptPay and other async methods can also expire unpaid, which
+            // fires payment_intent.canceled rather than .payment_failed. Both
+            // mean the same thing for us: release the reserved inventory.
+            case 'payment_intent.canceled':
             case 'payment_intent.payment_failed': {
                 const paymentIntent = event.data.object as Stripe.PaymentIntent;
                 const transferGroup = paymentIntent.transfer_group;
 
-                console.warn(`${logPrefix} PaymentIntent failed: ${paymentIntent.id}, transfer_group: ${transferGroup}`);
+                console.warn(`${logPrefix} PaymentIntent ${event.type === 'payment_intent.canceled' ? 'canceled' : 'failed'}: ${paymentIntent.id}, transfer_group: ${transferGroup}`);
 
                 if (transferGroup) {
                     // Revert pending_payment orders back to cancelled and restore listings

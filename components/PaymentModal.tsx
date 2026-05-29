@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import type { StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
 // Publishable key, region-aware to match the dual-platform server setup.
@@ -51,35 +52,39 @@ interface PaymentModalProps {
     onPaymentFailed: (error: string) => void;
 }
 
-// Inner form — must be inside <Elements> to use useStripe / useElements
-const StripeCardForm: React.FC<{
-    amount: number;
+// Inner form — must be inside <Elements> to use useStripe / useElements.
+//
+// Uses Stripe's *deferred* PaymentElement flow so the modal can offer every
+// method the seller's connected account supports (card + PromptPay on TH)
+// without us hardcoding a card field:
+//   1. elements.submit()        — validate + collect.
+//   2. /api/orders/checkout     — create pending orders, reserve inventory,
+//                                 get the transfer_group (zombie-payment guard).
+//   3. /api/checkout            — create an unconfirmed PaymentIntent on the
+//                                 seller's connected account, return client_secret.
+//   4. stripe.confirmPayment()  — confirm. Card confirms inline; PromptPay shows
+//                                 a QR and settles async (fulfilled by the webhook
+//                                 on payment_intent.succeeded).
+const PaymentElementForm: React.FC<{
+    displayAmount: number;
     currency: string;
     items: any[];
     apiEndpoint?: string;
     extraData?: any;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
-}> = ({ amount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed }) => {
+}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed }) => {
     const stripe = useStripe();
     const elements = useElements();
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
+    const [ready, setReady] = useState(false);
 
     const handlePay = async () => {
         if (!stripe || !elements) {
             onPaymentFailed('Stripe is not loaded yet. Please try again.');
             return;
         }
-
-        const cardElement = elements.getElement(CardElement);
-        if (!cardElement) {
-            onPaymentFailed('Card element not found.');
-            return;
-        }
-
-        // Belt-and-suspenders: surface a clear error if the parent rendered us
-        // without the required context, instead of letting the server return a
-        // generic "missing required fields" message.
         if (apiEndpoint === '/api/checkout' && !extraData?.buyerId) {
             onPaymentFailed('You must be signed in to complete a purchase.');
             return;
@@ -90,122 +95,100 @@ const StripeCardForm: React.FC<{
         }
 
         setLoading(true);
-
-        // Charge amount may be overridden by the server in step 2 below.
-        let chargeAmount = amount;
-
         try {
-            // Step 1: Create Stripe PaymentMethod from card details
-            const { error, paymentMethod } = await stripe.createPaymentMethod({
-                type: 'card',
-                card: cardElement,
-            });
-
-            if (error) {
-                onPaymentFailed(error.message || 'Card error');
+            // Step 1: validate the entered payment details.
+            const { error: submitError } = await elements.submit();
+            if (submitError) {
+                onPaymentFailed(submitError.message || 'Please check your payment details.');
                 setLoading(false);
                 return;
             }
 
-            // Step 2: Create orders FIRST to get a transfer_group
-            // This prevents "zombie payments" — orders exist before money is charged
+            // Step 2: create pending orders first (reserve inventory + get a
+            // transfer_group). buyerId is derived from the session server-side.
             let transferGroup: string | undefined;
-
             if (apiEndpoint === '/api/checkout') {
-                // buyerId is derived from the session server-side — never send
-                // it from the client.
                 const orderRes = await fetch('/api/orders/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        items,
-                        paymentMethod: 'credit_card',
-                    }),
+                    // 'credit_card' is the value the orders table has always
+                    // stored; the actual method (card/PromptPay) is recorded on
+                    // the Stripe PaymentIntent. Keep it to avoid any column
+                    // constraint surprise.
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card' }),
                 });
-
                 const orderData = await orderRes.json();
-
                 if (!orderRes.ok || !orderData.success) {
                     onPaymentFailed(orderData.error || 'Failed to create orders');
                     setLoading(false);
                     return;
                 }
-
                 transferGroup = orderData.transferGroup;
-                // The server is authoritative on the final total (it computes
-                // shipping with Flash). Use its number for the Stripe charge —
-                // otherwise the buyer's card statement won't match the order
-                // records, and refunds get fiddly.
-                if (typeof orderData.totalAmount === 'number') {
-                    chargeAmount = orderData.totalAmount;
-                }
-                // Intentionally not logging transfer_group / amount in client console.
             }
 
-            // Step 3: Charge the card via Stripe
-            const payload = apiEndpoint === '/api/checkout'
-                ? {
-                    // amount is ignored server-side (computed from DB) — kept
-                    // only for legacy logging compatibility.
-                    amount: chargeAmount,
-                    currency,
-                    token: paymentMethod.id,
-                    metadata: {
-                        transfer_group: transferGroup,
-                    },
-                }
-                : {
-                    orderId: items[0]?.id,
-                    paymentMethodId: paymentMethod.id,
-                    ...extraData
-                };
-
-            const res = await fetch(apiEndpoint, {
+            // Step 3: create the PaymentIntent (no card token — PaymentElement
+            // flow). Server computes the authoritative amount from the orders.
+            const piRes = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(
+                    apiEndpoint === '/api/checkout'
+                        ? { currency, metadata: { transfer_group: transferGroup } }
+                        : { orderId: items[0]?.id, ...extraData }
+                ),
             });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Payment failed');
+            const piData = await piRes.json();
+            if (!piRes.ok || !piData.client_secret) {
+                throw new Error(piData.error || 'Could not start payment');
             }
 
-            if (data.status === 'succeeded') {
-                // Client-triggered fulfillment fallback. The Stripe webhook
-                // is the canonical post-payment path, but if it's misconfigured
-                // or delivery fails, orders would stay stuck at pending_payment
-                // and never reach the seller's "Pending Shipments" view.
-                // /api/orders/finalize re-verifies the payment with Stripe and
-                // runs the same idempotent fulfillment — CAS guard inside
-                // fulfillOrdersByTransferGroup prevents double-processing if
-                // the webhook ALSO fires.
-                if (apiEndpoint === '/api/checkout' && transferGroup) {
+            // Step 4: confirm. redirect:'if_required' keeps card + PromptPay
+            // inline (Stripe renders the PromptPay QR itself); return_url is
+            // only used if a method actually needs a full redirect.
+            const returnUrl = typeof window !== 'undefined'
+                ? `${window.location.origin}/?payment_status=complete`
+                : 'https://cardstreet.app/?payment_status=complete';
+
+            const { error, paymentIntent } = await stripe.confirmPayment({
+                elements,
+                clientSecret: piData.client_secret,
+                confirmParams: { return_url: returnUrl },
+                redirect: 'if_required',
+            });
+
+            if (error) {
+                onPaymentFailed(error.message || 'Payment failed');
+                setLoading(false);
+                return;
+            }
+
+            const status = paymentIntent?.status;
+            const method = paymentIntent?.payment_method_types?.[0] || 'card';
+
+            if (status === 'succeeded') {
+                // Synchronous fulfillment fallback. The webhook is canonical and
+                // idempotent (CAS guard in fulfillOrdersByTransferGroup); this
+                // just avoids a stuck pending_payment order if the webhook is
+                // slow or misconfigured. PromptPay never reaches here (it lands
+                // on 'processing'); only the webhook fulfills it.
+                if (apiEndpoint === '/api/checkout' && transferGroup && paymentIntent) {
                     try {
-                        const finalizeRes = await fetch('/api/orders/finalize', {
+                        await fetch('/api/orders/finalize', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                transferGroup,
-                                paymentIntentId: data.id,
-                            }),
+                            body: JSON.stringify({ transferGroup, paymentIntentId: paymentIntent.id }),
                         });
-                        const finalizeData = await finalizeRes.json().catch(() => ({}));
-                        if (!finalizeRes.ok) {
-                            console.warn('[PaymentModal] Finalize fallback returned an error (webhook may still fulfill)');
-                        }
-                    } catch (finalizeErr) {
-                        // Don't block the user — the webhook is still the
-                        // canonical path, this is just a safety net.
-                        console.warn('[PaymentModal] Finalize fallback threw (webhook should still fulfill):', finalizeErr);
+                    } catch {
+                        // Non-blocking — webhook is the canonical path.
                     }
                 }
-                onPaymentSuccess({ paymentMethod: 'card', paymentId: data.id, transferGroup: data.transfer_group || transferGroup });
-            } else if (data.status === 'requires_action' && data.next_action?.redirect_to_url) {
-                window.location.href = data.next_action.redirect_to_url.url;
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
+            } else if (status === 'processing') {
+                // PromptPay (and other async methods): the buyer has authorized;
+                // funds settle shortly and the webhook fulfills on succeeded.
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
             } else {
-                onPaymentFailed('Payment not completed: ' + data.status);
+                onPaymentFailed('Payment not completed: ' + (status || 'unknown'));
             }
         } catch (e: any) {
             onPaymentFailed(e.message);
@@ -216,32 +199,20 @@ const StripeCardForm: React.FC<{
 
     return (
         <>
-            <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4">
-                <CardElement
-                    options={{
-                        style: {
-                            base: {
-                                color: '#ffffff',
-                                fontFamily: 'Inter, sans-serif',
-                                fontSize: '14px',
-                                '::placeholder': { color: '#64748b' },
-                                iconColor: '#a78bfa',
-                            },
-                            invalid: { color: '#f87171' },
-                        },
-                    }}
-                />
+            <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
+                <PaymentElement onReady={() => setReady(true)} options={{ layout: 'tabs' }} />
             </div>
             <button
                 onClick={handlePay}
-                disabled={loading || !stripe}
-                className={`mt-4 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${
-                    loading || !stripe
-                        ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                        : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
-                }`}
+                disabled={loading || !stripe || !ready}
+                className={`mt-4 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading || !stripe || !ready
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
+                    }`}
             >
-                {loading ? 'Processing...' : `Pay ${currency === 'THB' ? '฿' : '$'}${amount.toLocaleString()}`}
+                {loading
+                    ? (t('paymentFlow.processing') || 'Processing…')
+                    : `${t('paymentFlow.pay') || 'Pay'} ${currency === 'THB' ? '฿' : '$'}${displayAmount.toLocaleString()}`}
             </button>
         </>
     );
@@ -337,6 +308,22 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     );
     const waitingForEstimate = isMarketplaceCheckout && !estimate && !estimateError;
 
+    // Deferred PaymentElement options. amount is in the currency's smallest
+    // unit (satang/cents) and is only used to render eligible methods + wallet
+    // amounts; the authoritative charge amount is set server-side on the
+    // PaymentIntent. Dark theme to match the modal.
+    const amountMinor = Math.max(1, Math.round(effectiveAmount * 100));
+    const elementsCurrency = (currency || 'thb').toLowerCase();
+    const elementsOptions = useMemo<StripeElementsOptions>(() => ({
+        mode: 'payment',
+        amount: amountMinor,
+        currency: elementsCurrency,
+        appearance: {
+            theme: 'night',
+            variables: { colorPrimary: '#22d3ee', borderRadius: '12px' },
+        },
+    }), [amountMinor, elementsCurrency]);
+
     if (!isOpen) return null;
 
     return (
@@ -402,9 +389,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             </div>
                         ) : (
                             <>
-                                <Elements stripe={stripePromise}>
-                                    <StripeCardForm
-                                        amount={effectiveAmount}
+                                <Elements
+                                    stripe={stripePromise}
+                                    options={elementsOptions}
+                                    // Deferred Elements can't change amount/currency/account in
+                                    // place — remount when any of them changes.
+                                    key={`${amountMinor}-${elementsCurrency}-${estimate?.sellerStripeAccountId || 'platform'}`}
+                                >
+                                    <PaymentElementForm
+                                        displayAmount={effectiveAmount}
                                         currency={currency}
                                         items={items}
                                         apiEndpoint={apiEndpoint}

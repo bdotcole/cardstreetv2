@@ -274,6 +274,8 @@
         "secureTitle": "Secure Payment",
         "secureSubtitle": "Encrypted checkout",
         "paymentUnavailable": "Card payments are temporarily unavailable. Please try again later.",
-        "preparingCheckout": "Preparing secure checkout…"
+        "preparingCheckout": "Preparing secure checkout…",
+        "pay": "Pay",
+        "processing": "Processing…"
     }
 }
