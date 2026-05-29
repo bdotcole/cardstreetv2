@@ -270,6 +270,10 @@
         "listingFailed": "Failed to publish listing. Please try again.",
         "paymentFailed": "Payment failed",
         "cameraPermission": "Please allow camera access in your browser settings to use the scanner.",
-        "shippingEstimate": "Shipping is an estimate — the final amount is calculated at checkout."
+        "shippingEstimate": "Shipping shown is an estimate — your final total may shift slightly based on the actual delivery rate.",
+        "secureTitle": "Secure Payment",
+        "secureSubtitle": "Encrypted checkout",
+        "paymentUnavailable": "Card payments are temporarily unavailable. Please try again later.",
+        "preparingCheckout": "Preparing secure checkout…"
     }
 }

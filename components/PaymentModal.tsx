@@ -1,11 +1,32 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// NEXT_PUBLIC_* values are inlined at build time. This key has been pasted into
+// Vercel with trailing whitespace/newlines before, which makes loadStripe()
+// reject it and render a blank, dead card field. Trim defensively so a stray
+// space can't take checkout down.
+const PUBLISHABLE_KEY = (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '').trim();
+
+// Stripe.js instances are cached per connected account. A Thailand direct
+// charge requires the card to be tokenized in the SELLER's account context
+// (`stripeAccount`) — /api/checkout creates the PaymentIntent on that account,
+// and a platform-scoped PaymentMethod would be rejected with "No such
+// payment_method." The legacy US platform path loads without an account.
+const stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
+function getStripePromise(stripeAccount?: string | null): ReturnType<typeof loadStripe> | null {
+    if (!PUBLISHABLE_KEY) return null;
+    const cacheKey = stripeAccount || '__platform__';
+    let promise = stripePromiseCache.get(cacheKey);
+    if (!promise) {
+        promise = loadStripe(PUBLISHABLE_KEY, stripeAccount ? { stripeAccount } : undefined);
+        stripePromiseCache.set(cacheKey, promise);
+    }
+    return promise;
+}
 
 interface PaymentModalProps {
     isOpen: boolean;
@@ -240,6 +261,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         shipping: number;
         total: number;
         shippingIsEstimate: boolean;
+        sellerStripeAccountId: string | null;
     } | null>(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [estimateError, setEstimateError] = useState<string | null>(null);
@@ -275,6 +297,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     shipping: data.shipping,
                     total: data.total,
                     shippingIsEstimate: !!data.shippingIsEstimate,
+                    sellerStripeAccountId: data.sellerStripeAccountId ?? null,
                 });
             })
             .catch(err => {
@@ -292,6 +315,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const effectiveAmount = estimate?.total ?? amount;
     const effectiveShipping = estimate?.shipping ?? shippingFee;
 
+    // For the marketplace checkout we must wait for the estimate before
+    // mounting Elements, because it tells us which connected account to bind
+    // Stripe.js to (TH direct charge). Mounting on the platform first and
+    // swapping later would tokenize the card on the wrong account. Other
+    // (non-marketplace) callers tokenize on the platform immediately.
+    const isMarketplaceCheckout = (apiEndpoint ?? '/api/checkout') === '/api/checkout';
+    const stripePromise = useMemo(
+        () => getStripePromise(isMarketplaceCheckout ? estimate?.sellerStripeAccountId : undefined),
+        [isMarketplaceCheckout, estimate?.sellerStripeAccountId],
+    );
+    const waitingForEstimate = isMarketplaceCheckout && !estimate && !estimateError;
+
     if (!isOpen) return null;
 
     return (
@@ -300,8 +335,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 {/* Header */}
                 <div className="bg-gradient-to-r from-brand-darker to-[#1e293b] p-6 border-b border-white/5 flex justify-between items-center">
                     <div>
-                        <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">ชำระเงินอย่างปลอดภัย</h3>
-                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">ชำระเงินผ่านระบบเข้ารหัส</p>
+                        <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">{t('paymentFlow.secureTitle') || 'Secure Payment'}</h3>
+                        <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">{t('paymentFlow.secureSubtitle') || 'Encrypted checkout'}</p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-slate-400">
                         <i className="fa-solid fa-xmark"></i>
@@ -343,21 +378,37 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
 
                     <div className="space-y-3">
-                        <Elements stripe={stripePromise}>
-                            <StripeCardForm
-                                amount={effectiveAmount}
-                                currency={currency}
-                                items={items}
-                                apiEndpoint={apiEndpoint}
-                                extraData={extraData}
-                                onPaymentSuccess={onPaymentSuccess}
-                                onPaymentFailed={onPaymentFailed}
-                            />
-                        </Elements>
-                        <p className="text-center text-[10px] text-slate-600 flex items-center justify-center gap-1 mt-2">
-                            <i className="fa-brands fa-stripe text-slate-500 text-sm"></i>
-                            Secured by Stripe
-                        </p>
+                        {!stripePromise ? (
+                            // PUBLISHABLE_KEY missing/empty — render a clear message
+                            // instead of a silently dead card field + greyed button.
+                            <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-4 text-center">
+                                {t('paymentFlow.paymentUnavailable')
+                                    || 'Card payments are temporarily unavailable. Please try again later.'}
+                            </div>
+                        ) : waitingForEstimate ? (
+                            <div className="flex items-center justify-center gap-2 text-slate-400 text-xs py-6">
+                                <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                {t('paymentFlow.preparingCheckout') || 'Preparing secure checkout…'}
+                            </div>
+                        ) : (
+                            <>
+                                <Elements stripe={stripePromise}>
+                                    <StripeCardForm
+                                        amount={effectiveAmount}
+                                        currency={currency}
+                                        items={items}
+                                        apiEndpoint={apiEndpoint}
+                                        extraData={extraData}
+                                        onPaymentSuccess={onPaymentSuccess}
+                                        onPaymentFailed={onPaymentFailed}
+                                    />
+                                </Elements>
+                                <p className="text-center text-[10px] text-slate-600 flex items-center justify-center gap-1 mt-2">
+                                    <i className="fa-brands fa-stripe text-slate-500 text-sm"></i>
+                                    Secured by Stripe
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
