@@ -73,7 +73,8 @@ const PaymentElementForm: React.FC<{
     extraData?: any;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
-}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed }) => {
+    onTotalChanged?: (newTotal: number) => void;
+}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -115,11 +116,22 @@ const PaymentElementForm: React.FC<{
                     // stored; the actual method (card/PromptPay) is recorded on
                     // the Stripe PaymentIntent. Keep it to avoid any column
                     // constraint surprise.
-                    body: JSON.stringify({ items, paymentMethod: 'credit_card' }),
+                    //
+                    // expectedTotal is the price the buyer is looking at right
+                    // now. The server refuses to charge more than this (returns
+                    // TOTAL_CHANGED) so the displayed total is what gets charged.
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: displayAmount }),
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
-                    onPaymentFailed(orderData.error || 'Failed to create orders');
+                    if (orderData.code === 'TOTAL_CHANGED' && typeof orderData.total === 'number') {
+                        onTotalChanged?.(orderData.total);
+                        onPaymentFailed(
+                            `Shipping updated — your new total is ${currency === 'THB' ? '฿' : '$'}${orderData.total.toLocaleString()}. Please review and pay again.`
+                        );
+                    } else {
+                        onPaymentFailed(orderData.error || 'Failed to create orders');
+                    }
                     setLoading(false);
                     return;
                 }
@@ -404,6 +416,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         extraData={extraData}
                                         onPaymentSuccess={onPaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}
+                                        onTotalChanged={(newTotal) =>
+                                            setEstimate((prev) =>
+                                                prev
+                                                    ? { ...prev, total: newTotal, shipping: newTotal - prev.subtotal }
+                                                    : prev
+                                            )
+                                        }
                                     />
                                 </Elements>
                                 <p className="text-center text-[10px] text-slate-600 flex items-center justify-center gap-1 mt-2">

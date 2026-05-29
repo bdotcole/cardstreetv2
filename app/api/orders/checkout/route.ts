@@ -53,6 +53,16 @@ export async function POST(req: Request) {
         const body = await req.json().catch(() => ({}));
         const items: CheckoutItem[] = Array.isArray(body?.items) ? body.items : [];
         const paymentMethod: string = typeof body?.paymentMethod === 'string' ? body.paymentMethod : 'credit_card';
+        // The total the buyer was shown in the modal (THB). We use it to GUARANTEE
+        // we never charge more than what was displayed: if the server's freshly
+        // computed total exceeds it (e.g. Flash returned a higher live rate than
+        // the estimate shown), we reject so the buyer can review — rather than
+        // silently overcharging. We never charge below the server total, so this
+        // can't be abused to underpay.
+        const expectedTotal: number | null =
+            typeof body?.expectedTotal === 'number' && body.expectedTotal > 0
+                ? body.expectedTotal
+                : null;
 
         if (items.length === 0) {
             return NextResponse.json({ error: 'No items provided' }, { status: 400 });
@@ -262,6 +272,27 @@ export async function POST(req: Request) {
                 transfer_group: transferGroup,
                 stripe_region: orderRegion,
             });
+        }
+
+        // ─── No-overcharge guard (before any side effects) ───
+        // Compute the authoritative total now and compare against what the buyer
+        // was shown. If we'd charge MORE than displayed, reject cleanly — no
+        // listings reserved, no orders created — so the buyer reviews the new
+        // total instead of getting a surprise charge. A 1-satang tolerance
+        // absorbs rounding.
+        const computedTotalSatang = ordersToInsert.reduce(
+            (sum, o) => sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100),
+            0,
+        );
+        if (expectedTotal !== null && computedTotalSatang > Math.round(expectedTotal * 100) + 1) {
+            return NextResponse.json(
+                {
+                    error: 'Shipping was updated for this address. Please review your new total and try again.',
+                    code: 'TOTAL_CHANGED',
+                    total: computedTotalSatang / 100,
+                },
+                { status: 409 },
+            );
         }
 
         // ─── Reserve listings via CAS on status='active' BEFORE creating orders. ───

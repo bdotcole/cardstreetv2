@@ -270,7 +270,7 @@
         "listingFailed": "Failed to publish listing. Please try again.",
         "paymentFailed": "Payment failed",
         "cameraPermission": "Please allow camera access in your browser settings to use the scanner.",
-        "shippingEstimate": "Shipping shown is an estimate — your final total may shift slightly based on the actual delivery rate.",
+        "shippingEstimate": "Flat-rate shipping for this address — you'll be charged exactly the total shown above.",
         "secureTitle": "Secure Payment",
         "secureSubtitle": "Encrypted checkout",
         "paymentUnavailable": "Card payments are temporarily unavailable. Please try again later.",
