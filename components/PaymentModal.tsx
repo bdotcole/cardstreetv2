@@ -373,12 +373,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 Could not calculate shipping — showing subtotal only. Final amount will reflect actual shipping.
                             </p>
                         )}
-                        {!estimateError && estimate?.shippingIsEstimate && (
-                            <p className="text-[10px] text-amber-400 italic">
-                                {t('paymentFlow.shippingEstimate')
-                                    || 'Shipping is an estimate — the final amount is calculated at checkout.'}
-                            </p>
-                        )}
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
