@@ -353,10 +353,14 @@ export async function estimateRate(params: FlashRateParams): Promise<FlashRateRe
 
     const response = await makeFlashRequest('/open/v1/orders/estimate_rate', requestParams);
 
+    // Flash returns these as STRINGS ("2800"), even though the fields look
+    // numeric. Coerce to Number — otherwise callers doing
+    // `estimatePrice + upCountryAmount` get string concatenation
+    // ("2800" + "0" = "28000" → ฿280 instead of ฿28).
     return {
-        estimatePrice: response.data.estimatePrice,
-        upCountryAmount: response.data.upCountryAmount || 0,
-        pricePolicy: response.data.pricePolicy,
+        estimatePrice: Number(response.data.estimatePrice) || 0,
+        upCountryAmount: Number(response.data.upCountryAmount) || 0,
+        pricePolicy: Number(response.data.pricePolicy) || 0,
     };
 }
 
