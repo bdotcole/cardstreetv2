@@ -5,11 +5,21 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
-// NEXT_PUBLIC_* values are inlined at build time. This key has been pasted into
-// Vercel with trailing whitespace/newlines before, which makes loadStripe()
-// reject it and render a blank, dead card field. Trim defensively so a stray
-// space can't take checkout down.
-const PUBLISHABLE_KEY = (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '').trim();
+// Publishable key, region-aware to match the dual-platform server setup.
+// The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
+// counterpart is NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TH. We prefer the TH key
+// and fall back to the legacy un-suffixed var so either Vercel naming works.
+//
+// NEXT_PUBLIC_* values are inlined at build time and must be referenced as
+// static `process.env.X` member accesses for Next to inline them — don't
+// rewrite this as a dynamic lookup. Trim defensively: a trailing space/newline
+// pasted into Vercel makes loadStripe() reject the key and renders a blank,
+// dead card field.
+const PUBLISHABLE_KEY = (
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TH ||
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+    ''
+).trim();
 
 // Stripe.js instances are cached per connected account. A Thailand direct
 // charge requires the card to be tokenized in the SELLER's account context
