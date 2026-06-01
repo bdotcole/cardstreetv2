@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import RequestCardModal from './RequestCardModal';
 
 interface AddCardProps {
   onScanClick: () => void;
@@ -19,6 +20,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
   const [results, setResults] = useState<Card[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAiResolving, setIsAiResolving] = useState(false);
+  const [isRequestOpen, setIsRequestOpen] = useState(false);
   const searchTimeout = useRef<number | null>(null);
 
   const performSearch = async (val: string) => {
@@ -126,9 +128,15 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
             ))}
           </div>
         ) : searchQuery.length > 2 ? (
-          <div className="text-center py-24 glass rounded-[3rem] border-dashed border-white/10 opacity-30">
+          <div className="text-center py-16 glass rounded-[3rem] border-dashed border-white/10">
             <i className="fa-solid fa-ghost text-4xl mb-4 text-slate-800"></i>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-10">No matches in the registry for "{searchQuery}"</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-10 mb-6">{t('cardRequest.noMatches')} "{searchQuery}"</p>
+            <button
+              onClick={() => setIsRequestOpen(true)}
+              className="inline-flex items-center gap-2 px-6 h-11 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+            >
+              <i className="fa-solid fa-plus"></i> {t('cardRequest.requestCta')}
+            </button>
           </div>
         ) : (
           <div className="text-center py-20 opacity-10">
@@ -195,6 +203,11 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
         </div>
       )}
       {view === 'options' ? renderOptions() : renderManualView()}
+      <RequestCardModal
+        isOpen={isRequestOpen}
+        onClose={() => setIsRequestOpen(false)}
+        initialQuery={searchQuery}
+      />
     </>
   );
 };

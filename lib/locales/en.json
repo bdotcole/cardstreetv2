@@ -208,6 +208,21 @@
         "searchRegistry": "Search Registry",
         "globalArchives": "Global Product Archives"
     },
+    "cardRequest": {
+        "noMatches": "No matches in the registry for",
+        "requestCta": "Request this card",
+        "title": "Request a Card",
+        "subtitle": "Can't find it? Tell us and we'll add it to the catalog.",
+        "cardName": "Card name",
+        "cardNamePlaceholder": "e.g. Charizard ex 199/165",
+        "details": "Details (optional)",
+        "detailsPlaceholder": "Set, card number, language, or a link — anything that helps us find it.",
+        "cancel": "Cancel",
+        "submit": "Send Request",
+        "successMessage": "Request sent. Thanks for helping us grow the catalog!",
+        "loginRequired": "Please log in to request a card.",
+        "failed": "Could not send your request. Please try again."
+    },
     "card": {
         "common": "Common",
         "uncommon": "Uncommon",
