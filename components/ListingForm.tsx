@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import CustomSelect from './CustomSelect';
 interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
@@ -193,7 +194,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                 <input
                   type="number"
                   required
-                  min="1"
+                  min="20"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 text-white font-bold focus:border-brand-cyan outline-none transition-colors placeholder-slate-600"
@@ -238,15 +239,17 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl border border-white/5 animate-fadeIn">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Company</label>
-                  <select
+                  <CustomSelect
+                    ariaLabel="Company"
                     value={gradingCompany}
-                    onChange={(e) => setGradingCompany(e.target.value)}
-                    className="w-full h-10 bg-brand-darker border border-white/10 rounded-lg px-2 text-white text-sm"
-                  >
-                    <option value="PSA">PSA</option>
-                    <option value="BGS">BGS</option>
-                    <option value="CGC">CGC</option>
-                  </select>
+                    onChange={setGradingCompany}
+                    options={[
+                      { value: 'PSA', label: 'PSA' },
+                      { value: 'BGS', label: 'BGS' },
+                      { value: 'CGC', label: 'CGC' },
+                    ]}
+                    triggerClassName="w-full h-10 bg-brand-darker border border-white/10 rounded-lg px-3 text-white text-sm"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Grade</label>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ReportEntityType } from '@/types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CustomSelect from './CustomSelect';
 
 interface ReportModalProps {
     isOpen: boolean;
@@ -113,20 +114,15 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                                 {t('report.reason')}
                             </label>
-                            <div className="relative">
-                                <select 
-                                    className="w-full h-12 bg-black/40 border border-white/10 rounded-xl px-4 text-sm font-semibold text-white outline-none focus:border-brand-cyan appearance-none"
-                                    value={selectedReason}
-                                    onChange={(e) => setSelectedReason(e.target.value)}
-                                >
-                                    {REPORT_REASONS.map(reason => (
-                                        <option key={reason} value={reason} className="bg-[#0f1419]">
-                                            {t(`report.reasons.${REASON_KEYS[reason]}`)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
-                            </div>
+                            <CustomSelect
+                                ariaLabel={t('report.reason')}
+                                value={selectedReason}
+                                onChange={setSelectedReason}
+                                options={REPORT_REASONS.map(reason => ({
+                                    value: reason,
+                                    label: t(`report.reasons.${REASON_KEYS[reason]}`),
+                                }))}
+                            />
                         </div>
 
                         <div>
