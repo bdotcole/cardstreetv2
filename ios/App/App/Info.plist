@@ -28,6 +28,8 @@
 	<string>CardStreet accesses your photo library so you can choose existing card photos to scan or attach to listings.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>CardStreet saves card images you capture to your photo library.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
