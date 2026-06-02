@@ -43,8 +43,9 @@ iOS push routes through APNs, and the backend addresses devices by FCM token.
       JS is code-split off the web/Android path.
 - [x] `FirebaseApp.configure()` added to `ios/App/App/AppDelegate.swift`; `GoogleService-Info.plist`
       wired into `App.xcodeproj` (file ref + Resources build phase).
-- [ ] **Drop `GoogleService-Info.plist` (downloaded from Firebase) into `ios/App/App/`** and
-      commit it. The build will fail until this file is present (it's referenced in the project).
+- [x] `GoogleService-Info.plist` committed at `ios/App/App/` (bundle id `com.cardstreet.tcg`,
+      sender `385207592781`). Committed rather than CI-injected, to match the already-committed
+      Android `google-services.json`; the iOS API key is bundle-restricted and ships in the app.
 - [ ] Register an iOS app in Firebase + upload the APNs `.p8` key (Firebase > Cloud Messaging).
 - [x] `aps-environment` entitlement added (`ios/App/App/App.entitlements`, wired via
       `CODE_SIGN_ENTITLEMENTS` in both build configs). The App ID already has Push enabled, so
