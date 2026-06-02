@@ -34,12 +34,24 @@ Apple Guideline 5.1.1(v) requires real, in-app-reachable account deletion.
 - [x] `/delete` is linked from the Profile screen (below Sign Out, non-guest only) via
       the `profile.deleteAccount` i18n key (added to en + th locales).
 
-### 3. Push notifications via APNs
-The app uses FCM (`@capacitor/push-notifications`). iOS push routes through APNs:
-- Generate an APNs auth key (.p8) in the Apple Developer portal.
-- Upload it to Firebase (Project settings > Cloud Messaging > Apple app config).
-- Add the Push Notifications capability + `aps-environment` entitlement to the iOS target
-  (Codemagic automatic signing can manage the profile once the capability is set in Xcode).
+### 3. Push notifications via APNs / FCM
+iOS push routes through APNs, and the backend addresses devices by FCM token.
+- [x] Added `@capacitor-firebase/messaging` (+ `firebase`). `hooks/usePushNotifications.ts`
+      now branches: Android keeps `@capacitor/push-notifications` (already an FCM token);
+      iOS uses Firebase Messaging to mint a real FCM token (the bare plugin only yields the
+      raw APNs token, which the FCM backend can't address). Imported dynamically so firebase
+      JS is code-split off the web/Android path.
+- [x] `FirebaseApp.configure()` added to `ios/App/App/AppDelegate.swift`; `GoogleService-Info.plist`
+      wired into `App.xcodeproj` (file ref + Resources build phase).
+- [ ] **Drop `GoogleService-Info.plist` (downloaded from Firebase) into `ios/App/App/`** and
+      commit it. The build will fail until this file is present (it's referenced in the project).
+- [ ] Register an iOS app in Firebase + upload the APNs `.p8` key (Firebase > Cloud Messaging).
+- [x] `aps-environment` entitlement added (`ios/App/App/App.entitlements`, wired via
+      `CODE_SIGN_ENTITLEMENTS` in both build configs). The App ID already has Push enabled, so
+      Codemagic automatic signing will include push in the profile.
+      NOTE: the entitlement value is `development`. Xcode's App Store export normally remaps
+      this to `production`; if push doesn't arrive on a TestFlight build, change it to
+      `production`.
 
 ## Apple account / store setup (one-time, off-codebase)
 
