@@ -1,0 +1,78 @@
+# Codemagic CI for the CardStreet iOS app (Capacitor wrapper).
+#
+# This builds and signs the iOS shell that loads https://cardstreet.app, the
+# same pattern the Android app uses. No Mac required locally — Codemagic runs
+# the Xcode build on a hosted macOS machine and uploads to TestFlight.
+#
+# ONE-TIME SETUP in the Codemagic UI before the first run:
+#   1. Connect this repo (Codemagic > Add application).
+#   2. Teams > Integrations > App Store Connect: add an API key, and note the
+#      integration name. Put that name in `app_store_connect.api_key` below
+#      (here referenced as the env group / integration `app_store_connect`).
+#   3. Code signing: use "Automatic" with the App Store Connect API key so
+#      Codemagic fetches/creates the distribution cert + provisioning profile.
+#   4. Register the bundle id `com.cardstreet.tcg` in App Store Connect and
+#      create the app record there (same id as Android's appId).
+#
+# Apple review blockers tracked separately (see IOS_LAUNCH.md):
+#   - Sign in with Apple (required because Google sign-in is offered)
+#   - Working in-app account deletion
+#   - APNs key in Firebase for push
+
+workflows:
+  ios-release:
+    name: CardStreet iOS Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: CardStreet ASC API Key   # <-- match the integration name you create in Codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.cardstreet.tcg
+      vars:
+        BUNDLE_ID: "com.cardstreet.tcg"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        APP_STORE_APPLE_ID: 0000000000          # <-- numeric Apple ID of the app in App Store Connect
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+
+      # The Capacitor app loads the live site (server.url in capacitor.config.ts),
+      # so webDir only needs to exist for `cap sync` to copy. Mirror Android,
+      # which ships just the Cordova shim — generate a minimal placeholder.
+      - name: Create placeholder webDir
+        script: |
+          mkdir -p out
+          cat > out/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>CardStreet</title>
+          <body style="background:#0f1419"></body>
+          HTML
+
+      - name: Capacitor sync (copy web assets + pod install)
+        script: npx cap sync ios
+
+      - name: Set build number from Codemagic counter
+        script: |
+          cd ios/App
+          agvtool new-version -all $(($PROJECT_BUILD_NUMBER))
+
+      - name: Build and sign IPA
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # Flip to true and add reviewer notes once the review blockers are cleared:
+        submit_to_app_store: false

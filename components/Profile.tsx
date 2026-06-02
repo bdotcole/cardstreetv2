@@ -679,6 +679,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               {t('profile.signOut')}
             </button>
 
+            {/* Account deletion — required to be reachable in-app by App Store
+                Guideline 5.1.1(v). Guests have no server account, so hide it for them. */}
+            {user?.provider !== 'guest' && (
+              <div className="flex justify-center mt-6">
+                <a
+                  href="/delete"
+                  className="text-[11px] text-slate-500 hover:text-brand-red underline underline-offset-4 transition-colors"
+                >
+                  {t('profile.deleteAccount')}
+                </a>
+              </div>
+            )}
+
             {/* DBD Registration Banner — Thailand Department of Business
                 Development e-commerce trust mark. Legal requirement for Thai
                 online merchants; the linked page lets the public verify the

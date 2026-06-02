@@ -26,7 +26,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
     const supabase = createClient();
 
-    const handleGoogleLogin = async () => {
+    const handleOAuthLogin = async (provider: 'google' | 'apple') => {
         setLoading(true);
         setError(null);
         try {
@@ -52,10 +52,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 // Ignore, fallback to dynamic-origin web URL
             }
 
-            console.log('[Auth] Initiating Google Login. Native:', isNative, 'Redirect:', redirectUrl);
+            console.log(`[Auth] Initiating ${provider} Login. Native:`, isNative, 'Redirect:', redirectUrl);
 
             const { data, error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
+                provider,
                 options: {
                     redirectTo: redirectUrl,
                     skipBrowserRedirect: isNative // Only skip on native to open manually in system browser
@@ -76,8 +76,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 }
             }
         } catch (err: any) {
-            console.error('Error logging in with Google:', err);
-            setError('Failed to sign in with Google. Please try again.');
+            console.error(`Error logging in with ${provider}:`, err);
+            const label = provider === 'apple' ? 'Apple' : 'Google';
+            setError(`Failed to sign in with ${label}. Please try again.`);
             setLoading(false);
         }
     };
@@ -238,15 +239,27 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                             </div>
                         )}
 
-                        {/* Google OAuth */}
-                        <button
-                            onClick={handleGoogleLogin}
-                            disabled={loading}
-                            className="w-full h-12 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-slate-900 shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <i className="fa-brands fa-google text-xl text-red-500 group-hover:scale-110 transition-transform"></i>
-                            <span>Continue with Google</span>
-                        </button>
+                        {/* Social OAuth — Apple is required by App Store Guideline 4.8
+                            whenever a third-party social login (Google) is offered. */}
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => handleOAuthLogin('google')}
+                                disabled={loading}
+                                className="w-full h-12 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-slate-900 shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <i className="fa-brands fa-google text-xl text-red-500 group-hover:scale-110 transition-transform"></i>
+                                <span>Continue with Google</span>
+                            </button>
+
+                            <button
+                                onClick={() => handleOAuthLogin('apple')}
+                                disabled={loading}
+                                className="w-full h-12 bg-black hover:bg-zinc-900 active:bg-zinc-800 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-white shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
+                            >
+                                <i className="fa-brands fa-apple text-xl group-hover:scale-110 transition-transform"></i>
+                                <span>Continue with Apple</span>
+                            </button>
+                        </div>
 
                         {/* Divider */}
                         <div className="relative flex py-2 items-center">
