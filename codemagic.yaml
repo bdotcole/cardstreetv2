@@ -32,12 +32,12 @@ workflows:
         bundle_identifier: com.cardstreet.tcg
       vars:
         BUNDLE_ID: "com.cardstreet.tcg"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        # Capacitor 8 scaffolds iOS with Swift Package Manager, so we build the
+        # .xcodeproj directly (there is no CocoaPods .xcworkspace).
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
-        APP_STORE_APPLE_ID: 0000000000          # <-- numeric Apple ID of the app in App Store Connect
       node: 20
       xcode: latest
-      cocoapods: default
     scripts:
       - name: Install npm dependencies
         script: npm ci
@@ -53,7 +53,7 @@ workflows:
           <body style="background:#0f1419"></body>
           HTML
 
-      - name: Capacitor sync (copy web assets + pod install)
+      - name: Capacitor sync (copy web assets + resolve Swift packages)
         script: npx cap sync ios
 
       - name: Set build number from Codemagic counter
@@ -65,7 +65,7 @@ workflows:
         script: |
           xcode-project use-profiles
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
