@@ -5,6 +5,10 @@ const config: CapacitorConfig = {
   appName: 'CardStreet',
   webDir: 'out',
 
+  // Native web view background — prevents a white flash between the splash
+  // screen hiding and the remote site (cardstreet.app) painting.
+  backgroundColor: '#0f1419',
+
   // Load the live Vercel deployment instead of bundled static files.
   // This works because the Next.js app has API routes that require a server.
   // Remove this block to load from bundled static files (if you switch to static export later).
