@@ -27,9 +27,6 @@ workflows:
     integrations:
       app_store_connect: CardStreet ASC API Key   # <-- match the integration name you create in Codemagic
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.cardstreet.tcg
       vars:
         BUNDLE_ID: "com.cardstreet.tcg"
         # Capacitor 8 scaffolds iOS with Swift Package Manager, so we build the
@@ -60,6 +57,18 @@ workflows:
         script: |
           cd ios/App
           agvtool new-version -all $(($PROJECT_BUILD_NUMBER))
+
+      # Explicit signing: fetch the distribution cert + App Store profile, CREATING
+      # them via the App Store Connect API key if they don't exist yet (the automatic
+      # ios_signing block only fetches pre-existing profiles, which is why the first
+      # build failed with "No matching profiles found").
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
 
       - name: Build and sign IPA
         script: |
