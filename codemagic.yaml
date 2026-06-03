@@ -27,6 +27,8 @@ workflows:
     integrations:
       app_store_connect: CardStreet ASC API Key   # <-- match the integration name you create in Codemagic
     environment:
+      groups:
+        - ios_signing   # must contain CERTIFICATE_PRIVATE_KEY (secure) — see setup note below
       vars:
         BUNDLE_ID: "com.cardstreet.tcg"
         # Capacitor 8 scaffolds iOS with Swift Package Manager, so we build the
@@ -67,6 +69,7 @@ workflows:
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
 
