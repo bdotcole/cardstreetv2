@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { createClient } from '@/lib/supabase/client';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
@@ -23,6 +24,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [phone, setPhone] = useState('');
+    const [mounted, setMounted] = useState(false);
+
+    // Portal target is document.body, which only exists after mount.
+    useEffect(() => setMounted(true), []);
 
     const supabase = createClient();
 
@@ -137,10 +142,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
 
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/70 backdrop-blur-md transition-opacity"
@@ -148,7 +153,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             ></div>
 
             {/* Modal */}
-            <div className="relative w-full max-w-md bg-brand-darker rounded-3xl border border-white/10 shadow-2xl transition-all animate-slideUp overflow-hidden">
+            <div className="relative w-full max-w-md bg-brand-darker rounded-3xl border border-white/10 shadow-2xl transition-all animate-slideUp max-h-[90dvh] overflow-y-auto">
                 {/* Close Button */}
                 <button
                     onClick={onClose}
@@ -389,7 +394,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
