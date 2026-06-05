@@ -137,11 +137,13 @@ export const pokemonService = {
         }
     },
 
-    async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th') {
+    async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th', game: string = 'pokemon') {
         if (!query || query.trim().length < 2) return [];
 
-        // Cache key without language for cross-language search
-        const cacheKey = `${query.toLowerCase().trim()}-all-languages`;
+        // Scope search to the browsing context (game + language) so a Pokemon
+        // search doesn't surface One Piece/MTG and vice versa.
+        const dbLang = language === 'jp' ? 'ja' : language;
+        const cacheKey = `${query.toLowerCase().trim()}-${game}-${dbLang || 'all'}`;
         if (searchIndex.has(cacheKey)) {
             return searchIndex.get(cacheKey) || [];
         }
@@ -198,11 +200,14 @@ export const pokemonService = {
             let dbQuery = supabase
                 .from('pokemon_cards')
                 .select(`
-                    id, name, english_name, set_id, number, supertype, subtypes, 
-                    rarity, hp, types, image_small, image_large, language, raw_data,
+                    id, name, english_name, set_id, number, supertype, subtypes,
+                    rarity, hp, types, game, image_small, image_large, language, raw_data,
                     market_values(market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
-                `);
+                `)
+                .eq('game', game);
+
+            if (dbLang) dbQuery = dbQuery.eq('language', dbLang);
 
             if (matchedSetIds.length > 0) {
                 dbQuery = dbQuery.in('set_id', matchedSetIds);
@@ -292,17 +297,20 @@ export const pokemonService = {
                 const popularityBoost = Math.min(50, Math.floor(searchCount / 10)); // Max +50 points
                 score += popularityBoost;
 
-                // Boost Pokemon cards over Trainers/Energy
-                if (card.supertype === 'Pokémon') score += 10;
+                // Pokemon-specific ranking boosts only apply when searching Pokemon.
+                if (game === 'pokemon') {
+                    // Boost Pokemon cards over Trainers/Energy
+                    if (card.supertype === 'Pokémon') score += 10;
 
-                // Hardcoded boost for most popular Pokemon
-                const popularPokemon = [
-                    'charizard', 'pikachu', 'mewtwo', 'rayquaza', 'lucario',
-                    'eevee', 'gengar', 'dragonite', 'gyarados', 'garchomp',
-                    'ลิซาร์ดอน', 'ปิกาจู', 'มิวทู' // Thai names for popular Pokemon
-                ];
-                if (popularPokemon.some(p => nameLower.includes(p) || englishLower.includes(p))) {
-                    score += 30;
+                    // Hardcoded boost for most popular Pokemon
+                    const popularPokemon = [
+                        'charizard', 'pikachu', 'mewtwo', 'rayquaza', 'lucario',
+                        'eevee', 'gengar', 'dragonite', 'gyarados', 'garchomp',
+                        'ลิซาร์ดอน', 'ปิกาจู', 'มิวทู' // Thai names for popular Pokemon
+                    ];
+                    if (popularPokemon.some(p => nameLower.includes(p) || englishLower.includes(p))) {
+                        score += 30;
+                    }
                 }
 
                 return { card, score };

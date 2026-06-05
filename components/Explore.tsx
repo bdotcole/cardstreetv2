@@ -119,7 +119,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     if (debouncedSearchTerm.length > 2) {
       const myReq = ++cardsReqIdRef.current;
       setIsLoadingCards(true);
-      pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage).then(results => {
+      pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage, selectedGame).then(results => {
         if (myReq !== cardsReqIdRef.current) return;
         setCards(results);
         setIsLoadingCards(false);
