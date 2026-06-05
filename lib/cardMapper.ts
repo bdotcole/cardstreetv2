@@ -121,9 +121,14 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     rawData.set?.printedTotal ||
     '??';
 
+  // English-first app: show the English card name for JP cards when we have one.
+  const displayName = (isPokemon && supabaseCard.language === 'ja' && supabaseCard.english_name)
+    ? supabaseCard.english_name
+    : supabaseCard.name;
+
   return {
     id: supabaseCard.id,
-    name: supabaseCard.name,
+    name: displayName,
     thaiName: supabaseCard.english_name || supabaseCard.name,
     set: setName,
     game,
