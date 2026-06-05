@@ -81,6 +81,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 's3.limitlesstcg.com',
       },
+      {
+        // Bulbagarden archives (real Japanese expansion logos)
+        protocol: 'https',
+        hostname: 'archives.bulbagarden.net',
+      },
     ],
   },
   experimental: {
