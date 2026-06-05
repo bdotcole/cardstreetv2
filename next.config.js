@@ -42,9 +42,39 @@ const nextConfig = {
         hostname: 'api.dicebear.com',
       },
       {
+        // Google avatars (used by Supabase Auth)
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
         // Pokedata set images (used for some English sets like Temporal Forces)
         protocol: 'https',
         hostname: 'pokemonsetimages.pokedata.io',
+      },
+      {
+        // Scryfall card images (Magic: The Gathering catalog)
+        protocol: 'https',
+        hostname: 'cards.scryfall.io',
+      },
+      {
+        // Scryfall set symbol/icon SVGs (used as MTG set logos)
+        protocol: 'https',
+        hostname: 'svgs.scryfall.io',
+      },
+      {
+        // YGOPRODeck card images (Yu-Gi-Oh! catalog)
+        protocol: 'https',
+        hostname: 'images.ygoprodeck.com',
+      },
+      {
+        // optcgapi card images (One Piece Card Game catalog)
+        protocol: 'https',
+        hostname: 'optcgapi.com',
+      },
+      {
+        // Limitless TCG CDN (Japanese Pokemon images for sets TCGdex lacks)
+        protocol: 'https',
+        hostname: 'limitlesstcg.nyc3.cdn.digitaloceanspaces.com',
       },
     ],
   },

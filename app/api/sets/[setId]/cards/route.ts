@@ -7,6 +7,7 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
     try {
         const { searchParams } = new URL(request.url);
         const language = searchParams.get('language');
+        const game = searchParams.get('game') || 'pokemon';
 
         const params = await props.params;
         const setId = params.setId;
@@ -24,7 +25,7 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
         // We drop 'raw_data' to convert a ~4MB payload per set into a ~40KB payload
         const { data: cards, error } = await supabase
             .from('pokemon_cards')
-            .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, tcgplayer_url, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)')
+            .select('id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)')
             .eq('set_id', setId)
             .order('number', { ascending: true });
 
@@ -35,7 +36,10 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
 
         let filteredCards = cards || [];
 
-        if (language && cards) {
+        // Pokemon needs language disambiguation within a set (en/jp/th prints can
+        // share a set row space). Other games are single-language per set, so the
+        // set_id filter alone is sufficient.
+        if (game === 'pokemon' && language && cards) {
             const hasJapaneseChars = (text: string) => {
                 const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
                 return japaneseRegex.test(text);

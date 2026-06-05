@@ -3,6 +3,7 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
 import { Card } from '@/types';
+import { GAMES } from '@/lib/games';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -16,6 +17,7 @@ interface MarketplaceProps {
 }
 
 const Marketplace: React.FC<MarketplaceProps> = ({
+  initialGame,
   onSelectCard,
   onSelectListing,
   onSellerClick,
@@ -28,6 +30,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedGame, setSelectedGame] = useState(initialGame || 'all');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
   const [showFilters, setShowFilters] = useState(false);
@@ -54,6 +57,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     const data = await marketplaceService.getActiveListings({
       search: debouncedSearch,
       language: selectedLanguage === 'all' ? undefined : selectedLanguage,
+      game: selectedGame === 'all' ? undefined : selectedGame,
       minPrice: priceRange[0],
       maxPrice: priceRange[1],
       sort: sortOrder,
@@ -70,14 +74,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     }
     setHasMore(data.length === PAGE_SIZE);
     setIsLoading(false);
-  }, [debouncedSearch, selectedLanguage, priceRange, sortOrder, offset]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder, offset]);
 
   // When filters change, reset and re-fetch
   useEffect(() => {
     setOffset(0);
     fetchListings(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedLanguage, priceRange, sortOrder]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder]);
 
   // ── Infinite scroll observer ─────────────────────────────────────────────────
   const observerRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +96,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
   // Count active filters
   const activeFilterCount = [
+    selectedGame !== 'all',
     selectedLanguage !== 'all',
     priceRange[0] > 0 || priceRange[1] < 100000,
   ].filter(Boolean).length;
@@ -170,6 +175,25 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           {/* Filter Panel */}
           {showFilters && (
             <div className="mt-4 p-4 bg-[#0f172a] rounded-xl border border-white/10 space-y-4 animate-fadeIn">
+              {/* Game Filter */}
+              <div>
+                <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Game'}</label>
+                <div className="flex gap-2 flex-wrap">
+                  {[{ id: 'all', shortName: t('marketplace.allGames') || 'All' }, ...GAMES].map(g => (
+                    <button
+                      key={g.id}
+                      onClick={() => setSelectedGame(g.id)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedGame === g.id
+                        ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                        }`}
+                    >
+                      {g.shortName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Language Filter */}
               <div>
                 <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.language') || 'Language'}</label>
@@ -217,7 +241,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
               {activeFilterCount > 0 && (
                 <button
-                  onClick={() => { setSelectedLanguage('all'); setPriceRange([0, 100000]); }}
+                  onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, 100000]); }}
                   className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                 >
                   <i className="fa-solid fa-xmark mr-2"></i>

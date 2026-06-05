@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
@@ -17,8 +18,9 @@ interface ExploreProps {
 
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
   const { t } = useTranslation();
-  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
-  const [selectedGame, setSelectedGame] = useState<'pokemon' | 'onepiece'>('pokemon');
+  const [selectedGame, setSelectedGame] = useState<string>('pokemon');
+  const [selectedLanguage, setSelectedLanguage] = useState<GameLanguageCode>('en');
+  const showLanguageSelector = gameHasMultipleLanguages(selectedGame);
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
   const [cards, setCards] = useState<Card[]>([]);
@@ -67,7 +69,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   useEffect(() => {
     const loadSets = async () => {
       setIsLoadingSets(true);
-      if (selectedGame === 'onepiece') {
+      // Games without data yet (registry enabled=false) show an empty state.
+      if (!getGame(selectedGame).enabled) {
         setSets([]); setSelectedSetId(''); setCards([]); setIsLoadingSets(false);
         return;
       }
@@ -81,7 +84,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       }
       // Restored from 50 -> 300 to ensure all physical sets are accessible
       // Edge caching (s-maxage=3600) prevents this from hurting load times
-      const result = await pokemonService.fetchSets(selectedLanguage, 1, 300);
+      const result = await pokemonService.fetchSets(selectedLanguage, 1, 300, selectedGame);
       setsCache.current.set(cacheKey, result.data);
       setSets(result.data);
       if (result.data.length > 0) setSelectedSetId(result.data[0].id);
@@ -103,13 +106,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     if (!selectedSetId || debouncedSearchTerm.length > 2) return;
     const myReq = ++cardsReqIdRef.current;
     setIsLoadingCards(true);
-    pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage).then(apiCards => {
+    pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage, selectedGame).then(apiCards => {
       if (myReq !== cardsReqIdRef.current) return; // a newer fetch has superseded this one
       setCards(apiCards);
       cardListRef.current?.scrollTo({ top: 0 });
       setIsLoadingCards(false);
     });
-  }, [selectedSetId, debouncedSearchTerm, selectedLanguage]);
+  }, [selectedSetId, debouncedSearchTerm, selectedLanguage, selectedGame]);
 
   // Perform search when debounced term changes (same sequence guard — see cardsReqIdRef above)
   useEffect(() => {
@@ -124,13 +127,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     } else if (debouncedSearchTerm.length === 0 && selectedSetId) {
       const myReq = ++cardsReqIdRef.current;
       setIsLoadingCards(true);
-      pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage).then(apiCards => {
+      pokemonService.fetchCardsBySet(selectedSetId, selectedLanguage, selectedGame).then(apiCards => {
         if (myReq !== cardsReqIdRef.current) return;
         setCards(apiCards);
         setIsLoadingCards(false);
       });
     }
-  }, [debouncedSearchTerm, selectedSetId, selectedLanguage]);
+  }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame]);
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -202,7 +205,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           />
         </div>
 
-        {/* Database Selectors - Language → Game → Set */}
+        {/* Database Selectors - Game → Language → Set */}
         <div className="space-y-4">
           <div className="flex justify-between items-end">
             <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">
@@ -213,53 +216,64 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             </h2>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 z-30 relative">
-            {/* Language Dropdown */}
-            <div className="relative" ref={languageRef}>
+          <div className={`grid ${showLanguageSelector ? 'grid-cols-3' : 'grid-cols-2'} gap-2 z-30 relative`}>
+            {/* Game Dropdown — selected first; drives available languages + sets */}
+            <div className="relative" ref={gameRef}>
               <button
-                onClick={() => { setIsLanguageOpen(!isLanguageOpen); setIsGameOpen(false); }}
+                onClick={() => { setIsGameOpen(!isGameOpen); setIsLanguageOpen(false); }}
                 className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan active:bg-white/5 transition-colors"
               >
-                <span className="text-xs font-bold text-slate-300">
-                  {selectedLanguage === 'en' ? t('explore.english') : t('explore.thai')}
-                </span>
-                <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isLanguageOpen ? 'rotate-180' : ''}`}></i>
+                <span className="text-xs font-bold text-slate-300 truncate pr-2">{getGame(selectedGame).shortName}</span>
+                <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isGameOpen ? 'rotate-180' : ''}`}></i>
               </button>
-              {isLanguageOpen && (
-                <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
-                  {(['en', 'th'] as const).map((lang) => (
+              {isGameOpen && (
+                <div className="absolute top-full left-0 w-full min-w-[160px] mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                  {GAMES.map((g) => (
                     <button
-                      key={lang}
-                      onClick={() => { setSelectedLanguage(lang); setIsLanguageOpen(false); }}
-                      className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
+                      key={g.id}
+                      onClick={() => {
+                        setSelectedGame(g.id);
+                        setSelectedLanguage(defaultLanguageForGame(g.id));
+                        setSelectedSetId('');
+                        setIsGameOpen(false);
+                      }}
+                      className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors flex items-center justify-between gap-2 ${selectedGame === g.id ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
                     >
-                      {lang === 'en' ? t('explore.english') : t('explore.thai')}
+                      <span className="truncate">{g.shortName}</span>
+                      {!g.enabled && <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 flex-shrink-0">Soon</span>}
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Game Dropdown */}
-            <div className="relative" ref={gameRef}>
-              <button
-                onClick={() => { setIsGameOpen(!isGameOpen); setIsLanguageOpen(false); }}
-                className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan active:bg-white/5 transition-colors"
-              >
-                <span className="text-xs font-bold text-slate-300">Pokémon</span>
-                <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isGameOpen ? 'rotate-180' : ''}`}></i>
-              </button>
-              {isGameOpen && (
-                <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
-                  <button
-                    onClick={() => { setSelectedGame('pokemon'); setIsGameOpen(false); }}
-                    className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedGame === 'pokemon' ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
-                  >
-                    Pokémon
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Language Dropdown — only when the game has more than one language */}
+            {showLanguageSelector && (
+              <div className="relative" ref={languageRef}>
+                <button
+                  onClick={() => { setIsLanguageOpen(!isLanguageOpen); setIsGameOpen(false); }}
+                  className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center justify-between border border-white/10 outline-none focus:border-brand-cyan active:bg-white/5 transition-colors"
+                >
+                  <span className="text-xs font-bold text-slate-300">
+                    {getGameLanguages(selectedGame).find(l => l.code === selectedLanguage)?.label ?? selectedLanguage}
+                  </span>
+                  <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isLanguageOpen ? 'rotate-180' : ''}`}></i>
+                </button>
+                {isLanguageOpen && (
+                  <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                    {getGameLanguages(selectedGame).map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => { setSelectedLanguage(lang.code); setIsLanguageOpen(false); }}
+                        className={`w-full px-3 py-2.5 text-left text-xs font-bold transition-colors ${selectedLanguage === lang.code ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-300 hover:bg-white/5'}`}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Set Dropdown */}
             <div className="relative" ref={setListRef}>
@@ -352,7 +366,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
               </div>
               <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
               <p className="text-slate-500 text-xs text-center">
-                {selectedGame === 'onepiece' ? t('explore.onePieceSoon') : t('explore.selectSet')}
+                {!getGame(selectedGame).enabled ? `${getGame(selectedGame).name} coming soon` : t('explore.selectSet')}
               </p>
             </div>
           ) : (

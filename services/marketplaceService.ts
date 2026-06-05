@@ -61,6 +61,7 @@ export interface MarketplaceListing {
 export interface ListingFilters {
     search?: string;
     language?: string;
+    game?: string;
     minPrice?: number;
     maxPrice?: number;
     sort?: 'newest' | 'price_asc' | 'price_desc';
@@ -78,6 +79,7 @@ export const marketplaceService = {
         const {
             search,
             language,
+            game,
             minPrice,
             maxPrice,
             sort = 'newest',
@@ -115,6 +117,16 @@ export const marketplaceService = {
             // Server-side language filter
             if (language && language !== 'all') {
                 query = query.eq('card_data->>language', language);
+            }
+
+            // Server-side game filter. Legacy listings predate multi-game support
+            // and have no game in card_data, so treat them as Pokemon.
+            if (game && game !== 'all') {
+                if (game === 'pokemon') {
+                    query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null');
+                } else {
+                    query = query.eq('card_data->>game', game);
+                }
             }
 
             // Server-side price range

@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
+import Image from 'next/image';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface MasterSetDetailProps {
   set: ApiSet;
@@ -11,9 +13,10 @@ interface MasterSetDetailProps {
   onCardClick?: (card: Card) => void;
   onToggleWishlist?: (card: Card) => void;
   language?: 'en' | 'jp' | 'th';
+  game?: string;
 }
 
-const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wishlistCardIds, onBack, onCardClick, onToggleWishlist, language }) => {
+const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wishlistCardIds, onBack, onCardClick, onToggleWishlist, language, game = 'pokemon' }) => {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +27,7 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
 
     const loadCards = async () => {
       setLoading(true);
-      const data = await pokemonService.fetchCardsBySet(set.id, language);
+      const data = await pokemonService.fetchCardsBySet(set.id, language, game);
 
       // Sort: First by number (attempting numeric sort), then fallback string
       const sortedData = data.sort((a: any, b: any) => {
@@ -67,13 +70,14 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
           </div>
           {set.images?.logo && (
             <div className="relative h-8 w-24 flex items-center justify-end">
-              <img
+              <Image
                 src={set.images.logo}
                 alt="logo"
-                loading="lazy"
-                decoding="async"
-                className="max-h-8 max-w-[96px] w-auto object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                fill
+                sizes="96px"
+                className="object-contain"
+                unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
             </div>
           )}
@@ -108,15 +112,14 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                 >
                   {/* Background Image (Ghost if unowned) */}
                   <div className={`absolute inset-0 transition-opacity duration-500 ${isOwned ? 'opacity-100' : 'opacity-20 grayscale blur-[1px]'}`}>
-                    <img
-                      src={card.images?.small || card.imageUrl}
+                    <Image
+                      src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                       alt={card.name}
-                      loading="lazy"
-                      decoding="async"
-                      width={200}
-                      height={280}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                      fill
+                      sizes="33vw"
+                      className="object-cover"
+                      unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                      onError={(e) => { (e.target as HTMLElement).style.visibility = 'hidden'; }}
                     />
                   </div>
 

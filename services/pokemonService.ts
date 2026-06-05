@@ -33,15 +33,16 @@ export const pokemonService = {
     async fetchSets(
         language: 'en' | 'jp' | 'th' | 'pokemon-en' | 'pokemon-jp' | 'pokemon-th' = 'en',
         page: number = 1,
-        pageSize: number = 15
+        pageSize: number = 15,
+        game: string = 'pokemon'
     ): Promise<{ data: ApiSet[], totalCount: number }> {
-        const cacheKey = `sets-${language}-${page}-${pageSize}`;
+        const cacheKey = `sets-${game}-${language}-${page}-${pageSize}`;
         if (setsCache.has(cacheKey)) {
             return setsCache.get(cacheKey)!;
         }
 
         try {
-            const response = await fetch(`/api/sets?language=${language}&page=${page}&pageSize=${pageSize}`);
+            const response = await fetch(`/api/sets?game=${game}&language=${language}&page=${page}&pageSize=${pageSize}`);
             if (!response.ok) {
                 console.error('Failed to fetch sets from Edge API:', response.statusText);
                 return { data: [], totalCount: 0 };
@@ -56,11 +57,13 @@ export const pokemonService = {
         }
     },
 
-    async fetchCardsBySet(setId: string, language?: 'en' | 'jp' | 'th') {
+    async fetchCardsBySet(setId: string, language?: 'en' | 'jp' | 'th', game: string = 'pokemon') {
         try {
-            console.log('[fetchCardsBySet] Querying via Edge API for set_id:', setId, 'language:', language);
+            console.log('[fetchCardsBySet] Querying via Edge API for set_id:', setId, 'language:', language, 'game:', game);
 
-            const response = await fetch(`/api/sets/${setId}/cards${language ? `?language=${language}` : ''}`);
+            const params = new URLSearchParams({ game });
+            if (language) params.set('language', language);
+            const response = await fetch(`/api/sets/${setId}/cards?${params.toString()}`);
             if (!response.ok) {
                 console.error('Failed to fetch cards from Edge API:', response.statusText);
                 return [];

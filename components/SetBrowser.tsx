@@ -2,6 +2,31 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import Image from 'next/image';
+
+const ImageFallback = ({ src, alt }: { src: string, alt: string }) => {
+  const [error, setError] = useState(false);
+  
+  if (error) {
+    return (
+      <span className="logo-fallback text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">
+        {alt.charAt(0)}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="150px"
+      className="object-contain filter drop-shadow-lg p-2"
+      unoptimized={src.includes('asia.pokemon-card.com')}
+      onError={() => setError(true)}
+    />
+  );
+};
 
 interface SetBrowserProps {
   region: string;
@@ -40,10 +65,14 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
 
   const fetchSetPage = async (pageNum: number) => {
     setLoading(true);
+    // region is "<game>-<lang>" (e.g. "pokemon-th", "mtg-en"). The game prefix
+    // selects the catalog; fetchSets maps the rest to the DB language.
+    const game = region?.split('-')[0] || 'pokemon';
     const result = await pokemonService.fetchSets(
       region as 'en' | 'jp' | 'th',
       pageNum,
-      50 // Load more at once since we're doing client-side filtering/sorting
+      50, // Load more at once since we're doing client-side filtering/sorting
+      game
     );
 
     if (result.totalCount > 0) {
@@ -268,27 +297,9 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     {set.images.logo ? (
                       <div className="absolute inset-0 m-3 group-hover:scale-110 transition-transform duration-300">
-                        {/* Plain img for all domains — asia.pokemon-card.com blocks Vercel's
-                            server-side image optimizer, so NextImage returns 403 and breaks.
-                            Client-side img requests work fine since the browser User-Agent is allowed. */}
-                        <img
+                        <ImageFallback
                           src={set.images.logo}
                           alt={set.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-contain filter drop-shadow-lg"
-                          onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            img.style.display = 'none';
-                            // Insert letter fallback into the same parent
-                            const parent = img.parentElement;
-                            if (parent && !parent.querySelector('.logo-fallback')) {
-                              const span = document.createElement('span');
-                              span.className = 'logo-fallback text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full';
-                              span.textContent = set.name.charAt(0);
-                              parent.appendChild(span);
-                            }
-                          }}
                         />
                       </div>
                     ) : (

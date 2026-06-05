@@ -46,6 +46,7 @@ export interface Card {
   change7d?: number;
   priceHistory: { date: string; price: number }[];
   language?: string;
+  game?: string;
 }
 
 export interface UserCollectionItem {

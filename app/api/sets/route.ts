@@ -8,6 +8,7 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const language = searchParams.get('language') || 'en';
+        const game = searchParams.get('game') || 'pokemon';
         const page = parseInt(searchParams.get('page') || '1');
         const pageSize = parseInt(searchParams.get('pageSize') || '25');
 
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
         const { data: sets, error, count } = await supabase
             .from('pokemon_sets')
             .select('id, name, series, printed_total, total, release_date, updated_at, symbol_url, logo_url', { count: 'exact' })
+            .eq('game', game)
             .eq('language', dbLang)
             .order('release_date', { ascending: false, nullsFirst: false })
             .range(from, to);

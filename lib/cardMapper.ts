@@ -58,6 +58,11 @@ const THAI_SET_MAP: Record<string, string> = {
 };
 
 export function mapSupabaseCardToInternal(supabaseCard: any): Card {
+  // Pokemon-specific display rules (Thai rarity codes, Thai set-name aliases) must
+  // not touch other games. They are also implicitly language-gated, but gate on
+  // game explicitly so a future non-'en' language in another game stays unaffected.
+  const game = supabaseCard.game || 'pokemon';
+  const isPokemon = game === 'pokemon';
   const rawData = supabaseCard.raw_data || {};
   const tcgData = rawData.tcgplayer;
   const pricesTypes = tcgData?.prices || {};
@@ -101,7 +106,7 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   }
 
   let setName = supabaseCard.pokemon_sets?.name || rawData.set?.name || 'Unknown Set';
-  if (supabaseCard.language === 'th') {
+  if (isPokemon && supabaseCard.language === 'th') {
     const engName = THAI_SET_MAP[supabaseCard.set_id];
     if (engName && !setName.includes(engName)) setName = `${engName} (${setName})`;
   }
@@ -117,9 +122,10 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     name: supabaseCard.name,
     thaiName: supabaseCard.english_name || supabaseCard.name,
     set: setName,
+    game,
     language: supabaseCard.language || 'en',
     number: supabaseCard.number ? `${supabaseCard.number.split('/')[0]}/${setTotal}` : '??',
-    rarity: supabaseCard.language === 'th'
+    rarity: (isPokemon && supabaseCard.language === 'th')
       ? normalizeThaiRarity(supabaseCard.rarity)
       : (supabaseCard.rarity || 'Common'),
     imageUrl,

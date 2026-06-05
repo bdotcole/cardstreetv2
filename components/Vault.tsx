@@ -4,12 +4,16 @@ import { CustomCollection, Card, UserCollectionItem } from '../types';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
 import ListingForm from './ListingForm';
 import MasterSetPicker from './MasterSetPicker';
+import GamePicker from './GamePicker';
 import SetBrowser from './SetBrowser';
 import MasterSetDetail from './MasterSetDetail';
+import { gameHasMultipleLanguages } from '@/lib/games';
 import { ApiSet } from '../services/pokemonService';
 import CardDetails from './CardDetails';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import Image from 'next/image';
+import { getThumbnailUrl, getPreviewUrl } from '@/lib/imageUtils';
 
 // recharts is ~100KB. Defer until the chart actually renders.
 const PriceChart = dynamic(() => import('./PriceChart'), {
@@ -37,7 +41,7 @@ interface VaultProps {
   onRemoveFromCollection?: (collectionId: string, itemId: string) => Promise<void>;
 }
 
-type VaultView = 'folders' | 'wishlist' | 'listings' | 'collections' | 'master' | 'sets' | 'set-detail';
+type VaultView = 'folders' | 'wishlist' | 'listings' | 'collections' | 'master-game' | 'master' | 'sets' | 'set-detail';
 type SortOption = 'date_desc' | 'date_asc' | 'price_desc' | 'price_asc' | 'name_asc';
 
 const Vault: React.FC<VaultProps> = ({
@@ -60,6 +64,7 @@ const Vault: React.FC<VaultProps> = ({
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   const [view, setView] = useState<VaultView>('folders');
+  const [selectedGame, setSelectedGame] = useState<string>('pokemon');
   const [selectedRegion, setSelectedRegion] = useState<string>('');
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
@@ -172,8 +177,10 @@ const Vault: React.FC<VaultProps> = ({
         if (view === 'set-detail') {
           setView('sets');
         } else if (view === 'sets') {
-          setView('master');
+          setView(gameHasMultipleLanguages(selectedGame) ? 'master' : 'master-game');
         } else if (view === 'master') {
+          setView('master-game');
+        } else if (view === 'master-game') {
           setView('folders');
         } else if (view === 'folders') {
           // If at root of Vault, minimize app (default behavior)
@@ -192,7 +199,7 @@ const Vault: React.FC<VaultProps> = ({
         backListener.remove();
       }
     };
-  }, [view]);
+  }, [view, selectedGame]);
 
   // Close sort menu when clicking outside
   useEffect(() => {
@@ -368,7 +375,9 @@ const Vault: React.FC<VaultProps> = ({
               count = folder.count;
             }
 
-            const targetView = folder.id === 'collections' ? 'collections' : folder.id as VaultView;
+            const targetView = folder.id === 'collections' ? 'collections'
+              : folder.id === 'master' ? 'master-game'
+              : folder.id as VaultView;
 
             return (
               <div
@@ -429,8 +438,15 @@ const Vault: React.FC<VaultProps> = ({
                   onClick={() => onListCard(colId, item, card)}
                   className="w-full glass p-4 rounded-3xl flex items-center gap-4 border-white/5 active:scale-[0.98] transition-all text-left group"
                 >
-                  <div className="w-12 h-16 rounded-xl overflow-hidden bg-white/5 p-1 flex-shrink-0">
-                    <img src={card.imageUrl} className="w-full h-full object-contain" />
+                  <div className="w-12 h-16 rounded-xl overflow-hidden bg-white/5 p-1 flex-shrink-0 relative">
+                    <Image 
+                      src={getThumbnailUrl(card.images?.small || card.imageUrl)} 
+                      alt={card.name}
+                      fill
+                      sizes="48px"
+                      className="object-contain"
+                      unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                    />
                   </div>
                   <div className="flex-1">
                     <h4 className="text-white text-sm font-bold group-hover:text-brand-cyan transition-colors">{card.name}</h4>
@@ -460,8 +476,15 @@ const Vault: React.FC<VaultProps> = ({
           {myVaultListings.map(({ colId, item, card }) => (
             <div key={item.id} className="glass p-5 rounded-[2rem] border-white/5 space-y-4">
               <div className="flex gap-4 items-center">
-                <div className="w-16 aspect-[3/4] glass rounded-xl overflow-hidden p-1 flex-shrink-0">
-                  <img src={card.imageUrl} className="w-full h-full object-contain" />
+                <div className="w-16 aspect-[3/4] glass rounded-xl overflow-hidden p-1 flex-shrink-0 relative">
+                  <Image 
+                    src={getThumbnailUrl(card.images?.small || card.imageUrl)} 
+                    alt={card.name}
+                    fill
+                    sizes="64px"
+                    className="object-contain"
+                    unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -548,7 +571,16 @@ const Vault: React.FC<VaultProps> = ({
               onClick={() => { setViewingCard(card); setViewingItem(null); }}
               className="glass p-4 rounded-3xl flex items-center gap-4 border-white/5 active:bg-white/[0.05] transition-colors cursor-pointer"
             >
-              <img src={card.imageUrl} className="w-12 h-16 object-contain" />
+              <div className="w-12 h-16 relative flex-shrink-0">
+                <Image 
+                  src={getThumbnailUrl(card.images?.small || card.imageUrl)} 
+                  alt={card.name}
+                  fill
+                  sizes="48px"
+                  className="object-contain"
+                  unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                />
+              </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-white text-sm font-bold truncate">{card.name}</h4>
                 <p className="text-[9px] text-slate-500 uppercase font-bold">{card.set} • {card.rarity}</p>
@@ -649,8 +681,15 @@ const Vault: React.FC<VaultProps> = ({
                 onClick={() => { setViewingCard(card); setViewingItem({ colId, item }); }}
                 className="glass p-4 rounded-3xl flex items-center gap-4 border-white/5 group relative overflow-hidden active:bg-white/[0.05] transition-colors cursor-pointer"
               >
-                <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 p-1 border border-white/5">
-                  <img src={card.imageUrl} className="w-full h-full object-contain filter drop-shadow-md" alt={card.name} />
+                <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 p-1 border border-white/5 relative">
+                  <Image 
+                    src={getThumbnailUrl(card.images?.small || card.imageUrl)} 
+                    alt={card.name}
+                    fill
+                    sizes="56px"
+                    className="object-contain filter drop-shadow-md" 
+                    unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                  />
                 </div>
 
                 <div className="flex-1 min-w-0 space-y-1">
@@ -750,11 +789,27 @@ const Vault: React.FC<VaultProps> = ({
   );
 
   if (view === 'listings') return renderListings();
+  if (view === 'master-game') return (
+    <GamePicker
+      onBack={() => setView('folders')}
+      onSelectGame={(gameId) => {
+        setSelectedGame(gameId);
+        // Only games with multiple languages need a region/language step
+        // (currently just Pokemon). Single-language games jump straight to sets.
+        if (gameHasMultipleLanguages(gameId)) {
+          setView('master');
+        } else {
+          setSelectedRegion(`${gameId}-en`);
+          setView('sets');
+        }
+      }}
+    />
+  );
   if (view === 'master') return (
     <MasterSetPicker
-      onBack={() => setView('folders')}
-      onSelectGame={(game) => {
-        setSelectedRegion(game);
+      onBack={() => setView('master-game')}
+      onSelectGame={(region) => {
+        setSelectedRegion(region);
         setView('sets');
       }}
     />
@@ -762,7 +817,7 @@ const Vault: React.FC<VaultProps> = ({
   if (view === 'sets') return (
     <SetBrowser
       region={selectedRegion}
-      onBack={() => setView('master')}
+      onBack={() => setView(gameHasMultipleLanguages(selectedGame) ? 'master' : 'master-game')}
       onSelectSet={(set: ApiSet, language: 'en' | 'jp' | 'th') => {
         setSelectedSet(set);
         setSelectedLanguage(language);
@@ -779,6 +834,7 @@ const Vault: React.FC<VaultProps> = ({
         onBack={() => setView('sets')}
         onToggleWishlist={onToggleWishlist}
         language={selectedLanguage}
+        game={selectedGame}
       />
     );
   }

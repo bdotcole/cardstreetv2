@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
     const search = searchParams.get('search') || ''
     const language = searchParams.get('language') || ''
+    const game = searchParams.get('game') || ''
     const sort = searchParams.get('sort') || 'newest'
     const minPrice = parseFloat(searchParams.get('minPrice') || '0')
     const maxPrice = parseFloat(searchParams.get('maxPrice') || '0')
@@ -53,6 +54,15 @@ export async function GET(request: NextRequest) {
     }
     if (language && language !== 'all') {
         query = query.eq('card_data->>language', language)
+    }
+    if (game && game !== 'all') {
+        // Listings created before multi-game support have no game in card_data;
+        // treat those legacy rows as Pokemon.
+        if (game === 'pokemon') {
+            query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null')
+        } else {
+            query = query.eq('card_data->>game', game)
+        }
     }
     if (minPrice > 0) query = query.gte('price', minPrice)
     if (maxPrice > 0 && maxPrice < 100000) query = query.lte('price', maxPrice)
@@ -118,6 +128,17 @@ export async function POST(request: NextRequest) {
                 },
                 { status: 400 },
             )
+        }
+
+        // Check if seller has a Stripe account
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('stripe_account_id')
+            .eq('id', user.id)
+            .single()
+
+        if (!profile?.stripe_account_id) {
+            return NextResponse.json({ error: 'You must connect a Stripe account in your Profile > Payouts & Bank before listing an item for sale.' }, { status: 400 })
         }
 
         const { data: listing, error } = await supabase
