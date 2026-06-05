@@ -1,48 +1,26 @@
 
 import React from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getGame, getGameLanguages, GameLanguageCode } from '@/lib/games';
 
 interface MasterSetPickerProps {
   onBack: () => void;
-  onSelectGame: (gameId: string) => void;
+  onSelectGame: (regionId: string) => void;
+  /** Which game's regions to show (only multi-language games reach this step). */
+  game?: string;
 }
 
-const GAMES = [
-  {
-    id: 'pokemon-en',
-    title: 'Pokémon TCG',
-    region: 'English',
-    gradient: 'from-[#FFCB05] to-[#c79d00]', // Pokemon Yellow
-    textColor: 'text-[#3c5aa6]', // Pokemon Blue
-    logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/98/International_Pok%C3%A9mon_logo.svg',
-    flagUrl: 'https://flagcdn.com/w80/us.png',
-    accent: 'bg-[#3c5aa6]',
-  },
-  // Japanese temporarily hidden until database is complete
-  // {
-  //   id: 'pokemon-jp',
-  //   title: 'Pokémon TCG',
-  //   region: 'Japanese',
-  //   gradient: 'from-[#e2e8f0] to-[#cbd5e1]',
-  //   textColor: 'text-[#121212]',
-  //   logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/98/International_Pok%C3%A9mon_logo.svg',
-  //   flagUrl: 'https://flagcdn.com/w80/jp.png',
-  //   accent: 'bg-[#ef4444]',
-  // },
-  {
-    id: 'pokemon-th',
-    title: 'Pokémon TCG',
-    region: 'Thai',
-    gradient: 'from-[#1e293b] to-[#0f172a]', // Dark Blue (CardStreet)
-    textColor: 'text-white',
-    logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/98/International_Pok%C3%A9mon_logo.svg',
-    flagUrl: 'https://flagcdn.com/w80/th.png',
-    accent: 'bg-[#06b6d4]', // Cyan
-  }
-];
+// Per-language card styling so each region reads at a glance.
+const REGION_STYLE: Record<GameLanguageCode, { gradient: string; text: string; chipText: string }> = {
+  en: { gradient: 'from-[#FFCB05] to-[#c79d00]', text: 'text-[#3c5aa6]', chipText: 'text-slate-800' },
+  jp: { gradient: 'from-[#e2e8f0] to-[#cbd5e1]', text: 'text-[#3c5aa6]', chipText: 'text-slate-800' },
+  th: { gradient: 'from-[#1e293b] to-[#0f172a]', text: 'text-white', chipText: 'text-white' },
+};
 
-const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame }) => {
+const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame, game = 'pokemon' }) => {
   const { isThai } = useTranslation();
+  const gameConfig = getGame(game);
+  const languages = getGameLanguages(game);
 
   return (
     <div className="space-y-8 animate-fadeIn pb-20">
@@ -59,38 +37,37 @@ const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame 
       </div>
 
       <div className="grid grid-cols-1 gap-5">
-        {GAMES.map((game) => (
-          <button
-            key={game.id}
-            onClick={() => onSelectGame(game.id)}
-            className={`relative h-48 rounded-[2.5rem] overflow-hidden group active:scale-95 transition-all shadow-2xl`}
-          >
-            {/* Background */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${game.gradient}`}></div>
+        {languages.map((lang) => {
+          const style = REGION_STYLE[lang.code];
+          return (
+            <button
+              key={lang.code}
+              onClick={() => onSelectGame(`${game}-${lang.code}`)}
+              className="relative h-48 rounded-[2.5rem] overflow-hidden group active:scale-95 transition-all shadow-2xl"
+            >
+              <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient}`}></div>
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-black via-transparent to-transparent"></div>
 
-            {/* Pattern Overlay */}
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-black via-transparent to-transparent"></div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 z-10">
+                <div className="h-20 w-full flex items-center justify-center mb-4 drop-shadow-xl transform group-hover:scale-110 transition-transform duration-500">
+                  {gameConfig.logoUrl ? (
+                    <img src={gameConfig.logoUrl} alt={gameConfig.name} className="h-full w-auto object-contain" />
+                  ) : (
+                    <span className={`text-2xl font-black uppercase ${style.text}`}>{gameConfig.name}</span>
+                  )}
+                </div>
 
-            {/* Content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 z-10">
-              <div className="h-20 w-full flex items-center justify-center mb-4 drop-shadow-xl transform group-hover:scale-110 transition-transform duration-500">
-                <img src={game.logoUrl} alt={game.title} className="h-full w-auto object-contain" />
+                <div className="flex items-center gap-3 px-4 py-1.5 rounded-full backdrop-blur-md bg-white/20 border border-white/20 shadow-lg">
+                  <img src={lang.flagUrl} alt={lang.label} className="w-6 h-4 object-cover rounded shadow-sm" />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${style.chipText}`}>{lang.label}</span>
+                </div>
               </div>
 
-              <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full backdrop-blur-md bg-white/20 border border-white/20 shadow-lg`}>
-                <img src={game.flagUrl} alt={game.region} className="w-6 h-4 object-cover rounded shadow-sm" />
-                <span className={`text-[10px] font-black uppercase tracking-widest ${game.id === 'pokemon-th' ? 'text-white' : 'text-slate-800'}`}>
-                  {game.id === 'pokemon-th' ? (isThai ? 'ไทย' : 'Thai') : (isThai ? 'อังกฤษ' : 'English')}
-                </span>
-              </div>
-            </div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+            </button>
+          );
+        })}
 
-            {/* Hover Shine */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
-          </button>
-        ))}
-
-        {/* Coming Soon */}
         <div className="h-32 rounded-[2.5rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 opacity-30 bg-white/[0.02]">
           <i className="fa-solid fa-plus text-2xl text-slate-600"></i>
           <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">{isThai ? 'ภูมิภาคอื่นๆ เร็วๆ นี้' : 'More Regions Soon'}</span>

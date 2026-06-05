@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { englishJpSetName } from '@/lib/japaneseSetNames';
 
 // Cache configuration
 const defaultCacheControl = 'public, s-maxage=3600, stale-while-revalidate=86400';
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
 
             return {
                 id: s.id,
-                name: s.name,
+                name: englishJpSetName(s.id, s.name),
                 series: s.series || '',
                 printedTotal: s.printed_total || 0,
                 total: s.total || 0,

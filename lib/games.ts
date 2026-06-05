@@ -61,9 +61,7 @@ export const GAMES: GameConfig[] = [
     name: 'Magic: The Gathering',
     shortName: 'Magic',
     languages: [LANG_EN],
-    // No reliable hotlinkable wordmark; pickers fall back to the styled name.
-    // Replace with a local /public/games/*.svg asset for a true logo.
-    logoUrl: '',
+    logoUrl: '/games/mtg.svg',
     gradient: 'from-[#1a1410] to-[#3b2f2a]',
     textColor: 'text-white',
     accent: 'bg-[#d9a441]',
@@ -74,7 +72,7 @@ export const GAMES: GameConfig[] = [
     name: 'Yu-Gi-Oh!',
     shortName: 'Yu-Gi-Oh!',
     languages: [LANG_EN],
-    logoUrl: '',
+    logoUrl: '/games/yugioh.png',
     gradient: 'from-[#3a1c71] to-[#1b1035]',
     textColor: 'text-white',
     accent: 'bg-[#b066ff]',
@@ -85,7 +83,7 @@ export const GAMES: GameConfig[] = [
     name: 'One Piece Card Game',
     shortName: 'One Piece',
     languages: [LANG_EN],
-    logoUrl: '',
+    logoUrl: '/games/onepiece.png',
     gradient: 'from-[#b21f24] to-[#5e0d10]',
     textColor: 'text-white',
     accent: 'bg-[#ef4444]',

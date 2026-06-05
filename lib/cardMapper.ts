@@ -1,5 +1,6 @@
 import { Card } from '../types';
 import { EXCHANGE_RATES } from '../constants';
+import { englishJpSetName } from './japaneseSetNames';
 
 const EXCHANGE_RATE = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 
@@ -109,6 +110,9 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   if (isPokemon && supabaseCard.language === 'th') {
     const engName = THAI_SET_MAP[supabaseCard.set_id];
     if (engName && !setName.includes(engName)) setName = `${engName} (${setName})`;
+  } else if (isPokemon && supabaseCard.language === 'ja') {
+    // English-first app: show the English name for JP sets where we have one.
+    setName = englishJpSetName(supabaseCard.set_id, setName);
   }
 
   const setTotal =

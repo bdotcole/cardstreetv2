@@ -76,6 +76,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'limitlesstcg.nyc3.cdn.digitaloceanspaces.com',
       },
+      {
+        // Limitless TCG set logos (Japanese SV-era set symbols)
+        protocol: 'https',
+        hostname: 's3.limitlesstcg.com',
+      },
     ],
   },
   experimental: {

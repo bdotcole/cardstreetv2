@@ -807,6 +807,7 @@ const Vault: React.FC<VaultProps> = ({
   );
   if (view === 'master') return (
     <MasterSetPicker
+      game={selectedGame}
       onBack={() => setView('master-game')}
       onSelectGame={(region) => {
         setSelectedRegion(region);
