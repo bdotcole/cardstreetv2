@@ -59,7 +59,7 @@ async function getTopPartners() {
 
 const TIER_NAMES: Record<number, string> = {
     1: 'Bronze', 2: 'Silver', 3: 'Gold', 4: 'Platinum',
-    5: 'Sapphire', 6: 'Ruby', 7: 'Emerald', 8: 'Diamond', 9: 'Pink Diamond',
+    5: 'Sapphire', 6: 'Ruby', 7: 'Emerald', 8: 'Diamond', 9: 'Black Opal',
 }
 
 const STATUS_COLORS: Record<string, string> = {

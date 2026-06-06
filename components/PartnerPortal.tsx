@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, PartnerStats } from '@/types';
+import { GemIcon, GemType } from './GemIcons';
 
 interface PartnerPortalProps {
     user: UserProfile;
@@ -12,6 +13,7 @@ interface PartnerTier {
     fee: number;
     color: string;
     gemIcon: string;
+    gem?: GemType;
     rewards: string[];
 }
 
@@ -59,6 +61,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         fee: 3.0,
         color: 'text-blue-400 border-blue-400',
         gemIcon: '💎',
+        gem: 'sapphire',
         rewards: ['3% seller fee', 'Cardstreet social media feature'],
     },
     {
@@ -68,6 +71,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         fee: 2.75,
         color: 'text-red-400 border-red-400',
         gemIcon: '🔴',
+        gem: 'ruby',
         rewards: ['2.75% seller fee', 'Exclusive Cardstreet mousepad'],
     },
     {
@@ -77,6 +81,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         fee: 2.5,
         color: 'text-green-400 border-green-400',
         gemIcon: '🟢',
+        gem: 'emerald',
         rewards: ['2.5% seller fee', 'Free table spot at 2027 SEA International Card Show'],
     },
     {
@@ -86,15 +91,17 @@ const PARTNER_TIERS: PartnerTier[] = [
         fee: 2.25,
         color: 'text-brand-cyan border-brand-cyan',
         gemIcon: '💠',
+        gem: 'diamond',
         rewards: ['2.25% seller fee', '1% profit sharing on transactions from your referred users'],
     },
     {
         level: 9,
-        name: 'Pink Diamond Rare',
+        name: 'Black Opal Rare',
         minDownloads: 10000,
         fee: 2.0,
-        color: 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-fuchsia-300 to-pink-500 border-pink-400',
+        color: 'text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 via-cyan-300 to-violet-400 border-violet-400',
         gemIcon: '🩷',
+        gem: 'opal',
         rewards: ['2% seller fee', '2% profit sharing on transactions from your referred users'],
     },
 ];
@@ -143,6 +150,9 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     'ruby': 6,
                     'emerald': 7,
                     'diamond': 8,
+                    'black_opal': 9,
+                    'black opal': 9,
+                    'opal': 9,
                     'pink_diamond': 9,
                     'heart': 9,
                     'pink diamond': 9
@@ -299,7 +309,9 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                             >
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-3">
-                                        <span className="text-xl">{tier.gemIcon}</span>
+                                        {tier.gem
+                                            ? <GemIcon type={tier.gem} className="w-6 h-6 drop-shadow-[0_0_4px_rgba(255,255,255,0.15)]" />
+                                            : <span className="text-xl">{tier.gemIcon}</span>}
                                         <div>
                                             <p className={`text-sm font-bold ${tier.color.split(' ')[0]}`}>{tier.name}</p>
                                             <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minDownloads.toLocaleString()}+ Downloads</p>
