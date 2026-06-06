@@ -1,5 +1,5 @@
 -- Shipping Automation & Buyer Protection Schema
--- This migration adds tables for SHIPPOP integration and escrow-based buyer protection
+-- This migration adds tables for Flash Express integration and escrow-based buyer protection
 
 -- Orders table (replaces/extends transactions for shipping)
 CREATE TABLE IF NOT EXISTS orders (
@@ -36,12 +36,12 @@ CREATE TABLE IF NOT EXISTS orders (
   completed_at TIMESTAMPTZ
 );
 
--- Shipping labels table (SHIPPOP integration)
+-- Shipping labels table (Flash Express integration)
 CREATE TABLE IF NOT EXISTS shipping_labels (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID REFERENCES orders(id) ON DELETE CASCADE NOT NULL UNIQUE,
   
-  -- SHIPPOP response data
+  -- Flash Express response data
   tracking_number TEXT NOT NULL,
   label_url TEXT NOT NULL,
   carrier_name TEXT NOT NULL,
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS shipping_labels (
     'created', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'failed'
   )),
   
-  -- Additional SHIPPOP metadata
-  shippop_purchase_id TEXT,
+  -- Additional Flash Express metadata (column renamed to flash_order_id in 20260502 migration)
+  shippop_purchase_id TEXT, -- NOTE: renamed to flash_order_id by migration 20260502_flash_express_migration.sql
   courier_tracking_url TEXT,
   estimated_delivery_date DATE,
   

@@ -84,24 +84,32 @@ export function formatThaiAddress(address: ThaiAddress): string {
 }
 
 /**
- * Formats a Thai address for SHIPPOP API
+ * Formats a Thai address for Flash Express API.
+ * Maps to Flash Express field naming convention:
+ *   - provinceName  = จังหวัด (province)
+ *   - cityName      = อำเภอ/เขต (district)
+ *   - districtName  = ตำบล/แขวง (sub-district)
+ *   - postalCode    = รหัสไปรษณีย์
+ *   - detailAddress = ที่อยู่ (full address line)
  */
-export function formatAddressForShippop(address: ThaiAddress): {
+export function formatAddressForFlashExpress(address: ThaiAddress): {
     name: string
     phone: string
-    address: string
-    district: string
-    state: string
-    postcode: string
+    provinceName: string
+    cityName: string
+    districtName: string
+    postalCode: string
+    detailAddress: string
 } {
     return {
         name: address.recipient_name,
         phone: address.phone_number,
-        address: address.address_line2
+        provinceName: address.province,
+        cityName: address.district,
+        districtName: address.sub_district || address.district,
+        postalCode: address.postal_code,
+        detailAddress: address.address_line2
             ? `${address.address_line1}, ${address.address_line2}`
             : address.address_line1,
-        district: address.district,
-        state: address.province,
-        postcode: address.postal_code,
     }
 }
