@@ -276,16 +276,16 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                 <div className="glass p-6 rounded-2xl border border-white/10 space-y-4">
                     <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">Share the Value</h3>
                     <div className="flex gap-2">
-                        <div className="flex-1 bg-brand-darker border border-white/10 rounded-xl px-4 flex items-center h-12">
-                            <span className="text-xs text-slate-400 font-mono table-fixed truncate w-full">cardstreet.app/join/{stats.referralCode}</span>
+                        <div className="flex-1 min-w-0 bg-brand-darker border border-white/10 rounded-xl px-4 flex items-center h-12">
+                            <span className="text-xs text-slate-400 font-mono truncate w-full">cardstreet.app/join/{stats.referralCode}</span>
                         </div>
                         <button
                             onClick={handleCopy}
-                            className="w-12 h-12 bg-white text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+                            className="shrink-0 w-12 h-12 bg-white text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
                         >
                             {copied ? <i className="fa-solid fa-check text-brand-green"></i> : <i className="fa-regular fa-copy"></i>}
                         </button>
-                        <button className="w-12 h-12 bg-brand-cyan text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
+                        <button className="shrink-0 w-12 h-12 bg-brand-cyan text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
                             <i className="fa-solid fa-qrcode"></i>
                         </button>
                     </div>
@@ -313,7 +313,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                                             ? <GemIcon type={tier.gem} className="w-6 h-6 drop-shadow-[0_0_4px_rgba(255,255,255,0.15)]" />
                                             : <span className="text-xl">{tier.gemIcon}</span>}
                                         <div>
-                                            <p className={`text-sm font-bold ${tier.color.split(' ')[0]}`}>{tier.name}</p>
+                                            <p className={`text-sm font-bold ${tier.color}`}>{tier.name}</p>
                                             <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minDownloads.toLocaleString()}+ Downloads</p>
                                         </div>
                                     </div>
