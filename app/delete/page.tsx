@@ -4,9 +4,15 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
-export default function DeleteAccountPage() {
-  const supabase = createClient();
+// Auth-gated, fully client-driven page — never static-prerender it (build has no
+// NEXT_PUBLIC env for the Supabase client, and there's nothing to cache).
+export const dynamic = 'force-dynamic';
 
+export default function DeleteAccountPage() {
+  // NOTE: do not create the Supabase client at render top-level. This is a
+  // client component but Next still prerenders it at build time, where the
+  // NEXT_PUBLIC env isn't injected and @supabase/ssr throws. Create it lazily
+  // inside the effect/handler so it only ever runs in the browser.
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState('');
@@ -15,11 +21,12 @@ export default function DeleteAccountPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email ?? null);
       setLoading(false);
     });
-  }, [supabase]);
+  }, []);
 
   const handleDelete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +42,7 @@ export default function DeleteAccountPage() {
       }
 
       // Clear the local session so the app drops back to a signed-out state.
-      await supabase.auth.signOut();
+      await createClient().auth.signOut();
       setIsDeleted(true);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
