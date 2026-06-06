@@ -113,7 +113,7 @@ function rowsForCard(card, cardId, ourGame) {
 async function pricesForSet(justtcgSetId, ourSetId, slug, ourGame, idx) {
   let offset = 0;
   let matched = 0;
-  const rows = [];
+  let rows = [];
   for (;;) {
     const page = await jtcg(`/cards?game=${encodeURIComponent(slug)}&set=${encodeURIComponent(justtcgSetId)}&limit=${PAGE}&offset=${offset}`);
     const cards = page.data || [];
@@ -130,6 +130,19 @@ async function pricesForSet(justtcgSetId, ourSetId, slug, ourGame, idx) {
     offset += cards.length;
     if (cards.length < PAGE) break;
   }
+
+  // Name-matched games (Yu-Gi-Oh, One Piece) collapse multiple JustTCG entries
+  // (alt arts, parallels sharing a printed name) onto one of our card rows, so the
+  // batch can contain duplicate (card_id, condition) rows. Postgres rejects those
+  // in a single ON CONFLICT upsert ("cannot affect row a second time"), so dedupe
+  // first, preferring the Normal printing as the canonical price.
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = `${r.card_id}|${r.condition}`;
+    const prev = byKey.get(key);
+    if (!prev || (r.printing === 'Normal' && prev.printing !== 'Normal')) byKey.set(key, r);
+  }
+  rows = [...byKey.values()];
 
   // Upsert on the real unique constraint (one current price per card/lang/condition).
   for (let i = 0; i < rows.length; i += 500) {
