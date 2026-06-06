@@ -23,13 +23,16 @@ export async function POST(req: Request) {
         }
         const { fcmToken } = parsed.data;
 
-        const { error: updateError } = await supabase
+        const { error: upsertError } = await supabase
             .from('notification_preferences')
-            .update({ fcm_token: fcmToken })
-            .eq('user_id', user.id);
+            .upsert({ 
+                user_id: user.id,
+                fcm_token: fcmToken,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
 
-        if (updateError) {
-            console.error('Failed to save FCM token:', updateError);
+        if (upsertError) {
+            console.error('Failed to save FCM token:', upsertError);
             return NextResponse.json({ error: 'Failed to save FCM token' }, { status: 500 });
         }
 
