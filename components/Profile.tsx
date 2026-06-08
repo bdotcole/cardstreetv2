@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Mail, Phone, MapPin, CreditCard, Gift, Shield, Bell,
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2
+  Wallet, Loader2, Pencil
 } from 'lucide-react';
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
@@ -36,6 +36,36 @@ const fadeVariants = {
   animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
   exit: { opacity: 0, y: -20, transition: { duration: 0.2 } }
 };
+
+// Downscale a user-picked image to a square-friendly avatar (longest side
+// capped at `max`) and re-encode as JPEG. Keeps avatar files tiny so they load
+// fast in the header and grids — consistent with the app's thumbnail policy.
+async function downscaleImage(file: File, max: number): Promise<Blob> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('Could not load image'));
+    el.src = dataUrl;
+  });
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported');
+  ctx.drawImage(img, 0, 0, w, h);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode image'))), 'image/jpeg', 0.85)
+  );
+}
 
 // Types for profile data
 interface UserSettings {
@@ -139,6 +169,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState({ address: '', district: '', state: '', province: '', postcode: '' });
   const [profileData, setProfileData] = useState<any>(null);
+
+  // Avatar upload. avatarOverride shows the new photo instantly while the
+  // auth USER_UPDATED event propagates the metadata change back to page.tsx.
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
 
   // Modal states
   const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
@@ -497,6 +533,44 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     setIsLoading(false);
   };
 
+  // Upload a new profile photo: downscale, push to the 'avatars' bucket under
+  // the user's own folder, then store the public URL on user_metadata so it
+  // surfaces everywhere user.avatar is read. Cache-bust the URL so the new
+  // image shows immediately instead of a stale CDN copy.
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file later
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file', 'error');
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      const blob = await downscaleImage(file, 512);
+      const path = `${user.id}/${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+
+      const publicUrl = supabase.storage.from('avatars').getPublicUrl(data.path).data.publicUrl;
+      const bustUrl = `${publicUrl}?v=${Date.now()}`;
+
+      const { error: updateError } = await supabase.auth.updateUser({ data: { avatar_url: bustUrl } });
+      if (updateError) throw updateError;
+
+      setAvatarOverride(bustUrl);
+      showToast('Profile photo updated', 'success');
+    } catch (err: any) {
+      console.error('Avatar upload failed:', err);
+      showToast(err?.message || "Couldn't update your photo. Please try again.", 'error');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   // Open panel handlers
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
@@ -623,10 +697,32 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           >
             {/* Profile Header */}
             <div className="text-center pb-4">
-              <div className="w-24 h-24 rounded-[2.8rem] glass mx-auto mb-5 flex items-center justify-center p-1.5 border border-brand-cyan/20 relative group overflow-hidden shadow-2xl">
-                <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
-                  <img src={user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+              <div className="relative w-24 h-24 mx-auto mb-5">
+                <div className="w-24 h-24 rounded-[2.8rem] glass flex items-center justify-center p-1.5 border border-brand-cyan/20 group overflow-hidden shadow-2xl">
+                  <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
+                    <img src={avatarOverride || user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+                  </div>
                 </div>
+                {user.provider !== 'guest' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={avatarUploading}
+                      aria-label="Change profile photo"
+                      className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-brand-cyan text-black flex items-center justify-center shadow-lg border-2 border-brand-darker active:scale-90 transition-transform disabled:opacity-60"
+                    >
+                      {avatarUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                    </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarSelect}
+                    />
+                  </>
+                )}
               </div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
