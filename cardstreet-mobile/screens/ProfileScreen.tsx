@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
 import { LinearGradient } from 'expo-linear-gradient';
+
+// Same web origin the scanner talks to; serves the /help page from the Next.js app.
+const WEB_URL = process.env.EXPO_PUBLIC_API_URL || 'https://cardstreet-tcg.vercel.app';
 
 export default function ProfileScreen() {
     const [user, setUser] = useState<any>(null);
@@ -227,7 +230,10 @@ export default function ProfileScreen() {
 
                     <Text className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-3 mt-4">Support</Text>
 
-                    <TouchableOpacity className="flex-row items-center bg-white/5 p-4 rounded-xl mb-3 active:bg-white/10 border border-white/5">
+                    <TouchableOpacity
+                        className="flex-row items-center bg-white/5 p-4 rounded-xl mb-3 active:bg-white/10 border border-white/5"
+                        onPress={() => Linking.openURL(`${WEB_URL}/help`)}
+                    >
                         <View className="w-8 h-8 rounded-full bg-orange-500/20 items-center justify-center mr-3">
                             <Ionicons name="help-buoy" size={16} color="#f97316" />
                         </View>

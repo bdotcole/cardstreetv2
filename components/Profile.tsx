@@ -1385,7 +1385,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
               <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                 {[
-                  { icon: HelpCircle, label: 'Help Center', href: '#' },
+                  { icon: HelpCircle, label: 'Help Center', href: '/help' },
                   { icon: Mail, label: 'Contact Us', href: '/contact' },
                   { icon: FileText, label: 'Privacy Policy', href: '/privacy' },
                   { icon: FileText, label: 'Terms of Service', href: '/terms' }
