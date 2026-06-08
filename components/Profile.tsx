@@ -724,9 +724,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -886,9 +886,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -950,9 +950,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -1039,9 +1039,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -1193,9 +1193,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -1258,9 +1258,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -1350,9 +1350,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
@@ -1373,9 +1373,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto pb-20"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6">
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
