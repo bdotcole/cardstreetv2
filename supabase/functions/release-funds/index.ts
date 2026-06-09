@@ -248,6 +248,33 @@ serve(async (_req) => {
                 results.push({ orderId: order.id, status: 'success' })
                 processed++
 
+                // ─── Compute the figure to show the seller ───
+                // transferAmountCents = total - platform_fee. On US that's the
+                // exact amount we Transfer. On TH it OVERSTATES the deposit: it's
+                // a direct charge, so Stripe already debited its processing fee
+                // from the seller's balance at charge time. The seller's real net
+                // is the charge's balance_transaction.net (amount - Stripe fee -
+                // application_fee). Pull it so the notification matches what
+                // actually landed in their account. Fall back to the gross figure
+                // only if the lookup fails — a slightly high number beats none.
+                let notifyNetCents = transferAmountCents
+                if (orderRegion === 'th' && order.payment_id) {
+                    try {
+                        const pi = await stripe.paymentIntents.retrieve(
+                            order.payment_id,
+                            { expand: ['latest_charge.balance_transaction'] },
+                            { stripeAccount: sellerProfile.stripe_account_id }
+                        )
+                        const charge = pi.latest_charge
+                        const bt = (charge && typeof charge === 'object') ? charge.balance_transaction : null
+                        if (bt && typeof bt === 'object' && typeof bt.net === 'number') {
+                            notifyNetCents = bt.net
+                        }
+                    } catch (feeErr: any) {
+                        console.warn(`[release-funds] Could not read balance transaction for order ${order.id}; payout notification will show the pre-Stripe-fee figure. ${feeErr.message}`)
+                    }
+                }
+
                 // ─── Step 5: Send Courier Notification ───
                 try {
                     const courierToken = Deno.env.get('COURIER_AUTH_TOKEN')
@@ -288,10 +315,10 @@ serve(async (_req) => {
                                     to: recipient,
                                     content: {
                                         title: "CardStreet: Payout Sent! 💸",
-                                        body: `Your payout of ${currencySymbol}${(transferAmountCents / 100).toLocaleString()} for order ${order.id} has been successfully transferred to your Stripe account.`,
+                                        body: `Your payout of ${currencySymbol}${(notifyNetCents / 100).toLocaleString()} for order ${order.id} has been successfully transferred to your Stripe account.`,
                                     },
                                     routing: { method: "all", channels },
-                                    data: { orderId: order.id, type: 'payout_completed', amount: transferAmountCents / 100, currency: transferCurrency }
+                                    data: { orderId: order.id, type: 'payout_completed', amount: notifyNetCents / 100, currency: transferCurrency }
                                 }
                             })
                             console.log(`[release-funds] Sent payout_completed notification to seller ${order.seller_id}`)
