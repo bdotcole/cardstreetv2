@@ -22,6 +22,10 @@ interface ProfileProps {
   user: UserProfile | null;
   onNavigatePartner?: () => void;
   onGuestLogin?: () => void;
+  // Notifies the parent shell whether a slide-in sub-panel is open, so the
+  // Android hardware back button can close the panel instead of falling
+  // through to the tab-switch fallback. See the back handler in app/page.tsx.
+  onPanelStateChange?: (open: boolean) => void;
 }
 
 // Slide panel animation variants
@@ -134,7 +138,7 @@ const tierConfig = {
   platinum: { color: 'from-purple-400 to-indigo-600', icon: Zap, next: null, pointsNeeded: null }
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin }) => {
+const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -199,6 +203,20 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activePanel]);
+
+  // Keep the parent shell informed about whether a sub-panel is open so the
+  // Android hardware back button closes the panel instead of switching tabs.
+  useEffect(() => {
+    onPanelStateChange?.(activePanel !== 'none');
+  }, [activePanel, onPanelStateChange]);
+
+  // The shell dispatches this when the hardware back button is pressed while a
+  // sub-panel is open — close the panel rather than letting the shell navigate.
+  useEffect(() => {
+    const handler = () => setActivePanel('none');
+    window.addEventListener('profile-panel-back', handler);
+    return () => window.removeEventListener('profile-panel-back', handler);
+  }, []);
 
   // Auto-open the payouts panel when Stripe redirects back from Connect
   // onboarding. The StripeConnectSection's own useEffect strips the query
