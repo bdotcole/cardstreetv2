@@ -101,7 +101,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
             if (error) throw error;
 
-            // Success - page will reload automatically via auth listener
+            // Success. The parent listens to onAuthStateChange and updates the app,
+            // but close + clear loading here too so the button can never get stuck
+            // on a spinner if that listener is delayed.
+            setLoading(false);
+            onClose();
         } catch (err: any) {
             console.error('Error signing in:', err);
             setError(err.message || 'Invalid email or password');
