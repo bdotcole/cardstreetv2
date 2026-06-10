@@ -195,6 +195,27 @@ export default function HomePage() {
         return () => subscription.unsubscribe();
     }, []);
 
+    // Hydrate partner status from the profile. Partner status is keyed off
+    // partner_joined_at (independent of `role`, so an admin can also be a
+    // partner); `role === 'partner'` is kept for legacy partner rows.
+    useEffect(() => {
+        if (!user?.id || user.id === 'guest') return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/profile');
+                if (!res.ok) return;
+                const { profile } = await res.json();
+                const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
+                if (cancelled || !isPartner) return;
+                setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+            } catch {
+                // Non-fatal: partner dashboard simply stays gated if the fetch fails.
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user?.id]);
+
     // ONE-TIME OFFLINE DATA MIGRATION (CAPICATOR -> SUPABASE)
     useEffect(() => {
         if (!user) return;

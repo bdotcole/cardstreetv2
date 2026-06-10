@@ -19,9 +19,9 @@ async function getOverviewStats() {
 
     const [usersRes, partnersRes, ticketsRes, downloadsRes, reportsRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'partner'),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).not('partner_joined_at', 'is', null),
         supabase.from('support_tickets').select('id, status', { count: 'exact' }).neq('status', 'Resolved'),
-        supabase.from('profiles').select('total_downloads').eq('role', 'partner'),
+        supabase.from('profiles').select('total_downloads').not('partner_joined_at', 'is', null),
         supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
     ])
 
@@ -51,7 +51,7 @@ async function getTopPartners() {
     const { data } = await supabase
         .from('profiles')
         .select('id, display_name, total_downloads, partner_level')
-        .eq('role', 'partner')
+        .not('partner_joined_at', 'is', null)
         .order('total_downloads', { ascending: false })
         .limit(5)
     return data ?? []

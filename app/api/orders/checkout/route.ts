@@ -138,7 +138,7 @@ export async function POST(req: Request) {
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('id, role, partner_level, province, state, district, postcode, stripe_region')
+            .select('id, role, partner_level, partner_joined_at, province, state, district, postcode, stripe_region')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
@@ -194,7 +194,9 @@ export async function POST(req: Request) {
         const feeMap = new Map<string, number>();
         for (const profile of sellerProfiles || []) {
             let fee = 0.09;
-            if (profile.role === 'partner') {
+            // Partner status is keyed off partner_joined_at, not `role`: an admin
+            // can also be a partner, and `role` (single-valued) can't hold both.
+            if (profile.partner_joined_at) {
                 const level = String(profile.partner_level || 'standard').toLowerCase().replace(' ', '_');
                 switch (level) {
                     case 'bronze': fee = 0.05; break;

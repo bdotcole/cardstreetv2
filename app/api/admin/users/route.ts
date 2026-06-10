@@ -21,10 +21,12 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
+    // Partner status is independent of `role` (an admin can also be a partner),
+    // so it's keyed off partner_joined_at rather than role === 'partner'.
     if (roleFilter === 'partner') {
-        query = query.eq('role', 'partner')
+        query = query.not('partner_joined_at', 'is', null)
     } else if (roleFilter === 'non-partner') {
-        query = query.neq('role', 'partner')
+        query = query.is('partner_joined_at', null)
     }
 
     if (search) {

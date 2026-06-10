@@ -7,6 +7,7 @@ interface PartnerRow {
     display_name: string | null
     email: string
     avatar_url: string | null
+    role: string
     total_downloads: number
     partner_level: number | null
     partner_fee: number | null
@@ -56,7 +57,13 @@ export default function PartnersPage() {
             const res = await fetch(`/api/admin/users/${partner.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: 'user' }),
+                // Partner status lives in partner_joined_at; clearing it removes the
+                // partner. Only the legacy partner role is downgraded — an admin who
+                // is also a partner keeps their admin role.
+                body: JSON.stringify({
+                    partner_joined_at: null,
+                    ...(partner.role === 'partner' ? { role: 'user' } : {}),
+                }),
             })
             if (res.ok) {
                 setPartners(prev => prev.filter(p => p.id !== partner.id))

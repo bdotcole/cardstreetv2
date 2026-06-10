@@ -640,7 +640,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     }
   ];
 
-  const menuSections = (user?.isPartner || profileData?.role === 'partner') ? [
+  const isPartner = user?.isPartner || profileData?.role === 'partner' || !!profileData?.partner_joined_at;
+  const menuSections = isPartner ? [
     ...baseMenuSections.slice(0, 3),
     {
       title: t('profile.operations'),
