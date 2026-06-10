@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/client';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
@@ -11,6 +12,78 @@ interface AuthModalProps {
 }
 
 type AuthMode = 'signin' | 'signup' | 'verify';
+
+// App Review rejected the app twice for "loads indefinitely" on login (iPad,
+// WKWebView). A hang anywhere in the auth stack must therefore surface as a
+// visible, retryable error — never an endless spinner — and must report to
+// Sentry with enough context to diagnose the failing environment remotely.
+const AUTH_TIMEOUT_MS = 15000;
+
+class AuthTimeoutError extends Error {
+    constructor(step: string) {
+        super(`Auth step "${step}" timed out after ${AUTH_TIMEOUT_MS / 1000}s`);
+        this.name = 'AuthTimeoutError';
+    }
+}
+
+const AUTH_TIMEOUT_USER_MESSAGE =
+    'This is taking longer than expected. Please check your connection and try again.';
+
+async function withAuthWatchdog<T>(step: string, run: () => Promise<T>): Promise<T> {
+    Sentry.addBreadcrumb({ category: 'auth', message: `${step}: start`, level: 'info' });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        const result = await Promise.race([
+            run(),
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new AuthTimeoutError(step)), AUTH_TIMEOUT_MS);
+            }),
+        ]);
+        Sentry.addBreadcrumb({ category: 'auth', message: `${step}: done`, level: 'info' });
+        return result;
+    } catch (err) {
+        Sentry.addBreadcrumb({ category: 'auth', message: `${step}: failed`, level: 'error' });
+        if (err instanceof AuthTimeoutError) {
+            Sentry.captureException(err, {
+                tags: { auth_step: step, auth_watchdog: 'timeout' },
+                extra: {
+                    online: typeof navigator !== 'undefined' ? navigator.onLine : undefined,
+                    visibility: typeof document !== 'undefined' ? document.visibilityState : undefined,
+                },
+            });
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// The session lives in cookies (@supabase/ssr) and every /api route reads it
+// server-side — a cookie write that silently fails (the remaining WKWebView
+// suspect) would leave the user "signed in" on the client but 401 on every
+// API call. Measure it instead of guessing: report when the auth cookie is
+// missing shortly after a successful sign-in. Diagnostic only; never blocks
+// or disturbs the login flow.
+function verifySessionPersisted(supabase: ReturnType<typeof createClient>) {
+    setTimeout(async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const cookiePresent = document.cookie.split(';').some(c => {
+                const name = c.trim().split('=')[0];
+                return name.startsWith('sb-') && name.includes('-auth-token');
+            });
+            if (!session || !cookiePresent) {
+                Sentry.captureMessage('Auth session failed to persist after sign-in', {
+                    level: 'error',
+                    tags: { auth_step: 'persistence-check' },
+                    extra: { hasSession: !!session, cookiePresent },
+                });
+            }
+        } catch {
+            // Best-effort diagnostic.
+        }
+    }, 1500);
+}
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     const [mode, setMode] = useState<AuthMode>('signin');
@@ -59,13 +132,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
             console.log(`[Auth] Initiating ${provider} Login. Native:`, isNative, 'Redirect:', redirectUrl);
 
-            const { data, error } = await supabase.auth.signInWithOAuth({
-                provider,
-                options: {
-                    redirectTo: redirectUrl,
-                    skipBrowserRedirect: isNative // Only skip on native to open manually in system browser
-                },
-            });
+            const { data, error } = await withAuthWatchdog(`oauth-${provider}`, () =>
+                supabase.auth.signInWithOAuth({
+                    provider,
+                    options: {
+                        redirectTo: redirectUrl,
+                        skipBrowserRedirect: isNative // Only skip on native to open manually in system browser
+                    },
+                })
+            );
 
             if (error) throw error;
 
@@ -83,7 +158,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         } catch (err: any) {
             console.error(`Error logging in with ${provider}:`, err);
             const label = provider === 'apple' ? 'Apple' : 'Google';
-            setError(`Failed to sign in with ${label}. Please try again.`);
+            setError(err instanceof AuthTimeoutError
+                ? AUTH_TIMEOUT_USER_MESSAGE
+                : `Failed to sign in with ${label}. Please try again.`);
             setLoading(false);
         }
     };
@@ -94,12 +171,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setError(null);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
+            const { error } = await withAuthWatchdog('email-signin', () =>
+                supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                })
+            );
 
             if (error) throw error;
+
+            verifySessionPersisted(supabase);
 
             // Success. The parent listens to onAuthStateChange and updates the app,
             // but close + clear loading here too so the button can never get stuck
@@ -108,7 +189,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             onClose();
         } catch (err: any) {
             console.error('Error signing in:', err);
-            setError(err.message || 'Invalid email or password');
+            setError(err instanceof AuthTimeoutError
+                ? AUTH_TIMEOUT_USER_MESSAGE
+                : err.message || 'Invalid email or password');
             setLoading(false);
         }
     };
@@ -119,18 +202,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setError(null);
 
         try {
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        full_name: name,
-                        phone_number: phone,
-                        username: username,
+            const { data, error } = await withAuthWatchdog('email-signup', () =>
+                supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            full_name: name,
+                            phone_number: phone,
+                            username: username,
+                        },
+                        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
                     },
-                    emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-                },
-            });
+                })
+            );
 
             if (error) throw error;
 
@@ -139,7 +224,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             setMode('verify');
         } catch (err: any) {
             console.error('Error signing up:', err);
-            setError(err.message || 'Failed to create account');
+            setError(err instanceof AuthTimeoutError
+                ? AUTH_TIMEOUT_USER_MESSAGE
+                : err.message || 'Failed to create account');
             setLoading(false);
         }
     };

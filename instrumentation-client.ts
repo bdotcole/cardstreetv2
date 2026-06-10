@@ -18,6 +18,16 @@ if (dsn) {
         tracesSampleRate: 1.0,
         replaysSessionSampleRate: 0.1,
         replaysOnErrorSampleRate: 1.0,
+        // Google Tag Manager noise (CARDSTREET-1/-2/-6): gtag's injected
+        // script failing to parse, or its preload-link querySelector throwing
+        // in certain webviews/extensions. Hundreds of events, zero affected
+        // users, drowns out real regressions. Deliberately NOT filtering
+        // WebKit's "Unexpected EOF" — truncated script loads are evidence we
+        // want while diagnosing iPad/WKWebView behavior.
+        ignoreErrors: [
+            /googletagmanager/i,
+            "Failed to execute 'appendChild' on 'Node': Invalid or unexpected token",
+        ],
         integrations: [
             Sentry.browserTracingIntegration(),
             Sentry.replayIntegration({
