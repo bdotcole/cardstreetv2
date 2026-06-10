@@ -18,9 +18,7 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16',
-})
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 async function runTest() {
     try {
@@ -72,7 +70,7 @@ async function runTest() {
             })
         })
         
-        const orderData = await orderRes.json()
+        const orderData = await orderRes.json() as { success?: boolean; transferGroup: string }
         if (!orderRes.ok || !orderData.success) {
             console.log('Order Data:', orderData)
             throw new Error('Failed to create order')

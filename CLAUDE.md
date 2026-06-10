@@ -85,14 +85,19 @@ The pipeline is intentionally redundant (3 lookup tiers off the same Flash call)
 
 ## Continuous capture (`components/WebLiveScanner.tsx`)
 
-Auto-fires a scan when the camera frame is sharp + stable for 2 consecutive frames at 3fps:
+Google-Lens-style: the scanner detects the card's edges in real time, snaps a highlight overlay onto it, and auto-fires the instant the detected card is sharp and settled. The detection loop runs at `ANALYSIS_FPS` (10fps) on a small grayscale buffer sized to the **visible** video region (object-cover crop), so detected-box coords map cleanly to both screen (overlay) and video pixels (capture).
 
-- Laplacian variance > 120 → in focus
-- Mean absolute per-pixel diff < 6 vs previous frame → stable
+Per frame:
 
-All checks run on a tiny 80×112 grayscale buffer (constants at top of file). If auto-capture fires too eagerly or never fires, those thresholds are the knobs.
+1. `sobel()` → directional gradients. `detectCardBox()` projects `|gx|` onto columns (left/right borders) and `|gy|` onto rows (top/bottom), takes the outermost strong-edge bins (above `EDGE_PEAK_FRAC` of the projection max, gated by `EDGE_GRADIENT_THRESHOLD`), then **validates** the box is card-shaped (aspect ≈ `CARD_ASPECT` within `ASPECT_TOLERANCE`) and sensibly sized (`MIN/MAX_CARD_AREA_FRAC`). Returns null otherwise.
+2. The accepted box is EMA-smoothed (`BOX_SMOOTHING`) and drawn as the snapping highlight.
+3. **Fire** when the detected sub-region is sharp (`laplacianVariance` ≥ `FOCUS_VARIANCE_THRESHOLD`) and the box has settled (corner movement < `BOX_STABILITY_PX`) for `STABLE_FRAMES_REQUIRED` frames. Capture uses the detected box (padded), mapped back to video pixels — a tighter crop than the old fixed guide box.
 
-The manual shutter button is retained as an override.
+On fire, a white flash + frozen still shows immediately (`frozenFrame`) so the grab reads as instant while the catalog match runs.
+
+**Fallbacks (a detection miss must never strand the user):** if no box locks within `DETECT_TIMEOUT_MS` (2.5s — cluttered background, glare, low contrast), it degrades to the legacy center heuristic (whole-buffer Laplacian variance > 120 + mean-abs-diff < `STABILITY_DIFF_THRESHOLD` for 2 frames, capturing the centered `computeCardCrop`). The manual shutter button is also retained as an override (grabs the center crop).
+
+If auto-capture fires too eagerly or never fires, the knobs are `EDGE_PEAK_FRAC` and `BOX_STABILITY_PX` first, then the aspect/area tolerances — all in the documented constants block at the top of the file.
 
 ## Payments + Stripe Connect
 
