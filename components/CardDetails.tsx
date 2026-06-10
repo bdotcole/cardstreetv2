@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
 import PriceChart from './PriceChart';
@@ -42,6 +42,23 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
   const [imageLoaded, setImageLoaded] = useState(false);
 
+  // Real graded prices for this card: app sales (official) override JustTCG.
+  // Empty until a grade tier actually has data — the dashboard stays blank
+  // rather than inventing values off the raw price.
+  interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'justtcg'; }
+  const [gradedPrices, setGradedPrices] = useState<GradedPrice[]>([]);
+
+  useEffect(() => {
+    if (!card?.id) return;
+    let cancelled = false;
+    setGradedPrices([]);
+    fetch(`/api/cards/${encodeURIComponent(card.id)}/graded-prices`)
+      .then(res => (res.ok ? res.json() : { prices: [] }))
+      .then(data => { if (!cancelled) setGradedPrices(data.prices || []); })
+      .catch(() => { if (!cancelled) setGradedPrices([]); });
+    return () => { cancelled = true; };
+  }, [card?.id]);
+
   // Thai Price Adjustment Logic
   const isThaiSet = THAI_SETS.some(s => card.set.includes(s) || s.includes(card.set));
   const priceAdjustment = isThaiSet ? 0.55 : 1.0;
@@ -59,14 +76,19 @@ const CardDetails: React.FC<CardDetailsProps> = ({
     return `${currencySymbol} ${Math.round(val).toLocaleString()}`;
   };
 
-  const getGradedValue = (basePrice: number, multiplier: number) => {
-    if (!basePrice || basePrice === 0) return 'N/A';
-    const val = basePrice * multiplier * displayExchangeRate;
+  // Graded prices are real transacted/market values, so they take the plain
+  // currency conversion — not the Thai-set market estimate haircut in formatPrice.
+  const formatGradedPrice = (priceThb: number) => {
+    const val = priceThb * exchangeRate;
     if (currency === 'USD') {
       return `${currencySymbol} ${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
     return `${currencySymbol} ${Math.round(val).toLocaleString()}`;
   };
+
+  const gradedColor = (company: string) => (
+    { PSA: 'text-brand-cyan', BGS: 'text-brand-green', CGC: 'text-brand-red' } as Record<string, string>
+  )[company] || 'text-white';
 
   // Prioritize hires images if available
   const displayImageUrl = card.imageUrl;
@@ -218,30 +240,31 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                 </div>
               </div>
 
-              {/* Graded Section */}
-              <div className="space-y-4">
-                <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">{isThai ? 'แดชบอร์ดการ์ดเกรด' : 'Graded Dashboard'}</h3>
-                <div className="space-y-2">
-                  {[
-                    { label: "PSA 10", grade: "Gem Mint", multiplier: 3.5, color: "text-brand-cyan" },
-                    { label: "BGS 9.5", grade: "Gem Mint", multiplier: 3.2, color: "text-brand-green" },
-                    { label: "CGC 10", grade: "Pristine", multiplier: 3.4, color: "text-brand-red" }
-                  ].map((graded, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-white/[0.03] p-4 rounded-xl border border-white/5 hover:border-brand-cyan/30 transition-all cursor-default">
-                      <div>
-                        <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{graded.grade}</p>
+              {/* Graded Section — only rendered when we have real graded prices */}
+              {gradedPrices.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">{isThai ? 'แดชบอร์ดการ์ดเกรด' : 'Graded Dashboard'}</h3>
+                  <div className="space-y-2">
+                    {gradedPrices.map((graded) => (
+                      <div key={graded.label} className="flex justify-between items-center bg-white/[0.03] p-4 rounded-xl border border-white/5 hover:border-brand-cyan/30 transition-all cursor-default">
+                        <div>
+                          <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
+                          <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">
+                            {graded.source === 'app_sale'
+                              ? (isThai ? 'ขายบนแอป' : 'Sold on CardStreet')
+                              : (isThai ? 'ราคาตลาด' : 'Market')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-base ${gradedColor(graded.company)}`}>
+                            {formatGradedPrice(graded.price)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-black text-base ${graded.color}`}>
-                          {getGradedValue(card.prices?.market || card.marketPrice, graded.multiplier)}
-                        </p>
-                        <p className="text-[8px] text-slate-600 font-bold tracking-widest">{graded.multiplier}x Prem.</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           ) : (
             <div className="space-y-4 mt-6">

@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { validateThaiAddress, type ThaiAddress } from '@/lib/utils/addressValidation'
+import GooglePlacesAddressInput from './GooglePlacesAddressInput'
+import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress'
 
 // Thai provinces list
 const THAI_PROVINCES = [
@@ -95,6 +97,28 @@ export default function ThaiAddressForm({ onSubmit, initialValues }: ThaiAddress
                     required
                 />
                 {errors.phone_number && <div className="error-message">{errors.phone_number}</div>}
+            </div>
+
+            <div className="form-group">
+                <label>
+                    ค้นหาที่อยู่ (Search Address)
+                </label>
+                <GooglePlacesAddressInput
+                    onAddressParsed={(parsed: ParsedThaiAddress, rawFormatted: string) => {
+                        setAddress(prev => ({
+                            ...prev,
+                            address_line1: parsed.detail_address || rawFormatted,
+                            province: parsed.province || prev.province,
+                            district: parsed.district || prev.district,
+                            sub_district: parsed.sub_district || prev.sub_district,
+                            postal_code: parsed.postal_code || prev.postal_code,
+                        }))
+                    }}
+                    className="w-full h-12 px-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                    ค้นหาเพื่อเติมข้อมูลอัตโนมัติ (Search to auto-fill fields below)
+                </p>
             </div>
 
             <div className="form-group">

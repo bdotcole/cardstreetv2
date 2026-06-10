@@ -1,0 +1,406 @@
+{
+  "setId": "MAAF",
+  "generatedAt": "2026-06-01T19:37:29.313Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 24,
+    "twinSize": 0,
+    "proposed": 24,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "MAAF-001-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "001/023",
+      "name": "ฟุชิกิดาเนะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013214.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013214.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-002-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "002/023",
+      "name": "ฟุชิกิโซ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013215.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013215.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-003-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "003/023",
+      "name": "เมก้าฟุชิกิบานะex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013216.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013216.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-004-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "004/023",
+      "name": "จิโคริตา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013217.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013217.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-005-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "005/023",
+      "name": "เบย์ลีฟ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013218.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013218.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-006-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "006/023",
+      "name": "เมกาเนียม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013219.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013219.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-007-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "007/023",
+      "name": "เซเลบี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013220.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013220.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-008-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "008/023",
+      "name": "คิโนโคโค",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013221.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013221.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-009-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "009/023",
+      "name": "คิโนกัซซา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013222.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013222.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-010-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "010/023",
+      "name": "คาปู บูลูลู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013223.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013223.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-011-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "011/023",
+      "name": "โอการ์ปอง หน้ากากสีทีล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013224.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013224.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-012-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "012/023",
+      "name": "ยารักษาแผล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013225.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013225.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-013-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "013/023",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013226.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013226.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-014-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "014/023",
+      "name": "ลูกอมประหลาด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013227.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013227.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-015-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "015/023",
+      "name": "โปเกมอนแท็บเล็ต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013228.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013228.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-016-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "016/023",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013229.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013229.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-017-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "017/023",
+      "name": "โปเกมอนแคชเชอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013230.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013230.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-018-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "018/023",
+      "name": "ชุดจับแมลง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013231.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013231.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-019-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "019/023",
+      "name": "มอนสเตอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013232.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013232.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-020-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "020/023",
+      "name": "จิตนักสู้ของไอริส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013233.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013233.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-021-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "021/023",
+      "name": "ไก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013234.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013234.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-022-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "022/023",
+      "name": "ฮิคาริ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013235.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013235.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-023-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "023/023",
+      "name": "ปณิธานของลิเลีย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013236.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013236.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAF-GRA-th",
+      "set_id": "MAAF",
+      "language": "th",
+      "number": "GRA",
+      "name": "พลังงานพื้นฐาน[หญ้า]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013237.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013237.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

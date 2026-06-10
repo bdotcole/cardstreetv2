@@ -24,13 +24,29 @@ interface WebLiveScannerProps {
 // at 25s something is wrong — bail out to manual search.
 const SCAN_REQUEST_TIMEOUT_MS = 25_000;
 
-// Tuning for the auto-capture loop. Picked empirically.
-const ANALYSIS_FPS = 3;                // Frame-analysis cadence. Stability > motion, so 3fps is plenty.
-const ANALYSIS_W = 80;                 // Tiny grayscale buffer (80x112, 2.5:3.5). All checks run on this.
-const ANALYSIS_H = 112;
-const FOCUS_VARIANCE_THRESHOLD = 120;  // Laplacian variance above this = sharp enough to OCR.
-const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still.
-const STABLE_FRAMES_REQUIRED = 2;      // Need this many consecutive stable+focused frames before firing.
+// --- Detection / auto-capture tuning. Picked empirically; tune live on device. ---
+const ANALYSIS_FPS = 10;               // Detection cadence. Cheap on the tiny buffer, so run it live for a responsive snap.
+const DETECT_MAX = 160;                // Longest side of the detection buffer. Other side derives from the visible aspect.
+const FOCUS_VARIANCE_THRESHOLD = 120;  // Laplacian variance above this (within the detected card) = sharp enough to OCR.
+const STABLE_FRAMES_REQUIRED = 2;      // Consecutive locked frames before firing.
+
+// Card-edge detection. A TCG card is a high-contrast rectangle; we find its outer
+// borders from directional-gradient projections, then validate shape + size.
+const CARD_ASPECT = 2.5 / 3.5;         // Portrait card width/height (~0.714).
+const ASPECT_TOLERANCE = 0.18;         // Accept detected boxes whose aspect is within this of CARD_ASPECT (tolerates slight tilt).
+const MIN_CARD_AREA_FRAC = 0.10;       // Detected box must cover at least this fraction of the buffer (reject tiny noise).
+const MAX_CARD_AREA_FRAC = 0.96;       // ...and not basically the whole frame (reject "no card, all edges").
+const EDGE_GRADIENT_THRESHOLD = 36;    // Per-pixel Sobel magnitude floor before it counts toward a projection (noise gate).
+const EDGE_PEAK_FRAC = 0.4;            // A projection bin counts as a card border when it exceeds this fraction of the projection max.
+const BOX_STABILITY_PX = 6;            // Max corner movement (buffer px) between frames to count the box as "settled".
+const BOX_SMOOTHING = 0.5;             // EMA factor for the displayed box (0 = frozen, 1 = instant). Smooths the overlay snap.
+
+// Fallback: if no card locks within this window, fire on the old center-region
+// sharp+stable heuristic so a detection miss never strands the user.
+const DETECT_TIMEOUT_MS = 2_500;
+const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still (fallback path only).
+
+interface Box { x: number; y: number; w: number; h: number; score?: number; }
 
 async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
     return fetch('/api/scan', {
@@ -45,8 +61,14 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analysisCanvasRef = useRef<HTMLCanvasElement>(null);
-    const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
-    const stableCountRef = useRef(0);
+
+    const prevFrameRef = useRef<Uint8ClampedArray | null>(null);   // previous detection buffer (fallback stability)
+    const prevBoxRef = useRef<Box | null>(null);                   // last raw detected box (for settle check)
+    const smoothedBoxRef = useRef<Box | null>(null);               // EMA-smoothed box in buffer coords (for overlay)
+    const lockCountRef = useRef(0);                                // consecutive locked frames (detection path)
+    const centerCountRef = useRef(0);                              // consecutive sharp+stable frames (fallback path)
+    const lastDetectAtRef = useRef(0);                             // timestamp of last successful detection
+    const captureCropRef = useRef<Box | null>(null);              // crop (video px) to grab on the next trigger; null = use center crop
     const isProcessingRef = useRef(false);
     const streamRef = useRef<MediaStream | null>(null);
 
@@ -56,6 +78,11 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [isLocked, setIsLocked] = useState(false);
     const [statusHint, setStatusHint] = useState<'searching' | 'aligning' | 'sharpen' | 'scanning'>('searching');
+    // Smoothed detected card box in *screen* coords, drives the snapping highlight overlay. null = nothing found.
+    const [detectedBox, setDetectedBox] = useState<Box | null>(null);
+    // Frozen still + white flash so the grab reads as instant while the network match runs.
+    const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
+    const [flash, setFlash] = useState(false);
 
     useEffect(() => {
         let activeStream: MediaStream | null = null;
@@ -87,47 +114,94 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
         };
     }, [onClose]);
 
-    // Continuous analysis loop: focus + stability checks on a small grayscale buffer.
+    // Continuous detection loop. Each tick: downscale the visible video region, detect the
+    // card's bounding box from edge projections, snap the overlay onto it, and fire when the
+    // box is sharp + settled. Falls back to a center sharp+stable heuristic if nothing locks.
     useEffect(() => {
         if (!isVideoLoaded || isLocked) return;
         const intervalMs = Math.round(1000 / ANALYSIS_FPS);
+        lastDetectAtRef.current = Date.now();
 
         const tick = () => {
             if (isProcessingRef.current) return;
             const video = videoRef.current;
             const acanvas = analysisCanvasRef.current;
-            if (!video || !acanvas || video.readyState < 2) return;
+            if (!video || !acanvas || video.readyState < 2 || !video.videoWidth) return;
 
-            acanvas.width = ANALYSIS_W;
-            acanvas.height = ANALYSIS_H;
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            const vis = visibleVideoRect(video, screenW, screenH);
+            const { w: dw, h: dh } = detectBufferDims(vis);
+            if (dw < 8 || dh < 8) return;
+
+            acanvas.width = dw;
+            acanvas.height = dh;
             const actx = acanvas.getContext('2d', { willReadFrequently: true });
             if (!actx) return;
 
-            const crop = computeCardCrop(video, window.innerWidth, window.innerHeight);
-            actx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ANALYSIS_W, ANALYSIS_H);
-            const rgba = actx.getImageData(0, 0, ANALYSIS_W, ANALYSIS_H).data;
+            // Draw only the on-screen-visible region of the video so detection coords map
+            // cleanly to screen (overlay) and back to video pixels (capture).
+            actx.drawImage(video, vis.x, vis.y, vis.w, vis.h, 0, 0, dw, dh);
+            const gray = toGrayscale(actx.getImageData(0, 0, dw, dh).data, dw, dh);
 
-            const gray = toGrayscale(rgba, ANALYSIS_W, ANALYSIS_H);
-            const focus = laplacianVariance(gray, ANALYSIS_W, ANALYSIS_H);
-            const isSharp = focus >= FOCUS_VARIANCE_THRESHOLD;
+            const now = Date.now();
+            const box = detectCardBox(gray, dw, dh);
 
-            let isStable = false;
-            if (prevFrameRef.current && prevFrameRef.current.length === gray.length) {
-                isStable = meanAbsDiff(gray, prevFrameRef.current) < STABILITY_DIFF_THRESHOLD;
-            }
-            prevFrameRef.current = gray;
+            if (box) {
+                lastDetectAtRef.current = now;
+                centerCountRef.current = 0;
 
-            if (isSharp && isStable) {
-                stableCountRef.current += 1;
-                setStatusHint('aligning');
-                if (stableCountRef.current >= STABLE_FRAMES_REQUIRED) {
-                    stableCountRef.current = 0;
-                    triggerScan();
+                // Smooth for the overlay; snap glide comes from EMA + a short CSS transition.
+                smoothedBoxRef.current = emaBox(smoothedBoxRef.current, box, BOX_SMOOTHING);
+                setDetectedBox(bufferBoxToScreen(smoothedBoxRef.current, dw, dh, screenW, screenH));
+
+                const sub = cropGray(gray, dw, box);
+                const sharp = laplacianVariance(sub.data, sub.w, sub.h) >= FOCUS_VARIANCE_THRESHOLD;
+                const settled = prevBoxRef.current != null && maxCornerDelta(box, prevBoxRef.current) < BOX_STABILITY_PX;
+                prevBoxRef.current = box;
+
+                if (sharp && settled) {
+                    lockCountRef.current += 1;
+                    setStatusHint('aligning');
+                    if (lockCountRef.current >= STABLE_FRAMES_REQUIRED) {
+                        lockCountRef.current = 0;
+                        // Grab the detected card (lightly padded) rather than the fixed center box.
+                        captureCropRef.current = padCrop(bufferBoxToVideo(box, dw, dh, vis), 0.04, vis.Vw, vis.Vh);
+                        triggerScan();
+                    }
+                } else {
+                    lockCountRef.current = 0;
+                    setStatusHint(sharp ? 'aligning' : 'sharpen');
                 }
             } else {
-                stableCountRef.current = 0;
-                setStatusHint(isSharp ? 'aligning' : 'sharpen');
+                prevBoxRef.current = null;
+                smoothedBoxRef.current = null;
+                lockCountRef.current = 0;
+                setDetectedBox(null);
+                setStatusHint('searching');
+
+                // Degrade to the legacy center heuristic only after we've failed to lock for a
+                // while — so cluttered backgrounds / low contrast still scan, just less precisely.
+                if (now - lastDetectAtRef.current > DETECT_TIMEOUT_MS) {
+                    const focus = laplacianVariance(gray, dw, dh);
+                    const sharp = focus >= FOCUS_VARIANCE_THRESHOLD;
+                    const stable = prevFrameRef.current != null
+                        && prevFrameRef.current.length === gray.length
+                        && meanAbsDiff(gray, prevFrameRef.current) < STABILITY_DIFF_THRESHOLD;
+                    if (sharp && stable) {
+                        centerCountRef.current += 1;
+                        if (centerCountRef.current >= STABLE_FRAMES_REQUIRED) {
+                            centerCountRef.current = 0;
+                            captureCropRef.current = null; // null -> triggerScan uses the center crop
+                            triggerScan();
+                        }
+                    } else {
+                        centerCountRef.current = 0;
+                    }
+                }
             }
+
+            prevFrameRef.current = gray;
         };
 
         const id = window.setInterval(tick, intervalMs);
@@ -148,7 +222,17 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 return;
             }
 
-            const crop = computeCardCrop(video, window.innerWidth, window.innerHeight);
+            // Prefer the detected-card crop; fall back to the centered guide box (manual
+            // shutter / degraded path) when detection didn't supply one.
+            const raw = captureCropRef.current
+                ?? computeCardCrop(video, window.innerWidth, window.innerHeight);
+            const crop = {
+                x: Math.round(raw.x),
+                y: Math.round(raw.y),
+                w: Math.round(raw.w),
+                h: Math.round(raw.h),
+            };
+
             canvas.width = crop.w;
             canvas.height = crop.h;
             const ctx = canvas.getContext('2d');
@@ -164,6 +248,12 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 resetScan();
                 return;
             }
+
+            // Instant feedback: freeze the captured still and flash the shutter so the grab
+            // feels immediate even though the catalog match takes a few seconds behind it.
+            setFrozenFrame(dataUrl);
+            setFlash(true);
+            window.setTimeout(() => setFlash(false), 180);
 
             // On native we additionally run on-device OCR. The server uses pHash first; OCR text
             // only matters when pHash misses, so we send both and let the server pick the best path.
@@ -220,10 +310,24 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
 
     const resetScan = () => {
         isProcessingRef.current = false;
-        stableCountRef.current = 0;
+        lockCountRef.current = 0;
+        centerCountRef.current = 0;
         prevFrameRef.current = null;
+        prevBoxRef.current = null;
+        smoothedBoxRef.current = null;
+        captureCropRef.current = null;
+        lastDetectAtRef.current = Date.now();
         setIsLocked(false);
         setStatusHint('searching');
+        setDetectedBox(null);
+        setFrozenFrame(null);
+        setFlash(false);
+    };
+
+    const onShutter = () => {
+        // Manual override: grab whatever the camera currently sees (center crop).
+        captureCropRef.current = null;
+        triggerScan();
     };
 
     return (
@@ -247,27 +351,48 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
             <canvas ref={canvasRef} className="hidden" />
             <canvas ref={analysisCanvasRef} className="hidden" />
 
+            {/* Frozen still over the live feed while matching, so the captured frame stays put. */}
+            {frozenFrame && (
+                <img src={frozenFrame} alt="" className="absolute inset-0 w-full h-[100dvh] object-contain bg-black z-[5]" />
+            )}
+
+            {/* Shutter flash. */}
+            {flash && <div className="absolute inset-0 bg-white z-[60] animate-[ping_0.18s_ease-out] opacity-80" />}
+
             {!isVideoLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center bg-brand-darker">
                     <div className="w-8 h-8 rounded-full border-4 border-brand-cyan border-t-transparent animate-spin"></div>
                 </div>
             )}
 
-            {isVideoLoaded && (
-                <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-                    <div
-                        className={`relative w-[70vw] max-w-[280px] aspect-[2.5/3.5] rounded-xl overflow-hidden transition-all duration-300 ${isLocked ? 'scale-[1.02] border-brand-cyan/30' : 'scale-100'}`}
-                        style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)' }}
-                    >
-                        {isLocked && <div className="absolute inset-0 bg-white/20 animate-pulse z-0" />}
-                        <div className={`absolute transition-all duration-300 ${isLocked ? 'top-2 left-2 w-6 h-6 border-white/80' : 'top-0 left-0 w-8 h-8 border-brand-cyan'} border-t-[5px] border-l-[5px] rounded-tl-xl z-10`} />
-                        <div className={`absolute transition-all duration-300 ${isLocked ? 'top-2 right-2 w-6 h-6 border-white/80' : 'top-0 right-0 w-8 h-8 border-brand-cyan'} border-t-[5px] border-r-[5px] rounded-tr-xl z-10`} />
-                        <div className={`absolute transition-all duration-300 ${isLocked ? 'bottom-2 left-2 w-6 h-6 border-white/80' : 'bottom-0 left-0 w-8 h-8 border-brand-cyan'} border-b-[5px] border-l-[5px] rounded-bl-xl z-10`} />
-                        <div className={`absolute transition-all duration-300 ${isLocked ? 'bottom-2 right-2 w-6 h-6 border-white/80' : 'bottom-0 right-0 w-8 h-8 border-brand-cyan'} border-b-[5px] border-r-[5px] rounded-br-xl z-10`} />
-                        {!isLocked && (
-                            <div className="absolute inset-x-0 h-[2px] bg-brand-cyan/80 blur-[1px] rounded-full top-1/2 -mt-[1px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] shadow-[0_0_15px_#00e5ff]" />
-                        )}
-                    </div>
+            {/* Snapping highlight: follows the detected card. When nothing is found yet we show
+                a centered hint frame so the user knows where to aim. */}
+            {isVideoLoaded && !frozenFrame && (
+                <div className="absolute inset-0 pointer-events-none z-10">
+                    {detectedBox ? (
+                        <div
+                            className={`absolute rounded-xl border-[3px] transition-all duration-100 ease-out ${isLocked ? 'border-brand-cyan' : 'border-brand-cyan/90'}`}
+                            style={{
+                                left: detectedBox.x,
+                                top: detectedBox.y,
+                                width: detectedBox.w,
+                                height: detectedBox.h,
+                                boxShadow: '0 0 0 9999px rgba(0,0,0,0.6), 0 0 22px rgba(0,229,255,0.55)',
+                            }}
+                        >
+                            <CornerBrackets />
+                            {!isLocked && (
+                                <div className="absolute inset-x-0 h-[2px] bg-brand-cyan/80 blur-[1px] rounded-full top-1/2 -mt-[1px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] shadow-[0_0_15px_#00e5ff]" />
+                            )}
+                        </div>
+                    ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div
+                                className="relative w-[70vw] max-w-[280px] aspect-[2.5/3.5] rounded-xl border-2 border-dashed border-white/30"
+                                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -278,8 +403,8 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 >
                     <i className="fa-solid fa-xmark text-xl"></i>
                 </button>
-                <div className={`bg-black/60 backdrop-blur-md px-4 py-2 rounded-full transition-colors ${isLocked ? 'border border-brand-cyan/50' : ''}`}>
-                    <span className={`text-sm font-bold tracking-widest uppercase ${isLocked ? 'text-brand-cyan' : 'text-white'}`}>
+                <div className={`bg-black/60 backdrop-blur-md px-4 py-2 rounded-full transition-colors ${isLocked || detectedBox ? 'border border-brand-cyan/50' : ''}`}>
+                    <span className={`text-sm font-bold tracking-widest uppercase ${isLocked || detectedBox ? 'text-brand-cyan' : 'text-white'}`}>
                         {statusHintLabel(statusHint)}
                     </span>
                 </div>
@@ -294,8 +419,8 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                     </div>
                 ) : (
                     <button
-                        onClick={triggerScan}
-                        className="w-20 h-20 rounded-full border-4 border-white/80 p-1 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
+                        onClick={onShutter}
+                        className="w-20 h-20 rounded-full border-4 border-white/80 p-1 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg pointer-events-auto"
                         aria-label="Capture now"
                     >
                         <div className="w-full h-full bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)]"></div>
@@ -306,16 +431,89 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     );
 }
 
+function CornerBrackets() {
+    return (
+        <>
+            <div className="absolute -top-[3px] -left-[3px] w-7 h-7 border-t-[5px] border-l-[5px] border-brand-cyan rounded-tl-xl" />
+            <div className="absolute -top-[3px] -right-[3px] w-7 h-7 border-t-[5px] border-r-[5px] border-brand-cyan rounded-tr-xl" />
+            <div className="absolute -bottom-[3px] -left-[3px] w-7 h-7 border-b-[5px] border-l-[5px] border-brand-cyan rounded-bl-xl" />
+            <div className="absolute -bottom-[3px] -right-[3px] w-7 h-7 border-b-[5px] border-r-[5px] border-brand-cyan rounded-br-xl" />
+        </>
+    );
+}
+
 function statusHintLabel(hint: 'searching' | 'aligning' | 'sharpen' | 'scanning') {
     switch (hint) {
-        case 'searching': return 'Frame Card';
-        case 'sharpen':   return 'Hold Steady';
-        case 'aligning':  return 'Locking In';
+        case 'searching': return 'Point at a card';
+        case 'sharpen':   return 'Hold steady';
+        case 'aligning':  return 'Locking in';
         case 'scanning':  return 'Scanning AI…';
     }
 }
 
-function computeCardCrop(video: HTMLVideoElement, screenW: number, screenH: number) {
+// --- Geometry -------------------------------------------------------------
+
+// The video is rendered object-cover, so only a sub-rect of it is on screen. This returns
+// that visible region in video pixel coords (plus the native video dims for clamping).
+function visibleVideoRect(video: HTMLVideoElement, screenW: number, screenH: number) {
+    const Vw = video.videoWidth;
+    const Vh = video.videoHeight;
+    const S = Math.max(screenW / Vw, screenH / Vh); // cover scale
+    const visW = screenW / S;
+    const visH = screenH / S;
+    const visX = (Vw - visW) / 2;
+    const visY = (Vh - visH) / 2;
+    return { x: visX, y: visY, w: visW, h: visH, Vw, Vh };
+}
+
+// Detection buffer matching the visible aspect, so a detected box's aspect equals the real
+// card's aspect (no distortion to fool the aspect-ratio check). Longest side = DETECT_MAX.
+function detectBufferDims(vis: { w: number; h: number }) {
+    const a = vis.w / vis.h;
+    return a >= 1
+        ? { w: DETECT_MAX, h: Math.round(DETECT_MAX / a) }
+        : { w: Math.round(DETECT_MAX * a), h: DETECT_MAX };
+}
+
+function bufferBoxToScreen(box: Box, dw: number, dh: number, screenW: number, screenH: number): Box {
+    const sx = screenW / dw, sy = screenH / dh;
+    return { x: box.x * sx, y: box.y * sy, w: box.w * sx, h: box.h * sy };
+}
+
+function bufferBoxToVideo(box: Box, dw: number, dh: number, vis: { x: number; y: number; w: number; h: number }): Box {
+    const sx = vis.w / dw, sy = vis.h / dh;
+    return { x: vis.x + box.x * sx, y: vis.y + box.y * sy, w: box.w * sx, h: box.h * sy };
+}
+
+function padCrop(c: Box, frac: number, Vw: number, Vh: number): Box {
+    const px = c.w * frac, py = c.h * frac;
+    const x = Math.max(0, c.x - px);
+    const y = Math.max(0, c.y - py);
+    return { x, y, w: Math.min(Vw - x, c.w + 2 * px), h: Math.min(Vh - y, c.h + 2 * py) };
+}
+
+function emaBox(prev: Box | null, next: Box, a: number): Box {
+    if (!prev) return next;
+    return {
+        x: prev.x + (next.x - prev.x) * a,
+        y: prev.y + (next.y - prev.y) * a,
+        w: prev.w + (next.w - prev.w) * a,
+        h: prev.h + (next.h - prev.h) * a,
+    };
+}
+
+function maxCornerDelta(a: Box, b: Box): number {
+    return Math.max(
+        Math.abs(a.x - b.x),
+        Math.abs(a.y - b.y),
+        Math.abs((a.x + a.w) - (b.x + b.w)),
+        Math.abs((a.y + a.h) - (b.y + b.h)),
+    );
+}
+
+// Centered guide-box crop in video pixels. Used by the manual shutter and the degraded
+// fallback path when edge detection didn't produce a card crop.
+function computeCardCrop(video: HTMLVideoElement, screenW: number, screenH: number): Box {
     const Vw = video.videoWidth;
     const Vh = video.videoHeight;
     const S = Math.max(screenW / Vw, screenH / Vh);
@@ -334,6 +532,8 @@ function computeCardCrop(video: HTMLVideoElement, screenW: number, screenH: numb
     return { x, y, w, h };
 }
 
+// --- Image analysis -------------------------------------------------------
+
 function toGrayscale(rgba: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
     const gray = new Uint8ClampedArray(w * h);
     for (let i = 0, j = 0; j < gray.length; i += 4, j += 1) {
@@ -342,8 +542,22 @@ function toGrayscale(rgba: Uint8ClampedArray, w: number, h: number): Uint8Clampe
     return gray;
 }
 
+function cropGray(gray: Uint8ClampedArray, w: number, box: Box): { data: Uint8ClampedArray; w: number; h: number } {
+    const bx = Math.max(0, Math.round(box.x));
+    const by = Math.max(0, Math.round(box.y));
+    const bw = Math.max(1, Math.round(box.w));
+    const bh = Math.max(1, Math.round(box.h));
+    const out = new Uint8ClampedArray(bw * bh);
+    for (let yy = 0; yy < bh; yy++) {
+        const srcRow = (by + yy) * w + bx;
+        out.set(gray.subarray(srcRow, srcRow + bw), yy * bw);
+    }
+    return { data: out, w: bw, h: bh };
+}
+
 // Variance of Laplacian — classic blur detector. Sharp edges produce high variance.
 function laplacianVariance(gray: Uint8ClampedArray, w: number, h: number): number {
+    if (w < 3 || h < 3) return 0;
     let sum = 0;
     let sumSq = 0;
     let n = 0;
@@ -364,4 +578,93 @@ function meanAbsDiff(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
     let total = 0;
     for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
     return total / a.length;
+}
+
+// Sobel gradients. gx responds to vertical edges (the card's left/right borders); gy to
+// horizontal edges (top/bottom). Returned as signed float arrays.
+function sobel(gray: Uint8ClampedArray, w: number, h: number): { gx: Float32Array; gy: Float32Array } {
+    const gx = new Float32Array(w * h);
+    const gy = new Float32Array(w * h);
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            const tl = gray[i - w - 1], t = gray[i - w], tr = gray[i - w + 1];
+            const l = gray[i - 1], r = gray[i + 1];
+            const bl = gray[i + w - 1], b = gray[i + w], br = gray[i + w + 1];
+            gx[i] = (tr + 2 * r + br) - (tl + 2 * l + bl);
+            gy[i] = (bl + 2 * b + br) - (tl + 2 * t + tr);
+        }
+    }
+    return { gx, gy };
+}
+
+// Box blur (radius 1) over a 1D projection — merges anti-aliased multi-pixel edges into one peak.
+function smooth1d(arr: Float32Array): void {
+    const n = arr.length;
+    if (n < 3) return;
+    const out = new Float32Array(n);
+    out[0] = (arr[0] + arr[1]) / 2;
+    out[n - 1] = (arr[n - 2] + arr[n - 1]) / 2;
+    for (let i = 1; i < n - 1; i++) out[i] = (arr[i - 1] + arr[i] + arr[i + 1]) / 3;
+    arr.set(out);
+}
+
+function arrMax(arr: Float32Array): number {
+    let m = 0;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i];
+    return m;
+}
+
+// Outermost bin (scanning inward from one end) whose value clears the threshold.
+function firstAbove(arr: Float32Array, thresh: number, fromStart: boolean): number {
+    if (fromStart) {
+        for (let i = 0; i < arr.length; i++) if (arr[i] >= thresh) return i;
+    } else {
+        for (let i = arr.length - 1; i >= 0; i--) if (arr[i] >= thresh) return i;
+    }
+    return -1;
+}
+
+// Detect the card's bounding box from directional-gradient projections, then validate that
+// it is card-shaped and a sensible size. Returns null when no plausible card is present.
+function detectCardBox(gray: Uint8ClampedArray, w: number, h: number): Box | null {
+    const { gx, gy } = sobel(gray, w, h);
+
+    // Project edge energy: |gx| onto columns (left/right borders), |gy| onto rows (top/bottom).
+    const colE = new Float32Array(w);
+    const rowE = new Float32Array(h);
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            const ax = Math.abs(gx[i]);
+            if (ax > EDGE_GRADIENT_THRESHOLD) colE[x] += ax;
+            const ay = Math.abs(gy[i]);
+            if (ay > EDGE_GRADIENT_THRESHOLD) rowE[y] += ay;
+        }
+    }
+    smooth1d(colE);
+    smooth1d(rowE);
+
+    const colMax = arrMax(colE);
+    const rowMax = arrMax(rowE);
+    if (colMax <= 0 || rowMax <= 0) return null;
+
+    const left = firstAbove(colE, colMax * EDGE_PEAK_FRAC, true);
+    const right = firstAbove(colE, colMax * EDGE_PEAK_FRAC, false);
+    const top = firstAbove(rowE, rowMax * EDGE_PEAK_FRAC, true);
+    const bottom = firstAbove(rowE, rowMax * EDGE_PEAK_FRAC, false);
+    if (left < 0 || right < 0 || top < 0 || bottom < 0) return null;
+
+    const bw = right - left;
+    const bh = bottom - top;
+    if (bw < 6 || bh < 6) return null;
+
+    const aspect = bw / bh;
+    if (Math.abs(aspect - CARD_ASPECT) > ASPECT_TOLERANCE) return null;
+
+    const areaFrac = (bw * bh) / (w * h);
+    if (areaFrac < MIN_CARD_AREA_FRAC || areaFrac > MAX_CARD_AREA_FRAC) return null;
+
+    const score = (colE[left] + colE[right]) / colMax + (rowE[top] + rowE[bottom]) / rowMax;
+    return { x: left, y: top, w: bw, h: bh, score };
 }

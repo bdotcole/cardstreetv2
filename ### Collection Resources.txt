@@ -1,0 +1,267 @@
+### Collection Resources
+These endpoints provide information about the available trading card games and sets in our database. Start with these endpoints to understand what's available before diving into the cards endpoint.
+
+```
+cards
+```
+
+### Games
+Retrieve a list of all games.
+
+```
+https://api.justtcg.com/v1/games
+```
+
+
+#### Response Object
+
+### Sets
+Retrieve a list of all sets.
+
+```
+https://api.justtcg.com/v1/sets
+```
+
+
+#### Query Parameters
+Search query for finding sets by name.
+Filter by game ID (e.g., mtg, pokemon).
+
+```
+mtg
+```
+
+
+```
+pokemon
+```
+
+Field to sort by: name or release_date.
+
+```
+name
+```
+
+
+```
+release_date
+```
+
+Sort order for results: asc or desc.
+
+```
+asc
+```
+
+
+```
+desc
+```
+
+
+#### Response Object
+
+### Cards
+This high-performance endpoint provides rapid access to card data whether you already have identifier values or not. For the best performance when retrieving specific cards, use this endpoint with IDs obtained from the games or sets endpoints.
+
+```
+games
+```
+
+
+```
+sets
+```
+
+### Card Lookup
+Retrieve a card and its variant prices by ID or search query. You can optionally filter the returned variants by condition and printing type.
+
+```
+https://api.justtcg.com/v1/cards
+```
+
+Note: Any identifier will take precedence over any search query if multiple of those are provided.
+
+#### Query Parameters
+TCGplayer ID of the card.
+MTGJSON ID of the card.
+Scryfall ID of the card.
+TCGPlayer SKU ID of the variant. Note, printing and condition filters do not apply when this is defined.
+Filter by printing type (e.g., Normal, Foil).
+
+```
+Normal
+```
+
+
+```
+Foil
+```
+
+An array of conditions to filter by. Supports fully spelled names or abbreviations. Full names: "Sealed", "Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged". Abbreviations: "S", "NM", "LP", "MP", "HP", "DMG".
+Specify the duration of price history to include. Options are 7d, 30d, 90d, or 180d. This is ignored if include_price_history is set to false.
+
+```
+7d
+```
+
+
+```
+30d
+```
+
+
+```
+90d
+```
+
+
+```
+180d
+```
+
+
+```
+include_price_history
+```
+
+
+```
+false
+```
+
+Include price history data in the response.
+Specify which timeframe statistics to include in the response. Defaults to all timeframes.
+Options:
+- 7d
+- 30d
+- 90d
+- 1y
+- allTime
+
+```
+7d
+```
+
+
+```
+30d
+```
+
+
+```
+90d
+```
+
+
+```
+1y
+```
+
+
+```
+allTime
+```
+
+You can provide a comma-separated list (e.g., 7d,30d,1y) to include multiple statistics.
+
+```
+7d,30d,1y
+```
+
+Include cards with no pricing data in the response. Defaults to false. This parameter is ignored if a search query is passed in.
+
+```
+false
+```
+
+
+#### Response Object
+
+### Batch Card Lookup
+Retrieve multiple cards and their variants in a single request. For each card, you can optionally filter variants by specifying condition and printing parameters.
+
+```
+https://api.justtcg.com/v1/cards
+```
+
+
+#### Request Body Parameters
+Send an array of objects, each containing the following properties:
+TCGplayer ID of the card.
+MTGJSON ID of the card.
+Scryfall ID of the card.
+TCGPlayer SKU ID of the variant. Note, printing and condition filters do not apply when this is defined.
+Card ID of the card.
+Variant ID of the card.
+Filters results to include only card variants whose pricing information has been updated at or after the provided timestamp. Format: Unix Timestamp in seconds. Compatible with most filters (e.g., game, set, cardId, orderBy), but cannot be combined with the search query parameter (q).
+
+```
+game
+```
+
+
+```
+set
+```
+
+
+```
+cardId
+```
+
+
+```
+orderBy
+```
+
+
+```
+q
+```
+
+Filter by printing type (e.g., Normal, Foil).
+
+```
+Normal
+```
+
+
+```
+Foil
+```
+
+An array of conditions to filter by. Supports fully spelled names or abbreviations. Full names: "Sealed", "Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged". Abbreviations: "S", "NM", "LP", "MP", "HP", "DMG".
+
+```
+variantId
+```
+
+
+```
+tcgplayerSkuId
+```
+
+
+```
+tcgplayerId
+```
+
+
+```
+mtgjsonId
+```
+
+
+```
+scryfallId
+```
+
+
+```
+cardId
+```
+
+Note: The maximum number of items supported in a single request is 200 for "Enterprise" plans, 100 for "Starter" and "Pro" plans, and 20 for the free plan. For larger queries, please consider batching your requests.
+
+#### Response Object

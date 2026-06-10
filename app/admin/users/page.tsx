@@ -49,7 +49,9 @@ export default function UsersPage() {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    role: 'partner',
+                    // Partner status lives in partner_joined_at, not `role`, so an
+                    // admin keeps their admin role while also becoming a partner.
+                    ...(user.role === 'admin' ? {} : { role: 'partner' }),
                     partner_joined_at: new Date().toISOString(),
                     partner_level: 1,
                     partner_fee: 5.0,
@@ -138,8 +140,8 @@ export default function UsersPage() {
                                         <td className="px-6 py-4 text-center">
                                             <button
                                                 onClick={() => promoteToPartner(user)}
-                                                disabled={promoting === user.id || user.role === 'admin'}
-                                                title={user.role === 'admin' ? 'Cannot change admin role' : 'Promote to partner'}
+                                                disabled={promoting === user.id}
+                                                title="Promote to partner"
                                                 className="flex items-center gap-1.5 mx-auto px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[10px] font-black uppercase rounded-full hover:bg-yellow-500/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
                                             >
                                                 {promoting === user.id

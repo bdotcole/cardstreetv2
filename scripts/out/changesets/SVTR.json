@@ -1,0 +1,374 @@
+{
+  "setId": "SVTR",
+  "generatedAt": "2026-06-01T19:39:32.587Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 22,
+    "twinSize": 0,
+    "proposed": 22,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SVTR-001-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "001/021",
+      "name": "พิคาชู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008764.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008764.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-002-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "002/021",
+      "name": "ไรชู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008765.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008765.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-003-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "003/021",
+      "name": "ไรชูV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008766.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008766.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-004-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "004/021",
+      "name": "ธันเดอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008767.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008767.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-005-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "005/021",
+      "name": "ไรโคV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008768.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008768.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-006-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "006/021",
+      "name": "เซราโอรา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008769.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008769.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-007-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "007/021",
+      "name": "แขนเหล็กex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008770.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008770.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-008-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "008/021",
+      "name": "มิไรดอนex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008771.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008771.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-009-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "009/021",
+      "name": "รถเข็นสับเปลี่ยน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008772.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008772.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-010-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "010/021",
+      "name": "สลับการ์ดพลังงาน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008773.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008773.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-011-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "011/021",
+      "name": "อิเล็กทริกเจนเนอเรเตอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008774.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008774.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-012-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "012/021",
+      "name": "คันเบ็ดชั้นยอด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008775.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008775.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-013-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "013/021",
+      "name": "เนสต์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008776.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008776.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-014-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "014/021",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008777.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008777.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-015-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "015/021",
+      "name": "เครื่องรางแห่งความกล้า",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008778.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008778.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-016-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "016/021",
+      "name": "เซย์ยุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008779.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008779.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-017-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "017/021",
+      "name": "นันจาโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008780.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008780.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-018-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "018/021",
+      "name": "งานวิจัยของศาสตราจารย์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008781.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008781.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-019-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "019/021",
+      "name": "คำสั่งของบอส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008782.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008782.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-020-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "020/021",
+      "name": "บีชคอร์ท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008783.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008783.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-021-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "021/021",
+      "name": "ดับเบิลเทอร์โบเอนเนอร์จี้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008784.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008784.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVTR-LIG-th",
+      "set_id": "SVTR",
+      "language": "th",
+      "number": "LIG",
+      "name": "พลังงานพื้นฐาน[สายฟ้า]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008785.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008785.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

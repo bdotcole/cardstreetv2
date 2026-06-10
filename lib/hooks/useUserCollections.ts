@@ -191,6 +191,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to delete collections');
+
             const { error } = await supabase
                 .from('collections')
                 .delete()
@@ -210,6 +213,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to update collections');
+
             const dbUpdates: any = {};
             if (updates.name !== undefined) dbUpdates.name = updates.name;
             if (updates.includeInPortfolio !== undefined) dbUpdates.include_in_portfolio = updates.includeInPortfolio;
@@ -239,6 +245,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to add to your vault');
+
             // Ensure user profile exists (for legacy users)
             await ensureUserProfile();
 
@@ -291,6 +300,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to remove cards');
+
             const { error } = await supabase
                 .from('collection_items')
                 .delete()
@@ -322,6 +334,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const supabase = createClient();
 
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to update cards');
+
             const dbUpdates: any = {};
             if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity;
             if (updates.condition !== undefined) dbUpdates.condition = updates.condition;

@@ -104,8 +104,12 @@ Stripe Thailand does **not permit platform-loss-liable Connect accounts** — th
 
 | Region | Model | Seller capabilities | MOR | Cart shape |
 |---|---|---|---|---|
-| `th` (active) | Destination charges + `application_fee_amount` + manual payouts | `card_payments` + `transfers` | Seller | Single-seller only |
+| `th` (active) | **Direct charges** (PaymentIntent created on the connected account) + `application_fee_amount` | `card_payments` + `transfers` | Seller | Single-seller only |
 | `us` (dormant) | Separate charges and transfers + `recipient` agreement | `transfers` only | Platform | Multi-seller OK |
+
+**Who bears the Stripe processing fee:** on TH this is a *direct charge*, so the seller (the connected account, as MOR) automatically bears Stripe's processing fee — it is debited from their balance at charge time. The platform's only take is `application_fee_amount` (the seller's tier fee), which arrives untouched by Stripe fees. The buyer pays item + shipping only; the Stripe fee is never added on top of the buyer's total. On the dormant US path the platform is MOR and bears the Stripe fee instead.
+
+**Platform fee tiers** (the `application_fee_amount`, computed in `app/api/orders/checkout/route.ts`): non-partner sellers pay **9%**; partners pay a tiered rate starting at **5%** (bronze) and descending to 2% (heart / pink_diamond). The tier→percent map there must stay in sync with the display tiers in `components/PartnerPortal.tsx`.
 
 `profiles.stripe_region` and `orders.stripe_region` pin each entity to its platform — Express accounts can't move between platforms after creation, so the column is sticky.
 
@@ -116,10 +120,10 @@ Stripe Thailand does **not permit platform-loss-liable Connect accounts** — th
 - `app/api/webhooks/stripe/route.ts` — US endpoint, thin shim over the shared handler.
 - `app/api/webhooks/stripe/th/route.ts` — TH endpoint, same shim with `region='th'`.
 - `app/api/stripe/connect/{start,status,dashboard}/route.ts` — onboarding + status routes, all region-aware. `start` self-heals stale `stripe_account_id` rows by creating a fresh account when Stripe returns `resource_missing`.
-- `app/api/checkout/route.ts` — PaymentIntent creation. Region-branched (destination charge for TH, plain platform charge for US).
+- `app/api/checkout/route.ts` — PaymentIntent creation. Region-branched: on TH the PaymentIntent is created **on the seller's connected account** (direct charge — `requestOptions.stripeAccount = seller.stripe_account_id`) with `application_fee_amount`; on US it's a plain platform charge.
 - `app/api/orders/checkout/route.ts` — order creation. Enforces single-seller carts on TH and rejects mixed-region carts everywhere.
 - `app/api/orders/finalize/route.ts` — client-side webhook fallback; verifies the PaymentIntent on the correct platform.
-- `supabase/functions/release-funds/index.ts` — hourly payout cron. On TH uses `stripe.payouts.create({...}, {stripeAccount: sellerId})` to push the seller's already-credited balance to their bank. On US uses `stripe.transfers.create` to move money out of the platform's balance.
+- `supabase/functions/release-funds/index.ts` — hourly payout cron. On TH it makes **no Stripe payout call** — the buyer's funds already settled into the seller's connected-account balance at charge time (direct charge), so the cron only marks the order `completed`, records a synthetic `direct_charge_${order.id}` id, and notifies the seller. On US it uses `stripe.transfers.create` to move money out of the platform's balance. (See the escrow caveat under Payouts.)
 - `supabase/migrations/20260515_stripe_region_dual_platform.sql` — adds `stripe_region` + `preferred_currency` columns + backfill.
 
 ### Env vars
@@ -144,8 +148,8 @@ Subscribed events for both: `payment_intent.succeeded`, `payment_intent.payment_
 
 `app/api/stripe/connect/start/route.ts` creates connected accounts with:
 - `country: 'TH'`, `business_type: 'individual'`
-- Capabilities: `card_payments` + `transfers` (both required — `card_payments` makes the seller capable of being MOR; `transfers` lets the platform take an application fee)
-- `settings.payouts.schedule.interval = 'manual'` — funds accumulate in the seller's Stripe balance instead of auto-paying out, so `release-funds` is our explicit escrow gate
+- Capabilities: `card_payments` + `transfers` (both required — `card_payments` makes the seller capable of being MOR; `transfers` lets the platform take an application fee) + `promptpay_payments` on TH
+- **No payout schedule override** — the account uses Stripe's default automatic payout schedule. (The code does *not* set `settings.payouts.schedule.interval = 'manual'`; see the escrow caveat under Payouts.)
 - Pre-filled `business_profile.{url, product_description, mcc=5945}` so individual sellers without a website don't get blocked on a required URL field in Stripe's hosted onboarding
 
 **Self-heal**: if `accountLinks.create` (or any other Stripe call) returns `resource_missing` / `account_invalid` (stale account ID from a deleted account or rotated keys), the start route clears `stripe_account_id` + capability flags and creates a fresh account in the same request. No manual SQL cleanup needed for orphaned rows.
@@ -154,26 +158,25 @@ Subscribed events for both: `payment_intent.succeeded`, `payment_intent.payment_
 
 ### Charges (TH path)
 
-`/api/checkout` builds a PaymentIntent with:
-- `transfer_data.destination: sellerAccountId`
-- `on_behalf_of: sellerAccountId`
-- `application_fee_amount: Σ orders.platform_fee` in satang
+`/api/checkout` creates the PaymentIntent **on the seller's connected account** (direct charge) by passing `requestOptions.stripeAccount = seller.stripe_account_id`. It does **not** set `transfer_data.destination` or `on_behalf_of` — those belong to the destination-charge model, which TH does not use. The PaymentIntent carries:
+- `application_fee_amount: Σ orders.platform_fee` in satang (the platform's 9%/tiered cut)
+- `automatic_payment_methods.enabled` so the client PaymentElement can offer card + PromptPay
 
-Funds settle directly into the seller's Stripe balance. The Stripe processing fee comes off the seller's balance (standard for destination charges). With manual payouts enabled, the seller can't withdraw until `release-funds` pushes the balance to their bank.
+Funds settle directly into the seller's Stripe balance. The Stripe processing fee comes off that balance (standard for direct charges — the connected account is MOR), so the seller bears it automatically; the platform receives the full `application_fee_amount`.
 
 ### Payouts
 
 `release-funds` (Supabase Edge Function) finds orders where `status='delivered'`, `escrow_status='held'`, `funds_release_at <= NOW()`, `stripe_payout_id IS NULL`, and:
 
-- TH: `stripe.payouts.create({...}, {stripeAccount: sellerId, idempotencyKey: 'payout_' + order.id})` — pushes the seller's balance to their bank.
-- US: `stripe.transfers.create(...)` — moves money from the platform's balance to the seller's connected account, which then auto-pays-out on Stripe's default schedule.
+- TH: makes **no Stripe call**. With direct charges the buyer's money already sits in the seller's connected-account balance, and (since onboarding sets no manual payout schedule) Stripe pays it out on the account's default automatic schedule. The cron only marks the order `completed`, stamps a synthetic `direct_charge_${order.id}` id (keeps the `stripe_payout_id IS NULL` retry guard meaningful), and notifies the seller. The notification amount is the charge's `balance_transaction.net` (true deposit after Stripe's fee), not `total − platform_fee`.
+- US: `stripe.transfers.create(...)` with idempotency key `payout_${order.id}` — moves money from the platform's balance to the seller's connected account, which then auto-pays-out on Stripe's default schedule.
 
-Same `payout_${order.id}` idempotency key in both paths so a retry never double-charges.
+> **Escrow caveat (known gap):** the surrounding language (`escrow_status='held'`, `funds_release_at`) implies funds are *held* by the platform until delivery + 48h, then released. That is true on the US path. On TH it is **not** — direct-charge funds reach the seller's balance at charge time and pay out on Stripe's automatic schedule regardless of delivery state. To make TH a real escrow, onboarding would need `settings.payouts.schedule.interval = 'manual'` and `release-funds` would need to call `stripe.payouts.create({...}, {stripeAccount: sellerId})` on release. Neither is in place today.
 
 ### Cart constraints
 
 - **Mixed-region carts**: rejected at `/api/orders/checkout` with 400 (a PaymentIntent on platform A can't transfer to an account on platform B).
-- **Multi-seller carts on TH**: rejected at `/api/orders/checkout` with 400 (destination charges support exactly one destination per PaymentIntent). Multi-seller-as-N-charges is a future improvement.
+- **Multi-seller carts on TH**: rejected at `/api/orders/checkout` with 400 (a direct-charge PaymentIntent is created on exactly one connected account, so one seller per cart). Multi-seller-as-N-charges is a future improvement.
 - Both checks fire BEFORE any DB writes or listing reservations, so a rejected cart leaves no side effects to roll back.
 
 ## pHash backfill

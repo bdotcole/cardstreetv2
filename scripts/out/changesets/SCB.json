@@ -1,0 +1,2518 @@
+{
+  "setId": "SCB",
+  "generatedAt": "2026-06-01T19:37:59.914Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 156,
+    "twinSize": 0,
+    "proposed": 156,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SCB-001-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "001/156",
+      "name": "ฟุชิกิบานะV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001860.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001860.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-002-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "002/156",
+      "name": "ฟุชิกิบานะVMAX",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001861.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001861.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-003-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "003/156",
+      "name": "มาดาซึโบมิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001862.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001862.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-004-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "004/156",
+      "name": "อุซึดง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001863.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001863.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-005-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "005/156",
+      "name": "อุซึบ็อท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001864.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001864.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-006-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "006/156",
+      "name": "ยันยันมา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001865.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001865.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-007-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "007/156",
+      "name": "เมกกะยันมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001866.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001866.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-008-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "008/156",
+      "name": "เซเลบี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001867.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001867.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-009-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "009/156",
+      "name": "โทรพิอุส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001868.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001868.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-010-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "010/156",
+      "name": "โคโรท็อกV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001869.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001869.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-011-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "011/156",
+      "name": "เชอรินโบ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001870.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001870.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-012-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "012/156",
+      "name": "เชอริม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001871.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001871.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-013-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "013/156",
+      "name": "คาริคิริ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001872.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001872.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-014-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "014/156",
+      "name": "รารันเทส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001873.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001873.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-015-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "015/156",
+      "name": "คาปู บูลูลู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001874.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001874.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-016-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "016/156",
+      "name": "ฮิเมงกะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001875.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001875.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-017-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "017/156",
+      "name": "วาตะชิรากะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001876.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001876.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-018-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "018/156",
+      "name": "แอปปริวV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001877.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001877.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-019-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "019/156",
+      "name": "ซารู้ด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001878.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001878.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-020-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "020/156",
+      "name": "บูสเตอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001879.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001879.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-021-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "021/156",
+      "name": "เอ็นเต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001880.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001880.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-022-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "022/156",
+      "name": "วิคทินีV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001881.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001881.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-023-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "023/156",
+      "name": "คุยทาแรน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001882.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001882.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-024-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "024/156",
+      "name": "ยาโทโมริ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001883.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001883.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-025-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "025/156",
+      "name": "เอ็นนิวท์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001884.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001884.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-026-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "026/156",
+      "name": "ยาคุเดะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001885.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001885.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-027-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "027/156",
+      "name": "มารุยาคุเดะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001886.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001886.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-028-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "028/156",
+      "name": "คาเม็กซ์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001887.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001887.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-029-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "029/156",
+      "name": "คาเม็กซ์VMAX",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001888.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001888.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-030-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "030/156",
+      "name": "ทัททู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001889.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001889.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-031-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "031/156",
+      "name": "ทัททู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001890.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001890.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-032-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "032/156",
+      "name": "ซีดรา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001891.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001891.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-033-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "033/156",
+      "name": "คิงดรา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001892.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001892.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-034-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "034/156",
+      "name": "เฮกานิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001893.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001893.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-035-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "035/156",
+      "name": "ชิซาริเกอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001894.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001894.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-036-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "036/156",
+      "name": "เอ็มเพลท์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001895.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001895.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-037-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "037/156",
+      "name": "บุยเซล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001896.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001896.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-038-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "038/156",
+      "name": "โฟลเซล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001897.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001897.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-039-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "039/156",
+      "name": "มานาฟี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001898.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001898.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-040-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "040/156",
+      "name": "โวลเคเนียน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001899.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001899.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-041-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "041/156",
+      "name": "ฮากิกิชิริ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001900.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001900.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-042-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "042/156",
+      "name": "คามุคาเมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001901.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001901.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-043-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "043/156",
+      "name": "คาจิริกาเมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001902.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001902.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-044-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "044/156",
+      "name": "อุ๊อุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001903.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001903.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-045-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "045/156",
+      "name": "ยูกิฮามิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001904.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001904.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-046-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "046/156",
+      "name": "มอสโนว์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001905.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001905.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-047-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "047/156",
+      "name": "เอเลบู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001906.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001906.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-048-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "048/156",
+      "name": "เอเลคิเบิล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001907.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001907.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-049-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "049/156",
+      "name": "โคลิงก์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001908.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001908.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-050-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "050/156",
+      "name": "ลุคซิโอ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001909.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001909.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-051-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "051/156",
+      "name": "เร็นโทรา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001910.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001910.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-052-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "052/156",
+      "name": "พาจิริซึ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001911.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001911.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-053-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "053/156",
+      "name": "คาปู โคเคโคV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001912.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001912.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-054-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "054/156",
+      "name": "วันปาจิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001913.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001913.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-055-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "055/156",
+      "name": "พัลส์วัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001914.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001914.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-056-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "056/156",
+      "name": "กาลาร์ ยาดง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001915.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001915.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-057-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "057/156",
+      "name": "บาเนบู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001916.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001916.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-058-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "058/156",
+      "name": "บูพิก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001917.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001917.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-059-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "059/156",
+      "name": "ยาจิลอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001918.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001918.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-060-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "060/156",
+      "name": "เนนดอลล์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001919.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001919.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-061-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "061/156",
+      "name": "ชิรีน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001920.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001920.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-062-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "062/156",
+      "name": "เนียสเปอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001921.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001921.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-063-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "063/156",
+      "name": "เนียโอนิกซ์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001922.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001922.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-064-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "064/156",
+      "name": "มิมิคคิวV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001923.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001923.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-065-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "065/156",
+      "name": "เนครอสมาV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001924.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001924.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-066-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "066/156",
+      "name": "โดราเมชิยะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001925.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001925.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-067-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "067/156",
+      "name": "โดรอนจิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001926.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001926.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-068-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "068/156",
+      "name": "โดราพัลท์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001927.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001927.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-069-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "069/156",
+      "name": "แมนคี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001928.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001928.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-070-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "070/156",
+      "name": "โอโคริซารุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001929.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001929.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-071-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "071/156",
+      "name": "อิวาร์ค",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001930.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001930.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-072-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "072/156",
+      "name": "คาระคาระ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001931.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001931.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-073-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "073/156",
+      "name": "การะการะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001932.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001932.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-074-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "074/156",
+      "name": "ไกลกา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001933.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001933.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-075-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "075/156",
+      "name": "ไกลออน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001934.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001934.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-076-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "076/156",
+      "name": "โคโจฟู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001935.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001935.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-077-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "077/156",
+      "name": "โคโจนโดะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001936.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001936.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-078-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "078/156",
+      "name": "ทันด้ง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001937.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001937.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-079-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "079/156",
+      "name": "โทร็อกกอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001938.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001938.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-080-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "080/156",
+      "name": "เซคิทันซัง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001939.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001939.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-081-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "081/156",
+      "name": "อิชิเฮนจิน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001940.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001940.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-082-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "082/156",
+      "name": "วูลาโอส จู่โจมครั้งเดียวV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001941.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001941.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-083-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "083/156",
+      "name": "วูลาโอส จู่โจมต่อเนื่องV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001942.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001942.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-084-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "084/156",
+      "name": "ซูแบท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001943.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001943.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-085-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "085/156",
+      "name": "โกลแบท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001944.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001944.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-086-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "086/156",
+      "name": "โครแบท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001945.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001945.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-087-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "087/156",
+      "name": "กาลาร์ ยาโดรัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001946.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001946.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-088-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "088/156",
+      "name": "บันกิราสV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001947.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001947.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-089-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "089/156",
+      "name": "กูเรกกรู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001948.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001948.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-090-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "090/156",
+      "name": "โดคูร็อก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001949.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001949.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-091-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "091/156",
+      "name": "โมรุเปโกะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001950.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001950.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-092-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "092/156",
+      "name": "คูชีท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001951.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001951.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-093-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "093/156",
+      "name": "โดมิเรอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001952.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001952.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-094-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "094/156",
+      "name": "โดทาคุน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001953.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001953.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-095-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "095/156",
+      "name": "โคมาทานา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001954.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001954.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-096-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "096/156",
+      "name": "คิริคิซัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001955.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001955.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-097-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "097/156",
+      "name": "ฮิโตทซึกิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001956.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001956.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-098-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "098/156",
+      "name": "นิดังกิล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001957.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001957.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-099-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "099/156",
+      "name": "กิลการ์ด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001958.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001958.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-100-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "100/156",
+      "name": "กิลการ์ด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001959.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001959.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-101-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "101/156",
+      "name": "อาร์เมอร์การ์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001960.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001960.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-102-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "102/156",
+      "name": "โอนิสึซึเมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001961.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001961.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-103-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "103/156",
+      "name": "โอนิดริล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001962.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001962.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-104-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "104/156",
+      "name": "เบโรรินกา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001963.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001963.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-105-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "105/156",
+      "name": "เบโรเบลท์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001964.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001964.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-106-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "106/156",
+      "name": "อีวุย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001965.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001965.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-107-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "107/156",
+      "name": "อีวุยV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001966.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001966.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-108-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "108/156",
+      "name": "อีวุยVMAX",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001967.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001967.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-109-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "109/156",
+      "name": "เนียรุมา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001968.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001968.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-110-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "110/156",
+      "name": "บูเนียตโตะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001969.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001969.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-111-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "111/156",
+      "name": "มูแลนด์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001970.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001970.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-112-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "112/156",
+      "name": "บัฟฟรอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001971.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001971.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-113-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "113/156",
+      "name": "จิจีลอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001972.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001972.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-114-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "114/156",
+      "name": "อุ๊อุV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001973.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001973.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-115-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "115/156",
+      "name": "อุ๊อุVMAX",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001974.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001974.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-116-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "116/156",
+      "name": "อิเอซซัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001975.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001975.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-117-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "117/156",
+      "name": "เชือกหลบหนี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001976.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001976.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-118-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "118/156",
+      "name": "กระป๋องน่าสงสัย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001977.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001977.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-119-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "119/156",
+      "name": "ตาข่ายจับคืน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001978.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001978.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-120-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "120/156",
+      "name": "แคมป์เซ็ต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001979.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001979.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-121-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "121/156",
+      "name": "ควิกบอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001980.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001980.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-122-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "122/156",
+      "name": "ซูเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001981.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001981.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-123-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "123/156",
+      "name": "ถังเต็มเปี่ยม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001982.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001982.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-124-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "124/156",
+      "name": "ลูกอมประหลาด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001983.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001983.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-125-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "125/156",
+      "name": "คันเบ็ดธรรมดา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001984.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001984.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-126-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "126/156",
+      "name": "โปเกเกีย 3.0",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001985.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001985.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-127-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "127/156",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001986.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001986.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-128-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "128/156",
+      "name": "โปเกมอนแคชเชอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001987.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001987.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-129-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "129/156",
+      "name": "เมทัลซอเซอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001988.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001988.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-130-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "130/156",
+      "name": "ผ้าพันคอลุกโชน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001989.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001989.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-131-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "131/156",
+      "name": "พี่สาวคนสวย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001990.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001990.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-132-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "132/156",
+      "name": "ออเนียน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001991.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001991.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-133-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "133/156",
+      "name": "คาบุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001992.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001992.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-134-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "134/156",
+      "name": "คอร์นีสู้สุดใจ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001993.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001993.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-135-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "135/156",
+      "name": "ไซโต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001994.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001994.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-136-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "136/156",
+      "name": "ชิบะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001995.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001995.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-137-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "137/156",
+      "name": "เนซึ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001996.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001996.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-138-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "138/156",
+      "name": "งานวิจัยของศาสตราจารย์ (ศาสตราจารย์แมกโนเลีย)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001997.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001997.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-139-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "139/156",
+      "name": "โปเกมอนปลอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001998.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001998.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-140-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "140/156",
+      "name": "คำสั่งของบอส (ซากากิ)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001999.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001999.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-141-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "141/156",
+      "name": "ฮ็อป",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002000.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002000.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-142-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "142/156",
+      "name": "ป๊อบปูล่า",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002001.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002001.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-143-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "143/156",
+      "name": "แมรี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002002.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002002.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-144-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "144/156",
+      "name": "ยาร์โรว์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002003.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002003.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-145-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "145/156",
+      "name": "รูรินะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002004.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002004.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-146-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "146/156",
+      "name": "เทิร์ฟสเตเดียม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002005.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002005.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-147-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "147/156",
+      "name": "เอนเนอร์จี้อโรมา[พืช]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002006.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002006.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-148-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "148/156",
+      "name": "เอนเนอร์จี้ฮีท[ไฟ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002007.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002007.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-149-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "149/156",
+      "name": "เอนเนอร์จี้วอช [น้ำ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002008.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002008.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-150-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "150/156",
+      "name": "เอนเนอร์จี้สปีด [สายฟ้า]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002009.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002009.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-151-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "151/156",
+      "name": "เอนเนอร์จี้เฮอเรอร์ [พลังจิต]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002010.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002010.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-152-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "152/156",
+      "name": "เอนเนอร์จี้สโตน[ต่อสู้]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002011.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002011.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-153-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "153/156",
+      "name": "เอนเนอร์จี้ไฮด์ [ความมืด]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002012.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002012.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-154-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "154/156",
+      "name": "เอนเนอร์จี้โค้ตติ้ง [โลหะ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002013.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002013.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-155-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "155/156",
+      "name": "เอนเนอร์จี้พาวเวอร์ฟูล[ไร้สี]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002014.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002014.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCB-156-th",
+      "set_id": "SCB",
+      "language": "th",
+      "number": "156/156",
+      "name": "ออโรราเอนเนอร์จี้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00002015.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00002015.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

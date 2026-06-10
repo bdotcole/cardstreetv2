@@ -1,0 +1,1630 @@
+{
+  "setId": "S12",
+  "generatedAt": "2026-06-01T19:35:41.648Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "ja-twin"
+  },
+  "setMeta": {
+    "id": "S12",
+    "name": "ปฐมบทแห่งยุคใหม่",
+    "series": "Sword & Shield",
+    "printed_total": 98,
+    "total": 125,
+    "release_date": "2022-11-01",
+    "symbol_url": null,
+    "logo_url": "https://asia.pokemon-card.com/th/archive/special/card/s12/assets/images/product-img-1.png",
+    "updated_at": "2026-02-07T19:57:40.621094+00:00",
+    "created_at": "2026-01-26T21:46:20.531614+00:00",
+    "language": "th"
+  },
+  "stats": {
+    "scraped": 98,
+    "twinSize": 125,
+    "proposed": 98,
+    "twinOnly": 27
+  },
+  "rows": [
+    {
+      "id": "S12-001-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "001/098",
+      "name": "นาโซโนะคุสะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004537.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004537.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-002-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "002/098",
+      "name": "คุไซฮานะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004538.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004538.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-003-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "003/098",
+      "name": "คิเรอิฮานะ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004539.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004539.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-004-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "004/098",
+      "name": "มอนจารา",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004540.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004540.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-005-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "005/098",
+      "name": "โมจัมโบ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004541.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004541.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-006-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "006/098",
+      "name": "อิโตมารุ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004542.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004542.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-007-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "007/098",
+      "name": "อาริอาโดส",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004543.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004543.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-008-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "008/098",
+      "name": "วิริซิออน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004544.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004544.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-009-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "009/098",
+      "name": "บริการอนV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004545.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004545.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-010-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "010/098",
+      "name": "โพนีตะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004546.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004546.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-011-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "011/098",
+      "name": "แกลล็อป",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004547.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004547.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-012-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "012/098",
+      "name": "วิคทินี",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004548.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004548.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-013-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "013/098",
+      "name": "เมลาร์วา",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004549.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004549.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-014-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "014/098",
+      "name": "อุลกามอธ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004550.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004550.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-015-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "015/098",
+      "name": "เนียบี",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004551.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004551.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-016-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "016/098",
+      "name": "เนียฮีท",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004552.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004552.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-017-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "017/098",
+      "name": "กาโอกาเอ็น",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004553.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004553.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-018-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "018/098",
+      "name": "ออมสตาร์V",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004554.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004554.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-019-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "019/098",
+      "name": "ยูกิวาราชิ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004555.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004555.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-020-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "020/098",
+      "name": "โอนิโกริ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004556.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004556.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-021-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "021/098",
+      "name": "ยูกิเมโนโกะ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004557.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004557.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-022-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "022/098",
+      "name": "จีแลนซ์",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004558.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004558.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-023-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "023/098",
+      "name": "เคลดิโอ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004559.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004559.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-024-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "024/098",
+      "name": "พิคาชู",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004560.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004560.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-025-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "025/098",
+      "name": "ไรชู",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004561.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004561.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-026-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "026/098",
+      "name": "โคลิงก์",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004562.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004562.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-027-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "027/098",
+      "name": "ลุคซิโอ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004563.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004563.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-028-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "028/098",
+      "name": "เร็นโทรา",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004564.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004564.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-029-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "029/098",
+      "name": "มักเกียว",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004565.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004565.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-030-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "030/098",
+      "name": "เอลิคิเทล",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004566.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004566.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-031-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "031/098",
+      "name": "เอเลซาร์ด",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004567.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004567.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-032-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "032/098",
+      "name": "เซราโอรา",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004568.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004568.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-033-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "033/098",
+      "name": "เรจิเอเลคิV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004569.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004569.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-034-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "034/098",
+      "name": "เรจิเอเลคิVMAX",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004570.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004570.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-035-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "035/098",
+      "name": "อันโนนV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004571.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004571.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-036-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "036/098",
+      "name": "อันโนนVSTAR",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004572.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004572.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-037-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "037/098",
+      "name": "อาซานัน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004573.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004573.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-038-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "038/098",
+      "name": "ชาเรม",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004574.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004574.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-039-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "039/098",
+      "name": "ซิมโบลา",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004575.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004575.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-040-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "040/098",
+      "name": "ยูนิรัน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004576.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004576.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-041-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "041/098",
+      "name": "ดาบูลัน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004577.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004577.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-042-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "042/098",
+      "name": "แลนคูลัส",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004578.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004578.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-043-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "043/098",
+      "name": "ลีเกรย์",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004579.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004579.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-044-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "044/098",
+      "name": "โอเบ็ม",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004580.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004580.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-045-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "045/098",
+      "name": "เดเด็นเนะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004581.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004581.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-046-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "046/098",
+      "name": "ฮิซุย วินดีV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004582.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004582.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-047-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "047/098",
+      "name": "ยาจิลอน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004583.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004583.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-048-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "048/098",
+      "name": "เนนดอลล์",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004584.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004584.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-049-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "049/098",
+      "name": "อน็อปธ์",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004585.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004585.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-050-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "050/098",
+      "name": "อามัลโด",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004586.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004586.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-051-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "051/098",
+      "name": "เทราคิออน",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004587.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004587.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-052-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "052/098",
+      "name": "ยันชัม",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004588.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004588.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-053-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "053/098",
+      "name": "อิวังโค",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004589.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004589.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-054-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "054/098",
+      "name": "ลูกาลูกัน",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004590.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004590.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-055-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "055/098",
+      "name": "อิชิเฮนจิน",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004591.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004591.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-056-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "056/098",
+      "name": "สกาแทงค์V",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004592.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004592.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-057-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "057/098",
+      "name": "โจโรเนโกะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004593.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004593.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-058-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "058/098",
+      "name": "เลพัลดัส",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004594.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004594.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-059-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "059/098",
+      "name": "โกรอนดะ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004595.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004595.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-060-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "060/098",
+      "name": "คูซูโม",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004596.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004596.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-061-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "061/098",
+      "name": "ดรามิโดโร",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004597.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004597.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-062-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "062/098",
+      "name": "โมรุเปโกะ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004598.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004598.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-063-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "063/098",
+      "name": "กาลาร์ เนียส",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004599.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004599.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-064-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "064/098",
+      "name": "กาลาร์ เนียคิง",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004600.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004600.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-065-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "065/098",
+      "name": "โคโคโดรา",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004601.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004601.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-066-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "066/098",
+      "name": "โคโดรา",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004602.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004602.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-067-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "067/098",
+      "name": "บอสโกโดรา",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004603.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004603.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-068-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "068/098",
+      "name": "โคบัลออน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004604.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004604.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-069-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "069/098",
+      "name": "โทเกะเดมารุ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004605.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004605.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-070-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "070/098",
+      "name": "มินิริว",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004606.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004606.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-071-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "071/098",
+      "name": "ฮาคุริว",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004607.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004607.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-072-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "072/098",
+      "name": "ไคริว",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004608.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004608.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-073-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "073/098",
+      "name": "ออนแบท",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004609.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004609.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-074-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "074/098",
+      "name": "ออนเวิร์น",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004610.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004610.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-075-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "075/098",
+      "name": "ซีการ์ด",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004611.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004611.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-076-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "076/098",
+      "name": "เรจิดราโกV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004612.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004612.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-077-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "077/098",
+      "name": "เรจิดราโกVSTAR",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004613.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004613.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-078-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "078/098",
+      "name": "เคนเทารอส",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004614.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004614.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-079-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "079/098",
+      "name": "ลูเกียV",
+      "english_name": null,
+      "rarity": "RR",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004615.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004615.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-080-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "080/098",
+      "name": "ลูเกียVSTAR",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004616.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004616.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-081-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "081/098",
+      "name": "เชมิน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004617.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004617.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-082-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "082/098",
+      "name": "อาเคน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004618.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004618.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-083-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "083/098",
+      "name": "อาเคโอส",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004619.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004619.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-084-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "084/098",
+      "name": "วาชิบอน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004620.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004620.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-085-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "085/098",
+      "name": "ฮิซุย วอร์เกิล",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004621.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004621.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-086-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "086/098",
+      "name": "ยังกูส",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004622.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004622.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-087-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "087/098",
+      "name": "เดคากูส",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004623.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004623.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-088-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "088/098",
+      "name": "ยาเรยูตัน",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004624.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004624.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-089-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "089/098",
+      "name": "หินสี่แฉก",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004625.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004625.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-090-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "090/098",
+      "name": "ฟอสซิลลึกลับ",
+      "english_name": null,
+      "rarity": "C",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004626.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004626.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-091-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "091/098",
+      "name": "หินปิดผนึกปฐพี",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004627.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004627.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-092-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "092/098",
+      "name": "หินปิดผนึกพงไพร",
+      "english_name": null,
+      "rarity": "R",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004628.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004628.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-093-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "093/098",
+      "name": "คนงาน",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004629.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004629.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-094-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "094/098",
+      "name": "จินได",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004630.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004630.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-095-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "095/098",
+      "name": "ซุซุนะ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004631.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004631.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-096-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "096/098",
+      "name": "วาตารุ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004632.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004632.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-097-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "097/098",
+      "name": "แท่นบูชาอนารยะ",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004633.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004633.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "S12-098-th",
+      "set_id": "S12",
+      "language": "th",
+      "number": "098/098",
+      "name": "พลังงานฟื้นคืน",
+      "english_name": null,
+      "rarity": "U",
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00004634.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00004634.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": "twin",
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [
+    "099",
+    "100",
+    "101",
+    "102",
+    "103",
+    "104",
+    "105",
+    "106",
+    "107",
+    "108",
+    "109",
+    "110",
+    "111",
+    "112",
+    "113",
+    "114",
+    "115",
+    "116",
+    "117",
+    "118",
+    "119",
+    "120",
+    "121",
+    "122",
+    "123",
+    "124",
+    "125"
+  ],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

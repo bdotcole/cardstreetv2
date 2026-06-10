@@ -58,17 +58,23 @@ async function jtcg(path) {
 }
 
 // Our catalog rows for this game: index by tcgplayerId and by set/number/name.
+// setFilter is a comma list of set ids; each entry matches either the literal
+// set_id (Pokemon sets aren't namespaced, e.g. "me03") or the game-namespaced
+// form (Scryfall/ygoprodeck ids, e.g. "mtg-blb" from "--set=blb").
 async function loadCatalog(ourGame, setFilter) {
   const byTcgId = new Map();
   const byName = new Map(); // `${ourSetId}|${normName}` -> our card id (first printing)
   const ourSets = new Map(); // normalized set name -> our set_id
+  const setIds = setFilter
+    ? setFilter.split(',').flatMap((s) => [s.trim(), `${ourGame}-${s.trim()}`])
+    : null;
   let from = 0;
   for (;;) {
     let q = supabase
       .from('pokemon_cards')
       .select('id, name, number, set_id, raw_data->tcgplayer_id, pokemon_sets(name)')
       .eq('game', ourGame);
-    if (setFilter) q = q.eq('set_id', `${ourGame}-${setFilter}`);
+    if (setIds) q = q.in('set_id', setIds);
     const { data, error } = await q.range(from, from + 999);
     if (error) throw error;
     if (!data?.length) break;

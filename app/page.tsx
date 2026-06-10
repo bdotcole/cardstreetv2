@@ -195,6 +195,27 @@ export default function HomePage() {
         return () => subscription.unsubscribe();
     }, []);
 
+    // Hydrate partner status from the profile. Partner status is keyed off
+    // partner_joined_at (independent of `role`, so an admin can also be a
+    // partner); `role === 'partner'` is kept for legacy partner rows.
+    useEffect(() => {
+        if (!user?.id || user.id === 'guest') return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/profile');
+                if (!res.ok) return;
+                const { profile } = await res.json();
+                const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
+                if (cancelled || !isPartner) return;
+                setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+            } catch {
+                // Non-fatal: partner dashboard simply stays gated if the fetch fails.
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user?.id]);
+
     // ONE-TIME OFFLINE DATA MIGRATION (CAPICATOR -> SUPABASE)
     useEffect(() => {
         if (!user) return;
@@ -701,6 +722,12 @@ export default function HomePage() {
     };
 
     // Global Back Button Handling
+    // Tracks whether the Profile tab has a slide-in sub-panel open (Edit
+    // Profile, Settings, Track Orders, etc.). A plain ref rather than React
+    // state so updating it from Profile doesn't re-render this shell, and so
+    // the back-button listener reads the current value without a stale closure.
+    const profilePanelOpenRef = useRef(false);
+
     // State Refs for Back Button Listener (Prevents stale closures)
     const stateRef = useRef({
         isPaymentModalOpen,
@@ -754,6 +781,16 @@ export default function HomePage() {
                 }
                 if (state.buylistCard) {
                     setBuylistCard(null);
+                    return;
+                }
+
+                // Layer 1.5: Profile sub-panels. When a slide-in panel is open
+                // (Edit Profile, Settings, Track Orders, etc.) close it instead
+                // of falling through to the tab-switch fallback below, which
+                // would otherwise drop the user on the Explore (card database)
+                // screen. Profile listens for this event to close its panel.
+                if (profilePanelOpenRef.current) {
+                    window.dispatchEvent(new Event('profile-panel-back'));
                     return;
                 }
 
@@ -1021,6 +1058,7 @@ export default function HomePage() {
                         {activeTab === 'profile' && (
                             <Profile
                                 user={user}
+                                onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
                                 onNavigatePartner={() => setActiveTab('partner')}
                                 onGuestLogin={() => {
                                     setUser({

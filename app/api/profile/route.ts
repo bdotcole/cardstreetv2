@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { display_name, phone_number, address, district, state, province, postcode, username } = body
+        const { display_name, phone_number, address, district, state, province, postcode, sub_district, username } = body
 
         // Prepare profile update
         const profileUpdate: any = {}
@@ -78,6 +78,7 @@ export async function PATCH(request: NextRequest) {
         if (state !== undefined) profileUpdate.state = state
         if (province !== undefined) profileUpdate.province = province
         if (postcode !== undefined) profileUpdate.postcode = postcode
+        if (sub_district !== undefined) profileUpdate.sub_district = sub_district
 
         // Username update logic
         if (username) {

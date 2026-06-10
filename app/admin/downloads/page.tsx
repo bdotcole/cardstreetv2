@@ -27,7 +27,7 @@ const TIER_INFO: Record<number, { name: string; emoji: string; color: string }> 
     6: { name: 'Ruby Rare', emoji: '🔴', color: '#f87171' },
     7: { name: 'Emerald Rare', emoji: '🟢', color: '#4ade80' },
     8: { name: 'Diamond Rare', emoji: '💠', color: '#06b6d4' },
-    9: { name: 'Pink Diamond Rare', emoji: '🩷', color: '#f472b6' },
+    9: { name: 'Black Opal Rare', emoji: '🌌', color: '#a78bfa' },
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {

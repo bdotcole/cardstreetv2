@@ -1,0 +1,2182 @@
+{
+  "setId": "SCA",
+  "generatedAt": "2026-06-01T19:37:49.879Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 135,
+    "twinSize": 0,
+    "proposed": 135,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SCA-001-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "001/135",
+      "name": "เมเคิล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001725.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001725.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-002-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "002/135",
+      "name": "โกโกท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001726.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001726.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-003-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "003/135",
+      "name": "โมคุโร",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001727.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001727.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-004-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "004/135",
+      "name": "ฟุคุซึโร",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001728.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001728.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-005-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "005/135",
+      "name": "จูไนเปอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001729.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001729.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-006-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "006/135",
+      "name": "ดาดาริน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001730.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001730.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-007-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "007/135",
+      "name": "ซารุโนริ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001731.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001731.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-008-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "008/135",
+      "name": "บาจินคี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001732.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001732.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-009-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "009/135",
+      "name": "กอริลลันดา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001733.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001733.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-010-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "010/135",
+      "name": "อิออร์บV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001734.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001734.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-011-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "011/135",
+      "name": "การ์ดี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001735.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001735.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-012-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "012/135",
+      "name": "วินดี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001736.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001736.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-013-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "013/135",
+      "name": "อาชาโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001737.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001737.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-014-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "014/135",
+      "name": "วาคาชาโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001738.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001738.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-015-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "015/135",
+      "name": "บาชาโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001739.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001739.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-016-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "016/135",
+      "name": "วิคทินี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001740.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001740.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-017-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "017/135",
+      "name": "ไฟร์แอโรว์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001741.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001741.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-018-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "018/135",
+      "name": "ซุยคูน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001742.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001742.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-019-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "019/135",
+      "name": "เวลโกะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001743.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001743.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-020-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "020/135",
+      "name": "เวลโอ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001744.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001744.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-021-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "021/135",
+      "name": "มิจูมารุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001745.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001745.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-022-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "022/135",
+      "name": "ฟุตาจิมารุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001746.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001746.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-023-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "023/135",
+      "name": "ไดเคนคิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001747.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001747.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-024-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "024/135",
+      "name": "กาลาร์ ฮิฮิดารุมะV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001748.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001748.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-025-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "025/135",
+      "name": "คูมะชุน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001749.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001749.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-026-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "026/135",
+      "name": "ทันแบร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001750.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001750.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-027-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "027/135",
+      "name": "คามุคาเมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001751.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001751.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-028-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "028/135",
+      "name": "คาจิริกาเมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001752.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001752.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-029-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "029/135",
+      "name": "พิคาชูV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001753.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001753.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-030-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "030/135",
+      "name": "บิริริดามา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001754.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001754.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-031-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "031/135",
+      "name": "มารุมายน์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001755.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001755.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-032-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "032/135",
+      "name": "ราคุไร",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001756.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001756.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-033-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "033/135",
+      "name": "ไลโวลต์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001757.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001757.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-034-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "034/135",
+      "name": "โรตอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001758.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001758.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-035-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "035/135",
+      "name": "ชิบิชิราซึ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001759.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001759.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-036-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "036/135",
+      "name": "ชิบิบีล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001760.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001760.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-037-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "037/135",
+      "name": "ชิบิรูดอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001761.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001761.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-038-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "038/135",
+      "name": "เซครอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001762.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001762.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-039-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "039/135",
+      "name": "ฟูดินV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001763.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001763.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-040-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "040/135",
+      "name": "คิรินริกิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001764.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001764.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-041-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "041/135",
+      "name": "โกธิมู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001765.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001765.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-042-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "042/135",
+      "name": "โกธิมิรุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001766.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001766.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-043-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "043/135",
+      "name": "โกธิรูเซล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001767.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001767.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-044-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "044/135",
+      "name": "เซอเนียส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001768.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001768.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-045-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "045/135",
+      "name": "ดีแอนซี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001769.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001769.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-046-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "046/135",
+      "name": "มิบริม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001770.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001770.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-047-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "047/135",
+      "name": "เทบริม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001858.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001858.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-048-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "048/135",
+      "name": "บริมออน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001859.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001859.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-049-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "049/135",
+      "name": "วันริกี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001771.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001771.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-050-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "050/135",
+      "name": "โกริกี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001772.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001772.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-051-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "051/135",
+      "name": "ไคริกี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001773.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001773.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-052-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "052/135",
+      "name": "คาโพเอลาร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001774.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001774.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-053-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "053/135",
+      "name": "โยกิราส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001775.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001775.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-054-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "054/135",
+      "name": "ซานากิราส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001776.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001776.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-055-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "055/135",
+      "name": "บันกิราส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001777.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001777.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-056-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "056/135",
+      "name": "ซีการ์ด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001778.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001778.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-057-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "057/135",
+      "name": "นาเก็ทซึเกะซารุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001779.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001779.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-058-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "058/135",
+      "name": "ทาทักโกะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001780.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001780.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-059-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "059/135",
+      "name": "โอโทสพัส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001781.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001781.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-060-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "060/135",
+      "name": "กาลาร์ เนกิกะไนท์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001782.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001782.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-061-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "061/135",
+      "name": "โครแบทV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001783.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001783.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-062-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "062/135",
+      "name": "กาลาร์ จิกุซากุมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001784.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001784.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-063-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "063/135",
+      "name": "กาลาร์ มัสสึกุมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001785.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001785.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-064-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "064/135",
+      "name": "กาลาร์ ทาจิฟซากุมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001786.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001786.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-065-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "065/135",
+      "name": "แอบโซล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001787.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001787.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-066-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "066/135",
+      "name": "ดาร์กไร",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001788.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001788.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-067-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "067/135",
+      "name": "ซึรุกกุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001789.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001789.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-068-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "068/135",
+      "name": "ซึรุซึคิน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001790.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001790.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-069-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "069/135",
+      "name": "โมโนซึ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001791.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001791.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-070-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "070/135",
+      "name": "จิเฮด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001792.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001792.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-071-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "071/135",
+      "name": "ซาซันดรา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001793.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001793.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-072-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "072/135",
+      "name": "มุเก็นไดนาV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001794.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001794.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-073-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "073/135",
+      "name": "ดันบัล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001795.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001795.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-074-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "074/135",
+      "name": "เมแทงก์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001796.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001796.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-075-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "075/135",
+      "name": "เมทากรอส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001797.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001797.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-076-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "076/135",
+      "name": "เทสซีด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001798.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001798.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-077-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "077/135",
+      "name": "นัทเทรย์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001799.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001799.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-078-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "078/135",
+      "name": "กิลการ์ดV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001800.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001800.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-079-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "079/135",
+      "name": "โซโด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001801.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001801.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-080-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "080/135",
+      "name": "ไดโอโด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001802.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001802.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-081-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "081/135",
+      "name": "ดิวรัลดอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001803.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001803.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-082-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "082/135",
+      "name": "เมตามอนV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001804.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001804.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-083-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "083/135",
+      "name": "อีวุยV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001805.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001805.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-084-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "084/135",
+      "name": "คาบิกอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001806.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001806.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-085-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "085/135",
+      "name": "ทิลท์โท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001807.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001807.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-086-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "086/135",
+      "name": "ทิลทาลิส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001808.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001808.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-087-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "087/135",
+      "name": "เพราป",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001809.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001809.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-088-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "088/135",
+      "name": "โทเกคิสV",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001810.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001810.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-089-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "089/135",
+      "name": "ชึชึเคระ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001811.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001811.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-090-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "090/135",
+      "name": "เครารัปปา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001812.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001812.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-091-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "091/135",
+      "name": "โดเดคาบาชิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001813.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001813.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-092-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "092/135",
+      "name": "สลับการ์ดพลังงาน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001814.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001814.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-093-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "093/135",
+      "name": "ตาข่ายจับคืน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001815.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001815.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-094-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "094/135",
+      "name": "ควิกบอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001816.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001816.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-095-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "095/135",
+      "name": "ซูเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001817.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001817.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-096-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "096/135",
+      "name": "โรตอมสมาร์ทโฟน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001818.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001818.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-097-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "097/135",
+      "name": "เทอร์โบแพตช์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001819.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001819.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-098-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "098/135",
+      "name": "ถังเต็มเปี่ยม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001820.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001820.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-099-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "099/135",
+      "name": "ลูกอมประหลาด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001821.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001821.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-100-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "100/135",
+      "name": "คันเบ็ดธรรมดา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001822.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001822.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-101-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "101/135",
+      "name": "โปเกเกีย 3.0",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001823.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001823.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-102-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "102/135",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001824.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001824.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-103-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "103/135",
+      "name": "โปเกมอนแคชเชอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001825.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001825.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-104-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "104/135",
+      "name": "เมทัลซอเซอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001826.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001826.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-105-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "105/135",
+      "name": "จักรยานโรตอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001827.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001827.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-106-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "106/135",
+      "name": "เครื่องรางยักษ์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001828.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001828.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-107-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "107/135",
+      "name": "ผ้าพันคอลุกโชน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001829.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001829.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-108-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "108/135",
+      "name": "ออเนียน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001830.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001830.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-109-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "109/135",
+      "name": "คาบุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001831.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001831.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-110-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "110/135",
+      "name": "ไซโต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001832.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001832.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-111-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "111/135",
+      "name": "โซเนีย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001833.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001833.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-112-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "112/135",
+      "name": "ดันเปย์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001834.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001834.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-113-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "113/135",
+      "name": "ผู้ฝึกนก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001835.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001835.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-114-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "114/135",
+      "name": "เนซึ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001836.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001836.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-115-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "115/135",
+      "name": "งานวิจัยของศาสตราจารย์ (ศาสตราจารย์แมกโนเลีย)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001837.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001837.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-116-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "116/135",
+      "name": "โปเกมอนปลอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001838.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001838.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-117-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "117/135",
+      "name": "วิธีเลี้ยงของคนเลี้ยงโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001839.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001839.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-118-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "118/135",
+      "name": "คำสั่งของบอส (ซากากิ)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001840.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001840.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-119-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "119/135",
+      "name": "ฮ็อป",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001841.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001841.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-120-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "120/135",
+      "name": "แมรี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001842.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001842.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-121-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "121/135",
+      "name": "รูรินะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001843.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001843.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-122-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "122/135",
+      "name": "เทิร์ฟสเตเดียม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001844.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001844.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-123-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "123/135",
+      "name": "โรสทาวเวอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001845.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001845.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-124-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "124/135",
+      "name": "เอนเนอร์จี้อโรมา[พืช] อโรมา",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001846.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001846.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-125-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "125/135",
+      "name": "เอนเนอร์จี้ฮีท[ไฟ] ฮีท",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001847.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001847.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-126-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "126/135",
+      "name": "เอนเนอร์จี้วอช [น้ำ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001848.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001848.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-127-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "127/135",
+      "name": "เอนเนอร์จี้สปีดสายฟ้า",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001849.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001849.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-128-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "128/135",
+      "name": "เอนเนอร์จี้เฮอเรอร์พลังจิต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001850.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001850.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-129-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "129/135",
+      "name": "เอนเนอร์จี้สโตน[ต่อสู้] สโตน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001851.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001851.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-130-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "130/135",
+      "name": "เอนเนอร์จี้ไฮด์ [ความมืด] ไฮด์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001852.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001852.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-131-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "131/135",
+      "name": "เอนเนอร์จี้โค้ตติ้ง [โลหะ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001853.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001853.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-132-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "132/135",
+      "name": "เอนเนอร์จี้พาวเวอร์ฟูล[ไร้สี]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001854.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001854.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-133-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "133/135",
+      "name": "ออโรราเอนเนอร์จี้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001855.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001855.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-134-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "134/135",
+      "name": "แคปเจอร์เอนเนอร์จี้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001856.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001856.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SCA-135-th",
+      "set_id": "SCA",
+      "language": "th",
+      "number": "135/135",
+      "name": "ทวินเอนเนอร์จี้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00001857.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00001857.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

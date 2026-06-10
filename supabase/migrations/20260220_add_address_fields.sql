@@ -1,4 +1,4 @@
--- Add address and contact fields to profiles table for SHIPPOP integration
+-- Add address and contact fields to profiles table for Flash Express integration
 ALTER TABLE profiles
 ADD COLUMN address TEXT,
 ADD COLUMN district TEXT,

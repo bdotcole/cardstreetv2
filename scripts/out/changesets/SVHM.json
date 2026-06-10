@@ -1,0 +1,406 @@
+{
+  "setId": "SVHM",
+  "generatedAt": "2026-06-01T19:39:07.879Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 24,
+    "twinSize": 0,
+    "proposed": 24,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SVHM-001-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "001/022",
+      "name": "เนโอแลนท์V",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008041.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008041.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-002-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "002/022",
+      "name": "วันปาจิ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008042.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008042.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-003-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "003/022",
+      "name": "พัลส์วัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008043.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008043.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-004-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "004/022",
+      "name": "แขนเหล็ก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008044.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008044.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-005-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "005/022",
+      "name": "ลาทิอาส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008045.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008045.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-006-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "006/022",
+      "name": "ลีเกรย์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008046.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008046.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-007-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "007/022",
+      "name": "โอเบ็ม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008047.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008047.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-008-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "008/022",
+      "name": "นักรบเหล็ก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008048.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008048.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-009-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "009/022",
+      "name": "มิไรดอนex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008049.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008049.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-010-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "010/022",
+      "name": "คอเหล็ก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008050.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008050.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-011-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "011/022",
+      "name": "เทคโนเรดาร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008051.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008051.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-012-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "012/022",
+      "name": "เนสต์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008052.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008052.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-013-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "013/022",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008053.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008053.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-014-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "014/022",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008054.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008054.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-015-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "015/022",
+      "name": "มาสเตอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008055.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008055.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-016-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "016/022",
+      "name": "บูสต์เอนเนอร์จี้ อนาคต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008056.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008056.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-017-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "017/022",
+      "name": "ความทะเยอทะยานของชิโรนะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008057.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008057.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-018-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "018/022",
+      "name": "นันจาโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008058.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008058.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-019-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "019/022",
+      "name": "เนโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008059.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008059.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-020-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "020/022",
+      "name": "งานวิจัยของศาสตราจารย์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008060.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008060.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-021-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "021/022",
+      "name": "แผนการของศาสตราจารย์ฟูทูร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008061.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008061.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-022-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "022/022",
+      "name": "คำสั่งของบอส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008062.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008062.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-LIG-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "LIG",
+      "name": "พลังงานพื้นฐาน[สายฟ้า]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008063.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008063.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVHM-PSY-th",
+      "set_id": "SVHM",
+      "language": "th",
+      "number": "PSY",
+      "name": "พลังงานพื้นฐาน[พลังจิต]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00008064.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00008064.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

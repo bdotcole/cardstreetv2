@@ -13,7 +13,7 @@ export async function GET() {
     const { data: topPartners, error: topErr } = await supabase
         .from('profiles')
         .select('id, display_name, avatar_url, total_downloads, partner_level, partner_fee')
-        .eq('role', 'partner')
+        .not('partner_joined_at', 'is', null)
         .order('total_downloads', { ascending: false })
         .limit(10)
 
@@ -51,7 +51,7 @@ export async function GET() {
     const { data: allPartners, error: allErr } = await supabase
         .from('profiles')
         .select('id, display_name, total_downloads, partner_level, partner_fee, partner_joined_at')
-        .eq('role', 'partner')
+        .not('partner_joined_at', 'is', null)
         .order('total_downloads', { ascending: false })
 
     if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })

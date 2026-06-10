@@ -1,0 +1,422 @@
+{
+  "setId": "SVAW",
+  "generatedAt": "2026-06-01T19:38:53.378Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 25,
+    "twinSize": 0,
+    "proposed": 25,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SVAW-001-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "001/023",
+      "name": "มามันโบ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005184.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005184.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-002-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "002/023",
+      "name": "แคว็กซ์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005185.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005185.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-003-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "003/023",
+      "name": "เวลคาโมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005186.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005186.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-004-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "004/023",
+      "name": "เวนิวัล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005187.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005187.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-005-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "005/023",
+      "name": "เดเด็นเนะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005188.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005188.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-006-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "006/023",
+      "name": "มิมิคคิวex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005189.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005189.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-007-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "007/023",
+      "name": "ฮิราฮินะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005190.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005190.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-008-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "008/023",
+      "name": "แซงกูส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005191.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005191.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-009-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "009/023",
+      "name": "กูร์ตง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005192.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005192.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-010-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "010/023",
+      "name": "โมโตโทคาเงะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005193.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005193.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-011-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "011/023",
+      "name": "กู้คืนพลังงาน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005194.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005194.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-012-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "012/023",
+      "name": "ส่งต่อพลังงาน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005195.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005195.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-013-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "013/023",
+      "name": "แครชแฮมเมอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005196.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005196.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-014-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "014/023",
+      "name": "เนสต์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005197.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005197.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-015-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "015/023",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005198.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005198.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-016-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "016/023",
+      "name": "โปเกเกีย 3.0",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005199.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005199.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-017-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "017/023",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005200.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005200.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-018-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "018/023",
+      "name": "โปเกมอนแคชเชอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005201.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005201.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-019-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "019/023",
+      "name": "ผ้าคาดหัวแห่งความแข็งแกร่ง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005202.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005202.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-020-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "020/023",
+      "name": "ผู้ตัดสิน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005203.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005203.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-021-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "021/023",
+      "name": "เจ้าหนูกางเกงขาสั้น",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005204.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005204.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-022-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "022/023",
+      "name": "เนโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005205.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005205.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-023-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "023/023",
+      "name": "งานวิจัยของศาสตราจารย์ (ศาสตราจารย์โอลิม)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005206.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005206.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-PSY-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "PSY",
+      "name": "พลังงานพื้นฐาน[พลังจิต]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005207.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005207.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAW-WAT-th",
+      "set_id": "SVAW",
+      "language": "th",
+      "number": "WAT",
+      "name": "พลังงานพื้นฐาน[น้ำ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005208.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005208.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

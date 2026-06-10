@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { CartItem } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useConditionTranslation } from '@/lib/hooks/useCardTranslations';
@@ -8,7 +8,7 @@ interface CartDrawerProps {
     onClose: () => void;
     cart: CartItem[];
     onRemoveItem: (id: string) => void;
-    onCheckout: () => void;
+    onCheckout: (shippingFee: number) => void;
     currencySymbol: string;
 }
 
@@ -23,6 +23,38 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     const { t } = useTranslation();
     const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
+    
+    const [shippingFee, setShippingFee] = useState<number>(0);
+    const [isCalculatingShipping, setIsCalculatingShipping] = useState<boolean>(false);
+
+    useEffect(() => {
+        const fetchShipping = async () => {
+            if (!isOpen || cart.length === 0) {
+                setShippingFee(0);
+                return;
+            }
+            setIsCalculatingShipping(true);
+            try {
+                const res = await fetch('/api/shipping/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: cart })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setShippingFee(data.totalShippingFee || 0);
+                } else {
+                    console.error('Failed to calculate shipping:', data.error);
+                }
+            } catch (err) {
+                console.error('Shipping calc error:', err);
+            } finally {
+                setIsCalculatingShipping(false);
+            }
+        };
+
+        fetchShipping();
+    }, [isOpen, cart]);
 
     if (!isOpen) return null;
 
@@ -77,13 +109,23 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 {/* Footer */}
                 <div className="p-6 bg-brand-darker/80 border-t border-white/5 backdrop-blur-xl">
+                    <div className="flex justify-between items-end mb-2">
+                        <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Subtotal</span>
+                        <span className="text-sm font-black text-white">{currencySymbol}{total.toLocaleString()}</span>
+                    </div>
                     <div className="flex justify-between items-end mb-4">
-                        <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">{t('cart.price')}</span>
-                        <span className="text-2xl font-black text-white">{currencySymbol}{total.toLocaleString()}</span>
+                        <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Shipping</span>
+                        <span className="text-sm font-black text-brand-cyan">
+                            {isCalculatingShipping ? '...' : `${currencySymbol}${shippingFee.toLocaleString()}`}
+                        </span>
+                    </div>
+                    <div className="flex justify-between items-end mb-4 pt-2 border-t border-white/10">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{t('cart.price')}</span>
+                        <span className="text-2xl font-black text-white">{currencySymbol}{(total + shippingFee).toLocaleString()}</span>
                     </div>
                     <button
-                        onClick={onCheckout}
-                        disabled={cart.length === 0}
+                        onClick={() => onCheckout(shippingFee)}
+                        disabled={cart.length === 0 || isCalculatingShipping}
                         className="w-full h-14 bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 hover:bg-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {t('cart.checkout')} <i className="fa-solid fa-arrow-right"></i>

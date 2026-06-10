@@ -1,0 +1,374 @@
+{
+  "setId": "MAAL",
+  "generatedAt": "2026-06-01T19:37:31.646Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 22,
+    "twinSize": 0,
+    "proposed": 22,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "MAAL-001-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "001/021",
+      "name": "อาซานัน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013192.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013192.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-002-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "002/021",
+      "name": "ชาเรม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013193.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013193.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-003-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "003/021",
+      "name": "ริโอลุ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013194.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013194.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-004-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "004/021",
+      "name": "เมก้าลูคาริโอex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013195.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013195.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-005-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "005/021",
+      "name": "กูเรกกรู",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013196.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013196.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-006-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "006/021",
+      "name": "โดคูร็อก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013197.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013197.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-007-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "007/021",
+      "name": "ลูจาบูล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013198.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013198.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-008-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "008/021",
+      "name": "โทรพิอุส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013199.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013199.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-009-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "009/021",
+      "name": "นุยโคกุมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013200.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013200.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-010-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "010/021",
+      "name": "คิเทรุกุมะ",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013201.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013201.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-011-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "011/021",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013202.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013202.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-012-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "012/021",
+      "name": "พาวเวอร์โปรตีน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013203.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013203.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-013-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "013/021",
+      "name": "ฆ้องต่อสู้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013204.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013204.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-014-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "014/021",
+      "name": "โปเกมอนแท็บเล็ต",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013205.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013205.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-015-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "015/021",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013206.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013206.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-016-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "016/021",
+      "name": "โปเกมอนแคชเชอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013207.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013207.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-017-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "017/021",
+      "name": "มอนสเตอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013208.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013208.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-018-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "018/021",
+      "name": "จิตนักสู้ของไอริส",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013209.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013209.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-019-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "019/021",
+      "name": "ไก",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013210.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013210.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-020-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "020/021",
+      "name": "ผู้ตัดสิน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013211.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013211.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-021-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "021/021",
+      "name": "ปณิธานของลิเลีย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013212.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013212.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "MAAL-FIG-th",
+      "set_id": "MAAL",
+      "language": "th",
+      "number": "FIG",
+      "name": "พลังงานพื้นฐาน[ต่อสู้]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00013213.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00013213.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}

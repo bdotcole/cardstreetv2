@@ -1,0 +1,390 @@
+{
+  "setId": "SVAL",
+  "generatedAt": "2026-06-01T19:38:48.626Z",
+  "sources": {
+    "thaiName": "asia.pokemon-card.com/th",
+    "structure": "scrape-only"
+  },
+  "setMeta": null,
+  "stats": {
+    "scraped": 23,
+    "twinSize": 0,
+    "proposed": 23,
+    "twinOnly": 0
+  },
+  "rows": [
+    {
+      "id": "SVAL-001-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "001/021",
+      "name": "การ์ดี",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005121.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005121.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-002-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "002/021",
+      "name": "โฮเกเตอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005122.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005122.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-003-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "003/021",
+      "name": "อาจิเกเตอร์",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005123.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005123.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-004-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "004/021",
+      "name": "ลาวด์โบน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005124.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005124.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-005-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "005/021",
+      "name": "เมรีป",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005125.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005125.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-006-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "006/021",
+      "name": "โมโคโค",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005126.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005126.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-007-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "007/021",
+      "name": "เด็นริวex",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005127.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005127.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-008-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "008/021",
+      "name": "โรตอม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005128.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005128.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-009-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "009/021",
+      "name": "กูร์ตง",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005129.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005129.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-010-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "010/021",
+      "name": "คลามิงโก้",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005130.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005130.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-011-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "011/021",
+      "name": "ส่งต่อพลังงาน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005131.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005131.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-012-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "012/021",
+      "name": "เนสต์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005132.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005132.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-013-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "013/021",
+      "name": "ไฮเปอร์บอล",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005133.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005133.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-014-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "014/021",
+      "name": "ลูกอมประหลาด",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005134.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005134.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-015-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "015/021",
+      "name": "โปเกเกีย 3.0",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005135.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005135.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-016-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "016/021",
+      "name": "สับเปลี่ยนโปเกมอน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005136.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005136.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-017-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "017/021",
+      "name": "ซินเนีย",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005137.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005137.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-018-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "018/021",
+      "name": "ผู้ตัดสิน",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005138.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005138.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-019-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "019/021",
+      "name": "เจ้าหนูกางเกงขาสั้น",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005139.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005139.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-020-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "020/021",
+      "name": "เนโม",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005140.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005140.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-021-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "021/021",
+      "name": "งานวิจัยของศาสตราจารย์ (ศาสตราจารย์ฟูทูร์)",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005141.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005141.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-FIR-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "FIR",
+      "name": "พลังงานพื้นฐาน[ไฟ]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005142.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005142.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    },
+    {
+      "id": "SVAL-LIG-th",
+      "set_id": "SVAL",
+      "language": "th",
+      "number": "LIG",
+      "name": "พลังงานพื้นฐาน[สายฟ้า]",
+      "english_name": null,
+      "rarity": null,
+      "image_small": "https://asia.pokemon-card.com/th/card-img/th00005143.png",
+      "image_large": "https://asia.pokemon-card.com/th/card-img/th00005143.png",
+      "_provenance": {
+        "name": "scrape",
+        "rarity": null,
+        "image": "scrape"
+      }
+    }
+  ],
+  "twinOnlyNumbers": [],
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}
