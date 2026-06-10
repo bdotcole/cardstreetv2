@@ -309,19 +309,19 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
                           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                         >
-                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
+                          <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
                             {set.images.logo ? (
                               <Image
                                 src={set.images.logo}
                                 alt={set.name}
                                 fill
-                                sizes="40px"
+                                sizes="64px"
                                 unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
                                 className="object-contain p-1"
                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />
                             ) : (
-                              <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
+                              <span className="text-2xl font-black text-white/60">{set.name.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">

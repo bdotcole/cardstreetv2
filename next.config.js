@@ -25,6 +25,11 @@ const nextConfig = {
         hostname: 'asia.pokemon-card.com',
       },
       {
+        // Official 25th-anniversary portal — logos for some Thai sets (e.g. S8a)
+        protocol: 'https',
+        hostname: 'card25th.portal-pokemon.com',
+      },
+      {
         // Supabase Storage — card images, set logos, avatars
         protocol: 'https',
         hostname: 'fdxgzddvywtmnqsaqysx.supabase.co',
