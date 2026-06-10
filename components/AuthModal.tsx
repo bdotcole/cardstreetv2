@@ -102,6 +102,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     // Portal target is document.body, which only exists after mount.
     useEffect(() => setMounted(true), []);
 
+    // Web OAuth navigates the whole page away. If the user backs out of the
+    // provider's page, bfcache restores this page with `loading` still true —
+    // the same stuck "Please wait..." as the native sheet-dismiss case.
+    useEffect(() => {
+        const onPageShow = (e: PageTransitionEvent) => {
+            if (e.persisted) setLoading(false);
+        };
+        window.addEventListener('pageshow', onPageShow);
+        return () => window.removeEventListener('pageshow', onPageShow);
+    }, []);
+
     const supabase = createClient();
 
     const handleOAuthLogin = async (provider: 'google' | 'apple') => {
@@ -149,10 +160,31 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 console.log('[Auth] Opening Capacitor Browser for Auth:', data.url);
                 try {
                     const { Browser } = await import('@capacitor/browser');
+                    // If the user dismisses the browser sheet without
+                    // completing the provider flow, no deep link ever arrives
+                    // and nothing else clears `loading` — the modal sat on
+                    // "Please wait..." forever with every control disabled
+                    // (the App Review "loads indefinitely" rejection). The
+                    // listener also fires on the success path when the
+                    // deep-link handler closes the sheet; re-enabling the form
+                    // for the moment before onAuthStateChange signs the user
+                    // in is harmless.
+                    const finished = await Browser.addListener('browserFinished', () => {
+                        finished.remove();
+                        Sentry.addBreadcrumb({
+                            category: 'auth',
+                            message: `oauth-${provider}: browser sheet closed`,
+                            level: 'info',
+                        });
+                        setLoading(false);
+                    });
                     await Browser.open({ url: data.url });
                 } catch (e) {
                     console.error('Failed to open Capacitor Browser:', e);
                     window.open(data.url, '_system');
+                    // External browser gives no close signal — re-enable the
+                    // form immediately so email sign-in stays available.
+                    setLoading(false);
                 }
             }
         } catch (err: any) {
