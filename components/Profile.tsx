@@ -1502,15 +1502,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Help & Support</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.helpSupport')}</h2>
               </div>
 
               <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                 {[
-                  { icon: HelpCircle, label: 'Help Center', href: '/help' },
-                  { icon: Mail, label: 'Contact Us', href: '/contact' },
-                  { icon: FileText, label: 'Privacy Policy', href: '/privacy' },
-                  { icon: FileText, label: 'Terms of Service', href: '/terms' }
+                  { icon: HelpCircle, label: t('profile.helpCenter'), href: '/help' },
+                  { icon: Mail, label: t('profile.contactUs'), href: '/contact' },
+                  { icon: FileText, label: t('profile.privacyPolicy'), href: '/privacy' },
+                  { icon: FileText, label: t('profile.termsOfService'), href: '/terms' }
                 ].map((item) => (
                   <a
                     key={item.label}
