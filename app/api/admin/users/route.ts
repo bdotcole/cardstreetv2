@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     let query = supabase
         .from('profiles')
-        .select('id, display_name, avatar_url, role, total_downloads, partner_level, partner_fee, partner_joined_at, created_at', { count: 'exact' })
+        .select('id, display_name, avatar_url, role, total_downloads, partner_level, partner_fee, partner_joined_at, partner_qr_slug, created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 

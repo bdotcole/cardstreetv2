@@ -11,7 +11,7 @@ interface AuthModalProps {
     onClose: () => void;
 }
 
-type AuthMode = 'signin' | 'signup' | 'verify';
+type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot' | 'forgot-sent';
 
 // App Review rejected the app twice for "loads indefinitely" on login (iPad,
 // WKWebView). A hang anywhere in the auth stack must therefore surface as a
@@ -228,6 +228,36 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+
+        try {
+            // The auth callback honors this cookie when the ?next= param gets
+            // stripped anywhere along the redirect chain — both routes land
+            // the user on /reset-password with a recovery session.
+            document.cookie = 'cardstreet_auth_redirect=/reset-password; path=/; max-age=3600';
+
+            const { error } = await withAuthWatchdog('password-reset', () =>
+                supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/api/auth/callback?next=/reset-password`,
+                })
+            );
+            if (error) throw error;
+
+            setVerificationEmail(email);
+            setMode('forgot-sent');
+            setLoading(false);
+        } catch (err: any) {
+            console.error('Error sending password reset:', err);
+            setError(err instanceof AuthTimeoutError
+                ? AUTH_TIMEOUT_USER_MESSAGE
+                : err.message || 'Failed to send reset email');
+            setLoading(false);
+        }
+    };
+
     const handleEmailSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -296,7 +326,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     <p className="text-xs text-slate-400 mt-2 font-medium text-center max-w-sm mx-auto">
                         {mode === 'verify'
                             ? 'Check your email to verify your account'
-                            : 'Sign in to sync your collection across devices'}
+                            : mode === 'forgot' || mode === 'forgot-sent'
+                                ? 'Reset your password to get back in'
+                                : 'Sign in to sync your collection across devices'}
                     </p>
                 </div>
 
@@ -320,6 +352,77 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                             onClick={() => {
                                 setMode('signin');
                                 setVerificationEmail(null);
+                            }}
+                            className="w-full h-12 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors"
+                        >
+                            Back to Sign In
+                        </button>
+                    </div>
+                ) : mode === 'forgot' || mode === 'forgot-sent' ? (
+                    /* Forgot Password */
+                    <div className="p-8 space-y-6">
+                        {mode === 'forgot-sent' ? (
+                            <div className="bg-brand-green/10 border border-brand-green/20 rounded-2xl p-6 text-center space-y-3">
+                                <div className="w-16 h-16 bg-brand-green/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <Mail className="w-8 h-8 text-brand-green" />
+                                </div>
+                                <h3 className="text-lg font-bold text-white">Check Your Email</h3>
+                                <p className="text-sm text-slate-400 leading-relaxed">
+                                    If an account exists for <span className="text-brand-cyan font-semibold">{verificationEmail}</span>,
+                                    we&apos;ve sent a link to set a new password.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                {error && (
+                                    <div className="bg-brand-red/10 border border-brand-red/20 rounded-xl p-4 flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-brand-red/20 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa-solid fa-exclamation text-brand-red text-sm"></i>
+                                        </div>
+                                        <p className="text-sm text-red-200 flex-1">{error}</p>
+                                    </div>
+                                )}
+                                <p className="text-sm text-slate-400 leading-relaxed">
+                                    Enter the email on your account and we&apos;ll send you a link to
+                                    set a new password. This is also how you activate an account that
+                                    was created for you (e.g. a partner shop account).
+                                </p>
+                                <form onSubmit={handleForgotPassword} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                                            <Mail className="w-3 h-3" />
+                                            Email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="your@email.com"
+                                            required
+                                            className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="w-full h-12 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-cyan/20 hover:shadow-brand-cyan/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>Please wait...</span>
+                                            </>
+                                        ) : (
+                                            <span>Send Reset Link</span>
+                                        )}
+                                    </button>
+                                </form>
+                            </>
+                        )}
+                        <button
+                            onClick={() => {
+                                setMode('signin');
+                                setError(null);
                             }}
                             className="w-full h-12 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors"
                         >
@@ -488,6 +591,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                                 />
                                 {mode === 'signup' && (
                                     <p className="text-[10px] text-slate-500">Minimum 6 characters</p>
+                                )}
+                                {mode === 'signin' && (
+                                    <div className="text-right">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMode('forgot');
+                                                setError(null);
+                                            }}
+                                            className="text-[11px] font-bold text-brand-cyan hover:underline"
+                                        >
+                                            Forgot password?
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
