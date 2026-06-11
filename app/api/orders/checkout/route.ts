@@ -191,26 +191,29 @@ export async function POST(req: Request) {
         }
 
         // ─── Platform fee tier ───
+        // profiles.partner_level is INTEGER 1-9 (20260309_admin_schema.sql) and
+        // that's what the admin tools write; tier-name strings are accepted too
+        // for any legacy rows. Percentages must stay in sync with the display
+        // tiers in components/PartnerPortal.tsx.
+        const PARTNER_LEVEL_FEES: Record<string, number> = {
+            '1': 0.05, 'bronze': 0.05,
+            '2': 0.045, 'silver': 0.045,
+            '3': 0.04, 'gold': 0.04,
+            '4': 0.035, 'platinum': 0.035,
+            '5': 0.03, 'sapphire': 0.03,
+            '6': 0.0275, 'ruby': 0.0275,
+            '7': 0.025, 'emerald': 0.025,
+            '8': 0.0225, 'diamond': 0.0225,
+            '9': 0.02, 'black_opal': 0.02, 'opal': 0.02, 'pink_diamond': 0.02, 'heart': 0.02,
+        };
         const feeMap = new Map<string, number>();
         for (const profile of sellerProfiles || []) {
             let fee = 0.09;
             // Partner status is keyed off partner_joined_at, not `role`: an admin
             // can also be a partner, and `role` (single-valued) can't hold both.
             if (profile.partner_joined_at) {
-                const level = String(profile.partner_level || 'standard').toLowerCase().replace(' ', '_');
-                switch (level) {
-                    case 'bronze': fee = 0.05; break;
-                    case 'silver': fee = 0.045; break;
-                    case 'gold': fee = 0.04; break;
-                    case 'platinum': fee = 0.035; break;
-                    case 'sapphire': fee = 0.03; break;
-                    case 'ruby': fee = 0.0275; break;
-                    case 'emerald': fee = 0.025; break;
-                    case 'diamond': fee = 0.0225; break;
-                    case 'pink_diamond':
-                    case 'heart': fee = 0.02; break;
-                    default: fee = 0.05; break;
-                }
+                const level = String(profile.partner_level ?? 1).toLowerCase().replace(/ /g, '_');
+                fee = PARTNER_LEVEL_FEES[level] ?? 0.05;
             }
             feeMap.set(profile.id, fee);
         }

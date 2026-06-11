@@ -34,6 +34,7 @@ import {
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
+import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
@@ -157,10 +158,16 @@ export default function HomePage() {
     useEffect(() => {
         const supabase = createClient();
 
+        // Partner referral: stash any ?ref=<slug> before auth resolves, so a
+        // signup this session can be attributed even if the cs_ref cookie
+        // from /join/<slug> didn't survive.
+        captureReferralParam();
+
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
                 Sentry.setUser({ id: session.user.id, email: session.user.email });
+                void maybeAttributeReferral(session.user.id);
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
@@ -175,6 +182,7 @@ export default function HomePage() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
                 Sentry.setUser({ id: session.user.id, email: session.user.email });
+                void maybeAttributeReferral(session.user.id);
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',

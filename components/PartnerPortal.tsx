@@ -106,6 +106,15 @@ const PARTNER_TIERS: PartnerTier[] = [
     },
 ];
 
+interface ReferralData {
+    slug: string;
+    link: string;
+    clicks: number;
+    installs: number;
+    signups: number;
+    totalDownloads: number;
+}
+
 const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
     const [stats, setStats] = useState({
         totalDownloads: 0,
@@ -114,6 +123,9 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
         referralCode: `CARDSTREET-${user?.name?.toUpperCase().slice(0, 5) || 'PARTNER'}`,
         level: 1
     });
+    const [referral, setReferral] = useState<ReferralData | null>(null);
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [showQr, setShowQr] = useState(false);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -127,7 +139,9 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     const data = await profileRes.json();
                     if (data.profile) {
                         downloads = data.profile.total_downloads || 0;
-                        userLevelStr = data.profile.partner_level || 'bronze';
+                        // partner_level is INTEGER 1-9 in the DB; String() so
+                        // the numeric keys in strMap below match it too.
+                        userLevelStr = String(data.profile.partner_level ?? 'bronze');
                     }
                 }
 
@@ -142,6 +156,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                 // Map admin string to exact level index, or fallback to auto-computed from downloads
                 let activeLevel = 1;
                 const strMap: Record<string, number> = {
+                    '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
                     'bronze': 1,
                     'silver': 2,
                     'gold': 3,
@@ -186,6 +201,35 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
         }
     }, [user]);
 
+    // Real referral link + tracking stats (slug is generated server-side on
+    // first call). Falls back to nothing — the UI keeps the placeholder until
+    // this resolves.
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/referrals/me');
+                if (!res.ok) return;
+                const data: ReferralData = await res.json();
+                if (cancelled) return;
+                setReferral(data);
+                // Pre-render the QR so opening the panel is instant. Dynamic
+                // import keeps the qrcode lib out of the main bundle.
+                const QRCode = (await import('qrcode')).default;
+                const url = await QRCode.toDataURL(data.link, {
+                    width: 512,
+                    margin: 2,
+                    color: { dark: '#0f1419', light: '#ffffff' },
+                });
+                if (!cancelled) setQrDataUrl(url);
+            } catch (err) {
+                console.error('Failed to load referral data:', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user]);
+
     const currentTierIndex = PARTNER_TIERS.findIndex(t => t.level === stats.level);
     const currentTier = PARTNER_TIERS[currentTierIndex];
     const nextTier = PARTNER_TIERS[currentTierIndex + 1];
@@ -195,9 +239,12 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
         ? Math.min(100, Math.max(0, ((stats.totalDownloads - currentTier.minDownloads) / (nextTier.minDownloads - currentTier.minDownloads)) * 100))
         : 100;
 
+    const referralLink = referral?.link ?? `https://cardstreet.app/join/${stats.referralCode}`;
+    const referralLinkLabel = referralLink.replace(/^https?:\/\//, '');
+
     const [copied, setCopied] = useState(false);
     const handleCopy = () => {
-        navigator.clipboard.writeText(`https://cardstreet.app/join/${stats.referralCode}`);
+        navigator.clipboard.writeText(referralLink);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -277,7 +324,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">Share the Value</h3>
                     <div className="flex gap-2">
                         <div className="flex-1 min-w-0 bg-brand-darker border border-white/10 rounded-xl px-4 flex items-center h-12">
-                            <span className="text-xs text-slate-400 font-mono truncate w-full">cardstreet.app/join/{stats.referralCode}</span>
+                            <span className="text-xs text-slate-400 font-mono truncate w-full">{referralLinkLabel}</span>
                         </div>
                         <button
                             onClick={handleCopy}
@@ -285,10 +332,44 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                         >
                             {copied ? <i className="fa-solid fa-check text-brand-green"></i> : <i className="fa-regular fa-copy"></i>}
                         </button>
-                        <button className="shrink-0 w-12 h-12 bg-brand-cyan text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
+                        <button
+                            onClick={() => setShowQr(v => !v)}
+                            disabled={!qrDataUrl}
+                            className="shrink-0 w-12 h-12 bg-brand-cyan text-brand-darker rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:hover:scale-100"
+                        >
                             <i className="fa-solid fa-qrcode"></i>
                         </button>
                     </div>
+
+                    {showQr && qrDataUrl && (
+                        <div className="flex flex-col items-center gap-3 pt-2">
+                            <div className="bg-white p-3 rounded-2xl">
+                                {/* Plain img: the QR is a generated data URL, no optimizer needed */}
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={qrDataUrl} alt="Partner referral QR code" className="w-48 h-48" />
+                            </div>
+                            <a
+                                href={qrDataUrl}
+                                download={`cardstreet-qr-${referral?.slug ?? 'partner'}.png`}
+                                className="text-[10px] font-bold text-brand-cyan uppercase tracking-widest hover:underline"
+                            >
+                                <i className="fa-solid fa-download mr-1"></i> Download PNG for print
+                            </a>
+                        </div>
+                    )}
+
+                    {referral && (
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="bg-brand-darker border border-white/10 rounded-xl p-3">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Link Opens</p>
+                                <p className="text-xl font-black text-white">{referral.clicks.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-brand-darker border border-white/10 rounded-xl p-3">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Signups</p>
+                                <p className="text-xl font-black text-brand-green">{referral.signups.toLocaleString()}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tier Overview */}

@@ -23,9 +23,12 @@ export async function GET() {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
+    // 'click' events are link-open analytics, not downloads — only installs
+    // and attributed signups count toward the chart (and total_downloads).
     const { data: dailyData, error: dailyErr } = await supabase
         .from('partner_downloads')
         .select('downloaded_at, partner_id')
+        .in('event_type', ['install', 'signup'])
         .gte('downloaded_at', thirtyDaysAgo.toISOString())
         .order('downloaded_at', { ascending: true })
 
