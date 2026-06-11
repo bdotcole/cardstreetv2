@@ -40,10 +40,12 @@ export function getOptimizedImageUrl(url: string | null | undefined, width: numb
     }
 
     if (url.includes('.supabase.co/storage/v1/object/public/')) {
+        // resize=contain is required: with width only, the default (cover) keeps
+        // the original height and center-crops the width to a sliver.
         return url.replace(
             '/storage/v1/object/public/',
             '/storage/v1/render/image/public/'
-        ) + `?width=${width}&quality=${quality}`;
+        ) + `?width=${width}&quality=${quality}&resize=contain`;
     }
 
     const wantsSmall = width <= 240;
