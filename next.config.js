@@ -3,6 +3,10 @@ const { withSentryConfig } = require("@sentry/nextjs");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    // Card art is immutable once published; without this the optimizer falls
+    // back to a 60s TTL when origins send short/no cache headers, re-fetching
+    // and re-transforming the same images constantly.
+    minimumCacheTTL: 2678400, // 31 days
     remotePatterns: [
       {
         protocol: 'https',

@@ -3,6 +3,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { UserCollectionItem } from '../types';
 import { MOCK_CARDS } from '../constants';
 import { geminiService } from '../services/geminiService';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface PortfolioProps {
   collection: UserCollectionItem[];
@@ -106,7 +107,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ collection }) => {
             return (
               <div key={item.id} className="glass p-4 rounded-3xl flex items-center gap-4 border border-white/5 active:bg-white/[0.06] transition-all">
                 <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 p-1">
-                  <img src={imageUrl} className="w-full h-full object-contain filter drop-shadow-lg" />
+                  <img src={getThumbnailUrl(imageUrl)} loading="lazy" decoding="async" className="w-full h-full object-contain filter drop-shadow-lg" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-slate-200 text-sm truncate tracking-tight">{name}</h4>

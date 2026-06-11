@@ -5,6 +5,7 @@ import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
@@ -163,7 +164,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           {/* Card Preview */}
           <div className="flex gap-4 mb-6">
             <div className="w-20 h-28 bg-brand-darker rounded-lg border border-white/10 overflow-hidden flex-shrink-0">
-              <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+              <img src={getThumbnailUrl(card.images?.small || card.imageUrl)} alt={card.name} decoding="async" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-white font-bold truncate">{card.name}</h4>

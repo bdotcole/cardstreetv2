@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { CURRENCY_SYMBOLS } from '@/constants';
+import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
 import { Card } from '@/types';
@@ -267,14 +269,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
               {/* Card Image — lazy load, fixed dimensions to prevent CLS */}
               <div className="w-20 aspect-[3/4] bg-brand-darker rounded-lg relative overflow-hidden flex-shrink-0 border border-white/10">
-                <img
-                  src={listing.card_data.images?.small || listing.card_data.imageUrl}
+                <Image
+                  src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)}
                   alt={listing.card_data.name || 'Card'}
-                  width={80}
-                  height={107}
+                  fill
+                  sizes="80px"
                   loading={idx < 4 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  className="w-full h-full object-cover"
+                  unoptimized={shouldSkipNextOptimization(getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl))}
+                  className="object-cover"
                 />
               </div>
 

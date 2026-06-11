@@ -65,7 +65,9 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   const game = supabaseCard.game || 'pokemon';
   const isPokemon = game === 'pokemon';
   const rawData = supabaseCard.raw_data || {};
-  const tcgData = rawData.tcgplayer;
+  // List queries project `tcgplayer:raw_data->tcgplayer` instead of shipping the
+  // whole raw_data blob, so the slice arrives as a top-level key.
+  const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
   const pricesTypes = tcgData?.prices || {};
   const pricesObj = pricesTypes.holofoil || pricesTypes.normal || Object.values(pricesTypes)[0] || {};
 

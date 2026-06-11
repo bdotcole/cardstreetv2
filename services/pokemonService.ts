@@ -87,7 +87,9 @@ export const pokemonService = {
             const cleanName = (name || '').replace(/[^a-zA-Z0-9 ]/g, '').trim();
             const cleanSet = (setHint || '').replace(/[^a-zA-Z0-9]/g, '').trim();
 
-            const baseSelect = '*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+            // Explicit columns: raw_data is tens of KB per row; the mapper only
+            // needs its tcgplayer slice (price fallback).
+            const baseSelect = 'id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, tcgplayer:raw_data->tcgplayer, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
             const nameSearch = `name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`;
 
             // TIER 1: The "Perfect" Strict Match (Name + Number + Set + Language)
@@ -201,7 +203,8 @@ export const pokemonService = {
                 .from('pokemon_cards')
                 .select(`
                     id, name, english_name, set_id, number, supertype, subtypes,
-                    rarity, hp, types, game, image_small, image_large, language, raw_data,
+                    rarity, hp, types, game, image_small, image_large, language,
+                    tcgplayer_url, tcgplayer:raw_data->tcgplayer,
                     market_values(market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
                 `)
@@ -353,7 +356,9 @@ export const pokemonService = {
             const { data, error } = await supabase
                 .from('pokemon_cards')
                 .select(`
-                    *,
+                    id, name, english_name, set_id, number, rarity, game,
+                    image_small, image_large, language,
+                    tcgplayer_url, tcgplayer:raw_data->tcgplayer,
                     market_values(market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
                 `)

@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { CartItem } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useConditionTranslation } from '@/lib/hooks/useCardTranslations';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface CartDrawerProps {
     isOpen: boolean;
@@ -89,7 +90,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         cart.map((item) => (
                             <div key={item.id} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
                                 <div className="w-16 h-20 bg-brand-darker rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
-                                    <img src={item.card.imageUrl} className="w-full h-full object-contain" alt={item.card.name} />
+                                    <img src={getThumbnailUrl(item.card.images?.small || item.card.imageUrl)} loading="lazy" decoding="async" className="w-full h-full object-contain" alt={item.card.name} />
                                 </div>
                                 <div className="flex-1 min-w-0 py-1">
                                     <h4 className="text-white text-sm font-bold truncate pr-6">{item.card.name}</h4>
