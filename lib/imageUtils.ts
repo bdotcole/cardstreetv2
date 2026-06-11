@@ -69,14 +69,23 @@ export function getThumbnailUrl(url: string | null | undefined): string {
 /**
  * Whether to skip Next.js image optimization for a given URL.
  *
+ * Pass the URL you are about to render (i.e. AFTER getThumbnailUrl /
+ * getPreviewUrl), not the raw DB value — the transforms are what make a URL
+ * pre-sized.
+ *
  * - TCGdex with /low.webp: already a tiny pre-sized webp (~13KB) — the optimizer
  *   round-trip just adds latency.
+ * - Supabase render endpoint: already resized + encoded by Supabase's CDN.
+ *   Measured from TH: ~0.18s warm direct vs ~0.6s re-proxied through the
+ *   optimizer (and ~1.2s cold), for a ~1KB byte saving. Strictly worse.
  * - Other URLs (pokemontcg.io, asia.pokemon-card.com): full-size PNGs that
- *   benefit enormously from Vercel's transcode + edge cache.
+ *   benefit enormously from Vercel's transcode + edge cache (asia:
+ *   480KB PNG -> 27KB webp).
  */
 export function shouldSkipNextOptimization(url: string | null | undefined): boolean {
     if (!url) return false;
     if (url.includes('assets.tcgdex.net') && /\/(low|high)\.webp(\?|$)/.test(url)) return true;
+    if (url.includes('.supabase.co/storage/v1/render/image/')) return true;
     return false;
 }
 

@@ -13,7 +13,7 @@ import CardDetails from './CardDetails';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import Image from 'next/image';
-import { getThumbnailUrl, getPreviewUrl } from '@/lib/imageUtils';
+import { getThumbnailUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 
 // recharts is ~100KB. Defer until the chart actually renders.
 const PriceChart = dynamic(() => import('./PriceChart'), {
@@ -445,7 +445,7 @@ const Vault: React.FC<VaultProps> = ({
                       fill
                       sizes="48px"
                       className="object-contain"
-                      unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                      unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                     />
                   </div>
                   <div className="flex-1">
@@ -483,7 +483,7 @@ const Vault: React.FC<VaultProps> = ({
                     fill
                     sizes="64px"
                     className="object-contain"
-                    unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                    unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                   />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -578,7 +578,7 @@ const Vault: React.FC<VaultProps> = ({
                   fill
                   sizes="48px"
                   className="object-contain"
-                  unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                  unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -688,7 +688,7 @@ const Vault: React.FC<VaultProps> = ({
                     fill
                     sizes="56px"
                     className="object-contain filter drop-shadow-md" 
-                    unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                    unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                   />
                 </div>
 

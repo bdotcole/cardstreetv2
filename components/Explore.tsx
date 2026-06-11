@@ -434,7 +434,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                               src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                               fill
                               sizes="56px"
-                              unoptimized={shouldSkipNextOptimization(card.images?.small || card.imageUrl)}
+                              unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                               className="object-contain"
                               alt={card.name}
                             />
