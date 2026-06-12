@@ -4,7 +4,9 @@ import { scannerService } from '@/services/scannerService';
 // nodejs runtime is required: the pHash step uses `sharp` for image decoding,
 // which is a native module unavailable in Edge.
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// 300s (Pro plan ceiling) so the slow tail — SerpApi fallback, pathological
+// Gemini responses — degrades gracefully instead of 504ing mid-pipeline.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
     try {
