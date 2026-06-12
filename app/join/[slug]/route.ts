@@ -30,9 +30,8 @@ import { REF_COOKIE, REF_COOKIE_MAX_AGE_SECONDS, isValidSlugFormat } from '@/lib
 export const runtime = 'nodejs';
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.cardstreet.tcg';
-// Not live yet (App Store review in progress). When it is, set the full
-// https://apps.apple.com/... URL and iOS visitors will route there.
-const IOS_APP_STORE_URL: string | null = null;
+const IOS_APP_STORE_URL: string | null =
+    'https://apps.apple.com/us/app/cardstreet-tcg-marketplace/id6776266347';
 
 function destinationFor(userAgent: string, slug: string, baseUrl: string): string {
     const ua = userAgent.toLowerCase();
