@@ -5,6 +5,12 @@ const config: CapacitorConfig = {
   appName: 'CardStreet',
   webDir: 'out',
 
+  // Marks every WebView request as coming from the native app so middleware
+  // always serves the mobile experience. Without this, WebView user-agents
+  // can read as desktop (iPad WKWebViews report as Mac) and the app would get
+  // the desktop site. middleware.ts matches this exact string.
+  appendUserAgent: 'CardStreetApp',
+
   // Native web view background — prevents a white flash between the splash
   // screen hiding and the remote site (cardstreet.app) painting.
   backgroundColor: '#0f1419',

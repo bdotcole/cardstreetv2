@@ -232,6 +232,82 @@ export const marketplaceService = {
     },
 
     /**
+     * Fetch all active listings for one card, cheapest first. Used by the
+     * desktop card detail page.
+     */
+    async getListingsForCard(cardId: string): Promise<MarketplaceListing[]> {
+        const supabase = createClient();
+        try {
+            const { data, error } = await supabase
+                .from('listings')
+                .select(`
+                    id,
+                    seller_id,
+                    card_id,
+                    card_data,
+                    price,
+                    condition,
+                    is_graded,
+                    grading_company,
+                    grade,
+                    image_front_url,
+                    image_back_url,
+                    status,
+                    created_at,
+                    updated_at,
+                    seller:profiles(id, display_name, avatar_url, partner_tier)
+                `)
+                .eq('card_id', cardId)
+                .eq('status', 'active')
+                .order('price', { ascending: true });
+            if (error) throw error;
+            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+        } catch (error) {
+            console.error('Error fetching listings for card:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Fetch the signed-in user's own active listings, newest first. Used by
+     * the desktop Sell page.
+     */
+    async getMyListings(): Promise<MarketplaceListing[]> {
+        const supabase = createClient();
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return [];
+
+            const { data, error } = await supabase
+                .from('listings')
+                .select(`
+                    id,
+                    seller_id,
+                    card_id,
+                    card_data,
+                    price,
+                    condition,
+                    is_graded,
+                    grading_company,
+                    grade,
+                    image_front_url,
+                    image_back_url,
+                    status,
+                    created_at,
+                    updated_at
+                `)
+                .eq('seller_id', user.id)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+        } catch (error) {
+            console.error('Error fetching my listings:', error);
+            return [];
+        }
+    },
+
+    /**
      * Cancel an active listing
      */
     async cancelListing(listingId: string): Promise<boolean> {
