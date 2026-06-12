@@ -1,7 +1,10 @@
--- Weekly price refresh for non-English-Pokemon catalogs (batch-price-games).
+-- Daily price refresh for non-English-Pokemon catalogs (batch-price-games).
 -- One game per invocation (each fits the Edge Function wall-clock limit),
--- staggered Sunday slots so they never overlap (50 req/min JustTCG limit) and
--- sit after the daily English job (21:00 UTC). ~180 JustTCG calls/week total.
+-- staggered nightly slots so they never overlap (100 req/min JustTCG limit)
+-- and sit after the daily English job (21:00 UTC). ~180 JustTCG calls/day;
+-- with the daily English job (~200/day) total ~11.5K/month against the
+-- Professional plan's 5K/day / 50K/month budget. (Was weekly on the Starter
+-- plan's 1K/day / 10K/month.)
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
@@ -22,7 +25,7 @@ BEGIN
     END LOOP;
     PERFORM cron.schedule(
       'price-games-' || grp,
-      mins || ' 22 * * 0',
+      mins || ' 22 * * *',
       format(
         $q$SELECT net.http_post(url:=%L, headers:=%L::jsonb, body:=%L::jsonb)$q$,
         fn_url,
