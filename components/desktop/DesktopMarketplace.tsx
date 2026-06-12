@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
-import { getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { GAMES } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { CartItem } from '@/types';
@@ -165,7 +165,14 @@ function GameChip({ label, active, onClick }: { label: string; active: boolean; 
 
 function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: boolean }) {
     const { addItem } = useDesktopCart();
-    const imageUrl = getPreviewUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+    // Catalog art is the default; if its host is unreachable (TCGdex outages
+    // black out most EN card art) fall back to the seller's condition photo,
+    // which lives in our own Supabase storage.
+    const [catalogArtFailed, setCatalogArtFailed] = useState(false);
+    const catalogUrl = getPreviewUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+    const imageUrl = catalogArtFailed && listing.image_front_url
+        ? getOptimizedImageUrl(listing.image_front_url, 300, 80)
+        : catalogUrl;
     return (
         <Link
             href={`/card/${listing.card_id}`}
@@ -179,6 +186,7 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                     sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
                     loading={eager ? 'eager' : 'lazy'}
                     unoptimized={shouldSkipNextOptimization(imageUrl)}
+                    onError={() => setCatalogArtFailed(true)}
                     className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
                 />
             </div>
