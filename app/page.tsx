@@ -34,6 +34,7 @@ import {
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
+import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
@@ -681,6 +682,41 @@ export default function HomePage() {
             if (refetchTimer) clearTimeout(refetchTimer);
             supabase.removeChannel(channel);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Deep link from desktop card URLs: middleware redirects phones hitting
+    // /card/<id> to /?card=<id>. Open that card's detail view, then strip the
+    // param (preserving any other query params and the hash — OAuth callbacks
+    // ride in the hash) so refresh doesn't re-trigger it.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const cardId = params.get('card');
+        if (!cardId) return;
+
+        params.delete('card');
+        const rest = params.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+        );
+
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data } = await supabase
+                    .from('pokemon_cards')
+                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+                    .eq('id', cardId)
+                    .maybeSingle();
+                if (data) setSelectedCard(mapSupabaseCardToInternal(data));
+            } catch (err) {
+                // A bad/stale link should never break the app — land on the
+                // marketplace as before.
+                console.warn('[DeepLink] Could not open card', cardId, err);
+            }
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
