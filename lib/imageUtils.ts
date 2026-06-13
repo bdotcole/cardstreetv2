@@ -39,6 +39,16 @@ export function getOptimizedImageUrl(url: string | null | undefined, width: numb
         if (!url.startsWith('/')) return PLACEHOLDER;
     }
 
+    // Catalog art mirrored into our own `card-images` bucket is already stored
+    // as pre-sized WebP variants (small + large), so serve the object directly.
+    // Routing it through the render endpoint would re-encode an already-sized
+    // image AND incur Supabase image-transformation billing per origin image —
+    // at full-catalog scale (~73k cards) that is a large recurring cost for no
+    // gain. Other buckets (seller photos, set logos) keep the render path.
+    if (url.includes('/card-images/')) {
+        return url;
+    }
+
     if (url.includes('.supabase.co/storage/v1/object/public/')) {
         // resize=contain is required: with width only, the default (cover) keeps
         // the original height and center-crops the width to a sliver.
@@ -86,6 +96,9 @@ export function shouldSkipNextOptimization(url: string | null | undefined): bool
     if (!url) return false;
     if (url.includes('assets.tcgdex.net') && /\/(low|high)\.webp(\?|$)/.test(url)) return true;
     if (url.includes('.supabase.co/storage/v1/render/image/')) return true;
+    // Mirrored catalog art: already pre-sized WebP served straight from the
+    // Supabase CDN; re-proxying through Vercel's optimizer only adds latency.
+    if (url.includes('/card-images/')) return true;
     return false;
 }
 

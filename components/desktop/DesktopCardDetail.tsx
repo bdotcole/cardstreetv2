@@ -16,9 +16,6 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
     const [card, setCard] = useState<Card | null>(null);
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
     const [loading, setLoading] = useState(true);
-    // If catalog art fails to load (TCGdex outages black out most EN card
-    // art), fall back to a seller's condition photo from our own storage.
-    const [catalogArtFailed, setCatalogArtFailed] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -77,10 +74,7 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
         );
     }
 
-    const sellerPhoto = listings.find((l) => l.image_front_url)?.image_front_url;
-    const imageUrl = catalogArtFailed && sellerPhoto
-        ? getOptimizedImageUrl(sellerPhoto, 640, 85)
-        : getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 640, 85);
+    const imageUrl = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 640, 85);
 
     return (
         <div>
@@ -100,7 +94,6 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
                             sizes="380px"
                             priority
                             unoptimized={shouldSkipNextOptimization(imageUrl)}
-                            onError={() => setCatalogArtFailed(true)}
                             className="object-cover"
                         />
                     </div>
