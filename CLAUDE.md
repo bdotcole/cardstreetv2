@@ -40,6 +40,19 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 
 Each row may have `image_large`, `image_small`, and `raw_data` (full original API response). Use **`lib/cardMapper.ts:mapSupabaseCardToInternal`** to normalize into the in-app `Card` type — it handles TCGdex URL fixups (`.png` suffix), price-currency conversion, Thai set-name aliases, and image fallbacks. Don't reinvent this in new code; import it.
 
+## Card images (self-hosted)
+
+Card art used to be hotlinked from third-party hosts (TCGdex, ygoprodeck, Scryfall, optcgapi, asia.pokemon-card, pokemontcg.io). When TCGdex went fully unreachable in June 2026, most English Pokémon art blanked. Card images are now **mirrored into our own Supabase storage** so the catalog never depends on an upstream host being up.
+
+- **Storage:** the public `card-images` bucket. New cards use `card-images/<id>/{small,large}.webp` (two pre-sized WebP variants — small ~245w for grids, large ~734w for detail). The older AS-era Thai PDF scans predate this and live at `card-images/cards/<set>/<id>.webp` (single full-res file, small==large); both layouts coexist.
+- **`pokemon_cards.image_small` / `image_large`** point at the mirrored objects. The originals stay recoverable from `raw_data`, so the repoint is reversible.
+- **Serving:** `lib/imageUtils.ts` passes any `/card-images/` URL through **directly** (no render-endpoint rewrite, `shouldSkipNextOptimization` returns true). This is deliberate — Supabase bills image transformations *per origin image*, so routing ~76k cards through `/render/image/` would be a large recurring cost. Other buckets (`listing-images` seller photos, `jp-set-logos`) keep the render path. **Never point card art through the render endpoint.**
+- **Bulk backfill:** `scripts/ingest/mirror-card-images.mjs` (resumable id-cursor pagination, bounded concurrency, idempotent — skips rows already on `supabase.co`, re-encodes via `sharp`). Re-run anytime to sweep stragglers.
+- **Staying mirrored:** `app/api/cron/mirror-images/route.ts` is a **monthly Vercel cron** (`vercel.json`, 04:00 UTC on the 1st, `CRON_SECRET` auth, `nodejs` runtime for `sharp`) that mirrors any newly-ingested cards still on a third-party host and re-syncs active-listing `card_data` snapshots. Bounded by a wall-clock budget; overflow is caught next run.
+- **Listings carry an image snapshot.** Marketplace tiles render `listing.card_data.images`, not the live catalog. New listings snapshot the (mirrored) catalog URL at creation; pre-mirror listings were backfilled by `scripts/repoint-listing-images.mjs` and the monthly cron keeps them synced.
+
+Coverage is not total: ~2.2k Japanese vintage cards have no image on any host (nothing to mirror), and a handful of promo rows have corrupt upstream URLs. These render imageless regardless of mirroring.
+
 ## Scanning pipeline (`/api/scan`)
 
 > **The route must run `nodejs` runtime, not Edge.** `sharp` is a native module.
