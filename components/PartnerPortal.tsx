@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, PartnerStats } from '@/types';
 import { GemIcon, GemType } from './GemIcons';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 interface PartnerPortalProps {
     user: UserProfile;
@@ -15,6 +16,8 @@ interface PartnerTier {
     gemIcon: string;
     gem?: GemType;
     rewards: string[];
+    // QC-approved official Thai translation of `rewards`, same order.
+    rewardsTh: string[];
 }
 
 const PARTNER_TIERS: PartnerTier[] = [
@@ -26,6 +29,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         color: 'text-amber-600 border-amber-600',
         gemIcon: '🟤',
         rewards: ['Partner QR Code & referral link'],
+        rewardsTh: ['QR Code และลิงก์แนะนำของพาร์ทเนอร์'],
     },
     {
         level: 2,
@@ -35,6 +39,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         color: 'text-slate-300 border-slate-300',
         gemIcon: '⚪',
         rewards: ['4.5% seller fee'],
+        rewardsTh: ['ค่าธรรมเนียม 4.5%'],
     },
     {
         level: 3,
@@ -44,6 +49,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         color: 'text-yellow-400 border-yellow-400',
         gemIcon: '🟡',
         rewards: ['4% seller fee', 'Early access to feature updates (Actions & Live Breaks)'],
+        rewardsTh: ['ค่าธรรมเนียม 4%', 'สิทธิ์เข้าถึงฟีเจอร์ใหม่ก่อนใคร (ประมูลและไลฟ์สดเปิดซอง)'],
     },
     {
         level: 4,
@@ -53,6 +59,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         color: 'text-slate-200 border-slate-200',
         gemIcon: '🔷',
         rewards: ['3.5% seller fee', 'Raffle entry: English booster box (must reach by EOY)'],
+        rewardsTh: ['ค่าธรรมเนียม 3.5%', 'ลุ้นรับสิทธิ์ซื้อ Booster Box ภาษาอังกฤษ (จำกัดเวลาถึงสิ้นปีนี้)'],
     },
     {
         level: 5,
@@ -63,6 +70,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         gemIcon: '💎',
         gem: 'sapphire',
         rewards: ['3% seller fee', 'Cardstreet social media feature'],
+        rewardsTh: ['ค่าธรรมเนียม 3%', 'สิทธิ์เข้าใช้ฟีเจอร์โซเชียลคาร์ดสตรีท'],
     },
     {
         level: 6,
@@ -73,6 +81,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         gemIcon: '🔴',
         gem: 'ruby',
         rewards: ['2.75% seller fee', 'Exclusive Cardstreet mousepad'],
+        rewardsTh: ['ค่าธรรมเนียม 2.75%', 'รับแผ่นรองเมาส์รุ่นลิมิเต็ดจากคาร์ดสตรีท'],
     },
     {
         level: 7,
@@ -83,6 +92,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         gemIcon: '🟢',
         gem: 'emerald',
         rewards: ['2.5% seller fee', 'Free table spot at 2027 SEA International Card Show'],
+        rewardsTh: ['ค่าธรรมเนียม 2.5%', 'ฟรี! บูธแสดงสินค้างาน SEA International Card Show 2027'],
     },
     {
         level: 8,
@@ -93,6 +103,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         gemIcon: '💠',
         gem: 'diamond',
         rewards: ['2.25% seller fee', '1% profit sharing on transactions from your referred users'],
+        rewardsTh: ['ค่าธรรมเนียม 2.25%', 'ส่วนแบ่งกำไร 1% จากยอดซื้อขายของ User ที่คุณแนะนำ (Referred users)'],
     },
     {
         level: 9,
@@ -103,6 +114,7 @@ const PARTNER_TIERS: PartnerTier[] = [
         gemIcon: '🩷',
         gem: 'opal',
         rewards: ['2% seller fee', '2% profit sharing on transactions from your referred users'],
+        rewardsTh: ['ค่าธรรมเนียม 2%', 'ส่วนแบ่งกำไร 2% จากยอดซื้อขายของ User ที่คุณแนะนำ (Referred users)'],
     },
 ];
 
@@ -115,7 +127,53 @@ interface ReferralData {
     totalDownloads: number;
 }
 
+// Static UI labels. Thai is the QC-approved official translation.
+const LABELS = {
+    en: {
+        partnerPortal: 'Partner Portal',
+        welcomeBack: 'Welcome back,',
+        level: 'Level',
+        partnerSuffix: 'Partner',
+        totalDownloads: 'Total App Downloads',
+        keepGrowing: 'Keep Growing',
+        currentFee: 'Current Fee',
+        earnings: 'Earnings',
+        roadToLegend: 'Road to Legend',
+        shareValue: 'Share the Value',
+        downloadPng: 'Download PNG for print',
+        linkOpens: 'Link Opens',
+        signups: 'Signups',
+        tierRewards: 'Tier Rewards',
+        downloadsLabel: 'Downloads',
+        sellerFee: 'Seller Fee',
+        currentTier: 'Current Tier',
+        downloadsTo: (n: number, tier: string) => `${n.toLocaleString()} downloads to ${tier}`,
+    },
+    th: {
+        partnerPortal: 'ระบบพาร์ทเนอร์',
+        welcomeBack: 'ยินดีต้อนรับกลับมา,',
+        level: 'เลเวล',
+        partnerSuffix: 'Partner',
+        totalDownloads: 'ยอดดาวน์โหลดแอปทั้งหมด',
+        keepGrowing: 'สะสมต่อ',
+        currentFee: 'ค่าธรรมเนียมปัจจุบัน',
+        earnings: 'รายได้',
+        roadToLegend: 'เส้นทางสู่ระดับตำนาน',
+        shareValue: 'แชร์สิ่งดีๆ ให้เพื่อน',
+        downloadPng: 'ดาวน์โหลด PNG สำหรับพิมพ์',
+        linkOpens: 'จำนวนการเปิดลิงก์',
+        signups: 'จำนวนการลงทะเบียน',
+        tierRewards: 'รางวัลตามระดับ',
+        downloadsLabel: 'ดาวน์โหลด',
+        sellerFee: 'ค่าธรรมเนียม',
+        currentTier: 'ระดับปัจจุบัน',
+        downloadsTo: (n: number, tier: string) => `อีก ${n.toLocaleString()} ดาวน์โหลด สู่ ${tier}`,
+    },
+};
+
 const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
+    const { isThai } = useTranslation();
+    const L = isThai ? LABELS.th : LABELS.en;
     const [stats, setStats] = useState({
         totalDownloads: 0,
         totalEarnings: 0,
@@ -253,13 +311,13 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
         <div className="pb-32 animate-fadeIn bg-brand-darker min-h-screen">
             {/* Header */}
             <div className="pt-6 px-6 pb-6 bg-gradient-to-b from-brand-cyan/5 to-transparent border-b border-white/5">
-                <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg] mb-1">Partner Portal</p>
+                <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg] mb-1">{L.partnerPortal}</p>
                 <h1 className="text-3xl font-black text-white italic skew-x-[-5deg]">
-                    Welcome back, <br />
+                    {L.welcomeBack} <br />
                     <span className={currentTier.color}>{user.name}</span>
                 </h1>
                 <p className="text-xs font-bold text-slate-500 mt-2 uppercase tracking-widest">
-                    Level {stats.level} • {currentTier.name} Partner
+                    {L.level} {stats.level} • {currentTier.name} {L.partnerSuffix}
                 </p>
             </div>
 
@@ -270,20 +328,20 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <i className="fa-solid fa-users text-4xl text-brand-cyan"></i>
                         </div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total App Downloads</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{L.totalDownloads}</p>
                         <p className="text-4xl font-black text-white">{stats.totalDownloads.toLocaleString()}</p>
                         <div className="mt-2 text-[10px] text-brand-green font-bold uppercase flex items-center gap-1">
-                            <i className="fa-solid fa-arrow-trend-up"></i> Keep Growing
+                            <i className="fa-solid fa-arrow-trend-up"></i> {L.keepGrowing}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="glass p-4 rounded-2xl border border-white/10">
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Current Fee</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{L.currentFee}</p>
                             <p className="text-2xl font-black text-brand-red">{stats.currentFee}%</p>
                         </div>
                         <div className="glass p-4 rounded-2xl border border-white/10">
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Earnings</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{L.earnings}</p>
                             <p className="text-2xl font-black text-brand-green">฿{stats.totalEarnings.toLocaleString()}</p>
                         </div>
                     </div>
@@ -294,10 +352,10 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     <div className="absolute inset-0 bg-gradient-to-r from-brand-cyan/5 to-brand-purple/5"></div>
 
                     <div className="flex justify-between items-end relative z-10">
-                        <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">Road to Legend</h3>
+                        <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">{L.roadToLegend}</h3>
                         {nextTier && (
                             <span className="text-[9px] font-bold text-brand-cyan uppercase tracking-wider">
-                                {nextTier.minDownloads - stats.totalDownloads} downloads to {nextTier.name}
+                                {L.downloadsTo(nextTier.minDownloads - stats.totalDownloads, nextTier.name)}
                             </span>
                         )}
                     </div>
@@ -321,7 +379,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
 
                 {/* Referral Tool */}
                 <div className="glass p-6 rounded-2xl border border-white/10 space-y-4">
-                    <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">Share the Value</h3>
+                    <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide">{L.shareValue}</h3>
                     <div className="flex gap-2">
                         <div className="flex-1 min-w-0 bg-brand-darker border border-white/10 rounded-xl px-4 flex items-center h-12">
                             <span className="text-xs text-slate-400 font-mono truncate w-full">{referralLinkLabel}</span>
@@ -353,7 +411,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                                 download={`cardstreet-qr-${referral?.slug ?? 'partner'}.png`}
                                 className="text-[10px] font-bold text-brand-cyan uppercase tracking-widest hover:underline"
                             >
-                                <i className="fa-solid fa-download mr-1"></i> Download PNG for print
+                                <i className="fa-solid fa-download mr-1"></i> {L.downloadPng}
                             </a>
                         </div>
                     )}
@@ -361,11 +419,11 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     {referral && (
                         <div className="grid grid-cols-2 gap-3 pt-1">
                             <div className="bg-brand-darker border border-white/10 rounded-xl p-3">
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Link Opens</p>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{L.linkOpens}</p>
                                 <p className="text-xl font-black text-white">{referral.clicks.toLocaleString()}</p>
                             </div>
                             <div className="bg-brand-darker border border-white/10 rounded-xl p-3">
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Signups</p>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{L.signups}</p>
                                 <p className="text-xl font-black text-brand-green">{referral.signups.toLocaleString()}</p>
                             </div>
                         </div>
@@ -374,7 +432,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
 
                 {/* Tier Overview */}
                 <div className="space-y-3">
-                    <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide px-2">Tier Rewards</h3>
+                    <h3 className="font-black text-white italic skew-x-[-10deg] uppercase tracking-wide px-2">{L.tierRewards}</h3>
                     {PARTNER_TIERS.map((tier) => {
                         const isActive = tier.level === stats.level;
                         const isUnlocked = tier.level <= stats.level;
@@ -395,16 +453,16 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                                             : <span className="text-xl">{tier.gemIcon}</span>}
                                         <div>
                                             <p className={`text-sm font-bold ${tier.color}`}>{tier.name}</p>
-                                            <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minDownloads.toLocaleString()}+ Downloads</p>
+                                            <p className="text-[9px] text-slate-500 font-bold uppercase">{tier.minDownloads.toLocaleString()}+ {L.downloadsLabel}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-black text-white">{tier.fee}%</p>
-                                        <p className="text-[8px] text-slate-500 font-bold uppercase">Seller Fee</p>
+                                        <p className="text-[8px] text-slate-500 font-bold uppercase">{L.sellerFee}</p>
                                     </div>
                                 </div>
                                 <ul className="space-y-1 pl-9">
-                                    {tier.rewards.map((reward, i) => (
+                                    {(isThai ? tier.rewardsTh : tier.rewards).map((reward, i) => (
                                         <li key={i} className="text-[10px] text-slate-400 font-semibold flex items-start gap-1.5">
                                             <span className="text-brand-cyan mt-0.5">✦</span>
                                             {reward}
@@ -413,7 +471,7 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                                 </ul>
                                 {isActive && (
                                     <div className="mt-2 pl-9">
-                                        <span className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">← Current Tier</span>
+                                        <span className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">← {L.currentTier}</span>
                                     </div>
                                 )}
                             </div>
