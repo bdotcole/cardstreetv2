@@ -11,6 +11,7 @@ import { getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization } from '@/li
 import { SELLER_REQUIRED_PROFILE_FIELDS, checkSellerProfileComplete } from '@/lib/profileValidation';
 import { GAMES, gameHasMultipleLanguages, getGameLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import ListingForm from '@/components/ListingForm';
 import AuthModal from '@/components/AuthModal';
 import { Card } from '@/types';
@@ -25,6 +26,7 @@ interface StripeStatus {
 export default function DesktopSell() {
     const searchParams = useSearchParams();
     const { showToast } = useToast();
+    const { t } = useTranslation();
 
     const [user, setUser] = useState<User | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
@@ -99,10 +101,10 @@ export default function DesktopSell() {
                 }),
             });
             const data = await res.json();
-            if (!res.ok || !data.url) throw new Error(data.error || 'Could not start Stripe onboarding');
+            if (!res.ok || !data.url) throw new Error(data.error || t('desktop.sell.toastStripeError'));
             window.location.href = data.url;
         } catch (err: any) {
-            showToast(err.message || 'Could not start Stripe onboarding', 'error');
+            showToast(err.message || t('desktop.sell.toastStripeError'), 'error');
             setStripeLoading(false);
         }
     };
@@ -137,13 +139,13 @@ export default function DesktopSell() {
                 image_back_url: listingData.image_back_url,
             });
             setListingCard(null);
-            showToast('Listing published to the marketplace', 'success');
+            showToast(t('desktop.sell.toastPublished'), 'success');
             refreshMyListings();
         } catch (error) {
             if (error instanceof ProfileIncompleteError) {
                 setListingCard(null);
                 setProfileIncomplete(true);
-                showToast('Complete your shipping details before listing', 'error');
+                showToast(t('desktop.sell.toastCompleteShipping'), 'error');
                 return;
             }
             throw error; // ListingForm surfaces the message inline
@@ -151,13 +153,13 @@ export default function DesktopSell() {
     };
 
     const cancelListing = async (listing: MarketplaceListing) => {
-        if (!window.confirm(`Cancel your listing for ${listing.card_data.name}?`)) return;
+        if (!window.confirm(t('desktop.sell.cancelConfirm'))) return;
         const ok = await marketplaceService.cancelListing(listing.id);
         if (ok) {
-            showToast('Listing cancelled', 'success');
+            showToast(t('desktop.sell.toastCancelled'), 'success');
             refreshMyListings();
         } else {
-            showToast('Could not cancel listing', 'error');
+            showToast(t('desktop.sell.toastCancelFailed'), 'error');
         }
     };
 
@@ -171,13 +173,13 @@ export default function DesktopSell() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                     <i className="fa-solid fa-tag text-2xl text-slate-600"></i>
                 </div>
-                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">Sell on CardStreet</h1>
-                <p className="text-slate-500 text-sm mb-6">Sign in to list cards and reach buyers across Thailand.</p>
+                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.sell.signedOutTitle')}</h1>
+                <p className="text-slate-500 text-sm mb-6">{t('desktop.sell.signedOutDesc')}</p>
                 <button
                     onClick={() => setAuthOpen(true)}
                     className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-6 py-2.5 rounded-xl transition-colors"
                 >
-                    Sign in
+                    {t('desktop.signIn')}
                 </button>
                 <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
             </div>
@@ -188,17 +190,17 @@ export default function DesktopSell() {
 
     return (
         <div>
-            <h1 className="text-2xl font-black text-white">Sell</h1>
-            <p className="text-sm text-slate-400 mt-1">Search the catalog, set your price, and list in minutes.</p>
+            <h1 className="text-2xl font-black text-white">{t('desktop.sell.title')}</h1>
+            <p className="text-sm text-slate-400 mt-1">{t('desktop.sell.subtitle')}</p>
 
             {stripeStatus && !payoutsReady && (
                 <div className="flex flex-wrap items-center justify-between gap-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-4 mt-6">
                     <div>
                         <p className="text-amber-300 font-bold text-sm">
-                            {stripeStatus.connected ? 'Finish setting up payouts' : 'Set up payouts to get paid'}
+                            {stripeStatus.connected ? t('desktop.sell.payoutsFinish') : t('desktop.sell.payoutsSetup')}
                         </p>
                         <p className="text-slate-400 text-xs mt-0.5">
-                            Buyers pay through Stripe; the money lands in your account. Takes a few minutes.
+                            {t('desktop.sell.payoutsDesc')}
                         </p>
                     </div>
                     <button
@@ -206,17 +208,18 @@ export default function DesktopSell() {
                         disabled={stripeLoading}
                         className="bg-amber-400 hover:bg-amber-300 text-brand-darker text-xs font-black px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
                     >
-                        {stripeLoading ? 'Opening Stripe...' : stripeStatus.connected ? 'Continue setup' : 'Set up payouts'}
+                        {stripeLoading ? t('desktop.sell.payoutsOpening') : stripeStatus.connected ? t('desktop.sell.payoutsContinue') : t('desktop.sell.payoutsStart')}
                     </button>
                 </div>
             )}
 
             {profileIncomplete && (
                 <div className="bg-brand-red/10 border border-brand-red/30 rounded-2xl px-5 py-4 mt-4">
-                    <p className="text-rose-300 font-bold text-sm">Shipping details needed</p>
+                    <p className="text-rose-300 font-bold text-sm">{t('desktop.sell.incompleteTitle')}</p>
                     <p className="text-slate-400 text-xs mt-0.5">
-                        Listings need your name, phone, and pickup address for the courier. Add them in your profile on the{' '}
-                        <a href="/?view=mobile" className="text-brand-cyan hover:underline">mobile site</a> or the app — desktop profile editing is coming.
+                        {t('desktop.sell.incompleteBody1')}
+                        <a href="/?view=mobile" className="text-brand-cyan hover:underline">{t('desktop.sell.incompleteLink')}</a>
+                        {t('desktop.sell.incompleteBody2')}
                     </p>
                 </div>
             )}
@@ -248,7 +251,7 @@ export default function DesktopSell() {
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search for the card you want to sell..."
+                            placeholder={t('desktop.sell.searchPlaceholder')}
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                         />
                     </div>
@@ -268,13 +271,13 @@ export default function DesktopSell() {
                         disabled={searching || query.trim().length < 2}
                         className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50"
                     >
-                        {searching ? 'Searching...' : 'Search'}
+                        {searching ? t('desktop.sell.searching') : t('desktop.sell.search')}
                     </button>
                 </div>
             </form>
 
             {searched && !searching && results.length === 0 && (
-                <p className="text-slate-500 text-sm mt-6">No catalog matches. Check the spelling, game, and language.</p>
+                <p className="text-slate-500 text-sm mt-6">{t('desktop.sell.noMatches')}</p>
             )}
 
             {results.length > 0 && (
@@ -300,13 +303,13 @@ export default function DesktopSell() {
                                         {card.set}{card.number ? ` · #${card.number}` : ''}
                                     </p>
                                     {card.marketPrice > 0 && (
-                                        <p className="text-xs text-slate-400 mt-1">Market {formatTHB(card.marketPrice)}</p>
+                                        <p className="text-xs text-slate-400 mt-1">{t('desktop.marketShort')} {formatTHB(card.marketPrice)}</p>
                                     )}
                                     <button
                                         onClick={() => setListingCard(card)}
                                         className="w-full mt-2.5 bg-brand-cyan/10 hover:bg-brand-cyan text-brand-cyan hover:text-brand-darker border border-brand-cyan/30 text-xs font-black py-2 rounded-lg transition-colors"
                                     >
-                                        List this card
+                                        {t('desktop.sell.listThis')}
                                     </button>
                                 </div>
                             </div>
@@ -316,10 +319,10 @@ export default function DesktopSell() {
             )}
 
             <h2 className="text-sm font-black text-white uppercase tracking-widest mt-12 mb-4">
-                Your active listings <span className="text-slate-500">({myListings.length})</span>
+                {t('desktop.sell.yourListings')} <span className="text-slate-500">({myListings.length})</span>
             </h2>
             {myListings.length === 0 ? (
-                <p className="text-slate-500 text-sm">Nothing listed yet. Search above to list your first card.</p>
+                <p className="text-slate-500 text-sm">{t('desktop.sell.noListings')}</p>
             ) : (
                 <div className="space-y-2">
                     {myListings.map((listing) => (
@@ -351,7 +354,7 @@ export default function DesktopSell() {
                                     onClick={() => cancelListing(listing)}
                                     className="bg-white/5 hover:bg-brand-red/20 border border-white/10 hover:border-brand-red/40 text-slate-400 hover:text-rose-300 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
                                 >
-                                    Cancel
+                                    {t('desktop.sell.cancel')}
                                 </button>
                             </div>
                         </div>

@@ -12,6 +12,7 @@ import {
     BuyerRequiredField,
 } from '@/lib/profileValidation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
@@ -34,6 +35,7 @@ const EMPTY_ADDRESS: Record<BuyerRequiredField, string> = {
 export default function DesktopCartDrawer() {
     const router = useRouter();
     const { showToast } = useToast();
+    const { t } = useTranslation();
     const { user, items, isOpen, removeItem, clear, closeCart } = useDesktopCart();
 
     const [phase, setPhase] = useState<Phase>('cart');
@@ -98,7 +100,7 @@ export default function DesktopCartDrawer() {
                 body: JSON.stringify(addressForm),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Could not save your shipping details');
+            if (!res.ok) throw new Error(data.error || t('desktop.cart.toastSaveFailed'));
             setPhase('payment');
         } catch (err: any) {
             showToast(err.message, 'error');
@@ -110,7 +112,7 @@ export default function DesktopCartDrawer() {
     const handlePaymentSuccess = () => {
         clear();
         close();
-        showToast('Payment received — track your order under Orders', 'success');
+        showToast(t('desktop.cart.toastPaymentReceived'), 'success');
         router.push('/orders');
     };
 
@@ -123,7 +125,7 @@ export default function DesktopCartDrawer() {
                     <aside className="absolute right-0 top-0 h-full w-full max-w-[440px] bg-brand-darker border-l border-white/10 shadow-2xl flex flex-col">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
                             <h2 className="text-white font-black text-lg">
-                                {phase === 'address' ? 'Shipping details' : 'Cart'}
+                                {phase === 'address' ? t('desktop.cart.shippingDetails') : t('desktop.cart.title')}
                                 {phase === 'cart' && items.length > 0 && (
                                     <span className="text-slate-500 font-bold text-sm ml-2">({items.length})</span>
                                 )}
@@ -136,7 +138,7 @@ export default function DesktopCartDrawer() {
                         {phase === 'address' ? (
                             <form onSubmit={saveAddress} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
                                 <p className="text-slate-400 text-xs">
-                                    The courier needs a delivery address before checkout. Saved to your profile — you only do this once.
+                                    {t('desktop.cart.addressHint')}
                                 </p>
                                 {BUYER_REQUIRED_PROFILE_FIELDS.map((field) => (
                                     <div key={field}>
@@ -158,14 +160,14 @@ export default function DesktopCartDrawer() {
                                         onClick={() => setPhase('cart')}
                                         className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-sm font-bold py-3 rounded-xl transition-colors"
                                     >
-                                        Back
+                                        {t('desktop.cart.back')}
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={savingAddress}
                                         className="flex-1 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black py-3 rounded-xl transition-colors disabled:opacity-50"
                                     >
-                                        {savingAddress ? 'Saving...' : 'Save & continue'}
+                                        {savingAddress ? t('desktop.cart.saving') : t('desktop.cart.saveContinue')}
                                     </button>
                                 </div>
                             </form>
@@ -174,8 +176,8 @@ export default function DesktopCartDrawer() {
                                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                                     <i className="fa-solid fa-cart-shopping text-2xl text-slate-600"></i>
                                 </div>
-                                <p className="text-white font-bold text-sm uppercase tracking-widest mb-1">Cart is empty</p>
-                                <p className="text-slate-500 text-sm">Add cards from the marketplace to check out.</p>
+                                <p className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('desktop.cart.empty')}</p>
+                                <p className="text-slate-500 text-sm">{t('desktop.cart.emptyDesc')}</p>
                             </div>
                         ) : (
                             <>
@@ -211,16 +213,16 @@ export default function DesktopCartDrawer() {
 
                                 <div className="border-t border-white/5 px-6 py-5 shrink-0">
                                     <div className="flex items-center justify-between mb-1">
-                                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Subtotal</span>
+                                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{t('desktop.cart.subtotal')}</span>
                                         <span className="text-xl font-black text-white">{formatTHB(subtotal)}</span>
                                     </div>
-                                    <p className="text-[11px] text-slate-500 mb-4">Shipping is calculated at checkout.</p>
+                                    <p className="text-[11px] text-slate-500 mb-4">{t('desktop.cart.shippingAtCheckout')}</p>
                                     <button
                                         onClick={beginCheckout}
                                         disabled={checkingProfile}
                                         className="w-full bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black py-3.5 rounded-xl transition-colors disabled:opacity-50"
                                     >
-                                        {checkingProfile ? 'One moment...' : user ? 'Checkout' : 'Sign in to checkout'}
+                                        {checkingProfile ? t('desktop.cart.oneMoment') : user ? t('desktop.cart.checkout') : t('desktop.cart.signInToCheckout')}
                                     </button>
                                 </div>
                             </>
@@ -240,7 +242,7 @@ export default function DesktopCartDrawer() {
                 apiEndpoint="/api/checkout"
                 extraData={{ buyerId: user?.id }}
                 onPaymentSuccess={handlePaymentSuccess}
-                onPaymentFailed={(err) => showToast(`Payment failed: ${err}`, 'error')}
+                onPaymentFailed={(err) => showToast(`${t('desktop.cart.toastPaymentFailed')}: ${err}`, 'error')}
             />
         </>
     );

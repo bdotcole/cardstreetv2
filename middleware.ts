@@ -32,9 +32,52 @@ function withUaVary(response: NextResponse): NextResponse {
     return response
 }
 
+// Locale-in-URL scheme (see lib/i18nRouting.ts): Thai is canonical at the bare
+// path, English lives under /en, /th/* is an alias that redirects to bare.
+// First-visit default is Thai (the canonical market language) — English is
+// opt-in via the /en prefix or the in-app language toggle, not geo-negotiated.
+type Lang = 'EN' | 'TH'
+const LANG_COOKIE = 'cs_lang'
+
+// Resolve the internal render target for a locale-stripped path, applying the
+// existing desktop-vs-mobile routing. Kept separate from locale handling so the
+// two concerns don't tangle.
+type Decision =
+    | { kind: 'rewrite'; pathname: string; uaVary: boolean }
+    | { kind: 'redirect'; pathname: string; search?: string; uaVary: boolean }
+    | { kind: 'next'; uaVary: boolean }
+
+function resolveExperience(request: NextRequest, basePath: string): Decision {
+    if (basePath === '/') {
+        return isDesktopClient(request)
+            ? { kind: 'rewrite', pathname: '/desktop', uaVary: true }
+            : { kind: 'next', uaVary: true }
+    }
+
+    if (DESKTOP_ONLY_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
+        if (isDesktopClient(request)) {
+            return { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
+        }
+        // Phones land on the mobile SPA. The card id rides along as a query
+        // param so the SPA can learn to deep-link into it later.
+        const cardId = basePath.startsWith('/card/') ? basePath.slice('/card/'.length) : ''
+        return { kind: 'redirect', pathname: '/', search: cardId ? `?card=${cardId}` : '', uaVary: true }
+    }
+
+    // /desktop/* is an internal rendering target, not a public URL. Rewrites
+    // don't re-enter middleware, so any request seen here was typed directly —
+    // send it to the canonical clean URL.
+    if (basePath === '/desktop' || basePath.startsWith('/desktop/')) {
+        return { kind: 'redirect', pathname: basePath === '/desktop' ? '/' : basePath.slice('/desktop'.length), uaVary: false }
+    }
+
+    return { kind: 'next', uaVary: false }
+}
+
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
+    // Admin is not localized and has its own auth flow.
     if (pathname.startsWith('/admin')) {
         return adminGuard(request)
     }
@@ -50,40 +93,64 @@ export async function middleware(request: NextRequest) {
         return response
     }
 
-    if (pathname === '/') {
-        if (isDesktopClient(request)) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/desktop'
-            return withUaVary(NextResponse.rewrite(url))
-        }
-        return withUaVary(NextResponse.next())
-    }
-
-    if (DESKTOP_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-        if (isDesktopClient(request)) {
-            const url = request.nextUrl.clone()
-            url.pathname = `/desktop${pathname}`
-            return withUaVary(NextResponse.rewrite(url))
-        }
-        // Phones land on the mobile SPA. The card id rides along as a query
-        // param so the SPA can learn to deep-link into it later.
+    // --- Locale prefix handling ---
+    let locale: Lang | null = null
+    let basePath = pathname
+    if (pathname === '/en' || pathname.startsWith('/en/')) {
+        locale = 'EN'
+        basePath = pathname.slice('/en'.length) || '/'
+    } else if (pathname === '/th' || pathname.startsWith('/th/')) {
+        // Thai is canonical at the bare path — strip the redundant prefix.
         const url = request.nextUrl.clone()
-        const cardId = pathname.startsWith('/card/') ? pathname.slice('/card/'.length) : ''
-        url.pathname = '/'
-        if (cardId) url.searchParams.set('card', cardId)
-        return withUaVary(NextResponse.redirect(url))
+        url.pathname = pathname.slice('/th'.length) || '/'
+        const res = NextResponse.redirect(url)
+        res.cookies.set(LANG_COOKIE, 'TH', { path: '/' })
+        return res
     }
 
-    // /desktop/* is an internal rendering target, not a public URL. Rewrites
-    // don't re-enter middleware, so any request seen here was typed directly —
-    // send it to the canonical clean URL.
-    if (pathname === '/desktop' || pathname.startsWith('/desktop/')) {
+    const cookieLang = request.cookies.get(LANG_COOKIE)?.value as Lang | undefined
+    const lang: Lang = locale ?? (cookieLang === 'EN' || cookieLang === 'TH' ? cookieLang : 'TH')
+
+    // The chosen language travels to the server render via a request header so
+    // the root layout can set <html lang> and seed the settings provider on the
+    // very first request, before the cookie round-trips.
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-cs-lang', lang)
+
+    const applyLang = (res: NextResponse): NextResponse => {
+        if (cookieLang !== lang) res.cookies.set(LANG_COOKIE, lang, { path: '/' })
+        return res
+    }
+
+    const decision = resolveExperience(request, basePath)
+    const prefix = locale === 'EN' ? '/en' : ''
+
+    if (decision.kind === 'redirect') {
         const url = request.nextUrl.clone()
-        url.pathname = pathname === '/desktop' ? '/' : pathname.slice('/desktop'.length)
-        return NextResponse.redirect(url)
+        url.pathname = `${prefix}${decision.pathname}`
+        url.search = decision.search ?? ''
+        const res = NextResponse.redirect(url)
+        return decision.uaVary ? withUaVary(applyLang(res)) : applyLang(res)
     }
 
-    return NextResponse.next()
+    if (decision.kind === 'rewrite') {
+        const url = request.nextUrl.clone()
+        url.pathname = decision.pathname
+        const res = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+        return decision.uaVary ? withUaVary(applyLang(res)) : applyLang(res)
+    }
+
+    // kind === 'next'. Under /en there is no /en/* route, so rewrite to the
+    // bare route while keeping the /en URL in the browser.
+    if (locale === 'EN') {
+        const url = request.nextUrl.clone()
+        url.pathname = basePath
+        const res = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+        return decision.uaVary ? withUaVary(applyLang(res)) : applyLang(res)
+    }
+
+    const res = NextResponse.next({ request: { headers: requestHeaders } })
+    return decision.uaVary ? withUaVary(applyLang(res)) : applyLang(res)
 }
 
 // Guards /admin routes — but lets the login page through.
@@ -141,5 +208,22 @@ async function adminGuard(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/admin/:path*', '/', '/card/:path*', '/sell', '/orders', '/desktop/:path*'],
+    matcher: [
+        '/admin/:path*',
+        '/',
+        '/card/:path*',
+        '/sell',
+        '/orders',
+        '/desktop/:path*',
+        // Locale prefixes and the localized public content pages.
+        '/en',
+        '/en/:path*',
+        '/th',
+        '/th/:path*',
+        '/faq',
+        '/help',
+        '/terms',
+        '/privacy',
+        '/contact',
+    ],
 }

@@ -279,6 +279,30 @@ All `<Image>` components in `cardstreet-mobile/` should pass `cachePolicy="memor
 
 In `cardstreet-mobile/services/pokemonService.ts`, `setsCache` and `cardsCache` are in-memory Maps **backed by AsyncStorage** with TTL — 24h for sets, 6h for cards. Cache key prefix is `pokemonCache:v1:` — bump the version segment if the schema of a cached value changes (e.g. you add a new field to `Card` that consumers now require). Without the version bump, returning users will hit stale shapes from disk and crash.
 
+## Internationalization (i18n), locale routing & SEO
+
+CardStreet is Thailand-first and bilingual (Thai + English), built so adding markets/languages later is mostly config. Keep the four axes separate — **language** (UI), **market/region**, **currency**, **catalog** — they are not the same thing (a Thai buyer may want an English UI with THB pricing).
+
+### Single sources of truth
+
+- `lib/markets.ts` — `MARKETS` config (mirrors `lib/games.ts`). TH is live; SG/MY/PH/US are configured-but-dormant. Each market declares languages, default language, currency, `stripeRegion`, shipping provider, and BCP-47 `locales`. Read from here; don't hardcode per-market values.
+- `lib/i18nRouting.ts` — the locale-in-URL scheme and `buildAlternates(path)` / `sitemapAlternates(path)` helpers for canonical + `hreflang`.
+- UI strings live in `lib/locales/{en,th}.json`, read via `useTranslation()` (`t('namespace.key')`). The desktop site uses the `desktop.*` namespace (chrome + `desktop.{sell,orders,card,cart}`).
+
+### Locale-in-URL scheme (lightweight, middleware-driven — not next-intl)
+
+- **Thai is canonical at the bare path** (`/`, `/faq`); **English lives under `/en`** (`/en`, `/en/faq`); `/th/*` 301-redirects to the bare path.
+- `middleware.ts` strips a leading `/en` and **rewrites** to the bare route while keeping the `/en` URL in the browser; it sets a server-readable `cs_lang` cookie and forwards the resolved locale to the server via the **`x-cs-lang` request header**. First-visit default is **Thai** — English is opt-in via `/en` or the in-app language toggle, **not** geo-negotiated. The locale strip runs *before* the existing desktop-rewrite/admin-guard logic so the two concerns don't tangle (`resolveExperience` returns the internal target; the locale wrapper re-attaches the prefix on redirects, rewrites on `/en`). When adding routes that should be localized, extend the `config.matcher`.
+- `app/layout.tsx` is `async`: it reads `x-cs-lang` (then the `cs_lang` cookie) → `<html lang>` + the `initialLanguage` prop on `UserSettingsProvider`, so the server renders the right language with no flash. The provider seeds its initial language from that prop and **writes the `cs_lang` cookie** whenever the language changes (incl. `updateLanguage`). Reading `headers()`/`cookies()` in the root layout makes all routes dynamically rendered — fine for this mostly-dynamic app.
+
+### FAQ + content pages (SEO/GEO)
+
+- `lib/faqData.ts` is the single source for FAQ content (bilingual, plain-string answers so they serialize into schema.org). `buildFaqJsonLd()` emits a `FAQPage` JSON-LD block.
+- `app/faq/page.tsx` is the canonical, server-rendered FAQ page (metadata + JSON-LD + `buildAlternates('/faq')` for canonical/hreflang). `components/FaqList.tsx` renders the bilingual accordion (native `<details>`, no-JS-friendly) and is reused by `app/help/page.tsx`. The desktop homepage shows a featured-questions teaser (`components/desktop/DesktopFaqTeaser.tsx`) linking to `/faq`.
+- `app/sitemap.ts` lists the public content routes with per-locale `hreflang`; `app/robots.ts` points to it and blocks `/admin`, `/api`, `/desktop`.
+
+> Expansion roadmap (TH → SEA → US), phase status, and the open follow-ups (hreflang on the other `'use client'` content pages, language-toggle URL navigation, per-locale OG/JSON-LD) live in the agent memory note `project_i18n_market_expansion.md`, not here.
+
 ## Conventions
 
 - Avoid emojis in code, comments, and UI unless the user explicitly asks for them.

@@ -5,6 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 
@@ -33,25 +34,31 @@ interface SaleRow {
 
 type Tab = 'purchases' | 'shipments' | 'sales';
 
-const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
-    pending: { label: 'Pending payment', tone: 'bg-slate-700/60 text-slate-300 border-slate-600' },
-    paid: { label: 'Processing', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-    label_generated: { label: 'Processing', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-    processing: { label: 'Processing', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-    shipped: { label: 'Shipped', tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30' },
-    in_transit: { label: 'In transit', tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30' },
-    out_for_delivery: { label: 'Out for delivery', tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30' },
-    delivered: { label: 'Delivered', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
-    completed: { label: 'Completed', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
-    cancelled: { label: 'Cancelled', tone: 'bg-slate-700/60 text-slate-400 border-slate-600' },
-    disputed: { label: 'Disputed', tone: 'bg-brand-red/10 text-rose-300 border-brand-red/30' },
+// Raw order status -> Tailwind tone (CSS, locale-independent) and the i18n key
+// under desktop.orders.status. Several backend statuses collapse to one
+// user-facing label (e.g. paid/label_generated/processing all read "Processing").
+const STATUS_META: Record<string, { tone: string; key: string }> = {
+    pending: { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', key: 'pending_payment' },
+    paid: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
+    label_generated: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
+    processing: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
+    shipped: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', key: 'shipped' },
+    in_transit: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', key: 'in_transit' },
+    out_for_delivery: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', key: 'out_for_delivery' },
+    delivered: { tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', key: 'delivered' },
+    completed: { tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', key: 'completed' },
+    cancelled: { tone: 'bg-slate-700/60 text-slate-400 border-slate-600', key: 'cancelled' },
+    disputed: { tone: 'bg-brand-red/10 text-rose-300 border-brand-red/30', key: 'disputed' },
 };
 
 function StatusChip({ status }: { status: string }) {
-    const s = STATUS_LABELS[status] ?? { label: status.replace(/_/g, ' '), tone: 'bg-slate-700/60 text-slate-300 border-slate-600' };
+    const { t } = useTranslation();
+    const meta = STATUS_META[status];
+    const tone = meta?.tone ?? 'bg-slate-700/60 text-slate-300 border-slate-600';
+    const label = meta ? t(`desktop.orders.status.${meta.key}`) : status.replace(/_/g, ' ');
     return (
-        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border ${s.tone}`}>
-            {s.label}
+        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border ${tone}`}>
+            {label}
         </span>
     );
 }
@@ -75,6 +82,7 @@ function CardCell({ cardData, condition }: { cardData: any; condition?: string }
 
 export default function DesktopOrders() {
     const { showToast } = useToast();
+    const { t } = useTranslation();
     const [user, setUser] = useState<User | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
     const [authOpen, setAuthOpen] = useState(false);
@@ -134,10 +142,10 @@ export default function DesktopOrders() {
         try {
             const res = await fetch(`/api/orders/${orderId}/label/url`, { method: 'POST' });
             const data = await res.json();
-            if (!res.ok || !data.url) throw new Error(data.error || 'Could not get label');
+            if (!res.ok || !data.url) throw new Error(data.error || t('desktop.orders.toastLabelFailed'));
             window.open(data.url, '_blank', 'noopener');
         } catch (err: any) {
-            showToast(err.message || 'Could not get shipping label', 'error');
+            showToast(err.message || t('desktop.orders.toastLabelFailed'), 'error');
         }
     };
 
@@ -152,10 +160,10 @@ export default function DesktopOrders() {
             });
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || 'Could not confirm delivery');
+                throw new Error(data.error || t('desktop.orders.toastConfirmFailed'));
             }
             setReviewOrderId(null);
-            showToast('Order completed — thanks for the review', 'success');
+            showToast(t('desktop.orders.toastCompleted'), 'success');
             fetchTab('purchases');
         } catch (err: any) {
             showToast(err.message, 'error');
@@ -174,13 +182,13 @@ export default function DesktopOrders() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                     <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
                 </div>
-                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">Your orders</h1>
-                <p className="text-slate-500 text-sm mb-6">Sign in to track purchases, shipments, and sales.</p>
+                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.orders.signedOutTitle')}</h1>
+                <p className="text-slate-500 text-sm mb-6">{t('desktop.orders.signedOutDesc')}</p>
                 <button
                     onClick={() => setAuthOpen(true)}
                     className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-6 py-2.5 rounded-xl transition-colors"
                 >
-                    Sign in
+                    {t('desktop.signIn')}
                 </button>
                 <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
             </div>
@@ -189,14 +197,14 @@ export default function DesktopOrders() {
 
     return (
         <div>
-            <h1 className="text-2xl font-black text-white">Orders</h1>
-            <p className="text-sm text-slate-400 mt-1">Purchases you made and cards you sold — same orders as in the app.</p>
+            <h1 className="text-2xl font-black text-white">{t('desktop.orders.title')}</h1>
+            <p className="text-sm text-slate-400 mt-1">{t('desktop.orders.subtitle')}</p>
 
             <div className="flex gap-2 mt-6 border-b border-white/5">
                 {([
-                    ['purchases', 'Purchases'],
-                    ['shipments', 'To ship'],
-                    ['sales', 'Sales history'],
+                    ['purchases', t('desktop.orders.tabPurchases')],
+                    ['shipments', t('desktop.orders.tabShipments')],
+                    ['sales', t('desktop.orders.tabSales')],
                 ] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
@@ -222,7 +230,7 @@ export default function DesktopOrders() {
                 <div className="mt-6">
                     {tab === 'purchases' && (
                         orders.length === 0 ? (
-                            <p className="text-slate-500 text-sm">No purchases yet.</p>
+                            <p className="text-slate-500 text-sm">{t('desktop.orders.noPurchases')}</p>
                         ) : (
                             <div className="space-y-2">
                                 {orders.map((order) => {
@@ -242,13 +250,13 @@ export default function DesktopOrders() {
                                                                 rel="noopener noreferrer"
                                                                 className="text-brand-cyan hover:underline ml-2 font-bold uppercase text-[10px] tracking-widest"
                                                             >
-                                                                Track ↗
+                                                                {t('desktop.orders.track')} ↗
                                                             </a>
                                                         )}
                                                     </span>
                                                 )}
                                                 {label?.tracking_number === 'MANUAL' && (
-                                                    <span className="text-xs text-amber-300 italic">Manual handling — support will be in touch</span>
+                                                    <span className="text-xs text-amber-300 italic">{t('desktop.orders.manual')}</span>
                                                 )}
                                                 <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
                                                 <StatusChip status={order.status} />
@@ -258,7 +266,7 @@ export default function DesktopOrders() {
                                                         onClick={() => { setReviewOrderId(order.id); setReviewScore(5); setReviewComment(''); }}
                                                         className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
                                                     >
-                                                        Confirm delivery
+                                                        {t('desktop.orders.confirmDelivery')}
                                                     </button>
                                                 )}
                                             </div>
@@ -271,7 +279,7 @@ export default function DesktopOrders() {
 
                     {tab === 'shipments' && (
                         shipments.length === 0 ? (
-                            <p className="text-slate-500 text-sm">Nothing waiting to ship. Sold orders appear here with their shipping label.</p>
+                            <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
                         ) : (
                             <div className="space-y-2">
                                 {shipments.map((order) => (
@@ -286,7 +294,7 @@ export default function DesktopOrders() {
                                                 className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
                                             >
                                                 <i className="fa-solid fa-print mr-2 text-slate-400"></i>
-                                                Shipping label
+                                                {t('desktop.orders.shippingLabel')}
                                             </button>
                                         </div>
                                     </div>
@@ -297,7 +305,7 @@ export default function DesktopOrders() {
 
                     {tab === 'sales' && (
                         sales.length === 0 ? (
-                            <p className="text-slate-500 text-sm">No completed sales yet.</p>
+                            <p className="text-slate-500 text-sm">{t('desktop.orders.noSales')}</p>
                         ) : (
                             <div className="space-y-2">
                                 {sales.map((sale) => (
@@ -308,7 +316,7 @@ export default function DesktopOrders() {
                                                 {sale.completed_at ? new Date(sale.completed_at).toLocaleDateString() : ''}
                                             </span>
                                             <span className="text-xs text-slate-400">
-                                                Fee <span className="text-slate-300 font-bold">{formatTHB(sale.platform_fee || 0)}</span>
+                                                {t('desktop.orders.fee')} <span className="text-slate-300 font-bold">{formatTHB(sale.platform_fee || 0)}</span>
                                             </span>
                                             <span className="text-lg font-black text-emerald-300">
                                                 {formatTHB((sale.total_amount || 0) - (sale.platform_fee || 0))}
@@ -326,8 +334,8 @@ export default function DesktopOrders() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setReviewOrderId(null)}></div>
                     <div className="relative w-full max-w-sm bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-6">
-                        <h3 className="text-white font-black text-lg">Confirm delivery</h3>
-                        <p className="text-slate-400 text-sm mt-1">Rate the seller to complete the order.</p>
+                        <h3 className="text-white font-black text-lg">{t('desktop.orders.confirmDelivery')}</h3>
+                        <p className="text-slate-400 text-sm mt-1">{t('desktop.orders.rateSeller')}</p>
                         <div className="flex gap-2 mt-4">
                             {[1, 2, 3, 4, 5].map((n) => (
                                 <button
@@ -343,7 +351,7 @@ export default function DesktopOrders() {
                         <textarea
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
-                            placeholder="Optional comment for the seller..."
+                            placeholder={t('desktop.orders.reviewPlaceholder')}
                             rows={3}
                             className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 mt-4 resize-none"
                         />
@@ -352,14 +360,14 @@ export default function DesktopOrders() {
                                 onClick={() => setReviewOrderId(null)}
                                 className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-sm font-bold py-2.5 rounded-xl transition-colors"
                             >
-                                Cancel
+                                {t('desktop.orders.cancel')}
                             </button>
                             <button
                                 onClick={submitCompleteOrder}
                                 disabled={submittingReview}
                                 className="flex-1 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black py-2.5 rounded-xl transition-colors disabled:opacity-50"
                             >
-                                {submittingReview ? 'Confirming...' : 'Confirm'}
+                                {submittingReview ? t('desktop.orders.confirming') : t('desktop.orders.confirm')}
                             </button>
                         </div>
                     </div>

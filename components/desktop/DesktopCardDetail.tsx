@@ -10,12 +10,17 @@ import { getOptimizedImageUrl, shouldSkipNextOptimization } from '@/lib/imageUti
 import { Card } from '@/types';
 import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarketplace';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 export default function DesktopCardDetail({ cardId }: { cardId: string }) {
     const { addItem } = useDesktopCart();
+    const { t } = useTranslation();
     const [card, setCard] = useState<Card | null>(null);
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
     const [loading, setLoading] = useState(true);
+    // If catalog art fails to load (TCGdex outages black out most EN card
+    // art), fall back to a seller's condition photo from our own storage.
+    const [catalogArtFailed, setCatalogArtFailed] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -65,21 +70,24 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                     <i className="fa-solid fa-circle-question text-2xl text-slate-600"></i>
                 </div>
-                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">Card not found</h1>
-                <p className="text-slate-500 text-sm mb-6">This card may have been delisted or the link is wrong.</p>
+                <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.card.notFoundTitle')}</h1>
+                <p className="text-slate-500 text-sm mb-6">{t('desktop.card.notFoundDesc')}</p>
                 <Link href="/" className="text-brand-cyan text-sm font-bold hover:text-white transition-colors">
-                    Back to Marketplace
+                    {t('desktop.card.backToMarketplace')}
                 </Link>
             </div>
         );
     }
 
-    const imageUrl = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 640, 85);
+    const sellerPhoto = listings.find((l) => l.image_front_url)?.image_front_url;
+    const imageUrl = catalogArtFailed && sellerPhoto
+        ? getOptimizedImageUrl(sellerPhoto, 640, 85)
+        : getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 640, 85);
 
     return (
         <div>
             <nav className="text-sm text-slate-500">
-                <Link href="/" className="hover:text-slate-300 transition-colors">Marketplace</Link>
+                <Link href="/" className="hover:text-slate-300 transition-colors">{t('desktop.navMarketplace')}</Link>
                 <span className="mx-2">›</span>
                 <span className="text-slate-300">{card.name}</span>
             </nav>
@@ -94,6 +102,7 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
                             sizes="380px"
                             priority
                             unoptimized={shouldSkipNextOptimization(imageUrl)}
+                            onError={() => setCatalogArtFailed(true)}
                             className="object-cover"
                         />
                     </div>
@@ -109,17 +118,17 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
 
                     {card.marketPrice > 0 && (
                         <div className="inline-flex items-baseline gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 mt-5">
-                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Market price</span>
+                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{t('desktop.card.marketPrice')}</span>
                             <span className="text-xl font-black text-white">{formatTHB(card.marketPrice)}</span>
                         </div>
                     )}
 
                     <h2 className="text-sm font-black text-white uppercase tracking-widest mt-10 mb-4">
-                        Active listings <span className="text-slate-500">({listings.length})</span>
+                        {t('desktop.card.activeListings')} <span className="text-slate-500">({listings.length})</span>
                     </h2>
 
                     {listings.length === 0 ? (
-                        <p className="text-slate-500 text-sm">No active listings for this card right now.</p>
+                        <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
                     ) : (
                         <div className="space-y-2">
                             {listings.map((listing) => (
@@ -140,7 +149,7 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
                                             )}
                                         </span>
                                         <span className="text-sm font-bold text-slate-300 truncate">
-                                            {listing.seller?.display_name || 'Unknown Seller'}
+                                            {listing.seller?.display_name || t('desktop.unknownSeller')}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
@@ -149,7 +158,7 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
                                             onClick={() => addItem(listingToCartItem(listing))}
                                             className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
                                         >
-                                            Add to cart
+                                            {t('desktop.card.addToCart')}
                                         </button>
                                     </div>
                                 </div>

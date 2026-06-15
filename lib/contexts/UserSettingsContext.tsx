@@ -32,10 +32,47 @@ const DEFAULT_SETTINGS: UserSettings = {
     notifyMarketing: false
 };
 
+// First-visit UI language when the user has no saved preference. We're a
+// Thailand-first platform, so a visitor whose browser prefers Thai should land
+// in Thai; everyone else (expats, tourists, the international TCG community)
+// gets English. This is a client-side proxy for "is this a Thai visitor" —
+// a proper geo/locale-routing model (language in the URL) comes later.
+function detectBrowserLanguage(): 'TH' | 'EN' {
+    if (typeof navigator === 'undefined') return DEFAULT_SETTINGS.language;
+    const prefs = navigator.languages?.length ? navigator.languages : [navigator.language || ''];
+    // Honor preference order: whichever of Thai or English the visitor ranks
+    // higher wins. A device set to English-primary with Thai as a fallback
+    // (e.g. ['en-US', 'th']) should stay in English.
+    for (const pref of prefs) {
+        const lang = pref.toLowerCase();
+        if (lang.startsWith('th')) return 'TH';
+        if (lang.startsWith('en')) return 'EN';
+    }
+    return DEFAULT_SETTINGS.language;
+}
+
+// Server-readable mirror of the UI language so the next request's middleware +
+// root layout render the right locale (and <html lang>) without a flash.
+function writeLangCookie(language: 'TH' | 'EN') {
+    if (typeof document === 'undefined') return;
+    document.cookie = `cs_lang=${language}; path=/; max-age=31536000; samesite=lax`;
+}
+
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
 
-export function UserSettingsProvider({ children }: { children: ReactNode }) {
-    const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+export function UserSettingsProvider({
+    children,
+    initialLanguage,
+}: {
+    children: ReactNode;
+    // Locale resolved on the server (cs_lang cookie / Accept-Language) so the
+    // first client render matches the SSR HTML. Falls back to the default.
+    initialLanguage?: 'TH' | 'EN';
+}) {
+    const [settings, setSettings] = useState<UserSettings>({
+        ...DEFAULT_SETTINGS,
+        language: initialLanguage ?? DEFAULT_SETTINGS.language,
+    });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const hasLoadedOnce = useRef(false);
@@ -57,7 +94,15 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
                 const saved = localStorage.getItem('cardstreet-settings');
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+                    const merged = { ...DEFAULT_SETTINGS, ...parsed };
+                    // Explicit choice wins; keep the server cookie aligned with it.
+                    if (merged.language) writeLangCookie(merged.language);
+                    setSettings(merged);
+                } else {
+                    // No saved choice: trust the server's resolved locale, else detect.
+                    const lang = initialLanguage ?? detectBrowserLanguage();
+                    writeLangCookie(lang);
+                    setSettings({ ...DEFAULT_SETTINGS, language: lang });
                 }
                 setIsLoading(false);
                 hasLoadedOnce.current = true;
@@ -78,7 +123,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
             if (data) {
                 const userSettings: UserSettings = {
                     currency: DEFAULT_SETTINGS.currency,
-                    language: DEFAULT_SETTINGS.language,
+                    language: initialLanguage ?? detectBrowserLanguage(),
                     phoneNumber: data.phone_number,
                     shippingAddress: data.shipping_address,
                     twoFactorEnabled: data.two_factor_enabled,
@@ -95,6 +140,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
                     if (parsed.language) userSettings.language = parsed.language;
                 }
 
+                writeLangCookie(userSettings.language);
                 setSettings(userSettings);
             }
 
@@ -120,10 +166,11 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     };
 
     const updateLanguage = async (language: 'TH' | 'EN') => {
-        console.log('Context updateLanguage called with:', language);
         const newSettings = { ...settings, language };
         localStorage.setItem('cardstreet-settings', JSON.stringify(newSettings));
-        console.log('Updating settings state to:', newSettings);
+        // Keep the server-readable mirror in sync so the next navigation's SSR
+        // (and <html lang>) render in the chosen language.
+        writeLangCookie(language);
         setSettings(newSettings);
     };
 

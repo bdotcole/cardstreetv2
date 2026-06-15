@@ -5,9 +5,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
-import { getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { GAMES } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
+import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -33,6 +35,7 @@ export function listingToCartItem(listing: MarketplaceListing): CartItem {
 
 export default function DesktopMarketplace() {
     const searchParams = useSearchParams();
+    const { t } = useTranslation();
     const q = searchParams?.get('q') ?? '';
 
     const [game, setGame] = useState('all');
@@ -81,12 +84,12 @@ export default function DesktopMarketplace() {
         <div>
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-white">Marketplace</h1>
+                    <h1 className="text-2xl font-black text-white">{t('desktop.marketplaceTitle')}</h1>
                     <p className="text-sm text-slate-400 mt-1">
                         {q ? (
-                            <>Results for <span className="text-white font-bold">&ldquo;{q}&rdquo;</span></>
+                            <>{t('desktop.resultsFor')} <span className="text-white font-bold">&ldquo;{q}&rdquo;</span></>
                         ) : (
-                            'Live listings from sellers across Thailand'
+                            t('desktop.liveListings')
                         )}
                     </p>
                 </div>
@@ -96,14 +99,14 @@ export default function DesktopMarketplace() {
                     onChange={(e) => setSort(e.target.value as SortKey)}
                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
                 >
-                    <option value="newest">Newest first</option>
-                    <option value="price_asc">Price: low to high</option>
-                    <option value="price_desc">Price: high to low</option>
+                    <option value="newest">{t('desktop.sortNewest')}</option>
+                    <option value="price_asc">{t('desktop.sortPriceAsc')}</option>
+                    <option value="price_desc">{t('desktop.sortPriceDesc')}</option>
                 </select>
             </div>
 
             <div className="flex flex-wrap gap-2 mt-6">
-                <GameChip label="All Games" active={game === 'all'} onClick={() => setGame('all')} />
+                <GameChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => setGame('all')} />
                 {GAMES.filter((g) => g.enabled).map((g) => (
                     <GameChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => setGame(g.id)} />
                 ))}
@@ -120,8 +123,8 @@ export default function DesktopMarketplace() {
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                         <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
                     </div>
-                    <h2 className="text-white font-bold uppercase tracking-widest text-sm mb-1">No listings found</h2>
-                    <p className="text-slate-500 text-sm">Try a different search or game filter.</p>
+                    <h2 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.noListingsTitle')}</h2>
+                    <p className="text-slate-500 text-sm">{t('desktop.noListingsDesc')}</p>
                 </div>
             ) : (
                 <>
@@ -138,12 +141,16 @@ export default function DesktopMarketplace() {
                                 disabled={loadingMore}
                                 className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-bold px-8 py-3 rounded-xl transition-colors disabled:opacity-50"
                             >
-                                {loadingMore ? 'Loading...' : 'Load more'}
+                                {loadingMore ? t('desktop.loading') : t('desktop.loadMore')}
                             </button>
                         </div>
                     )}
                 </>
             )}
+
+            {/* Homepage only: the FAQ teaser is a marketing/SEO surface, not a
+                search result. Hidden once the visitor is actively searching. */}
+            {!q && <DesktopFaqTeaser />}
         </div>
     );
 }
@@ -165,7 +172,15 @@ function GameChip({ label, active, onClick }: { label: string; active: boolean; 
 
 function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: boolean }) {
     const { addItem } = useDesktopCart();
-    const imageUrl = getPreviewUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+    const { t } = useTranslation();
+    // Catalog art is the default; if its host is unreachable (TCGdex outages
+    // black out most EN card art) fall back to the seller's condition photo,
+    // which lives in our own Supabase storage.
+    const [catalogArtFailed, setCatalogArtFailed] = useState(false);
+    const catalogUrl = getPreviewUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+    const imageUrl = catalogArtFailed && listing.image_front_url
+        ? getOptimizedImageUrl(listing.image_front_url, 300, 80)
+        : catalogUrl;
     return (
         <Link
             href={`/card/${listing.card_id}`}
@@ -179,6 +194,7 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                     sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
                     loading={eager ? 'eager' : 'lazy'}
                     unoptimized={shouldSkipNextOptimization(imageUrl)}
+                    onError={() => setCatalogArtFailed(true)}
                     className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
                 />
             </div>
@@ -215,7 +231,7 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                             <img src={listing.seller.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
                     </span>
-                    <span className="truncate font-bold">{listing.seller?.display_name || 'Unknown Seller'}</span>
+                    <span className="truncate font-bold">{listing.seller?.display_name || t('desktop.unknownSeller')}</span>
                 </div>
             </div>
         </Link>

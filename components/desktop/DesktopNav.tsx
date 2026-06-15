@@ -8,10 +8,12 @@ import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 export default function DesktopNav() {
     const router = useRouter();
     const pathname = usePathname();
+    const { t } = useTranslation();
     const { items: cartItems, openCart } = useDesktopCart();
     const [query, setQuery] = useState('');
     const [user, setUser] = useState<User | null>(null);
@@ -59,16 +61,16 @@ export default function DesktopNav() {
                         type="search"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search cards by name..."
+                        placeholder={t('desktop.searchPlaceholder')}
                         className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                     />
                 </form>
 
                 <nav className="flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
-                        ['/', 'Marketplace'],
-                        ['/sell', 'Sell'],
-                        ['/orders', 'Orders'],
+                        ['/', t('desktop.navMarketplace')],
+                        ['/sell', t('desktop.navSell')],
+                        ['/orders', t('desktop.navOrders')],
                     ] as [string, string][]).map(([href, label]) => {
                         // Rendered paths live under /desktop/* via middleware
                         // rewrite, but client-side navigation keeps the clean
@@ -127,14 +129,14 @@ export default function DesktopNav() {
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                     >
                                         <i className="fa-solid fa-mobile-screen mr-2.5 text-slate-500"></i>
-                                        Switch to mobile site
+                                        {t('desktop.switchToMobile')}
                                     </a>
                                     <button
                                         onClick={handleSignOut}
                                         className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors border-t border-white/5"
                                     >
                                         <i className="fa-solid fa-arrow-right-from-bracket mr-2.5 text-slate-500"></i>
-                                        Sign out
+                                        {t('desktop.signOut')}
                                     </button>
                                 </div>
                             </>
@@ -145,7 +147,7 @@ export default function DesktopNav() {
                         onClick={() => setAuthOpen(true)}
                         className="shrink-0 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-5 py-2 rounded-xl transition-colors"
                     >
-                        Sign in
+                        {t('desktop.signIn')}
                     </button>
                 )}
             </div>
