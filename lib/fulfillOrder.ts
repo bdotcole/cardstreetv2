@@ -16,6 +16,7 @@ import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
     sendLabelGeneratedNotification,
+    sendFirstTimeSaleEmail,
 } from '@/lib/courier';
 
 function getAdminSupabase(): SupabaseClient {
@@ -440,6 +441,12 @@ export async function fulfillOrdersByTransferGroup(
                 const sellerTotal = sellerOrders.reduce((sum, o) => sum + o.total_amount, 0);
 
                 await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal });
+
+                // One-time onboarding email on the seller's first-ever sale.
+                // Durably guarded + idempotent (profiles.first_sale_email_sent_at
+                // compare-and-swap), so duplicate webhook deliveries / the
+                // /finalize fallback can't double-send. Never throws.
+                await sendFirstTimeSaleEmail(sellerId, { orderId: sellerOrders[0].id });
 
                 // Send the label-ready email regardless of whether the
                 // storage upload succeeded — the PDF travels as an attachment.

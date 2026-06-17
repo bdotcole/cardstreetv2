@@ -413,3 +413,193 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
         console.error(`[Courier] ❌ Error sending 'Package Delivered' notification to ${buyerId}:`, error);
     }
 }
+
+// ─── First-time seller sale email ───────────────────────────────────────────
+
+/**
+ * Order statuses that count as a real, paid sale for the "first sale" test.
+ * Mirrors the backfill in
+ * supabase/migrations/20260617_add_first_sale_email_sent_at.sql. Pre-payment
+ * (`pending`, `pending_payment`, `awaiting_shipping_payment`) and dead-end
+ * (`cancelled`, `disputed`) statuses are intentionally excluded — they are not
+ * money in the seller's pocket.
+ */
+const VALID_FIRST_SALE_STATUSES = [
+    'paid',
+    'label_generated',
+    'shipped',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+    'completed',
+] as const;
+
+// Minimal shape of the Courier client we depend on, so tests can inject a fake
+// without constructing a real CourierClient.
+type CourierLike = { send: { message: (payload: any) => Promise<any> } };
+
+export interface FirstTimeSaleDeps {
+    /** Injected Courier client (tests). Defaults to the lazy module client. */
+    courier?: CourierLike | null;
+    /** Injected service-role Supabase client (tests). Defaults to the module admin client. */
+    supabaseAdmin?: SupabaseClient;
+}
+
+function appBaseUrl(): string {
+    return (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/+$/, '');
+}
+
+/**
+ * Sends the one-time "First Time Sale" onboarding email to a seller the very
+ * first time one of their orders reaches a paid (ship-now) status.
+ *
+ * Idempotency & ordering (why claim-before-send):
+ *   1. Short-circuit if `profiles.first_sale_email_sent_at` is already set.
+ *   2. Skip unless this is the seller's only valid sale (count == 1) — protects
+ *      sellers who sold before this feature shipped (their column was backfilled
+ *      in the migration, but the count check is a second, independent guard).
+ *   3. Atomically CLAIM the slot:
+ *        UPDATE profiles SET first_sale_email_sent_at = now()
+ *        WHERE id = :seller AND first_sale_email_sent_at IS NULL
+ *      Only one concurrent caller (duplicate webhook + /finalize fallback) wins
+ *      the compare-and-swap; the rest match zero rows and bail.
+ *   4. Send via Courier. The timestamp is written BEFORE the send, so a success
+ *      followed by a crash can never double-send. If the send itself fails we
+ *      roll the claim back to NULL (guarded to our own timestamp) so a later
+ *      redelivery can retry — trading a possible missed email for never
+ *      double-emailing.
+ *
+ * Never throws: fulfillment must not be blocked by a notification failure.
+ * Returns 'sent' | 'skipped' | 'error' for callers/tests that care.
+ */
+export async function sendFirstTimeSaleEmail(
+    sellerId: string,
+    opts: { orderId: string; orderNumber?: string },
+    deps: FirstTimeSaleDeps = {},
+): Promise<'sent' | 'skipped' | 'error'> {
+    const courier = deps.courier !== undefined ? deps.courier : getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping first-sale email');
+        return 'skipped';
+    }
+    const supabaseAdmin = deps.supabaseAdmin ?? getSupabaseAdmin();
+
+    try {
+        // ── 1. Cheap pre-check: already sent? ──
+        const { data: profile, error: profileErr } = await supabaseAdmin
+            .from('profiles')
+            .select('display_name, first_sale_email_sent_at')
+            .eq('id', sellerId)
+            .single();
+
+        if (profileErr) {
+            console.error(`[Courier] ❌ first-sale: failed to load profile ${sellerId}:`, profileErr);
+            return 'error';
+        }
+        if (profile?.first_sale_email_sent_at) {
+            // Already sent (or claimed by a concurrent worker that won the CAS).
+            return 'skipped';
+        }
+
+        // ── 2. Is this really the seller's FIRST valid sale? ──
+        const { count, error: countErr } = await supabaseAdmin
+            .from('orders')
+            .select('id', { count: 'exact', head: true })
+            .eq('seller_id', sellerId)
+            .in('status', VALID_FIRST_SALE_STATUSES as unknown as string[]);
+
+        if (countErr) {
+            console.error(`[Courier] ❌ first-sale: failed to count sales for ${sellerId}:`, countErr);
+            return 'error';
+        }
+        if ((count ?? 0) !== 1) {
+            // Either no paid sale yet, or this is not their first one.
+            return 'skipped';
+        }
+
+        // ── 3. Resolve the seller's email (transactional — sent regardless of
+        // marketing/notification prefs, but we still need an address). ──
+        const { data: { user }, error: authErr } = await supabaseAdmin.auth.admin.getUserById(sellerId);
+        const email = (!authErr && user?.email) ? user.email : null;
+        if (!email) {
+            console.warn(`[Courier] ⚠️  No email for seller ${sellerId} — skipping first-sale email`);
+            return 'skipped';
+        }
+
+        // ── 4. Atomically claim the one-shot slot (compare-and-swap). ──
+        const claimedAt = new Date().toISOString();
+        const { data: claimed, error: claimErr } = await supabaseAdmin
+            .from('profiles')
+            .update({ first_sale_email_sent_at: claimedAt })
+            .eq('id', sellerId)
+            .is('first_sale_email_sent_at', null)
+            .select('id');
+
+        if (claimErr) {
+            console.error(`[Courier] ❌ first-sale: claim update failed for ${sellerId}:`, claimErr);
+            return 'error';
+        }
+        if (!claimed || claimed.length === 0) {
+            // Lost the race — another worker already claimed/sent.
+            console.log(`[Courier] first-sale slot already claimed for ${sellerId} — skipping`);
+            return 'skipped';
+        }
+
+        // ── 5. Build payload + send the "First Time Sale" template. ──
+        // Prefer an explicit template ID; fall back to the Courier event alias.
+        const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'seller_first_sale').trim();
+        const firstName = (profile?.display_name || '').trim().split(/\s+/)[0] || 'there';
+        const orderNumber = opts.orderNumber || opts.orderId;
+        // TODO: there is no dedicated seller order-detail route today — the sales
+        // list lives in the client-state Profile panel (components/Profile.tsx,
+        // activePanel === 'sales'). Deep-link there once a /profile/orders/[id]
+        // (or query-param-addressable panel) route exists.
+        const orderLink = `${appBaseUrl()}/profile`;
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const youtube = (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim();
+
+        const data: Record<string, string> = {
+            seller_first_name: firstName,
+            order_number: orderNumber,
+            order_link: orderLink,
+            support_email: supportEmail,
+        };
+        // Optional — don't break the send if the guide URL isn't configured yet.
+        if (youtube) data.youtube_packaging_link = youtube;
+
+        try {
+            const sendResult = await courier.send.message({
+                message: {
+                    to: { email },
+                    // The "First Time Sale" template owns the subject/body
+                    // ("Congrats on your first Cardstreet sale 🎉") — we only
+                    // supply the merge data above.
+                    template,
+                    data,
+                    routing: { method: 'all', channels: ['email'] },
+                },
+            });
+            console.log(
+                `[Courier] ✅ 'First Time Sale' email sent to seller ${sellerId} (order ${orderNumber}). ` +
+                `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`
+            );
+            return 'sent';
+        } catch (sendErr) {
+            // Send failed — roll the claim back so a later retry can resend.
+            // Guard on our own timestamp so we never clobber a newer claim.
+            console.error(`[Courier] ❌ Error sending 'First Time Sale' email to ${sellerId}:`, sendErr);
+            const { error: rollbackErr } = await supabaseAdmin
+                .from('profiles')
+                .update({ first_sale_email_sent_at: null })
+                .eq('id', sellerId)
+                .eq('first_sale_email_sent_at', claimedAt);
+            if (rollbackErr) {
+                console.error(`[Courier] ❌ first-sale: failed to roll back claim for ${sellerId} (email will not retry):`, rollbackErr);
+            }
+            return 'error';
+        }
+    } catch (err) {
+        console.error(`[Courier] ❌ Unexpected error in first-sale email for ${sellerId}:`, err);
+        return 'error';
+    }
+}
