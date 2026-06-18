@@ -14,8 +14,10 @@ import {
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
+import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -43,6 +45,10 @@ export default function DesktopCartDrawer() {
     const [checkingProfile, setCheckingProfile] = useState(false);
     const [addressForm, setAddressForm] = useState(EMPTY_ADDRESS);
     const [savingAddress, setSavingAddress] = useState(false);
+    // Purchases are Thailand-only for now; warm the geo lookup and show a popup
+    // when a non-TH buyer tries to check out.
+    usePurchaseRegion();
+    const [regionBlocked, setRegionBlocked] = useState(false);
 
     const subtotal = items.reduce((sum, i) => sum + i.price, 0);
 
@@ -57,6 +63,13 @@ export default function DesktopCartDrawer() {
     // instead of bouncing to a profile screen.
     const beginCheckout = async () => {
         if (items.length === 0) return;
+        // Geo gate: limit purchases to Thailand for now (shipping isn't
+        // configured elsewhere). Re-enforced server-side in /api/orders/checkout.
+        const region = await ensurePurchaseRegion();
+        if (!region.purchaseAllowed) {
+            setRegionBlocked(true);
+            return;
+        }
         if (!user) {
             setAuthOpen(true);
             return;
@@ -232,6 +245,8 @@ export default function DesktopCartDrawer() {
             )}
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+
+            <PurchaseRegionModal isOpen={regionBlocked} onClose={() => setRegionBlocked(false)} />
 
             <PaymentModal
                 isOpen={phase === 'payment'}

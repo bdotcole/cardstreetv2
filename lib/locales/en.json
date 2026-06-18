@@ -249,6 +249,11 @@
         "price": "Total",
         "checkout": "Checkout"
     },
+    "purchaseRegion": {
+        "title": "Available in Thailand only",
+        "body": "Purchases are currently available only in Thailand while we set up shipping in your area. You can still browse the marketplace and build your collection — buying is coming soon to your country.",
+        "gotIt": "Got it"
+    },
     "seller": {
         "profileTitle": "Seller Profile",
         "verifiedPro": "Verified Pro",

@@ -34,6 +34,7 @@ import {
     defaultCurrencyForRegion,
     type StripeRegion,
 } from '@/lib/stripe';
+import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import type Stripe from 'stripe';
 
 export async function POST(req: Request) {
@@ -42,6 +43,22 @@ export async function POST(req: Request) {
         const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser();
         if (authErr || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Defense in depth — /api/orders/checkout already gated this, but block
+        // non-Thailand buyers here too so the PaymentIntent can never be
+        // created out of region. See lib/geo.ts.
+        const buyerCountry = getRequestCountry(req);
+        if (!isPurchaseAllowedFromCountry(buyerCountry)) {
+            return NextResponse.json(
+                {
+                    error:
+                        'Purchases are currently only available in Thailand. ' +
+                        'Buying is coming soon to your country.',
+                    code: 'GEO_RESTRICTED',
+                },
+                { status: 403 },
+            );
         }
 
         const body = await req.json().catch(() => ({}));

@@ -16,6 +16,7 @@ import Vault from '@/components/Vault';
 import Profile from '@/components/Profile';
 import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
+import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
 
@@ -41,6 +42,7 @@ import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
@@ -112,6 +114,11 @@ export default function HomePage() {
     const cartOwnerRef = useRef<string | null>(null);
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // Purchases are Thailand-only for now (shipping isn't configured elsewhere).
+    // Warm the geo lookup on mount so the checkout gate is instant; the popup
+    // below explains the restriction when a non-TH buyer tries to check out.
+    usePurchaseRegion();
+    const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
 
     // Buylist State
     const [buylistCard, setBuylistCard] = useState<Card | null>(null);
@@ -446,7 +453,25 @@ export default function HomePage() {
         setCart(prev => prev.filter(item => item.id !== id));
     };
 
+    // Geo gate shared by every purchase entry point (cart checkout + Buy Now).
+    // Purchases are limited to Thailand for now, so a buyer outside TH gets a
+    // clear "coming soon to your country" popup instead of the payment modal.
+    // The server re-enforces this in /api/orders/checkout; failures fall open
+    // (the server has the final say). Returns true when purchasing may proceed.
+    const ensureCanPurchase = async (): Promise<boolean> => {
+        const region = await ensurePurchaseRegion();
+        if (!region.purchaseAllowed) {
+            setIsCartOpen(false);
+            setSelectedListing(null);
+            setIsRegionBlockOpen(true);
+            return false;
+        }
+        return true;
+    };
+
     const handleCheckout = async () => {
+        if (!(await ensureCanPurchase())) return;
+
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
         // with a generic "missing required fields" message that's hard to debug.
@@ -1211,7 +1236,10 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
-                        onBuyNow={() => {
+                        onBuyNow={async () => {
+                            // Same Thailand-only gate as cart checkout — Buy Now
+                            // skips the cart and opens the payment modal directly.
+                            if (!(await ensureCanPurchase())) return;
                             setCart([{
                                 id: selectedListing.id,
                                 cardId: selectedListing.card_id,
@@ -1270,6 +1298,11 @@ export default function HomePage() {
                     onRemoveItem={handleRemoveFromCart}
                     onCheckout={handleCheckout}
                     currencySymbol={currencySymbol}
+                />
+
+                <PurchaseRegionModal
+                    isOpen={isRegionBlockOpen}
+                    onClose={() => setIsRegionBlockOpen(false)}
                 />
 
                 <PaymentModal

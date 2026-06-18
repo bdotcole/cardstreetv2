@@ -29,6 +29,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -49,6 +50,26 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const buyerId = user.id;
+
+        // ─── Geo gate: purchases are Thailand-only for now ───
+        // Shipping (Flash Express) is only configured for TH, so we block
+        // checkout for buyers we can see are outside Thailand. This fires
+        // before any DB work, so a rejected request leaves no side effects.
+        // Unknown geo (local dev / unresolvable IP) is allowed through — see
+        // lib/geo.ts. Browsing and collection features are never gated here.
+        const buyerCountry = getRequestCountry(req);
+        if (!isPurchaseAllowedFromCountry(buyerCountry)) {
+            return NextResponse.json(
+                {
+                    error:
+                        'Purchases are currently only available in Thailand. ' +
+                        'Buying is coming soon to your country.',
+                    code: 'GEO_RESTRICTED',
+                    country: buyerCountry,
+                },
+                { status: 403 },
+            );
+        }
 
         const body = await req.json().catch(() => ({}));
         const items: CheckoutItem[] = Array.isArray(body?.items) ? body.items : [];

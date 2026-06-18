@@ -197,6 +197,26 @@ Funds settle directly into the seller's Stripe balance. The Stripe processing fe
 - **Multi-seller carts on TH**: rejected at `/api/orders/checkout` with 400 (a direct-charge PaymentIntent is created on exactly one connected account, so one seller per cart). Multi-seller-as-N-charges is a future improvement.
 - Both checks fire BEFORE any DB writes or listing reservations, so a rejected cart leaves no side effects to roll back.
 
+### Purchase region gating (Thailand-only)
+
+Shipping (Flash Express) is only configured for Thailand, so **buying is restricted to TH** for now. Browsing, scanning, and collection management are open everywhere — only the purchase/checkout path is gated. The rest of the world is meant to use the collection side until shipping expands.
+
+**Signal**: Vercel's `x-vercel-ip-country` header (ISO 3166-1 alpha-2), derived from the client IP — the same header used for referral attribution and `app/join/[slug]`. The single source of truth is **`lib/geo.ts`** (`getRequestCountry`, `isPurchaseAllowedFromCountry`). Don't re-read the header ad hoc; import the helper.
+
+**Fail-open policy**: a purchase is allowed when the country is `TH` **or unknown** (header absent — local dev / unresolvable IP). We only hard-block a country we can positively see is not Thailand. Blocking unknowns would lock out legitimate Thai buyers on the rare un-geolocatable request, and Vercel reliably sets the header in production. This is geography (IP) based, so a Thai user travelling abroad is also blocked — consistent, since shipping is to a TH address regardless.
+
+**Enforcement (authoritative, server-side)**:
+- `app/api/orders/checkout/route.ts` rejects non-TH with `403 { code: 'GEO_RESTRICTED' }` right after auth, **before any DB writes / listing reservations** — a rejected request leaves no side effects.
+- `app/api/checkout/route.ts` repeats the gate as defense in depth so a PaymentIntent can never be created out of region.
+
+**UX (popup)**: `components/PurchaseRegionModal.tsx` — "available in Thailand only / coming soon to your country" (bilingual, `purchaseRegion.*` keys in `lib/locales/{en,th}.json`). It's shown by the client gate before the payment modal ever opens:
+- `GET /api/geo` returns `{ country, purchaseAllowed }` (per-IP, `no-store`).
+- `lib/hooks/usePurchaseRegion.ts` warms that lookup once per session (cached + deduped) and exposes `ensurePurchaseRegion()` for click handlers.
+- Mobile `app/page.tsx`: a shared `ensureCanPurchase()` guard fronts both cart **Checkout** (`handleCheckout`) and listing **Buy Now** (`onBuyNow` — which skips the cart and opens the payment modal directly, so it needs its own gate).
+- Desktop `components/desktop/DesktopCartDrawer.tsx`: gated in `beginCheckout`, the only path into the desktop payment phase.
+
+The client gate is UX only and **fails open** (a `/api/geo` hiccup leaves `purchaseAllowed` true); the server gate has the final say. The popup's blocked state can't be reproduced in local dev, since the browser never sends `x-vercel-ip-country` — exercise `/api/geo` with a forced header to verify the logic.
+
 ## pHash backfill
 
 `scripts/backfill-phashes.mjs` populates `pokemon_cards.phash` for every row with a usable image URL.
