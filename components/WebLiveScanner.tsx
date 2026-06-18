@@ -25,28 +25,51 @@ interface WebLiveScannerProps {
 const SCAN_REQUEST_TIMEOUT_MS = 25_000;
 
 // --- Detection / auto-capture tuning. Picked empirically; tune live on device. ---
-const ANALYSIS_FPS = 10;               // Detection cadence. Cheap on the tiny buffer, so run it live for a responsive snap.
+// Capture only fires when the card is (a) fully inside the frame, (b) large enough to read,
+// (c) genuinely in focus, and (d) held still for a beat. Each is a separate gate, so a
+// failing condition produces a corrective hint ("move closer", "hold still to focus")
+// instead of a blurry / half / too-far grab — the exact failure modes we're killing.
+const ANALYSIS_FPS = 12;               // Detection cadence. Cheap on the tiny buffer, so run it live for a responsive snap.
 const DETECT_MAX = 160;                // Longest side of the detection buffer. Other side derives from the visible aspect.
-const FOCUS_VARIANCE_THRESHOLD = 120;  // Laplacian variance above this (within the detected card) = sharp enough to OCR.
-const STABLE_FRAMES_REQUIRED = 2;      // Consecutive locked frames before firing.
+const MIN_DETECT_STREAK = 4;           // Consecutive frames with a valid, fully-in-frame card before a lock can begin (~0.33s). Stops instant grabs.
+const STABLE_FRAMES_REQUIRED = 3;      // Sharp + settled frames on top of the streak before firing (~0.25s).
 
 // Card-edge detection. A TCG card is a high-contrast rectangle; we find its outer
 // borders from directional-gradient projections, then validate shape + size.
 const CARD_ASPECT = 2.5 / 3.5;         // Portrait card width/height (~0.714).
-const ASPECT_TOLERANCE = 0.18;         // Accept detected boxes whose aspect is within this of CARD_ASPECT (tolerates slight tilt).
-const MIN_CARD_AREA_FRAC = 0.10;       // Detected box must cover at least this fraction of the buffer (reject tiny noise).
-const MAX_CARD_AREA_FRAC = 0.96;       // ...and not basically the whole frame (reject "no card, all edges").
+const ASPECT_TOLERANCE = 0.16;         // Accept detected boxes whose aspect is within this of CARD_ASPECT (tolerates slight tilt).
+const MIN_CARD_AREA_FRAC = 0.20;       // Card must fill at least this fraction of the frame, else "move closer" (reject too-far / tiny grabs).
+const MAX_CARD_AREA_FRAC = 0.94;       // ...and not basically the whole frame (card overflowing the edges -> "fit the whole card").
+const EDGE_MARGIN_FRAC = 0.02;         // A detected border within this fraction of the buffer edge means the card is cut off -> "fit the whole card".
 const EDGE_GRADIENT_THRESHOLD = 36;    // Per-pixel Sobel magnitude floor before it counts toward a projection (noise gate).
 const EDGE_PEAK_FRAC = 0.4;            // A projection bin counts as a card border when it exceeds this fraction of the projection max.
-const BOX_STABILITY_PX = 6;            // Max corner movement (buffer px) between frames to count the box as "settled".
+const BOX_STABILITY_PX = 5;            // Max corner movement (buffer px) between frames to count the box as "settled".
 const BOX_SMOOTHING = 0.5;             // EMA factor for the displayed box (0 = frozen, 1 = instant). Smooths the overlay snap.
 
-// Fallback: if no card locks within this window, fire on the old center-region
-// sharp+stable heuristic so a detection miss never strands the user.
+// Focus gate. Measured as the variance of the Laplacian on the *actual* card region drawn
+// from the full-res video at SHARPNESS_SAMPLE_MAX px — NOT on the 160px detection buffer,
+// whose own downscale is a low-pass filter that washes blur out (that was why soft frames
+// still got captured). This is the primary blur knob: raise it if blurry frames slip
+// through, lower it if a sharp card never fires.
+const SHARPNESS_SAMPLE_MAX = 340;      // Normalize the focus crop to this long side before measuring (resolution-independent threshold).
+const SHARPNESS_MIN = 140;             // Laplacian-variance floor on that crop = "in focus".
+const FOCUS_GRACE_MS = 4_000;          // If a card stays framed + still but soft this long (fixed-focus / macro-limited cameras), relax the floor so we don't strand the user.
+const FOCUS_GRACE_FACTOR = 0.6;
+
+// Fallback: if edge detection never locks (cluttered / low-contrast background), fire on a
+// sharp + stable centered region so a detection miss never strands the user. Still gated on
+// the same hi-res sharpness check so the fallback can't grab a blur either.
 const DETECT_TIMEOUT_MS = 2_500;
+const FALLBACK_FRAMES_REQUIRED = 3;
 const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still (fallback path only).
 
 interface Box { x: number; y: number; w: number; h: number; score?: number; }
+
+// A detected rectangle plus why it is / isn't a usable lock target:
+//  'card'   — card-shaped, fully in frame, well sized: a lock candidate.
+//  'far'    — card-shaped but too small in the frame: prompt "move closer".
+//  'cutoff' — card-shaped but touching a frame edge / overflowing: prompt "fit the whole card".
+interface DetectResult { box: Box; status: 'card' | 'far' | 'cutoff'; }
 
 async function fetchScan(body: any, signal: AbortSignal): Promise<Response> {
     return fetch('/api/scan', {
@@ -61,11 +84,14 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analysisCanvasRef = useRef<HTMLCanvasElement>(null);
+    const focusCanvasRef = useRef<HTMLCanvasElement>(null);         // hi-res focus sampling (sharpness gate)
 
     const prevFrameRef = useRef<Uint8ClampedArray | null>(null);   // previous detection buffer (fallback stability)
     const prevBoxRef = useRef<Box | null>(null);                   // last raw detected box (for settle check)
     const smoothedBoxRef = useRef<Box | null>(null);               // EMA-smoothed box in buffer coords (for overlay)
-    const lockCountRef = useRef(0);                                // consecutive locked frames (detection path)
+    const lockCountRef = useRef(0);                                // consecutive sharp+settled frames (detection path)
+    const detectStreakRef = useRef(0);                             // consecutive frames with a valid, fully-in-frame card
+    const firstDetectAtRef = useRef(0);                            // timestamp the current detection streak began (focus grace)
     const centerCountRef = useRef(0);                              // consecutive sharp+stable frames (fallback path)
     const lastDetectAtRef = useRef(0);                             // timestamp of last successful detection
     const captureCropRef = useRef<Box | null>(null);              // crop (video px) to grab on the next trigger; null = use center crop
@@ -77,7 +103,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
 
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [isLocked, setIsLocked] = useState(false);
-    const [statusHint, setStatusHint] = useState<'searching' | 'aligning' | 'sharpen' | 'scanning'>('searching');
+    const [statusHint, setStatusHint] = useState<'searching' | 'closer' | 'fit' | 'aligning' | 'sharpen' | 'scanning'>('searching');
     // Smoothed detected card box in *screen* coords, drives the snapping highlight overlay. null = nothing found.
     const [detectedBox, setDetectedBox] = useState<Box | null>(null);
     // Frozen still + white flash so the grab reads as instant while the network match runs.
@@ -126,7 +152,8 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
             if (isProcessingRef.current) return;
             const video = videoRef.current;
             const acanvas = analysisCanvasRef.current;
-            if (!video || !acanvas || video.readyState < 2 || !video.videoWidth) return;
+            const fcanvas = focusCanvasRef.current;
+            if (!video || !acanvas || !fcanvas || video.readyState < 2 || !video.videoWidth) return;
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
@@ -145,52 +172,72 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
             const gray = toGrayscale(actx.getImageData(0, 0, dw, dh).data, dw, dh);
 
             const now = Date.now();
-            const box = detectCardBox(gray, dw, dh);
+            const det = detectCardBox(gray, dw, dh);
 
-            if (box) {
+            // Only a card-shaped, fully-in-frame, well-sized detection is a lock candidate.
+            // A cut-off or too-small rectangle still drives a corrective hint but never fires.
+            if (det && det.status === 'card') {
+                const box = det.box;
                 lastDetectAtRef.current = now;
                 centerCountRef.current = 0;
+                if (detectStreakRef.current === 0) firstDetectAtRef.current = now;
+                detectStreakRef.current += 1;
 
                 // Smooth for the overlay; snap glide comes from EMA + a short CSS transition.
                 smoothedBoxRef.current = emaBox(smoothedBoxRef.current, box, BOX_SMOOTHING);
                 setDetectedBox(bufferBoxToScreen(smoothedBoxRef.current, dw, dh, screenW, screenH));
 
-                const sub = cropGray(gray, dw, box);
-                const sharp = laplacianVariance(sub.data, sub.w, sub.h) >= FOCUS_VARIANCE_THRESHOLD;
                 const settled = prevBoxRef.current != null && maxCornerDelta(box, prevBoxRef.current) < BOX_STABILITY_PX;
                 prevBoxRef.current = box;
 
-                if (sharp && settled) {
+                // Judge focus on the real card pixels, not the tiny detection buffer (whose
+                // downscale hides blur). Relax the floor once a card has been held a while so
+                // fixed-focus cameras that never hit the sharp threshold aren't stranded.
+                const videoBox = bufferBoxToVideo(box, dw, dh, vis);
+                const sharpness = regionSharpness(video, videoBox, fcanvas);
+                const graced = now - firstDetectAtRef.current > FOCUS_GRACE_MS;
+                const focusFloor = graced ? SHARPNESS_MIN * FOCUS_GRACE_FACTOR : SHARPNESS_MIN;
+
+                if (detectStreakRef.current < MIN_DETECT_STREAK) {
+                    lockCountRef.current = 0;
+                    setStatusHint('aligning');
+                } else if (sharpness < focusFloor) {
+                    lockCountRef.current = 0;
+                    setStatusHint('sharpen');
+                } else if (!settled) {
+                    lockCountRef.current = 0;
+                    setStatusHint('aligning');
+                } else {
                     lockCountRef.current += 1;
                     setStatusHint('aligning');
                     if (lockCountRef.current >= STABLE_FRAMES_REQUIRED) {
                         lockCountRef.current = 0;
                         // Grab the detected card (lightly padded) rather than the fixed center box.
-                        captureCropRef.current = padCrop(bufferBoxToVideo(box, dw, dh, vis), 0.04, vis.Vw, vis.Vh);
+                        captureCropRef.current = padCrop(videoBox, 0.04, vis.Vw, vis.Vh);
                         triggerScan();
                     }
-                } else {
-                    lockCountRef.current = 0;
-                    setStatusHint(sharp ? 'aligning' : 'sharpen');
                 }
             } else {
                 prevBoxRef.current = null;
                 smoothedBoxRef.current = null;
                 lockCountRef.current = 0;
+                detectStreakRef.current = 0;
                 setDetectedBox(null);
-                setStatusHint('searching');
+                // Tell the user how to fix the framing instead of silently grabbing a bad shot.
+                setStatusHint(det ? (det.status === 'far' ? 'closer' : 'fit') : 'searching');
 
-                // Degrade to the legacy center heuristic only after we've failed to lock for a
-                // while — so cluttered backgrounds / low contrast still scan, just less precisely.
+                // Degrade to a centered sharp+stable heuristic only after we've failed to lock
+                // for a while — so cluttered backgrounds / low contrast still scan, just less
+                // precisely. Still gated on the same hi-res sharpness so it can't grab a blur.
                 if (now - lastDetectAtRef.current > DETECT_TIMEOUT_MS) {
-                    const focus = laplacianVariance(gray, dw, dh);
-                    const sharp = focus >= FOCUS_VARIANCE_THRESHOLD;
+                    const centerBox = computeCardCrop(video, screenW, screenH);
+                    const sharpness = regionSharpness(video, centerBox, fcanvas);
                     const stable = prevFrameRef.current != null
                         && prevFrameRef.current.length === gray.length
                         && meanAbsDiff(gray, prevFrameRef.current) < STABILITY_DIFF_THRESHOLD;
-                    if (sharp && stable) {
+                    if (sharpness >= SHARPNESS_MIN && stable) {
                         centerCountRef.current += 1;
-                        if (centerCountRef.current >= STABLE_FRAMES_REQUIRED) {
+                        if (centerCountRef.current >= FALLBACK_FRAMES_REQUIRED) {
                             centerCountRef.current = 0;
                             captureCropRef.current = null; // null -> triggerScan uses the center crop
                             triggerScan();
@@ -242,7 +289,10 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
             }
             ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
 
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            // Higher quality than a typical thumbnail: the server reads the tiny printed set
+            // code / number off this frame and hashes it against the catalog, so chroma/edge
+            // fidelity directly affects identification accuracy.
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
             const base64Image = dataUrl.split(',')[1];
             if (!base64Image) {
                 resetScan();
@@ -311,6 +361,8 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const resetScan = () => {
         isProcessingRef.current = false;
         lockCountRef.current = 0;
+        detectStreakRef.current = 0;
+        firstDetectAtRef.current = 0;
         centerCountRef.current = 0;
         prevFrameRef.current = null;
         prevBoxRef.current = null;
@@ -350,6 +402,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
 
             <canvas ref={canvasRef} className="hidden" />
             <canvas ref={analysisCanvasRef} className="hidden" />
+            <canvas ref={focusCanvasRef} className="hidden" />
 
             {/* Frozen still over the live feed while matching, so the captured frame stays put. */}
             {frozenFrame && (
@@ -442,10 +495,12 @@ function CornerBrackets() {
     );
 }
 
-function statusHintLabel(hint: 'searching' | 'aligning' | 'sharpen' | 'scanning') {
+function statusHintLabel(hint: 'searching' | 'closer' | 'fit' | 'aligning' | 'sharpen' | 'scanning') {
     switch (hint) {
         case 'searching': return 'Point at a card';
-        case 'sharpen':   return 'Hold steady';
+        case 'closer':    return 'Move closer';
+        case 'fit':       return 'Fit the whole card';
+        case 'sharpen':   return 'Hold still to focus';
         case 'aligning':  return 'Locking in';
         case 'scanning':  return 'Scanning AI…';
     }
@@ -542,17 +597,24 @@ function toGrayscale(rgba: Uint8ClampedArray, w: number, h: number): Uint8Clampe
     return gray;
 }
 
-function cropGray(gray: Uint8ClampedArray, w: number, box: Box): { data: Uint8ClampedArray; w: number; h: number } {
-    const bx = Math.max(0, Math.round(box.x));
-    const by = Math.max(0, Math.round(box.y));
-    const bw = Math.max(1, Math.round(box.w));
-    const bh = Math.max(1, Math.round(box.h));
-    const out = new Uint8ClampedArray(bw * bh);
-    for (let yy = 0; yy < bh; yy++) {
-        const srcRow = (by + yy) * w + bx;
-        out.set(gray.subarray(srcRow, srcRow + bw), yy * bw);
-    }
-    return { data: out, w: bw, h: bh };
+// Sharpness of a card region, sampled from the full-resolution video — NOT the 160px
+// detection buffer. The detection buffer's downscale is a low-pass filter that erases the
+// high-frequency detail blur detection relies on, so a soft card and a sharp one look the
+// same there. We redraw the region at SHARPNESS_SAMPLE_MAX px (a fixed scale, so the
+// threshold is resolution-independent) and take the Laplacian variance of that.
+function regionSharpness(video: HTMLVideoElement, box: Box, canvas: HTMLCanvasElement): number {
+    const long = Math.max(box.w, box.h);
+    if (long < 8) return 0;
+    const scale = Math.min(1, SHARPNESS_SAMPLE_MAX / long);
+    const w = Math.max(8, Math.round(box.w * scale));
+    const h = Math.max(8, Math.round(box.h * scale));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 0;
+    ctx.drawImage(video, box.x, box.y, box.w, box.h, 0, 0, w, h);
+    const gray = toGrayscale(ctx.getImageData(0, 0, w, h).data, w, h);
+    return laplacianVariance(gray, w, h);
 }
 
 // Variance of Laplacian — classic blur detector. Sharp edges produce high variance.
@@ -625,9 +687,11 @@ function firstAbove(arr: Float32Array, thresh: number, fromStart: boolean): numb
     return -1;
 }
 
-// Detect the card's bounding box from directional-gradient projections, then validate that
-// it is card-shaped and a sensible size. Returns null when no plausible card is present.
-function detectCardBox(gray: Uint8ClampedArray, w: number, h: number): Box | null {
+// Detect the card's bounding box from directional-gradient projections, then classify the
+// framing. Returns null only when nothing card-shaped is present; otherwise the status tells
+// the caller whether it's a lock candidate ('card') or how the user should reframe ('far' /
+// 'cutoff'). Surfacing the reason is what lets the UI coach instead of grabbing a bad shot.
+function detectCardBox(gray: Uint8ClampedArray, w: number, h: number): DetectResult | null {
     const { gx, gy } = sobel(gray, w, h);
 
     // Project edge energy: |gx| onto columns (left/right borders), |gy| onto rows (top/bottom).
@@ -659,12 +723,24 @@ function detectCardBox(gray: Uint8ClampedArray, w: number, h: number): Box | nul
     const bh = bottom - top;
     if (bw < 6 || bh < 6) return null;
 
+    // Must look like a portrait card — otherwise it isn't our target at all.
     const aspect = bw / bh;
     if (Math.abs(aspect - CARD_ASPECT) > ASPECT_TOLERANCE) return null;
 
-    const areaFrac = (bw * bh) / (w * h);
-    if (areaFrac < MIN_CARD_AREA_FRAC || areaFrac > MAX_CARD_AREA_FRAC) return null;
-
     const score = (colE[left] + colE[right]) / colMax + (rowE[top] + rowE[bottom]) / rowMax;
-    return { x: left, y: top, w: bw, h: bh, score };
+    const box: Box = { x: left, y: top, w: bw, h: bh, score };
+
+    // A border sitting on the buffer edge means the card runs past the frame — capturing now
+    // would clip the card (and often the printed set code), so ask the user to fit it in.
+    const mx = Math.max(1, Math.round(w * EDGE_MARGIN_FRAC));
+    const my = Math.max(1, Math.round(h * EDGE_MARGIN_FRAC));
+    const areaFrac = (bw * bh) / (w * h);
+    if (left <= mx || top <= my || right >= w - 1 - mx || bottom >= h - 1 - my || areaFrac > MAX_CARD_AREA_FRAC) {
+        return { box, status: 'cutoff' };
+    }
+    // Too small in the frame: a distant grab is low-resolution and matches poorly.
+    if (areaFrac < MIN_CARD_AREA_FRAC) {
+        return { box, status: 'far' };
+    }
+    return { box, status: 'card' };
 }

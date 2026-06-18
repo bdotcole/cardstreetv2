@@ -33,6 +33,15 @@ function getSupabase(): SupabaseClient {
 const DIST_HIGH_CONFIDENCE = 8;
 const DIST_CANDIDATE_CEILING = 20;
 
+// Sanity ceiling for the deterministic (set code + number) lookup. That tier is normally
+// ground truth, but Flash occasionally OCRs a set code into a *different valid* code (the
+// documented Thai "8s" -> "bs"/"B5" failure), which would silently return the wrong card at
+// high confidence with no image check. A correct card photographed under glare/angle still
+// lands well under this against its catalog scan (~40% of 64 bits); only a grossly different
+// image exceeds it. On a breach we fall through to the (language, number) tier — both fields
+// are ~100% reliable in diagnostics — so the redundant pipeline self-corrects.
+const SET_CODE_PHASH_SANITY = 26;
+
 export interface ScanResultPrimary {
   name: string;
   set: string;
@@ -159,7 +168,17 @@ export const scannerService = {
         // Multiple matches happen for variant prints (holo/reverse holo/full-art at the
         // same number). Rank them by dHash distance so the user's actual print surfaces.
         const ranked = await this.rankByPhash(direct, hex);
-        return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+        // Verify the best print actually resembles the captured frame before trusting the
+        // set code as ground truth — a misread set code lands on a real-but-wrong card here.
+        // Rows already carry `phash` (select '*'), so this is free. No stored phash (some ja
+        // rows) -> unverifiable -> trust the deterministic lookup as before.
+        const verify = rowPhashDistance(ranked[0].phash, hex);
+        if (verify === null || verify <= SET_CODE_PHASH_SANITY) {
+          return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+        }
+        console.log(
+          `[ScannerService] set-code lookup hash distance ${verify} > ${SET_CODE_PHASH_SANITY}; set code likely misread, falling through to language+number`,
+        );
       }
     }
 
@@ -771,6 +790,16 @@ function parseMetadataFromOcrText(ocrText?: string) {
         cardNumber: numMatch ? numMatch[1] : null,
         language,
     };
+}
+
+// dHash distance between a candidate row's stored phash and the query hash. Returns null
+// when the row has no usable phash (so callers can treat it as "unverifiable" rather than
+// "mismatch"). queryHex is the "\\x..."-prefixed bytea string from bufferToPostgresBytea.
+function rowPhashDistance(rowPhash: any, queryHex: string): number | null {
+    if (typeof rowPhash !== 'string') return null;
+    const cardBytes = decodeSupabaseBytea(rowPhash);
+    if (!cardBytes) return null;
+    return hammingDistance(hexToBytes(queryHex), cardBytes);
 }
 
 // Bytea decode/Hamming for the in-Node pHash distance ranking (variant disambiguation).
