@@ -56,3 +56,13 @@ android/*.jks
 android/*.keystore
 android/app/*.jks
 android/app/*.keystore
+
+# Local scratch / generated output — never commit. These accumulate in the
+# working tree from browser automation, APK inspection, static export, and
+# one-off research scripts, and were polluting `git status` with thousands of
+# files. None of it belongs in the repo.
+.chrome-shotprofile/
+aab_inspect_temp/
+inspect.zip
+/out/
+scripts/out/
