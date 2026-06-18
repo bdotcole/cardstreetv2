@@ -17,15 +17,13 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import { estimateRate, isRegionError, fallbackShippingSatang } from '@/lib/flashExpress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
     BUYER_PROFILE_INCOMPLETE_TOAST,
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
-
-const FALLBACK_RATE_THB = 40;
 
 const EstimateBodySchema = z.object({
     items: z
@@ -138,14 +136,15 @@ export async function POST(req: Request) {
                 sellerShipping.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
                 sellerShippingIsFallback.set(sellerId, false);
             } catch (err) {
+                const fb = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province) / 100;
                 if (isRegionError(err)) {
                     console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${FALLBACK_RATE_THB}`,
+                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${fb}`,
                     );
                 } else {
                     console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId}:`, err);
                 }
-                sellerShipping.set(sellerId, FALLBACK_RATE_THB);
+                sellerShipping.set(sellerId, fb);
                 sellerShippingIsFallback.set(sellerId, true);
             }
         }

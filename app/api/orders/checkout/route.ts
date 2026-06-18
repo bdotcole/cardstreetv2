@@ -28,7 +28,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import { estimateRate, isRegionError, fallbackShippingSatang } from '@/lib/flashExpress';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -240,7 +240,8 @@ export async function POST(req: Request) {
         }
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
-        const FALLBACK_SATANG = 40 * 100; // ฿40
+        // Live Flash quote first; province-aware fallback (฿40 intra-Bangkok,
+        // ฿90 otherwise) only when Flash can't price the route.
         const sellerShippingSatang = new Map<string, number>();
 
         for (const sellerId of sellerIds) {
@@ -261,12 +262,13 @@ export async function POST(req: Request) {
                 // Flash returns satang (cents) directly.
                 sellerShippingSatang.set(sellerId, quote.estimatePrice + quote.upCountryAmount);
             } catch (err) {
+                const fb = fallbackShippingSatang(sp?.province, buyerProfile?.province);
                 if (isRegionError(err)) {
-                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿40`);
+                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${fb / 100}`);
                 } else {
                     console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId}:`, err);
                 }
-                sellerShippingSatang.set(sellerId, FALLBACK_SATANG);
+                sellerShippingSatang.set(sellerId, fb);
             }
         }
 
@@ -281,7 +283,11 @@ export async function POST(req: Request) {
 
             let shippingSatang = 0;
             if (!shippingApplied.has(listing.seller_id)) {
-                shippingSatang = sellerShippingSatang.get(listing.seller_id) ?? FALLBACK_SATANG;
+                shippingSatang = sellerShippingSatang.get(listing.seller_id)
+                    ?? fallbackShippingSatang(
+                        sellerProfiles?.find(p => p.id === listing.seller_id)?.province,
+                        buyerProfile?.province,
+                    );
                 shippingApplied.add(listing.seller_id);
             }
 

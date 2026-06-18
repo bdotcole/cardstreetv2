@@ -364,6 +364,42 @@ export async function estimateRate(params: FlashRateParams): Promise<FlashRateRe
     };
 }
 
+// ---------------------------------------------------------------------------
+// Fallback shipping cost
+// ---------------------------------------------------------------------------
+
+const BANGKOK_FALLBACK_SATANG = 40 * 100;     // ฿40
+const UPCOUNTRY_FALLBACK_SATANG = 90 * 100;   // ฿90
+
+/**
+ * True when a province string refers to Bangkok, tolerant of the spellings we
+ * actually store (Thai กรุงเทพมหานคร / กทม from Google Places, or "Bangkok").
+ */
+export function isBangkokProvince(province?: string | null): boolean {
+    if (!province) return false;
+    const p = province.trim().toLowerCase();
+    return p.includes('กรุงเทพ') || p.includes('กทม') || p.includes('bangkok');
+}
+
+/**
+ * Fallback shipping cost in satang, used ONLY when a live estimateRate() call
+ * fails (region mismatch, timeout, Flash outage). Real quotes always come from
+ * Flash first; this is the safety net.
+ *
+ * ฿40 only when the whole shipment is within Bangkok (intra-Bangkok runs ~฿28
+ * live, so ฿40 covers it). Anything touching an upcountry province runs ฿68–฿138
+ * live, so we fall back to ฿90 — the platform is billed by Flash for every
+ * label, so a low guess is a direct platform loss, not just a buyer discount.
+ */
+export function fallbackShippingSatang(
+    srcProvince?: string | null,
+    dstProvince?: string | null,
+): number {
+    return isBangkokProvince(srcProvince) && isBangkokProvince(dstProvince)
+        ? BANGKOK_FALLBACK_SATANG
+        : UPCOUNTRY_FALLBACK_SATANG;
+}
+
 /**
  * 3. Notify Courier (Request Pickup) — POST /open/v1/notify
  */

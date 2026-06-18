@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { estimateRate } from '@/lib/flashExpress';
-
-const FALLBACK_RATE_THB = 40;
+import { estimateRate, fallbackShippingSatang } from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -46,8 +44,9 @@ export async function POST(request: NextRequest) {
             const seller = sellerProfiles?.find(p => p.id === sellerId);
             
             if (!seller?.postcode) {
-                totalShippingFee += FALLBACK_RATE_THB;
-                breakdown[sellerId as string] = FALLBACK_RATE_THB;
+                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
+                totalShippingFee += fb;
+                breakdown[sellerId as string] = fb;
                 continue;
             }
 
@@ -72,9 +71,10 @@ export async function POST(request: NextRequest) {
                 breakdown[sellerId as string] = rate;
             } catch (err) {
                 console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId}:`, err);
-                // Fallback to flat rate
-                totalShippingFee += FALLBACK_RATE_THB;
-                breakdown[sellerId as string] = FALLBACK_RATE_THB;
+                // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)
+                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
+                totalShippingFee += fb;
+                breakdown[sellerId as string] = fb;
             }
         }
 
