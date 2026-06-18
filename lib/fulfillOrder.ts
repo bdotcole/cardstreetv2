@@ -11,7 +11,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
-import { createShipment, generateLabel, requestPickup, isRegionError } from '@/lib/flashExpress';
+import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGrams } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -278,7 +278,9 @@ export async function fulfillOrdersByTransferGroup(
                     dstDistrictName: dst.districtName,
                     dstPostalCode: dst.postalCode,
                     dstDetailAddress: dst.detailAddress,
-                    weight: 500,
+                    // Match the weight the buyer was quoted at checkout (one
+                    // order per card, so sellerOrders.length is the card count).
+                    weight: estimateParcelWeightGrams(sellerOrders.length),
                     expressCategory: 1,
                     articleCategory: 3,
                     remark: 'CardStreet TCG - Handle with care',

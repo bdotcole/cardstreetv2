@@ -401,6 +401,23 @@ export function fallbackShippingSatang(
 }
 
 /**
+ * Estimated parcel weight in grams for a single-seller shipment of N cards.
+ *
+ * Flash bills by actual weight (and reconciles via the weight webhook), but the
+ * buyer is charged the up-front estimate — so a low estimate is a platform loss
+ * on the shipping it now recoups through the application fee. 500g (Flash's base
+ * tier) comfortably covers a 1–4 card toploader/bubble-mailer parcel, so small
+ * orders are unchanged; larger lots scale at ~110g/card (a graded slab plus its
+ * share of packaging) and never below the 500g floor, so we never newly
+ * under-quote. Deliberately platform-safe — a graded-aware model would be more
+ * precise but needs per-card weight data we don't track yet.
+ */
+export function estimateParcelWeightGrams(cardCount: number): number {
+    const n = Math.max(1, Math.floor(cardCount || 1));
+    return Math.max(500, n * 110);
+}
+
+/**
  * 3. Notify Courier (Request Pickup) — POST /open/v1/notify
  */
 export interface FlashPickupParams {

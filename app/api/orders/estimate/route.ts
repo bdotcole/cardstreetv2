@@ -17,7 +17,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { estimateRate, isRegionError, fallbackShippingSatang } from '@/lib/flashExpress';
+import { estimateRate, isRegionError, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -120,6 +120,7 @@ export async function POST(req: Request) {
 
         for (const sellerId of sellerIds) {
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
+            const cardCount = listings.filter(l => l.seller_id === sellerId).length;
             try {
                 const quote = await estimateRate({
                     srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
                     dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: 500,
+                    weight: estimateParcelWeightGrams(cardCount),
                     width: 10,
                     length: 15,
                     height: 2,

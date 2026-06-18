@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { estimateRate, fallbackShippingSatang } from '@/lib/flashExpress';
+import { estimateRate, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
 
         for (const sellerId of sellerIds) {
             const seller = sellerProfiles?.find(p => p.id === sellerId);
-            
+            const cardCount = items.filter((i: any) => i.sellerId === sellerId).length;
+
             if (!seller?.postcode) {
                 const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
                 totalShippingFee += fb;
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
                     dstProvinceName: buyerProfile.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile.state || buyerProfile.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile.postcode,
-                    weight: 500, // Standard weight for trading card package
+                    weight: estimateParcelWeightGrams(cardCount),
                     width: 10,
                     length: 15,
                     height: 2
