@@ -19,7 +19,7 @@ export interface SetRow {
 const SET_COLUMNS = 'id, name, game, language, logo_url, symbol_url, printed_total, total, release_date';
 
 const CARD_COLUMNS =
-    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)';
+    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)';
 
 // Set ids are unique across languages (verified), so one id resolves to exactly
 // one set and its cards. Cached per request so generateMetadata + the page body
