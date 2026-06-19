@@ -16,12 +16,15 @@ export default function DesktopCardDetail({
     cardId,
     initialCard = null,
     initialListings = [],
+    setId = null,
 }: {
     cardId: string;
     // Provided by the server component so the initial HTML is fully rendered
     // (SEO) and there's no loading flash. When present we skip the client fetch.
     initialCard?: Card | null;
     initialListings?: MarketplaceListing[];
+    // The card's set id, for the breadcrumb link to its set page.
+    setId?: string | null;
 }) {
     const { addItem } = useDesktopCart();
     const { t } = useTranslation();
@@ -101,6 +104,12 @@ export default function DesktopCardDetail({
             <nav className="text-sm text-slate-500">
                 <Link href="/" className="hover:text-slate-300 transition-colors">{t('desktop.navMarketplace')}</Link>
                 <span className="mx-2">›</span>
+                {setId && card.set && (
+                    <>
+                        <Link href={`/sets/${setId}`} className="hover:text-slate-300 transition-colors">{card.set}</Link>
+                        <span className="mx-2">›</span>
+                    </>
+                )}
                 <span className="text-slate-300">{card.name}</span>
             </nav>
 
@@ -160,9 +169,18 @@ export default function DesktopCardDetail({
                                                 <img src={listing.seller.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
                                             )}
                                         </span>
-                                        <span className="text-sm font-bold text-slate-300 truncate">
-                                            {listing.seller?.display_name || t('desktop.unknownSeller')}
-                                        </span>
+                                        {listing.seller?.username ? (
+                                            <Link
+                                                href={`/seller/${listing.seller.username}`}
+                                                className="text-sm font-bold text-slate-300 hover:text-brand-cyan truncate transition-colors"
+                                            >
+                                                {listing.seller.display_name || listing.seller.username}
+                                            </Link>
+                                        ) : (
+                                            <span className="text-sm font-bold text-slate-300 truncate">
+                                                {listing.seller?.display_name || t('desktop.unknownSeller')}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
                                         <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>

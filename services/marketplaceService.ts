@@ -32,6 +32,7 @@ function normalizeListing<T extends { card_id: string; card_data: any }>(row: T)
 // Shape returned from profiles table join (Supabase column names, not UserProfile)
 export interface SellerProfile {
     id: string;
+    username?: string;
     display_name?: string;
     avatar_url?: string;
     partner_tier?: string;
@@ -105,7 +106,7 @@ export const marketplaceService = {
                     status,
                     created_at,
                     updated_at,
-                    seller:profiles(id, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
                 `)
                 .eq('status', 'active');
 
@@ -219,7 +220,7 @@ export const marketplaceService = {
                 })
                 .select(`
                     *,
-                    seller:profiles(id, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
                 `)
                 .single();
 
@@ -255,7 +256,7 @@ export const marketplaceService = {
                     status,
                     created_at,
                     updated_at,
-                    seller:profiles(id, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
                 `)
                 .eq('card_id', cardId)
                 .eq('status', 'active')

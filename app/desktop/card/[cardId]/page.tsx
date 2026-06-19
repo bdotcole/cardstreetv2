@@ -96,7 +96,7 @@ function buildProductJsonLd(card: Card, listings: MarketplaceListing[]) {
 
 export default async function DesktopCardPage({ params }: { params: Promise<{ cardId: string }> }) {
     const { cardId } = await params;
-    const { card, listings } = await getCardPageData(cardId);
+    const { card, listings, setId } = await getCardPageData(cardId);
     if (!card) notFound();
 
     return (
@@ -105,7 +105,7 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductJsonLd(card, listings)) }}
             />
-            <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} />
+            <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} setId={setId} />
         </>
     );
 }

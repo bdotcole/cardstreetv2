@@ -13,13 +13,13 @@ const LISTING_SELECT = `
     id, seller_id, card_id, card_data, price, condition, is_graded,
     grading_company, grade, image_front_url, image_back_url, status,
     created_at, updated_at,
-    seller:profiles(id, display_name, avatar_url, partner_tier)
+    seller:profiles(id, username, display_name, avatar_url, partner_tier)
 `;
 
 // React cache() dedupes the query across generateMetadata + the page body
 // within a single request (both call this for the same cardId).
 export const getCardPageData = cache(
-    async (cardId: string): Promise<{ card: Card | null; listings: MarketplaceListing[] }> => {
+    async (cardId: string): Promise<{ card: Card | null; listings: MarketplaceListing[]; setId: string | null }> => {
         const supabase = await createClient();
 
         const { data: rows } = await supabase
@@ -48,6 +48,18 @@ export const getCardPageData = cache(
             if (data) card = mapSupabaseCardToInternal(data);
         }
 
-        return { card, listings };
+        // set_id (for the breadcrumb link to the set page) — a tiny indexed
+        // lookup that works whether the card came from a listing or the catalog.
+        let setId: string | null = null;
+        if (card) {
+            const { data: ref } = await supabase
+                .from('pokemon_cards')
+                .select('set_id')
+                .eq('id', cardId)
+                .maybeSingle();
+            setId = ref?.set_id ?? null;
+        }
+
+        return { card, listings, setId };
     }
 );
