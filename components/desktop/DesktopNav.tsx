@@ -69,6 +69,7 @@ export default function DesktopNav() {
                 <nav className="flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
                         ['/', t('desktop.navMarketplace')],
+                        ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
                     ] as [string, string][]).map(([href, label]) => {

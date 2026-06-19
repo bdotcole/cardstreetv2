@@ -307,6 +307,7 @@
     "desktop": {
         "searchPlaceholder": "Search cards by name...",
         "navMarketplace": "Marketplace",
+        "navSets": "Sets",
         "navSell": "Sell",
         "navOrders": "Orders",
         "signIn": "Sign in",

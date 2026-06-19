@@ -307,6 +307,7 @@
     "desktop": {
         "searchPlaceholder": "ค้นหาการ์ดด้วยชื่อ...",
         "navMarketplace": "ตลาด",
+        "navSets": "ชุดการ์ด",
         "navSell": "ขาย",
         "navOrders": "คำสั่งซื้อ",
         "signIn": "เข้าสู่ระบบ",
