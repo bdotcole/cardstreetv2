@@ -12,17 +12,29 @@ import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarket
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
-export default function DesktopCardDetail({ cardId }: { cardId: string }) {
+export default function DesktopCardDetail({
+    cardId,
+    initialCard = null,
+    initialListings = [],
+}: {
+    cardId: string;
+    // Provided by the server component so the initial HTML is fully rendered
+    // (SEO) and there's no loading flash. When present we skip the client fetch.
+    initialCard?: Card | null;
+    initialListings?: MarketplaceListing[];
+}) {
     const { addItem } = useDesktopCart();
     const { t } = useTranslation();
-    const [card, setCard] = useState<Card | null>(null);
-    const [listings, setListings] = useState<MarketplaceListing[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [card, setCard] = useState<Card | null>(initialCard);
+    const [listings, setListings] = useState<MarketplaceListing[]>(initialListings);
+    const [loading, setLoading] = useState(!initialCard);
     // If catalog art fails to load (TCGdex outages black out most EN card
     // art), fall back to a seller's condition photo from our own storage.
     const [catalogArtFailed, setCatalogArtFailed] = useState(false);
 
     useEffect(() => {
+        // Server already supplied the data — nothing to fetch.
+        if (initialCard) return;
         let cancelled = false;
         (async () => {
             const rows = await marketplaceService.getListingsForCard(cardId);
@@ -48,7 +60,7 @@ export default function DesktopCardDetail({ cardId }: { cardId: string }) {
         return () => {
             cancelled = true;
         };
-    }, [cardId]);
+    }, [cardId, initialCard]);
 
     if (loading) {
         return (

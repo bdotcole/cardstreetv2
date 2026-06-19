@@ -1,0 +1,40 @@
+import { localizedUrl } from '@/lib/i18nRouting';
+import { cardIdsForPage } from '@/lib/cardSitemap';
+
+// One child sitemap: up to CARDS_PER_SITEMAP card URLs, each advertising its
+// Thai (canonical/bare) and English (/en) variants via hreflang. Card ids are
+// ascii [A-Za-z0-9-] so they need no XML/URL escaping.
+export const revalidate = 86400;
+
+export async function GET(_req: Request, { params }: { params: Promise<{ page: string }> }) {
+    const { page } = await params;
+    const n = Number.parseInt(page, 10);
+    if (Number.isNaN(n) || n < 0) {
+        return new Response('Not found', { status: 404 });
+    }
+
+    const ids = await cardIdsForPage(n);
+    if (ids.length === 0) {
+        return new Response('Not found', { status: 404 });
+    }
+
+    const urls = ids
+        .map((id) => {
+            const path = `/card/${id}`;
+            const th = localizedUrl(path, 'th');
+            const en = localizedUrl(path, 'en');
+            return (
+                `<url><loc>${th}</loc>` +
+                `<xhtml:link rel="alternate" hreflang="th-TH" href="${th}"/>` +
+                `<xhtml:link rel="alternate" hreflang="en-TH" href="${en}"/>` +
+                `<xhtml:link rel="alternate" hreflang="x-default" href="${th}"/>` +
+                `</url>`
+            );
+        })
+        .join('');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${urls}</urlset>`;
+    return new Response(xml, {
+        headers: { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=86400' },
+    });
+}
