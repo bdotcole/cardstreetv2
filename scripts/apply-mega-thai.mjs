@@ -7,13 +7,22 @@
  *
  *   node scripts/apply-mega-thai.mjs MA5                 # dry-run: plan + review CSV
  *   node scripts/apply-mega-thai.mjs MA5 --commit        # write to prod
- *   node scripts/apply-mega-thai.mjs MA5 --name="เงามืดคุกคาม" --commit  # also set the Thai set name
+ *   node scripts/apply-mega-thai.mjs MA5 --anchor=me04 --commit  # RECOMMENDED
+ *   node scripts/apply-mega-thai.mjs MA5 --name="เงามืดคุกคาม" --anchor=me04 --commit
+ *
+ * Two match modes:
+ *   --anchor=<set>  monotonic sequence alignment against ONE intl set. Use this
+ *                   whenever the Thai set maps to a single intl set (the common
+ *                   case). Reliable — it rejects embedded extras instead of
+ *                   snapping them to a spurious nearest. (MA5 -> me04: 61 clean,
+ *                   name-verified matches; the other ~100 are extras/secrets.)
+ *   (default)       global nearest-neighbour over me01..me04. Only for sets that
+ *                   genuinely span multiple intl sets (e.g. MA4). UNRELIABLE when
+ *                   the Thai set isn't ~1:1 with the pool — the coarse 64-bit
+ *                   dHash false-positives even at d<=8 (MA5 default mode matched
+ *                   Fennekin -> Ninetales). Prefer --anchor when one exists.
  *
  * CAUTION — always review scripts/out/<code>-match-review.csv before --commit.
- * The 64-bit dHash is coarse and finds spurious nearest-neighbours when a Thai
- * card has no true counterpart in the EN pool (e.g. MA5 on 2026-06-19 produced
- * false positives even at d<=8, like Fennekin -> Ninetales). It is reliable only
- * when the Thai set is ~1:1 with the pool AND the matched name is consistent.
  *
  * Writes: pokemon_cards.english_name + rarity (confident matches), card_mappings,
  * market_values (THB, where the English source is priced), and optionally
@@ -45,6 +54,17 @@ const EN_SETS = ['me01', 'me02', 'me02.5', 'me03', 'me04'];
 
 const toBig = (hex) => BigInt('0x' + String(hex).replace(/[^0-9a-fA-F]/g, ''));
 const ham = (a, b) => { let x = a ^ b, c = 0n; while (x) { c += x & 1n; x >>= 1n; } return Number(c); };
+const numOf = (s) => parseInt(String(s).split('/')[0], 10) || 0;
+
+// --anchor=<set>: monotonic sequence alignment against ONE intl set instead of
+// global nearest-neighbour. Far more reliable when the Thai set maps to a single
+// intl set in roughly the same card order (e.g. MA5 -> me04): each Thai card is
+// matched only against the next forward window of the anchor set, so embedded
+// extras whose true card isn't in the window are correctly skipped rather than
+// snapped to a spurious nearest. Use this whenever an anchor set is known.
+const ANCHOR = (args.find((a) => a.startsWith('--anchor=')) || '').slice('--anchor='.length) || null;
+const ANCHOR_WINDOW = 12;   // how far ahead in the anchor set to look
+const ANCHOR_DIST = 10;     // tight accept band (false positives observed >=11)
 
 // English rarity string -> Thai display code (matches THAI_RARITY_DISPLAY in lib/cardMapper.ts).
 const RARITY_TH = {
@@ -88,25 +108,51 @@ function thaiPriceFromEn(p) {
   return Math.max(FLOOR_THB, +thb.toFixed(2));
 }
 
-// 2. Thai set cards -> nearest EN by pHash
-const { data: thai } = await supabase
+// 2. Thai set cards (number order) -> English card.
+const { data: thaiRaw } = await supabase
   .from('pokemon_cards').select('id,number,name,phash,english_name,rarity')
   .eq('set_id', CODE).eq('language', 'th').order('number');
+const thai = (thaiRaw || []).map((c) => ({ ...c, h: c.phash ? toBig(c.phash) : null, n: numOf(c.number) }))
+  .sort((a, b) => a.n - b.n);
 
+// Compute a match { c, best, bd } per Thai card. Global NN by default; forward-
+// window sequence alignment when --anchor is given.
+const matches = [];
+if (ANCHOR) {
+  const anchorPool = enH.filter((e) => e.set_id === ANCHOR)
+    .map((e) => ({ ...e, n: numOf(e.number) })).sort((a, b) => a.n - b.n);
+  if (!anchorPool.length) { console.error(`--anchor set "${ANCHOR}" has no pHashed cards in the pool`); process.exit(1); }
+  let j = 0;
+  for (const c of thai) {
+    if (!c.h) { matches.push({ c, best: null, bd: 999 }); continue; }
+    let bi = -1, bd = 999;
+    for (let k = j; k < Math.min(anchorPool.length, j + ANCHOR_WINDOW + 1); k++) { const d = ham(c.h, anchorPool[k].h); if (d < bd) { bd = d; bi = k; } }
+    if (bi >= 0 && bd <= ANCHOR_DIST) { matches.push({ c, best: anchorPool[bi], bd }); j = bi + 1; }
+    else { matches.push({ c, best: bi >= 0 ? anchorPool[bi] : null, bd }); }
+  }
+} else {
+  for (const c of thai) {
+    if (!c.h) { matches.push({ c, best: null, bd: 999 }); continue; }
+    let best = null, bd = 999;
+    for (const e of enH) { const d = ham(c.h, e.h); if (d < bd) { bd = d; best = e; } }
+    matches.push({ c, best, bd });
+  }
+}
+
+const ACCEPT = ANCHOR ? ANCHOR_DIST : DIST_MAX;
+const MATCH_METHOD = ANCHOR ? 'phash_seq' : 'phash';
 const cardUpdates = [], mappings = [], marketRows = [], review = [];
 let priced = 0, enriched = 0, skipped = 0;
 
-for (const c of thai) {
-  if (!c.phash) { skipped++; review.push([c.number, c.name, 'NO_PHASH', '', '']); continue; }
-  const h = toBig(c.phash); let best = null, bd = 999;
-  for (const e of enH) { const d = ham(h, e.h); if (d < bd) { bd = d; best = e; } }
-  if (bd > DIST_MAX) { skipped++; review.push([c.number, c.name, `SKIP d=${bd}`, best.set_id + '#' + best.number, best.name]); continue; }
+for (const { c, best, bd } of matches) {
+  if (!c.h) { skipped++; review.push([c.number, c.name, 'NO_PHASH', '', '']); continue; }
+  if (!best || bd > ACCEPT) { skipped++; review.push([c.number, c.name, `SKIP d=${bd}`, best ? best.set_id + '#' + best.number : '', best ? best.name : '']); continue; }
 
   enriched++;
   cardUpdates.push({ id: c.id, english_name: best.name, rarity: rarityToThai(best.rarity) });
   mappings.push({
     card_id_th: c.id, card_id_en: best.id,
-    match_method: 'phash', confidence_score: Math.min(1, +(1 - bd / 64).toFixed(2)), verified: false,
+    match_method: MATCH_METHOD, confidence_score: Math.min(1, +(1 - bd / 64).toFixed(2)), verified: false,
   });
 
   const enPrice = priceById.get(best.id);
@@ -116,7 +162,7 @@ for (const c of thai) {
     marketRows.push({
       card_id: c.id, language: 'th', condition: 'Raw_NM', printing: null,
       market_avg: thb, currency: 'THB', game: 'pokemon',
-      source_links: [`Database English Match (pHash ${best.set_id})`],
+      source_links: [`Database English Match (${MATCH_METHOD} ${best.set_id})`],
       source_prices: { en_card: best.id, en_price: enPrice.avg, en_currency: enPrice.currency, mult: EN_MULT, usd_thb: USD_THB, phash_dist: bd },
       last_updated: new Date().toISOString(),
     });
@@ -125,7 +171,7 @@ for (const c of thai) {
   review.push([c.number, c.name, `d=${bd}`, best.set_id + '#' + best.number + ' ' + best.name, priceNote]);
 }
 
-console.log(`\n${CODE} plan: ${enriched} enriched+mapped (d<=${DIST_MAX}), ${priced} priced now, ${skipped} skipped (d>${DIST_MAX} -> manual review)`);
+console.log(`\n${CODE} plan [${ANCHOR ? 'anchor=' + ANCHOR : 'global'}]: ${enriched} enriched+mapped (d<=${ACCEPT}), ${priced} priced now, ${skipped} skipped (d>${ACCEPT} -> manual review)`);
 console.log(`unpriced confident matches: ${enriched - priced}`);
 
 const outDir = path.join(ROOT, 'scripts', 'out');
