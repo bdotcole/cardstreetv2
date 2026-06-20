@@ -95,6 +95,16 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'archives.bulbagarden.net',
       },
+      {
+        // TCGPlayer CDN (real Japanese scans for vintage cards, keyed by tcgplayerId)
+        protocol: 'https',
+        hostname: 'tcgplayer-cdn.tcgplayer.com',
+      },
+      {
+        // TCGPlayer product images (sized thumbnail variant)
+        protocol: 'https',
+        hostname: 'product-images.tcgplayer.com',
+      },
     ],
   },
   experimental: {
