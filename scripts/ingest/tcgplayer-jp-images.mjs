@@ -104,24 +104,9 @@ async function fetchJtcgCards(slug) {
   return out;
 }
 
-async function buildDict() {
-  const dict = new Map();
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase
-      .from('pokemon_cards').select('name, english_name')
-      .eq('game', 'pokemon').eq('language', 'ja').not('english_name', 'is', null)
-      .order('id', { ascending: true }).range(from, from + 999);
-    if (error) throw error;
-    if (!data.length) break;
-    for (const r of data) { if (r.name && r.english_name) { const k = norm(r.name); if (k && !dict.has(k)) dict.set(k, r.english_name); } }
-    if (data.length < 1000) break;
-  }
-  return dict;
-}
-
 async function imagelessCards(setId) {
   const { data, error } = await supabase
-    .from('pokemon_cards').select('id, number, name')
+    .from('pokemon_cards').select('id, number, name, english_name')
     .eq('game', 'pokemon').eq('language', 'ja').eq('set_id', setId)
     .or('image_small.is.null,image_small.eq.');
   if (error) throw error;
@@ -137,11 +122,13 @@ function matchNumbered(ours, jt) {
   return out;
 }
 
-function matchNamebridge(ours, jt, dict) {
+// No-number sets: match on the english_name already filled by the name-bridge
+// pricing pass (authoritative), 1:1-guarded against JustTCG's English name.
+function matchNamebridge(ours, jt) {
   const jtByEn = new Map();
   for (const c of jt) { const k = norm(enName(c.name)); if (!k || !c.tcgplayerId) continue; if (!jtByEn.has(k)) jtByEn.set(k, []); jtByEn.get(k).push(c.tcgplayerId); }
   const ourByEn = new Map();
-  for (const c of ours) { const en = dict.get(norm(c.name)); if (!en) continue; const k = norm(en); if (!ourByEn.has(k)) ourByEn.set(k, []); ourByEn.get(k).push(c.id); }
+  for (const c of ours) { if (!c.english_name) continue; const k = norm(c.english_name); if (!ourByEn.has(k)) ourByEn.set(k, []); ourByEn.get(k).push(c.id); }
   const out = new Map();
   for (const [k, ids] of ourByEn) { const tids = jtByEn.get(k); if (!tids) continue; if (ids.length === 1 && tids.length === 1) out.set(ids[0], tids[0]); }
   return out;
@@ -149,17 +136,16 @@ function matchNamebridge(ours, jt, dict) {
 
 async function main() {
   if (!API_KEY) throw new Error('JUSTTCG_API_KEY missing');
-  const dict = await buildDict();
   const allSets = { ...NUMBERED_SLUGS, ...NAMEBRIDGE_SLUGS };
   let gFilled = 0, gNoMatch = 0, gNoImg = 0;
-  console.log(`mode: ${DRY ? 'DRY' : 'COMMIT'} | dict ${dict.size}\n`);
+  console.log(`mode: ${DRY ? 'DRY' : 'COMMIT'}\n`);
 
   for (const setId of Object.keys(allSets)) {
     if (ONLY_SETS.length && !ONLY_SETS.includes(setId)) continue;
     const ours = await imagelessCards(setId);
     if (!ours.length) { console.log(`${setId}: 0 image-less cards (skip)`); continue; }
     const jt = await fetchJtcgCards(allSets[setId]);
-    const matches = NAMEBRIDGE_SLUGS[setId] ? matchNamebridge(ours, jt, dict) : matchNumbered(ours, jt);
+    const matches = NAMEBRIDGE_SLUGS[setId] ? matchNamebridge(ours, jt) : matchNumbered(ours, jt);
 
     let filled = 0, noImg = 0;
     for (const [cardId, tid] of matches) {

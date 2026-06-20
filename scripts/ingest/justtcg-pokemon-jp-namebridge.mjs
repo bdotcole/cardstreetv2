@@ -57,6 +57,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (s) => String(s || '').toLowerCase().replace(/[\s　]/g, '').replace(/[^a-z0-9぀-ヿ一-鿿]/g, '');
 const enName = (n) => String(n || '').replace(/\s*-\s*\d.*$/, '').trim();
 
+// The pre-e-Card Gym/Rocket (PMCG5/6) and Neo Destiny (neo4) sets name cards as
+// "<owner>の<Pokemon>" or "<modifier><Pokemon>". The owner/modifier never carries
+// an english_name on its own, so a whole-name dict lookup misses them. Translate
+// the parts: strip the owner/modifier, translate the Pokemon via the dict, and
+// recompose the English form JustTCG uses ("Koga's Weedle", "Dark Crobat").
+const MODIFIERS = [['輝く', 'Shining'], ['ダーク', 'Dark'], ['暗い', 'Dark'], ['軽い', 'Light'], ['ライト', 'Light'], ['軽', 'Light']];
+const TRAINERS = [
+  ['ブロック', 'Brock'], ['カスミ', 'Misty'], ['マチス', 'Lt. Surge'], ['エリカ', 'Erika'], ['キョウ', 'Koga'], ['コガ', 'Koga'],
+  ['サブリナ', 'Sabrina'], ['ナツメ', 'Sabrina'], ['サカキ', 'Giovanni'], ['ジョバンニ', 'Giovanni'], ['ロケット団', 'Rocket'], ['ロケット', 'Rocket'],
+  ['ハヤト', 'Falkner'], ['ツクシ', 'Bugsy'], ['アカネ', 'Whitney'], ['マツバ', 'Morty'], ['シジマ', 'Chuck'], ['ミカン', 'Jasmine'],
+  ['ヤナギ', 'Pryce'], ['イブキ', 'Clair'], ['カリン', 'Karen'], ['ワタル', 'Lance'],
+];
+
+// Japanese name (possibly corrupted/compound) -> English, via the dict plus
+// owner/modifier decomposition. Returns null when no path resolves.
+function translate(name, dict) {
+  const base = String(name || '').replace(/[（(][^）)]*[)）]/g, '').trim(); // strip "(lv.15)" etc.
+  const direct = dict.get(norm(base));
+  if (direct) return direct;
+  const ownerIx = base.indexOf('の');
+  if (ownerIx > 0) {
+    const owner = base.slice(0, ownerIx);
+    const rest = base.slice(ownerIx + 1);
+    const tr = TRAINERS.find(([jp]) => owner === jp || owner.startsWith(jp));
+    const poke = dict.get(norm(rest));
+    if (tr && poke) return `${tr[1]}'s ${poke}`;
+  }
+  for (const [jp, en] of MODIFIERS) {
+    if (base.startsWith(jp)) {
+      const poke = dict.get(norm(base.slice(jp.length)));
+      if (poke) return `${en} ${poke}`;
+    }
+  }
+  return null;
+}
+
 async function jtcg(path) {
   await sleep(RATE_MS);
   const res = await fetch(`${BASE}${path}`, { headers: { 'x-api-key': API_KEY } });
@@ -147,7 +183,7 @@ async function main() {
     const ourByEn = new Map();
     let noTrans = 0;
     for (const c of ours) {
-      const en = dict.get(norm(c.name));
+      const en = translate(c.name, dict);
       if (!en) { noTrans++; continue; }
       const k = norm(en);
       if (!ourByEn.has(k)) ourByEn.set(k, []);
