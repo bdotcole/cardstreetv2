@@ -46,6 +46,7 @@ import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchase
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
+import PartnerFinishSetup from '@/components/PartnerFinishSetup';
 import SellerProfile from '@/components/SellerProfile';
 import BuylistRequest from '@/components/BuylistRequest';
 
@@ -71,6 +72,9 @@ export default function HomePage() {
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
     const [user, setUser] = useState<UserProfile | null>(null);
+    // Provisioned partner accounts must finish setup (real email/phone/password)
+    // on first login before they can use the app.
+    const [partnerSetup, setPartnerSetup] = useState<{ shopName: string } | null>(null);
 
     // Supabase hooks for data management
     const {
@@ -225,6 +229,11 @@ export default function HomePage() {
                 const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
                 if (cancelled || !isPartner) return;
                 setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+                // Provisioned partners (created by an admin with a temp password)
+                // must complete setup before using the app.
+                if (profile?.partner_joined_at && profile?.partner_onboarding_complete === false) {
+                    setPartnerSetup({ shopName: profile.display_name || 'Partner' });
+                }
             } catch {
                 // Non-fatal: partner dashboard simply stays gated if the fetch fails.
             }
@@ -991,7 +1000,19 @@ export default function HomePage() {
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
             }}>
-            
+
+            {/* Forced partner activation — blocks the app until a provisioned
+                partner sets their real email, phone, and password. */}
+            {user && partnerSetup && (
+                <PartnerFinishSetup
+                    shopName={partnerSetup.shopName}
+                    onComplete={() => {
+                        setPartnerSetup(null);
+                        setUser(prev => (prev ? { ...prev, isPartner: true } : prev));
+                    }}
+                />
+            )}
+
             {isWebScannerOpen && (
                 <WebLiveScanner
                     onClose={() => setIsWebScannerOpen(false)}

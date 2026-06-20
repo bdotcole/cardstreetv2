@@ -202,10 +202,32 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setLoading(true);
         setError(null);
 
+        const identifier = email.trim();
+
         try {
+            // Partners provisioned by an admin sign in with a username (no '@').
+            // The server resolves it to the account's email and sets the session
+            // cookie, so we reload to pick it up. Anything with '@' is a normal
+            // email sign-in.
+            if (!identifier.includes('@')) {
+                const res = await withAuthWatchdog('partner-username-signin', () =>
+                    fetch('/api/auth/partner-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: identifier.toLowerCase(), password }),
+                    })
+                );
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Invalid username or password');
+                }
+                window.location.reload();
+                return;
+            }
+
             const { error } = await withAuthWatchdog('email-signin', () =>
                 supabase.auth.signInWithPassword({
-                    email,
+                    email: identifier,
                     password,
                 })
             );
@@ -384,8 +406,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                                 )}
                                 <p className="text-sm text-slate-400 leading-relaxed">
                                     Enter the email on your account and we&apos;ll send you a link to
-                                    set a new password. This is also how you activate an account that
-                                    was created for you (e.g. a partner shop account).
+                                    set a new password.
                                 </p>
                                 <form onSubmit={handleForgotPassword} className="space-y-4">
                                     <div className="space-y-2">
@@ -558,17 +579,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                                 </>
                             )}
 
-                            {/* Email Field */}
+                            {/* Email (or username, on sign-in) Field */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                     <Mail className="w-3 h-3" />
-                                    Email
+                                    {mode === 'signin' ? 'Email or username' : 'Email'}
                                 </label>
                                 <input
-                                    type="email"
+                                    type={mode === 'signin' ? 'text' : 'email'}
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="your@email.com"
+                                    placeholder={mode === 'signin' ? 'your@email.com or username' : 'your@email.com'}
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
                                     required
                                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                 />

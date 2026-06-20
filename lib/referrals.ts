@@ -36,6 +36,39 @@ export function isValidSlugFormat(slug: unknown): slug is string {
 }
 
 /**
+ * Domain for partner login emails. These addresses are synthetic internal
+ * identifiers — never deliverable, never shown to users — so the partner can
+ * sign in with a username before they've supplied a real email. Replaced by
+ * the partner's real email when they finish onboarding.
+ */
+export const PARTNER_LOGIN_EMAIL_DOMAIN = 'partner.cardstreet.app';
+
+export const partnerLoginEmail = (username: string) =>
+    `${username.toLowerCase()}@${PARTNER_LOGIN_EMAIL_DOMAIN}`;
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+
+export function isValidUsername(username: unknown): username is string {
+    return typeof username === 'string' && USERNAME_PATTERN.test(username);
+}
+
+/**
+ * Lower-case, strip to [a-z0-9_], collapse spaces/dashes to underscores. Mirrors
+ * the app's existing username constraint (20260317_add_usernames.sql). Returns
+ * '' if nothing usable remains (e.g. a Thai-only shop name) so the caller can
+ * require an explicit username instead.
+ */
+export function sanitizeUsername(raw: string | null | undefined): string {
+    return (raw || '')
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 20);
+}
+
+/**
  * Name-derived slug + 4 random hex chars, mirroring the SQL backfill in
  * 20260611_referral_tracking.sql. ASCII-only on purpose: the slug ends up in
  * printed QR codes and Play Store referrer params, where non-ASCII invites
