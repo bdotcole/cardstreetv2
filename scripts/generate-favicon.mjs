@@ -1,10 +1,15 @@
-// Generates app/favicon.ico (multi-resolution: 16/32/48) from public/logo.png.
-// Next.js App Router auto-serves app/favicon.ico at /favicon.ico and injects the
-// <link rel="icon"> tag, which is what puts the brand mark in the browser tab.
+// Generates the browser-tab icons from public/logo.png:
+//   - app/favicon.ico   multi-resolution 16/32/48, for /favicon.ico + legacy
+//   - app/icon.png       32px PNG, the format modern browsers reliably paint
+//
+// Next.js App Router auto-serves both and injects the <link rel="icon"> tags.
+// We ship both deliberately: some browsers won't render a PNG-compressed ICO as
+// the tab favicon, and Next declares the .ico link as sizes="16x16" only, so a
+// HiDPI tab (which wants 32px) may skip it. The standalone 32px PNG covers both
+// gaps -- it is what Chrome ends up painting on a scaled Windows display.
 //
 // sharp can't encode ICO, so we resize to PNG at each size and pack the ICO
-// container ourselves. The Vista+ ICO format permits PNG-compressed entries,
-// which every current browser and Windows itself understand.
+// container ourselves. The Vista+ ICO format permits PNG-compressed entries.
 //
 // Run: node scripts/generate-favicon.mjs
 
@@ -15,8 +20,10 @@ import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(root, 'public', 'logo.png')
-const OUT = join(root, 'app', 'favicon.ico')
+const ICO_OUT = join(root, 'app', 'favicon.ico')
+const PNG_OUT = join(root, 'app', 'icon.png')
 const SIZES = [16, 32, 48]
+const PNG_SIZE = 32
 
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }
 
@@ -62,5 +69,8 @@ const trimmed = await sharp(SRC).trim().toBuffer()
 const images = await Promise.all(
   SIZES.map(async (size) => ({ size, data: await renderSize(trimmed, size) }))
 )
-writeFileSync(OUT, buildIco(images))
-console.log(`Wrote ${OUT} (${SIZES.join('/')}px)`)
+writeFileSync(ICO_OUT, buildIco(images))
+console.log(`Wrote ${ICO_OUT} (${SIZES.join('/')}px)`)
+
+writeFileSync(PNG_OUT, await renderSize(trimmed, PNG_SIZE))
+console.log(`Wrote ${PNG_OUT} (${PNG_SIZE}px)`)
