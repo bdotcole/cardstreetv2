@@ -18,7 +18,7 @@ DECLARE
   mins int;
 BEGIN
   -- staggered minute offsets per group
-  FOR grp, mins IN SELECT * FROM (VALUES ('mtg',0),('onepiece',5),('yugioh',9),('pokemon-jp',12)) AS t(g,m) LOOP
+  FOR grp, mins IN SELECT * FROM (VALUES ('mtg',0),('onepiece',5),('yugioh',9),('pokemon-jp',12),('riftbound',16)) AS t(g,m) LOOP
     -- remove any prior schedule with this name
     FOR j IN SELECT jobid FROM cron.job WHERE jobname = 'price-games-' || grp LOOP
       PERFORM cron.unschedule(j.jobid);

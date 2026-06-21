@@ -30,6 +30,7 @@ const GROUPS = [
   { key: 'mtg', game: 'mtg', justtcgGame: 'magic-the-gathering', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'onepiece', game: 'onepiece', justtcgGame: 'one-piece-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'yugioh', game: 'yugioh', justtcgGame: 'yugioh', cardLang: 'en', storeLang: 'en', matchById: false },
+  { key: 'riftbound', game: 'riftbound', justtcgGame: 'riftbound-league-of-legends-trading-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
   // JP Pokemon: our set name is English ("White Flare") but JustTCG is "SV11W: White Flare",
   // so resolve by set-id prefix (sv11w-...) instead of name.
   { key: 'pokemon-jp', game: 'pokemon', justtcgGame: 'pokemon-japan', cardLang: 'ja', storeLang: 'jp', matchById: true },

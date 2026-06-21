@@ -94,11 +94,11 @@ export const GAMES: GameConfig[] = [
     name: 'Riftbound',
     shortName: 'Riftbound',
     languages: [LANG_EN],
-    logoUrl: '',
-    gradient: 'from-[#0e7490] to-[#083344]',
+    logoUrl: '/games/riftbound.png',
+    gradient: 'from-[#1c2742] to-[#0a0f1c]',
     textColor: 'text-white',
-    accent: 'bg-[#06b6d4]',
-    enabled: false,
+    accent: 'bg-[#e8a33d]',
+    enabled: true,
   },
 ];
 
