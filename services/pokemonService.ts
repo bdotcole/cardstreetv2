@@ -78,7 +78,7 @@ export const pokemonService = {
         }
     },
 
-    async findCardByMetadata(name: string, setHint: string, numberStr: string, languageHint: string = 'en'): Promise<Card[]> {
+    async findCardByMetadata(name: string, setHint: string, numberStr: string, languageHint: string = 'en', game?: string): Promise<Card[]> {
         try {
             const supabase = createClient();
 
@@ -99,7 +99,8 @@ export const pokemonService = {
                     .or(`number.eq.${cleanNumber},number.ilike.${cleanNumber}/%`)
                     .ilike('set_id', `%${cleanSet}%`);
                 if (languageHint && languageHint !== 'other') strictQuery = strictQuery.eq('language', languageHint);
-                
+                if (game) strictQuery = strictQuery.eq('game', game);
+
                 const { data: cards, error } = await strictQuery.limit(5);
                 if (cards && cards.length > 0) return cards.map(c => this.mapSupabaseCardToInternal(c));
             }
@@ -110,7 +111,8 @@ export const pokemonService = {
                     .or(nameSearch)
                     .or(`number.eq.${cleanNumber},number.ilike.${cleanNumber}/%`);
                 if (languageHint && languageHint !== 'other') numQuery = numQuery.eq('language', languageHint);
-                
+                if (game) numQuery = numQuery.eq('game', game);
+
                 const { data: fallbackCards } = await numQuery.limit(5);
                 if (fallbackCards && fallbackCards.length > 0) return fallbackCards.map(c => this.mapSupabaseCardToInternal(c));
             }
@@ -119,14 +121,17 @@ export const pokemonService = {
             if (cleanSet) {
                 let setQuery = supabase.from('pokemon_cards').select(baseSelect).or(nameSearch).ilike('set_id', `%${cleanSet}%`);
                 if (languageHint && languageHint !== 'other') setQuery = setQuery.eq('language', languageHint);
-                
+                if (game) setQuery = setQuery.eq('game', game);
+
                 const { data: setFallback } = await setQuery.limit(5);
                 if (setFallback && setFallback.length > 0) return setFallback.map(c => this.mapSupabaseCardToInternal(c));
             }
 
             // TIER 4: Absolute Broadest Fallback (Name Only, cross-language)
-            const { data: broadFallback, error } = await supabase.from('pokemon_cards').select(baseSelect).or(nameSearch).limit(5);
-            
+            let broadQuery = supabase.from('pokemon_cards').select(baseSelect).or(nameSearch);
+            if (game) broadQuery = broadQuery.eq('game', game);
+            const { data: broadFallback, error } = await broadQuery.limit(5);
+
             if (error) {
                 console.error('Supabase error searching cards:', error);
                 return [];

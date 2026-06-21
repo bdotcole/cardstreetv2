@@ -584,15 +584,19 @@ export default function HomePage() {
             // Use setHint (Set Code) if available as it's more accurate than Set Name
             const setIdentifier = scanData.primary.setHint || scanData.primary.set;
             const detectedLanguage = scanData.primary.language;
+            // Detected game scopes the fallback DB search to the right catalog slice.
+            // Defaults to 'pokemon' so behaviour is unchanged when the game is unknown.
+            const detectedGame = scanData.primary.game || 'pokemon';
 
-            console.log(`[Scan] Searching DB for: ${scanData.primary.name} / ${setIdentifier} / #${scanData.primary.number}`);
+            console.log(`[Scan] Searching DB for: ${scanData.primary.name} / ${setIdentifier} / #${scanData.primary.number} (game: ${detectedGame})`);
             if (detectedLanguage) console.log(`[Scan] Detected Language: ${detectedLanguage}`);
 
             let matches = await pokemonService.findCardByMetadata(
                 scanData.primary.name,
                 setIdentifier,
                 scanData.primary.number,
-                detectedLanguage
+                detectedLanguage,
+                detectedGame
             );
             console.log(`[Scan] Metadata search returned ${matches.length} matches`);
 
@@ -602,7 +606,8 @@ export default function HomePage() {
                 matches = await pokemonService.searchCards(
                     scanData.primary.name,
                     false, // useAiResolution
-                    detectedLanguage as 'en' | 'jp' | 'th' // Pass language hint to search
+                    detectedLanguage as 'en' | 'jp' | 'th', // Pass language hint to search
+                    detectedGame // Scope to the detected game
                 );
                 console.log(`[Scan] Name search returned ${matches.length} matches`);
             }
