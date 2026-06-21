@@ -204,10 +204,14 @@ export const pokemonService = {
         }
     },
 
-    async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th') {
+    async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th', game: string = 'pokemon') {
         if (!query || query.trim().length < 2) return [];
 
-        const cacheKey = `${query.toLowerCase().trim()}-all-languages`;
+        // Scope to the browsing game so a search doesn't surface cards from the
+        // other games sharing the pokemon_cards table (MTG, Yu-Gi-Oh, One Piece,
+        // Riftbound, Lorcana). Defaults to pokemon since the mobile browse view
+        // is currently Pokemon-only.
+        const cacheKey = `${query.toLowerCase().trim()}-${game}-all-languages`;
         if (searchIndex.has(cacheKey)) {
             return searchIndex.get(cacheKey) || [];
         }
@@ -224,6 +228,7 @@ export const pokemonService = {
                     pokemon_sets(name, printed_total, total),
                     market_values(market_avg, last_updated)
                 `)
+                .eq('game', game)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
                 .limit(50); // Lower limit for mobile
 
