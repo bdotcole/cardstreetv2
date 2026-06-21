@@ -40,6 +40,27 @@ const GAME_SLUG = {
   yugioh: 'yugioh',
   onepiece: 'one-piece-card-game',
   riftbound: 'riftbound-league-of-legends-trading-card-game',
+  lorcana: 'disney-lorcana',
+};
+
+// Our set_id -> JustTCG set id, for sets whose names don't match by
+// normalization (JustTCG prefixes the SM era with "SM - ", etc.).
+const SET_ID_OVERRIDES = {
+  sm1: 'sm-base-set-pokemon',
+  sm2: 'sm-guardians-rising-pokemon',
+  sm3: 'sm-burning-shadows-pokemon',
+  sm4: 'sm-crimson-invasion-pokemon',
+  sm5: 'sm-ultra-prism-pokemon',
+  sm6: 'sm-forbidden-light-pokemon',
+  sm7: 'sm-celestial-storm-pokemon',
+  sm8: 'sm-lost-thunder-pokemon',
+  sm9: 'sm-team-up-pokemon',
+  sm10: 'sm-unbroken-bonds-pokemon',
+  sm11: 'sm-unified-minds-pokemon',
+  sm12: 'sm-cosmic-eclipse-pokemon',
+  smp: 'sm-promos-pokemon',
+  // Lorcana: LorcanaJSON names it "The Reign of Jafar"; JustTCG drops the "The".
+  'lorcana-8': 'reign-of-jafar-disney-lorcana',
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -61,9 +82,13 @@ async function jtcg(path) {
 // setFilter is a comma list of set ids; each entry matches either the literal
 // set_id (Pokemon sets aren't namespaced, e.g. "me03") or the game-namespaced
 // form (Scryfall/ygoprodeck ids, e.g. "mtg-blb" from "--set=blb").
+// "SM05" -> "sm5": case-insensitive, leading zeros in the numeric part stripped
+const normNum = (s) => String(s || '').toLowerCase().replace(/(\D)0+(?=\d)/, '$1').replace(/^0+(?=\d)/, '');
+
 async function loadCatalog(ourGame, setFilter) {
   const byTcgId = new Map();
   const byName = new Map(); // `${ourSetId}|${normName}` -> our card id (first printing)
+  const byNumber = new Map(); // `${ourSetId}|${normNum}` -> our card id
   const ourSets = new Map(); // normalized set name -> our set_id
   const setIds = setFilter
     ? setFilter.split(',').flatMap((s) => [s.trim(), `${ourGame}-${s.trim()}`])
@@ -75,20 +100,27 @@ async function loadCatalog(ourGame, setFilter) {
       .select('id, name, number, set_id, raw_data->tcgplayer_id, pokemon_sets(name)')
       .eq('game', ourGame);
     if (setIds) q = q.in('set_id', setIds);
-    const { data, error } = await q.range(from, from + 999);
+    // Stable ORDER BY so range-paginating a large catalog (>1000 rows, e.g.
+    // Lorcana's ~3k) reads every row exactly once. Without it PostgREST's
+    // arbitrary order can skip whole sets across page boundaries.
+    const { data, error } = await q.order('id', { ascending: true }).range(from, from + 999);
     if (error) throw error;
     if (!data?.length) break;
     for (const c of data) {
       if (c.tcgplayer_id) byTcgId.set(String(c.tcgplayer_id), c.id);
       const nameKey = `${c.set_id}|${norm(c.name)}`;
       if (!byName.has(nameKey)) byName.set(nameKey, c.id);
+      if (c.number) {
+        const numKey = `${c.set_id}|${normNum(c.number)}`;
+        if (!byNumber.has(numKey)) byNumber.set(numKey, c.id);
+      }
       const setName = c.pokemon_sets?.name;
       if (setName) ourSets.set(norm(setName), c.set_id);
     }
     if (data.length < 1000) break;
     from += 1000;
   }
-  return { byTcgId, byName, ourSets };
+  return { byTcgId, byName, byNumber, ourSets };
 }
 
 // market_values is unique on (card_id, language, condition) — one current price
@@ -129,6 +161,11 @@ async function pricesForSet(justtcgSetId, ourSetId, slug, ourGame, idx) {
       // the resolved set (Yu-Gi-Oh and any source lacking tcgplayer ids).
       let cardId = card.tcgplayerId ? idx.byTcgId.get(String(card.tcgplayerId)) : undefined;
       if (!cardId) cardId = idx.byName.get(`${ourSetId}|${norm(card.name)}`);
+      // promo sets embed the number in the name ("Dragonite GX - SM156"); match
+      // by collector number, skipping qualified variants (Prerelease/Staff)
+      if (!cardId && card.number && !/[([]/.test(card.name)) {
+        cardId = idx.byNumber.get(`${ourSetId}|${normNum(card.number)}`);
+      }
       if (!cardId) continue;
       matched++;
       rows.push(...rowsForCard(card, cardId, ourGame));
@@ -177,7 +214,7 @@ async function main() {
   let totalMatched = 0;
   let totalPriced = 0;
   for (const [normName, ourSetId] of idx.ourSets) {
-    const jtcgSetId = jtcgByName.get(normName);
+    const jtcgSetId = SET_ID_OVERRIDES[ourSetId] || jtcgByName.get(normName);
     if (!jtcgSetId) {
       console.warn(`[justtcg] no JustTCG set matched "${ourSetId}" (name "${normName}") — skipping`);
       continue;

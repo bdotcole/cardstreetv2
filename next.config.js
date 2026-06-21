@@ -105,6 +105,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'product-images.tcgplayer.com',
       },
+      {
+        // Disney Lorcana official CDN (LorcanaJSON catalog images)
+        protocol: 'https',
+        hostname: 'api.lorcana.ravensburger.com',
+      },
     ],
   },
   experimental: {

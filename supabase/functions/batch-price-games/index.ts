@@ -31,6 +31,7 @@ const GROUPS = [
   { key: 'onepiece', game: 'onepiece', justtcgGame: 'one-piece-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'yugioh', game: 'yugioh', justtcgGame: 'yugioh', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'riftbound', game: 'riftbound', justtcgGame: 'riftbound-league-of-legends-trading-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
+  { key: 'lorcana', game: 'lorcana', justtcgGame: 'disney-lorcana', cardLang: 'en', storeLang: 'en', matchById: false },
   // JP Pokemon: our set name is English ("White Flare") but JustTCG is "SV11W: White Flare",
   // so resolve by set-id prefix (sv11w-...) instead of name.
   { key: 'pokemon-jp', game: 'pokemon', justtcgGame: 'pokemon-japan', cardLang: 'ja', storeLang: 'jp', matchById: true },
@@ -48,6 +49,11 @@ const JP_SLUG_OVERRIDES: Record<string, string> = {
   SVK: 'sv-stellar-miracle-deck-build-box-pokemon-japan', SVLN: 'sv-sylveon-ex-stellar-tera-type-starter-set-pokemon-japan', SVLS: 'sv-ceruledge-ex-stellar-tera-type-starter-set-pokemon-japan',
   neo1: 'gold-silver-to-a-new-world-pokemon-japan', neo2: 'crossing-the-ruins-pokemon-japan', neo3: 'awakening-legends-pokemon-japan', neo4: 'darkness-and-to-light-pokemon-japan',
   PMCG1: 'expansion-pack-pokemon-japan', PMCG2: 'pokemon-jungle-pokemon-japan', PMCG3: 'mystery-of-the-fossils-pokemon-japan', PMCG4: 'rocket-gang-pokemon-japan', PMCG5: 'leaders-stadium-pokemon-japan', PMCG6: 'challenge-from-the-darkness-pokemon-japan',
+};
+
+// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id).
+const NAME_SLUG_OVERRIDES: Record<string, string> = {
+  'lorcana-8': 'reign-of-jafar-disney-lorcana',
 };
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -124,7 +130,8 @@ Deno.serve(async (req) => {
           slug = JP_SLUG_OVERRIDES[set.id]
             ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id;
         } else {
-          slug = byName.get(norm(set.name));
+          // LorcanaJSON names set 8 "The Reign of Jafar"; JustTCG drops the "The".
+          slug = NAME_SLUG_OVERRIDES[set.id] ?? byName.get(norm(set.name));
         }
         if (!slug) continue;
 

@@ -9,7 +9,7 @@
 // (see app/api/sets/route.ts). Only games with more than one language render a
 // language selector — this drives the "pick game, then language if needed" flow.
 
-export type GameId = 'pokemon' | 'mtg' | 'yugioh' | 'onepiece' | 'riftbound';
+export type GameId = 'pokemon' | 'mtg' | 'yugioh' | 'onepiece' | 'riftbound' | 'lorcana';
 
 export type GameLanguageCode = 'en' | 'jp' | 'th';
 
@@ -98,6 +98,17 @@ export const GAMES: GameConfig[] = [
     gradient: 'from-[#1c2742] to-[#0a0f1c]',
     textColor: 'text-white',
     accent: 'bg-[#e8a33d]',
+    enabled: true,
+  },
+  {
+    id: 'lorcana',
+    name: 'Disney Lorcana',
+    shortName: 'Lorcana',
+    languages: [LANG_EN],
+    logoUrl: '/games/lorcana.png',
+    gradient: 'from-[#3b1d6e] to-[#140a2e]',
+    textColor: 'text-white',
+    accent: 'bg-[#d4af37]',
     enabled: true,
   },
 ];
