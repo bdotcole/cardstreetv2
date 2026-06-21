@@ -5,42 +5,56 @@ import { cookies } from 'next/headers'
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
-    
+
     // Check for cookie intention in case Supabase strips query params on fallback
     const cookieStore = await cookies()
     const storedNext = cookieStore.get('cardstreet_auth_redirect')?.value
-    
+
     // if "next" is in param, use it; otherwise fallback to cookie, then '/'
     const next = searchParams.get('next') ?? storedNext ?? '/'
+
+    // Resolve the public-facing origin once. In production the request reaches us
+    // behind a load balancer, so the original host is in x-forwarded-host; falling
+    // back to it (then host, then the request origin) keeps every redirect below
+    // on the host the user's browser is actually on.
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const host = request.headers.get('host')
+    const isLocalEnv = process.env.NODE_ENV === 'development'
+    const base = isLocalEnv
+        ? origin
+        : forwardedHost
+            ? `https://${forwardedHost}`
+            : host && !host.includes('localhost')
+                ? `https://${host}`
+                : origin
 
     if (code) {
         const supabase = await createClient()
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
-            const isLocalEnv = process.env.NODE_ENV === 'development'
-
-            if (isLocalEnv) {
-                return NextResponse.redirect(`${origin}${next}`)
-            } else if (forwardedHost) {
-                return NextResponse.redirect(`https://${forwardedHost}${next}`)
-            } else {
-                const host = request.headers.get('host')
-                if (host && !host.includes('localhost')) {
-                    return NextResponse.redirect(`https://${host}${next}`)
-                }
-                return NextResponse.redirect(`${origin}${next}`)
-            }
-        } else {
-            // Log the real error server-side; show the user only a static code.
-            // Reflecting error.message into the redirect URL is an XSS / phishing
-            // surface (an attacker can craft a code that produces a chosen string).
-            console.error('[Auth Callback] Code exchange failed:', error.message)
-            return NextResponse.redirect(`${origin}/?error=auth_failed&code=exchange_failed`)
+            return NextResponse.redirect(`${base}${next}`)
         }
+
+        // The PKCE auth code is single-use. A duplicated/retried callback request
+        // (browser speculative load, double navigation, flaky-network retry), or
+        // an OAuth round-trip made while a valid session already existed, lands
+        // here with a "code already used / verifier mismatch" error even though
+        // the user IS authenticated. Don't bounce an authenticated user to an
+        // error page — confirm the session and continue to `next`. getUser()
+        // validates the token with Supabase, so we never honor a forged cookie.
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            return NextResponse.redirect(`${base}${next}`)
+        }
+
+        // Log the real error server-side; show the user only a static code.
+        // Reflecting error.message into the redirect URL is an XSS / phishing
+        // surface (an attacker can craft a code that produces a chosen string).
+        console.error('[Auth Callback] Code exchange failed:', error.message)
+        return NextResponse.redirect(`${base}/?error=auth_failed&code=exchange_failed`)
     }
 
     // return the user to an error page with instructions
     console.error('[Auth Callback] Code missing')
-    return NextResponse.redirect(`${origin}/?error=auth_failed&code=missing_code`)
+    return NextResponse.redirect(`${base}/?error=auth_failed&code=missing_code`)
 }
