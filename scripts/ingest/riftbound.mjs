@@ -31,6 +31,21 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE
 const RAW_BASE = 'https://raw.githubusercontent.com/apitcg/riftbound-tcg-data/main';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// apitcg sets carry no set logo/symbol, and the SetBrowser tile falls back to a
+// bare letter when set.images.logo is empty. Use an iconic card as the set cover
+// instead: prefer a base Champion Unit, highest rarity, lowest number.
+const RARITY_RANK = { Epic: 0, Rare: 1, Uncommon: 2, Common: 3 };
+function pickCover(rows) {
+  return [...rows].sort((a, b) => {
+    const ta = /champion/i.test(a.raw_data.card_type || '') ? 0 : (/legend/i.test(a.raw_data.card_type || '') ? 1 : 2);
+    const tb = /champion/i.test(b.raw_data.card_type || '') ? 0 : (/legend/i.test(b.raw_data.card_type || '') ? 1 : 2);
+    if (ta !== tb) return ta - tb;
+    const ra = RARITY_RANK[a.rarity] ?? 9, rb = RARITY_RANK[b.rarity] ?? 9;
+    if (ra !== rb) return ra - rb;
+    return (parseInt(a.number) || 999) - (parseInt(b.number) || 999);
+  })[0];
+}
+
 async function ghJson(path) {
   await sleep(150);
   const res = await fetch(`${RAW_BASE}${path}`, { headers: { 'User-Agent': 'CardStreetTCG/1.0', Accept: 'application/json' } });
@@ -81,6 +96,7 @@ async function ingestSet(set) {
     });
   }
 
+  const cover = pickCover(rows);
   const { error: setErr } = await supabase.from('pokemon_sets').upsert(
     {
       id: `rb-${set.id}`,
@@ -89,6 +105,9 @@ async function ingestSet(set) {
       printed_total: rows.length,
       total: rows.length,
       release_date: set.releaseDate || null,
+      // No upstream set logo — represent the set by an iconic card's art.
+      symbol_url: cover?.image_small || null,
+      logo_url: cover?.image_small || null,
       language: 'en',
       game: 'riftbound',
     },
