@@ -73,6 +73,33 @@ export interface ApiSet {
 
 const EXCHANGE_RATE = 35.85;
 
+// Embedded TCGplayer prices arrive in two shapes depending on the upstream source:
+//   pokemontcg.io: tcgData.prices.<printing>.{market,mid,low}
+//   TCGdex:        tcgData.<printing>.{marketPrice,midPrice,lowPrice}  (printing keys
+//                  sit directly on tcgplayer alongside `unit`/`updated`)
+// Reading only the first shape made TCGdex-sourced EN sets render priceless. Mirrors
+// the web mapper in lib/cardMapper.ts; keep the two in sync.
+function tcgplayerMarketUsd(tcgData: any): number {
+    if (!tcgData || typeof tcgData !== 'object') return 0;
+
+    const priceTypes = tcgData.prices;
+    if (priceTypes && typeof priceTypes === 'object') {
+        const p = priceTypes.holofoil || priceTypes.normal || Object.values(priceTypes)[0] || {};
+        const usd = (p as any)?.market || (p as any)?.mid || (p as any)?.low || 0;
+        if (typeof usd === 'number' && usd > 0) return usd;
+    }
+
+    const printing = tcgData.holofoil || tcgData.normal || tcgData['reverse-holofoil']
+        || Object.values(tcgData).find((v: any) => v && typeof v === 'object'
+            && ('marketPrice' in v || 'midPrice' in v || 'lowPrice' in v));
+    if (printing && typeof printing === 'object') {
+        const usd = (printing as any).marketPrice ?? (printing as any).midPrice ?? (printing as any).lowPrice ?? 0;
+        if (typeof usd === 'number' && usd > 0) return usd;
+    }
+
+    return 0;
+}
+
 // In-memory caches (fast path) — backed by AsyncStorage for persistence across restarts
 const searchIndex = new Map<string, Card[]>();
 const setsCache = new Map<string, { data: ApiSet[], totalCount: number }>();
@@ -283,9 +310,7 @@ export const pokemonService = {
             marketThb = Math.round(marketValueData.market_avg);
             lastUpdated = marketValueData.last_updated;
         } else {
-            const pricesTypes = tcgData?.prices || {};
-            const pricesObj = pricesTypes.holofoil || pricesTypes.normal || Object.values(pricesTypes)[0] || {};
-            const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || 0;
+            const marketUsd = tcgplayerMarketUsd(tcgData);
             marketThb = Math.round(marketUsd * EXCHANGE_RATE);
         }
 

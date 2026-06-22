@@ -44,6 +44,36 @@ function normalizeThaiRarity(rarity: string | null | undefined): string {
   return lookup || rarity;
 }
 
+// Embedded TCGplayer prices arrive in two shapes depending on the upstream source:
+//   pokemontcg.io: tcgData.prices.<printing>.{market,mid,low}
+//   TCGdex:        tcgData.<printing>.{marketPrice,midPrice,lowPrice}  (printing keys
+//                  sit directly on tcgplayer alongside `unit`/`updated`)
+// The mapper historically read only the first, so TCGdex-sourced EN sets (e.g. me03,
+// me04) rendered priceless even though raw_data carried TCGplayer numbers. Printing
+// preference mirrors the catalog convention: holofoil, then normal, then first usable.
+function tcgplayerMarketUsd(tcgData: any): number {
+  if (!tcgData || typeof tcgData !== 'object') return 0;
+
+  // pokemontcg.io shape
+  const priceTypes = tcgData.prices;
+  if (priceTypes && typeof priceTypes === 'object') {
+    const p = priceTypes.holofoil || priceTypes.normal || Object.values(priceTypes)[0] || {};
+    const usd = (p as any)?.market || (p as any)?.mid || (p as any)?.low || 0;
+    if (typeof usd === 'number' && usd > 0) return usd;
+  }
+
+  // TCGdex shape
+  const printing = tcgData.holofoil || tcgData.normal || tcgData['reverse-holofoil']
+    || Object.values(tcgData).find((v: any) => v && typeof v === 'object'
+        && ('marketPrice' in v || 'midPrice' in v || 'lowPrice' in v));
+  if (printing && typeof printing === 'object') {
+    const usd = (printing as any).marketPrice ?? (printing as any).midPrice ?? (printing as any).lowPrice ?? 0;
+    if (typeof usd === 'number' && usd > 0) return usd;
+  }
+
+  return 0;
+}
+
 const THAI_SET_MAP: Record<string, string> = {
   SV1V: 'Violet ex',
   SV1S: 'Scarlet ex',
@@ -68,8 +98,6 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // List queries project `tcgplayer:raw_data->tcgplayer` instead of shipping the
   // whole raw_data blob, so the slice arrives as a top-level key.
   const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
-  const pricesTypes = tcgData?.prices || {};
-  const pricesObj = pricesTypes.holofoil || pricesTypes.normal || Object.values(pricesTypes)[0] || {};
 
   const marketValueData = Array.isArray(supabaseCard.market_values)
     ? supabaseCard.market_values[0]
@@ -83,7 +111,7 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     marketThb = avg;
     lastUpdated = marketValueData.last_updated;
   } else {
-    const marketUsd = (pricesObj as any)?.market || (pricesObj as any)?.mid || (pricesObj as any)?.low || 0;
+    const marketUsd = tcgplayerMarketUsd(tcgData);
     marketThb = Math.round(marketUsd * EXCHANGE_RATE);
   }
 
