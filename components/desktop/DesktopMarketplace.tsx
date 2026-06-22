@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
-import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
@@ -193,6 +193,8 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                     fill
                     sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
                     loading={eager ? 'eager' : 'lazy'}
+                    placeholder="blur"
+                    blurDataURL={CARD_BLUR_DATA_URL}
                     unoptimized={shouldSkipNextOptimization(imageUrl)}
                     onError={() => setCatalogArtFailed(true)}
                     className="object-cover group-hover:scale-[1.03] transition-transform duration-300"

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 import Image from 'next/image';
-import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 
 interface MasterSetDetailProps {
   set: ApiSet;
@@ -117,6 +117,8 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                       alt={card.name}
                       fill
                       sizes="33vw"
+                      placeholder="blur"
+                      blurDataURL={CARD_BLUR_DATA_URL}
                       className="object-cover"
                       unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                       onError={(e) => { (e.target as HTMLElement).style.visibility = 'hidden'; }}

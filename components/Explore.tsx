@@ -5,7 +5,7 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 
 interface ExploreProps {
@@ -434,6 +434,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                               src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                               fill
                               sizes="56px"
+                              placeholder="blur"
+                              blurDataURL={CARD_BLUR_DATA_URL}
                               unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                               className="object-contain"
                               alt={card.name}

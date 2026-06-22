@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { CURRENCY_SYMBOLS } from '@/constants';
-import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
 import { Card } from '@/types';
@@ -275,6 +275,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                   fill
                   sizes="80px"
                   loading={idx < 4 ? 'eager' : 'lazy'}
+                  placeholder="blur"
+                  blurDataURL={CARD_BLUR_DATA_URL}
                   unoptimized={shouldSkipNextOptimization(getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl))}
                   className="object-cover"
                 />

@@ -90,7 +90,11 @@ async function fetchBuffer(url, attempt = 0) {
 async function uploadWebp(objectPath, buf) {
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(objectPath, buf, { contentType: 'image/webp', upsert: true });
+    // Card art is immutable once published, so cache it for a year. Without this
+    // Supabase defaults objects (and the render endpoint that serves them) to
+    // max-age=3600, so thumbnails keep aging out of the Cloudflare edge and get
+    // re-transformed — the storage-CDN analog of next.config's minimumCacheTTL.
+    .upload(objectPath, buf, { contentType: 'image/webp', upsert: true, cacheControl: '31536000' });
   if (error) throw new Error(`upload ${objectPath}: ${error.message}`);
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${objectPath}`;
 }

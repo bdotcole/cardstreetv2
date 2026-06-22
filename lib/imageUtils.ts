@@ -8,6 +8,16 @@
 
 const PLACEHOLDER = 'https://images.pokemontcg.io/placeholder.png';
 
+/**
+ * A tiny (278B) card-aspect gradient in the brand-dark palette, used as the
+ * next/image `blurDataURL`. It paints instantly while the real thumbnail loads,
+ * so a new user browsing never-before-cached cards sees a clean skeleton rather
+ * than empty boxes during the (~1s) first-view Vercel optimizer transform.
+ * Shared across every card grid so the skeleton reads consistently.
+ */
+export const CARD_BLUR_DATA_URL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAYAAAAiYZ4HAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAyElEQVR4nI2RSQ7DIAxFfYOSgBlDhs5V73++X5l0WlSNFxaSed9+AuJyAJc9XF7g0gwrFSf0YUQXKjo/wHCB4YydSyAJuLwG3nAc0b9g/4HlJP4Dd284t5JN9FH5gn+oGC6tRxpvw7n15J403kb0QkUfJ5DGu/O1TbdxBmm8+yfs0gLSeNs4waalPT9pvG2aGyx/Rhpvl/bgfIAvpzWw5b3CR/jhDNJ4c4NPCPUigW3vFxzHK0jjHYYzYr0ijTcJbHuv029I0x0PIsj0tViPg44AAAAASUVORK5CYII=';
+
 function downsizeTcgdex(url: string, quality: 'low' | 'high'): string {
     // tcgdex assets follow `/<set>/<id>` and optionally `/<quality>.<ext>`
     const stripped = url.replace(/\/(low|high)(\.(png|jpg|jpeg|webp))?$/i, '')

@@ -35,7 +35,7 @@ async function main() {
     if (!r.ok) { console.log('skip', s.id, r.status); continue; }
     const buf = Buffer.from(await r.arrayBuffer());
     const path = `jp-set-logos/${s.id}.png`;
-    const up = await supabase.storage.from(BUCKET).upload(path, buf, { contentType: 'image/png', upsert: true });
+    const up = await supabase.storage.from(BUCKET).upload(path, buf, { contentType: 'image/png', upsert: true, cacheControl: '31536000' });
     if (up.error) { console.log('upload fail', s.id, up.error.message); continue; }
     const publicUrl = `${SUPA}/storage/v1/object/public/${BUCKET}/${path}`;
     const { error: ue } = await supabase.from('pokemon_sets').update({ logo_url: publicUrl, symbol_url: publicUrl }).eq('id', s.id);
