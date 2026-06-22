@@ -40,6 +40,12 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 
 Each row may have `image_large`, `image_small`, and `raw_data` (full original API response). Use **`lib/cardMapper.ts:mapSupabaseCardToInternal`** to normalize into the in-app `Card` type — it handles TCGdex URL fixups (`.png` suffix), price-currency conversion, Thai set-name aliases, and image fallbacks. Don't reinvent this in new code; import it.
 
+**Embedded TCGplayer prices come in two shapes** (the fallback when a card has no `market_values` row). The mapper's `tcgplayerMarketUsd` helper reads both — don't reintroduce a single-shape reader:
+- **pokemontcg.io**: `raw_data.tcgplayer.prices.<printing>.{market,mid,low}`
+- **TCGdex**: `raw_data.tcgplayer.<printing>.{marketPrice,midPrice,lowPrice}` (printing keys sit directly on `tcgplayer` alongside `unit`/`updated`)
+
+TCGdex-sourced EN sets (e.g. me03, me04) rendered priceless for a while because only the first shape was read. The mobile mapper in `cardstreet-mobile/services/pokemonService.ts` has the same helper — **keep the two in sync**. To instead materialize TCGdex prices into `market_values` rows (needed for downstream Thai derivation), use `scripts/price-en-from-rawdata.mjs`.
+
 ## Card images (self-hosted)
 
 Card art used to be hotlinked from third-party hosts (TCGdex, ygoprodeck, Scryfall, optcgapi, asia.pokemon-card, pokemontcg.io). When TCGdex went fully unreachable in June 2026, most English Pokémon art blanked. Card images are now **mirrored into our own Supabase storage** so the catalog never depends on an upstream host being up.
@@ -226,6 +232,12 @@ The client gate is UX only and **fails open** (a `/api/geo` hiccup leaves `purch
 - Re-run is safe: already-hashed rows are excluded by the filter.
 
 Failures (~400) are cards with broken `image_large` URLs (mostly XY-era promos). Skips (~2.4k) are cards with no image URL in any field. Both classes need upstream catalog fixes, not script fixes.
+
+## Thai `english_name` backfill
+
+Thai (`language='th'`) rows store the Thai card name in `name` and often leave `english_name` null, which hurts English search of Thai cards. `scripts/backfill-thai-english-name.mjs` fills `english_name` from the **Japanese twin** — matched on the same `set_id` + `number`. This is the **only safe source**: Thai reprints a Japanese set 1:1 with identical numbering, so `ja <set>/<n>` is the same card, but the **English twin renumbers**, so an EN number-match would mislabel cards. The `set_bridge` (`scripts/build_set_bridge.ts`) maps Thai→EN for *pricing only* — never use it for names. Dry-run by default, `--commit` to write, idempotent (only fills empty rows), reversible per set.
+
+Coverage is limited to sets whose JA twin is in-catalog under the same code (filled 461 rows across S12/S12a/S9/S9a/SVK). The ~4k rows on "orphan" sets (S8b, S11, S10\*, SC\*, SVM, SVT\*, SVA\*, MAA\*, promos M-P/S-P) have no in-catalog JA twin and need a JA-name→EN-name dictionary instead.
 
 ## Applying migrations
 
