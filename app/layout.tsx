@@ -44,6 +44,37 @@ export default async function RootLayout({
                 {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
                     <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
                 )}
+                {/* Meta Pixel. Loads inside the iOS WebView and on web; conversion
+                    events are sent via lib/metaEvents.ts (which also bridges to the
+                    native FB SDK in the app). Inert until NEXT_PUBLIC_META_PIXEL_ID
+                    is set, so this is safe to ship before the Pixel is configured. */}
+                {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
+                    <>
+                        <script
+                            dangerouslySetInnerHTML={{
+                                __html: `!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${process.env.NEXT_PUBLIC_META_PIXEL_ID}');
+fbq('track', 'PageView');`,
+                            }}
+                        />
+                        <noscript>
+                            <img
+                                height="1"
+                                width="1"
+                                style={{ display: 'none' }}
+                                alt=""
+                                src={`https://www.facebook.com/tr?id=${process.env.NEXT_PUBLIC_META_PIXEL_ID}&ev=PageView&noscript=1`}
+                            />
+                        </noscript>
+                    </>
+                )}
                 <UserSettingsProvider initialLanguage={lang}>
                     <ToastProvider>
                         <HtmlLangSync />

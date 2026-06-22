@@ -36,6 +36,7 @@ import {
 
 import { createClient } from '@/lib/supabase/client';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
@@ -68,6 +69,17 @@ export default function HomePage() {
     }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+    // Meta ViewContent: fires once whenever a card detail opens, regardless of
+    // which path set selectedCard (marketplace tap, scan match, deep link, etc.).
+    useEffect(() => {
+        if (selectedCard) {
+            trackMetaEvent('ViewContent', {
+                content_ids: [selectedCard.id].filter(Boolean),
+                content_type: 'product',
+            });
+        }
+    }, [selectedCard]);
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
@@ -456,6 +468,14 @@ export default function HomePage() {
             return [...prev, item];
         });
         setIsCartOpen(true);
+        // Meta AddToCart (value in the user's display currency, matching the
+        // PaymentModal/Purchase convention).
+        trackMetaEvent('AddToCart', {
+            value: item.price * (currency === 'THB' ? 1 : exchangeRate),
+            currency,
+            content_ids: [item.cardId || item.id].filter(Boolean),
+            content_type: 'product',
+        });
     };
 
     const handleRemoveFromCart = (id: string) => {
@@ -519,6 +539,15 @@ export default function HomePage() {
         }
 
         setIsCartOpen(false);
+        // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
+        // profile gates and the payment modal actually opens.
+        trackMetaEvent('InitiateCheckout', {
+            value: cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
+            currency,
+            content_ids: cart.map(i => i.cardId || i.id).filter(Boolean),
+            content_type: 'product',
+            num_items: cart.length,
+        });
         setIsPaymentModalOpen(true);
     };
 
