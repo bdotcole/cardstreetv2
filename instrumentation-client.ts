@@ -24,9 +24,16 @@ if (dsn) {
         // users, drowns out real regressions. Deliberately NOT filtering
         // WebKit's "Unexpected EOF" — truncated script loads are evidence we
         // want while diagnosing iPad/WKWebView behavior.
+        // Android WebView / Capacitor bridge teardown (CARDSTREET-17/-18). The
+        // native bridge throws "Error invoking postMessage: Java object is gone"
+        // when JS reaches it after Android has destroyed the WebView's backing
+        // Java object (app backgrounded, activity recreated, low-memory reclaim).
+        // The native peer is already gone — nothing to fix in JS, zero impact.
         ignoreErrors: [
             /googletagmanager/i,
             "Failed to execute 'appendChild' on 'Node': Invalid or unexpected token",
+            /Java object is gone/i,
+            /Error invoking postMessage/i,
         ],
         integrations: [
             Sentry.browserTracingIntegration(),
