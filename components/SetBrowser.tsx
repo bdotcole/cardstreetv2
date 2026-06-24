@@ -3,10 +3,11 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
+import { getSetLogoUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 
 const ImageFallback = ({ src, alt }: { src: string, alt: string }) => {
   const [error, setError] = useState(false);
-  
+
   if (error) {
     return (
       <span className="logo-fallback text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">
@@ -15,14 +16,15 @@ const ImageFallback = ({ src, alt }: { src: string, alt: string }) => {
     );
   }
 
+  const logoSrc = getSetLogoUrl(src, 300);
   return (
     <Image
-      src={src}
+      src={logoSrc}
       alt={alt}
       fill
       sizes="150px"
       className="object-contain filter drop-shadow-lg p-2"
-      unoptimized={src.includes('asia.pokemon-card.com')}
+      unoptimized={shouldSkipNextOptimization(logoSrc)}
       onError={() => setError(true)}
     />
   );

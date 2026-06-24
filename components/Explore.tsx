@@ -5,7 +5,7 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
+import { getThumbnailUrl, getSetLogoUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 
 interface ExploreProps {
@@ -312,11 +312,11 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
                             {set.images.logo ? (
                               <Image
-                                src={set.images.logo}
+                                src={getSetLogoUrl(set.images.logo, 160)}
                                 alt={set.name}
                                 fill
                                 sizes="64px"
-                                unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
+                                unoptimized={shouldSkipNextOptimization(getSetLogoUrl(set.images.logo, 160))}
                                 className="object-contain p-1"
                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />

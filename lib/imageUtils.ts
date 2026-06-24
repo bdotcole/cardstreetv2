@@ -87,6 +87,33 @@ export function getThumbnailUrl(url: string | null | undefined): string {
 }
 
 /**
+ * Returns a fast URL for a set logo.
+ *
+ * Set logos live in their own `set-logos` bucket (NOT card-images, which
+ * getOptimizedImageUrl deliberately serves direct to avoid render-endpoint
+ * billing at 73k-card scale). Logos are few and want per-display downsizing,
+ * so they keep the render path. We can't reuse getOptimizedImageUrl here: it
+ * would rewrite a tcgdex `.../logo` into a broken `.../logo/low.webp`. This
+ * only rewrites our own Supabase-mirrored logos to the CDN render endpoint;
+ * every other host is returned unchanged so the caller can let the Vercel
+ * optimizer transcode it (e.g. a 200-480KB asia.pokemon-card.com PNG -> ~5KB).
+ *
+ * Pair the result with shouldSkipNextOptimization(): true for the Supabase
+ * render endpoint (already CDN-sized), false otherwise (optimizer transcodes).
+ */
+export function getSetLogoUrl(url: string | null | undefined, width: number = 240, quality: number = 80): string {
+    if (!url || typeof url !== 'string' || !url.trim()) return '';
+    url = url.trim();
+    if (url.includes('.supabase.co/storage/v1/object/public/')) {
+        return url.replace(
+            '/storage/v1/object/public/',
+            '/storage/v1/render/image/public/'
+        ) + `?width=${width}&quality=${quality}&resize=contain`;
+    }
+    return url;
+}
+
+/**
  * Whether to skip Next.js image optimization for a given URL.
  *
  * Pass the URL you are about to render (i.e. AFTER getThumbnailUrl /
