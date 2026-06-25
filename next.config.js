@@ -137,7 +137,7 @@ const nextConfig = {
 // the gap that left CARDSTREET-5's real frames unreadable for two months.
 module.exports = withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG || "cardstreet",
-  project: process.env.SENTRY_PROJECT || "javascript-nextjs",
+  project: process.env.SENTRY_PROJECT || "cardstreet",
   authToken: process.env.SENTRY_AUTH_TOKEN,
   // Stay quiet locally, but log upload status in the Vercel build so a missing
   // auth token is visible next time instead of silently skipping upload.
