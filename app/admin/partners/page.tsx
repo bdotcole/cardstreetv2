@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeCampaign } from '@/lib/appLinks'
 
 // Mirror of lib/referrals.sanitizeUsername — keep the admin form's live
 // suggestion in step with the server's accepted username shape.
@@ -41,18 +42,24 @@ interface PartnerRow {
 // admin panel happens to be running.
 const joinLink = (slug: string) => `https://cardstreet.app/join/${slug}`
 
-async function downloadQr(slug: string) {
+// Generic (non-partner) download QR. Scanning it device-routes to App Store /
+// Play Store / web app via the /download server route (lib/appLinks.ts).
+const APP_DOWNLOAD_LINK = 'https://cardstreet.app/download'
+
+async function downloadQrForUrl(url: string, filename: string) {
     const QRCode = (await import('qrcode')).default
-    const dataUrl = await QRCode.toDataURL(joinLink(slug), {
+    const dataUrl = await QRCode.toDataURL(url, {
         width: 512,
         margin: 2,
         color: { dark: '#0f1419', light: '#ffffff' },
     })
     const a = document.createElement('a')
     a.href = dataUrl
-    a.download = `cardstreet-qr-${slug}.png`
+    a.download = `${filename}.png`
     a.click()
 }
+
+const downloadQr = (slug: string) => downloadQrForUrl(joinLink(slug), `cardstreet-qr-${slug}`)
 
 const TIER_INFO: Record<number, { name: string; emoji: string; color: string }> = {
     1: { name: 'Bronze Rare', emoji: '🟤', color: '#d97706' },
@@ -75,6 +82,7 @@ export default function PartnersPage() {
     const [loading, setLoading] = useState(true)
     const [removing, setRemoving] = useState<string | null>(null)
     const [copiedId, setCopiedId] = useState<string | null>(null)
+    const [appCampaign, setAppCampaign] = useState('')
 
     // Add Partner (pre-provisioned shop accounts for welcome packages)
     const [showAdd, setShowAdd] = useState(false)
@@ -248,6 +256,50 @@ export default function PartnersPage() {
                     </button>
                 </form>
             </div>
+
+            {/* Generic app-download QR — no partner attribution. Scanning routes
+                to App Store / Play Store / web app by device (/download route).
+                Optional campaign tag (poster1, packaging, …) flows into Play
+                Console + App Store Connect so placements can be A/B'd. */}
+            {(() => {
+                const link = appCampaign ? `${APP_DOWNLOAD_LINK}?c=${appCampaign}` : APP_DOWNLOAD_LINK
+                const file = appCampaign ? `cardstreet-app-qr-${appCampaign}` : 'cardstreet-app-qr'
+                return (
+                    <div className="glass rounded-2xl border border-white/10 p-4 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-white">App Download QR <span className="text-slate-500 font-normal">· generic, not partner-linked</span></p>
+                                <p className="text-xs text-slate-500 font-mono truncate">{link}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <input
+                                    type="text"
+                                    value={appCampaign}
+                                    onChange={e => setAppCampaign(sanitizeCampaign(e.target.value))}
+                                    placeholder="campaign (e.g. poster1)"
+                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-cyan/50 w-44 font-mono"
+                                />
+                                <button
+                                    onClick={() => { navigator.clipboard.writeText(link); setCopiedId('app'); setTimeout(() => setCopiedId(null), 2000) }}
+                                    className="px-3 py-2 bg-white/10 text-slate-200 text-xs font-bold rounded-lg hover:bg-white/20 transition whitespace-nowrap"
+                                >
+                                    {copiedId === 'app' ? 'Copied!' : 'Copy Link'}
+                                </button>
+                                <button
+                                    onClick={() => downloadQrForUrl(link, file)}
+                                    className="px-3 py-2 bg-brand-cyan text-brand-darker text-xs font-bold rounded-lg hover:brightness-110 transition whitespace-nowrap"
+                                >
+                                    <i className="fa-solid fa-qrcode mr-1.5" />Download QR
+                                </button>
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                            Leave the campaign blank for a plain QR, or tag each placement (packaging, posters,
+                            ads) to see which drives installs in Play Console and App Store Connect.
+                        </p>
+                    </div>
+                )
+            })()}
 
             {/* Add Partner — pre-provision a shop account so its QR/link can be
                 printed for the welcome package before the shop ever signs in. */}

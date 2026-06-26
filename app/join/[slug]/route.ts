@@ -13,9 +13,10 @@
  *      - Android WebView (the Capacitor app intercepts cardstreet.app links
  *        via App Links, so an installed app opens this URL in-app) → stay in
  *        the app; the cookie lands directly in the WebView session.
- *      - iOS → the web app for now; swap IOS_APP_STORE_URL in once the App
- *        Store listing is live.
+ *      - iOS → App Store.
  *      - Desktop → the web app.
+ *   Store URLs + the device branching live in lib/appLinks.ts (shared with
+ *   /download).
  *
  * The ?ref=<slug> param on web-app redirects is a belt-and-braces fallback:
  * the shell stores it in localStorage and passes it to the attribute
@@ -26,37 +27,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getAppBaseUrl } from '@/lib/stripe';
 import { REF_COOKIE, REF_COOKIE_MAX_AGE_SECONDS, isValidSlugFormat } from '@/lib/referrals';
-
-export const runtime = 'nodejs';
-
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.cardstreet.tcg';
-const IOS_APP_STORE_URL: string | null =
-    'https://apps.apple.com/us/app/cardstreet-tcg-marketplace/id6776266347';
-
-function destinationFor(userAgent: string, slug: string, baseUrl: string): string {
-    const ua = userAgent.toLowerCase();
-    const webAppUrl = `${baseUrl}/?ref=${encodeURIComponent(slug)}`;
-
-    if (ua.includes('android')) {
-        // '; wv' is the Android System WebView marker: the visitor is already
-        // inside the Capacitor app (App Links routed them here), so keep them
-        // in the app rather than bouncing to the Play Store.
-        if (ua.includes('; wv')) return webAppUrl;
-        const referrer = encodeURIComponent(`utm_source=partner&utm_content=${slug}`);
-        return `${PLAY_STORE_URL}&referrer=${referrer}`;
-    }
-    if (/iphone|ipad|ipod/.test(ua)) {
-        return IOS_APP_STORE_URL ?? webAppUrl;
-    }
-    return webAppUrl;
-}
-
-function deviceTypeFor(userAgent: string): string {
-    const ua = userAgent.toLowerCase();
-    if (ua.includes('android')) return ua.includes('; wv') ? 'android-app' : 'android';
-    if (/iphone|ipad|ipod/.test(ua)) return 'ios';
-    return 'desktop';
-}
+import { storeDestinationFor, deviceTypeFromUA } from '@/lib/appLinks';
 
 export async function GET(
     request: NextRequest,
@@ -93,14 +64,20 @@ export async function GET(
         await admin.from('partner_downloads').insert({
             partner_id: partner.id,
             event_type: 'click',
-            device_type: deviceTypeFor(userAgent),
+            device_type: deviceTypeFromUA(userAgent),
             country: request.headers.get('x-vercel-ip-country') || null,
         });
     } catch (err) {
         console.error('[Join] Failed to log referral click:', err);
     }
 
-    const response = NextResponse.redirect(destinationFor(userAgent, slug, baseUrl));
+    const response = NextResponse.redirect(
+        storeDestinationFor(userAgent, {
+            baseUrl,
+            playReferrer: `utm_source=partner&utm_content=${slug}`,
+            webAppUrl: `${baseUrl}/?ref=${encodeURIComponent(slug)}`,
+        })
+    );
     response.cookies.set(REF_COOKIE, slug, {
         maxAge: REF_COOKIE_MAX_AGE_SECONDS,
         httpOnly: true,
