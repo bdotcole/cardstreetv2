@@ -51,8 +51,8 @@ export async function GET() {
                 .eq('event_type', eventType);
             return count ?? 0;
         };
-        const [clicks, installs, signups] = await Promise.all([
-            countOf('click'), countOf('install'), countOf('signup'),
+        const [clicks, installs, signups, storeVisits] = await Promise.all([
+            countOf('click'), countOf('install'), countOf('signup'), countOf('store_visit'),
         ]);
 
         return NextResponse.json({
@@ -61,6 +61,9 @@ export async function GET() {
             clicks,
             installs,
             signups,
+            // iOS App Store visits — counted as downloads, tracked separately so
+            // the softer iOS signal can be monitored vs Android's exact installs.
+            storeVisits,
             totalDownloads: profile.total_downloads ?? 0,
         });
     } catch (err: any) {

@@ -57,6 +57,8 @@ export async function GET(
     }
 
     const userAgent = request.headers.get('user-agent') || '';
+    const deviceType = deviceTypeFromUA(userAgent);
+    const country = request.headers.get('x-vercel-ip-country') || null;
 
     // Click logging is best-effort: a DB hiccup must never break the redirect
     // a customer just scanned a QR code for.
@@ -64,11 +66,33 @@ export async function GET(
         await admin.from('partner_downloads').insert({
             partner_id: partner.id,
             event_type: 'click',
-            device_type: deviceTypeFromUA(userAgent),
-            country: request.headers.get('x-vercel-ip-country') || null,
+            device_type: deviceType,
+            country,
         });
     } catch (err) {
         console.error('[Join] Failed to log referral click:', err);
+    }
+
+    // iOS "App Store visit" — our best download proxy for iPhone, since Apple
+    // exposes no install referrer to confirm the actual install. We count the
+    // scan-that-we-sent-to-the-App-Store once per device (deduped by a cookie)
+    // and bump total_downloads. Android is NOT counted here: its exact install
+    // is confirmed later via the Play Install Referrer (/api/referrals/install),
+    // so counting a store visit too would double-count.
+    const dedupeCookie = `cs_dl_${slug}`;
+    const alreadyCounted = request.cookies.get(dedupeCookie)?.value === '1';
+    if (deviceType === 'ios' && !alreadyCounted) {
+        try {
+            await admin.from('partner_downloads').insert({
+                partner_id: partner.id,
+                event_type: 'store_visit',
+                device_type: 'ios',
+                country,
+            });
+            await admin.rpc('increment_partner_downloads', { p_partner_id: partner.id });
+        } catch (err) {
+            console.error('[Join] Failed to log store_visit:', err);
+        }
     }
 
     const response = NextResponse.redirect(
@@ -85,5 +109,16 @@ export async function GET(
         sameSite: 'lax',
         path: '/',
     });
+    // Mark this device as counted for this partner so repeat iPhone scans don't
+    // re-inflate the store-visit total. Long-lived; best-effort dedupe.
+    if (deviceType === 'ios') {
+        response.cookies.set(dedupeCookie, '1', {
+            maxAge: 180 * 24 * 60 * 60,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            path: '/',
+        });
+    }
     return response;
 }
