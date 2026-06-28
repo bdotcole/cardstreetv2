@@ -111,8 +111,9 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
   };
 
   // Thai sets are portrait pack images (not wordmark logos), so we render them
-  // larger with minimal padding to fill the tile.
-  const isThai = region?.includes('th');
+  // larger with minimal padding to fill the tile. Region-based, not UI language
+  // (isThai from useTranslation is the UI locale) — enlarge regardless of locale.
+  const isThaiRegion = region?.includes('th');
 
   // Calculate completion % for a set
   const getSetCompletion = useCallback((set: ApiSet) => {
@@ -301,14 +302,14 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                   onClick={() => onSelectSet(set, getLanguageFromRegion())}
                   className="group flex flex-col items-center gap-2 active:scale-95 transition-all w-full mb-4"
                 >
-                  <div className={`w-full aspect-square glass rounded-3xl ${isThai ? 'p-1' : 'p-3'} flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden`}>
+                  <div className={`w-full aspect-square glass rounded-3xl ${isThaiRegion ? 'p-1' : 'p-3'} flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden`}>
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     {set.images.logo ? (
-                      <div className={`absolute inset-0 ${isThai ? 'm-1' : 'm-3'} group-hover:scale-110 transition-transform duration-300`}>
+                      <div className={`absolute inset-0 ${isThaiRegion ? 'm-1' : 'm-3'} group-hover:scale-110 transition-transform duration-300`}>
                         <ImageFallback
                           src={set.images.logo}
                           alt={set.name}
-                          tight={isThai}
+                          tight={isThaiRegion}
                         />
                       </div>
                     ) : (
