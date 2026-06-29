@@ -29,6 +29,18 @@ export interface ApiSet {
     };
 }
 
+export interface SealedProduct {
+    id: string;
+    name: string;
+    productType: string | null;
+    setId: string | null;
+    imageUrl: string | null;
+    price: number | null;       // THB (base); multiply by display exchangeRate
+    prices: { sealed: number | null; cib: number | null; loose: number | null };
+    currency: string;
+    lastUpdated?: string;
+}
+
 export const pokemonService = {
     async fetchSets(
         language: 'en' | 'jp' | 'th' | 'pokemon-en' | 'pokemon-jp' | 'pokemon-th' = 'en',
@@ -158,7 +170,7 @@ export const pokemonService = {
                 allSetsDbCache = data || [];
             }
             
-            let matchedSetIds: string[] = [];
+            const matchedSetIds: string[] = [];
             let queryWithoutSet = cleanQuery;
             
             if (allSetsDbCache && allSetsDbCache.length > 0) {
@@ -338,6 +350,22 @@ export const pokemonService = {
             return topResults;
         } catch (error) {
             console.error("Search failure:", error);
+            return [];
+        }
+    },
+
+    async fetchSealedProducts(opts: { game: string; setId?: string; q?: string; language?: string }): Promise<SealedProduct[]> {
+        try {
+            const params = new URLSearchParams({ game: opts.game });
+            if (opts.setId) params.set('setId', opts.setId);
+            if (opts.q) params.set('q', opts.q);
+            if (opts.language) params.set('language', opts.language);
+            const res = await fetch(`/api/sealed?${params.toString()}`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.products || [];
+        } catch (error) {
+            console.error('Failed to fetch sealed products:', error);
             return [];
         }
     },

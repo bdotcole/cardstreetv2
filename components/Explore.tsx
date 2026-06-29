@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { pokemonService, ApiSet } from '../services/pokemonService';
+import { pokemonService, ApiSet, SealedProduct } from '../services/pokemonService';
 import { Card } from '../types';
+import SealedProductDetail from './SealedProductDetail';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
@@ -17,7 +18,7 @@ interface ExploreProps {
 }
 
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
-  const { t } = useTranslation();
+  const { t, isThai } = useTranslation();
   const [selectedGame, setSelectedGame] = useState<string>('pokemon');
   const [selectedLanguage, setSelectedLanguage] = useState<GameLanguageCode>('en');
   const showLanguageSelector = gameHasMultipleLanguages(selectedGame);
@@ -30,6 +31,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sortOption, setSortOption] = useState<'number' | 'priceHigh' | 'priceLow'>('number');
+
+  // Catalog mode: individual cards vs sealed products (PriceCharting-sourced).
+  const [browseMode, setBrowseMode] = useState<'cards' | 'sealed'>('cards');
+  const [sealedProducts, setSealedProducts] = useState<SealedProduct[]>([]);
+  const [isLoadingSealed, setIsLoadingSealed] = useState(false);
+  const [selectedSealed, setSelectedSealed] = useState<SealedProduct | null>(null);
+  const sealedReqIdRef = useRef(0);
 
   // In-memory sets cache: avoid re-fetching on language/game toggle
   const setsCache = useRef<Map<string, ApiSet[]>>(new Map());
@@ -135,6 +143,25 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     }
   }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame]);
 
+  // Fetch sealed products when in sealed mode (driven by the same set / search box).
+  useEffect(() => {
+    if (browseMode !== 'sealed') return;
+    const searching = debouncedSearchTerm.length > 2;
+    if (!searching && !selectedSetId) { setSealedProducts([]); return; }
+    const myReq = ++sealedReqIdRef.current;
+    setIsLoadingSealed(true);
+    pokemonService.fetchSealedProducts({
+      game: selectedGame,
+      setId: searching ? undefined : selectedSetId,
+      q: searching ? debouncedSearchTerm : undefined,
+      language: showLanguageSelector ? selectedLanguage : undefined,
+    }).then(rows => {
+      if (myReq !== sealedReqIdRef.current) return;
+      setSealedProducts(rows);
+      setIsLoadingSealed(false);
+    });
+  }, [browseMode, selectedGame, selectedSetId, debouncedSearchTerm, selectedLanguage, showLanguageSelector]);
+
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
   // ── O(1) listing lookups — precomputed Map instead of O(n) .filter() per row ─
@@ -203,6 +230,24 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+
+        {/* Cards / Sealed toggle — switches the catalog between individual cards and sealed products */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-brand-darker rounded-xl border border-white/10">
+          <button
+            onClick={() => setBrowseMode('cards')}
+            className={`h-9 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${browseMode === 'cards' ? 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            <i className="fa-solid fa-clone text-[11px]"></i>
+            {isThai ? 'การ์ด' : 'Cards'}
+          </button>
+          <button
+            onClick={() => setBrowseMode('sealed')}
+            className={`h-9 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${browseMode === 'sealed' ? 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            <i className="fa-solid fa-box text-[11px]"></i>
+            {isThai ? 'สินค้าซีล' : 'Sealed'}
+          </button>
         </div>
 
         {/* Database Selectors - Game → Language → Set */}
@@ -347,7 +392,55 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       {/* Scrollable Results Section */}
       <div className="flex-1 overflow-hidden px-6 pb-4">
         <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
-          {isLoadingCards ? (
+          {browseMode === 'sealed' ? (
+            isLoadingSealed ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-16 skeleton rounded-xl opacity-20"></div>
+                ))}
+              </div>
+            ) : sealedProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 px-6">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                  <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
+                </div>
+                <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{isThai ? 'ไม่มีสินค้าซีล' : 'No sealed products'}</h3>
+                <p className="text-slate-500 text-xs text-center">{isThai ? 'ลองชุดอื่นหรือเกมอื่น' : 'Try another set or game'}</p>
+              </div>
+            ) : (
+              <div
+                className="flex-1 overflow-y-auto p-3 space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}
+              >
+                {sealedProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedSealed(p)}
+                    className="w-full flex items-center gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/5 hover:border-brand-cyan/30 active:scale-[0.99] transition-all text-left"
+                  >
+                    <div className="w-12 h-16 rounded-md bg-brand-darker border border-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                      {p.imageUrl ? (
+                        <Image src={p.imageUrl} alt={p.name} fill sizes="48px" className="object-contain" />
+                      ) : (
+                        <i className="fa-solid fa-box text-slate-600"></i>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-bold leading-tight line-clamp-2">{p.name}</p>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{(p.productType || 'sealed').replace(/_/g, ' ')}</span>
+                    </div>
+                    <p className="text-brand-cyan text-base font-black tracking-tight flex-shrink-0">
+                      {(!p.price || p.price <= 0)
+                        ? 'N/A'
+                        : currency === 'USD'
+                          ? `${currencySymbol}${(p.price * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : `${currencySymbol}${Math.round(p.price * exchangeRate).toLocaleString()}`}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : isLoadingCards ? (
             <div className="p-6 space-y-5">
               {[1, 2, 3, 4, 5].map(i => (
                 <div key={i} className="flex gap-4 items-center">
@@ -492,6 +585,15 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           )}
         </div>
       </div>
+
+      {selectedSealed && (
+        <SealedProductDetail
+          product={selectedSealed}
+          onClose={() => setSelectedSealed(null)}
+          currency={currency}
+          exchangeRate={exchangeRate}
+        />
+      )}
     </div>
   );
 };
