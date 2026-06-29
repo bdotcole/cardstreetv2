@@ -4,4 +4,9 @@
     <string name="title_activity_main">CardStreet</string>
     <string name="package_name">com.cardstreet.tcg</string>
     <string name="custom_url_scheme">com.cardstreet.tcg</string>
+    <!-- Meta (Facebook) SDK credentials. App ID is public; the client token is
+         semi-public (ships in the app binary), so both are safe to commit. Must
+         match the iOS Info.plist FacebookAppID / FacebookClientToken. -->
+    <string name="facebook_app_id">901554606295641</string>
+    <string name="facebook_client_token">460a3a499015935ac8c86c2007f63ffc</string>
 </resources>
