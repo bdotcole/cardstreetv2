@@ -13,6 +13,8 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useTranslation } from '@/lib/hooks/useTranslation';
+import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { Mail, Phone, Lock, Loader2 } from 'lucide-react';
 
 interface Props {
@@ -27,17 +29,18 @@ const PartnerFinishSetup: React.FC<Props> = ({ shopName, onComplete }) => {
     const [confirm, setConfirm] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { t } = useTranslation();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters.');
+        if (!isPasswordStructurallyValid(password)) {
+            setError(t('passwordPolicy.error'));
             return;
         }
         if (password !== confirm) {
-            setError('Passwords do not match.');
+            setError(t('passwordPolicy.mismatch'));
             return;
         }
 
@@ -125,6 +128,7 @@ const PartnerFinishSetup: React.FC<Props> = ({ shopName, onComplete }) => {
                             placeholder="••••••••" required minLength={6}
                             className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                         />
+                        <p className="text-[10px] text-slate-500">{t('passwordPolicy.hint')}</p>
                     </div>
 
                     <div className="space-y-2">

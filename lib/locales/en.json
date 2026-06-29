@@ -427,5 +427,10 @@
             "toastPaymentReceived": "Payment received — track your order under Orders",
             "toastPaymentFailed": "Payment failed"
         }
+    },
+    "passwordPolicy": {
+        "hint": "At least 6 characters, with a lowercase letter, an uppercase letter, and a number.",
+        "error": "Password must be at least 6 characters and include a lowercase letter, an uppercase letter, and a number.",
+        "mismatch": "Passwords do not match."
     }
 }

@@ -15,6 +15,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useTranslation } from '@/lib/hooks/useTranslation';
+import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { Lock, Loader2, CheckCircle2 } from 'lucide-react';
 
 type Status = 'checking' | 'ready' | 'saving' | 'done' | 'no-session';
@@ -24,6 +26,7 @@ export default function ResetPasswordPage() {
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const { t } = useTranslation();
 
     useEffect(() => {
         const supabase = createClient();
@@ -49,12 +52,12 @@ export default function ResetPasswordPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters.');
+        if (!isPasswordStructurallyValid(password)) {
+            setError(t('passwordPolicy.error'));
             return;
         }
         if (password !== confirm) {
-            setError('Passwords do not match.');
+            setError(t('passwordPolicy.mismatch'));
             return;
         }
         setStatus('saving');
@@ -131,6 +134,7 @@ export default function ResetPasswordPage() {
                                     minLength={6}
                                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                 />
+                                <p className="text-[10px] text-slate-500">{t('passwordPolicy.hint')}</p>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">

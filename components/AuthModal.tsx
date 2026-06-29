@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/client';
+import { useTranslation } from '@/lib/hooks/useTranslation';
+import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -98,6 +100,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     const [username, setUsername] = useState('');
     const [phone, setPhone] = useState('');
     const [mounted, setMounted] = useState(false);
+    const { t } = useTranslation();
 
     // Portal target is document.body, which only exists after mount.
     useEffect(() => setMounted(true), []);
@@ -282,9 +285,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
     const handleEmailSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError(null);
 
+        // Mirror Supabase's password policy client-side so structural failures
+        // surface inline instead of as a server-side 422 (the leaked-password
+        // check still runs server-side and its message is shown below).
+        if (!isPasswordStructurallyValid(password)) {
+            setError(t('passwordPolicy.error'));
+            return;
+        }
+
+        setLoading(true);
         try {
             const { data, error } = await withAuthWatchdog('email-signup', () =>
                 supabase.auth.signUp({
@@ -613,7 +624,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                 />
                                 {mode === 'signup' && (
-                                    <p className="text-[10px] text-slate-500">Minimum 6 characters</p>
+                                    <p className="text-[10px] text-slate-500">{t('passwordPolicy.hint')}</p>
                                 )}
                                 {mode === 'signin' && (
                                     <div className="text-right">
