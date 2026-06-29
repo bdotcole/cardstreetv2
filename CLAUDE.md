@@ -28,6 +28,14 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 - `lib/supabase/server.ts` — server component / route use.
 - `lib/supabase/admin.ts` — service-role. **Never expose to the browser** or import from a `'use client'` module.
 
+Both the browser and server clients route their `fetch` through **`lib/supabase/sentryFetch.ts`**, which reports non-2xx Supabase responses to Sentry. It deliberately **skips `/auth/v1/*` responses with status 400/401/422** — those are GoTrue control flow (wrong password, expired/rotated refresh token, weak password at signup), not faults, and were flooding Sentry as fake "Supabase API Error" issues. Everything else still reports (403/404/429, all 5xx, network failures, and non-auth responses incl. PostgREST 401s).
+
+## Auth password policy
+
+The Supabase Auth (GoTrue) password policy is enforced by the **dashboard** (Authentication → Policies) — that is the source of truth. Currently: **min 6 chars + one lowercase + one uppercase + one digit** (symbols not required), plus Supabase's breached-password (HaveIBeenPwned) check, which rejects common/leaked passwords like `Password1`.
+
+**`lib/passwordPolicy.ts`** is a hand-maintained client-side mirror of the *structural* rules (`getUnmetPasswordRules` / `isPasswordStructurallyValid`) so signup/reset forms give inline feedback instead of a server-side 422. The breached-password check stays server-side; its message is surfaced inline when it fires. Requirement text is localized via the `passwordPolicy.*` keys in `lib/locales/{en,th}.json`. Consumers: `components/AuthModal.tsx`, `app/reset-password/page.tsx`, `components/PartnerFinishSetup.tsx`. **If you change the dashboard policy, update `lib/passwordPolicy.ts` and the `passwordPolicy.*` locale strings to match** — they don't auto-sync. (The separate Expo app's signup is not yet aligned.)
+
 ## Card catalog
 
 `pokemon_cards` holds all card data, keyed by `id` (e.g. `sv4pt5-234`). Approximate language distribution:
