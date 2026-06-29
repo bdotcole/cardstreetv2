@@ -29,6 +29,27 @@ function getSupabaseAdmin(): SupabaseClient {
 }
 
 /**
+ * Courier template IDs for transactional notifications.
+ *
+ * Each send below references a template by ID and passes only merge `data` —
+ * never inline `content`. The subject, email body, AND per-channel push copy
+ * are authored in the Courier dashboard, not hardcoded here. Passing `content`
+ * instead bypasses these templates entirely (Courier auto-generates a plain
+ * email from the title/body) — that was the original bug: every template read
+ * "Sent: 0" while plain fallback emails went out through Postmark.
+ *
+ * IDs default to the live Production templates and can be overridden per
+ * environment via env (e.g. to aim a preview deploy at a draft template).
+ */
+const TEMPLATES = {
+    sold: (process.env.COURIER_SOLD_TEMPLATE_ID || '5ab4f968-eea2-4f2a-9566-9328a40e6136').trim(),
+    labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '0000a8bc-335b-464b-a43f-299645c48113').trim(),
+    shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'b54699a4-8df2-43b0-869d-0de569e0fa5b').trim(),
+    orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'e29c52d4-1d3d-42b1-854f-0d72d1fb6aa1').trim(),
+    firstTimeSale: (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'nt_01kvba0yzweh78ef8f9c1b49z7').trim(),
+} as const;
+
+/**
  * Helper to fetch a user's notification preferences AND email in one call.
  */
 async function getUserNotifContext(userId: string): Promise<{
@@ -109,12 +130,16 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         const sendResult = await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: You have a new sale! 🎉",
-                    body: `Your item has been sold for ฿${orderDetails.total_amount.toLocaleString()}. The buyer has paid for shipping — check your email for the Flash Express label to print.`,
-                },
+                template: TEMPLATES.sold,
                 routing,
-                data: { orderId: orderDetails.id, type: 'sold' }
+                data: {
+                    // Template references {orderDetails.total_amount} (and {orderDetails.id}).
+                    // Pass only the fields the template reads, not the whole order row.
+                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
+                    // Push deep-link payload (read by the mobile FCM handler).
+                    orderId: orderDetails.id,
+                    type: 'sold',
+                },
             }
         });
         console.log(`[Courier] ✅ 'Sold' notification sent. Request ID: ${(sendResult as { requestId?: string }).requestId}`);
@@ -157,9 +182,6 @@ export async function sendLabelGeneratedNotification(
 
     const dashboardUrl = 'https://cardstreet.app/profile';
     const hasAttachment = !!labelPdfBase64;
-    const body = hasAttachment
-        ? `Your Flash Express label for order ${orderDetails.id} is ready — the PDF is attached to this email. Print it and drop your package at any Flash Express location. You can also re-download it anytime from your CardStreet seller dashboard: ${dashboardUrl}`
-        : `Your Flash Express label for order ${orderDetails.id} is ready. Open it from your CardStreet seller dashboard: ${dashboardUrl}`;
 
     // Postmark attachment goes through Courier's per-provider override. The
     // override body is merged into Postmark's email API request, so any
@@ -187,13 +209,19 @@ export async function sendLabelGeneratedNotification(
         const { requestId } = await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Shipping Label Ready 📦",
-                    body,
-                },
+                template: TEMPLATES.labelGenerated,
                 routing,
                 ...(providers ? { providers } : {}),
-                data: { orderId: orderDetails.id, type: 'label_generated' },
+                data: {
+                    // Template references {orderDetails.id} and {labelUrl}. The label
+                    // route requires auth, so point at the seller dashboard (the PDF is
+                    // also attached to this email via the Postmark override below).
+                    orderDetails: { id: orderDetails.id },
+                    labelUrl: dashboardUrl,
+                    // Push deep-link payload.
+                    orderId: orderDetails.id,
+                    type: 'label_generated',
+                },
             },
         });
         console.log(`[Courier] ✅ 'Label Generated' notification sent. Request ID: ${requestId}`);
@@ -222,16 +250,23 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
     const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken);
     if (routing.channels.length === 0) return;
 
+    const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`;
     try {
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Your order has shipped! 🚀",
-                    body: `Order ${orderDetails.id} is on its way via Flash Express! Track it at: https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`,
-                },
+                template: TEMPLATES.shipped,
                 routing,
-                data: { orderId: orderDetails.id, type: 'shipped', trackingUrl }
+                data: {
+                    // Template references {trackingLink} (full URL) + {orderDetails.id}.
+                    orderDetails: { id: orderDetails.id },
+                    trackingLink,
+                    trackingNumber: trackingUrl,
+                    // Push deep-link payload (unchanged contract: raw tracking number).
+                    orderId: orderDetails.id,
+                    type: 'shipped',
+                    trackingUrl,
+                },
             }
         });
         console.log(`[Courier] ✅ 'Shipped' notification sent to buyer ${buyerId}`);
@@ -261,10 +296,6 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
         return;
     }
 
-    const trackingText = trackingNumbers.length > 0
-        ? `\n\nFlash Express tracking number(s): ${trackingNumbers.join(', ')}`
-        : '\n\nYour seller will be notified to ship your item shortly.';
-
     const recipient = buildRecipient(
         wantEmail ? email : null,
         wantPush ? fcmToken : null
@@ -276,12 +307,18 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Order Confirmed! ✅",
-                    body: `Thank you for your purchase of ฿${orderDetails.total_amount?.toLocaleString() || ''}. Your items are being prepared for shipment.${trackingText}`,
-                },
+                template: TEMPLATES.orderConfirmed,
                 routing,
-                data: { orderId: orderDetails.id, type: 'order_confirmation', trackingNumbers }
+                data: {
+                    // Template references {orderDetails.total_amount} + {trackingNumbersText}.
+                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
+                    trackingNumbersText: trackingNumbers.join(', '),
+                    hasTracking: trackingNumbers.length > 0,
+                    // Push deep-link payload (unchanged contract: array form).
+                    orderId: orderDetails.id,
+                    type: 'order_confirmation',
+                    trackingNumbers,
+                },
             }
         });
         console.log(`[Courier] ✅ 'Order Confirmation' notification sent to buyer ${buyerId}`);
@@ -547,7 +584,7 @@ export async function sendFirstTimeSaleEmail(
 
         // ── 5. Build payload + send the "First Time Sale" template. ──
         // Prefer an explicit template ID; fall back to the Courier event alias.
-        const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'seller_first_sale').trim();
+        const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || TEMPLATES.firstTimeSale).trim();
         const firstName = (profile?.display_name || '').trim().split(/\s+/)[0] || 'there';
         const orderNumber = opts.orderNumber || opts.orderId;
         // TODO: there is no dedicated seller order-detail route today — the sales
