@@ -420,7 +420,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         loading: false,
         error: null,
       });
-      showToast('Label saved to your device', 'success');
+      showToast(t('profile.labelSavedToast'), 'success');
     } catch (err: any) {
       setLabelModal({
         orderId,
@@ -1567,7 +1567,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             {labelModal.loading && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-cyan" />
-                <p className="text-sm">Saving label…</p>
+                <p className="text-sm">{t('profile.labelSaving')}</p>
               </div>
             )}
 
@@ -1575,7 +1575,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
                 <AlertCircle className="w-10 h-10 text-amber-400" />
                 <p className="text-amber-300 font-bold uppercase tracking-widest text-xs">
-                  Couldn&apos;t load label
+                  {t('profile.labelLoadError')}
                 </p>
                 <p className="text-slate-400 text-xs max-w-md leading-relaxed">{labelModal.error}</p>
               </div>
@@ -1587,10 +1587,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   <CheckCircle className="w-8 h-8 text-brand-green" />
                 </div>
                 <p className="text-white font-black uppercase tracking-widest text-sm">
-                  Label saved
+                  {t('profile.labelSaved')}
                 </p>
                 <p className="text-slate-400 text-xs max-w-md leading-relaxed">
-                  Saved to Documents/cardstreet/labels on your device.
+                  {t('profile.labelSavedLocation')}
                 </p>
                 {labelModal.savedFilename && (
                   <p className="text-slate-500 text-[11px] font-mono break-all max-w-md">
@@ -1602,13 +1602,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     onClick={openSavedLabel}
                     className="w-full h-12 rounded-xl bg-brand-green text-white font-black text-xs uppercase tracking-widest hover:bg-brand-green/90 active:scale-[0.98] transition-all"
                   >
-                    Open / Print
+                    {t('profile.labelOpenPrint')}
                   </button>
                   <button
                     onClick={closeLabel}
                     className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
                   >
-                    Done
+                    {t('profile.labelDone')}
                   </button>
                 </div>
               </div>
