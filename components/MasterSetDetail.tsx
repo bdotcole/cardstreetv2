@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 import Image from 'next/image';
-import { getThumbnailUrl } from '@/lib/imageUtils';
+import { getThumbnailUrl, getSetLogoUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 
 interface MasterSetDetailProps {
   set: ApiSet;
@@ -71,12 +71,12 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
           {set.images?.logo && (
             <div className="relative h-8 w-24 flex items-center justify-end">
               <Image
-                src={set.images.logo}
+                src={getSetLogoUrl(set.images.logo, 200)}
                 alt="logo"
                 fill
                 sizes="96px"
                 className="object-contain"
-                unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
+                unoptimized={shouldSkipNextOptimization(getSetLogoUrl(set.images.logo, 200))}
                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
             </div>
@@ -117,8 +117,10 @@ const MasterSetDetail: React.FC<MasterSetDetailProps> = ({ set, ownedCardIds, wi
                       alt={card.name}
                       fill
                       sizes="33vw"
+                      placeholder="blur"
+                      blurDataURL={CARD_BLUR_DATA_URL}
                       className="object-cover"
-                      unoptimized={(card.images?.small || card.imageUrl || '').includes('asia.pokemon-card.com')}
+                      unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                       onError={(e) => { (e.target as HTMLElement).style.visibility = 'hidden'; }}
                     />
                   </div>

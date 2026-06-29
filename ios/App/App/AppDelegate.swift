@@ -1,6 +1,9 @@
 import UIKit
 import Capacitor
 import FirebaseCore
+#if canImport(FacebookCore)
+import FacebookCore
+#endif
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -11,6 +14,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Initialize Firebase so @capacitor-firebase/messaging can mint FCM tokens.
         // Reads GoogleService-Info.plist bundled in the App target.
         FirebaseApp.configure()
+
+        // Initialize the Meta (Facebook) SDK so native install + app-session
+        // events are logged for Meta Ads attribution. FacebookAppID and
+        // FacebookClientToken are read from Info.plist. The UI is a remote
+        // WebView, so the native layer only does app-event logging (no login).
+        // Guarded so a Swift Package resolution failure can't break the build.
+        #if canImport(FacebookCore)
+        ApplicationDelegate.shared.application(application, didFinishLaunchingWithOptions: launchOptions)
+        #endif
+
         return true
     }
 

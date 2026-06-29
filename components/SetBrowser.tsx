@@ -3,10 +3,11 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
+import { getSetLogoUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 
-const ImageFallback = ({ src, alt }: { src: string, alt: string }) => {
+const ImageFallback = ({ src, alt, tight = false }: { src: string, alt: string, tight?: boolean }) => {
   const [error, setError] = useState(false);
-  
+
   if (error) {
     return (
       <span className="logo-fallback text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">
@@ -15,14 +16,17 @@ const ImageFallback = ({ src, alt }: { src: string, alt: string }) => {
     );
   }
 
+  // Thai sets use portrait pack art rather than wordmark logos, so render them
+  // edge-to-edge (no inner padding, higher render width) to fill the tile.
+  const logoSrc = getSetLogoUrl(src, tight ? 480 : 300);
   return (
     <Image
-      src={src}
+      src={logoSrc}
       alt={alt}
       fill
       sizes="150px"
-      className="object-contain filter drop-shadow-lg p-2"
-      unoptimized={src.includes('asia.pokemon-card.com')}
+      className={`object-contain filter drop-shadow-lg ${tight ? '' : 'p-2'}`}
+      unoptimized={shouldSkipNextOptimization(logoSrc)}
       onError={() => setError(true)}
     />
   );
@@ -105,6 +109,11 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
     if (region?.includes('th')) return 'th' as const;
     return 'en' as const;
   };
+
+  // Thai sets are portrait pack images (not wordmark logos), so we render them
+  // larger with minimal padding to fill the tile. Region-based, not UI language
+  // (isThai from useTranslation is the UI locale) — enlarge regardless of locale.
+  const isThaiRegion = region?.includes('th');
 
   // Calculate completion % for a set
   const getSetCompletion = useCallback((set: ApiSet) => {
@@ -293,13 +302,14 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                   onClick={() => onSelectSet(set, getLanguageFromRegion())}
                   className="group flex flex-col items-center gap-2 active:scale-95 transition-all w-full mb-4"
                 >
-                  <div className="w-full aspect-square glass rounded-3xl p-3 flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden">
+                  <div className={`w-full aspect-square glass rounded-3xl ${isThaiRegion ? 'p-1' : 'p-3'} flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden`}>
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     {set.images.logo ? (
-                      <div className="absolute inset-0 m-3 group-hover:scale-110 transition-transform duration-300">
+                      <div className={`absolute inset-0 ${isThaiRegion ? 'm-1' : 'm-3'} group-hover:scale-110 transition-transform duration-300`}>
                         <ImageFallback
                           src={set.images.logo}
                           alt={set.name}
+                          tight={isThaiRegion}
                         />
                       </div>
                     ) : (

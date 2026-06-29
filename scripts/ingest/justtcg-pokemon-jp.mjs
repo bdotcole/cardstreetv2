@@ -29,6 +29,38 @@ const PAGE = 100;
 const RATE_MS = 1300;
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Vintage + deck-set ids whose JustTCG slug is an English name, not "<id>-...",
+// so the id-prefix match below can't find them. Only sets that carry collector
+// numbers in JustTCG belong here — the number-within-set match is reliable for
+// them (verified 28-30/30 on samples). The pre-e-Card sets (neo1-4, PMCG1-6)
+// have number:N/A in JustTCG and need name-bridge matching, so they are NOT
+// listed here (a separate pass handles them).
+const JP_SET_SLUG_OVERRIDES = {
+  web1: 'pokemon-web-pokemon-japan',
+  VS1: 'pokemon-vs-pokemon-japan',
+  E1: 'base-expansion-pack-pokemon-japan',
+  E2: 'the-town-on-no-map-pokemon-japan',
+  E3: 'wind-from-the-sea-pokemon-japan',
+  E4: 'split-earth-pokemon-japan',
+  E5: 'mysterious-mountains-pokemon-japan',
+  PCG1: 'flight-of-legends-pokemon-japan',
+  PCG2: 'clash-of-the-blue-sky-pokemon-japan',
+  PCG3: 'rocket-gang-strikes-back-pokemon-japan',
+  PCG4: 'golden-sky-silvery-ocean-pokemon-japan',
+  PCG5: 'mirage-forest-pokemon-japan',
+  PCG6: 'holon-research-tower-pokemon-japan',
+  PCG7: 'holon-phantom-pokemon-japan',
+  PCG8: 'miracle-crystal-pokemon-japan',
+  PCG9: 'offense-and-defense-of-the-furthest-ends-pokemon-japan',
+  SVK: 'sv-stellar-miracle-deck-build-box-pokemon-japan',
+  SVLN: 'sv-sylveon-ex-stellar-tera-type-starter-set-pokemon-japan',
+  SVLS: 'sv-ceruledge-ex-stellar-tera-type-starter-set-pokemon-japan',
+};
+
+// CLI: --sets=E1,PCG7 scopes the run to those set ids; --dry previews without writing.
+const ONLY_SETS = (process.argv.find((a) => a.startsWith('--sets=')) || '').replace('--sets=', '').split(',').map((s) => s.trim()).filter(Boolean);
+const DRY = process.argv.includes('--dry');
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const numOf = (s) => {
   const m = String(s || '').match(/\d+/);
@@ -75,8 +107,10 @@ async function main() {
   let totalNames = 0;
   let totalPrices = 0;
   for (const ourSetId of ourSetIds) {
+    if (ONLY_SETS.length && !ONLY_SETS.includes(ourSetId)) continue;
     const prefix = ourSetId.toLowerCase() + '-';
-    const match = jtcgSets.find((s) => s.id.toLowerCase().startsWith(prefix));
+    const overrideSlug = JP_SET_SLUG_OVERRIDES[ourSetId];
+    const match = (overrideSlug && jtcgSets.find((s) => s.id === overrideSlug)) || jtcgSets.find((s) => s.id.toLowerCase().startsWith(prefix));
     if (!match) continue;
 
     const nameUpdates = [];
@@ -115,6 +149,7 @@ async function main() {
     for (const u of nameUpdates) {
       if (seen.has(u.id)) continue;
       seen.add(u.id);
+      if (DRY) continue;
       const { error: e } = await supabase.from('pokemon_cards').update({ english_name: u.english_name }).eq('id', u.id);
       if (e) throw e;
     }
@@ -127,13 +162,15 @@ async function main() {
       if (!prev || (r.printing === 'Normal' && prev.printing !== 'Normal')) dedup.set(k, r);
     }
     const finalRows = [...dedup.values()];
-    for (let i = 0; i < finalRows.length; i += 500) {
-      const { error: e } = await supabase.from('market_values').upsert(finalRows.slice(i, i + 500), { onConflict: 'card_id,language,condition' });
-      if (e) throw e;
+    if (!DRY) {
+      for (let i = 0; i < finalRows.length; i += 500) {
+        const { error: e } = await supabase.from('market_values').upsert(finalRows.slice(i, i + 500), { onConflict: 'card_id,language,condition' });
+        if (e) throw e;
+      }
     }
-    console.log(`[jp] ${ourSetId} <- ${match.id}: names ${seen.size}, prices ${priceRows.length}`);
+    console.log(`[jp]${DRY ? ' DRY' : ''} ${ourSetId} <- ${match.id}: names ${seen.size}, price-rows ${finalRows.length}`);
     totalNames += seen.size;
-    totalPrices += priceRows.length;
+    totalPrices += finalRows.length;
   }
   console.log(`[jp] done: english names ${totalNames}, price rows ${totalPrices}`);
 }

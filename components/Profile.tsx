@@ -17,6 +17,7 @@ import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -1185,8 +1186,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
                           {order.listing?.card_data?.images?.small && (
                             <img
-                              src={order.listing.card_data.images.small}
+                              src={getThumbnailUrl(order.listing.card_data.images.small)}
                               alt="Card"
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                             />
                           )}
@@ -1339,8 +1342,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       <div className="w-14 h-14 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
                         {sale.listing?.card_data?.images?.small && (
                           <img
-                            src={sale.listing.card_data.images.small}
+                            src={getThumbnailUrl(sale.listing.card_data.images.small)}
                             alt="Card"
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         )}
@@ -1398,8 +1403,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
                           {shipment.listing?.card_data?.images?.small && (
                             <img
-                              src={shipment.listing.card_data.images.small}
+                              src={getThumbnailUrl(shipment.listing.card_data.images.small)}
                               alt="Card"
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                             />
                           )}
@@ -1495,15 +1502,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Help & Support</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.helpSupport')}</h2>
               </div>
 
               <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                 {[
-                  { icon: HelpCircle, label: 'Help Center', href: '/help' },
-                  { icon: Mail, label: 'Contact Us', href: '/contact' },
-                  { icon: FileText, label: 'Privacy Policy', href: '/privacy' },
-                  { icon: FileText, label: 'Terms of Service', href: '/terms' }
+                  { icon: HelpCircle, label: t('profile.helpCenter'), href: '/help' },
+                  { icon: Mail, label: t('profile.contactUs'), href: '/contact' },
+                  { icon: FileText, label: t('profile.privacyPolicy'), href: '/privacy' },
+                  { icon: FileText, label: t('profile.termsOfService'), href: '/terms' }
                 ].map((item) => (
                   <a
                     key={item.label}

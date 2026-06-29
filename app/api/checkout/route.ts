@@ -34,6 +34,7 @@ import {
     defaultCurrencyForRegion,
     type StripeRegion,
 } from '@/lib/stripe';
+import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import type Stripe from 'stripe';
 
 export async function POST(req: Request) {
@@ -42,6 +43,22 @@ export async function POST(req: Request) {
         const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser();
         if (authErr || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Defense in depth — /api/orders/checkout already gated this, but block
+        // non-Thailand buyers here too so the PaymentIntent can never be
+        // created out of region. See lib/geo.ts.
+        const buyerCountry = getRequestCountry(req);
+        if (!isPurchaseAllowedFromCountry(buyerCountry)) {
+            return NextResponse.json(
+                {
+                    error:
+                        'Purchases are currently only available in Thailand. ' +
+                        'Buying is coming soon to your country.',
+                    code: 'GEO_RESTRICTED',
+                },
+                { status: 403 },
+            );
         }
 
         const body = await req.json().catch(() => ({}));
@@ -217,11 +234,25 @@ export async function POST(req: Request) {
                 );
             }
 
-            // Sum the platform_fee column across the cart's orders. Stored as
-            // a float in THB; convert to satang and re-floor to avoid 0.5-stang
-            // rounding drift accumulating across many small items.
+            // Application fee = platform_fee + shipping_fee, summed across the
+            // cart's orders. Both stored as floats in THB; convert to satang and
+            // re-floor to avoid 0.5-stang rounding drift across many small items.
+            //
+            // Why shipping is included: on this TH direct charge the buyer's full
+            // payment (item + shipping) settles into the SELLER's connected
+            // account, but Flash Express bills the single PLATFORM merchant
+            // account for every label. Pulling shipping_fee into the application
+            // fee routes the buyer's shipping payment back to the platform — the
+            // entity Flash actually invoices — so shipping is pass-through rather
+            // than a per-order platform loss. The seller still bears Stripe's
+            // processing fee on the shipping portion (they're MOR on a direct
+            // charge); that residual is small (~฿1.5–3.6) vs. the full Flash cost
+            // the platform would otherwise eat.
             const applicationFeeSatang = orders.reduce(
-                (sum, o) => sum + Math.round(Number(o.platform_fee || 0) * 100),
+                (sum, o) =>
+                    sum +
+                    Math.round(Number(o.platform_fee || 0) * 100) +
+                    Math.round(Number(o.shipping_fee || 0) * 100),
                 0,
             );
 

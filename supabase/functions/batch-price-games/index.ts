@@ -30,10 +30,31 @@ const GROUPS = [
   { key: 'mtg', game: 'mtg', justtcgGame: 'magic-the-gathering', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'onepiece', game: 'onepiece', justtcgGame: 'one-piece-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
   { key: 'yugioh', game: 'yugioh', justtcgGame: 'yugioh', cardLang: 'en', storeLang: 'en', matchById: false },
+  { key: 'riftbound', game: 'riftbound', justtcgGame: 'riftbound-league-of-legends-trading-card-game', cardLang: 'en', storeLang: 'en', matchById: false },
+  { key: 'lorcana', game: 'lorcana', justtcgGame: 'disney-lorcana', cardLang: 'en', storeLang: 'en', matchById: false },
   // JP Pokemon: our set name is English ("White Flare") but JustTCG is "SV11W: White Flare",
   // so resolve by set-id prefix (sv11w-...) instead of name.
   { key: 'pokemon-jp', game: 'pokemon', justtcgGame: 'pokemon-japan', cardLang: 'ja', storeLang: 'jp', matchById: true },
 ];
+
+// Vintage + deck JP sets whose JustTCG slug is an English name, not "<id>-...",
+// so the id-prefix resolver below can't find them. Numbered sets (web/VS/E/PCG,
+// deck boxes) then match cards by collector number; the pre-e-Card sets
+// (neo*, PMCG*) carry no upstream number and match by english_name instead
+// (filled during the 2026-06-20 vintage backfill).
+const JP_SLUG_OVERRIDES: Record<string, string> = {
+  web1: 'pokemon-web-pokemon-japan', VS1: 'pokemon-vs-pokemon-japan',
+  E1: 'base-expansion-pack-pokemon-japan', E2: 'the-town-on-no-map-pokemon-japan', E3: 'wind-from-the-sea-pokemon-japan', E4: 'split-earth-pokemon-japan', E5: 'mysterious-mountains-pokemon-japan',
+  PCG1: 'flight-of-legends-pokemon-japan', PCG2: 'clash-of-the-blue-sky-pokemon-japan', PCG3: 'rocket-gang-strikes-back-pokemon-japan', PCG4: 'golden-sky-silvery-ocean-pokemon-japan', PCG5: 'mirage-forest-pokemon-japan', PCG6: 'holon-research-tower-pokemon-japan', PCG7: 'holon-phantom-pokemon-japan', PCG8: 'miracle-crystal-pokemon-japan', PCG9: 'offense-and-defense-of-the-furthest-ends-pokemon-japan',
+  SVK: 'sv-stellar-miracle-deck-build-box-pokemon-japan', SVLN: 'sv-sylveon-ex-stellar-tera-type-starter-set-pokemon-japan', SVLS: 'sv-ceruledge-ex-stellar-tera-type-starter-set-pokemon-japan',
+  neo1: 'gold-silver-to-a-new-world-pokemon-japan', neo2: 'crossing-the-ruins-pokemon-japan', neo3: 'awakening-legends-pokemon-japan', neo4: 'darkness-and-to-light-pokemon-japan',
+  PMCG1: 'expansion-pack-pokemon-japan', PMCG2: 'pokemon-jungle-pokemon-japan', PMCG3: 'mystery-of-the-fossils-pokemon-japan', PMCG4: 'rocket-gang-pokemon-japan', PMCG5: 'leaders-stadium-pokemon-japan', PMCG6: 'challenge-from-the-darkness-pokemon-japan',
+};
+
+// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id).
+const NAME_SLUG_OVERRIDES: Record<string, string> = {
+  'lorcana-8': 'reign-of-jafar-disney-lorcana',
+};
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 // Card number from various formats: "OP01-003" -> 3 (strip set-code prefix),
@@ -106,17 +127,18 @@ Deno.serve(async (req) => {
 
         let slug: string | undefined;
         if (grp.matchById) {
-          const pre = set.id.toLowerCase() + '-';
-          slug = jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(pre))?.id;
+          slug = JP_SLUG_OVERRIDES[set.id]
+            ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id;
         } else {
-          slug = byName.get(norm(set.name));
+          // LorcanaJSON names set 8 "The Reign of Jafar"; JustTCG drops the "The".
+          slug = NAME_SLUG_OVERRIDES[set.id] ?? byName.get(norm(set.name));
         }
         if (!slug) continue;
 
         // our cards for this set
         const { data: ourCards } = await supabase
           .from('pokemon_cards')
-          .select('id, name, number')
+          .select('id, name, number, english_name')
           .eq('set_id', set.id)
           .eq('language', grp.cardLang);
         if (!ourCards?.length) continue;
@@ -126,6 +148,9 @@ Deno.serve(async (req) => {
           const n = numOf(c.number);
           if (n != null) byNumber.set(String(n), c);
           byCardName.set(norm(c.name), c);
+          // JustTCG names JP cards in English; our vintage `name` is Japanese,
+          // so index english_name too (the bridge for no-number neo*/PMCG* sets).
+          if (c.english_name) byCardName.set(norm(c.english_name), c);
         }
 
         // page JustTCG cards for the set

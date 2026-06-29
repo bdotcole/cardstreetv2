@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/adminAuth'
+import { ensurePartnerSlug } from '@/lib/referrals'
 import { NextResponse } from 'next/server'
 
 // PATCH /api/admin/users/[id] — update role, partner status, etc.
@@ -32,5 +33,17 @@ export async function PATCH(
         .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Promoting to partner generates the referral slug right away, so the
+    // QR/link is printable before the partner ever opens their portal.
+    if (data?.partner_joined_at && !data.partner_qr_slug) {
+        try {
+            data.partner_qr_slug = await ensurePartnerSlug(supabase, id, null, data.display_name)
+        } catch (slugErr) {
+            // Non-fatal: the portal regenerates lazily on first open.
+            console.error('[Admin/Users] slug generation on promotion failed:', slugErr)
+        }
+    }
+
     return NextResponse.json({ user: data })
 }

@@ -16,6 +16,7 @@ import Vault from '@/components/Vault';
 import Profile from '@/components/Profile';
 import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
+import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
 
@@ -34,14 +35,19 @@ import {
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
+import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import { trackMetaEvent } from '@/lib/metaEvents';
+import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
+import PartnerFinishSetup from '@/components/PartnerFinishSetup';
 import SellerProfile from '@/components/SellerProfile';
 import BuylistRequest from '@/components/BuylistRequest';
 
@@ -63,10 +69,24 @@ export default function HomePage() {
     }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+    // Meta ViewContent: fires once whenever a card detail opens, regardless of
+    // which path set selectedCard (marketplace tap, scan match, deep link, etc.).
+    useEffect(() => {
+        if (selectedCard) {
+            trackMetaEvent('ViewContent', {
+                content_ids: [selectedCard.id].filter(Boolean),
+                content_type: 'product',
+            });
+        }
+    }, [selectedCard]);
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
     const [user, setUser] = useState<UserProfile | null>(null);
+    // Provisioned partner accounts must finish setup (real email/phone/password)
+    // on first login before they can use the app.
+    const [partnerSetup, setPartnerSetup] = useState<{ shopName: string } | null>(null);
 
     // Supabase hooks for data management
     const {
@@ -110,6 +130,11 @@ export default function HomePage() {
     const cartOwnerRef = useRef<string | null>(null);
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // Purchases are Thailand-only for now (shipping isn't configured elsewhere).
+    // Warm the geo lookup on mount so the checkout gate is instant; the popup
+    // below explains the restriction when a non-TH buyer tries to check out.
+    usePurchaseRegion();
+    const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
 
     // Buylist State
     const [buylistCard, setBuylistCard] = useState<Card | null>(null);
@@ -157,10 +182,16 @@ export default function HomePage() {
     useEffect(() => {
         const supabase = createClient();
 
+        // Partner referral: stash any ?ref=<slug> before auth resolves, so a
+        // signup this session can be attributed even if the cs_ref cookie
+        // from /join/<slug> didn't survive.
+        captureReferralParam();
+
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
                 Sentry.setUser({ id: session.user.id, email: session.user.email });
+                void maybeAttributeReferral(session.user.id);
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
@@ -175,6 +206,7 @@ export default function HomePage() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
                 Sentry.setUser({ id: session.user.id, email: session.user.email });
+                void maybeAttributeReferral(session.user.id);
                 setUser({
                     id: session.user.id,
                     name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
@@ -209,6 +241,11 @@ export default function HomePage() {
                 const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
                 if (cancelled || !isPartner) return;
                 setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+                // Provisioned partners (created by an admin with a temp password)
+                // must complete setup before using the app.
+                if (profile?.partner_joined_at && profile?.partner_onboarding_complete === false) {
+                    setPartnerSetup({ shopName: profile.display_name || 'Partner' });
+                }
             } catch {
                 // Non-fatal: partner dashboard simply stays gated if the fetch fails.
             }
@@ -431,13 +468,39 @@ export default function HomePage() {
             return [...prev, item];
         });
         setIsCartOpen(true);
+        // Meta AddToCart (value in the user's display currency, matching the
+        // PaymentModal/Purchase convention).
+        trackMetaEvent('AddToCart', {
+            value: item.price * (currency === 'THB' ? 1 : exchangeRate),
+            currency,
+            content_ids: [item.cardId || item.id].filter(Boolean),
+            content_type: 'product',
+        });
     };
 
     const handleRemoveFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
     };
 
+    // Geo gate shared by every purchase entry point (cart checkout + Buy Now).
+    // Purchases are limited to Thailand for now, so a buyer outside TH gets a
+    // clear "coming soon to your country" popup instead of the payment modal.
+    // The server re-enforces this in /api/orders/checkout; failures fall open
+    // (the server has the final say). Returns true when purchasing may proceed.
+    const ensureCanPurchase = async (): Promise<boolean> => {
+        const region = await ensurePurchaseRegion();
+        if (!region.purchaseAllowed) {
+            setIsCartOpen(false);
+            setSelectedListing(null);
+            setIsRegionBlockOpen(true);
+            return false;
+        }
+        return true;
+    };
+
     const handleCheckout = async () => {
+        if (!(await ensureCanPurchase())) return;
+
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
         // with a generic "missing required fields" message that's hard to debug.
@@ -476,6 +539,15 @@ export default function HomePage() {
         }
 
         setIsCartOpen(false);
+        // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
+        // profile gates and the payment modal actually opens.
+        trackMetaEvent('InitiateCheckout', {
+            value: cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
+            currency,
+            content_ids: cart.map(i => i.cardId || i.id).filter(Boolean),
+            content_type: 'product',
+            num_items: cart.length,
+        });
         setIsPaymentModalOpen(true);
     };
 
@@ -541,15 +613,19 @@ export default function HomePage() {
             // Use setHint (Set Code) if available as it's more accurate than Set Name
             const setIdentifier = scanData.primary.setHint || scanData.primary.set;
             const detectedLanguage = scanData.primary.language;
+            // Detected game scopes the fallback DB search to the right catalog slice.
+            // Defaults to 'pokemon' so behaviour is unchanged when the game is unknown.
+            const detectedGame = scanData.primary.game || 'pokemon';
 
-            console.log(`[Scan] Searching DB for: ${scanData.primary.name} / ${setIdentifier} / #${scanData.primary.number}`);
+            console.log(`[Scan] Searching DB for: ${scanData.primary.name} / ${setIdentifier} / #${scanData.primary.number} (game: ${detectedGame})`);
             if (detectedLanguage) console.log(`[Scan] Detected Language: ${detectedLanguage}`);
 
             let matches = await pokemonService.findCardByMetadata(
                 scanData.primary.name,
                 setIdentifier,
                 scanData.primary.number,
-                detectedLanguage
+                detectedLanguage,
+                detectedGame
             );
             console.log(`[Scan] Metadata search returned ${matches.length} matches`);
 
@@ -559,7 +635,8 @@ export default function HomePage() {
                 matches = await pokemonService.searchCards(
                     scanData.primary.name,
                     false, // useAiResolution
-                    detectedLanguage as 'en' | 'jp' | 'th' // Pass language hint to search
+                    detectedLanguage as 'en' | 'jp' | 'th', // Pass language hint to search
+                    detectedGame // Scope to the detected game
                 );
                 console.log(`[Scan] Name search returned ${matches.length} matches`);
             }
@@ -673,6 +750,41 @@ export default function HomePage() {
             if (refetchTimer) clearTimeout(refetchTimer);
             supabase.removeChannel(channel);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Deep link from desktop card URLs: middleware redirects phones hitting
+    // /card/<id> to /?card=<id>. Open that card's detail view, then strip the
+    // param (preserving any other query params and the hash — OAuth callbacks
+    // ride in the hash) so refresh doesn't re-trigger it.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const cardId = params.get('card');
+        if (!cardId) return;
+
+        params.delete('card');
+        const rest = params.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+        );
+
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data } = await supabase
+                    .from('pokemon_cards')
+                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+                    .eq('id', cardId)
+                    .maybeSingle();
+                if (data) setSelectedCard(mapSupabaseCardToInternal(data));
+            } catch (err) {
+                // A bad/stale link should never break the app — land on the
+                // marketplace as before.
+                console.warn('[DeepLink] Could not open card', cardId, err);
+            }
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -922,7 +1034,19 @@ export default function HomePage() {
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
             }}>
-            
+
+            {/* Forced partner activation — blocks the app until a provisioned
+                partner sets their real email, phone, and password. */}
+            {user && partnerSetup && (
+                <PartnerFinishSetup
+                    shopName={partnerSetup.shopName}
+                    onComplete={() => {
+                        setPartnerSetup(null);
+                        setUser(prev => (prev ? { ...prev, isPartner: true } : prev));
+                    }}
+                />
+            )}
+
             {isWebScannerOpen && (
                 <WebLiveScanner
                     onClose={() => setIsWebScannerOpen(false)}
@@ -1167,7 +1291,10 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
-                        onBuyNow={() => {
+                        onBuyNow={async () => {
+                            // Same Thailand-only gate as cart checkout — Buy Now
+                            // skips the cart and opens the payment modal directly.
+                            if (!(await ensureCanPurchase())) return;
                             setCart([{
                                 id: selectedListing.id,
                                 cardId: selectedListing.card_id,
@@ -1226,6 +1353,11 @@ export default function HomePage() {
                     onRemoveItem={handleRemoveFromCart}
                     onCheckout={handleCheckout}
                     currencySymbol={currencySymbol}
+                />
+
+                <PurchaseRegionModal
+                    isOpen={isRegionBlockOpen}
+                    onClose={() => setIsRegionBlockOpen(false)}
                 />
 
                 <PaymentModal

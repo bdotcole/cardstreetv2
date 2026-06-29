@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '../types';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface BuylistRequestProps {
     card: Card;
@@ -99,8 +100,9 @@ const BuylistRequest: React.FC<BuylistRequestProps> = ({
                             {/* Card Preview */}
                             <div className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5">
                                 <img
-                                    src={card.imageUrl}
+                                    src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                                     alt={card.name}
+                                    decoding="async"
                                     className="w-20 h-28 object-cover rounded-lg shadow-lg"
                                 />
                                 <div className="flex-1">

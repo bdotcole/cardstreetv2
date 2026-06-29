@@ -40,6 +40,25 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 
 Each row may have `image_large`, `image_small`, and `raw_data` (full original API response). Use **`lib/cardMapper.ts:mapSupabaseCardToInternal`** to normalize into the in-app `Card` type — it handles TCGdex URL fixups (`.png` suffix), price-currency conversion, Thai set-name aliases, and image fallbacks. Don't reinvent this in new code; import it.
 
+**Embedded TCGplayer prices come in two shapes** (the fallback when a card has no `market_values` row). The mapper's `tcgplayerMarketUsd` helper reads both — don't reintroduce a single-shape reader:
+- **pokemontcg.io**: `raw_data.tcgplayer.prices.<printing>.{market,mid,low}`
+- **TCGdex**: `raw_data.tcgplayer.<printing>.{marketPrice,midPrice,lowPrice}` (printing keys sit directly on `tcgplayer` alongside `unit`/`updated`)
+
+TCGdex-sourced EN sets (e.g. me03, me04) rendered priceless for a while because only the first shape was read. The mobile mapper in `cardstreet-mobile/services/pokemonService.ts` has the same helper — **keep the two in sync**. To instead materialize TCGdex prices into `market_values` rows (needed for downstream Thai derivation), use `scripts/price-en-from-rawdata.mjs`.
+
+## Card images (self-hosted)
+
+Card art used to be hotlinked from third-party hosts (TCGdex, ygoprodeck, Scryfall, optcgapi, asia.pokemon-card, pokemontcg.io). When TCGdex went fully unreachable in June 2026, most English Pokémon art blanked. Card images are now **mirrored into our own Supabase storage** so the catalog never depends on an upstream host being up.
+
+- **Storage:** the public `card-images` bucket. New cards use `card-images/<id>/{small,large}.webp` (two pre-sized WebP variants — small ~245w for grids, large ~734w for detail). The older AS-era Thai PDF scans predate this and live at `card-images/cards/<set>/<id>.webp` (single full-res file, small==large); both layouts coexist.
+- **`pokemon_cards.image_small` / `image_large`** point at the mirrored objects. The originals stay recoverable from `raw_data`, so the repoint is reversible.
+- **Serving:** `lib/imageUtils.ts` passes any `/card-images/` URL through **directly** (no render-endpoint rewrite, `shouldSkipNextOptimization` returns true). This is deliberate — Supabase bills image transformations *per origin image*, so routing ~76k cards through `/render/image/` would be a large recurring cost. Other buckets (`listing-images` seller photos, `jp-set-logos`) keep the render path. **Never point card art through the render endpoint.**
+- **Bulk backfill:** `scripts/ingest/mirror-card-images.mjs` (resumable id-cursor pagination, bounded concurrency, idempotent — skips rows already on `supabase.co`, re-encodes via `sharp`). Re-run anytime to sweep stragglers.
+- **Staying mirrored:** `app/api/cron/mirror-images/route.ts` is a **monthly Vercel cron** (`vercel.json`, 04:00 UTC on the 1st, `CRON_SECRET` auth, `nodejs` runtime for `sharp`) that mirrors any newly-ingested cards still on a third-party host and re-syncs active-listing `card_data` snapshots. Bounded by a wall-clock budget; overflow is caught next run.
+- **Listings carry an image snapshot.** Marketplace tiles render `listing.card_data.images`, not the live catalog. New listings snapshot the (mirrored) catalog URL at creation; pre-mirror listings were backfilled by `scripts/repoint-listing-images.mjs` and the monthly cron keeps them synced.
+
+Coverage is not total: ~2.2k Japanese vintage cards have no image on any host (nothing to mirror), and a handful of promo rows have corrupt upstream URLs. These render imageless regardless of mirroring.
+
 ## Scanning pipeline (`/api/scan`)
 
 > **The route must run `nodejs` runtime, not Edge.** `sharp` is a native module.
@@ -184,6 +203,26 @@ Funds settle directly into the seller's Stripe balance. The Stripe processing fe
 - **Multi-seller carts on TH**: rejected at `/api/orders/checkout` with 400 (a direct-charge PaymentIntent is created on exactly one connected account, so one seller per cart). Multi-seller-as-N-charges is a future improvement.
 - Both checks fire BEFORE any DB writes or listing reservations, so a rejected cart leaves no side effects to roll back.
 
+### Purchase region gating (Thailand-only)
+
+Shipping (Flash Express) is only configured for Thailand, so **buying is restricted to TH** for now. Browsing, scanning, and collection management are open everywhere — only the purchase/checkout path is gated. The rest of the world is meant to use the collection side until shipping expands.
+
+**Signal**: Vercel's `x-vercel-ip-country` header (ISO 3166-1 alpha-2), derived from the client IP — the same header used for referral attribution and `app/join/[slug]`. The single source of truth is **`lib/geo.ts`** (`getRequestCountry`, `isPurchaseAllowedFromCountry`). Don't re-read the header ad hoc; import the helper.
+
+**Fail-open policy**: a purchase is allowed when the country is `TH` **or unknown** (header absent — local dev / unresolvable IP). We only hard-block a country we can positively see is not Thailand. Blocking unknowns would lock out legitimate Thai buyers on the rare un-geolocatable request, and Vercel reliably sets the header in production. This is geography (IP) based, so a Thai user travelling abroad is also blocked — consistent, since shipping is to a TH address regardless.
+
+**Enforcement (authoritative, server-side)**:
+- `app/api/orders/checkout/route.ts` rejects non-TH with `403 { code: 'GEO_RESTRICTED' }` right after auth, **before any DB writes / listing reservations** — a rejected request leaves no side effects.
+- `app/api/checkout/route.ts` repeats the gate as defense in depth so a PaymentIntent can never be created out of region.
+
+**UX (popup)**: `components/PurchaseRegionModal.tsx` — "available in Thailand only / coming soon to your country" (bilingual, `purchaseRegion.*` keys in `lib/locales/{en,th}.json`). It's shown by the client gate before the payment modal ever opens:
+- `GET /api/geo` returns `{ country, purchaseAllowed }` (per-IP, `no-store`).
+- `lib/hooks/usePurchaseRegion.ts` warms that lookup once per session (cached + deduped) and exposes `ensurePurchaseRegion()` for click handlers.
+- Mobile `app/page.tsx`: a shared `ensureCanPurchase()` guard fronts both cart **Checkout** (`handleCheckout`) and listing **Buy Now** (`onBuyNow` — which skips the cart and opens the payment modal directly, so it needs its own gate).
+- Desktop `components/desktop/DesktopCartDrawer.tsx`: gated in `beginCheckout`, the only path into the desktop payment phase.
+
+The client gate is UX only and **fails open** (a `/api/geo` hiccup leaves `purchaseAllowed` true); the server gate has the final say. The popup's blocked state can't be reproduced in local dev, since the browser never sends `x-vercel-ip-country` — exercise `/api/geo` with a forced header to verify the logic.
+
 ## pHash backfill
 
 `scripts/backfill-phashes.mjs` populates `pokemon_cards.phash` for every row with a usable image URL.
@@ -193,6 +232,12 @@ Funds settle directly into the seller's Stripe balance. The Stripe processing fe
 - Re-run is safe: already-hashed rows are excluded by the filter.
 
 Failures (~400) are cards with broken `image_large` URLs (mostly XY-era promos). Skips (~2.4k) are cards with no image URL in any field. Both classes need upstream catalog fixes, not script fixes.
+
+## Thai `english_name` backfill
+
+Thai (`language='th'`) rows store the Thai card name in `name` and often leave `english_name` null, which hurts English search of Thai cards. `scripts/backfill-thai-english-name.mjs` fills `english_name` from the **Japanese twin** — matched on the same `set_id` + `number`. This is the **only safe source**: Thai reprints a Japanese set 1:1 with identical numbering, so `ja <set>/<n>` is the same card, but the **English twin renumbers**, so an EN number-match would mislabel cards. The `set_bridge` (`scripts/build_set_bridge.ts`) maps Thai→EN for *pricing only* — never use it for names. Dry-run by default, `--commit` to write, idempotent (only fills empty rows), reversible per set.
+
+Coverage is limited to sets whose JA twin is in-catalog under the same code (filled 461 rows across S12/S12a/S9/S9a/SVK). The ~4k rows on "orphan" sets (S8b, S11, S10\*, SC\*, SVM, SVT\*, SVA\*, MAA\*, promos M-P/S-P) have no in-catalog JA twin and need a JA-name→EN-name dictionary instead.
 
 ## Applying migrations
 
@@ -265,6 +310,30 @@ All `<Image>` components in `cardstreet-mobile/` should pass `cachePolicy="memor
 ### Persistent set/card cache (mobile)
 
 In `cardstreet-mobile/services/pokemonService.ts`, `setsCache` and `cardsCache` are in-memory Maps **backed by AsyncStorage** with TTL — 24h for sets, 6h for cards. Cache key prefix is `pokemonCache:v1:` — bump the version segment if the schema of a cached value changes (e.g. you add a new field to `Card` that consumers now require). Without the version bump, returning users will hit stale shapes from disk and crash.
+
+## Internationalization (i18n), locale routing & SEO
+
+CardStreet is Thailand-first and bilingual (Thai + English), built so adding markets/languages later is mostly config. Keep the four axes separate — **language** (UI), **market/region**, **currency**, **catalog** — they are not the same thing (a Thai buyer may want an English UI with THB pricing).
+
+### Single sources of truth
+
+- `lib/markets.ts` — `MARKETS` config (mirrors `lib/games.ts`). TH is live; SG/MY/PH/US are configured-but-dormant. Each market declares languages, default language, currency, `stripeRegion`, shipping provider, and BCP-47 `locales`. Read from here; don't hardcode per-market values.
+- `lib/i18nRouting.ts` — the locale-in-URL scheme and `buildAlternates(path)` / `sitemapAlternates(path)` helpers for canonical + `hreflang`.
+- UI strings live in `lib/locales/{en,th}.json`, read via `useTranslation()` (`t('namespace.key')`). The desktop site uses the `desktop.*` namespace (chrome + `desktop.{sell,orders,card,cart}`).
+
+### Locale-in-URL scheme (lightweight, middleware-driven — not next-intl)
+
+- **Thai is canonical at the bare path** (`/`, `/faq`); **English lives under `/en`** (`/en`, `/en/faq`); `/th/*` 301-redirects to the bare path.
+- `middleware.ts` strips a leading `/en` and **rewrites** to the bare route while keeping the `/en` URL in the browser; it sets a server-readable `cs_lang` cookie and forwards the resolved locale to the server via the **`x-cs-lang` request header**. First-visit default is **Thai** — English is opt-in via `/en` or the in-app language toggle, **not** geo-negotiated. The locale strip runs *before* the existing desktop-rewrite/admin-guard logic so the two concerns don't tangle (`resolveExperience` returns the internal target; the locale wrapper re-attaches the prefix on redirects, rewrites on `/en`). When adding routes that should be localized, extend the `config.matcher`.
+- `app/layout.tsx` is `async`: it reads `x-cs-lang` (then the `cs_lang` cookie) → `<html lang>` + the `initialLanguage` prop on `UserSettingsProvider`, so the server renders the right language with no flash. The provider seeds its initial language from that prop and **writes the `cs_lang` cookie** whenever the language changes (incl. `updateLanguage`). Reading `headers()`/`cookies()` in the root layout makes all routes dynamically rendered — fine for this mostly-dynamic app.
+
+### FAQ + content pages (SEO/GEO)
+
+- `lib/faqData.ts` is the single source for FAQ content (bilingual, plain-string answers so they serialize into schema.org). `buildFaqJsonLd()` emits a `FAQPage` JSON-LD block.
+- `app/faq/page.tsx` is the canonical, server-rendered FAQ page (metadata + JSON-LD + `buildAlternates('/faq')` for canonical/hreflang). `components/FaqList.tsx` renders the bilingual accordion (native `<details>`, no-JS-friendly) and is reused by `app/help/page.tsx`. The desktop homepage shows a featured-questions teaser (`components/desktop/DesktopFaqTeaser.tsx`) linking to `/faq`.
+- `app/sitemap.ts` lists the public content routes with per-locale `hreflang`; `app/robots.ts` points to it and blocks `/admin`, `/api`, `/desktop`.
+
+> Expansion roadmap (TH → SEA → US), phase status, and the open follow-ups (hreflang on the other `'use client'` content pages, language-toggle URL navigation, per-locale OG/JSON-LD) live in the agent memory note `project_i18n_market_expansion.md`, not here.
 
 ## Conventions
 

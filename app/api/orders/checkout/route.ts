@@ -28,7 +28,8 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { estimateRate, isRegionError } from '@/lib/flashExpress';
+import { estimateRate, isRegionError, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
+import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -49,6 +50,26 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const buyerId = user.id;
+
+        // ─── Geo gate: purchases are Thailand-only for now ───
+        // Shipping (Flash Express) is only configured for TH, so we block
+        // checkout for buyers we can see are outside Thailand. This fires
+        // before any DB work, so a rejected request leaves no side effects.
+        // Unknown geo (local dev / unresolvable IP) is allowed through — see
+        // lib/geo.ts. Browsing and collection features are never gated here.
+        const buyerCountry = getRequestCountry(req);
+        if (!isPurchaseAllowedFromCountry(buyerCountry)) {
+            return NextResponse.json(
+                {
+                    error:
+                        'Purchases are currently only available in Thailand. ' +
+                        'Buying is coming soon to your country.',
+                    code: 'GEO_RESTRICTED',
+                    country: buyerCountry,
+                },
+                { status: 403 },
+            );
+        }
 
         const body = await req.json().catch(() => ({}));
         const items: CheckoutItem[] = Array.isArray(body?.items) ? body.items : [];
@@ -191,36 +212,41 @@ export async function POST(req: Request) {
         }
 
         // ─── Platform fee tier ───
+        // profiles.partner_level is INTEGER 1-9 (20260309_admin_schema.sql) and
+        // that's what the admin tools write; tier-name strings are accepted too
+        // for any legacy rows. Percentages must stay in sync with the display
+        // tiers in components/PartnerPortal.tsx.
+        const PARTNER_LEVEL_FEES: Record<string, number> = {
+            '1': 0.05, 'bronze': 0.05,
+            '2': 0.045, 'silver': 0.045,
+            '3': 0.04, 'gold': 0.04,
+            '4': 0.035, 'platinum': 0.035,
+            '5': 0.03, 'sapphire': 0.03,
+            '6': 0.0275, 'ruby': 0.0275,
+            '7': 0.025, 'emerald': 0.025,
+            '8': 0.0225, 'diamond': 0.0225,
+            '9': 0.02, 'black_opal': 0.02, 'opal': 0.02, 'pink_diamond': 0.02, 'heart': 0.02,
+        };
         const feeMap = new Map<string, number>();
         for (const profile of sellerProfiles || []) {
             let fee = 0.09;
             // Partner status is keyed off partner_joined_at, not `role`: an admin
             // can also be a partner, and `role` (single-valued) can't hold both.
             if (profile.partner_joined_at) {
-                const level = String(profile.partner_level || 'standard').toLowerCase().replace(' ', '_');
-                switch (level) {
-                    case 'bronze': fee = 0.05; break;
-                    case 'silver': fee = 0.045; break;
-                    case 'gold': fee = 0.04; break;
-                    case 'platinum': fee = 0.035; break;
-                    case 'sapphire': fee = 0.03; break;
-                    case 'ruby': fee = 0.0275; break;
-                    case 'emerald': fee = 0.025; break;
-                    case 'diamond': fee = 0.0225; break;
-                    case 'pink_diamond':
-                    case 'heart': fee = 0.02; break;
-                    default: fee = 0.05; break;
-                }
+                const level = String(profile.partner_level ?? 1).toLowerCase().replace(/ /g, '_');
+                fee = PARTNER_LEVEL_FEES[level] ?? 0.05;
             }
             feeMap.set(profile.id, fee);
         }
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
-        const FALLBACK_SATANG = 40 * 100; // ฿40
+        // Live Flash quote first; province-aware fallback (฿40 intra-Bangkok,
+        // ฿90 otherwise) only when Flash can't price the route.
         const sellerShippingSatang = new Map<string, number>();
 
         for (const sellerId of sellerIds) {
             const sp = sellerProfiles?.find(p => p.id === sellerId);
+            const cardCount = listings.filter(l => l.seller_id === sellerId).length;
             try {
                 const quote = await estimateRate({
                     srcProvinceName: sp?.province || 'กรุงเทพมหานคร',
@@ -229,7 +255,7 @@ export async function POST(req: Request) {
                     dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: 500,
+                    weight: estimateParcelWeightGrams(cardCount),
                     width: 10,
                     length: 15,
                     height: 2,
@@ -237,12 +263,13 @@ export async function POST(req: Request) {
                 // Flash returns satang (cents) directly.
                 sellerShippingSatang.set(sellerId, quote.estimatePrice + quote.upCountryAmount);
             } catch (err) {
+                const fb = fallbackShippingSatang(sp?.province, buyerProfile?.province);
                 if (isRegionError(err)) {
-                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿40`);
+                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${fb / 100}`);
                 } else {
                     console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId}:`, err);
                 }
-                sellerShippingSatang.set(sellerId, FALLBACK_SATANG);
+                sellerShippingSatang.set(sellerId, fb);
             }
         }
 
@@ -257,7 +284,11 @@ export async function POST(req: Request) {
 
             let shippingSatang = 0;
             if (!shippingApplied.has(listing.seller_id)) {
-                shippingSatang = sellerShippingSatang.get(listing.seller_id) ?? FALLBACK_SATANG;
+                shippingSatang = sellerShippingSatang.get(listing.seller_id)
+                    ?? fallbackShippingSatang(
+                        sellerProfiles?.find(p => p.id === listing.seller_id)?.province,
+                        buyerProfile?.province,
+                    );
                 shippingApplied.add(listing.seller_id);
             }
 

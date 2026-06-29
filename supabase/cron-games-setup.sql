@@ -1,7 +1,10 @@
--- Weekly price refresh for non-English-Pokemon catalogs (batch-price-games).
+-- Daily price refresh for non-English-Pokemon catalogs (batch-price-games).
 -- One game per invocation (each fits the Edge Function wall-clock limit),
--- staggered Sunday slots so they never overlap (50 req/min JustTCG limit) and
--- sit after the daily English job (21:00 UTC). ~180 JustTCG calls/week total.
+-- staggered nightly slots so they never overlap (100 req/min JustTCG limit)
+-- and sit after the daily English job (21:00 UTC). ~180 JustTCG calls/day;
+-- with the daily English job (~200/day) total ~11.5K/month against the
+-- Professional plan's 5K/day / 50K/month budget. (Was weekly on the Starter
+-- plan's 1K/day / 10K/month.)
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
@@ -15,14 +18,14 @@ DECLARE
   mins int;
 BEGIN
   -- staggered minute offsets per group
-  FOR grp, mins IN SELECT * FROM (VALUES ('mtg',0),('onepiece',5),('yugioh',9),('pokemon-jp',12)) AS t(g,m) LOOP
+  FOR grp, mins IN SELECT * FROM (VALUES ('mtg',0),('onepiece',5),('yugioh',9),('pokemon-jp',12),('riftbound',16),('lorcana',20)) AS t(g,m) LOOP
     -- remove any prior schedule with this name
     FOR j IN SELECT jobid FROM cron.job WHERE jobname = 'price-games-' || grp LOOP
       PERFORM cron.unschedule(j.jobid);
     END LOOP;
     PERFORM cron.schedule(
       'price-games-' || grp,
-      mins || ' 22 * * 0',
+      mins || ' 22 * * *',
       format(
         $q$SELECT net.http_post(url:=%L, headers:=%L::jsonb, body:=%L::jsonb)$q$,
         fn_url,

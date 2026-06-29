@@ -6,7 +6,10 @@ import { useSearchParams } from 'next/navigation'
 export default function RedirectContent() {
     const searchParams = useSearchParams();
     const [url, setUrl] = useState('cardstreet://login-callback');
-    const [intentUrl, setIntentUrl] = useState('intent://login-callback#Intent;scheme=cardstreet;package=com.cardstreet.app;end');
+    // Package-less by design (see the effect below): omitting the package avoids
+    // a Play Store fallback when the app isn't installed / on debug builds. The
+    // effect overwrites this with the query-bearing intent on mount.
+    const [intentUrl, setIntentUrl] = useState('intent://login-callback#Intent;scheme=cardstreet;end');
 
     // This page is the deep-link bounce target for both OAuth login and Stripe
     // Connect onboarding returns. The forwarding logic is identical; only the

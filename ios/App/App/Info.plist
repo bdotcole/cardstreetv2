@@ -22,6 +22,42 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.cardstreet.tcg</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cardstreet</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb901554606295641</string>
+			</array>
+		</dict>
+	</array>
+	<key>FacebookAppID</key>
+	<string>901554606295641</string>
+	<key>FacebookClientToken</key>
+	<string>460a3a499015935ac8c86c2007f63ffc</string>
+	<key>FacebookDisplayName</key>
+	<string>CardStreet</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v9wttpbfk9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>n38lu8286q.skadnetwork</string>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>CardStreet uses the camera to scan trading cards so you can identify them and add them to your collection or marketplace listings.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

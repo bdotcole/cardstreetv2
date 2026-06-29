@@ -6,7 +6,7 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getThumbnailUrl, getSetLogoUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 
 interface ExploreProps {
@@ -218,7 +218,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
+      <div className="flex-shrink-0 px-3 pt-6 pb-2 space-y-4 bg-brand-darker">
         {/* Search Engine */}
         <div className="relative group">
           <div className="absolute inset-0 bg-brand-cyan/20 blur-md rounded-xl group-focus-within:opacity-100 opacity-0 transition-opacity"></div>
@@ -354,19 +354,19 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
                           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
                         >
-                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
+                          <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
                             {set.images.logo ? (
                               <Image
-                                src={set.images.logo}
+                                src={getSetLogoUrl(set.images.logo, 160)}
                                 alt={set.name}
                                 fill
-                                sizes="40px"
-                                unoptimized={set.images.logo.includes('asia.pokemon-card.com')}
+                                sizes="64px"
+                                unoptimized={shouldSkipNextOptimization(getSetLogoUrl(set.images.logo, 160))}
                                 className="object-contain p-1"
                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />
                             ) : (
-                              <span className="text-lg font-black text-white/60">{set.name.charAt(0)}</span>
+                              <span className="text-2xl font-black text-white/60">{set.name.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -390,7 +390,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       </div>
 
       {/* Scrollable Results Section */}
-      <div className="flex-1 overflow-hidden px-6 pb-4">
+      <div className="flex-1 overflow-hidden px-3 pb-4">
         <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
           {browseMode === 'sealed' ? (
             isLoadingSealed ? (
@@ -465,7 +465,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           ) : (
             <div className="flex flex-col h-full">
               {/* Fixed Header Row */}
-              <div className="flex-shrink-0 grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 bg-white/5 border-b border-white/5">
+              <div className="flex-shrink-0 grid grid-cols-[minmax(0,1fr)_auto_2.5rem] gap-3 px-4 py-3 bg-white/5 border-b border-white/5">
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                   {t('explore.asset')}
                   <span className="text-[8px] font-bold text-slate-700 normal-case tracking-normal">{sortedCards.length}</span>
@@ -487,7 +487,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     <i className={`fa-solid fa-caret-down text-[8px] ${sortOption === 'priceHigh' ? 'text-brand-cyan' : 'text-slate-600'}`}></i>
                   </div>
                 </div>
-                <span className="w-8">{/* add button placeholder */}</span>
+                <span aria-hidden="true">{/* add button placeholder */}</span>
               </div>
 
               {/* Scrollable Card List — Virtualized */}
@@ -518,22 +518,24 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           height: `${virtualItem.size}px`,
                           transform: `translateY(${virtualItem.start}px)`,
                         }}
-                        className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-4 active:bg-white/[0.05] transition-colors group cursor-pointer border-b border-white/[0.03]"
+                        className="grid grid-cols-[minmax(0,1fr)_auto_2.5rem] gap-3 items-center px-4 py-4 active:bg-white/[0.05] transition-colors group cursor-pointer border-b border-white/[0.03]"
                         onClick={() => onSelectCard(card)}
                       >
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className="w-14 h-20 bg-brand-darker rounded-md overflow-hidden flex-shrink-0 border border-white/5 relative">
                             <Image
                               src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                               fill
                               sizes="56px"
-                              unoptimized={shouldSkipNextOptimization(card.images?.small || card.imageUrl)}
+                              placeholder="blur"
+                              blurDataURL={CARD_BLUR_DATA_URL}
+                              unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
                               className="object-contain"
                               alt={card.name}
                             />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-white text-sm font-bold truncate group-hover:text-brand-cyan transition-colors">{card.name}</p>
+                            <p className="text-white text-sm font-bold leading-tight line-clamp-2 group-hover:text-brand-cyan transition-colors">{card.name}</p>
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
                               <span className="text-[10px] text-slate-600 font-bold">#{card.number}</span>
@@ -559,11 +561,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           )}
                         </div>
 
-                        <div className="text-right">
-                          <button className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${listing ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
-                            {listing ? <i className="fa-solid fa-cart-shopping text-xs"></i> : <i className="fa-solid fa-plus text-xs"></i>}
-                          </button>
-                        </div>
+                        <button className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${listing ? 'bg-brand-green text-brand-darker hover:bg-white' : 'bg-white/5 text-brand-cyan hover:bg-brand-cyan/20'}`}>
+                          {listing ? <i className="fa-solid fa-cart-shopping text-xs"></i> : <i className="fa-solid fa-plus text-xs"></i>}
+                        </button>
                       </div>
                     );
                   })}

@@ -5,6 +5,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import type { StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { trackMetaEvent } from '@/lib/metaEvents';
 
 // Publishable key, region-aware to match the dual-platform server setup.
 // The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
@@ -194,6 +195,16 @@ const PaymentElementForm: React.FC<{
                         // Non-blocking — webhook is the canonical path.
                     }
                 }
+                // Meta Purchase event (web Pixel + native iOS app event). Fired
+                // only on settled card payments, not PromptPay 'processing', so
+                // unsettled authorizations aren't counted as purchases.
+                trackMetaEvent('Purchase', {
+                    value: displayAmount,
+                    currency,
+                    content_ids: items.map((i) => i.cardId || i.id).filter(Boolean),
+                    content_type: 'product',
+                    num_items: items.length,
+                });
                 onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
             } else if (status === 'processing') {
                 // PromptPay (and other async methods): the buyer has authorized;

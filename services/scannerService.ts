@@ -3,7 +3,16 @@ import { createClient as createAdminClient, SupabaseClient } from '@supabase/sup
 import sharp from 'sharp';
 import { computeDHash, base64ToBuffer, bufferToPostgresBytea } from '@/lib/phash';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import { GameId } from '@/lib/games';
 import { Card } from '../types';
+
+// The games the catalog holds (pokemon_cards.game). Mirrors lib/games.ts GAMES — used
+// to constrain the model's game detection and to game-scope catalog lookups so a number
+// printed on, say, an MTG card can't false-match a Pokémon row with the same number.
+const SCAN_GAME_IDS: GameId[] = ['pokemon', 'mtg', 'yugioh', 'onepiece', 'riftbound', 'lorcana'];
+function sanitizeGame(v: any): GameId | null {
+  return typeof v === 'string' && (SCAN_GAME_IDS as string[]).includes(v) ? (v as GameId) : null;
+}
 
 // Lazy-init both clients. createAdminClient throws at construction time when
 // SUPABASE_URL is empty (which is true during `next build` page-data collection
@@ -33,6 +42,15 @@ function getSupabase(): SupabaseClient {
 const DIST_HIGH_CONFIDENCE = 8;
 const DIST_CANDIDATE_CEILING = 20;
 
+// Sanity ceiling for the deterministic (set code + number) lookup. That tier is normally
+// ground truth, but Flash occasionally OCRs a set code into a *different valid* code (the
+// documented Thai "8s" -> "bs"/"B5" failure), which would silently return the wrong card at
+// high confidence with no image check. A correct card photographed under glare/angle still
+// lands well under this against its catalog scan (~40% of 64 bits); only a grossly different
+// image exceeds it. On a breach we fall through to the (language, number) tier — both fields
+// are ~100% reliable in diagnostics — so the redundant pipeline self-corrects.
+const SET_CODE_PHASH_SANITY = 26;
+
 export interface ScanResultPrimary {
   name: string;
   set: string;
@@ -40,6 +58,9 @@ export interface ScanResultPrimary {
   number: string;
   rarity: string;
   language?: 'en' | 'th' | 'jp' | 'other';
+  // Detected trading-card game. Drives which catalog slice the client searches on the
+  // LLM-fallback path; the pHash path already returns fully-mapped Cards carrying `game`.
+  game?: GameId;
   confidence: number;
 }
 
@@ -58,6 +79,10 @@ export interface ScanPayload {
   image?: string;
   text?: string;
   languageHint?: 'en' | 'jp' | 'th' | 'other';
+  // Optional game hint from the UI. The scan entry is game-agnostic today (the user
+  // scans any card), so this is usually absent and the game is auto-detected. When a
+  // future game-scoped scan flow passes it, it narrows lookups + the pHash search.
+  gameHint?: GameId;
 }
 
 export const scannerService = {
@@ -75,6 +100,7 @@ export const scannerService = {
         const phashResult = await this.phashScan(payload.image as string, {
           ocrText: payload.text,
           userLocale: payload.languageHint,
+          gameHint: payload.gameHint,
         });
         if (phashResult && phashResult.matches && phashResult.matches.length > 0) {
           const bestDist = phashResult.matchDistance ?? 99;
@@ -133,7 +159,7 @@ export const scannerService = {
 
   async phashScan(
     base64Image: string,
-    opts: { ocrText?: string; userLocale?: string } = {}
+    opts: { ocrText?: string; userLocale?: string; gameHint?: GameId } = {}
   ): Promise<ScanResult | null> {
     const supabase = getSupabase();
     const imageBuffer = base64ToBuffer(base64Image);
@@ -152,14 +178,30 @@ export const scannerService = {
     ]);
     const hex = bufferToPostgresBytea(hash);
 
+    // Detected game (or the UI's hint). Scopes every catalog lookup below to one game so
+    // a number/name printed on one game's card can't false-match another game's row.
+    // pHash is the cross-game guarantee (artworks are globally unique), so when the game
+    // is wrong or unknown the redundant tiers still self-correct.
+    const detectedGame: GameId | null = ocr?.game ?? opts.gameHint ?? null;
+
     // -------- Tier 1: deterministic (set_id, number) lookup --------
     if (ocr?.setCode && ocr?.cardNumber) {
-      const direct = await this.lookupBySetAndNumber(ocr.setCode, ocr.cardNumber, ocr.language);
+      const direct = await this.lookupBySetAndNumber(ocr.setCode, ocr.cardNumber, ocr.language, detectedGame);
       if (direct && direct.length > 0) {
         // Multiple matches happen for variant prints (holo/reverse holo/full-art at the
         // same number). Rank them by dHash distance so the user's actual print surfaces.
         const ranked = await this.rankByPhash(direct, hex);
-        return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+        // Verify the best print actually resembles the captured frame before trusting the
+        // set code as ground truth — a misread set code lands on a real-but-wrong card here.
+        // Rows already carry `phash` (select '*'), so this is free. No stored phash (some ja
+        // rows) -> unverifiable -> trust the deterministic lookup as before.
+        const verify = rowPhashDistance(ranked[0].phash, hex);
+        if (verify === null || verify <= SET_CODE_PHASH_SANITY) {
+          return this.buildScanResult(ranked, ranked[0].distance ?? 0, 'set-code-ocr');
+        }
+        console.log(
+          `[ScannerService] set-code lookup hash distance ${verify} > ${SET_CODE_PHASH_SANITY}; set code likely misread, falling through to language+number`,
+        );
       }
     }
 
@@ -168,7 +210,7 @@ export const scannerService = {
     // (glare, fingerprint, oblique angle). Cross-checking name + number + language
     // narrows the catalog to a handful of candidates; pHash picks the right one.
     if (ocr?.name && ocr?.language && (ocr?.cardNumber || ocr?.setCode)) {
-      const byName = await this.lookupByNameAndLanguage(ocr.name, ocr.language, ocr.cardNumber);
+      const byName = await this.lookupByNameAndLanguage(ocr.name, ocr.language, ocr.cardNumber, detectedGame);
       if (byName && byName.length > 0) {
         const ranked = await this.rankByPhash(byName, hex);
         if ((ranked[0].distance ?? 99) <= 14) {
@@ -184,7 +226,7 @@ export const scannerService = {
     // as "bs"/"B5"), the (language, number) pair narrows the catalog to typically
     // 1-10 cards across all sets, and pHash picks the right one from there.
     if (ocr?.language && ocr?.cardNumber) {
-      const byLangNum = await this.lookupByLanguageAndNumber(ocr.language, ocr.cardNumber);
+      const byLangNum = await this.lookupByLanguageAndNumber(ocr.language, ocr.cardNumber, detectedGame);
       if (byLangNum && byLangNum.length > 0) {
         const ranked = await this.rankByPhash(byLangNum, hex);
         if ((ranked[0].distance ?? 99) <= 18) {
@@ -193,28 +235,31 @@ export const scannerService = {
       }
     }
 
-    // -------- Tier 2: pHash search, filtered by detected language --------
-    const filter = ocr?.language ?? null;
+    // -------- Tier 2: pHash search, filtered by detected language + game --------
+    // Cross-game artworks never collide, so the game filter is a precision/speed
+    // optimisation, not a correctness requirement — we fall back fully unfiltered below.
+    const langFilter = ocr?.language ?? null;
 
-    const runRpc = (lang: string | null) =>
+    const runRpc = (lang: string | null, game: string | null) =>
       supabase.rpc('search_pokemon_by_phash', {
         query_phash: hex,
         max_distance: DIST_CANDIDATE_CEILING,
         result_limit: 10,
         language_filter: lang,
+        game_filter: game,
       });
 
-    let { data: rows, error } = await runRpc(filter);
+    let { data: rows, error } = await runRpc(langFilter, detectedGame);
     if (error) {
       console.error('[ScannerService] phash RPC error:', error);
       return null;
     }
 
-    // If the detected language returned nothing, the detection may have been wrong
-    // (e.g. partial OCR). Retry unfiltered.
-    if (filter && (!rows || rows.length === 0)) {
-      console.log(`[ScannerService] phash: 0 matches in lang=${filter}, retrying unfiltered`);
-      const retry = await runRpc(null);
+    // If the detected language/game returned nothing, the detection may have been wrong
+    // (e.g. partial OCR, misjudged game). Retry fully unfiltered across the whole catalog.
+    if ((langFilter || detectedGame) && (!rows || rows.length === 0)) {
+      console.log(`[ScannerService] phash: 0 matches in lang=${langFilter} game=${detectedGame}, retrying unfiltered`);
+      const retry = await runRpc(null, null);
       if (retry.error) {
         console.error('[ScannerService] phash retry error:', retry.error);
         return null;
@@ -253,6 +298,7 @@ export const scannerService = {
     setCode: string,
     cardNumber: string,
     language?: 'en' | 'th' | 'jp' | null,
+    game?: GameId | null,
   ): Promise<any[] | null> {
     const supabase = getSupabase();
     // Take the first whitespace-delimited token, then drop non-alphanumerics.
@@ -267,39 +313,31 @@ export const scannerService = {
     const numeratorStripped = numeratorRaw.replace(/^0+/, '') || numeratorRaw;
     if (!numeratorRaw) return null;
 
-    let q = supabase
-      .from('pokemon_cards')
-      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
-      .ilike('set_id', cleanSet)
-      .or(
-        `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`
-      );
-    if (language) q = q.eq('language', language);
+    const numberOr = `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`;
+    const select = '*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
 
-    const { data, error } = await q.limit(5);
-    if (error) {
-      console.warn('[ScannerService] lookupBySetAndNumber error:', error);
-      return null;
-    }
-    if (data && data.length > 0) return data;
+    // Set-id matching, in order of decreasing precision. For Pokémon the printed code IS
+    // the set_id ("MA3", "swsh3"); other games prefix it ("mtg-big", "ygo-bach"), so the
+    // trailing suffix leg lets a printed "BIG"/"BACH" reach the namespaced row. game + number
+    // + the caller's pHash sanity gate keep the looser legs from returning a wrong card.
+    const setMatchers: Array<(q: any) => any> = [
+      (q) => q.ilike('set_id', cleanSet),
+      (q) => q.ilike('set_id', `${cleanSet}%`),
+      (q) => q.ilike('set_id', `%${cleanSet}`),
+    ];
 
-    // Defensive retry: some Thai sets are stored with extra characters in pokemon_sets
-    // but the bulk of rows live under the canonical id. Try an ILIKE prefix match if
-    // an exact match found nothing.
-    let q2 = supabase
-      .from('pokemon_cards')
-      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
-      .ilike('set_id', `${cleanSet}%`)
-      .or(
-        `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`
-      );
-    if (language) q2 = q2.eq('language', language);
-    const retry = await q2.limit(5);
-    if (retry.error) {
-      console.warn('[ScannerService] lookupBySetAndNumber prefix retry error:', retry.error);
-      return null;
+    for (const applySetMatcher of setMatchers) {
+      let q = applySetMatcher(supabase.from('pokemon_cards').select(select)).or(numberOr);
+      if (language) q = q.eq('language', language);
+      if (game) q = q.eq('game', game);
+      const { data, error } = await q.limit(5);
+      if (error) {
+        console.warn('[ScannerService] lookupBySetAndNumber error:', error);
+        return null;
+      }
+      if (data && data.length > 0) return data;
     }
-    return retry.data && retry.data.length > 0 ? retry.data : null;
+    return null;
   },
 
   // Fallback lookup for when the set code didn't OCR cleanly but Pro identified the
@@ -311,6 +349,7 @@ export const scannerService = {
     name: string,
     language: 'en' | 'th' | 'jp',
     cardNumber?: string | null,
+    game?: GameId | null,
   ): Promise<any[] | null> {
     const supabase = getSupabase();
     const cleanName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
@@ -321,6 +360,7 @@ export const scannerService = {
       .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
       .eq('language', language);
+    if (game) q = q.eq('game', game);
 
     if (cardNumber) {
       const numerator = cardNumber.split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -348,20 +388,22 @@ export const scannerService = {
   async lookupByLanguageAndNumber(
     language: 'en' | 'th' | 'jp',
     cardNumber: string,
+    game?: GameId | null,
   ): Promise<any[] | null> {
     const supabase = getSupabase();
     const numerator = cardNumber.split('/')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
     if (!numerator) return null;
     const stripped = numerator.replace(/^0+/, '') || numerator;
 
-    const { data, error } = await supabase
+    let q = supabase
       .from('pokemon_cards')
       .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .eq('language', language)
       .or(
         `number.eq.${numerator},number.eq.${stripped},number.ilike.${numerator}/%,number.ilike.${stripped}/%`,
-      )
-      .limit(20);
+      );
+    if (game) q = q.eq('game', game);
+    const { data, error } = await q.limit(20);
     if (error) {
       console.warn('[ScannerService] lookupByLanguageAndNumber error:', error);
       return null;
@@ -441,6 +483,7 @@ export const scannerService = {
       number: top.number,
       rarity: top.rarity,
       language: (top.language as any) || 'en',
+      game: (top.game as GameId) || 'pokemon',
       confidence,
     };
     return {
@@ -483,6 +526,9 @@ export const scannerService = {
     language: 'en' | 'th' | 'jp' | null;
     name?: string | null;
     rarity?: string | null;
+    // Detected game. Only the LLM path can read it; the OCR-text-only fast path leaves it
+    // undefined (so callers treat the game as unknown and search cross-game).
+    game?: GameId | null;
     confidence?: number;
   } | null> {
     const fromOcrText = parseMetadataFromOcrText(ocrText);
@@ -533,19 +579,20 @@ export const scannerService = {
               { inlineData: { data: fullBase64, mimeType: 'image/jpeg' } },
               { inlineData: { data: bottomBase64, mimeType: 'image/jpeg' } },
               {
-                text: `You are a Pokémon TCG identification expert. Two images are provided: the full card, then a magnified view of its bottom edge.
+                text: `You are a trading-card identification expert. The card belongs to ONE of these games: Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Riftbound, or Disney Lorcana. Two images are provided: the full card, then a magnified view of its bottom edge.
 
 Extract the following fields. Be concise — values are short strings, not paragraphs.
 
-- name: The Pokémon's name in English (canonical). Even on Thai or Japanese cards, return the standard English name (e.g. "Charizard ex", "Pikachu V").
-- setCode: The short alphanumeric printed near the bottom corners. Examples: "MA3", "MA2", "SV5K", "SV4a", "sv4pt5", "swsh3", "PROMO", "s12a", "s9a". Maximum 10 characters. Preserve exact casing. Strip any trailing region marker like " T" (Thai) or " J" (Japanese). If unreadable, return null.
-- cardNumber: As printed, usually digits with a forward slash. Examples: "087/198", "132/190", "14/214", "SV001". Maximum 12 characters. If unreadable, return null.
+- game: Which game it is. One of exactly: "pokemon", "mtg", "yugioh", "onepiece", "riftbound", "lorcana". Cues: Pokémon (energy symbols, HP top-right, "ex"/"V"/"VMAX"); Magic (mana cost circles top-right, a card-type line, a set symbol mid-right); Yu-Gi-Oh (orange/blue header, ATK/DEF bottom-right, a passcode bottom-left); One Piece (DON!!/power top-left, life/cost circles); Riftbound (League of Legends champions/runes); Lorcana (Disney characters, ink cost gems top-left, lore/strength/willpower). If unsure, give your best guess.
+- name: The card's name in English (canonical). Even on Thai or Japanese cards, return the standard English name (e.g. "Charizard ex", "Black Lotus", "Blue-Eyes White Dragon").
+- setCode: The short alphanumeric set/expansion code printed near the bottom corners. Examples by game — Pokémon: "MA3", "SV5K", "swsh3", "s12a", "PROMO"; Magic: "BLB", "MH3"; Yu-Gi-Oh: "LOB", "BACH" (often as a prefix in the card number like "BACH-EN001"); One Piece: "OP01", "EB01"; Riftbound: "OGN"; Lorcana: the set number. Maximum 10 characters. Preserve exact casing. Strip any trailing region marker like " T" (Thai) or " J" (Japanese). If unreadable, return null.
+- cardNumber: The collector number as printed, usually digits, sometimes with a forward slash or a set prefix. Examples: "087/198", "132/190", "0123", "BACH-EN001", "OP01-003", "007/298". Maximum 14 characters. If unreadable, return null.
 - language: How to decide — this is critical, do it carefully:
-    Step 1: Look at the ATTACK BOX (middle of the card, where moves are described).
+    Step 1: Look at the BODY TEXT (the rules/attack/effect box in the middle of the card).
     Step 2: Is ANY non-Latin script visible there? Thai characters (e.g. ก ข ค ง จ ฉ พ ม ภ ภาษาไทย) or Japanese hiragana/katakana/kanji (e.g. の は を します ポケモン)?
     Step 3: If you see Thai script anywhere → "th". If you see hiragana/katakana/kanji → "ja". If only Latin/English → "en".
-    Important: Pokémon NAMES are often shown in English on regional cards (a Thai card may still show "Charizard ex" in Latin). What matters is the BODY TEXT in the attack box. Do NOT decide based on the card name or set code alone.
-- rarity: Best guess: "C", "U", "R", "RR", "RRR", "SR", "AR", "SAR", "UR", or similar.
+    Important: card NAMES are often shown in English even on regional prints (a Thai card may still show "Charizard ex" in Latin). What matters is the BODY TEXT. Do NOT decide based on the card name or set code alone.
+- rarity: Best guess for that game (e.g. "C", "U", "R", "RR", "SR", "AR", "SAR", "UR", "Mythic", "Secret", "Legendary"...). If unclear, null.
 - confidence: Overall 0.0 to 1.0.
 
 Return JSON only. Keep values terse — single short string per field.`,
@@ -558,6 +605,7 @@ Return JSON only. Keep values terse — single short string per field.`,
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              game: { type: Type.STRING, enum: SCAN_GAME_IDS as string[] },
               name: { type: Type.STRING },
               setCode: { type: Type.STRING },
               cardNumber: { type: Type.STRING },
@@ -580,7 +628,8 @@ Return JSON only. Keep values terse — single short string per field.`,
       const sanitizeNumber = (v: any): string | null => {
         if (typeof v !== 'string') return null;
         const trimmed = v.trim();
-        if (trimmed.length === 0 || trimmed.length > 12) return null;
+        // 14 chars covers prefixed numbers like "BACH-EN001" / "OP01-003" alongside "087/198".
+        if (trimmed.length === 0 || trimmed.length > 14) return null;
         return trimmed;
       };
       const sanitizeName = (v: any): string | null => {
@@ -594,7 +643,9 @@ Return JSON only. Keep values terse — single short string per field.`,
       const cleanSetCode = sanitizeCode(parsed.setCode);
       const cleanCardNumber = sanitizeNumber(parsed.cardNumber);
       const cleanName = sanitizeName(parsed.name);
-      console.log('[ScannerService] Pro extraction:', {
+      const cleanGame = sanitizeGame(parsed.game);
+      console.log('[ScannerService] Flash extraction:', {
+        game: cleanGame,
         name: cleanName,
         setCode: cleanSetCode,
         cardNumber: cleanCardNumber,
@@ -606,6 +657,7 @@ Return JSON only. Keep values terse — single short string per field.`,
         cardNumber: cleanCardNumber || fromOcrText?.cardNumber || null,
         language: language ?? fromOcrText?.language ?? null,
         name: cleanName ?? null,
+        game: cleanGame,
         rarity: parsed.rarity ?? null,
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : undefined,
       };
@@ -644,11 +696,11 @@ Return JSON only. Keep values terse — single short string per field.`,
         const titles = json.visual_matches.map((m: any) => m.title).slice(0, 8);
         const parseRes = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Act as a Pokémon TCG expert. Google Lens just identified an image with these titles: ${JSON.stringify(titles)}.
+            contents: `Act as a trading-card expert (Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Riftbound, or Disney Lorcana). Google Lens just identified an image with these titles: ${JSON.stringify(titles)}.
 
-Identify the EXACT Pokémon card (Name, Set Code, Number, Rarity) they represent.
+Identify the EXACT card (Game, Name, Set Code, Number, Rarity) they represent. For game use one of "pokemon", "mtg", "yugioh", "onepiece", "riftbound", "lorcana".
 Return your best singular match as 'primary', and alternative matches as 'candidates'.
-If the titles are garbage or unrelated to Pokemon, return a low confidence.`,
+If the titles are garbage or unrelated to trading cards, return a low confidence.`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: scanResultSchema(),
@@ -672,14 +724,15 @@ If the titles are garbage or unrelated to Pokemon, return a low confidence.`,
           parts: [
             { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
             {
-              text: `Act as a professional TCG grader and card identifier. Identify this EXACT Pokémon card variation from the cropped image.
+              text: `Act as a professional trading-card grader and identifier. The card is from one of: Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Riftbound, or Disney Lorcana. Identify this EXACT card variation from the cropped image.
 
-CRITICAL OCR INSTRUCTIONS:
-1. Examine the absolute bottom corners of the card. You must accurately extract the Alphanumeric Set Code (e.g., "SV4a", "s9a", "SV1", "PROMO") and the specific Card Number (e.g., "132/190", "014/165", "005/012").
-2. The language of the card will be English, Japanese, or Thai (ภาษาไทย). SET THIS LANGUAGE CORRECTLY!
-3. If it is Thai, look for the Thai name but return the standard ENGLISH name for the Pokémon.
-4. If there are distinct art variants (like Secret Rares or Art Rares), ensure the set code and number correctly reflect this exact print, not the base set version.
-5. Provide your single best exact match as primary. Return valid JSON.` }
+CRITICAL INSTRUCTIONS:
+1. game: state which game it is — one of "pokemon", "mtg", "yugioh", "onepiece", "riftbound", "lorcana".
+2. Examine the bottom corners. Accurately extract the alphanumeric Set Code (e.g. "SV4a", "PROMO", "BLB", "OP01", "LOB") and the Card Number (e.g. "132/190", "0123", "OP01-003", "BACH-EN001").
+3. The language will be English, Japanese, or Thai (ภาษาไทย) — judge it from the BODY/rules text, not the name. SET THIS LANGUAGE CORRECTLY!
+4. Return the standard ENGLISH card name even when the print is Thai or Japanese.
+5. For distinct art variants (Secret/Art rares, alternate arts), make the set code and number reflect this exact print, not the base version.
+6. Provide your single best exact match as primary. Return valid JSON.` }
           ]
         }
       ],
@@ -700,12 +753,13 @@ CRITICAL OCR INSTRUCTIONS:
       model: 'gemini-2.5-flash',
       contents: [
         {
-          text: `Act as a professional Pokémon TCG grader. A mobile device ran Native MLKit OCR on a cropped Pokemon card and retrieved the following raw text strings:\n\n[ ${ocrText} ]\n\nIdentify the EXACT Pokémon card variation from this text.
+          text: `Act as a professional trading-card grader. The card is from one of: Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Riftbound, or Disney Lorcana. A mobile device ran Native MLKit OCR on a cropped card and retrieved the following raw text strings:\n\n[ ${ocrText} ]\n\nIdentify the EXACT card variation from this text.
 CRITICAL INSTRUCTIONS:
-1. Parse the text for the crucial Alphanumeric Set Code (e.g., "SV4a", "s9a", "SV1", "PROMO") and the Card Number (e.g., "132/190", "014/165").
-2. The language of the card will be English, Japanese, or Thai (ภาษาไทย). SET THIS LANGUAGE CORRECTLY!
-3. If the names are in Thai or Japanese characters, use that to set language, but return the standard ENGLISH name for the Pokémon in the JSON.
-4. Provide your single best exact match as primary. Return valid JSON.`
+1. game: state which game it is — one of "pokemon", "mtg", "yugioh", "onepiece", "riftbound", "lorcana".
+2. Parse the text for the Alphanumeric Set Code (e.g. "SV4a", "PROMO", "BLB", "OP01", "LOB") and the Card Number (e.g. "132/190", "OP01-003", "BACH-EN001").
+3. The language will be English, Japanese, or Thai (ภาษาไทย). SET THIS LANGUAGE CORRECTLY!
+4. If the text contains Thai or Japanese characters use that to set language, but return the standard ENGLISH card name in the JSON.
+5. Provide your single best exact match as primary. Return valid JSON.`
         }
       ],
       config: {
@@ -725,6 +779,7 @@ function scanResultSchema() {
             primary: {
                 type: Type.OBJECT,
                 properties: {
+                    game: { type: Type.STRING, enum: ['pokemon', 'mtg', 'yugioh', 'onepiece', 'riftbound', 'lorcana'] },
                     name: { type: Type.STRING },
                     set: { type: Type.STRING },
                     setHint: { type: Type.STRING },
@@ -755,8 +810,13 @@ function scanResultSchema() {
 // Misses are common — text is often jumbled and the model picks up things the
 // regex can't parse — so we still fall through to the Flash call when fields are
 // missing. The point is to skip the LLM hop when the OCR is clean.
-const RE_SET_CODE = /\b(MA[0-9]{1,2}|SV[0-9][a-zA-Z0-9]*|sv[0-9][a-zA-Z0-9]*|swsh[0-9]{1,3}|sm[0-9]{1,3}|s[0-9]{1,3}[a-z]?|PROMO)\b/;
-const RE_CARD_NUMBER = /\b([0-9]{1,3}\/[0-9]{1,3})\b/;
+// Set codes that carry digits (unambiguous). Pokémon (MA3/SV5K/swsh3/s12a/PROMO) plus the
+// digit-bearing codes used by One Piece (OP01/EB01/ST01/PRB01) and Riftbound (OGN). Bare
+// 3-letter codes (Magic "BLB", Yu-Gi-Oh "LOB") are intentionally omitted — they'd false-match
+// ordinary OCR words; those games fall through to the Flash extractor, which detects the game.
+const RE_SET_CODE = /\b(MA[0-9]{1,2}|SV[0-9][a-zA-Z0-9]*|sv[0-9][a-zA-Z0-9]*|swsh[0-9]{1,3}|sm[0-9]{1,3}|s[0-9]{1,3}[a-z]?|PROMO|OP[0-9]{2}|EB[0-9]{2}|ST[0-9]{2}|PRB[0-9]{2}|OGN)\b/;
+// "087/198" plus prefixed collector numbers like "OP01-003" / "BACH-EN001".
+const RE_CARD_NUMBER = /\b([0-9]{1,3}\/[0-9]{1,3}|[A-Z0-9]{2,5}-[A-Z]{0,3}[0-9]{1,4})\b/;
 function parseMetadataFromOcrText(ocrText?: string) {
     if (!ocrText || ocrText.trim().length === 0) return null;
     const setMatch = ocrText.match(RE_SET_CODE);
@@ -771,6 +831,16 @@ function parseMetadataFromOcrText(ocrText?: string) {
         cardNumber: numMatch ? numMatch[1] : null,
         language,
     };
+}
+
+// dHash distance between a candidate row's stored phash and the query hash. Returns null
+// when the row has no usable phash (so callers can treat it as "unverifiable" rather than
+// "mismatch"). queryHex is the "\\x..."-prefixed bytea string from bufferToPostgresBytea.
+function rowPhashDistance(rowPhash: any, queryHex: string): number | null {
+    if (typeof rowPhash !== 'string') return null;
+    const cardBytes = decodeSupabaseBytea(rowPhash);
+    if (!cardBytes) return null;
+    return hammingDistance(hexToBytes(queryHex), cardBytes);
 }
 
 // Bytea decode/Hamming for the in-Node pHash distance ranking (variant disambiguation).

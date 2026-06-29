@@ -11,6 +11,10 @@
             "schedule": "0 0 * * *"
         },
         {
+            "path": "/api/cron/mirror-images",
+            "schedule": "0 4 1 * *"
+        },
+        {
             "path": "/api/cron/pricecharting",
             "schedule": "0 3 * * 1"
         }

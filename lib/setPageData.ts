@@ -1,0 +1,74 @@
+import 'server-only';
+import { cache } from 'react';
+import { createClient } from '@/lib/supabase/server';
+import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import type { Card } from '@/types';
+
+export interface SetRow {
+    id: string;
+    name: string;
+    game: string;
+    language: string;
+    logo_url: string | null;
+    symbol_url: string | null;
+    printed_total: number | null;
+    total: number | null;
+    release_date: string | null;
+}
+
+const SET_COLUMNS = 'id, name, game, language, logo_url, symbol_url, printed_total, total, release_date';
+
+const CARD_COLUMNS =
+    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)';
+
+// Set ids are unique across languages (verified), so one id resolves to exactly
+// one set and its cards. Cached per request so generateMetadata + the page body
+// share a single round-trip.
+export const getSetPageData = cache(
+    async (setId: string): Promise<{ set: SetRow | null; cards: Card[] }> => {
+        const supabase = await createClient();
+
+        const { data: setRows } = await supabase
+            .from('pokemon_sets')
+            .select(SET_COLUMNS)
+            .eq('id', setId)
+            .limit(1);
+        const set = (setRows?.[0] as SetRow) ?? null;
+        if (!set) return { set: null, cards: [] };
+
+        const { data: cardRows } = await supabase
+            .from('pokemon_cards')
+            .select(CARD_COLUMNS)
+            .eq('set_id', setId)
+            .order('number', { ascending: true });
+
+        const cards = (cardRows || []).map(mapSupabaseCardToInternal);
+        // `number` is text, so the DB sort is lexicographic (1,10,100,2…).
+        // Re-sort numerically for a natural card order on the page.
+        cards.sort((a, b) => {
+            const na = parseInt(a.number, 10);
+            const nb = parseInt(b.number, 10);
+            if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
+            return a.number.localeCompare(b.number);
+        });
+
+        return { set, cards };
+    }
+);
+
+// Every set, newest first — for the /sets index and the sets sitemap.
+export const getAllSets = cache(async (): Promise<SetRow[]> => {
+    const supabase = await createClient();
+    // 947 sets < the 1000-row PostgREST cap, so a single query is complete.
+    const { data } = await supabase
+        .from('pokemon_sets')
+        .select(SET_COLUMNS)
+        .order('release_date', { ascending: false, nullsFirst: false });
+    return (data || []) as SetRow[];
+});
+
+export async function getAllSetIds(): Promise<string[]> {
+    const supabase = await createClient();
+    const { data } = await supabase.from('pokemon_sets').select('id').order('id', { ascending: true });
+    return (data || []).map((r: { id: string }) => r.id);
+}

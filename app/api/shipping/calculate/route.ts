@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { estimateRate } from '@/lib/flashExpress';
-
-const FALLBACK_RATE_THB = 40;
+import { estimateRate, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -44,10 +42,12 @@ export async function POST(request: NextRequest) {
 
         for (const sellerId of sellerIds) {
             const seller = sellerProfiles?.find(p => p.id === sellerId);
-            
+            const cardCount = items.filter((i: any) => i.sellerId === sellerId).length;
+
             if (!seller?.postcode) {
-                totalShippingFee += FALLBACK_RATE_THB;
-                breakdown[sellerId as string] = FALLBACK_RATE_THB;
+                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
+                totalShippingFee += fb;
+                breakdown[sellerId as string] = fb;
                 continue;
             }
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
                     dstProvinceName: buyerProfile.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile.state || buyerProfile.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile.postcode,
-                    weight: 500, // Standard weight for trading card package
+                    weight: estimateParcelWeightGrams(cardCount),
                     width: 10,
                     length: 15,
                     height: 2
@@ -72,9 +72,10 @@ export async function POST(request: NextRequest) {
                 breakdown[sellerId as string] = rate;
             } catch (err) {
                 console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId}:`, err);
-                // Fallback to flat rate
-                totalShippingFee += FALLBACK_RATE_THB;
-                breakdown[sellerId as string] = FALLBACK_RATE_THB;
+                // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)
+                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
+                totalShippingFee += fb;
+                breakdown[sellerId as string] = fb;
             }
         }
 

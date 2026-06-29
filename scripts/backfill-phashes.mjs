@@ -3,7 +3,7 @@
  *
  * Usage:
  *   npm install -D sharp @supabase/supabase-js
- *   node scripts/backfill-phashes.mjs [--limit=1000] [--force] [--language=en]
+ *   node scripts/backfill-phashes.mjs [--limit=1000] [--force] [--language=en] [--game=lorcana]
  *
  * Idempotent — skips rows that already have a phash unless --force is passed.
  * Resumable — safe to ctrl-c and re-run; in-flight rows just get retried.
@@ -21,9 +21,15 @@ const envPath = path.join(__dirname, '..', '.env.local');
 
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split('\n').forEach((line) => {
+  // Split on \r?\n so Windows CRLF endings don't leave a trailing \r that breaks
+  // the line regex (a non-multiline $ won't match before \r, which silently dropped
+  // every var). Strip surrounding quotes per the project's dotenv convention.
+  envContent.split(/\r?\n/).forEach((line) => {
     const match = line.match(/^([^=#]+)=(.*)$/);
-    if (match) process.env[match[1].trim()] = match[2].trim();
+    if (match) {
+      const value = match[2].trim().replace(/^["']|["']$/g, '');
+      process.env[match[1].trim()] = value;
+    }
   });
 }
 
@@ -46,6 +52,9 @@ const args = Object.fromEntries(
 const LIMIT = parseInt(args.limit ?? '0', 10) || Infinity;
 const FORCE = !!args.force;
 const LANGUAGE = args.language ?? null;
+// Scope to one game (catalog now holds 6 games in pokemon_cards keyed by `game`).
+// Used to backfill newly-ingested games without re-scanning the rest.
+const GAME = args.game ?? null;
 const CONCURRENCY = parseInt(args.concurrency ?? '8', 10);
 const PAGE_SIZE = 500;
 
@@ -133,6 +142,7 @@ async function fetchPage(lastId, take) {
   if (!FORCE) q = q.is('phash', null);
   if (lastId) q = q.gt('id', lastId);
   if (LANGUAGE) q = q.eq('language', LANGUAGE);
+  if (GAME) q = q.eq('game', GAME);
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
@@ -141,6 +151,7 @@ async function fetchPage(lastId, take) {
 async function main() {
   console.log(`pHash backfill starting`);
   console.log(`  language: ${LANGUAGE ?? '(all)'}`);
+  console.log(`  game:     ${GAME ?? '(all)'}`);
   console.log(`  force:    ${FORCE}`);
   console.log(`  limit:    ${LIMIT === Infinity ? '(unlimited)' : LIMIT}`);
   console.log(`  conc:     ${CONCURRENCY}`);

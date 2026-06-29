@@ -4,6 +4,7 @@ import { pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import RequestCardModal from './RequestCardModal';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface AddCardProps {
   onScanClick: () => void;
@@ -107,8 +108,10 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
               >
                 <div className="w-14 h-20 rounded-xl bg-slate-900 flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg group-hover:scale-105 transition-transform duration-300">
                   <img
-                    src={card.imageUrl}
+                    src={getThumbnailUrl(card.images?.small || card.imageUrl)}
                     alt={card.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain filter drop-shadow-md"
                   />
                 </div>

@@ -11,11 +11,12 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
-import { createShipment, generateLabel, requestPickup, isRegionError } from '@/lib/flashExpress';
+import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGrams } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
     sendLabelGeneratedNotification,
+    sendFirstTimeSaleEmail,
 } from '@/lib/courier';
 
 function getAdminSupabase(): SupabaseClient {
@@ -277,7 +278,9 @@ export async function fulfillOrdersByTransferGroup(
                     dstDistrictName: dst.districtName,
                     dstPostalCode: dst.postalCode,
                     dstDetailAddress: dst.detailAddress,
-                    weight: 500,
+                    // Match the weight the buyer was quoted at checkout (one
+                    // order per card, so sellerOrders.length is the card count).
+                    weight: estimateParcelWeightGrams(sellerOrders.length),
                     expressCategory: 1,
                     articleCategory: 3,
                     remark: 'CardStreet TCG - Handle with care',
@@ -440,6 +443,12 @@ export async function fulfillOrdersByTransferGroup(
                 const sellerTotal = sellerOrders.reduce((sum, o) => sum + o.total_amount, 0);
 
                 await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal });
+
+                // One-time onboarding email on the seller's first-ever sale.
+                // Durably guarded + idempotent (profiles.first_sale_email_sent_at
+                // compare-and-swap), so duplicate webhook deliveries / the
+                // /finalize fallback can't double-send. Never throws.
+                await sendFirstTimeSaleEmail(sellerId, { orderId: sellerOrders[0].id });
 
                 // Send the label-ready email regardless of whether the
                 // storage upload succeeded — the PDF travels as an attachment.

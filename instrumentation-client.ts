@@ -18,6 +18,26 @@ if (dsn) {
         tracesSampleRate: 1.0,
         replaysSessionSampleRate: 0.1,
         replaysOnErrorSampleRate: 1.0,
+        // Google Tag Manager / gtag injected-script parse failures
+        // (CARDSTREET-1/-2/-5/-6): the analytics <script> fails to compile
+        // during appendChild. Blink reports "...appendChild... Invalid or
+        // unexpected token"; WebKit/iOS reports the identical failure as a bare
+        // SyntaxError "Unexpected EOF". Confirmed third-party noise (zero
+        // affected app users), so the WebKit twin is now filtered too — the
+        // anchored regex matches only the script-compiler EOF, never a real
+        // "JSON Parse error: ...Unexpected EOF" from app code.
+        // Android WebView / Capacitor bridge teardown (CARDSTREET-17/-18). The
+        // native bridge throws "Error invoking postMessage: Java object is gone"
+        // when JS reaches it after Android has destroyed the WebView's backing
+        // Java object (app backgrounded, activity recreated, low-memory reclaim).
+        // The native peer is already gone — nothing to fix in JS, zero impact.
+        ignoreErrors: [
+            /googletagmanager/i,
+            "Failed to execute 'appendChild' on 'Node': Invalid or unexpected token",
+            /^(?:SyntaxError: )?Unexpected EOF$/,
+            /Java object is gone/i,
+            /Error invoking postMessage/i,
+        ],
         integrations: [
             Sentry.browserTracingIntegration(),
             Sentry.replayIntegration({

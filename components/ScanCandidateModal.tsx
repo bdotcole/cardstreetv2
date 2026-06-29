@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Card } from '../types';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface ScanCandidateModalProps {
   candidates: Card[];
@@ -28,7 +29,7 @@ const ScanCandidateModal: React.FC<ScanCandidateModalProps> = ({ candidates, onS
               className="w-full glass p-4 rounded-3xl border-white/5 flex items-center gap-4 text-left active:scale-95 transition-all group"
             >
               <div className="w-14 h-20 rounded-xl overflow-hidden bg-white/5 flex-shrink-0">
-                <img src={card.imageUrl} alt={card.name} className="w-full h-full object-contain" />
+                <img src={getThumbnailUrl(card.images?.small || card.imageUrl)} alt={card.name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-bold truncate group-hover:text-brand-cyan">{card.name}</p>

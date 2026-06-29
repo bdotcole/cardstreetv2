@@ -364,6 +364,59 @@ export async function estimateRate(params: FlashRateParams): Promise<FlashRateRe
     };
 }
 
+// ---------------------------------------------------------------------------
+// Fallback shipping cost
+// ---------------------------------------------------------------------------
+
+const BANGKOK_FALLBACK_SATANG = 40 * 100;     // ฿40
+const UPCOUNTRY_FALLBACK_SATANG = 90 * 100;   // ฿90
+
+/**
+ * True when a province string refers to Bangkok, tolerant of the spellings we
+ * actually store (Thai กรุงเทพมหานคร / กทม from Google Places, or "Bangkok").
+ */
+export function isBangkokProvince(province?: string | null): boolean {
+    if (!province) return false;
+    const p = province.trim().toLowerCase();
+    return p.includes('กรุงเทพ') || p.includes('กทม') || p.includes('bangkok');
+}
+
+/**
+ * Fallback shipping cost in satang, used ONLY when a live estimateRate() call
+ * fails (region mismatch, timeout, Flash outage). Real quotes always come from
+ * Flash first; this is the safety net.
+ *
+ * ฿40 only when the whole shipment is within Bangkok (intra-Bangkok runs ~฿28
+ * live, so ฿40 covers it). Anything touching an upcountry province runs ฿68–฿138
+ * live, so we fall back to ฿90 — the platform is billed by Flash for every
+ * label, so a low guess is a direct platform loss, not just a buyer discount.
+ */
+export function fallbackShippingSatang(
+    srcProvince?: string | null,
+    dstProvince?: string | null,
+): number {
+    return isBangkokProvince(srcProvince) && isBangkokProvince(dstProvince)
+        ? BANGKOK_FALLBACK_SATANG
+        : UPCOUNTRY_FALLBACK_SATANG;
+}
+
+/**
+ * Estimated parcel weight in grams for a single-seller shipment of N cards.
+ *
+ * Flash bills by actual weight (and reconciles via the weight webhook), but the
+ * buyer is charged the up-front estimate — so a low estimate is a platform loss
+ * on the shipping it now recoups through the application fee. 500g (Flash's base
+ * tier) comfortably covers a 1–4 card toploader/bubble-mailer parcel, so small
+ * orders are unchanged; larger lots scale at ~110g/card (a graded slab plus its
+ * share of packaging) and never below the 500g floor, so we never newly
+ * under-quote. Deliberately platform-safe — a graded-aware model would be more
+ * precise but needs per-card weight data we don't track yet.
+ */
+export function estimateParcelWeightGrams(cardCount: number): number {
+    const n = Math.max(1, Math.floor(cardCount || 1));
+    return Math.max(500, n * 110);
+}
+
 /**
  * 3. Notify Courier (Request Pickup) — POST /open/v1/notify
  */

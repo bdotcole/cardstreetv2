@@ -20,7 +20,9 @@ export const ROOT = path.join(__dirname, '..', '..');
 export function loadEnv() {
   const envPath = path.join(ROOT, '.env.local');
   if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+  // split on \r?\n so Windows CRLF files don't leave a trailing \r that breaks
+  // the `$` anchor below (`.` doesn't match \r, so the whole line would fail).
+  for (const line of fs.readFileSync(envPath, 'utf-8').split(/\r?\n/)) {
     const m = line.match(/^([^=#]+)=(.*)$/);
     if (m) process.env[m[1].trim()] = m[2].trim().replace(/^["']|["']$/g, '');
   }
