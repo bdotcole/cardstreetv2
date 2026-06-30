@@ -10,6 +10,7 @@ import { GAMES } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getSellerTrust } from '@/lib/sellerTrust';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -234,6 +235,12 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                         )}
                     </span>
                     <span className="truncate font-bold">{listing.seller?.display_name || t('desktop.unknownSeller')}</span>
+                    {getSellerTrust(listing.seller).kind === 'partner' && (
+                        <span className="text-brand-cyan font-bold whitespace-nowrap flex items-center gap-0.5 shrink-0">
+                            <i className="fa-solid fa-circle-check"></i>
+                            {t('seller.officialPartner')}
+                        </span>
+                    )}
                 </div>
             </div>
         </Link>

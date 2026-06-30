@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
 import { Card } from '@/types';
 import { GAMES } from '@/lib/games';
+import { getSellerTrust } from '@/lib/sellerTrust';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -313,7 +314,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                     )}
                   </div>
                   <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || 'Unknown Seller'}</span>
-                  <span className="text-[8px] text-yellow-500">★ {listing.seller?.rating || '5.0'}</span>
+                  {(() => {
+                    const trust = getSellerTrust(listing.seller);
+                    if (trust.kind === 'partner')
+                      return <span className="text-[8px] text-brand-cyan font-bold whitespace-nowrap">{t('seller.officialPartner')}</span>;
+                    if (trust.kind === 'new')
+                      return <span className="text-[8px] text-slate-500 font-bold whitespace-nowrap">{t('seller.newSeller')}</span>;
+                    return <span className="text-[8px] text-yellow-500 whitespace-nowrap">★ {trust.rating.toFixed(1)}</span>;
+                  })()}
                 </div>
               </div>
 

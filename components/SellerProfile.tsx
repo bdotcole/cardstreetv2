@@ -48,26 +48,31 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow">
                         <img src={seller.avatar} className="w-full h-full rounded-full object-cover border-4 border-brand-darker" alt={seller.name} />
                     </div>
-                    {/* Verification Badge */}
-                    <div className="absolute bottom-0 right-0 w-8 h-8 bg-brand-darker rounded-full flex items-center justify-center border border-brand-cyan/30 shadow-lg">
-                        <i className="fa-solid fa-certificate text-brand-cyan text-lg"></i>
-                    </div>
                 </div>
 
                 <div>
                     <h1 className="text-2xl font-black text-white italic skew-x-[-5deg] mb-1">{seller.name}</h1>
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                        {seller.badges?.map(badge => (
-                            <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                {badge}
-                            </span>
-                        )) || <span className="px-2 py-0.5 rounded bg-brand-purple/10 border border-brand-purple/20 text-[9px] font-bold text-brand-purple uppercase tracking-wider">{t('seller.verifiedPro')}</span>}
-                    </div>
+                    {(seller.isPartner || (seller.badges && seller.badges.length > 0)) && (
+                        <div className="flex items-center justify-center gap-2 mb-3">
+                            {seller.isPartner && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-[9px] font-black text-brand-cyan uppercase tracking-wider flex items-center gap-1">
+                                    <i className="fa-solid fa-circle-check"></i>
+                                    {t('seller.officialPartner')}
+                                </span>
+                            )}
+                            {seller.badges?.map(badge => (
+                                <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                    {badge}
+                                </span>
+                            ))}
+                        </div>
+                    )}
 
                     <div className="flex justify-center items-center gap-6">
                         <div className="text-center">
-                            <p className="text-lg font-black text-white">{rating}</p>
+                            <p className="text-lg font-black text-white">{reviewCount > 0 ? Number(rating).toFixed(1) : '—'}</p>
                             <RatingStars rating={rating} />
+                            <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{reviewCount} {t('seller.reviews')}</p>
                         </div>
                         <div className="w-[1px] h-8 bg-white/10"></div>
                         <div className="text-center">
@@ -133,7 +138,13 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                 )}
 
                 {activeTab === 'reviews' && (
-                    <ReviewList reviews={reviews} />
+                    reviews.length > 0 ? (
+                        <ReviewList reviews={reviews} />
+                    ) : (
+                        <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
+                            {t('seller.noReviews')}
+                        </div>
+                    )
                 )}
 
                 {activeTab === 'about' && (

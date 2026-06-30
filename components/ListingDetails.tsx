@@ -4,6 +4,7 @@ import { Card } from '../types';
 import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 interface ListingDetailsProps {
     listing: {
@@ -157,10 +158,24 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             <div>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">{isThai ? 'ผู้ขาย' : 'Seller'}</p>
                                 <p className="text-white font-bold group-hover:text-brand-cyan transition-colors">{listing.seller.display_name}</p>
-                                <div className="flex items-center gap-1 text-[10px]">
-                                    <i className="fa-solid fa-star text-yellow-500"></i>
-                                    <span className="text-slate-500 font-bold">{parseFloat(listing.seller.rating) || 0}</span>
-                                </div>
+                                {(() => {
+                                    const trust = getSellerTrust(listing.seller);
+                                    if (trust.kind === 'partner')
+                                        return (
+                                            <div className="flex items-center gap-1 text-[10px] text-brand-cyan font-bold">
+                                                <i className="fa-solid fa-circle-check"></i>
+                                                {isThai ? 'พาร์ทเนอร์ทางการ' : 'Official Partner'}
+                                            </div>
+                                        );
+                                    if (trust.kind === 'new')
+                                        return <div className="text-[10px] text-slate-500 font-bold">{isThai ? 'ผู้ขายใหม่' : 'New Seller'}</div>;
+                                    return (
+                                        <div className="flex items-center gap-1 text-[10px]">
+                                            <i className="fa-solid fa-star text-yellow-500"></i>
+                                            <span className="text-slate-500 font-bold">{trust.rating.toFixed(1)}</span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>

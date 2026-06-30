@@ -11,6 +11,7 @@ import { Card } from '@/types';
 import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarketplace';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getSellerTrust } from '@/lib/sellerTrust';
 
 export default function DesktopCardDetail({
     cardId,
@@ -179,6 +180,12 @@ export default function DesktopCardDetail({
                                         ) : (
                                             <span className="text-sm font-bold text-slate-300 truncate">
                                                 {listing.seller?.display_name || t('desktop.unknownSeller')}
+                                            </span>
+                                        )}
+                                        {getSellerTrust(listing.seller).kind === 'partner' && (
+                                            <span className="shrink-0 text-[11px] text-brand-cyan font-bold whitespace-nowrap flex items-center gap-0.5">
+                                                <i className="fa-solid fa-circle-check"></i>
+                                                {t('seller.officialPartner')}
                                             </span>
                                         )}
                                     </div>

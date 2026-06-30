@@ -37,11 +37,6 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     };
 }
 
-const TIER_LABEL: Record<string, string> = {
-    bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum',
-    diamond: 'Diamond', heart: 'Heart', pink_diamond: 'Pink Diamond',
-};
-
 export default async function DesktopSellerPage({ params }: { params: Promise<{ username: string }> }) {
     const { username } = await params;
     const { seller, listings } = await getSellerPageData(username);
@@ -79,7 +74,8 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                     </div>
                     <p className="text-sm text-slate-400 mt-1">
                         {`${listings.length} ${lang === 'EN' ? 'listings' : 'รายการ'}`}
-                        {seller.partner_tier && TIER_LABEL[seller.partner_tier] ? ` · ${TIER_LABEL[seller.partner_tier]} ${lang === 'EN' ? 'partner' : 'พาร์ทเนอร์'}` : ''}
+                        {seller.review_count && seller.review_count > 0 ? ` · ★ ${Number(seller.rating).toFixed(1)} (${seller.review_count})` : ''}
+                        {seller.partner_joined_at ? ` · ${lang === 'EN' ? 'Official Partner' : 'พาร์ทเนอร์ทางการ'}` : ''}
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
                 </div>

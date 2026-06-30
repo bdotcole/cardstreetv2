@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem } from '@/types';
+import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review } from '@/types';
 import { EXCHANGE_RATES } from '@/constants';
 import CurrencySwitcher from '@/components/CurrencySwitcher';
 import LanguagePicker from '@/components/LanguagePicker';
@@ -82,7 +82,25 @@ export default function HomePage() {
     }, [selectedCard]);
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
+    const [viewingSellerReviews, setViewingSellerReviews] = useState<Review[]>([]);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
+
+    // Load a seller's reviews when their profile is opened.
+    useEffect(() => {
+        const sellerId = viewingSeller?.id;
+        if (!sellerId || sellerId === 'mock-id') { setViewingSellerReviews([]); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/reviews?seller_id=${encodeURIComponent(sellerId)}`, { credentials: 'include' });
+                const data = await res.json().catch(() => ({}));
+                if (!cancelled) setViewingSellerReviews(res.ok ? (data.reviews || []) : []);
+            } catch {
+                if (!cancelled) setViewingSellerReviews([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [viewingSeller?.id]);
     const [user, setUser] = useState<UserProfile | null>(null);
     // Provisioned partner accounts must finish setup (real email/phone/password)
     // on first login before they can use the app.
@@ -1134,6 +1152,8 @@ export default function HomePage() {
                                         avatar: seller.avatar_url,
                                         provider: 'google',
                                         rating: parseFloat(seller.rating) || 0,
+                                        reviewCount: seller.review_count || 0,
+                                        isPartner: !!(seller.partner_joined_at || seller.role === 'partner'),
                                         badges: seller.badges || []
                                     });
                                     setActiveTab('seller_profile');
@@ -1148,7 +1168,7 @@ export default function HomePage() {
                             <SellerProfile
                                 seller={viewingSeller}
                                 listings={activeListings.slice(0, 4)}
-                                reviews={[]}
+                                reviews={viewingSellerReviews}
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectCard={setSelectedCard}
                                 currency={currency}
@@ -1327,6 +1347,8 @@ export default function HomePage() {
                                 avatar: seller.avatar_url,
                                 provider: 'google',
                                 rating: parseFloat(seller.rating) || 0,
+                                reviewCount: seller.review_count || 0,
+                                isPartner: !!(seller.partner_joined_at || seller.role === 'partner'),
                                 badges: seller.badges || []
                             });
                             setSelectedListing(null); // Close modal

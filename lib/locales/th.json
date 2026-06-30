@@ -264,6 +264,9 @@
     "seller": {
         "profileTitle": "โปรไฟล์ผู้ขาย",
         "verifiedPro": "ผู้ขายที่ได้รับการยืนยัน",
+        "newSeller": "ผู้ขายใหม่",
+        "officialPartner": "พาร์ทเนอร์ทางการ",
+        "noReviews": "ยังไม่มีรีวิว",
         "sales": "ยอดขาย",
         "follow": "ติดตาม",
         "shop": "ร้านค้า",

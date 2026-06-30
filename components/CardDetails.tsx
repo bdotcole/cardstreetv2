@@ -4,6 +4,7 @@ import { Card } from '../types';
 import PriceChart from './PriceChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getSellerTrust } from '@/lib/sellerTrust';
 
 interface CardDetailsProps {
   card: Card;
@@ -203,7 +204,14 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                               <div className="flex items-center gap-2">
                                 <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{listing.condition}</span>
                                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span className="text-[8px] text-slate-500 font-bold uppercase">{listing.seller?.rating || 5.0} ★</span>
+                                {(() => {
+                                  const trust = getSellerTrust(listing.seller);
+                                  if (trust.kind === 'partner')
+                                    return <span className="text-[8px] text-brand-cyan font-bold uppercase">{isThai ? 'พาร์ทเนอร์ทางการ' : 'Official Partner'}</span>;
+                                  if (trust.kind === 'new')
+                                    return <span className="text-[8px] text-slate-500 font-bold uppercase">{isThai ? 'ผู้ขายใหม่' : 'New Seller'}</span>;
+                                  return <span className="text-[8px] text-slate-500 font-bold uppercase">{trust.rating.toFixed(1)} ★</span>;
+                                })()}
                               </div>
                             </div>
                           </div>

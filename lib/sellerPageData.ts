@@ -10,6 +10,9 @@ export interface SellerInfo {
     display_name: string | null;
     avatar_url: string | null;
     partner_tier: string | null;
+    partner_joined_at: string | null;
+    rating: number | null;
+    review_count: number | null;
     is_verified_shop: boolean | null;
     created_at: string | null;
 }
@@ -18,7 +21,7 @@ const LISTING_SELECT = `
     id, seller_id, card_id, card_data, price, condition, is_graded,
     grading_company, grade, image_front_url, image_back_url, status,
     created_at, updated_at,
-    seller:profiles(id, username, display_name, avatar_url, partner_tier)
+    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
 `;
 
 // Resolve a public seller shop by username, with their active listings. Cached
@@ -29,7 +32,7 @@ export const getSellerPageData = cache(
 
         const { data: seller } = await supabase
             .from('profiles')
-            .select('id, username, display_name, avatar_url, partner_tier, is_verified_shop, created_at')
+            .select('id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at')
             .eq('username', username)
             .maybeSingle<SellerInfo>();
         if (!seller) return { seller: null, listings: [] };

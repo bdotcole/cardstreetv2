@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         // Verify ownership as buyer
         const { data: order, error: orderError } = await supabase
             .from('orders')
-            .select('id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee')
+            .select('id, listing_id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee')
             .eq('id', orderId)
             .single();
 
@@ -122,12 +122,43 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Record review (placeholder — wire to a real reviews table when one exists).
-        if (reviewScore) {
-            console.log(
-                `[Orders/Complete] Review for seller ${order.seller_id}: ` +
-                `${reviewScore}/5 - ${reviewComment || ''}`
-            );
+        // Persist the buyer's review (a verified purchase, tied to this order).
+        // One review per order — re-confirming updates it rather than duplicating.
+        // The recompute_seller_rating trigger refreshes the seller's aggregate
+        // profiles.rating / review_count on write.
+        if (reviewScore && Number(reviewScore) >= 1 && Number(reviewScore) <= 5) {
+            // Snapshot the card name via the admin client (the listing may be
+            // 'sold' now, which the buyer's session client can't read under RLS).
+            let itemName: string | null = null;
+            if (order.listing_id) {
+                const { data: listingRow } = await admin
+                    .from('listings')
+                    .select('card_data')
+                    .eq('id', order.listing_id)
+                    .maybeSingle();
+                itemName = (listingRow?.card_data as { name?: string } | null)?.name ?? null;
+            }
+
+            const { error: reviewError } = await admin
+                .from('reviews')
+                .upsert(
+                    {
+                        order_id: orderId,
+                        reviewer_id: user.id,
+                        seller_id: order.seller_id,
+                        rating: Math.round(Number(reviewScore)),
+                        comment: (reviewComment || '').trim() || null,
+                        item_name: itemName,
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: 'order_id' },
+                );
+
+            // Non-fatal: a failed review must not block the delivery confirmation
+            // (and the payout it triggers).
+            if (reviewError) {
+                console.error('[Orders/Complete] Failed to save review:', reviewError);
+            }
         }
 
         return NextResponse.json({

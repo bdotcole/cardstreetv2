@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
             is_graded,
             status,
             created_at,
-            seller:profiles(id, display_name, avatar_url, partner_tier)
+            seller:profiles(id, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
         `)
         .eq('status', 'active')
 

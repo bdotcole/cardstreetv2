@@ -36,7 +36,13 @@ export interface SellerProfile {
     display_name?: string;
     avatar_url?: string;
     partner_tier?: string;
+    // Canonical partner signal is partner_joined_at (partner_tier defaults to
+    // 'bronze' for everyone, so it can't distinguish partners). role === 'admin'
+    // marks the owner account, which keeps its rating display.
+    role?: string | null;
+    partner_joined_at?: string | null;
     rating?: number | string;
+    review_count?: number | null;
 }
 
 
@@ -106,7 +112,7 @@ export const marketplaceService = {
                     status,
                     created_at,
                     updated_at,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
                 `)
                 .eq('status', 'active');
 
@@ -220,7 +226,7 @@ export const marketplaceService = {
                 })
                 .select(`
                     *,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
                 `)
                 .single();
 
@@ -256,7 +262,7 @@ export const marketplaceService = {
                     status,
                     created_at,
                     updated_at,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier)
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
                 `)
                 .eq('card_id', cardId)
                 .eq('status', 'active')
