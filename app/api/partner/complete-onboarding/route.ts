@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PARTNER_LOGIN_EMAIL_DOMAIN } from '@/lib/referrals';
+import { sendPartnerActivatedNotification } from '@/lib/courier';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
         const { data: profile } = await admin
             .from('profiles')
-            .select('partner_joined_at, partner_onboarding_complete')
+            .select('partner_joined_at, partner_onboarding_complete, display_name, username, partner_level, partner_qr_slug')
             .eq('id', user.id)
             .single();
 
@@ -83,6 +84,21 @@ export async function POST(request: Request) {
             console.error('[Partner/CompleteOnboarding] profile update failed:', profileErr);
             return NextResponse.json({ error: 'Could not finish setup' }, { status: 500 });
         }
+
+        // Fire-and-forget internal alert so the team can see which mailed welcome
+        // packages convert. We reach here only on the genuine first activation
+        // (the route short-circuits above if onboarding was already complete), so
+        // it's a one-shot per partner. Never block or fail activation on a
+        // notification error.
+        const partnerUsername = profile.username || user.user_metadata?.username || '';
+        void sendPartnerActivatedNotification({
+            shopName: profile.display_name || user.user_metadata?.full_name || partnerUsername || 'Unknown shop',
+            username: partnerUsername,
+            email,
+            phone,
+            level: profile.partner_level,
+            slug: profile.partner_qr_slug,
+        }).catch((e) => console.error('[Partner/CompleteOnboarding] activation alert failed:', e));
 
         return NextResponse.json({ success: true });
     } catch (err: any) {

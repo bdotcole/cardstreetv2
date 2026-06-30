@@ -486,6 +486,74 @@ function appBaseUrl(): string {
     return (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/+$/, '');
 }
 
+// ─── Internal ops alert: welcome-package partner activated their account ─────
+
+/**
+ * Notifies the CardStreet team when a cold-provisioned partner activates the
+ * account from their mailed welcome package — i.e. they signed in with the
+ * username + temp password printed in their letter and finished setup (real
+ * email, phone, new password) via /api/partner/complete-onboarding.
+ *
+ * This is an internal "which gifts converted" signal, so it goes to a single
+ * ops inbox (PARTNER_ACTIVATION_NOTIFY_EMAIL, default the founder's address)
+ * with inline content rather than a customer-facing Courier template — no
+ * dashboard template to author or keep in sync. Best-effort: never throws, so
+ * a notification hiccup can't fail the partner's activation. The caller fires
+ * it exactly once per partner (the onboarding route short-circuits on repeat
+ * calls), so there's no idempotency guard here.
+ */
+export async function sendPartnerActivatedNotification(partner: {
+    shopName: string;
+    username: string;
+    email: string;
+    phone: string;
+    level?: number | null;
+    slug?: string | null;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping partner-activated alert'); return; }
+
+    const to = (process.env.PARTNER_ACTIVATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+
+    const joinLink = partner.slug ? `${appBaseUrl()}/join/${partner.slug}` : null;
+    const activatedAt = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
+    });
+    const lines = [
+        `Shop: ${partner.shopName}`,
+        `Username: ${partner.username}`,
+        `Email: ${partner.email}`,
+        `Phone: ${partner.phone}`,
+        partner.level != null ? `Partner level: ${partner.level}` : null,
+        joinLink ? `Referral link: ${joinLink}` : null,
+        `Activated: ${activatedAt} (Bangkok)`,
+    ].filter(Boolean) as string[];
+
+    try {
+        const sendResult = await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `New partner activated: ${partner.shopName}`,
+                    body:
+                        'A welcome-package partner just activated their CardStreet account ' +
+                        '(signed in with their mailed credentials and set a new password).\n\n' +
+                        lines.join('\n'),
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'partner_activated', username: partner.username },
+            },
+        });
+        console.log(
+            `[Courier] ✅ 'Partner Activated' alert sent for ${partner.username} → ${to}. ` +
+            `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+        );
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Partner Activated' alert for ${partner.username}:`, error);
+    }
+}
+
 /**
  * Sends the one-time "First Time Sale" onboarding email to a seller the very
  * first time one of their orders reaches a paid (ship-now) status.
