@@ -23,7 +23,6 @@ import {
     fallbackShippingSatang,
     estimateParcelWeightGrams,
     estimateParcelDimsCm,
-    applyShippingBuffer,
 } from '@/lib/flashExpress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -148,15 +147,15 @@ export async function POST(req: Request) {
                 isFallback = true;
                 if (isRegionError(err)) {
                     console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100} (+buffer)`,
+                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100}`,
                     );
                 } else {
-                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100} (+buffer):`, err);
+                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100}:`, err);
                 }
             }
-            // Buffer applied identically to /api/orders/checkout so the shown
-            // total equals the charged total.
-            sellerShipping.set(sellerId, applyShippingBuffer(baseSatang) / 100);
+            // Matches /api/orders/checkout exactly so the shown total equals the
+            // charged total.
+            sellerShipping.set(sellerId, baseSatang / 100);
             sellerShippingIsFallback.set(sellerId, isFallback);
         }
 

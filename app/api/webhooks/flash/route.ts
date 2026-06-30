@@ -229,8 +229,10 @@ async function reconcileFreight(
 
     console.log(`[FlashWebhook] Reconciled freight for order ${order.id}:`, JSON.stringify(update))
 
-    // Surface a real under-quote (> ฿1 over tolerance) so the team can see how
-    // often the buffer is too low and tune SHIPPING_BUFFER_SATANG accordingly.
+    // Surface a real under-quote (> ฿1 over tolerance). The location estimate is
+    // accurate, so a positive delta almost always means the seller shipped an
+    // oversized box that tripped Flash's dimension-based pricing — visibility
+    // here lets the team spot repeat offenders / nudge packaging.
     if (delta !== null && delta > 1) {
         Sentry.captureMessage(
             `Flash freight exceeded the quoted shipping for order ${order.id} by ฿${delta}`,

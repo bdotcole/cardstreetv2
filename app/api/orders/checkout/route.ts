@@ -34,7 +34,6 @@ import {
     fallbackShippingSatang,
     estimateParcelWeightGrams,
     estimateParcelDimsCm,
-    applyShippingBuffer,
 } from '@/lib/flashExpress';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
@@ -273,13 +272,12 @@ export async function POST(req: Request) {
         }
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
-        // Live Flash quote first; province-aware fallback (฿40 intra-Bangkok,
-        // ฿90 otherwise) only when Flash can't price the route. Either way the
-        // quoted base then gets applyShippingBuffer() so the buyer covers the
-        // remote-area / weight-drift adders Flash only assesses at the depot —
-        // see lib/flashExpress.ts. The same buffer is applied identically in
-        // /api/orders/estimate so the displayed total matches this charge and
-        // the no-overcharge guard below doesn't false-trip.
+        // Live Flash quote first (estimatePrice already includes the fuel
+        // surcharge; upCountryAmount is the additive upcountry premium — together
+        // they match Flash's real billed rate). Province-aware fallback (฿40
+        // intra-Bangkok, ฿90 otherwise) only when Flash can't price the route.
+        // This is applied identically in /api/orders/estimate so the displayed
+        // total matches this charge and the no-overcharge guard doesn't false-trip.
         const sellerShippingSatang = new Map<string, number>();
 
         for (const sellerId of sellerIds) {
@@ -302,12 +300,12 @@ export async function POST(req: Request) {
             } catch (err) {
                 baseSatang = fallbackShippingSatang(sp?.province, buyerProfile?.province);
                 if (isRegionError(err)) {
-                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100} (+buffer)`);
+                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100}`);
                 } else {
-                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100} (+buffer):`, err);
+                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100}:`, err);
                 }
             }
-            sellerShippingSatang.set(sellerId, applyShippingBuffer(baseSatang));
+            sellerShippingSatang.set(sellerId, baseSatang);
         }
 
         // ─── Build orders. Prices come from the DB; shipping is charged once per seller. ───
@@ -322,10 +320,10 @@ export async function POST(req: Request) {
             let shippingSatang = 0;
             if (!shippingApplied.has(listing.seller_id)) {
                 shippingSatang = sellerShippingSatang.get(listing.seller_id)
-                    ?? applyShippingBuffer(fallbackShippingSatang(
+                    ?? fallbackShippingSatang(
                         sellerProfiles?.find(p => p.id === listing.seller_id)?.province,
                         buyerProfile?.province,
-                    ));
+                    );
                 shippingApplied.add(listing.seller_id);
             }
 

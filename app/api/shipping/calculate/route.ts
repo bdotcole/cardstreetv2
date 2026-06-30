@@ -5,7 +5,6 @@ import {
     fallbackShippingSatang,
     estimateParcelWeightGrams,
     estimateParcelDimsCm,
-    applyShippingBuffer,
 } from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
@@ -51,9 +50,9 @@ export async function POST(request: NextRequest) {
             const cardCount = items.filter((i: any) => i.sellerId === sellerId).length;
 
             // Base shipping in satang: live Flash quote when the seller has an
-            // address, province-aware fallback otherwise. The buffer (depot
-            // surcharge cover — see lib/flashExpress.ts) is applied once at the
-            // end, matching /api/orders/estimate and /api/orders/checkout.
+            // address (estimatePrice already includes fuel; upCountryAmount is
+            // the additive upcountry premium), province-aware fallback otherwise.
+            // Matches /api/orders/estimate and /api/orders/checkout.
             let baseSatang: number;
             if (!seller?.postcode) {
                 baseSatang = fallbackShippingSatang(seller?.province, buyerProfile.province);
@@ -71,13 +70,13 @@ export async function POST(request: NextRequest) {
                     });
                     baseSatang = quote.estimatePrice + quote.upCountryAmount;
                 } catch (err) {
-                    console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId} — using fallback (+buffer):`, err);
+                    console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId} — using fallback:`, err);
                     // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)
                     baseSatang = fallbackShippingSatang(seller?.province, buyerProfile.province);
                 }
             }
 
-            const rate = applyShippingBuffer(baseSatang) / 100;
+            const rate = baseSatang / 100;
             totalShippingFee += rate;
             breakdown[sellerId as string] = rate;
         }
