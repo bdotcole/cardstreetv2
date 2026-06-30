@@ -1,14 +1,24 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { verifyWebhookSignature, mapFlashStateToStatus } from '@/lib/flashExpress'
 
 /**
  * Flash Express Webhook Receiver
- * 
+ *
  * Receives status, routes, weight, and price webhooks from Flash Express.
  * Must respond with { "errorCode": "1", "state": "success" } on success.
- * 
- * Register this URL in Flash Express dashboard:
+ *
+ * Two independent concerns are handled per delivery:
+ *   - Status (code 0): forward order/shipping status (picked up → delivered).
+ *   - Freight reconciliation (weight code 1, price code 2): record the ACTUAL
+ *     weight/freight Flash assessed at the depot vs. the up-front estimate the
+ *     buyer paid, so an under-quote is visible instead of silently absorbed.
+ * A single delivery is one type; running both is harmless (a status webhook
+ * carries no weight/price fields, a price webhook carries no forward state).
+ *
+ * Register this URL in Flash Express for all five event types via
+ * POST /api/admin/setup-flash-webhooks:
  *   https://cardstreet.app/api/webhooks/flash
  */
 export async function POST(request: NextRequest) {
@@ -30,7 +40,10 @@ export async function POST(request: NextRequest) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
 
-        const data = payload.data
+        // Flash posts the body either as a parsed `data` object or as a
+        // `dataJson` string (the signed form). Accept both so the freight
+        // webhooks — which may only ship `dataJson` — are not dropped.
+        const data = payload.data ?? parseDataJson(payload.dataJson)
         if (!data) {
             console.warn('[FlashWebhook] No data in payload')
             return NextResponse.json({ errorCode: '1', state: 'success' })
@@ -43,10 +56,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
 
-        // Find the shipping label by tracking number
+        // Find the shipping label by tracking number. shipping_fee is what the
+        // buyer was charged up front — needed to compute the reconciliation delta.
         const { data: label, error: labelError } = await supabase
             .from('shipping_labels')
-            .select('*, orders!inner(id, status, buyer_id, seller_id)')
+            .select('*, orders!inner(id, status, buyer_id, seller_id, shipping_fee)')
             .eq('tracking_number', pno)
             .single()
 
@@ -56,7 +70,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
 
-        // Determine webhook type and update accordingly
+        const order = (label as any).orders
+
+        // ─── Status transition (code 0) ───
         const flashState = parseInt(data.state, 10)
 
         if (!isNaN(flashState)) {
@@ -73,7 +89,6 @@ export async function POST(request: NextRequest) {
 
             // Update order status (only move forward)
             const statusOrder = ['pending', 'paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
-            const order = (label as any).orders
             const currentIdx = statusOrder.indexOf(order.status)
             const newIdx = statusOrder.indexOf(orderStatus)
 
@@ -97,7 +112,7 @@ export async function POST(request: NextRequest) {
                 // Fire notifications for significant status changes
                 try {
                     const { sendShippedNotification, sendPackageDeliveredNotification } = await import('@/lib/courier')
-                    
+
                     if (orderStatus === 'delivered') {
                         // Notify buyer that package was delivered (Task 3 requirement)
                         await sendPackageDeliveredNotification(
@@ -119,11 +134,115 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // ─── Freight reconciliation (weight code 1, price code 2) ───
+        await reconcileFreight(supabase, order, data)
+
         return NextResponse.json({ errorCode: '1', state: 'success' })
 
     } catch (error: any) {
         console.error('[FlashWebhook] Error processing webhook:', error)
         // Still return success to prevent infinite retries for malformed data
         return NextResponse.json({ errorCode: '1', state: 'success' })
+    }
+}
+
+/** Parse Flash's `dataJson` string form into an object; null on failure. */
+function parseDataJson(dataJson: unknown): Record<string, any> | null {
+    if (typeof dataJson !== 'string' || dataJson.trim() === '') return null
+    try {
+        return JSON.parse(dataJson)
+    } catch {
+        return null
+    }
+}
+
+/** First numeric-looking value among the candidate keys, or null. */
+function pickNumber(obj: Record<string, any>, keys: string[]): number | null {
+    for (const k of keys) {
+        const v = obj?.[k]
+        if (v === undefined || v === null || v === '') continue
+        const n = Number(v)
+        if (!Number.isNaN(n)) return n
+    }
+    return null
+}
+
+/**
+ * Records the actual freight/weight Flash reports after measuring a parcel.
+ *
+ * Flash sends these AFTER the buyer has already paid the estimate, so the
+ * difference (shipping_fee_delta) is a platform cost we want visible rather
+ * than silently eaten. We read several candidate field names and stash the raw
+ * payload because Flash's weight/price callbacks aren't documented field-for-
+ * field here — the first real payloads in the logs / shipping_reconciliation_raw
+ * confirm the exact shape, and the candidate lists below can be trimmed then.
+ *
+ * Money is assumed to be satang (Flash's API convention — estimate_rate returns
+ * "2800" for ฿28); the stored raw payload lets us correct that if a real
+ * payload proves otherwise. Weight is grams (what createShipment declares).
+ *
+ * Writes are best-effort: if the reconciliation columns don't exist yet (the
+ * 20260630 migration hasn't been applied), we log and move on rather than 500
+ * the webhook into a Flash retry storm.
+ */
+async function reconcileFreight(
+    supabase: SupabaseClient,
+    order: { id: string; shipping_fee: number | null },
+    data: Record<string, any>,
+): Promise<void> {
+    const actualSatang = pickNumber(data, [
+        'price', 'totalPrice', 'expressPrice', 'freight', 'freightAmount',
+        'amount', 'actualPrice', 'fee', 'shippingFee',
+    ])
+    const actualGrams = pickNumber(data, [
+        'weight', 'actualWeight', 'weightValue', 'realWeight',
+    ])
+
+    // Neither a price nor a weight webhook — nothing to reconcile.
+    if (actualSatang === null && actualGrams === null) return
+
+    const update: Record<string, any> = {
+        shipping_reconciliation_raw: data,
+        updated_at: new Date().toISOString(),
+    }
+
+    if (actualGrams !== null) update.actual_weight_grams = Math.round(actualGrams)
+
+    let delta: number | null = null
+    if (actualSatang !== null) {
+        const actualFee = actualSatang / 100
+        const charged = Number(order.shipping_fee || 0)
+        delta = Number((actualFee - charged).toFixed(2))
+        update.actual_shipping_fee = actualFee
+        update.shipping_fee_delta = delta
+    }
+
+    const { error } = await supabase.from('orders').update(update).eq('id', order.id)
+    if (error) {
+        console.error(
+            '[FlashWebhook] Freight reconciliation update failed ' +
+            '(has the 20260630 migration been applied?):',
+            error.message,
+        )
+        return
+    }
+
+    console.log(`[FlashWebhook] Reconciled freight for order ${order.id}:`, JSON.stringify(update))
+
+    // Surface a real under-quote (> ฿1 over tolerance) so the team can see how
+    // often the buffer is too low and tune SHIPPING_BUFFER_SATANG accordingly.
+    if (delta !== null && delta > 1) {
+        Sentry.captureMessage(
+            `Flash freight exceeded the quoted shipping for order ${order.id} by ฿${delta}`,
+            {
+                level: 'warning',
+                extra: {
+                    orderId: order.id,
+                    chargedShippingFee: order.shipping_fee,
+                    actualShippingFee: update.actual_shipping_fee,
+                    delta,
+                },
+            },
+        )
     }
 }

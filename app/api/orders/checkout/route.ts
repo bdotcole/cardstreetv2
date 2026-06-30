@@ -28,7 +28,14 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { estimateRate, isRegionError, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
+import {
+    estimateRate,
+    isRegionError,
+    fallbackShippingSatang,
+    estimateParcelWeightGrams,
+    estimateParcelDimsCm,
+    applyShippingBuffer,
+} from '@/lib/flashExpress';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -267,12 +274,18 @@ export async function POST(req: Request) {
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
         // Live Flash quote first; province-aware fallback (฿40 intra-Bangkok,
-        // ฿90 otherwise) only when Flash can't price the route.
+        // ฿90 otherwise) only when Flash can't price the route. Either way the
+        // quoted base then gets applyShippingBuffer() so the buyer covers the
+        // remote-area / weight-drift adders Flash only assesses at the depot —
+        // see lib/flashExpress.ts. The same buffer is applied identically in
+        // /api/orders/estimate so the displayed total matches this charge and
+        // the no-overcharge guard below doesn't false-trip.
         const sellerShippingSatang = new Map<string, number>();
 
         for (const sellerId of sellerIds) {
             const sp = sellerProfiles?.find(p => p.id === sellerId);
             const cardCount = listings.filter(l => l.seller_id === sellerId).length;
+            let baseSatang: number;
             try {
                 const quote = await estimateRate({
                     srcProvinceName: sp?.province || 'กรุงเทพมหานคร',
@@ -282,21 +295,19 @@ export async function POST(req: Request) {
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
                     weight: estimateParcelWeightGrams(cardCount),
-                    width: 10,
-                    length: 15,
-                    height: 2,
+                    ...estimateParcelDimsCm(cardCount),
                 });
                 // Flash returns satang (cents) directly.
-                sellerShippingSatang.set(sellerId, quote.estimatePrice + quote.upCountryAmount);
+                baseSatang = quote.estimatePrice + quote.upCountryAmount;
             } catch (err) {
-                const fb = fallbackShippingSatang(sp?.province, buyerProfile?.province);
+                baseSatang = fallbackShippingSatang(sp?.province, buyerProfile?.province);
                 if (isRegionError(err)) {
-                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${fb / 100}`);
+                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100} (+buffer)`);
                 } else {
-                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId}:`, err);
+                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100} (+buffer):`, err);
                 }
-                sellerShippingSatang.set(sellerId, fb);
             }
+            sellerShippingSatang.set(sellerId, applyShippingBuffer(baseSatang));
         }
 
         // ─── Build orders. Prices come from the DB; shipping is charged once per seller. ───
@@ -311,10 +322,10 @@ export async function POST(req: Request) {
             let shippingSatang = 0;
             if (!shippingApplied.has(listing.seller_id)) {
                 shippingSatang = sellerShippingSatang.get(listing.seller_id)
-                    ?? fallbackShippingSatang(
+                    ?? applyShippingBuffer(fallbackShippingSatang(
                         sellerProfiles?.find(p => p.id === listing.seller_id)?.province,
                         buyerProfile?.province,
-                    );
+                    ));
                 shippingApplied.add(listing.seller_id);
             }
 

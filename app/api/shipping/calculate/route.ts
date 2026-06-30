@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { estimateRate, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
+import {
+    estimateRate,
+    fallbackShippingSatang,
+    estimateParcelWeightGrams,
+    estimateParcelDimsCm,
+    applyShippingBuffer,
+} from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -44,39 +50,36 @@ export async function POST(request: NextRequest) {
             const seller = sellerProfiles?.find(p => p.id === sellerId);
             const cardCount = items.filter((i: any) => i.sellerId === sellerId).length;
 
+            // Base shipping in satang: live Flash quote when the seller has an
+            // address, province-aware fallback otherwise. The buffer (depot
+            // surcharge cover — see lib/flashExpress.ts) is applied once at the
+            // end, matching /api/orders/estimate and /api/orders/checkout.
+            let baseSatang: number;
             if (!seller?.postcode) {
-                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
-                totalShippingFee += fb;
-                breakdown[sellerId as string] = fb;
-                continue;
+                baseSatang = fallbackShippingSatang(seller?.province, buyerProfile.province);
+            } else {
+                try {
+                    const quote = await estimateRate({
+                        srcProvinceName: seller.province || 'กรุงเทพมหานคร',
+                        srcCityName: seller.state || seller.district || 'เขตบางรัก', // Amphoe/Khet
+                        srcPostalCode: seller.postcode,
+                        dstProvinceName: buyerProfile.province || 'กรุงเทพมหานคร',
+                        dstCityName: buyerProfile.state || buyerProfile.district || 'เขตบางรัก',
+                        dstPostalCode: buyerProfile.postcode,
+                        weight: estimateParcelWeightGrams(cardCount),
+                        ...estimateParcelDimsCm(cardCount),
+                    });
+                    baseSatang = quote.estimatePrice + quote.upCountryAmount;
+                } catch (err) {
+                    console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId} — using fallback (+buffer):`, err);
+                    // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)
+                    baseSatang = fallbackShippingSatang(seller?.province, buyerProfile.province);
+                }
             }
 
-            try {
-                // Call Flash Express to get real-time quote
-                const quote = await estimateRate({
-                    srcProvinceName: seller.province || 'กรุงเทพมหานคร',
-                    srcCityName: seller.state || seller.district || 'เขตบางรัก', // Amphoe/Khet
-                    srcPostalCode: seller.postcode,
-                    dstProvinceName: buyerProfile.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyerProfile.state || buyerProfile.district || 'เขตบางรัก',
-                    dstPostalCode: buyerProfile.postcode,
-                    weight: estimateParcelWeightGrams(cardCount),
-                    width: 10,
-                    length: 15,
-                    height: 2
-                });
-
-                // Convert cents to THB
-                const rate = (quote.estimatePrice + quote.upCountryAmount) / 100;
-                totalShippingFee += rate;
-                breakdown[sellerId as string] = rate;
-            } catch (err) {
-                console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId}:`, err);
-                // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)
-                const fb = fallbackShippingSatang(seller?.province, buyerProfile.province) / 100;
-                totalShippingFee += fb;
-                breakdown[sellerId as string] = fb;
-            }
+            const rate = applyShippingBuffer(baseSatang) / 100;
+            totalShippingFee += rate;
+            breakdown[sellerId as string] = rate;
         }
 
         return NextResponse.json({

@@ -417,6 +417,50 @@ export function estimateParcelWeightGrams(cardCount: number): number {
     return Math.max(500, n * 110);
 }
 
+// ---------------------------------------------------------------------------
+// Shipping buffer + parcel dimensions
+// ---------------------------------------------------------------------------
+
+/**
+ * Flat buffer (satang) added ONCE to every quoted shipping fee — live Flash
+ * quote and fallback alike — so the buyer covers the depot-assessed adders that
+ * estimate_rate does NOT return.
+ *
+ * estimate_rate yields only base + upCountryAmount. The FINAL freight is set
+ * when Flash physically weighs/measures the parcel and tacks on a remote-area
+ * surcharge (พื้นที่ห่างไกล), fuel, and weight drift — all of which land AFTER
+ * the buyer has paid. Without a buffer the platform silently eats that gap (a
+ * real case: a ฿90 fallback against a ฿108 actual = ฿18 short, which Flash
+ * collected from the seller at pickup).
+ *
+ * One knob, deliberately simple to tune. Raise it to under-quote less often at
+ * the cost of a pricier shipping line on ordinary routes; lower it if the price
+ * webhook (which records the real freight on orders.actual_shipping_fee /
+ * shipping_fee_delta) shows we're consistently over-collecting.
+ */
+export const SHIPPING_BUFFER_SATANG = 20 * 100; // ฿20
+
+/** Adds the shipping buffer to a base cost. Satang in, satang out. */
+export function applyShippingBuffer(baseSatang: number): number {
+    return Math.round(baseSatang) + SHIPPING_BUFFER_SATANG;
+}
+
+/**
+ * Declared parcel dimensions (cm) for a single-seller shipment of N cards.
+ *
+ * Used for BOTH the rate estimate and the actual createShipment call so the
+ * quote and the printed label describe the same box. Previously createShipment
+ * passed no dims and defaulted to a 1x1x1 cm cube, which understates the parcel
+ * and invites a re-rate at the depot. A toploader/bubble-mailer footprint
+ * (10x15 cm) with height growing ~2 cm per 4-card stack. Volumetric weight
+ * stays well under the 500 g base tier for normal orders, so this never inflates
+ * small-order quotes — it just stops the box from being declared as a cube.
+ */
+export function estimateParcelDimsCm(cardCount: number): { width: number; length: number; height: number } {
+    const n = Math.max(1, Math.floor(cardCount || 1));
+    return { width: 10, length: 15, height: Math.max(2, Math.ceil(n / 4) * 2) };
+}
+
 /**
  * 3. Notify Courier (Request Pickup) — POST /open/v1/notify
  */

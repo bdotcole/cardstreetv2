@@ -17,7 +17,14 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { estimateRate, isRegionError, fallbackShippingSatang, estimateParcelWeightGrams } from '@/lib/flashExpress';
+import {
+    estimateRate,
+    isRegionError,
+    fallbackShippingSatang,
+    estimateParcelWeightGrams,
+    estimateParcelDimsCm,
+    applyShippingBuffer,
+} from '@/lib/flashExpress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -121,6 +128,8 @@ export async function POST(req: Request) {
         for (const sellerId of sellerIds) {
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
             const cardCount = listings.filter(l => l.seller_id === sellerId).length;
+            let baseSatang: number;
+            let isFallback: boolean;
             try {
                 const quote = await estimateRate({
                     srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
@@ -130,24 +139,25 @@ export async function POST(req: Request) {
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
                     weight: estimateParcelWeightGrams(cardCount),
-                    width: 10,
-                    length: 15,
-                    height: 2,
+                    ...estimateParcelDimsCm(cardCount),
                 });
-                sellerShipping.set(sellerId, (quote.estimatePrice + quote.upCountryAmount) / 100);
-                sellerShippingIsFallback.set(sellerId, false);
+                baseSatang = quote.estimatePrice + quote.upCountryAmount;
+                isFallback = false;
             } catch (err) {
-                const fb = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province) / 100;
+                baseSatang = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province);
+                isFallback = true;
                 if (isRegionError(err)) {
                     console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${fb}`,
+                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100} (+buffer)`,
                     );
                 } else {
-                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId}:`, err);
+                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100} (+buffer):`, err);
                 }
-                sellerShipping.set(sellerId, fb);
-                sellerShippingIsFallback.set(sellerId, true);
             }
+            // Buffer applied identically to /api/orders/checkout so the shown
+            // total equals the charged total.
+            sellerShipping.set(sellerId, applyShippingBuffer(baseSatang) / 100);
+            sellerShippingIsFallback.set(sellerId, isFallback);
         }
 
         const subtotal = listings.reduce((sum, l) => sum + Number(l.price || 0), 0);

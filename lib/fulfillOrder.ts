@@ -11,7 +11,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
-import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGrams } from '@/lib/flashExpress';
+import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGrams, estimateParcelDimsCm } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -278,9 +278,13 @@ export async function fulfillOrdersByTransferGroup(
                     dstDistrictName: dst.districtName,
                     dstPostalCode: dst.postalCode,
                     dstDetailAddress: dst.detailAddress,
-                    // Match the weight the buyer was quoted at checkout (one
-                    // order per card, so sellerOrders.length is the card count).
+                    // Match the weight AND dimensions the buyer was quoted at
+                    // checkout (one order per card, so sellerOrders.length is the
+                    // card count). Declaring real dims — rather than letting them
+                    // default to a 1x1x1 cm cube — keeps Flash from re-rating the
+                    // parcel at the depot off a bogus size.
                     weight: estimateParcelWeightGrams(sellerOrders.length),
+                    ...estimateParcelDimsCm(sellerOrders.length),
                     expressCategory: 1,
                     articleCategory: 3,
                     remark: 'CardStreet TCG - Handle with care',
