@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
                 shipping_labels(*)
             `, { count: 'exact' })
             .eq('seller_id', user.id)
-            .in('status', ['paid', 'label_generated', 'shipped', 'out_for_delivery'])
+            // Through 'delivered' (but not 'completed', which lives in Sales
+            // History) so the seller can follow the parcel out for delivery
+            // and to the door, mirroring the buyer's tracking. 'in_transit'
+            // was previously missing, which made shipments vanish mid-route.
+            .in('status', ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'])
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 

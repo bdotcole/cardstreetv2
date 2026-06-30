@@ -40,7 +40,7 @@ type Tab = 'purchases' | 'shipments' | 'sales';
 const STATUS_META: Record<string, { tone: string; key: string }> = {
     pending: { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', key: 'pending_payment' },
     paid: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
-    label_generated: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
+    label_generated: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'preparing_for_shipment' },
     processing: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', key: 'processing' },
     shipped: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', key: 'shipped' },
     in_transit: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', key: 'in_transit' },

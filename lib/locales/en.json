@@ -120,6 +120,9 @@
         "labelSavedLocation": "Saved to Documents/cardstreet/labels on your device.",
         "labelOpenPrint": "Open / Print",
         "labelDone": "Done",
+        "trackOrder": "Track Order",
+        "noTrackingYet": "Tracking updates will appear here once Flash Express scans your parcel.",
+        "trackingUnavailable": "Tracking isn't available for this order yet.",
         "confirmShipment": "Confirm Shipment",
         "generateShippingLabelMsg": "The system will automatically generate a tracking number and shipping label via Flash Express. Are you ready to pack and drop off the shipment?",
         "processing": "Processing...",
@@ -404,6 +407,7 @@
             "status": {
                 "pending_payment": "Pending payment",
                 "processing": "Processing",
+                "preparing_for_shipment": "Preparing Shipment",
                 "shipped": "Shipped",
                 "in_transit": "In transit",
                 "out_for_delivery": "Out for delivery",

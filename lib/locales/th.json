@@ -120,6 +120,9 @@
         "labelSavedLocation": "บันทึกไว้ที่ Documents/cardstreet/labels บนอุปกรณ์ของคุณแล้ว",
         "labelOpenPrint": "เปิด / พิมพ์",
         "labelDone": "เสร็จสิ้น",
+        "trackOrder": "ติดตามพัสดุ",
+        "noTrackingYet": "สถานะการติดตามจะแสดงที่นี่เมื่อ Flash Express สแกนพัสดุของคุณแล้ว",
+        "trackingUnavailable": "ยังไม่มีข้อมูลติดตามสำหรับคำสั่งซื้อนี้",
         "confirmShipment": "ยืนยันการจัดส่ง",
         "generateShippingLabelMsg": "ระบบจะสร้างหมายเลขติดตามและป้ายจัดส่งผ่าน Flash Express สำหรับคำสั่งซื้อนี้โดยอัตโนมัติ คุณพร้อมที่จะแพ็คและนำพัสดุไปส่งแล้วหรือยัง?",
         "processing": "กำลังดำเนินการ...",
@@ -404,6 +407,7 @@
             "status": {
                 "pending_payment": "รอชำระเงิน",
                 "processing": "กำลังดำเนินการ",
+                "preparing_for_shipment": "กำลังเตรียมจัดส่ง",
                 "shipped": "จัดส่งแล้ว",
                 "in_transit": "อยู่ระหว่างขนส่ง",
                 "out_for_delivery": "กำลังนำส่ง",

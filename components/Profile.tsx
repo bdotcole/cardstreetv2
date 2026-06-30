@@ -139,6 +139,117 @@ const tierConfig = {
   platinum: { color: 'from-purple-400 to-indigo-600', icon: Zap, next: null, pointsNeeded: null }
 };
 
+// Shared delivery-progress view: the five-step timeline plus the carrier
+// tracking row. Rendered for both the buyer's Track Orders panel and the
+// seller's Track Order modal so each side sees identical status. The real DB
+// statuses don't map 1:1 to the timeline steps, so we collapse them:
+// paid -> processing, label_generated -> preparing for shipment (the label is
+// ready for the seller to print), in_transit -> shipped, completed -> delivered.
+// Without this mapping the timeline shows blank for parts of the order's life.
+const TIMELINE_STEPS = ['processing', 'preparing_for_shipment', 'shipped', 'out_for_delivery', 'delivered'] as const;
+
+// Bilingual step labels. Kept inline (the component is module-scope and only
+// needs the language flag) and matched against the full step key so the EN
+// fallback never leaks an underscore like the old `replace('_', ' ')` did.
+const TIMELINE_LABELS: Record<string, { en: string; th: string }> = {
+  processing: { en: 'Processing', th: 'กำลังดำเนินการ' },
+  preparing_for_shipment: { en: 'Preparing Shipment', th: 'กำลังเตรียมจัดส่ง' },
+  shipped: { en: 'Shipped', th: 'จัดส่งแล้ว' },
+  out_for_delivery: { en: 'Out for Delivery', th: 'กำลังนำจ่าย' },
+  delivered: { en: 'Delivered', th: 'จัดส่งสำเร็จ' },
+};
+
+const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ order, isThai }) => {
+  const timelineStatus =
+    order.status === 'paid' || order.status === 'processing' || order.status === 'pending'
+      ? 'processing'
+      : order.status === 'label_generated'
+        ? 'preparing_for_shipment'
+        : order.status === 'shipped' || order.status === 'in_transit'
+          ? 'shipped'
+          : order.status === 'out_for_delivery'
+            ? 'out_for_delivery'
+            : order.status === 'delivered' || order.status === 'completed'
+              ? 'delivered'
+              : 'processing';
+  const currentIdx = TIMELINE_STEPS.indexOf(timelineStatus as typeof TIMELINE_STEPS[number]);
+  const label = order.shipping_labels?.[0];
+  const stepLabel = (step: string) => {
+    const l = TIMELINE_LABELS[step];
+    return l ? (isThai ? l.th : l.en) : step.replace(/_/g, ' ');
+  };
+
+  return (
+    <>
+      {/* items-start + a fixed column width keeps the five circles evenly
+          spaced and lets the longer "Preparing for Shipment" label wrap
+          beneath its node without shoving the row out of alignment; the
+          connector's mt-4 pins it to the circles' vertical centre. */}
+      <div className="flex items-start">
+        {TIMELINE_STEPS.map((step, idx) => {
+          const isComplete = idx <= currentIdx;
+          const isCurrent = idx === currentIdx;
+          return (
+            <React.Fragment key={step}>
+              <div className="flex flex-col items-center gap-1 w-12 shrink-0">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isComplete ? 'bg-brand-green' : 'bg-slate-800'} ${isCurrent ? 'ring-2 ring-brand-green ring-offset-2 ring-offset-brand-darker' : ''}`}>
+                  {step === 'processing' && <Clock className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
+                  {step === 'preparing_for_shipment' && <FileText className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
+                  {step === 'shipped' && <Package className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
+                  {step === 'out_for_delivery' && <Truck className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
+                  {step === 'delivered' && <CheckCircle className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
+                </div>
+                <span className={`text-[8px] uppercase tracking-wider text-center leading-tight ${isCurrent ? 'text-brand-green font-bold' : 'text-slate-600'}`}>
+                  {stepLabel(step)}
+                </span>
+              </div>
+              {idx < TIMELINE_STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 mt-4 ${idx < currentIdx ? 'bg-brand-green' : 'bg-slate-800'}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Tracking — pulled from the shipping_labels join. MANUAL is the
+          sentinel the region-error fallback uses; show a different message
+          for those since the parcel can't actually be tracked. */}
+      {(() => {
+        if (!label?.tracking_number) return null;
+        if (label.tracking_number === 'MANUAL') {
+          return (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-500">Tracking:</span>
+              <span className="text-amber-300 italic">Manual handling — support will be in touch</span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className="text-slate-500">Tracking:</span>
+            <span className="text-white font-mono">{label.tracking_number}</span>
+            {label.courier_tracking_url && (
+              <a
+                href={label.courier_tracking_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-cyan hover:underline text-[10px] uppercase tracking-widest font-bold"
+              >
+                Track ↗
+              </a>
+            )}
+            {label.carrier_name && (
+              <span className="text-slate-600 text-[10px] uppercase tracking-widest">
+                via {label.carrier_name}
+              </span>
+            )}
+          </div>
+        );
+      })()}
+    </>
+  );
+};
+
 const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
@@ -183,6 +294,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   // Modal states
   const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
+  // Seller-side delivery tracking. Holds the order id whose tracking timeline
+  // is open in the full-screen tracking modal — reached from a pending
+  // shipment card or from the "Track Order" affordance on the label-saved
+  // screen. The order is looked up in `shipments` (the seller's list).
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
 
   // Shipping-label download modal. On Android (Capacitor) we fetch the PDF
   // ourselves and write it to the device with @capacitor/filesystem, then
@@ -1203,88 +1319,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         </div>
                       </div>
 
-                      {/* Order Timeline. The real DB statuses (paid,
-                          label_generated, shipped, in_transit, out_for_delivery,
-                          delivered) don't map 1:1 to the four timeline steps,
-                          so collapse them: paid/label_generated → processing,
-                          in_transit → shipped. Without this mapping the
-                          timeline shows blank for the first part of the
-                          order's life. */}
-                      <div className="flex items-center justify-between">
-                        {['processing', 'shipped', 'out_for_delivery', 'delivered'].map((step, idx) => {
-                          const stepOrder = ['processing', 'shipped', 'out_for_delivery', 'delivered'];
-                          const timelineStatus =
-                            order.status === 'paid' || order.status === 'label_generated' || order.status === 'processing'
-                              ? 'processing'
-                              : order.status === 'shipped' || order.status === 'in_transit'
-                                ? 'shipped'
-                                : order.status === 'out_for_delivery'
-                                  ? 'out_for_delivery'
-                                  : order.status === 'delivered' || order.status === 'completed'
-                                    ? 'delivered'
-                                    : 'processing';
-                          const currentIdx = stepOrder.indexOf(timelineStatus);
-                          const isComplete = idx <= currentIdx;
-                          const isCurrent = idx === currentIdx;
-
-                          return (
-                            <React.Fragment key={step}>
-                              <div className="flex flex-col items-center gap-1">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isComplete ? 'bg-brand-green' : 'bg-slate-800'} ${isCurrent ? 'ring-2 ring-brand-green ring-offset-2 ring-offset-brand-darker' : ''}`}>
-                                  {step === 'processing' && <Clock className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
-                                  {step === 'shipped' && <Package className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
-                                  {step === 'out_for_delivery' && <Truck className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
-                                  {step === 'delivered' && <CheckCircle className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
-                                </div>
-                                <span className={`text-[8px] uppercase tracking-wider ${isCurrent ? 'text-brand-green font-bold' : 'text-slate-600'}`}>
-                                  {isThai ? ({ processing: 'กำลังดำเนินการ', shipped: 'จัดส่งแล้ว', out_for_delivery: 'กำลังนำจ่าย', delivered: 'จัดส่งสำเร็จ' }[step as string] || step.replace('_', ' ')) : (step.replace('_', ' '))}
-                                </span>
-                              </div>
-                              {idx < 3 && (
-                                <div className={`flex-1 h-0.5 ${idx < currentIdx ? 'bg-brand-green' : 'bg-slate-800'}`} />
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </div>
-
-                      {/* Tracking — pulled from the shipping_labels join.
-                          MANUAL is the sentinel value Bug #D's region-error
-                          fallback uses; show a different message for those
-                          orders since the buyer can't actually track them. */}
-                      {(() => {
-                        const label = order.shipping_labels?.[0];
-                        if (!label?.tracking_number) return null;
-                        if (label.tracking_number === 'MANUAL') {
-                          return (
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-slate-500">Tracking:</span>
-                              <span className="text-amber-300 italic">Manual handling — support will be in touch</span>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="flex items-center gap-2 text-xs flex-wrap">
-                            <span className="text-slate-500">Tracking:</span>
-                            <span className="text-white font-mono">{label.tracking_number}</span>
-                            {label.courier_tracking_url && (
-                              <a
-                                href={label.courier_tracking_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-brand-cyan hover:underline text-[10px] uppercase tracking-widest font-bold"
-                              >
-                                Track ↗
-                              </a>
-                            )}
-                            {label.carrier_name && (
-                              <span className="text-slate-600 text-[10px] uppercase tracking-widest">
-                                via {label.carrier_name}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <OrderTrackingTimeline order={order} isThai={isThai} />
 
                       {/* Buyer Action required */}
                       {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (
@@ -1456,6 +1491,20 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           {t('profile.printShippingLabel')}
                         </button>
                       )}
+                      {/* Durable track entry point — the label-saved modal only
+                          appears right after a download, so sellers need a way
+                          back to the timeline afterwards. Shown through to
+                          'delivered' so the seller can follow the parcel the
+                          whole way, mirroring the buyer's view. */}
+                      {['label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(shipment.status) &&
+                       shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' && (
+                        <button
+                          onClick={() => setTrackingOrderId(shipment.id)}
+                          className="w-full h-10 flex items-center justify-center gap-2 bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/20 transition-colors">
+                          <MapPin className="w-3.5 h-3.5" />
+                          {t('profile.trackOrder')}
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
@@ -1604,6 +1653,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   >
                     {t('profile.labelOpenPrint')}
                   </button>
+                  {/* Track Order — opens the same delivery timeline the buyer
+                      sees. Layered above this modal (higher z-index), so
+                      closing it returns to the label-saved screen. */}
+                  {labelModal.orderId && (
+                    <button
+                      onClick={() => setTrackingOrderId(labelModal.orderId)}
+                      className="w-full h-12 rounded-xl bg-brand-cyan/15 border border-brand-cyan/30 text-brand-cyan font-bold text-xs uppercase tracking-widest hover:bg-brand-cyan/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      {t('profile.trackOrder')}
+                    </button>
+                  )}
                   <button
                     onClick={closeLabel}
                     className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
@@ -1615,6 +1676,81 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             )}
           </motion.div>
         )}
+
+        {/* Seller delivery-tracking modal. Mirrors the buyer's Track Orders
+            timeline so the seller can follow the parcel after handing it off.
+            Layered above the label-saved modal (z-[10001] > z-[10000]) so
+            closing it returns to the saved-label screen when opened from
+            there; it also opens standalone from a pending shipment card. */}
+        {trackingOrderId && (() => {
+          const trackingOrder = shipments.find((s) => s.id === trackingOrderId);
+          const tLabel = trackingOrder?.shipping_labels?.[0];
+          return (
+            <motion.div
+              key="tracking-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[10001] flex flex-col bg-brand-darker"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
+                <h3 className="text-white font-black uppercase tracking-widest text-sm">
+                  {t('profile.trackOrder')}
+                </h3>
+                <button
+                  onClick={() => setTrackingOrderId(null)}
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 40px)' }}>
+                {!trackingOrder ? (
+                  <div className="flex flex-col items-center justify-center gap-3 text-slate-400 py-16 text-center">
+                    <Package className="w-10 h-10 text-slate-700" />
+                    <p className="text-sm">{t('profile.trackingUnavailable')}</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Card context so the seller knows which parcel this is */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                        {trackingOrder.listing?.card_data?.images?.small && (
+                          <img
+                            src={getThumbnailUrl(trackingOrder.listing.card_data.images.small)}
+                            alt="Card"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-semibold text-sm truncate">
+                          {trackingOrder.listing?.card_data?.name || t('profile.cardOrder')}
+                        </p>
+                        <p className="text-slate-500 text-xs">{trackingOrder.listing?.condition}</p>
+                        <p className="text-brand-orange font-bold text-sm mt-1">
+                          {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${trackingOrder.status.toLowerCase()}`) || trackingOrder.status.replace('_', ' ')}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="glass p-4 rounded-2xl border border-white/5 space-y-4">
+                      <OrderTrackingTimeline order={trackingOrder} isThai={isThai} />
+                      {!tLabel?.tracking_number && (
+                        <p className="text-slate-500 text-xs leading-relaxed text-center">
+                          {t('profile.noTrackingYet')}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {reviewModalOrderId && (
           <motion.div
