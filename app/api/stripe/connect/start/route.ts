@@ -113,7 +113,7 @@ export async function POST(request: Request) {
             // and "support phone number" onboarding hoops; pre-filling them from
             // data the seller already gave us (for Flash Express shipping)
             // collapses those steps instead of making the seller re-type them.
-            .select('id, stripe_account_id, stripe_region, display_name, preferred_currency, full_name, phone_number, address, district, state, province, postcode, stripe_details_submitted')
+            .select('id, stripe_account_id, stripe_region, display_name, preferred_currency, phone_number, address, district, state, province, postcode, stripe_details_submitted')
             .eq('id', user.id)
             .single();
 
@@ -166,14 +166,11 @@ export async function POST(request: Request) {
             };
             const phone = toThE164(profile!.phone_number as string | null);
 
-            // full_name is the shipping recipient (their real/legal name), so it
-            // is a safe seed for first/last. display_name is often a handle, so we
-            // deliberately don't fall back to it — a wrong legal name would
-            // mismatch the ID at verification, which is worse than leaving it blank.
-            const fullName = ((profile!.full_name as string | null) || '').trim();
-            const nameParts = fullName ? fullName.split(/\s+/) : [];
-            const firstName = nameParts[0];
-            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+            // We intentionally do NOT pre-fill the legal name. profiles has no
+            // full/legal-name column — only display_name/username, which are
+            // often handles ("TUY Channel"). Seeding a wrong legal name would
+            // mismatch the government ID at verification and FAIL the account,
+            // which is worse than letting Stripe collect it. Leave it to Stripe.
 
             // Field-name mapping: profiles.state holds the city, profiles.province
             // holds the Thai province (Stripe's `state`). See profileValidation.ts.
@@ -195,7 +192,6 @@ export async function POST(request: Request) {
                 // ("job title") as required — it was on every restricted account
                 // in the diagnostic. A sole seller's title is just "Owner".
                 relationship: { title: 'Owner' },
-                ...(firstName ? { first_name: firstName, last_name: lastName } : {}),
                 ...(phone ? { phone } : {}),
                 ...(individualAddress ? { address: individualAddress } : {}),
             };
