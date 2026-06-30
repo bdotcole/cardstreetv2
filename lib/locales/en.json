@@ -304,6 +304,8 @@
         "signInToList": "Please sign in to list a card.",
         "listingPublished": "Listing successfully published to the market!",
         "listingFailed": "Failed to publish listing. Please try again.",
+        "listingRemoved": "Listing removed from the market.",
+        "listingRemoveFailed": "Failed to remove listing. Please try again.",
         "paymentFailed": "Payment failed",
         "cameraPermission": "Please allow camera access in your browser settings to use the scanner.",
         "shippingEstimate": "Flat-rate shipping for this address — you'll be charged exactly the total shown above.",

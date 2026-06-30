@@ -851,6 +851,28 @@ export default function HomePage() {
         }
     };
 
+    // Inverse of handlePublishListing. The Vault "Live on Market" flag is
+    // derived from the DB `listings` table (see useUserCollections), so the
+    // real removal is cancelling that listing — flipping a local flag alone
+    // would reappear on the next reload.
+    const handleRemoveListing = async (colId: string, item: UserCollectionItem, card: Card) => {
+        try {
+            // No active listing matched (already removed/sold) still falls
+            // through to the refresh below, which reconciles the stale UI.
+            await marketplaceService.cancelListingForCard(card.id, item.condition);
+
+            // Refresh global marketplace + re-derive the Vault listing flags
+            // from the DB so the removed card drops out of Active Listings.
+            await fetchGlobalListings();
+            await refreshCollections();
+
+            showToast(t('paymentFlow.listingRemoved') || 'Listing removed from the market.', 'success');
+        } catch (error) {
+            console.error('Failed to remove listing:', error);
+            showToast(t('paymentFlow.listingRemoveFailed') || 'Failed to remove listing. Please try again.', 'error');
+        }
+    };
+
     // Global Back Button Handling
     // Tracks whether the Profile tab has a slide-in sub-panel open (Edit
     // Profile, Settings, Track Orders, etc.). A plain ref rather than React
@@ -1189,6 +1211,7 @@ export default function HomePage() {
                                 onToggleWishlist={handleToggleWishlist}
                                 onAddToCollection={handleAddToCollection}
                                 onListCard={handleStartListing}
+                                onRemoveListing={handleRemoveListing}
                                 listingTarget={listingTarget}
                                 onCancelListing={() => setListingTarget(null)}
                                 onPublishListing={handlePublishListing}

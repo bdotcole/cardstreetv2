@@ -331,5 +331,46 @@ export const marketplaceService = {
             console.error('Error cancelling listing:', error);
             return false;
         }
+    },
+
+    /**
+     * Cancel the signed-in user's active listing for a given card.
+     *
+     * The mobile Vault doesn't track the underlying listing id — it derives
+     * the "Live on Market" flag by matching collection items to active
+     * listings on card_id (+ condition), exactly as `useUserCollections`
+     * does on load. So removal matches the same way: prefer an exact
+     * condition match, otherwise cancel the first active listing for the card.
+     * Returns false when no active listing is found (already removed/sold).
+     */
+    async cancelListingForCard(cardId: string, condition?: string): Promise<boolean> {
+        const supabase = createClient();
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to remove a listing');
+
+            const { data: listings, error: fetchError } = await supabase
+                .from('listings')
+                .select('id, condition')
+                .eq('seller_id', user.id)
+                .eq('card_id', cardId)
+                .eq('status', 'active');
+
+            if (fetchError) throw fetchError;
+            if (!listings || listings.length === 0) return false;
+
+            const target = listings.find(l => l.condition === condition) || listings[0];
+
+            const { error } = await supabase
+                .from('listings')
+                .update({ status: 'cancelled' })
+                .eq('id', target.id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error cancelling listing for card:', error);
+            throw error;
+        }
     }
 };

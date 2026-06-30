@@ -30,6 +30,7 @@ interface VaultProps {
   onAddToCollection: (card: Card) => void;
   onToggleWishlist: (card: Card) => void;
   onListCard: (colId: string, item: UserCollectionItem, card: Card) => void;
+  onRemoveListing: (colId: string, item: UserCollectionItem, card: Card) => void | Promise<void>;
   listingTarget: { colId: string, item: UserCollectionItem, card: Card } | null;
   onCancelListing: () => void;
   onPublishListing: (data: any) => void;
@@ -51,6 +52,7 @@ const Vault: React.FC<VaultProps> = ({
   onAddToCollection,
   onToggleWishlist,
   onListCard,
+  onRemoveListing,
   listingTarget,
   onCancelListing,
   onPublishListing,
@@ -513,15 +515,9 @@ const Vault: React.FC<VaultProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    onUpdateCollections(customCollections.map(col => {
-                      if (col.id === colId) {
-                        return {
-                          ...col,
-                          items: col.items.map(it => it.id === item.id ? { ...it, isListing: false, listingPrice: undefined } : it)
-                        };
-                      }
-                      return col;
-                    }));
+                    if (confirm(isThai ? 'นำประกาศนี้ออกจากตลาดหรือไม่?' : 'Remove this listing from the market?')) {
+                      onRemoveListing(colId, item, card);
+                    }
                   }}
                   className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-brand-red/60 hover:text-brand-red transition-colors"
                 >
