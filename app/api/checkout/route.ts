@@ -35,6 +35,7 @@ import {
     type StripeRegion,
 } from '@/lib/stripe';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
+import { SELLER_UNVERIFIED_ERROR_CODE } from '@/lib/profileValidation';
 import type Stripe from 'stripe';
 
 export async function POST(req: Request) {
@@ -213,7 +214,10 @@ export async function POST(req: Request) {
 
             if (sellerErr || !seller?.stripe_account_id) {
                 return NextResponse.json(
-                    { error: 'Seller has not finished Stripe onboarding — cannot charge yet.' },
+                    {
+                        error: 'Seller has not finished Stripe onboarding — cannot charge yet.',
+                        code: SELLER_UNVERIFIED_ERROR_CODE,
+                    },
                     { status: 409 }
                 );
             }
@@ -229,6 +233,7 @@ export async function POST(req: Request) {
                         error:
                             "Seller's Stripe account is still being verified. Please try " +
                             'again later.',
+                        code: SELLER_UNVERIFIED_ERROR_CODE,
                     },
                     { status: 409 }
                 );

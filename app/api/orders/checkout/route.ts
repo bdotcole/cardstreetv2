@@ -35,6 +35,8 @@ import {
     checkBuyerProfileComplete,
     BUYER_PROFILE_INCOMPLETE_TOAST,
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+    SELLER_UNVERIFIED_TOAST,
+    SELLER_UNVERIFIED_ERROR_CODE,
 } from '@/lib/profileValidation';
 
 interface CheckoutItem {
@@ -159,7 +161,7 @@ export async function POST(req: Request) {
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('id, role, partner_level, partner_joined_at, province, state, district, postcode, stripe_region')
+            .select('id, role, partner_level, partner_joined_at, province, state, district, postcode, stripe_region, stripe_account_id, stripe_charges_enabled')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
@@ -209,6 +211,30 @@ export async function POST(req: Request) {
                     { status: 400 }
                 );
             }
+        }
+
+        // ─── Gate: every seller must be able to RECEIVE the charge ───
+        // Sellers can now LIST before finishing Stripe identity verification
+        // (list-first — see lib/profileValidation.ts), so we enforce the
+        // "charges_enabled" requirement here at purchase time. On the TH
+        // direct-charge model the PaymentIntent is created on the seller's
+        // connected account; an unverified seller (no account or charges not
+        // yet enabled) can't be paid, and /api/checkout would reject. We catch
+        // it here FIRST — before reserving listings or inserting orders — so a
+        // blocked cart leaves no dangling reservation or pending order.
+        const unverifiedSeller = (sellerProfiles ?? []).find(
+            (p) =>
+                sellerIds.includes(p.id) &&
+                !(p.stripe_account_id && p.stripe_charges_enabled),
+        );
+        if (unverifiedSeller) {
+            return NextResponse.json(
+                {
+                    error: SELLER_UNVERIFIED_TOAST,
+                    code: SELLER_UNVERIFIED_ERROR_CODE,
+                },
+                { status: 409 },
+            );
         }
 
         // ─── Platform fee tier ───

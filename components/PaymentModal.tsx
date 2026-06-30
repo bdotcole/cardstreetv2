@@ -266,6 +266,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         total: number;
         shippingIsEstimate: boolean;
         sellerStripeAccountId: string | null;
+        sellerPayoutReady: boolean;
     } | null>(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [estimateError, setEstimateError] = useState<string | null>(null);
@@ -302,6 +303,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     total: data.total,
                     shippingIsEstimate: !!data.shippingIsEstimate,
                     sellerStripeAccountId: data.sellerStripeAccountId ?? null,
+                    // Default true if the field is absent (older server / US
+                    // legacy path) so we never block those flows.
+                    sellerPayoutReady: data.sellerPayoutReady !== false,
                 });
             })
             .catch(err => {
@@ -330,6 +334,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         [isMarketplaceCheckout, estimate?.sellerStripeAccountId],
     );
     const waitingForEstimate = isMarketplaceCheckout && !estimate && !estimateError;
+
+    // List-first: a seller may list before finishing Stripe verification, but a
+    // buyer can't pay until that seller's account can receive charges. Block the
+    // pay step up front so the buyer never submits a checkout the server would
+    // reject. The authoritative block is server-side in /api/orders/checkout.
+    const sellerNotReady = isMarketplaceCheckout && !!estimate && !estimate.sellerPayoutReady;
 
     // Deferred PaymentElement options. amount is in the currency's smallest
     // unit (satang/cents) and is only used to render eligible methods + wallet
@@ -403,6 +413,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             <div className="flex items-center justify-center gap-2 text-slate-400 text-xs py-6">
                                 <i className="fa-solid fa-circle-notch fa-spin"></i>
                                 {t('paymentFlow.preparingCheckout') || 'Preparing secure checkout…'}
+                            </div>
+                        ) : sellerNotReady ? (
+                            // Seller listed before finishing Stripe verification —
+                            // no account can receive the charge yet, so hide the
+                            // card field instead of letting the buyer hit a reject.
+                            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-xl p-4 text-center">
+                                {t('paymentFlow.sellerUnverified')
+                                    || 'This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.'}
                             </div>
                         ) : (
                             <>

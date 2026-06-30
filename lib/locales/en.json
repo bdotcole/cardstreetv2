@@ -311,6 +311,7 @@
         "secureSubtitle": "Encrypted checkout",
         "paymentUnavailable": "Card payments are temporarily unavailable. Please try again later.",
         "preparingCheckout": "Preparing secure checkout…",
+        "sellerUnverified": "This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.",
         "pay": "Pay",
         "processing": "Processing…"
     },

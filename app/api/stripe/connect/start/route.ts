@@ -107,7 +107,13 @@ export async function POST(request: Request) {
 
         const { data: profile, error: profileErr } = await admin
             .from('profiles')
-            .select('id, stripe_account_id, stripe_region, display_name, preferred_currency')
+            // full_name / phone_number / shipping address are pulled so we can
+            // pre-fill Stripe's `individual` person + business support phone.
+            // These are the exact fields Stripe surfaces as the "representative"
+            // and "support phone number" onboarding hoops; pre-filling them from
+            // data the seller already gave us (for Flash Express shipping)
+            // collapses those steps instead of making the seller re-type them.
+            .select('id, stripe_account_id, stripe_region, display_name, preferred_currency, full_name, phone_number, address, district, state, province, postcode')
             .eq('id', user.id)
             .single();
 
@@ -161,6 +167,67 @@ export async function POST(request: Request) {
         async function createFreshAccount(): Promise<string> {
             const sellerPublicUrl = `${getAppBaseUrl()}/profile/${user!.id}`;
 
+            // Pre-fill the individual (person) and support phone from the profile
+            // data the seller already gave us for Flash Express shipping. Every
+            // field we send here is one fewer hoop in Stripe's hosted onboarding:
+            // it removes the standalone "provide a support phone number" step and
+            // pre-populates the "representative" (the individual themselves), so
+            // the seller mostly just confirms + does the mandatory ID/selfie.
+            //
+            // We do NOT lock business_type beyond setting it to 'individual'
+            // below — Stripe has no API flag that hard-disables the
+            // individual/company toggle. Setting the type AND supplying
+            // individual data is what keeps the hosted flow on the individual
+            // path (a company account is what pulls the heavier
+            // director/representative/job-title requirements).
+            const toThE164 = (raw?: string | null): string | undefined => {
+                if (!raw) return undefined;
+                const d = raw.replace(/[^\d+]/g, '');
+                if (!d) return undefined;
+                if (d.startsWith('+')) return d;
+                if (d.startsWith('0')) return `+66${d.slice(1)}`;
+                if (d.startsWith('66')) return `+${d}`;
+                return `+66${d}`;
+            };
+
+            const phone = toThE164(profile!.phone_number as string | null);
+
+            // full_name is the shipping recipient (their real/legal name), so it
+            // is a safe seed for first/last. display_name is often a handle, so
+            // we deliberately don't fall back to it — a wrong legal name would
+            // mismatch the ID at verification and cause a failure, which is worse
+            // than leaving it blank for Stripe to collect.
+            const fullName = ((profile!.full_name as string | null) || '').trim();
+            const nameParts = fullName ? fullName.split(/\s+/) : [];
+            const firstName = nameParts[0];
+            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+
+            // Field-name mapping: profiles.state holds the city, profiles.province
+            // holds the Thai province (Stripe's `state`). See profileValidation.ts.
+            const street = (profile!.address as string | null) || '';
+            const individualAddress: Stripe.AddressParam | undefined = street
+                ? {
+                      line1: street,
+                      line2: (profile!.district as string | null) || undefined,
+                      city: (profile!.state as string | null) || undefined,
+                      state: (profile!.province as string | null) || undefined,
+                      postal_code: (profile!.postcode as string | null) || undefined,
+                      country: 'TH',
+                  }
+                : undefined;
+
+            const individual: Stripe.AccountCreateParams.Individual = {
+                email: user!.email || undefined,
+                // Thai individual accounts surface individual.relationship.title
+                // ("job title") as a required field — it showed up on every
+                // restricted account in the diagnostic. A sole seller's title is
+                // just "Owner"; defaulting it removes that hoop entirely.
+                relationship: { title: 'Owner' },
+                ...(firstName ? { first_name: firstName, last_name: lastName } : {}),
+                ...(phone ? { phone } : {}),
+                ...(individualAddress ? { address: individualAddress } : {}),
+            };
+
             const createParams: Stripe.AccountCreateParams = {
                 country: 'TH',
                 email: user!.email || undefined,
@@ -174,6 +241,7 @@ export async function POST(request: Request) {
                     ...(region === 'th' ? { promptpay_payments: { requested: true } } : {}),
                 },
                 business_type: 'individual',
+                individual,
                 business_profile: {
                     // Pre-filled so individual sellers without a website
                     // aren't blocked on a required URL field. The seller's
@@ -185,6 +253,10 @@ export async function POST(request: Request) {
                     // sales. Influences Stripe risk scoring and the buyer's
                     // statement descriptor.
                     mcc: '5945',
+                    // Satisfies the standalone "provide a support phone number"
+                    // onboarding requirement up front when we have the seller's
+                    // phone. Omitted (not sent as undefined) when we don't.
+                    ...(phone ? { support_phone: phone } : {}),
                 },
                 metadata: {
                     cardstreet_user_id: user!.id,

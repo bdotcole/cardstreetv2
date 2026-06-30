@@ -12,6 +12,15 @@
  *
  * `sub_district` is intentionally not required — Flash accepts the
  * `district` value in its place (see fulfillOrder.ts:135).
+ *
+ * List-first: a seller may list before finishing Stripe identity
+ * verification. So `stripe_charges_enabled` is deliberately NOT part of the
+ * listing gate — only `stripe_account_id` is (they must have started
+ * onboarding, which gives the future charge a destination account). The
+ * "can actually receive money?" check (charges_enabled) is enforced later,
+ * on the buyer's checkout paths, so an unverified seller's listings exist
+ * but can't be purchased until they verify. See SELLER_UNVERIFIED_* below,
+ * app/api/orders/checkout/route.ts, and app/api/checkout/route.ts.
  */
 
 // ── Shipping fields that both sellers and buyers need ──
@@ -25,10 +34,12 @@ const SHIPPING_REQUIRED_FIELDS = [
 ] as const;
 
 // ── Stripe Connect fields a seller needs, on top of shipping. ──
-// charges_enabled is the canonical "can receive money?" boolean from Stripe.
+// Only the account id is required to LIST: the seller must have started
+// onboarding so the eventual charge has a destination account. We do NOT
+// require stripe_charges_enabled here — verification (the ID/selfie that
+// flips charges_enabled) is gated at purchase time instead (list-first).
 const SELLER_CONNECT_REQUIRED_FIELDS = [
     'stripe_account_id',
-    'stripe_charges_enabled',
 ] as const;
 
 export const SELLER_REQUIRED_PROFILE_FIELDS = [
@@ -46,7 +57,6 @@ export const SELLER_PROFILE_FIELD_LABELS: Record<SellerRequiredField, string> = 
     postcode: 'Postcode',
     phone_number: 'Phone number',
     stripe_account_id: 'Stripe payout account',
-    stripe_charges_enabled: 'Stripe payout activation',
 };
 
 export type SellerProfileSubset = Partial<
@@ -61,9 +71,6 @@ export interface ProfileCompletenessResult {
 }
 
 function isFieldPresent(field: SellerRequiredField, value: unknown): boolean {
-    // Booleans must be explicitly true; nullable booleans (Supabase often
-    // returns null for unset bools) count as missing.
-    if (field === 'stripe_charges_enabled') return value === true;
     // The account id is a non-empty string when set.
     if (field === 'stripe_account_id') {
         return typeof value === 'string' && value.trim().length > 0;
@@ -136,3 +143,12 @@ export const PROFILE_INCOMPLETE_ERROR_CODE = 'PROFILE_INCOMPLETE';
 export const BUYER_PROFILE_INCOMPLETE_TOAST =
     'Add your shipping address and phone number in Profile before checking out.';
 export const BUYER_PROFILE_INCOMPLETE_ERROR_CODE = 'BUYER_PROFILE_INCOMPLETE';
+
+// ── Buyer-facing block: the seller listed before finishing Stripe identity
+// verification (charges_enabled is still false), so on the TH direct-charge
+// model there's no account that can receive the payment yet. Enforced on the
+// buyer's checkout paths (not at listing time) so list-first sellers don't
+// strand buyers in a failed charge.
+export const SELLER_UNVERIFIED_ERROR_CODE = 'SELLER_UNVERIFIED';
+export const SELLER_UNVERIFIED_TOAST =
+    'This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.';

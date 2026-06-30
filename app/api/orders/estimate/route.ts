@@ -162,16 +162,21 @@ export async function POST(req: Request) {
         // (matches the direct-charge constraint in /api/checkout); otherwise we
         // return null and the client tokenizes on the platform (US legacy).
         let sellerStripeAccountId: string | null = null;
+        // True unless we can positively see a single-seller TH cart whose seller
+        // hasn't finished Stripe verification (charges_enabled still false).
+        // Sellers can list before verifying (list-first), so the buyer UI uses
+        // this flag to block the pay step up front — an unverified seller's
+        // listing is browsable but not purchasable until they verify. The
+        // authoritative block is server-side in /api/orders/checkout.
+        let sellerPayoutReady = true;
         if (sellerIds.length === 1) {
             const seller = sellerProfiles?.find(p => p.id === sellerIds[0]) as
                 | { stripe_account_id?: string | null; stripe_region?: string | null; stripe_charges_enabled?: boolean | null }
                 | undefined;
-            if (
-                seller?.stripe_region === 'th' &&
-                seller.stripe_account_id &&
-                seller.stripe_charges_enabled
-            ) {
-                sellerStripeAccountId = seller.stripe_account_id;
+            if (seller?.stripe_region === 'th') {
+                const ready = !!(seller.stripe_account_id && seller.stripe_charges_enabled);
+                sellerPayoutReady = ready;
+                if (ready) sellerStripeAccountId = seller.stripe_account_id!;
             }
         }
 
@@ -187,6 +192,9 @@ export async function POST(req: Request) {
             // Connected account to bind Stripe.js to for a direct charge, or null
             // when tokenizing on the platform. See PaymentModal.
             sellerStripeAccountId,
+            // False only for a single-seller TH cart whose seller hasn't finished
+            // Stripe verification yet. PaymentModal blocks the pay step on this.
+            sellerPayoutReady,
             perSellerShipping: Object.fromEntries(sellerShipping),
             perSellerShippingIsFallback: Object.fromEntries(sellerShippingIsFallback),
         });
