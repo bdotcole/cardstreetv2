@@ -13,14 +13,16 @@
  * `sub_district` is intentionally not required — Flash accepts the
  * `district` value in its place (see fulfillOrder.ts:135).
  *
- * List-first: a seller may list before finishing Stripe identity
- * verification. So `stripe_charges_enabled` is deliberately NOT part of the
- * listing gate — only `stripe_account_id` is (they must have started
- * onboarding, which gives the future charge a destination account). The
- * "can actually receive money?" check (charges_enabled) is enforced later,
- * on the buyer's checkout paths, so an unverified seller's listings exist
- * but can't be purchased until they verify. See SELLER_UNVERIFIED_* below,
- * app/api/orders/checkout/route.ts, and app/api/checkout/route.ts.
+ * Stripe gate — submit, don't wait: a seller must have COMPLETED Stripe
+ * onboarding (`stripe_details_submitted` — they've submitted their ID, bank
+ * account, DOB, selfie, ToS) before they can list. This protects buyers: every
+ * lister is an identified, accountable seller. We gate on details_submitted
+ * rather than `stripe_charges_enabled` so a seller can list the moment they
+ * finish the form, without waiting on Stripe's async review. The stricter
+ * "can actually receive money?" check (charges_enabled) is enforced separately
+ * at purchase time, so a buyer is never charged against a seller Stripe hasn't
+ * yet activated. See SELLER_UNVERIFIED_* below, app/api/orders/checkout/route.ts,
+ * and app/api/checkout/route.ts.
  */
 
 // ── Shipping fields that both sellers and buyers need ──
@@ -34,12 +36,15 @@ const SHIPPING_REQUIRED_FIELDS = [
 ] as const;
 
 // ── Stripe Connect fields a seller needs, on top of shipping. ──
-// Only the account id is required to LIST: the seller must have started
-// onboarding so the eventual charge has a destination account. We do NOT
-// require stripe_charges_enabled here — verification (the ID/selfie that
-// flips charges_enabled) is gated at purchase time instead (list-first).
+// To LIST, the seller must have an account AND have completed onboarding
+// (stripe_details_submitted) — i.e. submitted their ID + bank. This keeps
+// every lister identified for buyer protection. We deliberately require
+// details_submitted (form finished) rather than stripe_charges_enabled
+// (Stripe finished reviewing) so sellers aren't blocked while Stripe's
+// async verification runs; the charges_enabled bar is enforced at purchase.
 const SELLER_CONNECT_REQUIRED_FIELDS = [
     'stripe_account_id',
+    'stripe_details_submitted',
 ] as const;
 
 export const SELLER_REQUIRED_PROFILE_FIELDS = [
@@ -57,6 +62,7 @@ export const SELLER_PROFILE_FIELD_LABELS: Record<SellerRequiredField, string> = 
     postcode: 'Postcode',
     phone_number: 'Phone number',
     stripe_account_id: 'Stripe payout account',
+    stripe_details_submitted: 'Stripe onboarding (ID & bank)',
 };
 
 export type SellerProfileSubset = Partial<
@@ -71,6 +77,8 @@ export interface ProfileCompletenessResult {
 }
 
 function isFieldPresent(field: SellerRequiredField, value: unknown): boolean {
+    // Nullable boolean (Supabase returns null for unset bools) — must be true.
+    if (field === 'stripe_details_submitted') return value === true;
     // The account id is a non-empty string when set.
     if (field === 'stripe_account_id') {
         return typeof value === 'string' && value.trim().length > 0;
