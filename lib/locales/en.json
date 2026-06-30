@@ -264,6 +264,19 @@
         "body": "Purchases are currently available only in Thailand while we set up shipping in your area. You can still browse the marketplace and build your collection — buying is coming soon to your country.",
         "gotIt": "Got it"
     },
+    "sellerInfo": {
+        "title": "How selling works",
+        "subtitle": "A quick rundown of fees and what happens after a sale.",
+        "feeTitle": "CardStreet fee",
+        "feeBody": "We keep a 9% fee on the item price (partners pay as low as 2%). There's no CardStreet fee on shipping.",
+        "stripeTitle": "Payment processing",
+        "stripeBody": "Card payments run through Stripe, which deducts its standard processing fee (about 3.65% on Thai cards) from your payout.",
+        "buyerTitle": "What the buyer pays",
+        "buyerBody": "At checkout the buyer pays your item price plus shipping. The full amount is sent to your connected Stripe account.",
+        "shippingTitle": "Your part: shipping",
+        "shippingBody": "After a sale you'll get a Flash Express label. Pack the card in a small padded mailer, then pay Flash for the shipment when they collect it — covered by the shipping the buyer already paid you. Oversized boxes cost more, and the extra is on you.",
+        "gotIt": "Got it — list my card"
+    },
     "seller": {
         "profileTitle": "Seller Profile",
         "verifiedPro": "Verified Pro",

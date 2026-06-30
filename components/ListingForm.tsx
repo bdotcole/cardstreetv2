@@ -5,7 +5,13 @@ import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
+import SellerInfoModal from './SellerInfoModal';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+
+// Shown once per device the first time the listing form opens, so a new seller
+// understands the fees and that they pay Flash for shipping at pickup.
+const SELLER_INFO_ACK_KEY = 'cs_seller_info_ack_v1';
+
 interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
@@ -30,6 +36,22 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const [backImageBlob, setBackImageBlob] = useState<Blob | null>(null);
   const [backImagePreview, setBackImagePreview] = useState<string | null>(null);
   
+  // First-listing explainer: open it on mount unless this device already
+  // acknowledged it. SSR-safe (localStorage read deferred to an effect).
+  const [showSellerInfo, setShowSellerInfo] = useState(false);
+  React.useEffect(() => {
+    try {
+      if (!localStorage.getItem(SELLER_INFO_ACK_KEY)) setShowSellerInfo(true);
+    } catch {
+      /* localStorage unavailable (private mode) — just skip the explainer */
+    }
+  }, []);
+
+  const dismissSellerInfo = () => {
+    try { localStorage.setItem(SELLER_INFO_ACK_KEY, '1'); } catch { /* ignore */ }
+    setShowSellerInfo(false);
+  };
+
   const isSubmittingRef = useRef(false);
   const frontFileInputRef = useRef<HTMLInputElement>(null);
   const backFileInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +171,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <SellerInfoModal isOpen={showSellerInfo} onClose={dismissSellerInfo} />
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
       <div className="relative w-full max-w-md bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
