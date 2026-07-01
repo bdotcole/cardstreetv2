@@ -106,6 +106,13 @@ const nextConfig = {
         hostname: 'product-images.tcgplayer.com',
       },
       {
+        // PriceCharting sealed-product covers (Google Cloud Storage bucket), the
+        // fallback image source for sealed products with no TCGplayer id.
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/images.pricecharting.com/**',
+      },
+      {
         // Disney Lorcana official CDN (LorcanaJSON catalog images)
         protocol: 'https',
         hostname: 'api.lorcana.ravensburger.com',
