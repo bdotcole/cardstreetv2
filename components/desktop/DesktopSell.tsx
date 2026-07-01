@@ -218,7 +218,7 @@ export default function DesktopSell() {
                     <p className="text-rose-300 font-bold text-sm">{t('desktop.sell.incompleteTitle')}</p>
                     <p className="text-slate-400 text-xs mt-0.5">
                         {t('desktop.sell.incompleteBody1')}
-                        <a href="/?view=mobile" className="text-brand-cyan hover:underline">{t('desktop.sell.incompleteLink')}</a>
+                        <a href="/settings?tab=profile" className="text-brand-cyan hover:underline">{t('desktop.sell.incompleteLink')}</a>
                         {t('desktop.sell.incompleteBody2')}
                     </p>
                 </div>

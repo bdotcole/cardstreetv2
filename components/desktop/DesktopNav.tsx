@@ -81,7 +81,6 @@ export default function DesktopNav() {
                     {([
                         ['/', t('desktop.navMarketplace')],
                         ['/sets', t('desktop.navSets')],
-                        ['/collection', t('desktop.navCollection')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
                     ] as [string, string][]).map(([href, label]) => {
@@ -148,18 +147,42 @@ export default function DesktopNav() {
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)}></div>
                                 <div className="absolute right-0 top-full mt-2 w-56 bg-brand-dark border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50">
-                                    <a
-                                        href="/?view=mobile"
+                                    <Link
+                                        href="/collection"
+                                        onClick={() => setMenuOpen(false)}
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                     >
-                                        <i className="fa-solid fa-mobile-screen mr-2.5 text-slate-500"></i>
+                                        <i className="fa-solid fa-vault mr-2.5 text-slate-500 w-4 text-center"></i>
+                                        {t('desktop.navCollection')}
+                                    </Link>
+                                    <Link
+                                        href="/settings?tab=profile"
+                                        onClick={() => setMenuOpen(false)}
+                                        className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                                    >
+                                        <i className="fa-solid fa-user-pen mr-2.5 text-slate-500 w-4 text-center"></i>
+                                        {t('desktop.editProfile')}
+                                    </Link>
+                                    <Link
+                                        href="/settings?tab=preferences"
+                                        onClick={() => setMenuOpen(false)}
+                                        className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                                    >
+                                        <i className="fa-solid fa-gear mr-2.5 text-slate-500 w-4 text-center"></i>
+                                        {t('desktop.settings.title')}
+                                    </Link>
+                                    <a
+                                        href="/?view=mobile"
+                                        className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors border-t border-white/5"
+                                    >
+                                        <i className="fa-solid fa-mobile-screen mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.switchToMobile')}
                                     </a>
                                     <button
                                         onClick={handleSignOut}
                                         className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors border-t border-white/5"
                                     >
-                                        <i className="fa-solid fa-arrow-right-from-bracket mr-2.5 text-slate-500"></i>
+                                        <i className="fa-solid fa-arrow-right-from-bracket mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.signOut')}
                                     </button>
                                 </div>

@@ -160,7 +160,7 @@ export default function DesktopCollection() {
                         profitLoss={profitLoss}
                         plPct={plPct}
                         assetCount={allItems.length}
-                        collectionsCount={collections.length}
+                        setsCount={ownedCountBySet.size}
                         wishlistCount={wishlist.length}
                     />
                 )}
@@ -193,14 +193,14 @@ function OverviewPanel({
     profitLoss,
     plPct,
     assetCount,
-    collectionsCount,
+    setsCount,
     wishlistCount,
 }: {
     totalValue: number;
     profitLoss: number;
     plPct: number;
     assetCount: number;
-    collectionsCount: number;
+    setsCount: number;
     wishlistCount: number;
 }) {
     const { t } = useTranslation();
@@ -289,7 +289,7 @@ function OverviewPanel({
             {/* Quick stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatCard icon="fa-layer-group" label={t('desktop.collection.statAssets')} value={assetCount} />
-                <StatCard icon="fa-boxes-stacked" label={t('desktop.collection.statCollections')} value={collectionsCount} />
+                <StatCard icon="fa-boxes-stacked" label={t('desktop.collection.statSets')} value={setsCount} />
                 <StatCard icon="fa-heart" label={t('desktop.collection.statWishlist')} value={wishlistCount} />
             </div>
         </div>
