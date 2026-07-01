@@ -54,26 +54,51 @@ export function centsToUsd(cents: unknown): number | null {
   return Math.round(n as number) / 100;
 }
 
+// PriceCharting lists every single CARD alongside sealed products in each category.
+// A card is recognized by one of three signals (none of which a real sealed carries):
+//   - a collector number "#<1-4 digits>" (Pokemon/MTG/Lorcana), e.g. "Charizard #199"
+//   - a trailing set-code "OP07-002" / "RA04-EN253" / "ST10-013" (One Piece / Yu-Gi-Oh)
+//   - a card-only variant bracket, e.g. "[Foil]", "[Extended Art]", "[Prize Pack]",
+//     "[Tin Topper]" — sealed products never use these (their brackets are "[1st Edition]",
+//     "[Series 1]", set names, etc.)
+// The number/set-code signal is suppressed when the name LEADS with a container noun,
+// because a few real sealed products append a set code: "Booster Box #SV8", "Double Pack DP-08".
+const CARD_NUMBER_RE = /#\s*[A-Za-z]{0,5}\d{1,4}\b/;
+const CARD_SETCODE_RE = /\b[A-Z]{1,5}\d{0,2}-[A-Z]{0,4}\d{1,4}[a-z]?\b\s*$/;
+const CONTAINER_HEAD_RE = /^\s*(sealed\s+|factory\s+sealed\s+)?(booster box|booster pack|booster bundle|elite trainer box|\betb\b|double pack|triple pack|build\s*&?\s*battle|starter deck|structure deck|prerelease|bundle box|display box|booster case)\b/i;
+const CARD_VARIANT_RE = /\[(foil|non-?foil[^\]]*|etched[^\]]*|extended art|borderless|showcase|retro frame|full art|alt(?:ernate)? art|[^\]]*\bfoil\b|serial(?:ized)?|prize pack[^\]]*|tin topper|box topper|storage box set[^\]]*|illustration box[^\]]*|dash pack|welcome pack[^\]]*|master ball|poke ball|reverse holo)\]/i;
+
+/** True when a PriceCharting product-name is actually a single card, not a sealed product. */
+export function looksLikeCardProductName(productName: string): boolean {
+  const name = productName || '';
+  if (CARD_VARIANT_RE.test(name)) return true;
+  return (CARD_NUMBER_RE.test(name) || CARD_SETCODE_RE.test(name)) && !CONTAINER_HEAD_RE.test(name);
+}
+
+// Ordered: first match wins. The union of these patterns defines "names a sealed
+// container" — a product-name matching none of them (and not a card) is skipped.
 const SEALED_KEYWORDS: Array<[RegExp, string]> = [
   [/elite trainer box|\betb\b/i, 'etb'],
-  [/booster box/i, 'booster_box'],
-  [/booster bundle|booster pack|\bpack\b/i, 'booster_pack'],
-  [/bundle/i, 'bundle'],
-  [/collection|tin|premium|box set|gift/i, 'collection'],
+  [/booster box|booster case|display box/i, 'booster_box'],
+  [/booster bundle|booster pack|sleeved booster|\bblister\b|fat pack|\bpack\b/i, 'booster_pack'],
+  [/\bbundle\b|build\s*&?\s*battle|prerelease|\bjumpstart\b|toolkit/i, 'bundle'],
+  [/starter deck|structure deck|commander deck|theme deck|planeswalker deck|challenger deck|battle deck|deck box|deckbuilder|\bdeck\b/i, 'other'],
+  [/\bcollection\b|\btin\b|premium|box set|\bgift\b|\btrove\b|portfolio|\bbinder\b|\bcalendar\b|advent|checklane|storage box|\bbox\b/i, 'collection'],
 ];
 
 /**
- * Classify a PriceCharting product-name as a sealed product type, or null when it
- * looks like a single card (card names carry a "#<number>" token).
+ * Classify a PriceCharting product-name as a sealed product type, or null when it is
+ * a single card. A card gate runs FIRST so that card names containing sealed-sounding
+ * words ("Bulbasaur [Tin Topper] #3", "Tin Goldfish", "Iron Bundle #66") are correctly
+ * rejected instead of being filed as sealed.
  */
 export function classifySealed(productName: string): string | null {
   const name = productName || '';
-  const looksLikeCard = /#\s*\w+/.test(name);
+  if (looksLikeCardProductName(name)) return null; // it's a single card, not sealed
   for (const [re, type] of SEALED_KEYWORDS) {
     if (re.test(name)) return type;
   }
-  if (!looksLikeCard && /\b(box|case|display|collection)\b/i.test(name)) return 'other';
-  return null;
+  return null; // no recognizable container -> not a sealed product
 }
 
 export function buildProductByIdUrl(token: string, id: string): string {

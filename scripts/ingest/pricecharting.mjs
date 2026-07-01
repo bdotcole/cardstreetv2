@@ -61,12 +61,27 @@ const SET_NAME_OVERRIDES = {
   // 'scarlet violet 151': 'sv2a',
 };
 
+// Card detection + sealed classification — MUST stay in sync with lib/pricecharting.ts.
+// A card gate runs first so card names with sealed-sounding words ("[Tin Topper] #3",
+// "Tin Goldfish", "Iron Bundle #66") are rejected instead of filed as sealed.
+const CARD_NUMBER_RE = /#\s*[A-Za-z]{0,5}\d{1,4}\b/;
+const CARD_SETCODE_RE = /\b[A-Z]{1,5}\d{0,2}-[A-Z]{0,4}\d{1,4}[a-z]?\b\s*$/;
+const CONTAINER_HEAD_RE = /^\s*(sealed\s+|factory\s+sealed\s+)?(booster box|booster pack|booster bundle|elite trainer box|\betb\b|double pack|triple pack|build\s*&?\s*battle|starter deck|structure deck|prerelease|bundle box|display box|booster case)\b/i;
+const CARD_VARIANT_RE = /\[(foil|non-?foil[^\]]*|etched[^\]]*|extended art|borderless|showcase|retro frame|full art|alt(?:ernate)? art|[^\]]*\bfoil\b|serial(?:ized)?|prize pack[^\]]*|tin topper|box topper|storage box set[^\]]*|illustration box[^\]]*|dash pack|welcome pack[^\]]*|master ball|poke ball|reverse holo)\]/i;
+
+function looksLikeCardProductName(name) {
+  const n = name || '';
+  if (CARD_VARIANT_RE.test(n)) return true;
+  return (CARD_NUMBER_RE.test(n) || CARD_SETCODE_RE.test(n)) && !CONTAINER_HEAD_RE.test(n);
+}
+
 const SEALED_KEYWORDS = [
   [/elite trainer box|\betb\b/i, 'etb'],
-  [/booster box/i, 'booster_box'],
-  [/booster bundle|booster pack|\bpack\b/i, 'booster_pack'],
-  [/bundle/i, 'bundle'],
-  [/collection|tin|premium|box set|gift/i, 'collection'],
+  [/booster box|booster case|display box/i, 'booster_box'],
+  [/booster bundle|booster pack|sleeved booster|\bblister\b|fat pack|\bpack\b/i, 'booster_pack'],
+  [/\bbundle\b|build\s*&?\s*battle|prerelease|\bjumpstart\b|toolkit/i, 'bundle'],
+  [/starter deck|structure deck|commander deck|theme deck|planeswalker deck|challenger deck|battle deck|deck box|deckbuilder|\bdeck\b/i, 'other'],
+  [/\bcollection\b|\btin\b|premium|box set|\bgift\b|\btrove\b|portfolio|\bbinder\b|\bcalendar\b|advent|checklane|storage box|\bbox\b/i, 'collection'],
 ];
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -77,9 +92,8 @@ const usd = (v) => { if (v == null || v === '') return null; const n = parseFloa
 
 function classifySealed(productName) {
   const name = productName || '';
-  const looksLikeCard = /#\s*\w+/.test(name);
+  if (looksLikeCardProductName(name)) return null; // single card, not sealed
   for (const [re, type] of SEALED_KEYWORDS) if (re.test(name)) return type;
-  if (!looksLikeCard && /\b(box|case|display|collection)\b/i.test(name)) return 'other';
   return null;
 }
 
