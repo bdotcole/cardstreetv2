@@ -72,6 +72,8 @@
         "salesHistory": "Sales History",
         "operations": "Operations",
         "partnerDashboard": "Partner Dashboard",
+        "proSection": "Pro",
+        "cardstreetPro": "CardStreet Pro",
         "support": "Support",
         "signOut": "Sign Out",
         "deleteAccount": "Delete Account",

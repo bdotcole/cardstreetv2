@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
+import { syncPremiumFromSubscription } from '@/lib/premiumEntitlement';
 import {
     getStripeForRegion,
     getAllWebhookSecretsForRegion,
@@ -225,6 +226,33 @@ export async function handleStripeWebhook(
                     }
                 } catch (syncErr) {
                     console.error(`${logPrefix} account.updated handler error:`, syncErr);
+                }
+                break;
+            }
+
+            // ─── CardStreet Pro (premium subscription, platform account) ───
+            // These are PLATFORM events (no event.account) — premium billing
+            // never touches a seller's connected account. Requires the TH
+            // endpoint to subscribe to checkout.session.completed +
+            // customer.subscription.updated/deleted in the Stripe Dashboard.
+            case 'checkout.session.completed': {
+                const session = event.data.object as Stripe.Checkout.Session;
+                if (session.mode === 'subscription' && session.subscription && session.metadata?.purpose === 'cardstreet_premium') {
+                    const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+                    const sub = await stripe.subscriptions.retrieve(subId);
+                    await syncPremiumFromSubscription(sub);
+                }
+                break;
+            }
+
+            case 'customer.subscription.created':
+            case 'customer.subscription.updated':
+            case 'customer.subscription.deleted': {
+                const sub = event.data.object as Stripe.Subscription;
+                if (sub.metadata?.purpose === 'cardstreet_premium') {
+                    await syncPremiumFromSubscription(sub);
+                } else {
+                    console.log(`${logPrefix} ${event.type} for non-premium subscription ${sub.id} — ignored`);
                 }
                 break;
             }

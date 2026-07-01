@@ -754,6 +754,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       items: [
         { name: t('profile.supportCenter'), icon: HelpCircle, panel: 'support' as ActivePanel, color: 'text-slate-400' }
       ]
+    },
+    {
+      title: t('profile.proSection'),
+      items: [
+        // Standalone route (not a slide panel) — premium features live at
+        // /premium, /grade, /trade, /insights outside the tab shell.
+        { name: t('profile.cardstreetPro'), icon: Crown, action: () => { window.location.href = '/premium'; }, color: 'text-brand-cyan', special: true }
+      ]
     }
   ];
 
