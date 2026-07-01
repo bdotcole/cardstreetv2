@@ -292,6 +292,33 @@ export async function fulfillOrdersByTransferGroup(
 
                 result.trackingNumbers.push(flashOrder.pno);
 
+                // Persist the freshly-minted waybill IMMEDIATELY, before the
+                // label/pickup work (any of which can fail). Flash does NOT
+                // dedupe on outTradeNo — calling createShipment again for the
+                // same order mints a *different* pno — so if this pno is ever
+                // lost (e.g. the enriched upsert at the end of the loop fails),
+                // the /api/orders/[id]/label recovery path would create a
+                // duplicate waybill that diverges from the one actually printed
+                // and shipped. That is exactly how order 26126d8d ended up with
+                // a delivered parcel under a waybill the DB never stored.
+                // Storing the pno up front makes that divergence impossible.
+                {
+                    const earlyRows = sellerOrders.map(o => ({
+                        order_id: o.id,
+                        tracking_number: flashOrder.pno,
+                        carrier_name: 'Flash Express',
+                        status: 'created',
+                        label_url: 'N/A',
+                        courier_tracking_url: `https://www.flashexpress.com/fle/tracking?se=${flashOrder.pno}`,
+                    }));
+                    const { error: earlyErr } = await supabase
+                        .from('shipping_labels')
+                        .upsert(earlyRows, { onConflict: 'order_id' });
+                    if (earlyErr) {
+                        console.error('[Fulfillment] Early tracking-number persist failed:', earlyErr.message);
+                    }
+                }
+
                 // Generate label
                 let labelUrl = '';
                 try {

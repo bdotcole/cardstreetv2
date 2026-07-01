@@ -65,8 +65,17 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (labelError || !label) {
+            // An unmatched pno means Flash is sending us real events for a
+            // waybill we don't have on any order — which is exactly how a
+            // waybill divergence (e.g. a duplicate shipment created for one
+            // order, where the DB stored a different pno than the one that
+            // actually shipped) stays invisible. Alert instead of silently
+            // dropping it. Still 200 so Flash doesn't retry a pno we can't map.
             console.warn('[FlashWebhook] No matching shipment for pno:', pno)
-            // Still respond success so Flash doesn't retry
+            Sentry.captureMessage(
+                `Flash webhook for unmatched pno ${pno} — no shipping_labels row. Possible waybill divergence.`,
+                { level: 'warning', extra: { pno, state: data.state, stateText: data.stateText } },
+            )
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
 
@@ -102,10 +111,23 @@ export async function POST(request: NextRequest) {
                     updateData.funds_release_at = releaseAt.toISOString()
                 }
 
-                await supabase
+                const { error: orderUpdateError } = await supabase
                     .from('orders')
                     .update(updateData)
                     .eq('id', order.id)
+
+                if (orderUpdateError) {
+                    // A silent failure here is how a delivered parcel stays
+                    // "not delivered" forever (e.g. a missing delivered_at /
+                    // funds_release_at column made the whole update error). Make
+                    // it loud so the status pipeline can't rot unnoticed.
+                    console.error(`[FlashWebhook] Order ${order.id} status update failed:`, orderUpdateError.message)
+                    Sentry.captureException(new Error(`Flash webhook order status update failed: ${orderUpdateError.message}`), {
+                        level: 'error',
+                        extra: { orderId: order.id, from: order.status, to: orderStatus, updateData },
+                    })
+                    return NextResponse.json({ errorCode: '0', error: 'Order update failed' }, { status: 500 })
+                }
 
                 console.log(`[FlashWebhook] Order ${order.id} updated: ${order.status} → ${orderStatus}`)
 

@@ -97,16 +97,35 @@ export async function GET(
 
         // ─── Recovery path ───
         // If the order has reached a status where a label should exist but
-        // shipping_labels has no usable row (e.g., earlier fulfillment failed
-        // to insert because of the missing courier_tracking_url column), call
-        // Flash again with the same outTradeNo. Flash treats outTradeNo as an
-        // idempotency key — if a shipment already exists for this order id,
-        // it returns the same pno rather than creating a duplicate. If for
-        // some reason none exists yet, this creates one. Either way, we end
-        // up with a valid pno and a fresh shipping_labels row.
-        const needsRecovery =
+        // shipping_labels has no usable row (e.g. an earlier fulfillment failed
+        // to persist), create a Flash shipment now.
+        //
+        // CAUTION: Flash does NOT treat outTradeNo as an idempotency key — a
+        // second createShipment for the same order mints a *brand-new* pno.
+        // (Proven by order 26126d8d: two waybills, WFAF97C and WKM1K5C, both
+        // live for one outTradeNo.) So creating here when a real waybill
+        // already exists elsewhere silently orphans the real one. Fulfillment
+        // now persists the pno up front, so this path should almost never fire;
+        // we still re-read directly (bypassing the possibly-stale joined SELECT)
+        // right before creating, and never overwrite an existing real pno.
+        let needsRecovery =
             (!trackingNumber || trackingNumber === 'MANUAL') &&
             LABEL_EXPECTED_STATUSES.includes(order.status);
+
+        if (needsRecovery) {
+            // Re-check the source of truth before minting a new waybill.
+            const { data: freshLabel } = await admin
+                .from('shipping_labels')
+                .select('tracking_number')
+                .eq('order_id', orderId)
+                .maybeSingle();
+            const freshTracking = freshLabel?.tracking_number || null;
+            if (freshTracking && freshTracking !== 'MANUAL') {
+                console.log(`[Orders/Label] Found existing waybill ${freshTracking} for order ${orderId} on re-check — reusing, skipping create.`);
+                trackingNumber = freshTracking;
+                needsRecovery = false;
+            }
+        }
 
         if (needsRecovery) {
             console.log(`[Orders/Label] No tracking number for order ${orderId} at status ${order.status} — attempting Flash recovery`);
