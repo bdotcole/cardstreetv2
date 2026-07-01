@@ -12,6 +12,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { GAMES, GameId, defaultLanguageForGame, gameHasMultipleLanguages } from '@/lib/games';
 import { Card } from '@/types';
 
 export default function DesktopNav() {
@@ -21,6 +22,7 @@ export default function DesktopNav() {
     const { updateLanguage } = useUserSettings();
     const { items: cartItems, openCart } = useDesktopCart();
     const [query, setQuery] = useState('');
+    const [game, setGame] = useState<GameId>('pokemon');
     const [user, setUser] = useState<User | null>(null);
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -40,8 +42,10 @@ export default function DesktopNav() {
 
     // Full-catalog search (not just marketplace listings): debounce the query
     // and hit the same client-side catalog search the sell/explore flows use,
-    // scoped to Pokemon in the user's UI language (cross-language name matching
-    // still surfaces the English/Thai twin). Results deep-link to /card/[id].
+    // scoped to the selected game. Multi-language games follow the UI language
+    // (cross-language name matching still surfaces the English/Thai twin);
+    // single-language catalogs use their default so a Thai UI doesn't filter
+    // an EN-only game down to zero rows. Results deep-link to /card/[id].
     useEffect(() => {
         const q = query.trim();
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -55,8 +59,10 @@ export default function DesktopNav() {
         setSearchOpen(true);
         debounceRef.current = setTimeout(async () => {
             try {
-                const lang: 'en' | 'th' = language === 'TH' ? 'th' : 'en';
-                const cards = await pokemonService.searchCards(q, false, lang, 'pokemon');
+                const lang = gameHasMultipleLanguages(game)
+                    ? (language === 'TH' ? 'th' as const : 'en' as const)
+                    : defaultLanguageForGame(game);
+                const cards = await pokemonService.searchCards(q, false, lang, game);
                 setResults(cards.slice(0, 8));
             } catch {
                 setResults([]);
@@ -67,7 +73,7 @@ export default function DesktopNav() {
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [query, language]);
+    }, [query, language, game]);
 
     const goToCard = (id: string) => {
         setSearchOpen(false);
@@ -114,16 +120,28 @@ export default function DesktopNav() {
                     {searchOpen && (
                         <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)}></div>
                     )}
-                    <form onSubmit={handleSearch} className="relative z-50">
-                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-                        <input
-                            type="search"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onFocus={() => { if (results.length > 0) setSearchOpen(true); }}
-                            placeholder={t('desktop.searchPlaceholder')}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
-                        />
+                    <form onSubmit={handleSearch} className="relative z-50 flex gap-2">
+                        <select
+                            value={game}
+                            onChange={(e) => setGame(e.target.value as GameId)}
+                            aria-label={language === 'TH' ? 'เลือกเกม' : 'Select game'}
+                            className="shrink-0 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none focus:border-brand-cyan/50 transition-colors cursor-pointer [&>option]:bg-brand-dark"
+                        >
+                            {GAMES.filter((g) => g.enabled).map((g) => (
+                                <option key={g.id} value={g.id}>{g.shortName}</option>
+                            ))}
+                        </select>
+                        <div className="relative flex-1">
+                            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                            <input
+                                type="search"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onFocus={() => { if (results.length > 0) setSearchOpen(true); }}
+                                placeholder={t('desktop.searchPlaceholder')}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
+                            />
+                        </div>
                     </form>
 
                     {searchOpen && (
