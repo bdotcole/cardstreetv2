@@ -180,7 +180,7 @@ export async function sendLabelGeneratedNotification(
     const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken);
     if (routing.channels.length === 0) return;
 
-    const dashboardUrl = 'https://cardstreet.app/profile';
+    const orderUrl = `${appBaseUrl()}/orders/${orderDetails.id}`;
     const hasAttachment = !!labelPdfBase64;
 
     // Postmark attachment goes through Courier's per-provider override. The
@@ -214,10 +214,11 @@ export async function sendLabelGeneratedNotification(
                 ...(providers ? { providers } : {}),
                 data: {
                     // Template references {orderDetails.id} and {labelUrl}. The label
-                    // route requires auth, so point at the seller dashboard (the PDF is
-                    // also attached to this email via the Postmark override below).
+                    // route requires auth, so deep-link to the order page where the
+                    // seller can pull the label (the PDF is also attached to this
+                    // email via the Postmark override below).
                     orderDetails: { id: orderDetails.id },
-                    labelUrl: dashboardUrl,
+                    labelUrl: orderUrl,
                     // Push deep-link payload.
                     orderId: orderDetails.id,
                     type: 'label_generated',
@@ -655,11 +656,8 @@ export async function sendFirstTimeSaleEmail(
         const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || TEMPLATES.firstTimeSale).trim();
         const firstName = (profile?.display_name || '').trim().split(/\s+/)[0] || 'there';
         const orderNumber = opts.orderNumber || opts.orderId;
-        // TODO: there is no dedicated seller order-detail route today — the sales
-        // list lives in the client-state Profile panel (components/Profile.tsx,
-        // activePanel === 'sales'). Deep-link there once a /profile/orders/[id]
-        // (or query-param-addressable panel) route exists.
-        const orderLink = `${appBaseUrl()}/profile`;
+        // Deep-link straight to the addressable order page (app/orders/[id]).
+        const orderLink = `${appBaseUrl()}/orders/${opts.orderId}`;
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const youtube = (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim();
 
