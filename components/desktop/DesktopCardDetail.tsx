@@ -12,6 +12,11 @@ import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarket
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { useUserCollections } from '@/lib/hooks/useUserCollections';
+import { useWishlist } from '@/lib/hooks/useWishlist';
+import { useToast } from '@/lib/contexts/ToastContext';
+import AuthModal from '@/components/AuthModal';
+import type { User } from '@supabase/supabase-js';
 
 export default function DesktopCardDetail({
     cardId,
@@ -29,12 +34,60 @@ export default function DesktopCardDetail({
 }) {
     const { addItem } = useDesktopCart();
     const { t } = useTranslation();
+    const { showToast } = useToast();
+    const { collections, addCollection, addCardToCollection } = useUserCollections();
+    const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
     const [card, setCard] = useState<Card | null>(initialCard);
     const [listings, setListings] = useState<MarketplaceListing[]>(initialListings);
     const [loading, setLoading] = useState(!initialCard);
     // If catalog art fails to load (TCGdex outages black out most EN card
     // art), fall back to a seller's condition photo from our own storage.
     const [catalogArtFailed, setCatalogArtFailed] = useState(false);
+    const [user, setUser] = useState<User | null>(null);
+    const [authOpen, setAuthOpen] = useState(false);
+    const [addingToCollection, setAddingToCollection] = useState(false);
+
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+        const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+        return () => sub.subscription.unsubscribe();
+    }, []);
+
+    const handleAddToCollection = async () => {
+        if (!card) return;
+        if (!user) { setAuthOpen(true); return; }
+        setAddingToCollection(true);
+        try {
+            // useUserCollections auto-heals a default collection for legacy
+            // accounts, but a brand-new user may momentarily have none loaded —
+            // create one on demand so the add never fails.
+            let colId = collections[0]?.id;
+            if (!colId) colId = await addCollection(t('desktop.collection.defaultName'));
+            await addCardToCollection(colId, card);
+            showToast(t('desktop.collection.added'), 'success');
+        } catch {
+            showToast(t('desktop.collection.addFailed'), 'error');
+        } finally {
+            setAddingToCollection(false);
+        }
+    };
+
+    const handleToggleWishlist = async () => {
+        if (!card) return;
+        if (!user) { setAuthOpen(true); return; }
+        try {
+            if (isInWishlist(card.id)) {
+                await removeFromWishlist(card.id);
+                showToast(t('desktop.collection.wishlistRemoved'), 'success');
+            } else {
+                await addToWishlist(card);
+                showToast(t('desktop.collection.wishlistAdded'), 'success');
+            }
+        } catch {
+            showToast(t('desktop.collection.addFailed'), 'error');
+        }
+    };
 
     useEffect(() => {
         // Server already supplied the data — nothing to fetch.
@@ -145,6 +198,24 @@ export default function DesktopCardDetail({
                         </div>
                     )}
 
+                    <div className="flex flex-wrap items-center gap-3 mt-6">
+                        <button
+                            onClick={handleAddToCollection}
+                            disabled={addingToCollection}
+                            className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+                        >
+                            <i className="fa-solid fa-plus text-xs text-brand-green"></i>
+                            {t('desktop.collection.addToCollection')}
+                        </button>
+                        <button
+                            onClick={handleToggleWishlist}
+                            className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
+                        >
+                            <i className={`${isInWishlist(card.id) ? 'fa-solid text-brand-red' : 'fa-regular text-slate-400'} fa-heart text-xs`}></i>
+                            {isInWishlist(card.id) ? t('desktop.collection.wishlisted') : t('desktop.collection.addToWishlist')}
+                        </button>
+                    </div>
+
                     <h2 className="text-sm font-black text-white uppercase tracking-widest mt-10 mb-4">
                         {t('desktop.card.activeListings')} <span className="text-slate-500">({listings.length})</span>
                     </h2>
@@ -204,6 +275,8 @@ export default function DesktopCardDetail({
                     )}
                 </div>
             </div>
+
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
         </div>
     );
 }

@@ -1,19 +1,15 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
-import { getThumbnailUrl, getOptimizedImageUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { getOptimizedImageUrl } from '@/lib/imageUtils';
+import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
-}
-
-function fmtTHB(n: number): string {
-    return `฿${n < 1 ? n.toFixed(2) : Math.round(n).toLocaleString()}`;
 }
 
 const GAME_LABEL: Record<string, string> = {
@@ -121,39 +117,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
             {cards.length === 0 ? (
                 <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'No cards found for this set.' : 'ไม่พบการ์ดในชุดนี้'}</p>
             ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
-                    {cards.map((card) => {
-                        const thumb = getThumbnailUrl(card.images?.small || card.imageUrl);
-                        return (
-                            <Link
-                                key={card.id}
-                                href={`/card/${card.id}`}
-                                className="group bg-[#1e293b]/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
-                            >
-                                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                                    <Image
-                                        src={thumb}
-                                        alt={card.name}
-                                        fill
-                                        sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                                        loading="lazy"
-                                        unoptimized={shouldSkipNextOptimization(thumb)}
-                                        className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
-                                    />
-                                </div>
-                                <div className="p-3">
-                                    <h2 className="text-sm font-bold text-white truncate">{card.name}</h2>
-                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                                        {card.number ? `#${card.number}` : ''}{card.rarity ? ` · ${card.rarity}` : ''}
-                                    </p>
-                                    {card.marketPrice > 0 && (
-                                        <p className="text-sm font-black text-brand-cyan mt-1.5">{fmtTHB(card.marketPrice)}</p>
-                                    )}
-                                </div>
-                            </Link>
-                        );
-                    })}
-                </div>
+                <DesktopSetCards cards={cards} />
             )}
         </div>
     );

@@ -9,11 +9,13 @@ import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 
 export default function DesktopNav() {
     const router = useRouter();
     const pathname = usePathname();
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
+    const { updateLanguage } = useUserSettings();
     const { items: cartItems, openCart } = useDesktopCart();
     const [query, setQuery] = useState('');
     const [user, setUser] = useState<User | null>(null);
@@ -38,6 +40,15 @@ export default function DesktopNav() {
     const handleSignOut = async () => {
         setMenuOpen(false);
         await createClient().auth.signOut();
+    };
+
+    const toggleLanguage = async () => {
+        const next = language === 'TH' ? 'EN' : 'TH';
+        await updateLanguage(next);
+        // Client chrome re-renders instantly via useTranslation; refresh so the
+        // server-rendered desktop pages (/sets, /card, /collection) re-read the
+        // updated cs_lang cookie via the x-cs-lang header and flip locale too.
+        router.refresh();
     };
 
     const displayName =
@@ -70,6 +81,7 @@ export default function DesktopNav() {
                     {([
                         ['/', t('desktop.navMarketplace')],
                         ['/sets', t('desktop.navSets')],
+                        ['/collection', t('desktop.navCollection')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
                     ] as [string, string][]).map(([href, label]) => {
@@ -89,6 +101,17 @@ export default function DesktopNav() {
                         );
                     })}
                 </nav>
+
+                <button
+                    onClick={toggleLanguage}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
+                    title={language === 'TH' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
+                    aria-label={language === 'TH' ? 'Switch to English' : 'Switch to Thai'}
+                >
+                    <span className="text-[11px] font-black text-slate-300 group-hover:text-white transition-colors">
+                        {language}
+                    </span>
+                </button>
 
                 <button
                     onClick={openCart}

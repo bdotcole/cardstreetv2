@@ -10,7 +10,7 @@ const APP_UA_MARKER = 'CardStreetApp'
 
 // Clean public URLs owned by the desktop experience. They render from the
 // internal /desktop/* tree; phones hitting them are bounced to the mobile SPA.
-const DESKTOP_ONLY_PREFIXES = ['/card', '/sets', '/seller', '/sell', '/orders']
+const DESKTOP_ONLY_PREFIXES = ['/card', '/sets', '/seller', '/sell', '/orders', '/collection']
 
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
@@ -217,6 +217,7 @@ export const config = {
         '/seller/:path*',
         '/sell',
         '/orders',
+        '/collection',
         '/desktop/:path*',
         // Locale prefixes and the localized public content pages.
         '/en',
