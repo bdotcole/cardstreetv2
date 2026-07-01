@@ -389,7 +389,7 @@
             "unrealizedPl": "กำไร/ขาดทุนที่ยังไม่รับรู้",
             "noHistory": "ยังไม่มีประวัติมูลค่า",
             "statAssets": "การ์ด",
-            "statSets": "ชุด",
+            "statSets": "ชุดการ์ดสะสม",
             "statWishlist": "รายการที่อยากได้",
             "searchCards": "ค้นหาการ์ดของคุณ...",
             "sortRecent": "เพิ่มล่าสุด",

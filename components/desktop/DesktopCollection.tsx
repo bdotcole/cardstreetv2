@@ -162,6 +162,7 @@ export default function DesktopCollection() {
                         assetCount={allItems.length}
                         setsCount={ownedCountBySet.size}
                         wishlistCount={wishlist.length}
+                        onNavigate={setTab}
                     />
                 )}
                 {tab === 'collection' && (
@@ -195,6 +196,7 @@ function OverviewPanel({
     assetCount,
     setsCount,
     wishlistCount,
+    onNavigate,
 }: {
     totalValue: number;
     profitLoss: number;
@@ -202,6 +204,7 @@ function OverviewPanel({
     assetCount: number;
     setsCount: number;
     wishlistCount: number;
+    onNavigate: (tab: Tab) => void;
 }) {
     const { t } = useTranslation();
     const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>('1M');
@@ -288,25 +291,29 @@ function OverviewPanel({
 
             {/* Quick stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard icon="fa-layer-group" label={t('desktop.collection.statAssets')} value={assetCount} />
-                <StatCard icon="fa-boxes-stacked" label={t('desktop.collection.statSets')} value={setsCount} />
-                <StatCard icon="fa-heart" label={t('desktop.collection.statWishlist')} value={wishlistCount} />
+                <StatCard icon="fa-layer-group" label={t('desktop.collection.statAssets')} value={assetCount} onClick={() => onNavigate('collection')} />
+                <StatCard icon="fa-boxes-stacked" label={t('desktop.collection.statSets')} value={setsCount} onClick={() => onNavigate('master')} />
+                <StatCard icon="fa-heart" label={t('desktop.collection.statWishlist')} value={wishlistCount} onClick={() => onNavigate('wishlist')} />
             </div>
         </div>
     );
 }
 
-function StatCard({ icon, label, value }: { icon: string; label: string; value: number }) {
+function StatCard({ icon, label, value, onClick }: { icon: string; label: string; value: number; onClick?: () => void }) {
     return (
-        <div className="bg-[#1e293b]/40 border border-white/5 rounded-2xl p-5 flex items-center gap-4">
-            <span className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                <i className={`fa-solid ${icon} text-slate-400`}></i>
+        <button
+            onClick={onClick}
+            className="group text-left w-full bg-[#1e293b]/40 border border-white/5 rounded-2xl p-5 flex items-center gap-4 hover:border-brand-cyan/40 hover:bg-[#1e293b]/60 transition-colors"
+        >
+            <span className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-brand-cyan/10 transition-colors">
+                <i className={`fa-solid ${icon} text-slate-400 group-hover:text-brand-cyan transition-colors`}></i>
             </span>
-            <div>
+            <div className="min-w-0">
                 <p className="text-2xl font-black text-white leading-none">{value}</p>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">{label}</p>
             </div>
-        </div>
+            <i className="fa-solid fa-chevron-right text-[10px] text-slate-600 ml-auto group-hover:text-brand-cyan group-hover:translate-x-0.5 transition-all"></i>
+        </button>
     );
 }
 
