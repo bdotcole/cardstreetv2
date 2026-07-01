@@ -35,6 +35,7 @@ import {
     estimateParcelWeightGrams,
     estimateParcelDimsCm,
 } from '@/lib/flashExpress';
+import { effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -167,7 +168,7 @@ export async function POST(req: Request) {
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('id, role, partner_level, partner_joined_at, province, state, district, postcode, stripe_region, stripe_account_id, stripe_charges_enabled')
+            .select('id, role, partner_level, total_downloads, partner_joined_at, province, state, district, postcode, stripe_region, stripe_account_id, stripe_charges_enabled')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
@@ -244,29 +245,20 @@ export async function POST(req: Request) {
         }
 
         // ─── Platform fee tier ───
-        // profiles.partner_level is INTEGER 1-9 (20260309_admin_schema.sql) and
-        // that's what the admin tools write; tier-name strings are accepted too
-        // for any legacy rows. Percentages must stay in sync with the display
-        // tiers in components/PartnerPortal.tsx.
-        const PARTNER_LEVEL_FEES: Record<string, number> = {
-            '1': 0.05, 'bronze': 0.05,
-            '2': 0.045, 'silver': 0.045,
-            '3': 0.04, 'gold': 0.04,
-            '4': 0.035, 'platinum': 0.035,
-            '5': 0.03, 'sapphire': 0.03,
-            '6': 0.0275, 'ruby': 0.0275,
-            '7': 0.025, 'emerald': 0.025,
-            '8': 0.0225, 'diamond': 0.0225,
-            '9': 0.02, 'black_opal': 0.02, 'opal': 0.02, 'pink_diamond': 0.02, 'heart': 0.02,
-        };
+        // The fee ladder (level -> percent, downloads -> level) lives in
+        // lib/partnerTiers.ts so this and components/PartnerPortal can't drift.
+        // The effective level is the higher of the admin-set partner_level and
+        // the level the seller's total_downloads have earned, so the loyalty
+        // loop (downloads -> level -> fee) holds even before the DB trigger in
+        // 20260701_partner_level_from_downloads.sql runs. Partner status is
+        // keyed off partner_joined_at, not `role`: an admin can also be a
+        // partner, and `role` (single-valued) can't hold both.
         const feeMap = new Map<string, number>();
         for (const profile of sellerProfiles || []) {
-            let fee = 0.09;
-            // Partner status is keyed off partner_joined_at, not `role`: an admin
-            // can also be a partner, and `role` (single-valued) can't hold both.
+            let fee = NON_PARTNER_FEE_FRACTION;
             if (profile.partner_joined_at) {
-                const level = String(profile.partner_level ?? 1).toLowerCase().replace(/ /g, '_');
-                fee = PARTNER_LEVEL_FEES[level] ?? 0.05;
+                const level = effectivePartnerLevel(profile.partner_level, profile.total_downloads ?? 0);
+                fee = feeFractionForLevel(level);
             }
             feeMap.set(profile.id, fee);
         }
@@ -313,7 +305,7 @@ export async function POST(req: Request) {
         const shippingApplied = new Set<string>();
 
         for (const listing of listings) {
-            const feePct = feeMap.get(listing.seller_id) || 0.09;
+            const feePct = feeMap.get(listing.seller_id) || NON_PARTNER_FEE_FRACTION;
             const priceSatang = Math.round(Number(listing.price) * 100);
             const platformFeeSatang = Math.round(priceSatang * feePct);
 

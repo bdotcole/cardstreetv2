@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, PartnerStats } from '@/types';
+import { UserProfile } from '@/types';
 import { GemIcon, GemType } from './GemIcons';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { PARTNER_TIERS as TIER_SPECS, effectivePartnerLevel, feePercentForLevel } from '@/lib/partnerTiers';
 
 interface PartnerPortalProps {
     user: UserProfile;
 }
 
-interface PartnerTier {
-    level: number;
-    name: string;
-    minDownloads: number;
-    fee: number;
+// Display decoration per level. The numeric ladder (name, minDownloads, fee)
+// comes from lib/partnerTiers so this view can't drift from the fee a seller is
+// actually charged; only the gem/colour/rewards presentation lives here.
+interface TierDecor {
     color: string;
     gemIcon: string;
     gem?: GemType;
@@ -20,103 +20,83 @@ interface PartnerTier {
     rewardsTh: string[];
 }
 
-const PARTNER_TIERS: PartnerTier[] = [
-    {
-        level: 1,
-        name: 'Bronze Rare',
-        minDownloads: 0,
-        fee: 5.0,
+interface PartnerTier extends TierDecor {
+    level: number;
+    name: string;
+    minDownloads: number;
+    fee: number; // percent, from the shared ladder
+}
+
+const TIER_DECOR: Record<number, TierDecor> = {
+    1: {
         color: 'text-amber-600 border-amber-600',
         gemIcon: '🟤',
         rewards: ['Partner QR Code & referral link'],
         rewardsTh: ['QR Code และลิงก์แนะนำของพาร์ทเนอร์'],
     },
-    {
-        level: 2,
-        name: 'Silver Rare',
-        minDownloads: 100,
-        fee: 4.5,
+    2: {
         color: 'text-slate-300 border-slate-300',
         gemIcon: '⚪',
         rewards: ['4.5% seller fee'],
         rewardsTh: ['ค่าธรรมเนียม 4.5%'],
     },
-    {
-        level: 3,
-        name: 'Gold Rare',
-        minDownloads: 500,
-        fee: 4.0,
+    3: {
         color: 'text-yellow-400 border-yellow-400',
         gemIcon: '🟡',
         rewards: ['4% seller fee', 'Early access to feature updates (Actions & Live Breaks)'],
         rewardsTh: ['ค่าธรรมเนียม 4%', 'สิทธิ์เข้าถึงฟีเจอร์ใหม่ก่อนใคร (ประมูลและไลฟ์สดเปิดซอง)'],
     },
-    {
-        level: 4,
-        name: 'Platinum Rare',
-        minDownloads: 1000,
-        fee: 3.5,
+    4: {
         color: 'text-slate-200 border-slate-200',
         gemIcon: '🔷',
         rewards: ['3.5% seller fee', 'Raffle entry: English booster box (must reach by EOY)'],
         rewardsTh: ['ค่าธรรมเนียม 3.5%', 'ลุ้นรับสิทธิ์ซื้อ Booster Box ภาษาอังกฤษ (จำกัดเวลาถึงสิ้นปีนี้)'],
     },
-    {
-        level: 5,
-        name: 'Sapphire Rare',
-        minDownloads: 2500,
-        fee: 3.0,
+    5: {
         color: 'text-blue-400 border-blue-400',
         gemIcon: '💎',
         gem: 'sapphire',
         rewards: ['3% seller fee', 'Cardstreet social media feature'],
         rewardsTh: ['ค่าธรรมเนียม 3%', 'สิทธิ์เข้าใช้ฟีเจอร์โซเชียลคาร์ดสตรีท'],
     },
-    {
-        level: 6,
-        name: 'Ruby Rare',
-        minDownloads: 3500,
-        fee: 2.75,
+    6: {
         color: 'text-red-400 border-red-400',
         gemIcon: '🔴',
         gem: 'ruby',
         rewards: ['2.75% seller fee', 'Exclusive Cardstreet mousepad'],
         rewardsTh: ['ค่าธรรมเนียม 2.75%', 'รับแผ่นรองเมาส์รุ่นลิมิเต็ดจากคาร์ดสตรีท'],
     },
-    {
-        level: 7,
-        name: 'Emerald Rare',
-        minDownloads: 5000,
-        fee: 2.5,
+    7: {
         color: 'text-green-400 border-green-400',
         gemIcon: '🟢',
         gem: 'emerald',
         rewards: ['2.5% seller fee', 'Free table spot at 2027 SEA International Card Show'],
         rewardsTh: ['ค่าธรรมเนียม 2.5%', 'ฟรี! บูธแสดงสินค้างาน SEA International Card Show 2027'],
     },
-    {
-        level: 8,
-        name: 'Diamond Rare',
-        minDownloads: 7500,
-        fee: 2.25,
+    8: {
         color: 'text-brand-cyan border-brand-cyan',
         gemIcon: '💠',
         gem: 'diamond',
         rewards: ['2.25% seller fee', '1% profit sharing on transactions from your referred users'],
         rewardsTh: ['ค่าธรรมเนียม 2.25%', 'ส่วนแบ่งกำไร 1% จากยอดซื้อขายของ User ที่คุณแนะนำ (Referred users)'],
     },
-    {
-        level: 9,
-        name: 'Black Opal Rare',
-        minDownloads: 10000,
-        fee: 2.0,
+    9: {
         color: 'text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 via-cyan-300 to-violet-400 border-violet-400',
         gemIcon: '🩷',
         gem: 'opal',
         rewards: ['2% seller fee', '2% profit sharing on transactions from your referred users'],
         rewardsTh: ['ค่าธรรมเนียม 2%', 'ส่วนแบ่งกำไร 2% จากยอดซื้อขายของ User ที่คุณแนะนำ (Referred users)'],
     },
-];
+};
+
+// Decorated tiers for the UI, built from the shared numeric ladder.
+const PARTNER_TIERS: PartnerTier[] = TIER_SPECS.map((spec) => ({
+    level: spec.level,
+    name: spec.name,
+    minDownloads: spec.minDownloads,
+    fee: spec.feePercent,
+    ...TIER_DECOR[spec.level],
+}));
 
 interface ReferralData {
     slug: string;
@@ -211,36 +191,11 @@ const PartnerPortal: React.FC<PartnerPortalProps> = ({ user }) => {
                     earnings = salesData.totalEarnings || 0;
                 }
 
-                // Map admin string to exact level index, or fallback to auto-computed from downloads
-                let activeLevel = 1;
-                const strMap: Record<string, number> = {
-                    '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
-                    'bronze': 1,
-                    'silver': 2,
-                    'gold': 3,
-                    'platinum': 4,
-                    'sapphire': 5,
-                    'ruby': 6,
-                    'emerald': 7,
-                    'diamond': 8,
-                    'black_opal': 9,
-                    'black opal': 9,
-                    'opal': 9,
-                    'pink_diamond': 9,
-                    'heart': 9,
-                    'pink diamond': 9
-                };
-
-                const matchedTier = strMap[userLevelStr.toLowerCase()];
-                if (matchedTier) {
-                    activeLevel = matchedTier;
-                } else {
-                    const sortedTiers = [...PARTNER_TIERS].reverse(); 
-                    const calculatedTier = sortedTiers.find(t => downloads >= t.minDownloads);
-                    if (calculatedTier) activeLevel = calculatedTier.level;
-                }
-
-                const activeFee = PARTNER_TIERS.find(t => t.level === activeLevel)?.fee || 5.0;
+                // Effective level = the higher of the admin-set level and what
+                // the partner's downloads have earned (shared ladder; mirrors
+                // the checkout fee and the SQL trigger).
+                const activeLevel = effectivePartnerLevel(userLevelStr, downloads);
+                const activeFee = feePercentForLevel(activeLevel);
 
                 setStats({
                     totalDownloads: downloads,
