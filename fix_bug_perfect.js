@@ -1,7 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://fdxgzddvywtmnqsaqysx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkeGd6ZGR2eXd0bW5xc2FxeXN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTMxNzcxOSwiZXhwIjoyMDg0ODkzNzE5fQ.Hz5vJpnCeiUDoD4owCd-LCTJ1VTdViH1v-cx6g1smKU';
+// Never hard-code the service-role key — read it from .env.local.
+const _env = {};
+for (const line of require('fs').readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
+    const i = line.indexOf('=');
+    if (i < 0 || line.trim().startsWith('#')) continue;
+    const k = line.slice(0, i).trim();
+    let v = line.slice(i + 1).trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    _env[k] = v;
+}
+const SUPABASE_URL = _env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = _env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in .env.local');
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TARGET_SETS = [
