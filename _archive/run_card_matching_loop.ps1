@@ -1,5 +1,7 @@
 $Url = "https://fdxgzddvywtmnqsaqysx.supabase.co/functions/v1/daily-market-update"
-$AnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkeGd6ZGR2eXd0bW5xc2FxeXN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTMxNzcxOSwiZXhwIjoyMDg0ODkzNzE5fQ.Hz5vJpnCeiUDoD4owCd-LCTJ1VTdViH1v-cx6g1smKU"
+# Never hard-code the service-role key — set SUPABASE_SERVICE_ROLE_KEY (see .env.local).
+$AnonKey = $env:SUPABASE_SERVICE_ROLE_KEY
+if (-not $AnonKey) { throw "Set SUPABASE_SERVICE_ROLE_KEY in the environment" }
 $Headers = @{ 
     "Authorization" = "Bearer $AnonKey"
     "Content-Type"  = "application/json"
