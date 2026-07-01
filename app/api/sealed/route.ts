@@ -14,8 +14,12 @@ export const runtime = 'nodejs';
 const defaultCacheControl = 'public, s-maxage=300, stale-while-revalidate=3600';
 const USD_TO_THB = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 
-const toThb = (usd: number | null | undefined) =>
-    typeof usd === 'number' && usd > 0 ? Math.round(usd * USD_TO_THB) : null;
+// PriceCharting rows are stored in USD and converted to the THB base; Thai retail-SRP
+// rows are stored THB-native (currency='THB') and passed through unconverted.
+const toThb = (val: number | null | undefined, currency: string) => {
+    if (typeof val !== 'number' || val <= 0) return null;
+    return currency === 'THB' ? Math.round(val) : Math.round(val * USD_TO_THB);
+};
 
 export async function GET(request: Request) {
     try {
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
 
         let query = supabase
             .from('sealed_products')
-            .select('id, game, language, set_id, name, product_type, image_url, loose_price, cib_price, new_price, currency, last_updated');
+            .select('id, game, language, set_id, name, product_type, image_url, pricecharting_id, loose_price, cib_price, new_price, currency, last_updated');
 
         // game='all' (or absent) = no game filter, used by the desktop browse.
         if (game && game !== 'all') query = query.eq('game', game);
@@ -56,9 +60,10 @@ export async function GET(request: Request) {
         }
 
         const products = (data || []).map((p) => {
-            const sealed = toThb(p.new_price);
-            const cib = toThb(p.cib_price);
-            const loose = toThb(p.loose_price);
+            const cur = p.currency || 'USD';
+            const sealed = toThb(p.new_price, cur);
+            const cib = toThb(p.cib_price, cur);
+            const loose = toThb(p.loose_price, cur);
             return {
                 id: p.id,
                 name: p.name,
@@ -69,6 +74,9 @@ export async function GET(request: Request) {
                 price: sealed ?? cib ?? loose,
                 prices: { sealed, cib, loose },
                 currency: 'THB',
+                // Thai rows: JP-twin-derived estimate (pricecharting_id = the JP box)
+                // or plain retail SRP (no JP twin). Everything else: PriceCharting market.
+                priceType: p.language === 'th' ? (p.pricecharting_id ? 'estimate' : 'srp') : 'market',
                 lastUpdated: p.last_updated,
             };
         });

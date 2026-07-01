@@ -86,12 +86,27 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
           </div>
 
           {/* Headline price */}
-          <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
-            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาตลาด (ซีล)' : 'Market Price (Sealed)'}</p>
-            <p className="text-3xl font-black text-white">{fmt(product.price)}</p>
-            <p className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">PriceCharting</p>
-          </div>
+          {(() => {
+            const pt = product.priceType || 'market';
+            const headline = pt === 'srp'
+              ? (isThai ? 'ราคาขายปลีก (SRP)' : 'Retail Price (SRP)')
+              : pt === 'estimate'
+                ? (isThai ? 'ราคาประเมิน (ซีล)' : 'Est. Market (Sealed)')
+                : (isThai ? 'ราคาตลาด (ซีล)' : 'Market Price (Sealed)');
+            const source = pt === 'srp'
+              ? (isThai ? 'ราคาขายปลีกไทยโดยประมาณ' : 'Thai retail (SRP)')
+              : pt === 'estimate'
+                ? (isThai ? 'ประมาณจากตลาดญี่ปุ่น (ชุดเดียวกัน)' : 'Est. from JP market (same set)')
+                : 'PriceCharting';
+            return (
+              <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
+                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{headline}</p>
+                <p className="text-3xl font-black text-white">{fmt(product.price)}</p>
+                <p className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">{source}</p>
+              </div>
+            );
+          })()}
 
           {/* Per-condition breakdown */}
           {tiers.length > 0 && (

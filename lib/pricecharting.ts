@@ -101,6 +101,35 @@ export function classifySealed(productName: string): string | null {
   return null; // no recognizable container -> not a sealed product
 }
 
+/**
+ * Thai sealed pricing. PriceCharting has NO Thai category, but Thai sets are 1:1
+ * reprints of Japanese sets, so a Thai box's appreciation is anchored to its JP twin:
+ *
+ *   estimate = Thai SRP x max(1, JP box market / JP box SRP)
+ *
+ * The multiplier comes from the BOX only (the liquid market); packs reuse it. Floored
+ * at SRP so in-print sets read as plain retail. Rows with no JP twin stay at SRP.
+ * Estimates are THB-native (currency='THB') and labeled priceType='estimate' by the API.
+ */
+export const THAI_SEALED_SRP_THB: Record<string, number> = {
+  booster_box: 1690,
+  booster_pack: 100,
+};
+
+/** JP booster-box SRP in USD (S/SV-era 30-pack box, ~JPY 5,400-5,800). */
+export const JP_BOOSTER_BOX_SRP_USD = 38;
+
+/** THB estimate for a Thai sealed product from its JP twin's box market price (USD). */
+export function thaiSealedEstimateThb(
+  productType: string | null,
+  jpBoxMarketUsd: number | null,
+): number | null {
+  const srp = productType ? THAI_SEALED_SRP_THB[productType] : null;
+  if (!srp || !jpBoxMarketUsd || jpBoxMarketUsd <= 0) return null;
+  const multiplier = Math.max(1, jpBoxMarketUsd / JP_BOOSTER_BOX_SRP_USD);
+  return Math.round((srp * multiplier) / 10) * 10;
+}
+
 export function buildProductByIdUrl(token: string, id: string): string {
   return `${PRICECHARTING_BASE}/api/product?t=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`;
 }

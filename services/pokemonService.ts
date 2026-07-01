@@ -38,6 +38,9 @@ export interface SealedProduct {
     price: number | null;       // THB (base); multiply by display exchangeRate
     prices: { sealed: number | null; cib: number | null; loose: number | null };
     currency: string;
+    // 'market' = PriceCharting; 'estimate' = Thai, derived from the JP twin's market;
+    // 'srp' = Thai real-world retail (no JP twin to derive from)
+    priceType?: 'market' | 'srp' | 'estimate';
     lastUpdated?: string;
 }
 

@@ -4,6 +4,7 @@ import {
     buildProductByIdUrl,
     gradedRowsFromProduct,
     centsToUsd,
+    thaiSealedEstimateThb,
 } from '@/lib/pricecharting';
 
 // Weekly PriceCharting refresh. Graded + sealed prices move slowly, so this only
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
     // --- Sealed: stalest sealed products ---------------------------------------
     const { data: sealed } = await supabase
         .from('sealed_products')
-        .select('id, pricecharting_id')
+        .select('id, pricecharting_id, currency, product_type')
         .not('pricecharting_id', 'is', null)
         .order('last_updated', { ascending: true, nullsFirst: true })
         .limit(SEALED_CAP);
@@ -106,14 +107,32 @@ export async function GET(request: NextRequest) {
         if (overBudget()) break;
         try {
             const product = await fetchProduct(s.pricecharting_id);
-            const { error } = await supabase.from('sealed_products').update({
-                loose_price: centsToUsd(product['loose-price']),
-                cib_price: centsToUsd(product['cib-price']),
-                new_price: centsToUsd(product['new-price']),
-                last_updated: new Date().toISOString(),
-            }).eq('id', s.id);
-            if (error) throw error;
-            sealedUpdated++;
+            if (s.currency === 'THB') {
+                // Thai estimate row: pricecharting_id points at the JP TWIN's box.
+                // Re-derive the THB estimate from the JP box market; never write the
+                // JP USD price into a THB row.
+                const jpBoxUsd = centsToUsd(product['new-price'])
+                    ?? centsToUsd(product['cib-price'])
+                    ?? centsToUsd(product['loose-price']);
+                const est = thaiSealedEstimateThb(s.product_type, jpBoxUsd);
+                if (est != null) {
+                    const { error } = await supabase.from('sealed_products').update({
+                        new_price: est,
+                        last_updated: new Date().toISOString(),
+                    }).eq('id', s.id);
+                    if (error) throw error;
+                    sealedUpdated++;
+                }
+            } else {
+                const { error } = await supabase.from('sealed_products').update({
+                    loose_price: centsToUsd(product['loose-price']),
+                    cib_price: centsToUsd(product['cib-price']),
+                    new_price: centsToUsd(product['new-price']),
+                    last_updated: new Date().toISOString(),
+                }).eq('id', s.id);
+                if (error) throw error;
+                sealedUpdated++;
+            }
         } catch (e: any) {
             if (errors.length < 10) errors.push(`sealed ${s.pricecharting_id}: ${e.message}`);
         }
