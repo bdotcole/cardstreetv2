@@ -52,3 +52,27 @@ export const getSellerPageData = cache(
         return { seller, listings };
     }
 );
+
+// Usernames of sellers with at least one active listing — the shops worth
+// indexing (a seller page renders only active listings, so these are the pages
+// with real content). Used by the sellers sitemap. Paged past the 1000-row
+// PostgREST cap and deduped by username; usernames may be null on legacy rows.
+export async function getActiveSellerUsernames(): Promise<string[]> {
+    const supabase = await createClient();
+    const usernames = new Set<string>();
+    for (let from = 0; ; from += 1000) {
+        const { data } = await supabase
+            .from('listings')
+            .select('seller:profiles(username)')
+            .eq('status', 'active')
+            .order('seller_id', { ascending: true })
+            .range(from, from + 999);
+        if (!data?.length) break;
+        for (const row of data as any[]) {
+            const u = row.seller?.username;
+            if (u) usernames.add(u);
+        }
+        if (data.length < 1000) break;
+    }
+    return [...usernames];
+}
