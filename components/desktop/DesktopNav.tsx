@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -10,6 +10,9 @@ import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
+import { pokemonService } from '@/services/pokemonService';
+import { getThumbnailUrl } from '@/lib/imageUtils';
+import { Card } from '@/types';
 
 export default function DesktopNav() {
     const router = useRouter();
@@ -21,6 +24,10 @@ export default function DesktopNav() {
     const [user, setUser] = useState<User | null>(null);
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [results, setResults] = useState<Card[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const supabase = createClient();
@@ -31,10 +38,47 @@ export default function DesktopNav() {
         return () => sub.subscription.unsubscribe();
     }, []);
 
+    // Full-catalog search (not just marketplace listings): debounce the query
+    // and hit the same client-side catalog search the sell/explore flows use,
+    // scoped to Pokemon in the user's UI language (cross-language name matching
+    // still surfaces the English/Thai twin). Results deep-link to /card/[id].
+    useEffect(() => {
+        const q = query.trim();
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (q.length < 2) {
+            setResults([]);
+            setSearchOpen(false);
+            setSearching(false);
+            return;
+        }
+        setSearching(true);
+        setSearchOpen(true);
+        debounceRef.current = setTimeout(async () => {
+            try {
+                const lang: 'en' | 'th' = language === 'TH' ? 'th' : 'en';
+                const cards = await pokemonService.searchCards(q, false, lang, 'pokemon');
+                setResults(cards.slice(0, 8));
+            } catch {
+                setResults([]);
+            } finally {
+                setSearching(false);
+            }
+        }, 250);
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, [query, language]);
+
+    const goToCard = (id: string) => {
+        setSearchOpen(false);
+        setQuery('');
+        setResults([]);
+        router.push(`/card/${id}`);
+    };
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        const q = query.trim();
-        router.push(q ? `/?q=${encodeURIComponent(q)}` : '/');
+        if (results.length > 0) goToCard(results[0].id);
     };
 
     const handleSignOut = async () => {
@@ -66,16 +110,61 @@ export default function DesktopNav() {
                     <span className="text-lg font-black text-white tracking-tight">CardStreet</span>
                 </Link>
 
-                <form onSubmit={handleSearch} className="flex-1 max-w-xl relative">
-                    <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-                    <input
-                        type="search"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder={t('desktop.searchPlaceholder')}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
-                    />
-                </form>
+                <div className="flex-1 max-w-xl relative">
+                    {searchOpen && (
+                        <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)}></div>
+                    )}
+                    <form onSubmit={handleSearch} className="relative z-50">
+                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onFocus={() => { if (results.length > 0) setSearchOpen(true); }}
+                            placeholder={t('desktop.searchPlaceholder')}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
+                        />
+                    </form>
+
+                    {searchOpen && (
+                        <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-brand-dark border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden max-h-[70vh] overflow-y-auto">
+                            {searching && results.length === 0 ? (
+                                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                                    <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                                    {language === 'TH' ? 'กำลังค้นหา…' : 'Searching…'}
+                                </div>
+                            ) : results.length === 0 ? (
+                                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                                    {language === 'TH' ? 'ไม่พบการ์ด' : 'No cards found'}
+                                </div>
+                            ) : (
+                                results.map((card) => {
+                                    const thumb = getThumbnailUrl(card.images?.small || card.imageUrl);
+                                    return (
+                                        <button
+                                            key={card.id}
+                                            onClick={() => goToCard(card.id)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <span className="w-9 h-12 rounded bg-brand-darker overflow-hidden shrink-0 border border-white/10">
+                                                {thumb && (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                                )}
+                                            </span>
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-bold text-white truncate">{card.name}</span>
+                                                <span className="block text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">
+                                                    {card.set}{card.number ? ` · #${card.number}` : ''}
+                                                </span>
+                                            </span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 <nav className="flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
