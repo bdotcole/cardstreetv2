@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
 import { pokemonService } from '@/services/pokemonService';
+import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { SELLER_REQUIRED_PROFILE_FIELDS, checkSellerProfileComplete } from '@/lib/profileValidation';
 import { GAMES, gameHasMultipleLanguages, getGameLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
@@ -26,7 +27,7 @@ interface StripeStatus {
 export default function DesktopSell() {
     const searchParams = useSearchParams();
     const { showToast } = useToast();
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
 
     const [user, setUser] = useState<User | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
@@ -38,6 +39,10 @@ export default function DesktopSell() {
 
     const [game, setGame] = useState('pokemon');
     const [language, setLanguage] = useState<GameLanguageCode>('en');
+    // What's being listed: single cards or sealed products (boxes, ETBs, ...).
+    // Sealed results are mapped to Card-shaped snapshots so the same results
+    // grid and ListingForm flow works unchanged.
+    const [mode, setMode] = useState<'cards' | 'sealed'>('cards');
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<Card[]>([]);
     const [searching, setSearching] = useState(false);
@@ -116,9 +121,14 @@ export default function DesktopSell() {
         setSearching(true);
         setSearched(true);
         try {
-            const lang = gameHasMultipleLanguages(game) ? language : defaultLanguageForGame(game);
-            const cards = await pokemonService.searchCards(q, false, lang, game);
-            setResults(cards);
+            if (mode === 'sealed') {
+                const products = await pokemonService.fetchSealedProducts({ game, q });
+                setResults(products.map(sealedProductToCard));
+            } else {
+                const lang = gameHasMultipleLanguages(game) ? language : defaultLanguageForGame(game);
+                const cards = await pokemonService.searchCards(q, false, lang, game);
+                setResults(cards);
+            }
         } finally {
             setSearching(false);
         }
@@ -243,6 +253,28 @@ export default function DesktopSell() {
                             {g.shortName}
                         </button>
                     ))}
+                    {/* Cards / Sealed toggle — mirrors the mobile Explore toggle */}
+                    <div className="flex gap-1 ml-auto bg-white/5 border border-white/10 rounded-full p-1">
+                        {(['cards', 'sealed'] as const).map((m) => (
+                            <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                    if (mode === m) return;
+                                    setMode(m);
+                                    setResults([]);
+                                    setSearched(false);
+                                }}
+                                className={`px-4 py-1 rounded-full text-xs font-bold transition-colors ${
+                                    mode === m
+                                        ? 'bg-brand-cyan text-brand-darker'
+                                        : 'text-slate-300 hover:text-white'
+                                }`}
+                            >
+                                {m === 'cards' ? (isThai ? 'การ์ด' : 'Cards') : (isThai ? 'สินค้าซีล' : 'Sealed')}
+                            </button>
+                        ))}
+                    </div>
                 </div>
                 <div className="flex gap-3">
                     <div className="relative flex-1 max-w-2xl">
@@ -255,7 +287,7 @@ export default function DesktopSell() {
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                         />
                     </div>
-                    {gameHasMultipleLanguages(game) && (
+                    {mode === 'cards' && gameHasMultipleLanguages(game) && (
                         <select
                             value={language}
                             onChange={(e) => setLanguage(e.target.value as GameLanguageCode)}
@@ -294,13 +326,13 @@ export default function DesktopSell() {
                                         sizes="(min-width: 1024px) 16vw, 40vw"
                                         loading="lazy"
                                         unoptimized={shouldSkipNextOptimization(imageUrl)}
-                                        className="object-cover"
+                                        className={card.isSealed ? 'object-contain p-2' : 'object-cover'}
                                     />
                                 </div>
                                 <div className="p-3">
                                     <h3 className="text-sm font-bold text-white truncate">{card.name}</h3>
                                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                                        {card.set}{card.number ? ` · #${card.number}` : ''}
+                                        {card.isSealed ? card.set : `${card.set}${card.number ? ` · #${card.number}` : ''}`}
                                     </p>
                                     {card.marketPrice > 0 && (
                                         <p className="text-xs text-slate-400 mt-1">{t('desktop.marketShort')} {formatTHB(card.marketPrice)}</p>

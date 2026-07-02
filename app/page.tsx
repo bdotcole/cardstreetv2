@@ -506,7 +506,7 @@ export default function HomePage() {
 
             await addCardToCollection(targetId, card, {
                 quantity: 1,
-                condition: CardCondition.NM,
+                condition: card.isSealed ? CardCondition.Sealed : CardCondition.NM,
                 purchasePrice: card.marketPrice
             });
 
@@ -1215,6 +1215,7 @@ export default function HomePage() {
                                 localListings={activeListings}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
+                                onAddToCollection={handleAddToCollection}
                             />
                         )}
                         {activeTab === 'marketplace' && (

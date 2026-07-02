@@ -21,8 +21,8 @@ import {
     estimateRate,
     isRegionError,
     fallbackShippingSatang,
-    estimateParcelWeightGrams,
-    estimateParcelDimsCm,
+    estimateParcelWeightGramsForItems,
+    estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -96,7 +96,7 @@ export async function POST(req: Request) {
         // will actually charge at /api/orders/checkout.
         const { data: listings } = await supabase
             .from('listings')
-            .select('id, seller_id, price, status')
+            .select('id, seller_id, price, status, card_data')
             .in('id', items.map(i => i.id));
 
         if (!listings || listings.length !== items.length) {
@@ -126,7 +126,14 @@ export async function POST(req: Request) {
 
         for (const sellerId of sellerIds) {
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
-            const cardCount = listings.filter(l => l.seller_id === sellerId).length;
+            // Same sealed-aware weight/dims as /api/orders/checkout so the
+            // displayed shipping matches the charged shipping.
+            const sellerItems = listings
+                .filter(l => l.seller_id === sellerId)
+                .map(l => ({
+                    isSealed: (l.card_data as any)?.isSealed === true,
+                    productType: (l.card_data as any)?.productType ?? null,
+                }));
             let baseSatang: number;
             let isFallback: boolean;
             try {
@@ -137,8 +144,8 @@ export async function POST(req: Request) {
                     dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: estimateParcelWeightGrams(cardCount),
-                    ...estimateParcelDimsCm(cardCount),
+                    weight: estimateParcelWeightGramsForItems(sellerItems),
+                    ...estimateParcelDimsCmForItems(sellerItems),
                 });
                 baseSatang = quote.estimatePrice + quote.upCountryAmount;
                 isFallback = false;

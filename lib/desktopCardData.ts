@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
+import { mapSealedRowToProduct, sealedProductToCard, SealedProductRow } from '@/lib/sealedProduct';
 import type { Card } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
@@ -46,6 +47,17 @@ export const getCardPageData = cache(
                 .eq('id', cardId)
                 .maybeSingle();
             if (data) card = mapSupabaseCardToInternal(data);
+        }
+
+        // Still nothing — sealed products live in their own catalog table, so a
+        // sealed listing's /card/<id> page keeps resolving after it sells out.
+        if (!card) {
+            const { data: sealedRow } = await supabase
+                .from('sealed_products')
+                .select('id, game, language, set_id, name, product_type, image_url, pricecharting_id, loose_price, cib_price, new_price, currency, last_updated')
+                .eq('id', cardId)
+                .maybeSingle();
+            if (sealedRow) card = sealedProductToCard(mapSealedRowToProduct(sealedRow as SealedProductRow));
         }
 
         // set_id (for the breadcrumb link to the set page) — a tiny indexed

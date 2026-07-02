@@ -29,5 +29,7 @@ export function normalizeCard(raw: any, fallbackId?: string): Card {
         priceHistory: Array.isArray(r.priceHistory) ? r.priceHistory : [],
         language: typeof r.language === 'string' ? r.language : undefined,
         game: typeof r.game === 'string' ? r.game : undefined,
+        isSealed: r.isSealed === true ? true : undefined,
+        productType: typeof r.productType === 'string' ? r.productType : undefined,
     };
 }

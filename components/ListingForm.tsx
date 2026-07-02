@@ -21,8 +21,13 @@ interface ListingFormProps {
 
 const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
   const { isThai } = useTranslation();
+  // Sealed products list factory-sealed only: condition is locked and grading
+  // doesn't apply, so both sections are hidden below.
+  const isSealed = !!card.isSealed;
   const [price, setPrice] = useState<string>('');
-  const [condition, setCondition] = useState<CardCondition>(initialCondition || CardCondition.NM);
+  const [condition, setCondition] = useState<CardCondition>(
+    isSealed ? CardCondition.Sealed : (initialCondition || CardCondition.NM)
+  );
   const [isGraded, setIsGraded] = useState(false);
   const [gradingCompany, setGradingCompany] = useState('PSA');
   const [grade, setGrade] = useState('10');
@@ -113,7 +118,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!frontImageBlob || !backImageBlob) {
-      setError(isThai ? 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด' : 'Please provide both front and back photos of the card.');
+      setError(isThai
+        ? (isSealed ? 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของกล่อง' : 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด')
+        : (isSealed ? 'Please provide both front and back photos of the sealed product.' : 'Please provide both front and back photos of the card.'));
       return;
     }
     
@@ -187,11 +194,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           {/* Card Preview */}
           <div className="flex gap-4 mb-6">
             <div className="w-20 h-28 bg-brand-darker rounded-lg border border-white/10 overflow-hidden flex-shrink-0">
-              <img src={getThumbnailUrl(card.images?.small || card.imageUrl)} alt={card.name} decoding="async" className="w-full h-full object-cover" />
+              <img src={getThumbnailUrl(card.images?.small || card.imageUrl)} alt={card.name} decoding="async" className={`w-full h-full ${isSealed ? 'object-contain' : 'object-cover'}`} />
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-white font-bold truncate">{card.name}</h4>
-              <p className="text-xs text-slate-400">{card.set} #{card.number}</p>
+              <p className="text-xs text-slate-400">{isSealed ? card.set : `${card.set} #${card.number}`}</p>
               <div className="mt-2 text-xs text-brand-green font-bold bg-brand-green/10 inline-block px-2 py-1 rounded">
                 {isThai ? 'ตลาด' : 'Market'}: ฿{card.marketPrice?.toLocaleString() || '-'}
               </div>
@@ -227,27 +234,38 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               </div>
             </div>
 
-            {/* Condition */}
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'สภาพการ์ด' : 'Condition'}</label>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.values(CardCondition).map((cond) => (
-                  <button
-                    key={cond}
-                    type="button"
-                    onClick={() => setCondition(cond)}
-                    className={`h-10 rounded-lg text-xs font-bold border transition-all ${condition === cond
-                      ? 'bg-brand-cyan text-brand-darker border-brand-cyan'
-                      : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'
-                      }`}
-                  >
-                    {cond === 'Near Mint' ? 'NM' : cond === 'Lightly Played' ? 'LP' : cond.replace(' ', '')}
-                  </button>
-                ))}
+            {/* Condition — sealed products are factory sealed by definition */}
+            {isSealed ? (
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'สภาพสินค้า' : 'Condition'}</label>
+                <div className="h-10 rounded-lg text-xs font-bold border bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30 flex items-center justify-center gap-2">
+                  <i className="fa-solid fa-box"></i>
+                  {isThai ? 'ซีล (ยังไม่แกะ)' : 'Factory Sealed'}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'สภาพการ์ด' : 'Condition'}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.values(CardCondition).filter((cond) => cond !== CardCondition.Sealed).map((cond) => (
+                    <button
+                      key={cond}
+                      type="button"
+                      onClick={() => setCondition(cond)}
+                      className={`h-10 rounded-lg text-xs font-bold border transition-all ${condition === cond
+                        ? 'bg-brand-cyan text-brand-darker border-brand-cyan'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'
+                        }`}
+                    >
+                      {cond === 'Near Mint' ? 'NM' : cond === 'Lightly Played' ? 'LP' : cond.replace(' ', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Grading Toggle */}
+            {/* Grading Toggle — not applicable to sealed products */}
+            {!isSealed && (
             <div className="flex items-center gap-3 py-2">
               <button
                 type="button"
@@ -258,8 +276,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               </button>
               <span className="text-sm font-bold text-white">{isThai ? 'การ์ดใบนี้ได้รับการเกรดอย่างเป็นทางการ' : 'This card is professionally graded'}</span>
             </div>
+            )}
 
-            {isGraded && (
+            {!isSealed && isGraded && (
               <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl border border-white/5 animate-fadeIn">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Company</label>

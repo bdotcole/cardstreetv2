@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
     estimateRate,
     fallbackShippingSatang,
-    estimateParcelWeightGrams,
-    estimateParcelDimsCm,
+    estimateParcelWeightGramsForItems,
+    estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
 
 export async function POST(request: NextRequest) {
@@ -47,7 +47,15 @@ export async function POST(request: NextRequest) {
 
         for (const sellerId of sellerIds) {
             const seller = sellerProfiles?.find(p => p.id === sellerId);
-            const cardCount = items.filter((i: any) => i.sellerId === sellerId).length;
+            // Cart items carry the Card snapshot — sealed products quote at
+            // their real weight. Display-only estimate; checkout re-derives
+            // from the DB.
+            const sellerItems = items
+                .filter((i: any) => i.sellerId === sellerId)
+                .map((i: any) => ({
+                    isSealed: i.card?.isSealed === true,
+                    productType: i.card?.productType ?? null,
+                }));
 
             // Base shipping in satang: live Flash quote when the seller has an
             // address (estimatePrice already includes fuel; upCountryAmount is
@@ -65,8 +73,8 @@ export async function POST(request: NextRequest) {
                         dstProvinceName: buyerProfile.province || 'กรุงเทพมหานคร',
                         dstCityName: buyerProfile.state || buyerProfile.district || 'เขตบางรัก',
                         dstPostalCode: buyerProfile.postcode,
-                        weight: estimateParcelWeightGrams(cardCount),
-                        ...estimateParcelDimsCm(cardCount),
+                        weight: estimateParcelWeightGramsForItems(sellerItems),
+                        ...estimateParcelDimsCmForItems(sellerItems),
                     });
                     baseSatang = quote.estimatePrice + quote.upCountryAmount;
                 } catch (err) {

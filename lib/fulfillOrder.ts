@@ -11,7 +11,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
-import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGrams, estimateParcelDimsCm } from '@/lib/flashExpress';
+import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGramsForItems, estimateParcelDimsCmForItems } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -65,7 +65,9 @@ export async function fulfillOrdersByTransferGroup(
         // ─── Step 1: Find pending orders ───
         const { data: orders, error: fetchError } = await supabase
             .from('orders')
-            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group')
+            // listing card_data rides along so the shipment declares the real
+            // parcel weight when the order contains sealed products.
+            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group, listing:listings(card_data)')
             .eq('transfer_group', transferGroup)
             .eq('status', 'pending_payment');
 
@@ -279,12 +281,19 @@ export async function fulfillOrdersByTransferGroup(
                     dstPostalCode: dst.postalCode,
                     dstDetailAddress: dst.detailAddress,
                     // Match the weight AND dimensions the buyer was quoted at
-                    // checkout (one order per card, so sellerOrders.length is the
-                    // card count). Declaring real dims — rather than letting them
-                    // default to a 1x1x1 cm cube — keeps Flash from re-rating the
-                    // parcel at the depot off a bogus size.
-                    weight: estimateParcelWeightGrams(sellerOrders.length),
-                    ...estimateParcelDimsCm(sellerOrders.length),
+                    // checkout (one order per item; sealed products declare
+                    // their real per-type weight). Declaring real dims — rather
+                    // than letting them default to a 1x1x1 cm cube — keeps
+                    // Flash from re-rating the parcel at the depot off a bogus
+                    // size.
+                    weight: estimateParcelWeightGramsForItems(sellerOrders.map(o => ({
+                        isSealed: (o as any).listing?.card_data?.isSealed === true,
+                        productType: (o as any).listing?.card_data?.productType ?? null,
+                    }))),
+                    ...estimateParcelDimsCmForItems(sellerOrders.map(o => ({
+                        isSealed: (o as any).listing?.card_data?.isSealed === true,
+                        productType: (o as any).listing?.card_data?.productType ?? null,
+                    }))),
                     expressCategory: 1,
                     articleCategory: 3,
                     remark: 'CardStreet TCG - Handle with care',

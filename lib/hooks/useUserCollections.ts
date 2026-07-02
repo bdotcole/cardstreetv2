@@ -262,7 +262,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
                     card_id: safeCard.id,
                     card_data: safeCard,
                     quantity: details?.quantity || 1,
-                    condition: details?.condition || CardCondition.NM,
+                    condition: details?.condition || (safeCard.isSealed ? CardCondition.Sealed : CardCondition.NM),
                     purchase_price: details?.purchasePrice || safeCard.marketPrice || 0
                 })
                 .select()

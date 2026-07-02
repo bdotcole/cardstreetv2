@@ -1,28 +1,25 @@
 import React from 'react';
 import Image from 'next/image';
 import { SealedProduct } from '../services/pokemonService';
+import { Card } from '@/types';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { sealedProductToCard, productTypeLabel } from '@/lib/sealedProduct';
 
 interface SealedProductDetailProps {
   product: SealedProduct;
   onClose: () => void;
   currency?: string;
   exchangeRate?: number;
+  // When provided, shows the Add to Vault action (same handler cards use —
+  // the product is converted to a Card-shaped snapshot first).
+  onAddToCollection?: (card: Card) => void;
 }
 
-const PRODUCT_TYPE_LABEL: Record<string, string> = {
-  booster_box: 'Booster Box',
-  etb: 'Elite Trainer Box',
-  booster_pack: 'Booster Pack',
-  bundle: 'Booster Bundle',
-  collection: 'Collection',
-  other: 'Sealed',
-};
-
-const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onClose, currency = 'THB', exchangeRate = 1 }) => {
+const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onClose, currency = 'THB', exchangeRate = 1, onAddToCollection }) => {
   const { isThai } = useTranslation();
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+  const typeLabel = productTypeLabel(product.productType, isThai);
 
   // Prices arrive in THB (base); convert to the display currency.
   const fmt = (priceThb: number | null | undefined) => {
@@ -52,7 +49,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
         </button>
         <div className="text-center">
           <span className="font-black italic skew-x-[-10deg] uppercase tracking-wider text-xs text-brand-cyan block">{isThai ? 'สินค้าซีล' : 'Sealed Product'}</span>
-          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{PRODUCT_TYPE_LABEL[product.productType || 'other'] || 'Sealed'}</span>
+          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{typeLabel}</span>
         </div>
         <div className="w-10 h-10" aria-hidden="true" />
       </div>
@@ -80,7 +77,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
         <div className="px-6 space-y-8">
           <div className="space-y-1">
             <span className="bg-brand-cyan text-brand-darker px-2 py-0.5 rounded text-[9px] font-black uppercase italic skew-x-[-10deg] shadow-lg shadow-brand-cyan/20">
-              {PRODUCT_TYPE_LABEL[product.productType || 'other'] || 'Sealed'}
+              {typeLabel}
             </span>
             <h1 className="text-2xl font-black text-white leading-tight tracking-tight mt-2">{product.name}</h1>
           </div>
@@ -124,6 +121,20 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
           )}
         </div>
       </div>
+
+      {/* Action Bar — mirrors CardDetails. Adding stores a Card-shaped
+          snapshot so the vault/listing pipeline treats it like any card. */}
+      {onAddToCollection && (
+        <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex gap-3 z-20">
+          <button
+            onClick={() => onAddToCollection(sealedProductToCard(product))}
+            className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
+          >
+            <i className="fa-solid fa-vault text-brand-cyan group-hover:scale-110 transition-transform"></i>
+            {isThai ? 'เพิ่มเข้าคลัง' : 'Add to Vault'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

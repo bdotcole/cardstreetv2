@@ -418,6 +418,65 @@ export function estimateParcelWeightGrams(cardCount: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Sealed-aware estimates
+// ---------------------------------------------------------------------------
+
+/**
+ * The card_data fields the estimators need — matches the Card snapshot stored
+ * on listings/collection items (isSealed + productType, absent for cards).
+ */
+export interface ParcelItemInfo {
+    isSealed?: boolean;
+    productType?: string | null;
+}
+
+/**
+ * Per-unit weights for sealed products (grams, incl. packing share). Slightly
+ * above typical retail weights on purpose: Flash bills actual weight at pickup,
+ * so an over-quote is a small buyer premium while an under-quote is a platform
+ * loss (buyer pays the estimate, seller pays Flash the actual).
+ */
+const SEALED_WEIGHT_GRAMS: Record<string, number> = {
+    booster_box: 900,
+    etb: 1100,
+    booster_pack: 60,
+    bundle: 500,
+    collection: 900,
+};
+const SEALED_WEIGHT_DEFAULT_GRAMS = 700;
+
+/**
+ * Item-aware version of estimateParcelWeightGrams: cards at ~110g each, sealed
+ * products at their per-type weight, never below Flash's 500g base tier.
+ * Callers with card_data in hand (checkout, estimate, fulfillment) use this;
+ * the card-count version stays for callers without item detail.
+ */
+export function estimateParcelWeightGramsForItems(items: ParcelItemInfo[]): number {
+    const sealed = items.filter(i => i?.isSealed);
+    if (sealed.length === 0) return estimateParcelWeightGrams(items.length);
+    const sealedGrams = sealed.reduce(
+        (sum, i) => sum + (SEALED_WEIGHT_GRAMS[i.productType || ''] ?? SEALED_WEIGHT_DEFAULT_GRAMS),
+        0,
+    );
+    const cardCount = items.length - sealed.length;
+    return Math.max(500, cardCount * 110 + sealedGrams);
+}
+
+/**
+ * Item-aware version of estimateParcelDimsCm. A parcel with any sealed product
+ * is a real box, not a bubble mailer: 25x20 footprint, 15 cm for the first
+ * sealed unit (covers an ETB on its side), +8 cm per additional unit, plus the
+ * card stack. Honest dims keep Flash from re-rating at the depot.
+ */
+export function estimateParcelDimsCmForItems(items: ParcelItemInfo[]): { width: number; length: number; height: number } {
+    const sealedCount = items.filter(i => i?.isSealed).length;
+    if (sealedCount === 0) return estimateParcelDimsCm(items.length);
+    const cardCount = items.length - sealedCount;
+    const height = 15 + (sealedCount - 1) * 8 + Math.ceil(cardCount / 4) * 2;
+    return { width: 20, length: 25, height };
+}
+
+// ---------------------------------------------------------------------------
 // Parcel dimensions
 // ---------------------------------------------------------------------------
 

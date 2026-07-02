@@ -32,8 +32,8 @@ import {
     estimateRate,
     isRegionError,
     fallbackShippingSatang,
-    estimateParcelWeightGrams,
-    estimateParcelDimsCm,
+    estimateParcelWeightGramsForItems,
+    estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
 import { applyProSellerRate, effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
 import { isPremium } from '@/lib/entitlements';
@@ -283,7 +283,14 @@ export async function POST(req: Request) {
 
         for (const sellerId of sellerIds) {
             const sp = sellerProfiles?.find(p => p.id === sellerId);
-            const cardCount = listings.filter(l => l.seller_id === sellerId).length;
+            // Sealed products (booster boxes, ETBs) weigh far more than cards —
+            // quote off the card_data snapshots so heavy items aren't under-quoted.
+            const sellerItems = listings
+                .filter(l => l.seller_id === sellerId)
+                .map(l => ({
+                    isSealed: (l.card_data as any)?.isSealed === true,
+                    productType: (l.card_data as any)?.productType ?? null,
+                }));
             let baseSatang: number;
             try {
                 const quote = await estimateRate({
@@ -293,8 +300,8 @@ export async function POST(req: Request) {
                     dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                     dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                     dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: estimateParcelWeightGrams(cardCount),
-                    ...estimateParcelDimsCm(cardCount),
+                    weight: estimateParcelWeightGramsForItems(sellerItems),
+                    ...estimateParcelDimsCmForItems(sellerItems),
                 });
                 // Flash returns satang (cents) directly.
                 baseSatang = quote.estimatePrice + quote.upCountryAmount;

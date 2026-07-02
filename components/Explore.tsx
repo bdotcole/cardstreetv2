@@ -15,9 +15,11 @@ interface ExploreProps {
   localListings?: any[];
   currency?: string;
   exchangeRate?: number;
+  // Enables Add to Vault on sealed products (cards get it via CardDetails).
+  onAddToCollection?: (card: Card) => void;
 }
 
-const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1 }) => {
+const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection }) => {
   const { t, isThai } = useTranslation();
   const [selectedGame, setSelectedGame] = useState<string>('pokemon');
   const [selectedLanguage, setSelectedLanguage] = useState<GameLanguageCode>('en');
@@ -592,6 +594,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           onClose={() => setSelectedSealed(null)}
           currency={currency}
           exchangeRate={exchangeRate}
+          onAddToCollection={onAddToCollection}
         />
       )}
     </div>

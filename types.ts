@@ -4,7 +4,9 @@ export enum CardCondition {
   LP = 'Lightly Played',
   MP = 'Moderately Played',
   HP = 'Heavily Played',
-  DMG = 'Damaged'
+  DMG = 'Damaged',
+  // Sealed products only — excluded from single-card condition pickers.
+  Sealed = 'Sealed'
 }
 
 export enum Rarity {
@@ -21,6 +23,8 @@ export enum Rarity {
   EH = 'EH',
   MA = 'MA',
   MUR = 'MUR',
+  // Pseudo-rarity for sealed products (they have no card rarity).
+  Sealed = 'Sealed',
 }
 
 export interface CardPrices {
@@ -47,6 +51,10 @@ export interface Card {
   priceHistory: { date: string; price: number }[];
   language?: string;
   game?: string;
+  // Sealed products (booster boxes, ETBs, ...) reuse the Card shape so they
+  // flow through the same collection/listing snapshot pipeline as cards.
+  isSealed?: boolean;
+  productType?: string | null;
 }
 
 export interface UserCollectionItem {

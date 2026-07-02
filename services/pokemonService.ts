@@ -34,6 +34,8 @@ export interface SealedProduct {
     name: string;
     productType: string | null;
     setId: string | null;
+    game?: string;
+    language?: string;
     imageUrl: string | null;
     price: number | null;       // THB (base); multiply by display exchangeRate
     prices: { sealed: number | null; cib: number | null; loose: number | null };
