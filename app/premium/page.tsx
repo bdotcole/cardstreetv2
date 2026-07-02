@@ -177,7 +177,7 @@ function PremiumPageInner() {
           </div>
         ) : (
           <div className="glass rounded-3xl border-brand-cyan/20 p-6 text-center">
-            <p className="text-3xl font-black text-white">฿199<span className="text-sm text-slate-500 font-bold"> {t('pro.perMonth')}</span></p>
+            <p className="text-3xl font-black text-white">฿149<span className="text-sm text-slate-500 font-bold"> {t('pro.perMonth')}</span></p>
             <p className="text-[11px] text-slate-500 mt-1">{t('pro.cancelAnytime')}</p>
             <button
               onClick={startCheckout}

@@ -14,8 +14,9 @@ import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/str
 // Checkout Session. In-app purchases will use store IAP later — the client
 // hides this path inside the native shells.
 
-// ฿199/month unless overridden (satang).
-const PRICE_SATANG = Number(process.env.PREMIUM_PRICE_SATANG) || 19900;
+// ฿149/month unless overridden (satang). Keep in step with the ฿149 display
+// on app/premium/page.tsx and the store IAP price tiers.
+const PRICE_SATANG = Number(process.env.PREMIUM_PRICE_SATANG) || 14900;
 
 export async function POST() {
   const supabase = await createServerClient();
