@@ -586,6 +586,8 @@
         "activeThrough": "Active through",
         "manage": "Manage Subscription",
         "comingSoonApp": "CardStreet Pro is coming to the app soon.",
+        "restore": "Restore Purchases",
+        "nothingToRestore": "No previous purchase found for this account.",
         "partOfPro": "This feature is part of CardStreet Pro. Tap to learn more.",
         "grader": {
             "subtitle": "Snap a few angles for an estimated grade",

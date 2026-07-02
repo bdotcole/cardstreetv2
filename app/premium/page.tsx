@@ -5,6 +5,13 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import {
+  loadNativeProOffer,
+  purchaseNativePro,
+  restoreNativePro,
+  storeSubscriptionsUrl,
+  type NativeProOffer,
+} from '@/lib/revenuecat';
 
 /**
  * CardStreet Pro hub — what Pro includes, upgrade (web/Stripe), and manage.
@@ -39,6 +46,16 @@ function PremiumPageInner() {
   // before hydration, so there's no user-visible flip.
   const [isNativeApp, setIsNativeApp] = useState(false);
   useEffect(() => { setIsNativeApp(isNativeShell()); }, []);
+
+  // Native IAP (RevenueCat). Null offer = plugin/store not available (old
+  // binary, product not yet approved, logged out) -> coming-soon card.
+  const [iapOffer, setIapOffer] = useState<NativeProOffer | null>(null);
+  useEffect(() => {
+    if (!isNativeApp || premium || loading) return;
+    let active = true;
+    loadNativeProOffer().then((o) => { if (active) setIapOffer(o); });
+    return () => { active = false; };
+  }, [isNativeApp, premium, loading]);
 
   // Perks without an href are passive benefits (applied automatically), not
   // destinations — they render with a check instead of a chevron.
@@ -83,6 +100,41 @@ function PremiumPageInner() {
       window.location.href = data.url;
     } catch (e: any) {
       setError(e.message);
+      setBusy(false);
+    }
+  };
+
+  const buyNative = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await purchaseNativePro();
+      if (result === 'purchased') {
+        // The store confirms instantly; the entitlement lands via the
+        // RevenueCat webhook a beat later. Poll briefly so the page flips
+        // without a manual refresh.
+        for (let i = 0; i < 6; i++) {
+          const s = await refresh();
+          if (s.premium) break;
+          await new Promise((res) => setTimeout(res, 2000));
+        }
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreNative = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (await restoreNativePro()) await refresh();
+      else setError(t('pro.nothingToRestore'));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
       setBusy(false);
     }
   };
@@ -160,7 +212,19 @@ function PremiumPageInner() {
               <i className="fa-solid fa-circle-check mr-1.5"></i>{t('pro.youArePro')}
             </p>
             {renewDate && <p className="text-xs text-slate-400 mt-2">{t('pro.activeThrough')} {renewDate}</p>}
-            {/* Role-granted Pro (admins) has no Stripe subscription to manage. */}
+            {/* Role-granted Pro (admins) has no subscription to manage. In the
+                native shells, manage points at the store's own subscription
+                page (store policy: never a web billing portal in-app). */}
+            {isNativeApp && status.premiumUntil && (
+              <a
+                href={storeSubscriptionsUrl()}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 w-full h-12 rounded-2xl glass border-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center"
+              >
+                {t('pro.manage')}
+              </a>
+            )}
             {!isNativeApp && status.premiumUntil && (
               <button
                 onClick={openPortal}
@@ -172,9 +236,30 @@ function PremiumPageInner() {
             )}
           </div>
         ) : isNativeApp ? (
-          <div className="glass rounded-3xl border-white/10 p-6 text-center">
-            <p className="text-sm text-slate-300 font-bold">{t('pro.comingSoonApp')}</p>
-          </div>
+          iapOffer ? (
+            <div className="glass rounded-3xl border-brand-cyan/20 p-6 text-center">
+              <p className="text-3xl font-black text-white">{iapOffer.priceString}<span className="text-sm text-slate-500 font-bold"> {t('pro.perMonth')}</span></p>
+              <p className="text-[11px] text-slate-500 mt-1">{t('pro.cancelAnytime')}</p>
+              <button
+                onClick={buyNative}
+                disabled={busy}
+                className="mt-5 w-full h-14 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <><i className="fa-solid fa-crown"></i> {t('pro.upgrade')}</>}
+              </button>
+              <button
+                onClick={restoreNative}
+                disabled={busy}
+                className="mt-4 text-[10px] text-slate-500 font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                {t('pro.restore')}
+              </button>
+            </div>
+          ) : (
+            <div className="glass rounded-3xl border-white/10 p-6 text-center">
+              <p className="text-sm text-slate-300 font-bold">{t('pro.comingSoonApp')}</p>
+            </div>
+          )
         ) : (
           <div className="glass rounded-3xl border-brand-cyan/20 p-6 text-center">
             <p className="text-3xl font-black text-white">฿149<span className="text-sm text-slate-500 font-bold"> {t('pro.perMonth')}</span></p>

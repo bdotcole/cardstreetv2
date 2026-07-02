@@ -586,6 +586,8 @@
         "activeThrough": "ใช้งานได้ถึง",
         "manage": "จัดการการสมัคร",
         "comingSoonApp": "CardStreet Pro กำลังจะมาในแอปเร็ว ๆ นี้",
+        "restore": "กู้คืนการซื้อ",
+        "nothingToRestore": "ไม่พบการซื้อก่อนหน้าสำหรับบัญชีนี้",
         "partOfPro": "ฟีเจอร์นี้เป็นส่วนหนึ่งของ CardStreet Pro แตะเพื่อดูรายละเอียด",
         "grader": {
             "subtitle": "ถ่ายไม่กี่มุมเพื่อรับเกรดประเมิน",
