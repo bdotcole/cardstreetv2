@@ -261,11 +261,15 @@ export async function POST(req: Request) {
                 const level = effectivePartnerLevel(profile.partner_level, profile.total_downloads ?? 0);
                 fee = feeFractionForLevel(level);
             }
-            // CardStreet Pro floor: subscribers sell at 5% even without partner
-            // status; a partner ladder already better than 5% still wins. Admins
-            // are Pro by role (same rule as lib/premiumAuth getEntitlement).
-            const pro = profile.role === 'admin' || isPremium(profile.premium_until);
-            feeMap.set(profile.id, applyProSellerRate(fee, pro));
+            // Admins (house accounts) sell fee-free -- /api/checkout omits a
+            // zero application_fee_amount, so Stripe sees no fee at all.
+            // CardStreet Pro subscribers get the 5% floor; a partner ladder
+            // already better than 5% still wins.
+            if (profile.role === 'admin') {
+                feeMap.set(profile.id, 0);
+            } else {
+                feeMap.set(profile.id, applyProSellerRate(fee, isPremium(profile.premium_until)));
+            }
         }
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
