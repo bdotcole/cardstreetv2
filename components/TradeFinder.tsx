@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
  * Trade Finder (premium).
@@ -41,12 +42,6 @@ interface MatchResult {
 
 const baht = (v: number) => `฿${Math.round(v).toLocaleString()}`;
 
-const KIND_LABEL: Record<TradeProposal['kind'], string> = {
-  single: 'Even Swap',
-  balanced: 'Balanced Bundle',
-  max: 'Blockbuster',
-};
-
 const ItemRow: React.FC<{ item: TradeItem }> = ({ item }) => (
   <div className="flex items-center gap-3 py-1.5">
     <div className="w-9 h-12 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
@@ -59,34 +54,8 @@ const ItemRow: React.FC<{ item: TradeItem }> = ({ item }) => (
   </div>
 );
 
-const ProposalCard: React.FC<{ proposal: TradeProposal; partnerName: string }> = ({ proposal, partnerName }) => {
-  const even = proposal.deltaPct <= 0.1;
-  const diff = proposal.getValue - proposal.giveValue;
-  return (
-    <div className="glass rounded-3xl border-white/10 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[9px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2.5 py-1 rounded-full tracking-widest">
-          {KIND_LABEL[proposal.kind]}
-        </span>
-        <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full tracking-widest ${even ? 'bg-emerald-400/10 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
-          {even ? 'Fair Deal' : `${diff > 0 ? '+' : '−'}${baht(Math.abs(diff))} ${diff > 0 ? 'in your favor' : 'their favor'}`}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">You send · {baht(proposal.giveValue)}</p>
-          {proposal.give.map((i) => <ItemRow key={i.itemId} item={i} />)}
-        </div>
-        <div className="border-l border-white/5 pl-4">
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">{partnerName} sends · {baht(proposal.getValue)}</p>
-          {proposal.get.map((i) => <ItemRow key={i.itemId} item={i} />)}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'mine' | 'code' | 'match'>(initialCode ? 'match' : 'mine');
 
   // My tradables
@@ -103,6 +72,12 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
   const [match, setMatch] = useState<MatchResult | null>(null);
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
+
+  const KIND_LABEL: Record<TradeProposal['kind'], string> = {
+    single: t('pro.trade.kindSingle'),
+    balanced: t('pro.trade.kindBalanced'),
+    max: t('pro.trade.kindMax'),
+  };
 
   useEffect(() => {
     fetch('/api/trade/items')
@@ -174,18 +149,45 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
 
   const tradableCount = items?.filter((i) => i.forTrade).length ?? 0;
 
+  const ProposalCard: React.FC<{ proposal: TradeProposal; partnerName: string }> = ({ proposal, partnerName }) => {
+    const even = proposal.deltaPct <= 0.1;
+    const diff = proposal.getValue - proposal.giveValue;
+    return (
+      <div className="glass rounded-3xl border-white/10 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[9px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2.5 py-1 rounded-full tracking-widest">
+            {KIND_LABEL[proposal.kind]}
+          </span>
+          <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full tracking-widest ${even ? 'bg-emerald-400/10 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
+            {even ? t('pro.trade.fairDeal') : `${diff > 0 ? '+' : '−'}${baht(Math.abs(diff))} ${diff > 0 ? t('pro.trade.inYourFavor') : t('pro.trade.theirFavor')}`}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">{t('pro.trade.youSend')} · {baht(proposal.giveValue)}</p>
+            {proposal.give.map((i) => <ItemRow key={i.itemId} item={i} />)}
+          </div>
+          <div className="border-l border-white/5 pl-4">
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">{partnerName} {t('pro.trade.sends')} · {baht(proposal.getValue)}</p>
+            {proposal.get.map((i) => <ItemRow key={i.itemId} item={i} />)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-[520px] mx-auto">
       <div className="text-center mb-6">
         <div className="w-14 h-14 rounded-2xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">
           <i className="fa-solid fa-right-left text-brand-cyan text-xl"></i>
         </div>
-        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">Trade Finder</h2>
-        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">Scan a code · Match by value · Make the deal</p>
+        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.tradeTitle')}</h2>
+        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">{t('pro.trade.tagline')}</p>
       </div>
 
       <div className="flex gap-2 mb-6">
-        {([['mine', 'My Cards'], ['code', 'My Code'], ['match', 'Find Trades']] as const).map(([key, label]) => (
+        {([['mine', t('pro.trade.tabMine')], ['code', t('pro.trade.tabCode')], ['match', t('pro.trade.tabFind')]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -199,14 +201,14 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
       {tab === 'mine' && (
         <div>
           <p className="text-[11px] text-slate-500 mb-4 text-center">
-            Toggle the cards you'd trade away. <span className="text-brand-cyan font-bold">{tradableCount}</span> up for trade.
+            {t('pro.trade.toggleHint')} <span className="text-brand-cyan font-bold">{tradableCount}</span> {t('pro.trade.upForTrade')}
           </p>
           {itemsError && <p className="text-[11px] text-rose-300 text-center mb-3">{itemsError}</p>}
           {items === null && !itemsError && (
             <div className="text-center py-10"><i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i></div>
           )}
           {items?.length === 0 && (
-            <p className="text-xs text-slate-500 text-center py-8">Your collection is empty — scan some cards first.</p>
+            <p className="text-xs text-slate-500 text-center py-8">{t('pro.trade.emptyCollection')}</p>
           )}
           <div className="space-y-2">
             {items?.map((item) => (
@@ -243,15 +245,13 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                 </div>
               )}
               <p className="text-2xl font-black text-white tracking-[0.2em]">{myCode.code}</p>
-              <p className="text-[11px] text-slate-500 mt-2 leading-snug">
-                Friends scan this (or enter the code) to see trades matched against your tradables and wishlist.
-              </p>
+              <p className="text-[11px] text-slate-500 mt-2 leading-snug">{t('pro.trade.codeHint')}</p>
               <button
                 onClick={copyCode}
                 className="mt-5 w-full h-12 rounded-2xl glass border-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
               >
                 <i className={`fa-solid ${copied ? 'fa-check text-emerald-400' : 'fa-copy'} mr-2`}></i>
-                {copied ? 'Copied' : 'Copy Link'}
+                {copied ? t('pro.trade.copied') : t('pro.trade.copyLink')}
               </button>
             </>
           )}
@@ -272,7 +272,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
               disabled={matching || !codeInput.trim()}
               className="px-6 h-12 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
             >
-              {matching ? <i className="fa-solid fa-circle-notch animate-spin"></i> : 'Match'}
+              {matching ? <i className="fa-solid fa-circle-notch animate-spin"></i> : t('pro.trade.match')}
             </button>
           </div>
 
@@ -294,7 +294,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-bold truncate">{match.partner.displayName}</p>
                   <p className="text-[10px] text-slate-500">
-                    They want <span className="text-brand-cyan font-bold">{match.counts.theyWant}</span> of your cards · You want <span className="text-brand-cyan font-bold">{match.counts.youWant}</span> of theirs
+                    {t('pro.trade.theyWant')} <span className="text-brand-cyan font-bold">{match.counts.theyWant}</span> {t('pro.trade.ofYourCards')} · {t('pro.trade.youWant')} <span className="text-brand-cyan font-bold">{match.counts.youWant}</span> {t('pro.trade.ofTheirs')}
                   </p>
                 </div>
               </div>
@@ -305,17 +305,17 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                 ))
               ) : (
                 <div className="glass rounded-3xl border-white/10 p-6 text-center">
-                  <p className="text-sm text-slate-300 font-bold">No matching trades yet</p>
+                  <p className="text-sm text-slate-300 font-bold">{t('pro.trade.noMatchesTitle')}</p>
                   <p className="text-[11px] text-slate-500 mt-2 leading-snug">
-                    A match needs overlap both ways: cards on your trade list that they've wishlisted, and cards on theirs that you've wishlisted.
-                    {match.counts.myTradables === 0 && ' You haven’t tagged any cards for trade yet.'}
-                    {match.counts.theirTradables === 0 && ' They haven’t tagged any cards for trade yet.'}
+                    {t('pro.trade.noMatchesBody')}
+                    {match.counts.myTradables === 0 && ` ${t('pro.trade.youNoTradables')}`}
+                    {match.counts.theirTradables === 0 && ` ${t('pro.trade.theyNoTradables')}`}
                   </p>
                 </div>
               )}
 
               <p className="text-[10px] text-slate-600 text-center leading-snug px-4">
-                Values are market estimates. CardStreet doesn't broker the swap — agree on the details together.
+                {t('pro.trade.valuesFootnote')}
               </p>
             </div>
           )}

@@ -1,50 +1,49 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { usePremium } from '@/lib/hooks/usePremium';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
  * CardStreet Pro hub — what Pro includes, upgrade (web/Stripe), and manage.
  *
- * Store-policy note: inside the native Capacitor shells (CardStreetApp UA
- * marker) the Stripe purchase/manage buttons are HIDDEN and no wording points
- * at an external purchase path — Apple 3.1.1 / Play Billing require digital
- * subscriptions in-app to go through store IAP (the RevenueCat phase). The
- * web/desktop experience gets the full Stripe flow.
+ * Store-policy note: inside the native Capacitor shells the Stripe
+ * purchase/manage buttons are HIDDEN and no wording points at an external
+ * purchase path — Apple 3.1.1 / Play Billing require digital subscriptions
+ * in-app to go through store IAP (the RevenueCat phase). Native detection is
+ * belt-and-suspenders: the CardStreetApp UA marker (Android ships it; iOS
+ * gets it in 1.0.4) OR the Capacitor bridge object, which is injected into
+ * remote-loaded pages on both shells regardless of user agent — this catches
+ * the live iOS build that predates the marker.
  */
 
-const FEATURES = [
-  {
-    href: '/grade',
-    icon: 'fa-wand-magic-sparkles',
-    title: 'AI Card Grader',
-    desc: 'Snap a few angles, get an estimated grade — centering, corners, edges, surface.',
-  },
-  {
-    href: '/trade',
-    icon: 'fa-right-left',
-    title: 'Trade Finder',
-    desc: 'Share your trade code and get value-balanced swap proposals matched across collections.',
-  },
-  {
-    href: '/insights',
-    icon: 'fa-chart-line',
-    title: 'Pro Insights',
-    desc: 'Portfolio history, cost basis and P/L, top holdings, allocation, weekly movers.',
-  },
-];
+function isNativeShell(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (navigator.userAgent.includes('CardStreetApp')) return true;
+  const cap = (window as any).Capacitor;
+  return !!cap && (typeof cap.isNativePlatform === 'function' ? cap.isNativePlatform() : true);
+}
 
 function PremiumPageInner() {
   const { loading, premium, status, refresh } = usePremium();
+  const { t } = useTranslation();
   const upgraded = useSearchParams()?.get('upgraded') === '1';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isNativeApp = useMemo(
-    () => typeof navigator !== 'undefined' && navigator.userAgent.includes('CardStreetApp'),
-    [],
-  );
+  // Effect (not render-time) so the server render and first client paint
+  // agree — the purchase block only appears once usePremium resolves, by
+  // which point this has long settled. In the real shells the bridge exists
+  // before hydration, so there's no user-visible flip.
+  const [isNativeApp, setIsNativeApp] = useState(false);
+  useEffect(() => { setIsNativeApp(isNativeShell()); }, []);
+
+  const FEATURES = [
+    { href: '/grade', icon: 'fa-wand-magic-sparkles', title: t('pro.graderTitle'), desc: t('pro.graderDesc') },
+    { href: '/trade', icon: 'fa-right-left', title: t('pro.tradeTitle'), desc: t('pro.tradeDesc') },
+    { href: '/insights', icon: 'fa-chart-line', title: t('pro.insightsTitle'), desc: t('pro.insightsDesc') },
+  ];
 
   // Back from Stripe Checkout: the webhook may land a beat after the redirect,
   // so refresh the cached entitlement now and once more shortly after.
@@ -84,7 +83,7 @@ function PremiumPageInner() {
   };
 
   const renewDate = status.premiumUntil
-    ? new Date(status.premiumUntil).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    ? new Date(status.premiumUntil).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
     : null;
 
   return (
@@ -94,20 +93,20 @@ function PremiumPageInner() {
           <div className="w-16 h-16 rounded-3xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">
             <i className="fa-solid fa-crown text-brand-cyan text-2xl"></i>
           </div>
-          <h1 className="text-3xl font-black tracking-tight uppercase italic skew-x-[-10deg]">CardStreet Pro</h1>
-          <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2">Serious tools for serious collectors</p>
+          <h1 className="text-3xl font-black tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.title')}</h1>
+          <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2">{t('pro.tagline')}</p>
         </div>
 
         {upgraded && premium && (
           <div className="flex items-start gap-2 rounded-2xl bg-emerald-400/10 border border-emerald-400/20 p-4 mb-6">
             <i className="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
-            <p className="text-sm text-emerald-100 leading-snug font-bold">Welcome to Pro! Everything below is unlocked.</p>
+            <p className="text-sm text-emerald-100 leading-snug font-bold">{t('pro.welcome')}</p>
           </div>
         )}
         {upgraded && !premium && !loading && (
           <div className="flex items-start gap-2 rounded-2xl bg-amber-400/10 border border-amber-400/20 p-4 mb-6">
             <i className="fa-solid fa-circle-notch animate-spin text-amber-400 mt-0.5"></i>
-            <p className="text-[12px] text-amber-100 leading-snug">Payment received — activating your subscription. This takes a few seconds; pull to refresh if it doesn't flip.</p>
+            <p className="text-[12px] text-amber-100 leading-snug">{t('pro.activating')}</p>
           </div>
         )}
 
@@ -144,33 +143,33 @@ function PremiumPageInner() {
         ) : premium ? (
           <div className="glass rounded-3xl border-white/10 p-6 text-center">
             <p className="text-[11px] text-emerald-400 font-black uppercase tracking-widest">
-              <i className="fa-solid fa-circle-check mr-1.5"></i>You're Pro
+              <i className="fa-solid fa-circle-check mr-1.5"></i>{t('pro.youArePro')}
             </p>
-            {renewDate && <p className="text-xs text-slate-400 mt-2">Active through {renewDate}</p>}
+            {renewDate && <p className="text-xs text-slate-400 mt-2">{t('pro.activeThrough')} {renewDate}</p>}
             {!isNativeApp && (
               <button
                 onClick={openPortal}
                 disabled={busy}
                 className="mt-5 w-full h-12 rounded-2xl glass border-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
               >
-                {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : 'Manage Subscription'}
+                {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : t('pro.manage')}
               </button>
             )}
           </div>
         ) : isNativeApp ? (
           <div className="glass rounded-3xl border-white/10 p-6 text-center">
-            <p className="text-sm text-slate-300 font-bold">CardStreet Pro is coming to the app soon.</p>
+            <p className="text-sm text-slate-300 font-bold">{t('pro.comingSoonApp')}</p>
           </div>
         ) : (
           <div className="glass rounded-3xl border-brand-cyan/20 p-6 text-center">
-            <p className="text-3xl font-black text-white">฿199<span className="text-sm text-slate-500 font-bold"> / month</span></p>
-            <p className="text-[11px] text-slate-500 mt-1">Cancel anytime</p>
+            <p className="text-3xl font-black text-white">฿199<span className="text-sm text-slate-500 font-bold"> {t('pro.perMonth')}</span></p>
+            <p className="text-[11px] text-slate-500 mt-1">{t('pro.cancelAnytime')}</p>
             <button
               onClick={startCheckout}
               disabled={busy}
               className="mt-5 w-full h-14 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
             >
-              {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <><i className="fa-solid fa-crown"></i> Upgrade to Pro</>}
+              {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <><i className="fa-solid fa-crown"></i> {t('pro.upgrade')}</>}
             </button>
           </div>
         )}

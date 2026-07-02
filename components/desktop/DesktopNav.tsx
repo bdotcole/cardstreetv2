@@ -190,6 +190,7 @@ export default function DesktopNav() {
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
+                        ['/premium', t('desktop.navPro')],
                     ] as [string, string][]).map(([href, label]) => {
                         // Rendered paths live under /desktop/* via middleware
                         // rewrite, but client-side navigation keeps the clean

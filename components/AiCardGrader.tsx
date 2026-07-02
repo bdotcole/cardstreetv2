@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
  * AI Card Grader (premium).
@@ -39,12 +40,6 @@ interface GradeResult {
   };
   disclaimer: string;
 }
-
-const SLOTS: { angle: Angle; label: string; hint: string; required: boolean }[] = [
-  { angle: 'front', label: 'Front', hint: 'Straight on, fills the frame', required: true },
-  { angle: 'back', label: 'Back', hint: 'Improves centering accuracy', required: false },
-  { angle: 'surface', label: 'Surface', hint: 'Slight angle under light, catches scratches', required: false },
-];
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -103,11 +98,18 @@ const SubGradeRow: React.FC<{ label: string; value: number; note: string }> = ({
 );
 
 const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) => {
+  const { t } = useTranslation();
   const [images, setImages] = useState<Partial<Record<Angle, string>>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GradeResult | null>(null);
   const inputs = useRef<Partial<Record<Angle, HTMLInputElement | null>>>({});
+
+  const SLOTS: { angle: Angle; label: string; hint: string; required: boolean }[] = [
+    { angle: 'front', label: t('pro.grader.front'), hint: t('pro.grader.frontHint'), required: true },
+    { angle: 'back', label: t('pro.grader.back'), hint: t('pro.grader.backHint'), required: false },
+    { angle: 'surface', label: t('pro.grader.surface'), hint: t('pro.grader.surfaceHint'), required: false },
+  ];
 
   const onPick = async (angle: Angle, file: File | undefined) => {
     if (!file) return;
@@ -116,7 +118,7 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
       const dataUrl = await fileToDataUrl(file);
       setImages((prev) => ({ ...prev, [angle]: dataUrl }));
     } catch {
-      setError('Could not read that photo. Try another.');
+      setError(t('pro.grader.readError'));
     }
   };
 
@@ -157,13 +159,13 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
       <div className="w-full max-w-[440px] mx-auto">
         <div className="glass rounded-[2rem] border-white/10 p-7">
           <div className="flex flex-col items-center text-center">
-            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.3em] mb-3">Estimated Grade</span>
+            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.3em] mb-3">{t('pro.grader.estimatedGrade')}</span>
             <div className="w-28 h-28 rounded-full border-4 border-white/10 flex items-center justify-center mb-3">
               <span className={`text-5xl font-black ${gradeColor(result.overall)}`}>{result.overall.toFixed(1)}</span>
             </div>
             <h3 className="text-xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{result.label}</h3>
             {cardName && <p className="text-xs text-slate-400 mt-1">{cardName}</p>}
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">Confidence {conf}%</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">{t('pro.grader.confidence')} {conf}%</span>
           </div>
 
           {result.notes.summary && (
@@ -171,23 +173,21 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
           )}
 
           <div className="space-y-4 mt-6">
-            <SubGradeRow label="Centering" value={result.centering} note={result.notes.centering} />
-            <SubGradeRow label="Corners" value={result.corners} note={result.notes.corners} />
-            <SubGradeRow label="Edges" value={result.edges} note={result.notes.edges} />
-            <SubGradeRow label="Surface" value={result.surface} note={result.notes.surface} />
+            <SubGradeRow label={t('pro.grader.centering')} value={result.centering} note={result.notes.centering} />
+            <SubGradeRow label={t('pro.grader.corners')} value={result.corners} note={result.notes.corners} />
+            <SubGradeRow label={t('pro.grader.edges')} value={result.edges} note={result.notes.edges} />
+            <SubGradeRow label={t('pro.grader.surfaceLabel')} value={result.surface} note={result.notes.surface} />
           </div>
 
           {result.notes.imageQuality !== 'good' && (
             <div className="mt-5 flex items-start gap-2 rounded-2xl bg-amber-400/10 border border-amber-400/20 p-3">
               <i className="fa-solid fa-triangle-exclamation text-amber-400 text-xs mt-0.5"></i>
-              <p className="text-[11px] text-amber-200/90 leading-snug">
-                Photo quality was {result.notes.imageQuality}. Brighter, sharper, glare-free shots give a more reliable estimate.
-              </p>
+              <p className="text-[11px] text-amber-200/90 leading-snug">{t('pro.grader.photoQualityWarn')}</p>
             </div>
           )}
 
           <div className="mt-5 rounded-2xl bg-white/5 border border-white/5 p-3">
-            <p className="text-[10px] text-slate-500 leading-snug">{result.disclaimer}</p>
+            <p className="text-[10px] text-slate-500 leading-snug">{t('pro.grader.disclaimer')}</p>
           </div>
         </div>
 
@@ -195,7 +195,7 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
           onClick={reset}
           className="mt-5 w-full h-14 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          <i className="fa-solid fa-rotate"></i> Grade Another Card
+          <i className="fa-solid fa-rotate"></i> {t('pro.grader.gradeAnother')}
         </button>
       </div>
     );
@@ -207,8 +207,8 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
         <div className="w-14 h-14 rounded-2xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">
           <i className="fa-solid fa-wand-magic-sparkles text-brand-cyan text-xl"></i>
         </div>
-        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">AI Card Grader</h2>
-        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">Snap a few angles for an estimated grade</p>
+        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.graderTitle')}</h2>
+        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">{t('pro.grader.subtitle')}</p>
       </div>
 
       <div className="space-y-3">
@@ -239,9 +239,9 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
                   <div className="flex items-center gap-2">
                     <span className="text-white text-sm font-bold">{label}</span>
                     {required ? (
-                      <span className="text-[8px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2 py-0.5 rounded-full tracking-widest">Required</span>
+                      <span className="text-[8px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2 py-0.5 rounded-full tracking-widest">{t('pro.grader.required')}</span>
                     ) : (
-                      <span className="text-[8px] bg-white/5 text-slate-500 font-black uppercase px-2 py-0.5 rounded-full tracking-widest">Optional</span>
+                      <span className="text-[8px] bg-white/5 text-slate-500 font-black uppercase px-2 py-0.5 rounded-full tracking-widest">{t('pro.grader.optional')}</span>
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">{hint}</p>
@@ -266,14 +266,14 @@ const AiCardGrader: React.FC<AiCardGraderProps> = ({ cardId, cardName, game }) =
         className="mt-5 w-full h-14 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100"
       >
         {loading ? (
-          <><i className="fa-solid fa-circle-notch animate-spin"></i> Grading…</>
+          <><i className="fa-solid fa-circle-notch animate-spin"></i> {t('pro.grader.grading')}</>
         ) : (
-          <><i className="fa-solid fa-wand-magic-sparkles"></i> Grade My Card</>
+          <><i className="fa-solid fa-wand-magic-sparkles"></i> {t('pro.grader.gradeButton')}</>
         )}
       </button>
 
       <p className="text-[10px] text-slate-600 text-center leading-snug mt-4 px-4">
-        Estimate only — not an official PSA, BGS, or CGC grade.
+        {t('pro.grader.disclaimerShort')}
       </p>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
  * Pro Insights (premium): the business side of collecting. Portfolio value
@@ -44,6 +45,7 @@ const Stat: React.FC<{ label: string; value: string; accent?: string }> = ({ lab
 );
 
 const ProInsights: React.FC = () => {
+  const { t } = useTranslation();
   const [data, setData] = useState<InsightsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,23 +83,23 @@ const ProInsights: React.FC = () => {
         <div className="w-14 h-14 rounded-2xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">
           <i className="fa-solid fa-chart-line text-brand-cyan text-xl"></i>
         </div>
-        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">Pro Insights</h2>
-        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">Your collection as a portfolio</p>
+        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.insightsTitle')}</h2>
+        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">{t('pro.insights.tagline')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <Stat label="Portfolio Value" value={baht(summary.totalValue)} />
-        <Stat label="Cards" value={`${summary.itemCount.toLocaleString()} · ${summary.uniqueCards} unique`} />
-        <Stat label="Cost Basis (tracked)" value={summary.costBasis > 0 ? baht(summary.costBasis) : '—'} />
+        <Stat label={t('pro.insights.portfolioValue')} value={baht(summary.totalValue)} />
+        <Stat label={t('pro.insights.cards')} value={`${summary.itemCount.toLocaleString()} · ${summary.uniqueCards} ${t('pro.insights.unique')}`} />
+        <Stat label={t('pro.insights.costBasis')} value={summary.costBasis > 0 ? baht(summary.costBasis) : '—'} />
         <Stat
-          label="Unrealized P/L"
+          label={t('pro.insights.unrealizedPl')}
           value={summary.costBasis > 0 ? `${plUp ? '+' : '−'}${baht(Math.abs(summary.unrealizedPl))}` : '—'}
           accent={summary.costBasis > 0 ? (plUp ? 'text-emerald-400' : 'text-rose-400') : undefined}
         />
       </div>
 
       <div className="glass rounded-3xl border-white/10 p-5 mb-5">
-        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">Value · Last 90 Days</p>
+        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">{t('pro.insights.last90')}</p>
         {chart.length >= 2 ? (
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
@@ -113,22 +115,20 @@ const ProInsights: React.FC = () => {
                 <Tooltip
                   contentStyle={{ background: '#0f1419', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 11 }}
                   labelStyle={{ color: '#94a3b8' }}
-                  formatter={(value: any) => [baht(Number(value)), 'Value']}
+                  formatter={(value: any) => [baht(Number(value)), t('pro.insights.portfolioValue')]}
                 />
                 <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="url(#proValue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="text-[11px] text-slate-500 py-8 text-center">
-            History builds as the hourly snapshot runs — check back tomorrow.
-          </p>
+          <p className="text-[11px] text-slate-500 py-8 text-center">{t('pro.insights.historyEmpty')}</p>
         )}
       </div>
 
       {data.allocation.length > 0 && (
         <div className="glass rounded-3xl border-white/10 p-5 mb-5">
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">Allocation by Game</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">{t('pro.insights.allocation')}</p>
           <div className="space-y-2.5">
             {data.allocation.map((a) => (
               <div key={a.game}>
@@ -147,7 +147,7 @@ const ProInsights: React.FC = () => {
 
       {data.topHoldings.length > 0 && (
         <div className="glass rounded-3xl border-white/10 p-5 mb-5">
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">Top Holdings</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">{t('pro.insights.topHoldings')}</p>
           <div className="space-y-2">
             {data.topHoldings.map((h) => (
               <div key={h.cardId} className="flex items-center gap-3">
@@ -171,7 +171,7 @@ const ProInsights: React.FC = () => {
 
       {data.movers.length > 0 && (
         <div className="glass rounded-3xl border-white/10 p-5">
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">This Week's Movers</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3">{t('pro.insights.movers')}</p>
           <div className="space-y-2">
             {data.movers.map((m) => (
               <div key={m.cardId} className="flex items-center gap-3">

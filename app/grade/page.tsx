@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePremium } from '@/lib/hooks/usePremium';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import AiCardGrader from '@/components/AiCardGrader';
 
 // Standalone page for the AI Card Grader so the premium feature ships without
@@ -9,6 +10,7 @@ import AiCardGrader from '@/components/AiCardGrader';
 // /api/grade route holds the authoritative premium lock.
 export default function GradePage() {
   const { loading, hasFeature } = usePremium();
+  const { t } = useTranslation();
 
   return (
     <main className="min-h-screen bg-brand-darker text-white px-5 py-10 flex flex-col items-center justify-center">
@@ -21,19 +23,13 @@ export default function GradePage() {
           <div className="w-14 h-14 rounded-2xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-5">
             <i className="fa-solid fa-wand-magic-sparkles text-brand-cyan text-xl"></i>
           </div>
-          <h1 className="text-2xl font-black tracking-tight uppercase italic skew-x-[-10deg]">AI Card Grader</h1>
-          <p className="text-sm text-slate-400 mt-3 leading-relaxed">
-            Snap a few angles of any card and get an instant, estimated condition grade — centering, corners, edges, and surface.
-          </p>
-          <div className="mt-6 rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 p-4">
-            <p className="text-[11px] text-brand-cyan font-black uppercase tracking-widest">CardStreet Pro</p>
-            <p className="text-xs text-slate-300 mt-2 leading-snug">
-              AI grading is part of CardStreet Pro. Upgrade to unlock it.
-            </p>
-          </div>
-          <p className="text-[10px] text-slate-600 mt-5 leading-snug">
-            Estimates only — not an official PSA, BGS, or CGC grade.
-          </p>
+          <h1 className="text-2xl font-black tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.graderTitle')}</h1>
+          <p className="text-sm text-slate-400 mt-3 leading-relaxed">{t('pro.graderDesc')}</p>
+          <a href="/premium" className="mt-6 block rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 p-4 active:scale-95 transition-all">
+            <p className="text-[11px] text-brand-cyan font-black uppercase tracking-widest">{t('pro.title')}</p>
+            <p className="text-xs text-slate-300 mt-2 leading-snug">{t('pro.partOfPro')}</p>
+          </a>
+          <p className="text-[10px] text-slate-600 mt-5 leading-snug">{t('pro.grader.disclaimerShort')}</p>
         </div>
       )}
     </main>
