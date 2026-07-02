@@ -4,18 +4,19 @@
  * Called by the buyer to confirm receipt of an order. This:
  *   1. Verifies the caller is the buyer
  *   2. Verifies the order is in a confirmable state (shipped / out_for_delivery / delivered)
- *   3. Marks the order completed
+ *   3. Marks the order completed — immediately, so the buyer's UI reflects the
+ *      confirmation on the very next fetch (both clients key the confirm button
+ *      and the status pill off orders.status)
  *   4. Triggers escrow release on the next release-funds cron tick by setting
  *      funds_release_at = now() (instead of waiting the full 48h since delivery).
- *      The actual stripe.transfers.create runs in the supabase/functions/release-funds
- *      edge function, which idempotently transfers from the platform to the seller's
- *      Stripe Connect account.
+ *      release-funds matches status IN ('delivered','completed'), so completing
+ *      here does not hide the order from it.
  *   5. Logs a warning if the seller has no Stripe Connect account so support
  *      can prompt them to onboard before the cron retries.
  *
  * Note: escrow_status is *not* flipped to 'released' here — that happens in the
- * release-funds job, atomically with the Stripe Transfer creation. Flipping it
- * here would lie about the money having moved.
+ * release-funds job, atomically with the payout bookkeeping (and, on US, the
+ * Stripe Transfer). Flipping it here would lie about the money having moved.
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
         // Verify ownership as buyer
         const { data: order, error: orderError } = await supabase
             .from('orders')
-            .select('id, listing_id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee')
+            .select('id, listing_id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee, delivered_at')
             .eq('id', orderId)
             .single();
 
@@ -74,15 +75,19 @@ export async function POST(request: NextRequest) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
-        // Bring funds_release_at forward to now so the next release-funds cron
-        // tick picks this order up. CAS on escrow_status guards against a race
-        // with the cron already having released this order.
+        // Complete the order now (the buyer has the goods and said so) and
+        // bring funds_release_at forward so the next release-funds cron tick
+        // does the escrow bookkeeping + seller payout notification. Keep the
+        // carrier's real delivered_at if the Flash webhook/cron already set it
+        // — the buyer's click time is a confirmation, not a delivery event.
+        // CAS on escrow_status guards against a race with the cron already
+        // having released this order.
         const { data: updated, error: updateError } = await admin
             .from('orders')
             .update({
-                status: 'delivered', // release-funds requires status='delivered'
+                status: 'completed',
                 completed_at: new Date().toISOString(),
-                delivered_at: new Date().toISOString(),
+                delivered_at: order.delivered_at || new Date().toISOString(),
                 funds_release_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             })

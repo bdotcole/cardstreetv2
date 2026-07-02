@@ -49,11 +49,13 @@ serve(async (_req) => {
         console.log('[release-funds] Running funds release job...')
 
         // Find orders ready for fund release
-        // Criteria: delivered, escrow held, past the 48-hour release date, NOT already paid out
+        // Criteria: delivered OR completed (buyer confirm in /api/orders/complete
+        // sets status='completed' immediately for UI truth, with escrow still
+        // held), escrow held, past the release date, NOT already paid out
         const { data: orders, error: fetchError } = await supabase
             .from('orders')
             .select('*')
-            .eq('status', 'delivered')
+            .in('status', ['delivered', 'completed'])
             .eq('escrow_status', 'held')
             .is('stripe_payout_id', null) // Idempotency: skip orders already paid
             .lte('funds_release_at', new Date().toISOString())
@@ -231,7 +233,9 @@ serve(async (_req) => {
                     .update({
                         escrow_status: 'released',
                         status: 'completed',
-                        completed_at: new Date().toISOString(),
+                        // Keep the buyer's confirm time if /api/orders/complete
+                        // already stamped it; this tick is bookkeeping, not the event.
+                        completed_at: order.completed_at || new Date().toISOString(),
                         stripe_payout_id: payoutOrTransferId,
                     })
                     .eq('id', order.id)
