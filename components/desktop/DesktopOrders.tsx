@@ -138,6 +138,24 @@ export default function DesktopOrders() {
         if (user) fetchTab(tab);
     }, [user, tab, fetchTab]);
 
+    // Dismiss a delivered/completed shipment from the "To ship" tab. Same
+    // semantics as the mobile swipe: stamps seller_cleared_at; the order
+    // stays in Sales History. Optimistic removal with refetch on failure.
+    const clearShipment = async (orderId: string) => {
+        setShipments((prev) => prev.filter((s) => s.id !== orderId));
+        try {
+            const res = await fetch('/api/profile/shipments/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId }),
+            });
+            if (!res.ok) throw new Error();
+        } catch {
+            showToast(t('desktop.orders.toastClearFailed'), 'error');
+            fetchTab('shipments');
+        }
+    };
+
     const openLabel = async (orderId: string) => {
         try {
             const res = await fetch(`/api/orders/${orderId}/label/url`, { method: 'POST' });
@@ -282,23 +300,39 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {shipments.map((order) => (
+                                {shipments.map((order) => {
+                                    // Delivered/completed rows linger as a delivery
+                                    // notice until cleared — label printing no longer
+                                    // applies to them.
+                                    const isDelivered = ['delivered', 'completed'].includes(order.status);
+                                    return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3">
                                         <CardCell cardData={order.listing?.card_data} condition={order.listing?.condition} />
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
-                                            <StatusChip status={order.status} />
+                                            <StatusChip status={isDelivered ? 'delivered' : order.status} />
                                             <span className="text-lg font-black text-brand-cyan">{formatTHB(order.total_amount)}</span>
-                                            <button
-                                                onClick={() => openLabel(order.id)}
-                                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-                                            >
-                                                <i className="fa-solid fa-print mr-2 text-slate-400"></i>
-                                                {t('desktop.orders.shippingLabel')}
-                                            </button>
+                                            {isDelivered ? (
+                                                <button
+                                                    onClick={() => clearShipment(order.id)}
+                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                                >
+                                                    <i className="fa-solid fa-check mr-2 text-emerald-400"></i>
+                                                    {t('desktop.orders.clearShipment')}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => openLabel(order.id)}
+                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                                >
+                                                    <i className="fa-solid fa-print mr-2 text-slate-400"></i>
+                                                    {t('desktop.orders.shippingLabel')}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )
                     )}
