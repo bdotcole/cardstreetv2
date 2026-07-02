@@ -91,26 +91,15 @@ serve(async (_req) => {
 
                 const orderRegion: Region = order.stripe_region === 'th' ? 'th' : 'us'
 
-                // Acquire the platform's Stripe client. If the key isn't
-                // configured for this region we skip the order (rather than
-                // failing the whole batch) so the cron keeps making progress
-                // on the other region. Once the env var lands, retries pick
-                // these up automatically.
-                let stripe: Stripe
-                try {
-                    stripe = getStripeForRegion(orderRegion)
-                } catch (envErr: any) {
-                    console.warn(
-                        `[release-funds] Stripe ${orderRegion.toUpperCase()} not configured — ` +
-                        `skipping order ${order.id} until the key is set. ${envErr.message}`
-                    )
-                    results.push({
-                        orderId: order.id,
-                        status: 'skipped',
-                        error: `Stripe ${orderRegion.toUpperCase()} not configured`,
-                    })
-                    continue
-                }
+                // NOTE: the Stripe client is fetched lazily, inside the US
+                // transfer branch below (Step 3) — NOT here. TH direct-charge
+                // orders never call Stripe for the payout itself (funds already
+                // settled to the seller at charge time), so gating every order
+                // on STRIPE_SECRET_KEY_TH being configured was blocking every TH
+                // payout on a key the TH path doesn't use, e.g. order 26126d8d
+                // sat with stripe_payout_id=null / escrow_status='held' with the
+                // release-funds response literally saying
+                // {"status":"skipped","error":"Stripe TH not configured"}.
 
                 // ─── Step 1: Fetch seller's Stripe Connect account ───
                 const { data: sellerProfile, error: profileError } = await supabase
@@ -195,6 +184,25 @@ serve(async (_req) => {
                     payoutOrTransferId = `direct_charge_${order.id}`
                     console.log(`[release-funds] Marking order ${order.id} completed (TH direct charge — funds already with seller)`)
                 } else {
+                    // Only the US transfer path actually calls Stripe — fetch
+                    // the client here, not upfront, so a missing/misnamed US
+                    // key can never block TH payouts.
+                    let stripe: Stripe
+                    try {
+                        stripe = getStripeForRegion(orderRegion)
+                    } catch (envErr: any) {
+                        console.warn(
+                            `[release-funds] Stripe ${orderRegion.toUpperCase()} not configured — ` +
+                            `skipping order ${order.id} until the key is set. ${envErr.message}`
+                        )
+                        results.push({
+                            orderId: order.id,
+                            status: 'skipped',
+                            error: `Stripe ${orderRegion.toUpperCase()} not configured`,
+                        })
+                        continue
+                    }
+
                     console.log(`[release-funds] Transferring ${transferAmountCents} ${transferCurrency} subunits to ${sellerProfile.stripe_account_id} for order ${order.id} on US platform...`)
                     // Stripe Idempotency-Key keyed on order.id closes two race windows:
                     //   1. Transfer succeeds, but the subsequent DB update fails.
@@ -264,7 +272,12 @@ serve(async (_req) => {
                 let notifyNetCents = transferAmountCents
                 if (orderRegion === 'th' && order.payment_id) {
                     try {
-                        const pi = await stripe.paymentIntents.retrieve(
+                        // Best-effort only — getStripeForRegion('th') can throw
+                        // if STRIPE_SECRET_KEY_TH isn't set; the catch below
+                        // already falls back to the gross figure, so a missing
+                        // key here degrades the notification, not the payout.
+                        const stripeTh = getStripeForRegion('th')
+                        const pi = await stripeTh.paymentIntents.retrieve(
                             order.payment_id,
                             { expand: ['latest_charge.balance_transaction'] },
                             { stripeAccount: sellerProfile.stripe_account_id }
