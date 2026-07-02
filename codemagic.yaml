@@ -55,6 +55,38 @@ workflows:
       - name: Capacitor sync (copy web assets + resolve Swift packages)
         script: npx cap sync ios
 
+      # Release safety net — never ship a shell without its synced web assets.
+      # iOS twin of the verifyCapacitorAssets Gradle task in
+      # android/app/build.gradle: capacitor.config.json + public/ are GENERATED
+      # by cap sync above (not committed), and a config without server.url boots
+      # the WebView to the blank bundled placeholder instead of cardstreet.app.
+      # That exact miss shipped live on Android once (versionCode 13,
+      # 2026-07-01) and bricked every user. Xcode only catches the file being
+      # absent (it's in the Resources phase); content is checked here, before
+      # the signing + build minutes are spent and TestFlight auto-submit fires.
+      - name: Verify Capacitor assets (server.url guardrail)
+        script: |
+          set -e
+          CONFIG=ios/App/App/capacitor.config.json
+          HINT='Run `npx cap sync ios` and check capacitor.config.ts.'
+          if [ ! -f "$CONFIG" ]; then
+            echo "FAIL: $CONFIG not generated — did cap sync run? $HINT"; exit 1
+          fi
+          if ! grep -Eq '"url"[[:space:]]*:[[:space:]]*"https://cardstreet\.app"' "$CONFIG"; then
+            echo "FAIL: $CONFIG has no server.url=https://cardstreet.app — the app would boot to a blank localhost page. $HINT"
+            cat "$CONFIG"; exit 1
+          fi
+          # middleware.ts + Pro native-shell detection key off this UA marker;
+          # without it the app is served the desktop site.
+          if ! grep -Eq '"appendUserAgent"[[:space:]]*:[[:space:]]*"CardStreetApp"' "$CONFIG"; then
+            echo "FAIL: $CONFIG lost appendUserAgent=CardStreetApp. $HINT"
+            cat "$CONFIG"; exit 1
+          fi
+          if [ ! -f ios/App/App/public/index.html ]; then
+            echo "FAIL: ios/App/App/public/index.html missing — cap sync did not copy web assets. $HINT"; exit 1
+          fi
+          echo "OK: capacitor.config.json server.url + UA marker + web assets verified"
+
       - name: Set build number from Codemagic counter
         script: |
           cd ios/App
