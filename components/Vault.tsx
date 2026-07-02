@@ -167,41 +167,29 @@ const Vault: React.FC<VaultProps> = ({
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
-  // Handle Android Back Button
+  // Hardware back inside the Vault. The page shell owns the single Capacitor
+  // backButton listener and dispatches a cancelable 'vault-back' event while
+  // this tab is active. Consume it (preventDefault) when there is an overlay
+  // to close or a sub-view to step out of — a card open from a collection
+  // must land back in that collection, not at the Vault root — and leave it
+  // unconsumed at the root so the shell's tab fallback runs.
   useEffect(() => {
-    let backListener: any;
+    const handleBack = (event: Event) => {
+      const consume = (step: () => void) => { event.preventDefault(); step(); };
 
-    const setupBackListener = async () => {
-      // Dynamic import to avoid SSR issues
-      const { App } = await import('@capacitor/app');
-
-      backListener = await App.addListener('backButton', () => {
-        if (view === 'set-detail') {
-          setView('sets');
-        } else if (view === 'sets') {
-          setView(gameHasMultipleLanguages(selectedGame) ? 'master' : 'master-game');
-        } else if (view === 'master') {
-          setView('master-game');
-        } else if (view === 'master-game') {
-          setView('folders');
-        } else if (view === 'folders') {
-          // If at root of Vault, minimize app (default behavior)
-          App.minimizeApp();
-        } else {
-          // Default fallback for other views
-          setView('folders');
-        }
-      });
+      if (viewingCard) return consume(() => { setViewingCard(null); setViewingItem(null); });
+      if (listingTarget) return consume(() => onCancelListing());
+      if (isSelectingForListing) return consume(() => setIsSelectingForListing(false));
+      if (view === 'set-detail') return consume(() => setView('sets'));
+      if (view === 'sets') return consume(() => setView(gameHasMultipleLanguages(selectedGame) ? 'master' : 'master-game'));
+      if (view === 'master') return consume(() => setView('master-game'));
+      if (view !== 'folders') return consume(() => setView('folders'));
+      // At the Vault root — leave unconsumed, the shell decides.
     };
 
-    setupBackListener();
-
-    return () => {
-      if (backListener) {
-        backListener.remove();
-      }
-    };
-  }, [view, selectedGame]);
+    window.addEventListener('vault-back', handleBack);
+    return () => window.removeEventListener('vault-back', handleBack);
+  }, [view, selectedGame, viewingCard, listingTarget, isSelectingForListing, onCancelListing]);
 
   // Close sort menu when clicking outside
   useEffect(() => {

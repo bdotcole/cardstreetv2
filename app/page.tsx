@@ -51,6 +51,15 @@ import PartnerFinishSetup from '@/components/PartnerFinishSetup';
 import SellerProfile from '@/components/SellerProfile';
 import BuylistRequest from '@/components/BuylistRequest';
 
+// Tabs that are safe to land on directly (via /?tab=<name> or a same-session
+// restore). 'seller_profile' needs a seller loaded in state and 'home' no
+// longer renders, so neither is a valid landing target.
+const LANDING_TABS = ['explore', 'marketplace', 'add', 'vault', 'profile', 'partner'] as const;
+type LandingTab = (typeof LANDING_TABS)[number];
+const isLandingTab = (v: string | null): v is LandingTab =>
+    !!v && (LANDING_TABS as readonly string[]).includes(v);
+const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
+
 export default function HomePage() {
     const { t } = useTranslation();
     const { showToast } = useToast();
@@ -60,13 +69,54 @@ export default function HomePage() {
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
     // the Profile component handles the rest — but the user needs to actually
     // be on the Profile tab for that to mount. Switch them there on arrival.
+    //
+    // Ref-guarded: StrictMode re-runs this effect after the ?tab= branch has
+    // already stripped the URL, and the second pass would fall into the
+    // sessionStorage-restore branch (whose value is still stale in the same
+    // cycle) and undo the landing choice.
+    const landingHandledRef = useRef(false);
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const cn = new URLSearchParams(window.location.search).get('stripe_connect');
+        if (landingHandledRef.current) return;
+        landingHandledRef.current = true;
+        const params = new URLSearchParams(window.location.search);
+        const cn = params.get('stripe_connect');
         if (cn === 'complete' || cn === 'refresh') {
             setActiveTab('profile');
+            return;
         }
+
+        // /?tab=<name> lands on an explicit tab — the Pro hub's back button
+        // returns via /?tab=profile. Strip the param (keeping everything
+        // else) so a refresh doesn't re-apply it.
+        const tab = params.get('tab');
+        if (isLandingTab(tab)) {
+            setActiveTab(tab);
+            params.delete('tab');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
+        // Re-mounting within the same session (back from /premium, /grade,
+        // /trade, /insights, OAuth round-trips) would otherwise reset to the
+        // marketplace default — restore the tab the user was on.
+        try {
+            const saved = sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+            if (isLandingTab(saved)) setActiveTab(saved);
+        } catch { /* storage unavailable (private mode) */ }
     }, []);
+
+    // Remember the current tab so navigations away from the shell (Pro pages,
+    // Stripe redirects) come back to it instead of the marketplace default.
+    useEffect(() => {
+        if (!isLandingTab(activeTab)) return;
+        try { sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab); } catch { /* storage unavailable */ }
+    }, [activeTab]);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
 
@@ -946,9 +996,15 @@ export default function HomePage() {
                     return;
                 }
 
-                // Layer 2: Vault Internal Navigation
+                // Layer 2: Vault internal navigation. Vault owns its sub-view
+                // stack (folders → collections/sets → card overlay), so offer
+                // it the press as a cancelable event: it preventDefault()s
+                // when it stepped back internally, and leaves the event
+                // untouched at its root so the tab fallback below runs.
+                // (dispatchEvent returns false when the event was canceled.)
                 if (state.activeTab === 'vault') {
-                    return;
+                    const unconsumed = window.dispatchEvent(new CustomEvent('vault-back', { cancelable: true }));
+                    if (!unconsumed) return;
                 }
 
                 // Layer 3: Navigation History / Root

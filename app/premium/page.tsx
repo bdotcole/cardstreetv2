@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -93,6 +94,15 @@ function PremiumPageInner() {
   return (
     <main className="min-h-screen bg-brand-darker text-white px-5 py-10">
       <div className="w-full max-w-[480px] mx-auto">
+        {/* Pro lives outside the tab shell; back returns to the Profile tab
+            it is reached from, not the shell's marketplace default. */}
+        <Link
+          href="/?tab=profile"
+          aria-label="Back"
+          className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center active:scale-90 transition-all mb-6"
+        >
+          <i className="fa-solid fa-chevron-left text-slate-400 text-sm"></i>
+        </Link>
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-3xl bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">
             <i className="fa-solid fa-crown text-brand-cyan text-2xl"></i>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -17,6 +18,15 @@ function TradePageInner() {
 
   return (
     <main className="min-h-screen bg-brand-darker text-white px-5 py-10">
+      <div className="w-full max-w-[480px] mx-auto mb-4">
+        <Link
+          href="/premium"
+          aria-label="Back"
+          className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center active:scale-90 transition-all"
+        >
+          <i className="fa-solid fa-chevron-left text-slate-400 text-sm"></i>
+        </Link>
+      </div>
       {loading ? (
         <div className="min-h-[60vh] flex items-center justify-center">
           <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-2xl"></i>
