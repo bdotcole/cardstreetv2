@@ -178,7 +178,7 @@ export default function DesktopCardDetail({
                             priority
                             unoptimized={shouldSkipNextOptimization(imageUrl)}
                             onError={() => setCatalogArtFailed(true)}
-                            className="object-cover"
+                            className={card.isSealed ? 'object-contain p-4' : 'object-cover'}
                         />
                     </div>
                 </div>
@@ -187,8 +187,9 @@ export default function DesktopCardDetail({
                     <h1 className="text-3xl font-black text-white">{card.name}</h1>
                     <p className="text-sm text-slate-400 font-bold uppercase tracking-wide mt-2">
                         {card.set}
-                        {card.number ? ` · #${card.number}` : ''}
-                        {card.rarity ? ` · ${card.rarity}` : ''}
+                        {/* Sealed products have no collector number or rarity */}
+                        {!card.isSealed && card.number ? ` · #${card.number}` : ''}
+                        {!card.isSealed && card.rarity ? ` · ${card.rarity}` : ''}
                     </p>
 
                     {card.marketPrice > 0 && (

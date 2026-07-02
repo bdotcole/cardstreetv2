@@ -406,7 +406,7 @@ function CollectionPanel({
                                         placeholder="blur"
                                         blurDataURL={CARD_BLUR_DATA_URL}
                                         unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
-                                        className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${card.isSealed ? 'object-contain p-3' : 'object-cover'}`}
                                     />
                                     {item.isListing && (
                                         <span className="absolute top-2 left-2 text-[8px] font-black uppercase tracking-widest bg-brand-cyan/90 text-brand-darker px-1.5 py-0.5 rounded">
@@ -417,7 +417,7 @@ function CollectionPanel({
                                 <div className="p-3">
                                     <h3 className="text-sm font-bold text-white truncate">{card.name}</h3>
                                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                                        {card.set}{card.number ? ` · #${card.number}` : ''}
+                                        {card.isSealed ? card.set : `${card.set}${card.number ? ` · #${card.number}` : ''}`}
                                     </p>
                                     <div className="flex items-center justify-between mt-1.5">
                                         <p className="text-sm font-black text-brand-cyan">{formatTHB(card.marketPrice || 0)}</p>
@@ -481,7 +481,7 @@ function WishlistPanel({
                                 placeholder="blur"
                                 blurDataURL={CARD_BLUR_DATA_URL}
                                 unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
-                                className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                                className={`group-hover:scale-[1.03] transition-transform duration-300 ${card.isSealed ? 'object-contain p-3' : 'object-cover'}`}
                             />
                         </div>
                         <div className="p-3">

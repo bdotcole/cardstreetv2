@@ -286,7 +286,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                     placeholder="blur"
                     blurDataURL={CARD_BLUR_DATA_URL}
                     unoptimized={shouldSkipNextOptimization(thumbUrl)}
-                    className="object-cover"
+                    className={listing.card_data.isSealed ? 'object-contain p-2' : 'object-cover'}
                   />
                   {dealPct !== null && (
                     <span className="absolute top-1.5 left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40">

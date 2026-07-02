@@ -121,7 +121,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         {listings.map(listing => (
                             <div key={listing.id} className="glass rounded-xl p-2 border border-white/5 group relative active:scale-95 transition-all">
                                 <div className="aspect-[3/4] bg-brand-darker rounded-lg mb-2 relative overflow-hidden">
-                                    <img src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                    <img src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)} loading="lazy" decoding="async" className={`w-full h-full ${listing.card_data.isSealed ? 'object-contain p-1' : 'object-cover'}`} />
                                     <span className="absolute top-1 right-1 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
                                         {listing.condition}
                                     </span>

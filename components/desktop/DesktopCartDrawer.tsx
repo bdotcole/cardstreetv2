@@ -203,7 +203,7 @@ export default function DesktopCartDrawer() {
                                                     src={getThumbnailUrl(item.card.images?.small || item.card.imageUrl)}
                                                     alt=""
                                                     loading="lazy"
-                                                    className="w-full h-full object-cover"
+                                                    className={`w-full h-full ${item.card.isSealed ? 'object-contain' : 'object-cover'}`}
                                                 />
                                             </span>
                                             <div className="flex-1 min-w-0">

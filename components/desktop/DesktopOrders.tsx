@@ -69,7 +69,7 @@ function CardCell({ cardData, condition }: { cardData: any; condition?: string }
             <span className="w-10 h-14 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
                 {cardData?.images?.small && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={getThumbnailUrl(cardData.images.small)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    <img src={getThumbnailUrl(cardData.images.small)} alt="" loading="lazy" className={`w-full h-full ${cardData?.isSealed ? 'object-contain' : 'object-cover'}`} />
                 )}
             </span>
             <div className="min-w-0">
