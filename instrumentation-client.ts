@@ -15,7 +15,9 @@ if (dsn) {
     Sentry.init({
         dsn,
         environment: process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' ? 'production' : 'development',
-        tracesSampleRate: 1.0,
+        // 10% transaction sampling — full tracing at ad-push traffic volume
+        // burns the quota error events need. Errors are always captured.
+        tracesSampleRate: 0.1,
         replaysSessionSampleRate: 0.1,
         replaysOnErrorSampleRate: 1.0,
         // Google Tag Manager / gtag injected-script parse failures

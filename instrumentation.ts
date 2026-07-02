@@ -19,11 +19,14 @@ export async function register() {
 
     const environment = process.env.VERCEL_ENV === 'production' ? 'production' : 'development';
 
+    // 10% transaction sampling: full tracing at launch-traffic volume burns the
+    // Sentry quota that error events need. Errors are always captured; this
+    // only samples performance transactions.
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         Sentry.init({
             dsn,
             environment,
-            tracesSampleRate: 1.0,
+            tracesSampleRate: 0.1,
         });
     }
 
@@ -31,7 +34,7 @@ export async function register() {
         Sentry.init({
             dsn,
             environment,
-            tracesSampleRate: 1.0,
+            tracesSampleRate: 0.1,
         });
     }
 }
