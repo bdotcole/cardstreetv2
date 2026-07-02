@@ -65,13 +65,15 @@ export interface MarketplaceListing {
     seller?: SellerProfile;
 }
 
+export type ListingSort = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
+
 export interface ListingFilters {
     search?: string;
     language?: string;
     game?: string;
     minPrice?: number;
     maxPrice?: number;
-    sort?: 'newest' | 'price_asc' | 'price_desc';
+    sort?: ListingSort;
     limit?: number;
     offset?: number;
 }
@@ -95,71 +97,87 @@ export const marketplaceService = {
         } = filters;
 
         try {
-            let query = supabase
-                .from('listings')
-                .select(`
-                    id,
-                    seller_id,
-                    card_id,
-                    card_data,
-                    price,
-                    condition,
-                    is_graded,
-                    grading_company,
-                    grade,
-                    image_front_url,
-                    image_back_url,
-                    status,
-                    created_at,
-                    updated_at,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
-                `)
-                .eq('status', 'active');
+            const buildQuery = (sortKey: ListingSort) => {
+                let query = supabase
+                    .from('listings')
+                    .select(`
+                        id,
+                        seller_id,
+                        card_id,
+                        card_data,
+                        price,
+                        condition,
+                        is_graded,
+                        grading_company,
+                        grade,
+                        image_front_url,
+                        image_back_url,
+                        status,
+                        created_at,
+                        updated_at,
+                        seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+                    `)
+                    .eq('status', 'active');
 
-            // Server-side search: filter by card name inside JSONB
-            if (search && search.trim().length > 0) {
-                query = query.ilike('card_data->>name', `%${search.trim()}%`);
-            }
-
-            // Server-side language filter
-            if (language && language !== 'all') {
-                query = query.eq('card_data->>language', language);
-            }
-
-            // Server-side game filter. Legacy listings predate multi-game support
-            // and have no game in card_data, so treat them as Pokemon.
-            if (game && game !== 'all') {
-                if (game === 'pokemon') {
-                    query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null');
-                } else {
-                    query = query.eq('card_data->>game', game);
+                // Server-side search: filter by card name inside JSONB
+                if (search && search.trim().length > 0) {
+                    query = query.ilike('card_data->>name', `%${search.trim()}%`);
                 }
-            }
 
-            // Server-side price range
-            if (minPrice !== undefined && minPrice > 0) {
-                query = query.gte('price', minPrice);
-            }
-            if (maxPrice !== undefined && maxPrice < 100000) {
-                query = query.lte('price', maxPrice);
-            }
+                // Server-side language filter
+                if (language && language !== 'all') {
+                    query = query.eq('card_data->>language', language);
+                }
 
-            // Server-side sort
-            switch (sort) {
-                case 'price_asc':
-                    query = query.order('price', { ascending: true });
-                    break;
-                case 'price_desc':
-                    query = query.order('price', { ascending: false });
-                    break;
-                default:
-                    query = query.order('created_at', { ascending: false });
+                // Server-side game filter. Legacy listings predate multi-game support
+                // and have no game in card_data, so treat them as Pokemon.
+                if (game && game !== 'all') {
+                    if (game === 'pokemon') {
+                        query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null');
+                    } else {
+                        query = query.eq('card_data->>game', game);
+                    }
+                }
+
+                // Server-side price range
+                if (minPrice !== undefined && minPrice > 0) {
+                    query = query.gte('price', minPrice);
+                }
+                if (maxPrice !== undefined && maxPrice < 100000) {
+                    query = query.lte('price', maxPrice);
+                }
+
+                // Server-side sort
+                switch (sortKey) {
+                    case 'price_asc':
+                        query = query.order('price', { ascending: true });
+                        break;
+                    case 'price_desc':
+                        query = query.order('price', { ascending: false });
+                        break;
+                    case 'best_deals':
+                        // deal_ratio = price / market snapshot (generated column,
+                        // 20260702_listing_deal_ratio.sql). Lowest ratio = deepest
+                        // discount; listings with no market price sort last.
+                        query = query
+                            .order('deal_ratio', { ascending: true, nullsFirst: false })
+                            .order('created_at', { ascending: false });
+                        break;
+                    default:
+                        query = query.order('created_at', { ascending: false });
+                }
+
+                // Pagination
+                return query.range(offset, offset + limit - 1);
+            };
+
+            let { data, error } = await buildQuery(sort);
+            // If the deal_ratio migration hasn't been applied yet, degrade to
+            // newest-first instead of an empty marketplace.
+            if (error && sort === 'best_deals') {
+                console.warn('best_deals sort unavailable, falling back to newest:', error.message);
+                ({ data, error } = await buildQuery('newest'));
             }
-
-            // Pagination
-            query = query.range(offset, offset + limit - 1);
-
-            const { data, error } = await query;
             if (error) throw error;
             return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
         } catch (error) {

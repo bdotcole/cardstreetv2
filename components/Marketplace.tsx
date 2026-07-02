@@ -3,10 +3,11 @@ import Image from 'next/image';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { MarketplaceListing, marketplaceService } from '@/services/marketplaceService';
+import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { Card } from '@/types';
 import { GAMES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -35,7 +36,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedGame, setSelectedGame] = useState(initialGame || 'all');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
-  const [sortOrder, setSortOrder] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
+  // Best deals first: discount vs. market snapshot is the default browse order.
+  const [sortOrder, setSortOrder] = useState<ListingSort>('best_deals');
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
 
@@ -160,6 +162,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
             {/* Sort Options */}
             <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
               {([
+                { id: 'best_deals', label: t('marketplace.deals') },
                 { id: 'newest', label: t('marketplace.new') },
                 { id: 'price_asc', label: t('marketplace.lowPrice') },
                 { id: 'price_desc', label: t('marketplace.highPrice') }
@@ -258,107 +261,115 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
       {/* Scrollable Listings Grid */}
       <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
-        <div className="grid grid-cols-1 gap-2">
-          {listings.length > 0 ? listings.map((listing, idx) => (
-            <div
-              key={listing.id}
-              onClick={() => onSelectListing ? onSelectListing(listing) : onSelectCard(listing.card_data)}
-              className="bg-[#1e293b]/50 border border-white/5 hover:border-brand-cyan/30 rounded-xl p-2 flex gap-3 group active:scale-[0.98] transition-all relative overflow-hidden cursor-pointer"
-            >
-              {/* Highlight Bar */}
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-cyan to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-              {/* Card Image — lazy load, fixed dimensions to prevent CLS */}
-              <div className="w-20 aspect-[3/4] bg-brand-darker rounded-lg relative overflow-hidden flex-shrink-0 border border-white/10">
-                <Image
-                  src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)}
-                  alt={listing.card_data.name || 'Card'}
-                  fill
-                  sizes="80px"
-                  loading={idx < 4 ? 'eager' : 'lazy'}
-                  placeholder="blur"
-                  blurDataURL={CARD_BLUR_DATA_URL}
-                  unoptimized={shouldSkipNextOptimization(getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl))}
-                  className="object-cover"
-                />
-              </div>
-
-              {/* Card Details */}
-              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                <div>
-                  <div className="flex justify-between items-start">
-                    <h3 className="text-white font-bold text-sm truncate pr-2">{listing.card_data.name}</h3>
-                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${listing.condition === 'NM' ? 'bg-brand-green/10 text-brand-green border-brand-green/20' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
-                      {listing.condition}
+        <div className="grid grid-cols-2 gap-3">
+          {listings.length > 0 ? listings.map((listing, idx) => {
+            const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
+            const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+            const formatPrice = (thb: number) => {
+              const v = thb * exchangeRate;
+              return `${CURRENCY_SYMBOLS[currency] || currency}${v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
+            };
+            return (
+              <div
+                key={listing.id}
+                onClick={() => onSelectListing ? onSelectListing(listing) : onSelectCard(listing.card_data)}
+                className="bg-[#1e293b]/50 border border-white/5 hover:border-brand-cyan/30 rounded-xl overflow-hidden flex flex-col group active:scale-[0.98] transition-all cursor-pointer"
+              >
+                {/* Card Image — fixed aspect to prevent CLS */}
+                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
+                  <Image
+                    src={thumbUrl}
+                    alt={listing.card_data.name || 'Card'}
+                    fill
+                    sizes="(max-width: 768px) 45vw, 200px"
+                    loading={idx < 6 ? 'eager' : 'lazy'}
+                    placeholder="blur"
+                    blurDataURL={CARD_BLUR_DATA_URL}
+                    unoptimized={shouldSkipNextOptimization(thumbUrl)}
+                    className="object-cover"
+                  />
+                  {dealPct !== null && (
+                    <span className="absolute top-1.5 left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40">
+                      -{dealPct}%
                     </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide truncate">{listing.card_data.set}</p>
+                  )}
+                  <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
+                    {conditionBadgeLabel(listing)}
+                  </span>
                 </div>
 
-                {/* Seller */}
-                <div
-                  onClick={(e) => { e.stopPropagation(); if (listing.seller) onSellerClick(listing.seller); }}
-                  className="flex items-center gap-1.5 mt-2 bg-black/20 p-1.5 rounded-lg w-fit cursor-pointer hover:bg-white/10 transition-colors"
-                >
-                  <div className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden">
-                    {listing.seller?.avatar_url && (
-                      <img
-                        src={listing.seller.avatar_url}
-                        alt=""
-                        width={16}
-                        height={16}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <span className="text-[9px] text-slate-400 font-bold max-w-[80px] truncate">{listing.seller?.display_name || 'Unknown Seller'}</span>
-                  {(() => {
-                    const trust = getSellerTrust(listing.seller);
-                    if (trust.kind === 'partner')
-                      return <span className="text-[8px] text-brand-cyan font-bold whitespace-nowrap">{t('seller.officialPartner')}</span>;
-                    if (trust.kind === 'new')
-                      return <span className="text-[8px] text-slate-500 font-bold whitespace-nowrap">{t('seller.newSeller')}</span>;
-                    return <span className="text-[8px] text-yellow-500 whitespace-nowrap">★ {trust.rating.toFixed(1)}</span>;
-                  })()}
-                </div>
-              </div>
+                {/* Card Details */}
+                <div className="p-2 flex flex-col flex-1 min-w-0">
+                  <h3 className="text-white font-bold text-xs truncate">{listing.card_data.name}</h3>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">{listing.card_data.set}</p>
 
-              {/* Price & Action */}
-              <div className="flex flex-col justify-between items-end border-l border-white/5 pl-3 min-w-[80px]">
-                <div className="text-right">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">{t('card.askPrice')}</p>
-                  <p className="text-lg font-black text-brand-cyan leading-none">
-                    {CURRENCY_SYMBOLS[currency] || currency}{' '}
-                    {(listing.price * exchangeRate) < 1
-                      ? (listing.price * exchangeRate).toFixed(2)
-                      : Math.round(listing.price * exchangeRate).toLocaleString()}
-                  </p>
+                  {/* Price & Action */}
+                  <div className="flex items-end justify-between gap-1 mt-auto pt-1.5">
+                    <div className="min-w-0">
+                      <p className="text-base font-black text-brand-cyan leading-none truncate">
+                        {formatPrice(listing.price)}
+                      </p>
+                      {dealPct !== null && (
+                        <p className="text-[9px] text-slate-500 font-bold line-through mt-0.5 truncate">
+                          {formatPrice(listing.card_data.marketPrice)}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onAddToCart) {
+                          onAddToCart({
+                            id: listing.id,
+                            cardId: listing.card_id,
+                            card: listing.card_data,
+                            price: listing.price,
+                            sellerId: listing.seller_id,
+                            sellerName: listing.seller?.display_name || 'Unknown',
+                            condition: listing.condition
+                          });
+                        }
+                      }}
+                      className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 hover:bg-brand-green hover:text-brand-darker text-brand-green flex items-center justify-center transition-all shadow-lg shadow-black/20 active:scale-90"
+                      aria-label={`Add ${listing.card_data.name} to cart`}
+                    >
+                      <i className="fa-solid fa-cart-plus text-xs"></i>
+                    </button>
+                  </div>
+
+                  {/* Seller */}
+                  <div
+                    onClick={(e) => { e.stopPropagation(); if (listing.seller) onSellerClick(listing.seller); }}
+                    className="flex items-center gap-1 mt-1.5 cursor-pointer hover:bg-white/5 rounded-md p-0.5 -m-0.5 transition-colors"
+                  >
+                    <div className="w-3.5 h-3.5 rounded-full bg-slate-700 overflow-hidden flex-shrink-0">
+                      {listing.seller?.avatar_url && (
+                        <img
+                          src={listing.seller.avatar_url}
+                          alt=""
+                          width={14}
+                          height={14}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-bold truncate">{listing.seller?.display_name || 'Unknown Seller'}</span>
+                    {(() => {
+                      const trust = getSellerTrust(listing.seller);
+                      if (trust.kind === 'partner')
+                        return <i className="fa-solid fa-circle-check text-[8px] text-brand-cyan flex-shrink-0" title={t('seller.officialPartner')}></i>;
+                      if (trust.kind === 'new')
+                        return null;
+                      return <span className="text-[8px] text-yellow-500 whitespace-nowrap flex-shrink-0">★ {trust.rating.toFixed(1)}</span>;
+                    })()}
+                  </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onAddToCart) {
-                      onAddToCart({
-                        id: listing.id,
-                        cardId: listing.card_id,
-                        card: listing.card_data,
-                        price: listing.price,
-                        sellerId: listing.seller_id,
-                        sellerName: listing.seller?.display_name || 'Unknown',
-                        condition: listing.condition
-                      });
-                    }
-                  }}
-                  className="w-10 h-10 rounded-full bg-white/5 hover:bg-brand-green hover:text-brand-darker text-brand-green flex items-center justify-center transition-all shadow-lg shadow-black/20 active:scale-90"
-                >
-                  <i className="fa-solid fa-cart-plus"></i>
-                </button>
               </div>
-            </div>
-          )) : !isLoading ? (
-            <div className="text-center py-20 px-6">
+            );
+          }) : !isLoading ? (
+            <div className="col-span-2 text-center py-20 px-6">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
@@ -374,26 +385,22 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           ) : null}
 
           {/* Loading skeleton */}
-          {isLoading && (
-            <div className="space-y-2 mt-2">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="bg-[#1e293b]/50 border border-white/5 rounded-xl p-2 flex gap-3 animate-pulse">
-                  <div className="w-20 aspect-[3/4] bg-white/5 rounded-lg flex-shrink-0" />
-                  <div className="flex-1 space-y-2 py-2">
-                    <div className="h-3 bg-white/5 rounded w-3/4" />
-                    <div className="h-2 bg-white/5 rounded w-1/2" />
-                  </div>
-                </div>
-              ))}
+          {isLoading && [1, 2, 3, 4, 5, 6].map(i => (
+            <div key={`skeleton-${i}`} className="bg-[#1e293b]/50 border border-white/5 rounded-xl overflow-hidden animate-pulse">
+              <div className="aspect-[3/4] bg-white/5" />
+              <div className="p-2 space-y-2">
+                <div className="h-3 bg-white/5 rounded w-3/4" />
+                <div className="h-2 bg-white/5 rounded w-1/2" />
+              </div>
             </div>
-          )}
+          ))}
 
           {/* Infinite scroll trigger */}
-          {!isLoading && hasMore && <div ref={observerRef} className="h-8" />}
+          {!isLoading && hasMore && <div ref={observerRef} className="col-span-2 h-8" />}
 
           {/* End of results */}
           {!isLoading && !hasMore && listings.length > 0 && (
-            <p className="text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest py-4">
+            <p className="col-span-2 text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest py-4">
               — {listings.length} listings shown —
             </p>
           )}

@@ -11,6 +11,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -20,7 +21,7 @@ export function formatTHB(amount: number): string {
     return `฿${amount < 1 ? amount.toFixed(2) : Math.round(amount).toLocaleString()}`;
 }
 
-type SortKey = 'newest' | 'price_asc' | 'price_desc';
+type SortKey = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
 
 export function listingToCartItem(listing: MarketplaceListing): CartItem {
     return {
@@ -100,6 +101,7 @@ export default function DesktopMarketplace() {
                     onChange={(e) => setSort(e.target.value as SortKey)}
                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
                 >
+                    <option value="best_deals">{t('desktop.sortBestDeals')}</option>
                     <option value="newest">{t('desktop.sortNewest')}</option>
                     <option value="price_asc">{t('desktop.sortPriceAsc')}</option>
                     <option value="price_desc">{t('desktop.sortPriceDesc')}</option>
@@ -182,6 +184,7 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
     const imageUrl = catalogArtFailed && listing.image_front_url
         ? getOptimizedImageUrl(listing.image_front_url, 300, 80)
         : catalogUrl;
+    const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
     return (
         <Link
             href={`/card/${listing.card_id}`}
@@ -200,21 +203,31 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                     onError={() => setCatalogArtFailed(true)}
                     className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
                 />
+                {dealPct !== null && (
+                    <span className="absolute top-2 left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40">
+                        -{dealPct}%
+                    </span>
+                )}
             </div>
             <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
                     <h3 className="text-sm font-bold text-white truncate">{listing.card_data.name}</h3>
                     <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-700/60 text-slate-300 border-slate-600">
-                        {listing.is_graded && listing.grading_company
-                            ? `${listing.grading_company} ${listing.grade ?? ''}`.trim()
-                            : listing.condition}
+                        {conditionBadgeLabel(listing)}
                     </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
                     {listing.card_data.set}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                    <p className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</p>
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                        <p className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</p>
+                        {dealPct !== null && (
+                            <p className="text-[11px] text-slate-500 font-bold line-through truncate">
+                                {formatTHB(listing.card_data.marketPrice)}
+                            </p>
+                        )}
+                    </div>
                     <button
                         onClick={(e) => {
                             e.preventDefault();
