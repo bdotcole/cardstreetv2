@@ -28,6 +28,11 @@ export interface TradeItem {
   quantity: number;
   /** On the receiving side's wishlist -- badge + ranking boost, never a filter. */
   wanted?: boolean;
+  /** Market snapshot shown on offer rows, so both traders can judge the number. */
+  condition?: string | null;
+  set?: string | null;
+  rarity?: string | null;
+  change7d?: number | null;
 }
 
 export interface TradeOffer {
@@ -44,12 +49,15 @@ export interface TradeOffer {
 
 export const MIN_OFFERS = 5;
 const MAX_OFFERS = 8;
+/** Largest combo one side of an offer may hold. */
+export const MAX_COMBO_CARDS = 4;
 
 // Combinatorics caps: pools are value-sorted first, so the caps keep the most
-// tradable-relevant cards while bounding pair/triple enumeration (~80C2 +
-// 50C3 = ~23k combos worst case -- fine for a request handler).
+// tradable-relevant cards while bounding enumeration (~80C2 + 50C3 + 30C4 =
+// ~50k combos worst case, each O(1) -- fine for a request handler).
 const PAIR_POOL = 80;
 const TRIPLE_POOL = 50;
+const QUAD_POOL = 30;
 
 const byValueDesc = (a: TradeItem, b: TradeItem) =>
   b.value - a.value || a.itemId.localeCompare(b.itemId);
@@ -80,12 +88,17 @@ interface Combo {
 }
 
 /**
- * Combos of 1..3 cards from `pool` totalling as close to `target` as
+ * Combos of 1..maxCards cards from `pool` totalling as close to `target` as
  * possible. Wanted cards score better (5% of target per wanted card) so a
  * wishlisted card wins ties, but an unwishlisted exact-value match still
  * beats a wishlisted bad one.
  */
-export function combosNear(pool: TradeItem[], target: number, keep = 24): Combo[] {
+export function combosNear(
+  pool: TradeItem[],
+  target: number,
+  keep = 24,
+  maxCards: number = MAX_COMBO_CARDS,
+): Combo[] {
   if (target <= 0 || pool.length === 0) return [];
   const sorted = [...pool].sort(byValueDesc);
 
@@ -108,21 +121,40 @@ export function combosNear(pool: TradeItem[], target: number, keep = 24): Combo[
 
   for (const a of sorted) push([a]);
 
-  const pairPool = sorted.slice(0, PAIR_POOL);
-  for (let i = 0; i < pairPool.length; i++) {
-    for (let j = i + 1; j < pairPool.length; j++) {
-      push([pairPool[i], pairPool[j]]);
+  if (maxCards >= 2) {
+    const pairPool = sorted.slice(0, PAIR_POOL);
+    for (let i = 0; i < pairPool.length; i++) {
+      for (let j = i + 1; j < pairPool.length; j++) {
+        push([pairPool[i], pairPool[j]]);
+      }
     }
   }
 
-  const triplePool = sorted.slice(0, TRIPLE_POOL);
-  for (let i = 0; i < triplePool.length; i++) {
-    for (let j = i + 1; j < triplePool.length; j++) {
-      // Early prune: if the two largest already bust 2x target, adding a
-      // third only makes it worse.
-      if (triplePool[i].value + triplePool[j].value > target * 2) continue;
-      for (let k = j + 1; k < triplePool.length; k++) {
-        push([triplePool[i], triplePool[j], triplePool[k]]);
+  if (maxCards >= 3) {
+    const triplePool = sorted.slice(0, TRIPLE_POOL);
+    for (let i = 0; i < triplePool.length; i++) {
+      for (let j = i + 1; j < triplePool.length; j++) {
+        // Early prune: if the two largest already bust 2x target, adding a
+        // third only makes it worse.
+        if (triplePool[i].value + triplePool[j].value > target * 2) continue;
+        for (let k = j + 1; k < triplePool.length; k++) {
+          push([triplePool[i], triplePool[j], triplePool[k]]);
+        }
+      }
+    }
+  }
+
+  if (maxCards >= 4) {
+    const quadPool = sorted.slice(0, QUAD_POOL);
+    for (let i = 0; i < quadPool.length; i++) {
+      for (let j = i + 1; j < quadPool.length; j++) {
+        if (quadPool[i].value + quadPool[j].value > target * 2) continue;
+        for (let k = j + 1; k < quadPool.length; k++) {
+          if (quadPool[i].value + quadPool[j].value + quadPool[k].value > target * 2) continue;
+          for (let l = k + 1; l < quadPool.length; l++) {
+            push([quadPool[i], quadPool[j], quadPool[k], quadPool[l]]);
+          }
+        }
       }
     }
   }
@@ -133,13 +165,16 @@ export function combosNear(pool: TradeItem[], target: number, keep = 24): Combo[
 }
 
 /**
- * Final selection: rank by evenness, cap repetition so five offers aren't
- * five rearrangements of the same chase card, and cut to MAX_OFFERS. Falls
- * below MIN_OFFERS only when the pools genuinely can't produce more.
+ * Final selection: rank by evenness with the same simplicity preference the
+ * combo scorer uses (a 2.2%-off single beats a dead-even 4-card pile), cap
+ * repetition so five offers aren't five rearrangements of the same chase
+ * card, and cut to MAX_OFFERS. Falls below MIN_OFFERS only when the pools
+ * genuinely can't produce more. Displayed deltaPct stays the true value gap.
  */
 function selectOffers(candidates: TradeOffer[]): TradeOffer[] {
+  const rankScore = (o: TradeOffer) => o.deltaPct + 0.015 * (o.give.length + o.get.length - 2);
   const ranked = [...candidates].sort(
-    (a, b) => a.deltaPct - b.deltaPct || signature([...a.give, ...a.get]).localeCompare(signature([...b.give, ...b.get])),
+    (a, b) => rankScore(a) - rankScore(b) || signature([...a.give, ...a.get]).localeCompare(signature([...b.give, ...b.get])),
   );
 
   const seen = new Set<string>();
@@ -250,4 +285,48 @@ function greedyBundle(mine: TradeItem[], theirs: TradeItem[], maxPerSide = 4): T
     }
   }
   return best;
+}
+
+/** A refreshed offer is only worth keeping if it lands at least this fair. */
+const COMPLETION_CEILING = 0.2;
+
+/**
+ * Refinement: the user declined some cards out of an offer but kept the rest.
+ * Try to top the lighter side back up with replacements from its pool (which
+ * the caller has already stripped of declined/kept ids). Returns null when no
+ * close-in-value completion exists -- the caller then lets fresh offers take
+ * this slot instead.
+ */
+export function completeOffer(
+  keptGive: TradeItem[],
+  keptGet: TradeItem[],
+  minePool: TradeItem[],
+  theirsPool: TradeItem[],
+): TradeOffer | null {
+  if (keptGive.length === 0 || keptGet.length === 0) return null;
+
+  const asIs = makeOffer(keptGive, keptGet);
+  // Removing a card may leave a trade that is still fair -- ship it untouched.
+  if (asIs.deltaPct <= 0.1) return asIs;
+
+  const giveTotal = sum(keptGive);
+  const getTotal = sum(keptGet);
+  const lighterIsGive = giveTotal < getTotal;
+  const kept = lighterIsGive ? keptGive : keptGet;
+  const pool = lighterIsGive ? minePool : theirsPool;
+  const gap = Math.abs(getTotal - giveTotal);
+  const room = MAX_COMBO_CARDS - kept.length;
+  if (room <= 0) return asIs.deltaPct <= COMPLETION_CEILING ? asIs : null;
+
+  const keptIds = new Set([...keptGive, ...keptGet].map((i) => i.itemId));
+  const usable = pool.filter((i) => !keptIds.has(i.itemId));
+
+  let best = asIs;
+  for (const combo of combosNear(usable, gap, 8, room)) {
+    const filled = lighterIsGive
+      ? makeOffer([...keptGive, ...combo.items], keptGet)
+      : makeOffer(keptGive, [...keptGet, ...combo.items]);
+    if (filled.deltaPct < best.deltaPct) best = filled;
+  }
+  return best.deltaPct <= COMPLETION_CEILING ? best : null;
 }

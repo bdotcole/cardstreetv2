@@ -13,7 +13,12 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
  *   even mode    "what would be a fair trade between our binders?"
  *   target mode  "you want my Card 1 (~B900)? Here's what you could give" —
  *                pick any card from your collection, scan their code, get
- *                singles and 2-3-card combos from their trade list at ~B900.
+ *                singles and 2-4-card combos from their trade list at ~B900.
+ *
+ * Offers are refinable: every card row carries its market snapshot and an X.
+ * Declining a card excludes it from ALL matching (single-card offers collapse
+ * — that IS declining the trade); refresh tops edited offers back up with
+ * replacements where a close-value one exists, otherwise builds fresh offers.
  *
  * All matching runs server-side (/api/trade/*, premium-gated); this component
  * only renders. Values are Card.marketPrice snapshots in THB.
@@ -28,6 +33,10 @@ interface TradeItem {
   quantity: number;
   forTrade?: boolean;
   wanted?: boolean;
+  condition?: string | null;
+  set?: string | null;
+  rarity?: string | null;
+  change7d?: number | null;
 }
 
 interface TradeOffer {
@@ -77,6 +86,10 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
 
+  // Refinement: declined cards, per side, persist across refresh rounds.
+  const [declinedMine, setDeclinedMine] = useState<Set<string>>(new Set());
+  const [declinedTheirs, setDeclinedTheirs] = useState<Set<string>>(new Set());
+
   const KIND_LABEL: Record<TradeOffer['kind'], string> = {
     single: t('pro.trade.kindSingle'),
     combo: t('pro.trade.kindCombo'),
@@ -119,11 +132,17 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
     }
   };
 
+  const resetDeclines = () => {
+    setDeclinedMine(new Set());
+    setDeclinedTheirs(new Set());
+  };
+
   const runMatch = useCallback(async (code: string, anchorItem: TradeItem | null) => {
     if (!code.trim()) return;
     setMatching(true);
     setMatchError(null);
     setMatch(null);
+    resetDeclines();
     try {
       const anchorParam = anchorItem ? `&itemId=${encodeURIComponent(anchorItem.itemId)}` : '';
       const res = await fetch(`/api/trade/match?code=${encodeURIComponent(code.trim())}${anchorParam}`);
@@ -137,6 +156,51 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
     }
   }, []);
 
+  // Refinement round: declined cards excluded everywhere; edited offers'
+  // surviving cards ride along as `keeps` for replacement-completion.
+  const refreshOffers = useCallback(async () => {
+    if (!match || !codeInput.trim()) return;
+    setMatching(true);
+    setMatchError(null);
+    try {
+      const keeps = match.offers
+        .filter((o) =>
+          o.give.some((i) => declinedMine.has(i.itemId)) || o.get.some((i) => declinedTheirs.has(i.itemId)))
+        .map((o) => ({
+          give: o.give.filter((i) => !declinedMine.has(i.itemId)).map((i) => i.itemId),
+          get: o.get.filter((i) => !declinedTheirs.has(i.itemId)).map((i) => i.itemId),
+        }))
+        .filter((k) => k.give.length > 0 && k.get.length > 0);
+
+      const res = await fetch('/api/trade/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: codeInput.trim(),
+          itemId: match.mode === 'target' ? match.anchor?.itemId : undefined,
+          excludeMine: [...declinedMine],
+          excludeTheirs: [...declinedTheirs],
+          keeps,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Refresh failed');
+      setMatch(data);
+    } catch (e: any) {
+      setMatchError(e.message);
+    } finally {
+      setMatching(false);
+    }
+  }, [match, codeInput, declinedMine, declinedTheirs]);
+
+  const decline = (item: TradeItem, mineSide: boolean) => {
+    if (mineSide) {
+      setDeclinedMine((prev) => new Set(prev).add(item.itemId));
+    } else {
+      setDeclinedTheirs((prev) => new Set(prev).add(item.itemId));
+    }
+  };
+
   // Deep link: /trade?code=... runs an even-mode match immediately.
   useEffect(() => {
     if (initialCode) runMatch(initialCode, null);
@@ -145,6 +209,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
   const targetFromMyCards = (item: TradeItem) => {
     setAnchor(item);
     setMatch(null);
+    resetDeclines();
     setTab('match');
   };
 
@@ -158,6 +223,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
   };
 
   const tradableCount = items?.filter((i) => i.forTrade).length ?? 0;
+  const declinedCount = declinedMine.size + declinedTheirs.size;
 
   const pickerItems = useMemo(() => {
     if (!items) return [];
@@ -173,24 +239,48 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
     </span>
   );
 
-  const OfferRow: React.FC<{ item: TradeItem; mineSide: boolean }> = ({ item, mineSide }) => (
-    <div className="flex items-center gap-3 py-1.5">
-      <CardThumb item={item} />
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-bold truncate">{item.name}</p>
-        <div className="flex items-center gap-1.5">
-          <p className="text-[10px] text-slate-500">{baht(item.value)}</p>
-          {item.wanted && <WantedBadge mine={mineSide} />}
+  // Offer row with market snapshot (value, set, condition, 7d change) and the
+  // decline X. Declined cards stay visible struck-through until refresh.
+  const OfferRow: React.FC<{ item: TradeItem; mineSide: boolean }> = ({ item, mineSide }) => {
+    const declined = mineSide ? declinedMine.has(item.itemId) : declinedTheirs.has(item.itemId);
+    const meta = [item.set, item.condition].filter(Boolean).join(' · ');
+    return (
+      <div className={`flex items-start gap-3 py-1.5 transition-opacity ${declined ? 'opacity-40' : ''}`}>
+        <CardThumb item={item} />
+        <div className="flex-1 min-w-0">
+          <p className={`text-white text-xs font-bold truncate ${declined ? 'line-through' : ''}`}>{item.name}</p>
+          {meta && <p className="text-[9px] text-slate-600 truncate">{meta}</p>}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className={`text-[10px] text-slate-400 font-bold ${declined ? 'line-through' : ''}`}>{baht(item.value)}</p>
+            {typeof item.change7d === 'number' && item.change7d !== 0 && (
+              <span className={`text-[9px] font-black ${item.change7d > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {item.change7d > 0 ? '▲' : '▼'}{Math.abs(item.change7d).toFixed(1)}%
+              </span>
+            )}
+            {item.wanted && !declined && <WantedBadge mine={mineSide} />}
+          </div>
         </div>
+        {!declined && (
+          <button
+            onClick={() => decline(item, mineSide)}
+            aria-label={`${t('pro.trade.removeCard')}: ${item.name}`}
+            title={t('pro.trade.removeCard')}
+            className="w-6 h-6 rounded-lg bg-white/5 hover:bg-rose-500/20 flex items-center justify-center text-slate-600 hover:text-rose-300 active:scale-90 transition-all flex-shrink-0"
+          >
+            <i className="fa-solid fa-xmark text-[10px]"></i>
+          </button>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const OfferCard: React.FC<{ offer: TradeOffer; partnerName: string }> = ({ offer, partnerName }) => {
     const even = offer.deltaPct <= 0.1;
     const diff = offer.getValue - offer.giveValue;
+    const fullyDeclined =
+      offer.give.every((i) => declinedMine.has(i.itemId)) || offer.get.every((i) => declinedTheirs.has(i.itemId));
     return (
-      <div className="glass rounded-3xl border-white/10 p-5">
+      <div className={`glass rounded-3xl border-white/10 p-5 transition-opacity ${fullyDeclined ? 'opacity-50' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <span className="text-[9px] bg-brand-cyan/10 text-brand-cyan font-black uppercase px-2.5 py-1 rounded-full tracking-widest">
             {KIND_LABEL[offer.kind]}
@@ -312,7 +402,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                   <p className="text-white text-xs font-bold truncate">{anchor.name} · {baht(anchor.value)}</p>
                 </div>
                 <button
-                  onClick={() => { setAnchor(null); setMatch(null); }}
+                  onClick={() => { setAnchor(null); setMatch(null); resetDeclines(); }}
                   className="px-3 h-9 rounded-xl glass border-white/10 text-slate-400 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
                 >
                   {t('pro.trade.clearTarget')}
@@ -342,7 +432,7 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                   {pickerItems.map((item) => (
                     <button
                       key={item.itemId}
-                      onClick={() => { setAnchor(item); setPickerOpen(false); setMatch(null); }}
+                      onClick={() => { setAnchor(item); setPickerOpen(false); setMatch(null); resetDeclines(); }}
                       className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/5 text-left transition-colors"
                     >
                       <CardThumb item={item} />
@@ -400,6 +490,24 @@ const TradeFinder: React.FC<{ initialCode?: string }> = ({ initialCode }) => {
                   </p>
                 </div>
               </div>
+
+              {declinedCount > 0 && (
+                <div className="glass rounded-2xl border-brand-cyan/20 p-3 flex items-center gap-3">
+                  <p className="flex-1 text-[11px] text-slate-400 leading-snug">
+                    <span className="text-white font-bold">{declinedCount}</span> {t('pro.trade.removedCards')}
+                    <button onClick={resetDeclines} className="ml-2 text-brand-cyan text-[10px] font-black uppercase tracking-widest">
+                      {t('pro.trade.resetRemoved')}
+                    </button>
+                  </p>
+                  <button
+                    onClick={refreshOffers}
+                    disabled={matching}
+                    className="px-4 h-10 rounded-xl bg-brand-cyan text-brand-darker font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {matching ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <><i className="fa-solid fa-rotate mr-1.5"></i>{t('pro.trade.refreshOffers')}</>}
+                  </button>
+                </div>
+              )}
 
               {match.offers.length > 0 ? (
                 <>

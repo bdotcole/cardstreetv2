@@ -16,6 +16,8 @@ interface SlimItem {
   value: number;
   quantity: number;
   forTrade: boolean;
+  condition: string | null;
+  set: string | null;
 }
 
 function slim(row: any): SlimItem {
@@ -28,6 +30,8 @@ function slim(row: any): SlimItem {
     value: typeof cd.marketPrice === 'number' ? cd.marketPrice : 0,
     quantity: row.quantity ?? 1,
     forTrade: row.for_trade === true,
+    condition: row.condition ?? null,
+    set: typeof cd.set === 'string' ? cd.set : null,
   };
 }
 
@@ -39,7 +43,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('collection_items')
-    .select('id, card_id, card_data, quantity, for_trade, collections!inner(user_id)')
+    .select('id, card_id, card_data, quantity, condition, for_trade, collections!inner(user_id)')
     .eq('collections.user_id', user.id)
     .order('added_at', { ascending: false })
     .limit(500);
