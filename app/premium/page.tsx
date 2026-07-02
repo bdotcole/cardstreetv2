@@ -39,10 +39,14 @@ function PremiumPageInner() {
   const [isNativeApp, setIsNativeApp] = useState(false);
   useEffect(() => { setIsNativeApp(isNativeShell()); }, []);
 
-  const FEATURES = [
+  // Perks without an href are passive benefits (applied automatically), not
+  // destinations — they render with a check instead of a chevron.
+  const FEATURES: { href?: string; icon: string; title: string; desc: string }[] = [
     { href: '/grade', icon: 'fa-wand-magic-sparkles', title: t('pro.graderTitle'), desc: t('pro.graderDesc') },
     { href: '/trade', icon: 'fa-right-left', title: t('pro.tradeTitle'), desc: t('pro.tradeDesc') },
     { href: '/insights', icon: 'fa-chart-line', title: t('pro.insightsTitle'), desc: t('pro.insightsDesc') },
+    { icon: 'fa-tags', title: t('pro.sellerRateTitle'), desc: t('pro.sellerRateDesc') },
+    { icon: 'fa-bell', title: t('pro.alertsTitle'), desc: t('pro.alertsDesc') },
   ];
 
   // Back from Stripe Checkout: the webhook may land a beat after the redirect,
@@ -113,9 +117,9 @@ function PremiumPageInner() {
         <div className="space-y-3 mb-8">
           {FEATURES.map((f) => (
             <a
-              key={f.href}
-              href={premium ? f.href : undefined}
-              className={`block glass rounded-3xl border-white/10 p-5 transition-all ${premium ? 'active:scale-[0.98]' : 'opacity-90'}`}
+              key={f.title}
+              href={premium && f.href ? f.href : undefined}
+              className={`block glass rounded-3xl border-white/10 p-5 transition-all ${premium && f.href ? 'active:scale-[0.98]' : 'opacity-90'}`}
             >
               <div className="flex items-center gap-4">
                 <div className="w-11 h-11 rounded-2xl bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
@@ -125,7 +129,7 @@ function PremiumPageInner() {
                   <p className="text-white text-sm font-black">{f.title}</p>
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{f.desc}</p>
                 </div>
-                <i className={`fa-solid ${premium ? 'fa-chevron-right text-brand-cyan' : 'fa-lock text-slate-600'}`}></i>
+                <i className={`fa-solid ${!premium ? 'fa-lock text-slate-600' : f.href ? 'fa-chevron-right text-brand-cyan' : 'fa-circle-check text-emerald-400'}`}></i>
               </div>
             </a>
           ))}

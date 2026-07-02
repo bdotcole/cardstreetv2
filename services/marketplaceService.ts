@@ -231,6 +231,18 @@ export const marketplaceService = {
                 .single();
 
             if (error) throw error;
+
+            // Wake the wishlist-alert fan-out (Pro perk). This insert runs in
+            // the browser, so alerting needs a server round-trip -- strictly
+            // fire-and-forget: a failed alert must never fail the listing.
+            if (data?.id && typeof fetch !== 'undefined') {
+                void fetch('/api/alerts/listing-created', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ listingId: data.id }),
+                }).catch(() => { /* best-effort */ });
+            }
+
             return normalizeListing(data as MarketplaceListing);
         } catch (error) {
             console.error('Error creating listing:', error);

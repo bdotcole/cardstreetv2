@@ -1,7 +1,8 @@
 
 import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { z } from 'zod'
+import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts'
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -158,6 +159,14 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (error) throw error
+
+        // Wishlist alerts (Pro perk) run after the response is sent -- a slow
+        // or failed fan-out must never delay or fail the listing itself.
+        after(() =>
+            notifyWishlistersOfListing(listing.id).catch((e) =>
+                console.error('[Listings] wishlist alert fan-out failed:', e),
+            ),
+        )
 
         return NextResponse.json(listing)
     } catch (error: any) {

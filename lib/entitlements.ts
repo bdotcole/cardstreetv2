@@ -13,13 +13,19 @@ export type PlanTier = 'free' | 'premium';
 export type PremiumFeature =
   | 'ai_grader'
   | 'trade_finder'
-  | 'advanced_market';
+  | 'advanced_market'
+  | 'pro_seller_rate'
+  | 'wishlist_alerts';
 
 /** Each feature -> minimum tier required. Anything not listed is free. */
 export const FEATURE_TIERS: Record<PremiumFeature, PlanTier> = {
   ai_grader: 'premium',
   trade_finder: 'premium',
   advanced_market: 'premium',
+  // 5% seller fee (vs the 9% standard) -- enforced in app/api/orders/checkout.
+  pro_seller_rate: 'premium',
+  // Email/push when a wishlisted card gets listed -- lib/wishlistAlerts.ts.
+  wishlist_alerts: 'premium',
 };
 
 export const PREMIUM_FEATURES = Object.keys(FEATURE_TIERS) as PremiumFeature[];

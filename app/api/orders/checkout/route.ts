@@ -35,7 +35,8 @@ import {
     estimateParcelWeightGrams,
     estimateParcelDimsCm,
 } from '@/lib/flashExpress';
-import { effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
+import { applyProSellerRate, effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
+import { isPremium } from '@/lib/entitlements';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -168,7 +169,7 @@ export async function POST(req: Request) {
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
         const { data: sellerProfiles } = await supabase
             .from('profiles')
-            .select('id, role, partner_level, total_downloads, partner_joined_at, province, state, district, postcode, stripe_region, stripe_account_id, stripe_charges_enabled')
+            .select('id, role, partner_level, total_downloads, partner_joined_at, premium_until, province, state, district, postcode, stripe_region, stripe_account_id, stripe_charges_enabled')
             .in('id', sellerIds);
 
         const { data: buyerProfile } = await supabase
@@ -260,7 +261,11 @@ export async function POST(req: Request) {
                 const level = effectivePartnerLevel(profile.partner_level, profile.total_downloads ?? 0);
                 fee = feeFractionForLevel(level);
             }
-            feeMap.set(profile.id, fee);
+            // CardStreet Pro floor: subscribers sell at 5% even without partner
+            // status; a partner ladder already better than 5% still wins. Admins
+            // are Pro by role (same rule as lib/premiumAuth getEntitlement).
+            const pro = profile.role === 'admin' || isPremium(profile.premium_until);
+            feeMap.set(profile.id, applyProSellerRate(fee, pro));
         }
 
         // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───

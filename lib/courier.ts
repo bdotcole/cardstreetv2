@@ -706,3 +706,77 @@ export async function sendFirstTimeSaleEmail(
         return 'error';
     }
 }
+
+/**
+ * CardStreet Pro perk: tells a wishlister that a card on their wishlist was
+ * just listed for sale. Entitlement filtering and dedupe happen in the caller
+ * (lib/wishlistAlerts.ts) -- this only handles prefs, channels, and the send.
+ *
+ * No designed Courier template exists yet, so the copy is inline `content`
+ * (bilingual EN/TH -- the UI language preference is client-side only, so the
+ * server can't pick one). Set COURIER_WISHLIST_ALERT_TEMPLATE_ID once a
+ * dashboard template is authored and the send switches to it automatically.
+ *
+ * Returns true only when a send was actually dispatched, so the caller logs
+ * the dedupe row for real sends only.
+ */
+export async function sendWishlistListingAlert(
+    userId: string,
+    listing: {
+        listingId: string;
+        cardId: string;
+        cardName: string;
+        price: number;
+        condition: string;
+    },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping wishlist alert'); return false; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    // `!== false` so accounts predating the wishlist_email/wishlist_push
+    // columns (or a missing prefs row) default to ON, like the other alerts.
+    const wantEmail = prefs.wishlist_email !== false && !!email;
+    const wantPush = prefs.wishlist_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
+    const routing = buildRouting(wantEmail, wantPush);
+
+    const priceLabel = `฿${Number(listing.price).toLocaleString('en-US')}`;
+    const templateId = (process.env.COURIER_WISHLIST_ALERT_TEMPLATE_ID || '').trim();
+
+    const message: Record<string, unknown> = {
+        to: recipient,
+        routing,
+        data: {
+            cardName: listing.cardName,
+            condition: listing.condition,
+            price: listing.price,
+            priceLabel,
+            // Push deep-link payload (read by the mobile FCM handler).
+            listingId: listing.listingId,
+            cardId: listing.cardId,
+            type: 'wishlist_listing',
+        },
+    };
+    if (templateId) {
+        message.template = templateId;
+    } else {
+        message.content = {
+            title: `${listing.cardName} just listed — ${priceLabel}`,
+            body:
+                `${listing.cardName} (${listing.condition}) from your wishlist was just listed for ${priceLabel} on CardStreet. ` +
+                `การ์ดใน Wishlist ของคุณเพิ่งถูกลงขาย — เปิด CardStreet เพื่อดูก่อนใคร`,
+        };
+    }
+
+    try {
+        const sendResult = await courier.send.message({ message: message as any });
+        console.log(`[Courier] ✅ Wishlist alert sent to ${userId} for listing ${listing.listingId}. Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending wishlist alert to ${userId}:`, error);
+        return false;
+    }
+}
