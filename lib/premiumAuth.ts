@@ -9,6 +9,10 @@
  *   if (gate instanceof NextResponse) return gate;
  *   const { user } = gate;  // entitled from here on
  *
+ * Entitlement = an active subscription (premium_until in the future, written
+ * by the billing webhooks) OR role='admin' -- staff get every Pro feature by
+ * role, evergreen, with no synthetic subscription rows.
+ *
  * The client paywall (lib/hooks/usePremium.ts) is UX only -- this is the lock.
  */
 
@@ -23,6 +27,26 @@ export interface PremiumContext {
   premiumUntil: string | null;
 }
 
+export interface Entitlement {
+  premiumUntil: string | null;
+  isAdmin: boolean;
+  /** The effective answer: active subscription OR admin role. */
+  premium: boolean;
+}
+
+/** Effective entitlement for a user (service-role read; never throws). */
+export async function getEntitlement(userId: string): Promise<Entitlement> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('profiles')
+    .select('premium_until, role')
+    .eq('id', userId)
+    .single();
+  const premiumUntil = (data?.premium_until as string | null) ?? null;
+  const isAdmin = data?.role === 'admin';
+  return { premiumUntil, isAdmin, premium: isAdmin || isPremium(premiumUntil) };
+}
+
 export async function requirePremium(): Promise<PremiumContext | NextResponse> {
   const cookieSupabase = await createServerClient();
   const { data: { user }, error } = await cookieSupabase.auth.getUser();
@@ -33,35 +57,18 @@ export async function requirePremium(): Promise<PremiumContext | NextResponse> {
 
   // Read the cached entitlement with service-role so an RLS policy can't hide
   // the caller's own row from this check.
-  const admin = createAdminClient();
-  const { data: profile, error: profileErr } = await admin
-    .from('profiles')
-    .select('premium_until')
-    .eq('id', user.id)
-    .single();
-
-  if (profileErr) {
-    return NextResponse.json({ error: 'Failed to verify subscription' }, { status: 500 });
-  }
-
-  const premiumUntil = (profile?.premium_until as string | null) ?? null;
-  if (!isPremium(premiumUntil)) {
+  const ent = await getEntitlement(user.id);
+  if (!ent.premium) {
     return NextResponse.json(
       { error: 'Premium subscription required', code: 'PREMIUM_REQUIRED' },
       { status: 403 },
     );
   }
 
-  return { user, premiumUntil };
+  return { user, premiumUntil: ent.premiumUntil };
 }
 
 /** Cached entitlement for a user, for status routes that don't need to gate. */
 export async function getPremiumUntil(userId: string): Promise<string | null> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('profiles')
-    .select('premium_until')
-    .eq('id', userId)
-    .single();
-  return (data?.premium_until as string | null) ?? null;
+  return (await getEntitlement(userId)).premiumUntil;
 }

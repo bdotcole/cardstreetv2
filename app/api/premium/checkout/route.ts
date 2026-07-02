@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { getPremiumUntil } from '@/lib/premiumAuth';
-import { isPremium } from '@/lib/entitlements';
+import { getEntitlement } from '@/lib/premiumAuth';
 import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/stripe';
 
 // POST /api/premium/checkout — start a CardStreet Pro subscription (web rail).
@@ -27,8 +26,9 @@ export async function POST() {
     return NextResponse.json({ error: 'Billing is not configured on this deploy' }, { status: 503 });
   }
 
-  // Double-subscribing through a second Checkout would double-charge.
-  if (isPremium(await getPremiumUntil(user.id))) {
+  // Double-subscribing through a second Checkout would double-charge -- and
+  // admins (Pro by role) have nothing to buy.
+  if ((await getEntitlement(user.id)).premium) {
     return NextResponse.json({ error: 'You already have CardStreet Pro', code: 'ALREADY_PREMIUM' }, { status: 400 });
   }
 

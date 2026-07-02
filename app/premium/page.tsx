@@ -146,7 +146,8 @@ function PremiumPageInner() {
               <i className="fa-solid fa-circle-check mr-1.5"></i>{t('pro.youArePro')}
             </p>
             {renewDate && <p className="text-xs text-slate-400 mt-2">{t('pro.activeThrough')} {renewDate}</p>}
-            {!isNativeApp && (
+            {/* Role-granted Pro (admins) has no Stripe subscription to manage. */}
+            {!isNativeApp && status.premiumUntil && (
               <button
                 onClick={openPortal}
                 disabled={busy}
