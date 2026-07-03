@@ -9,6 +9,12 @@ import { createClient } from '@/lib/supabase/client';
 import { geminiService, SearchIntent } from './geminiService';
 import { Card } from '../types';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import { GAMES } from '@/lib/games';
+
+// Games whose catalog spans more than one language (currently just Pokemon).
+// In all-games search mode, single-language catalogs bypass the UI-language
+// filter — their rows only exist in the game's default language.
+const multiLanguageGameIds = GAMES.filter(g => g.languages.length > 1).map(g => g.id);
 
 // Client-side search cache
 const searchIndex = new Map<string, Card[]>();
@@ -165,7 +171,9 @@ export const pokemonService = {
         if (!query || query.trim().length < 2) return [];
 
         // Scope search to the browsing context (game + language) so a Pokemon
-        // search doesn't surface One Piece/MTG and vice versa.
+        // search doesn't surface One Piece/MTG and vice versa. Pass game='all'
+        // to search every catalog at once (the desktop nav search does this).
+        const searchAllGames = game === 'all';
         const dbLang = language === 'jp' ? 'ja' : language;
         const cacheKey = `${query.toLowerCase().trim()}-${game}-${dbLang || 'all'}`;
         if (searchIndex.has(cacheKey)) {
@@ -221,18 +229,28 @@ export const pokemonService = {
 
             // CROSS-LANGUAGE SEARCH: Search both 'name' and 'english_name' fields
             // This allows English users to find Thai cards and vice versa
-            let dbQuery = supabase
-                .from('pokemon_cards')
-                .select(`
-                    id, name, english_name, set_id, number, supertype, subtypes,
-                    rarity, hp, types, game, image_small, image_large, language,
-                    tcgplayer_url, tcgplayer:raw_data->tcgplayer,
-                    market_values(condition, market_avg, currency, last_updated),
-                    pokemon_sets(name, printed_total, total)
-                `)
-                .eq('game', game);
-
-            if (dbLang) dbQuery = dbQuery.eq('language', dbLang);
+            const newScopedQuery = () => {
+                let q = supabase
+                    .from('pokemon_cards')
+                    .select(`
+                        id, name, english_name, set_id, number, supertype, subtypes,
+                        rarity, hp, types, game, image_small, image_large, language,
+                        tcgplayer_url, tcgplayer:raw_data->tcgplayer,
+                        market_values(condition, market_avg, currency, last_updated),
+                        pokemon_sets(name, printed_total, total)
+                    `);
+                if (!searchAllGames) q = q.eq('game', game);
+                if (dbLang) {
+                    // In all-games mode a strict language filter would empty
+                    // every single-language catalog, so those games skip it.
+                    // PostgREST ANDs this or-group with the name or-group.
+                    q = searchAllGames && multiLanguageGameIds.length > 0
+                        ? q.or(`language.eq.${dbLang},game.not.in.(${multiLanguageGameIds.join(',')})`)
+                        : q.eq('language', dbLang);
+                }
+                return q;
+            };
+            let dbQuery = newScopedQuery();
 
             if (matchedSetIds.length > 0) {
                 dbQuery = dbQuery.in('set_id', matchedSetIds);
@@ -251,7 +269,18 @@ export const pokemonService = {
                 dbQuery = dbQuery.or(orStr);
             }
 
-            const { data: cards, error } = await dbQuery.limit(100);
+            let { data: cards, error } = await dbQuery.limit(100);
+
+            // A matched "set" can be a false positive: common words double as
+            // set names ("Dragon" is Pokemon ex3), eating part of a card name
+            // ("Blue-Eyes White Dragon") and zeroing the result. Retry once
+            // with the untouched query when the set-scoped pass finds nothing.
+            if (!error && (!cards || cards.length === 0) && matchedSetIds.length > 0) {
+                const retry = await newScopedQuery()
+                    .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
+                    .limit(100);
+                if (!retry.error) cards = retry.data;
+            }
 
             if (error) {
                 console.error('Search error:', error);
@@ -322,8 +351,8 @@ export const pokemonService = {
                 const popularityBoost = Math.min(50, Math.floor(searchCount / 10)); // Max +50 points
                 score += popularityBoost;
 
-                // Pokemon-specific ranking boosts only apply when searching Pokemon.
-                if (game === 'pokemon') {
+                // Pokemon-specific ranking boosts only apply to Pokemon rows.
+                if ((searchAllGames ? card.game : game) === 'pokemon') {
                     // Boost Pokemon cards over Trainers/Energy
                     if (card.supertype === 'Pokémon') score += 10;
 
