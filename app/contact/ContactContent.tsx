@@ -91,13 +91,13 @@ export default function ContactContent() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{content.emailSupportLabel}</p>
-                <a href="mailto:support@cardstreet.app" className="text-white font-bold hover:text-brand-cyan transition-colors">
-                  support@cardstreet.app
+                <a href="mailto:support@thailandtcg.com" className="text-white font-bold hover:text-brand-cyan transition-colors">
+                  support@thailandtcg.com
                 </a>
               </div>
             </div>
             <a
-              href="mailto:support@cardstreet.app"
+              href="mailto:support@thailandtcg.com"
               className="block w-full text-center bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all"
             >
               {content.sendEmailButton}
@@ -131,7 +131,9 @@ export default function ContactContent() {
           <section className="space-y-2 pt-2 border-t border-white/5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{content.operatedByLabel}</p>
             <p className="text-slate-400">
-              ELC Global Ventures, LLC d.b.a CardStreet
+              Cardstreet
+              <br />
+              (Commercial Registration No. 1329900962791)
             </p>
             <p className="text-slate-600 text-xs">{content.madeWithCare}</p>
           </section>

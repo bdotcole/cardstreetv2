@@ -59,7 +59,7 @@ export default function HelpContent() {
         <div className="mt-12 glass rounded-2xl border border-white/10 p-6 text-center space-y-3">
           <p className="text-sm text-slate-300">{content.stillStuck}</p>
           <a
-            href="mailto:support@cardstreet.app"
+            href="mailto:support@thailandtcg.com"
             className="inline-block bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider px-6 py-3 rounded-xl active:scale-[0.98] transition-all"
           >
             {content.emailSupport}

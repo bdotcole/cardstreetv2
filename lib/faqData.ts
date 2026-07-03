@@ -70,7 +70,7 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'Is it safe to buy cards on CardStreet?',
-        a: 'Yes. Every order is covered by buyer protection: your payment is held and only released to the seller after the card is delivered. If an item arrives damaged, counterfeit, or not as described, contact support@cardstreet.app with your order number and photos before the protection window closes and we will help mediate.',
+        a: 'Yes. Every order is covered by buyer protection: your payment is held and only released to the seller after the card is delivered. If an item arrives damaged, counterfeit, or not as described, contact support@thailandtcg.com with your order number and photos before the protection window closes and we will help mediate.',
         featured: true,
       },
       {
@@ -150,7 +150,7 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'What if my card arrives damaged or not as described?',
-        a: 'Contact support@cardstreet.app with your order number and photos before the protection window closes. Because your payment is held until the issue is resolved, we can mediate and issue a refund where warranted.',
+        a: 'Contact support@thailandtcg.com with your order number and photos before the protection window closes. Because your payment is held until the issue is resolved, we can mediate and issue a refund where warranted.',
       },
     ],
   },
@@ -217,7 +217,7 @@ const FAQ_TH: FaqCategory[] = [
       },
       {
         q: 'ซื้อการ์ดบน CardStreet ปลอดภัยไหม?',
-        a: 'ปลอดภัย ทุกคำสั่งซื้อมีการคุ้มครองผู้ซื้อ เงินของคุณจะถูกพักไว้และโอนให้ผู้ขายหลังการ์ดถึงมือคุณแล้วเท่านั้น หากสินค้าที่ได้รับเสียหาย เป็นของปลอม หรือไม่ตรงตามคำอธิบาย ให้ติดต่อ support@cardstreet.app พร้อมหมายเลขคำสั่งซื้อและรูปถ่ายก่อนหมดระยะเวลาคุ้มครอง แล้วเราจะช่วยไกล่เกลี่ยให้',
+        a: 'ปลอดภัย ทุกคำสั่งซื้อมีการคุ้มครองผู้ซื้อ เงินของคุณจะถูกพักไว้และโอนให้ผู้ขายหลังการ์ดถึงมือคุณแล้วเท่านั้น หากสินค้าที่ได้รับเสียหาย เป็นของปลอม หรือไม่ตรงตามคำอธิบาย ให้ติดต่อ support@thailandtcg.com พร้อมหมายเลขคำสั่งซื้อและรูปถ่ายก่อนหมดระยะเวลาคุ้มครอง แล้วเราจะช่วยไกล่เกลี่ยให้',
         featured: true,
       },
       {
@@ -297,7 +297,7 @@ const FAQ_TH: FaqCategory[] = [
       },
       {
         q: 'หากการ์ดที่ได้รับเสียหายหรือไม่ตรงตามคำอธิบาย ต้องทำอย่างไร?',
-        a: 'ติดต่อ support@cardstreet.app พร้อมหมายเลขคำสั่งซื้อและรูปถ่ายก่อนหมดระยะเวลาคุ้มครอง เนื่องจากเงินของคุณถูกพักไว้จนกว่าจะแก้ไขปัญหาเสร็จ เราจึงสามารถไกล่เกลี่ยและคืนเงินให้ได้ตามความเหมาะสม',
+        a: 'ติดต่อ support@thailandtcg.com พร้อมหมายเลขคำสั่งซื้อและรูปถ่ายก่อนหมดระยะเวลาคุ้มครอง เนื่องจากเงินของคุณถูกพักไว้จนกว่าจะแก้ไขปัญหาเสร็จ เราจึงสามารถไกล่เกลี่ยและคืนเงินให้ได้ตามความเหมาะสม',
       },
     ],
   },
