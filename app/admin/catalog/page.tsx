@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { GAMES, getGameLanguages, defaultLanguageForGame, type GameId, type GameLanguageCode } from '@/lib/games'
 import { dbLanguage } from '@/lib/catalogFields'
-import { getThumbnailUrl } from '@/lib/imageUtils'
+import { getThumbnailUrl, getSetLogoUrl } from '@/lib/imageUtils'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -158,7 +158,7 @@ export default function CatalogHomePage() {
                         >
                             <div className="w-14 h-14 rounded-xl bg-black/40 flex items-center justify-center shrink-0 overflow-hidden">
                                 {s.logo_url ? (
-                                    <img src={s.logo_url} alt="" className="w-full h-full object-contain" />
+                                    <img src={getSetLogoUrl(s.logo_url)} alt="" className="w-full h-full object-contain" />
                                 ) : (
                                     <i className="fa-solid fa-layer-group text-slate-600" />
                                 )}

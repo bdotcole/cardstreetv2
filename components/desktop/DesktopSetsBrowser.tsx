@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { getOptimizedImageUrl } from '@/lib/imageUtils';
+import { getSetLogoUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import type { SetRow } from '@/lib/setPageData';
@@ -181,7 +181,7 @@ function SetGrid({ sets, isThai }: { sets: SetRow[]; isThai: boolean }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {sets.map((s) => {
-                const logo = s.logo_url ? getOptimizedImageUrl(s.logo_url, 160, 80) : null;
+                const logo = s.logo_url ? getSetLogoUrl(s.logo_url, 160, 80) : null;
                 return (
                     <Link
                         key={`${s.id}-${s.language}`}

@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { getThumbnailUrl } from '@/lib/imageUtils'
+import { getThumbnailUrl, getSetLogoUrl } from '@/lib/imageUtils'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -115,7 +115,7 @@ export default function SetCardManagerPage() {
                     </button>
                     {set?.logo_url && (
                         <div className="w-12 h-12 rounded-xl bg-black/40 flex items-center justify-center overflow-hidden shrink-0">
-                            <img src={set.logo_url} alt="" className="w-full h-full object-contain" />
+                            <img src={getSetLogoUrl(set.logo_url)} alt="" className="w-full h-full object-contain" />
                         </div>
                     )}
                     <div className="min-w-0">

@@ -93,10 +93,13 @@ export function getThumbnailUrl(url: string | null | undefined): string {
  * getOptimizedImageUrl deliberately serves direct to avoid render-endpoint
  * billing at 73k-card scale). Logos are few and want per-display downsizing,
  * so they keep the render path. We can't reuse getOptimizedImageUrl here: it
- * would rewrite a tcgdex `.../logo` into a broken `.../logo/low.webp`. This
- * only rewrites our own Supabase-mirrored logos to the CDN render endpoint;
- * every other host is returned unchanged so the caller can let the Vercel
- * optimizer transcode it (e.g. a 200-480KB asia.pokemon-card.com PNG -> ~5KB).
+ * would rewrite a tcgdex `.../logo` into a broken `.../logo/low.webp` — logos
+ * have no low/high variants, that scheme is for card art. This rewrites our
+ * own Supabase-mirrored logos to the CDN render endpoint and completes bare
+ * tcgdex logo paths (`.../logo` serves text/html; `.../logo.png` is the
+ * image — same fixup /api/sets applies); every other host is returned
+ * unchanged so the caller can let the Vercel optimizer transcode it (e.g. a
+ * 200-480KB asia.pokemon-card.com PNG -> ~5KB).
  *
  * Pair the result with shouldSkipNextOptimization(): true for the Supabase
  * render endpoint (already CDN-sized), false otherwise (optimizer transcodes).
@@ -109,6 +112,9 @@ export function getSetLogoUrl(url: string | null | undefined, width: number = 24
             '/storage/v1/object/public/',
             '/storage/v1/render/image/public/'
         ) + `?width=${width}&quality=${quality}&resize=contain`;
+    }
+    if (url.includes('tcgdex.net') && !/\.(png|jpg|jpeg|webp|svg)$/i.test(url)) {
+        return `${url}.png`;
     }
     return url;
 }

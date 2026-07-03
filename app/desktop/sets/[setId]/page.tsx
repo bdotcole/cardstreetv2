@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
-import { getOptimizedImageUrl } from '@/lib/imageUtils';
+import { getSetLogoUrl } from '@/lib/imageUtils';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
 
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
             ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
             : `เลือกชมการ์ด ${set.name} (${game}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน CardStreet จัดส่งทั่วไทย`;
 
-    const ogImage = set.logo_url ? getOptimizedImageUrl(set.logo_url, 600, 85) : undefined;
+    const ogImage = set.logo_url ? getSetLogoUrl(set.logo_url, 600, 85) : undefined;
 
     return {
         metadataBase: new URL(BASE_URL),
@@ -82,7 +82,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
 
     const lang = await resolveLang();
     const game = GAME_LABEL[set.game] ?? set.game;
-    const logo = set.logo_url ? getOptimizedImageUrl(set.logo_url, 300, 85) : null;
+    const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
 
     return (
         <div>
