@@ -249,6 +249,8 @@ Thai (`language='th'`) rows store the Thai card name in `name` and often leave `
 
 Coverage is limited to sets whose JA twin is in-catalog under the same code (filled 461 rows across S12/S12a/S9/S9a/SVK). The ~4k rows on "orphan" sets (S8b, S11, S10\*, SC\*, SVM, SVT\*, SVA\*, MAA\*, promos M-P/S-P) have no in-catalog JA twin and need a JA-name→EN-name dictionary instead.
 
+**The 1:1-numbering premise is not universal.** A TH and a JA product can share a set code yet be different, renumbered lineups — `SVK` (JA rows = Deck Build BOX Stella Miracle) mislabeled 22/27 filled rows this way (Mew ex stored as "Radiant Charizard"; repaired 2026-07-03 by pHash-matching each TH row against the JA catalog). The script now **pHash-verifies every pair** (a Thai reprint keeps the same artwork): pairs over 20 bits apart are skipped, and a set where >30% of hashed pairs mismatch is skipped wholesale.
+
 ## Applying migrations
 
 **Don't use `supabase db push`.** The local migration history is desynced from the remote DB — `db push` would try to replay 27 already-applied migrations.
