@@ -249,7 +249,9 @@ Thai (`language='th'`) rows store the Thai card name in `name` and often leave `
 
 Coverage is limited to sets whose JA twin is in-catalog under the same code (filled 461 rows across S12/S12a/S9/S9a/SVK). The ~4k rows on "orphan" sets (S8b, S11, S10\*, SC\*, SVM, SVT\*, SVA\*, MAA\*, promos M-P/S-P) have no in-catalog JA twin and need a JA-name→EN-name dictionary instead.
 
-**The 1:1-numbering premise is not universal.** A TH and a JA product can share a set code yet be different, renumbered lineups — `SVK` (JA rows = Deck Build BOX Stella Miracle) mislabeled 22/27 filled rows this way (Mew ex stored as "Radiant Charizard"; repaired 2026-07-03 by pHash-matching each TH row against the JA catalog). The script now **pHash-verifies every pair** (a Thai reprint keeps the same artwork): pairs over 20 bits apart are skipped, and a set where >30% of hashed pairs mismatch is skipped wholesale.
+**The 1:1-numbering premise is not universal.** A TH and a JA product can share a set code yet be different, renumbered lineups — `SVK` (JA rows = Deck Build BOX Stella Miracle) mislabeled 22/27 filled rows this way (Mew ex stored as "Radiant Charizard"; repaired 2026-07-03 by pHash-matching each TH row against the JA catalog). The script now **pHash-verifies every pair** (a Thai reprint keeps the same artwork): pairs over 14 bits apart are skipped, and a set where >30% of hashed pairs mismatch is skipped wholesale. The gate is 14, not 20, because **item/trainer cards share near-identical layouts and false-match in the 14–20 band** (SVK's Rare Candy passed as "Nest Ball" at ≤20).
+
+**Shared set codes across languages:** `pokemon_sets.id` is a single-col PK, so a code can only carry one language's set row. When a TH and a JA product genuinely share a code with *different* lineups, the Thai product gets its own suffixed set id — precedent: `SVK-th` (เด็คบิลด์บ็อกซ์ สเตลลาร์มิราเคิล, split 2026-07-03; the 50 Thai cards' `set_id` moved to `SVK-th`, card ids unchanged). The scanner needs no changes for this: tier-1's second matcher leg (`set_id ILIKE '<code>%'` + language filter) resolves a printed "SVK" on a Thai card to `SVK-th`.
 
 ## Applying migrations
 

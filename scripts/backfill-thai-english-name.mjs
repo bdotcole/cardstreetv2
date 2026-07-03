@@ -29,7 +29,11 @@ const COMMIT = process.argv.includes('--commit');
 const sb = getSupabase();
 const norm = n => (n || '').split('/')[0].trim();
 
-const MAX_TWIN_DIST = 20;       // same-art reprints land well under this
+// True reprint pairs land at ~6-13 bits. 14 (not 20) because ITEM/TRAINER cards
+// share near-identical layouts and false-match in the 14-20 band — SVK had Rare
+// Candy pass as "Nest Ball" at <=20. A rare true pair above 14 (worn AS-era scans)
+// just gets skipped, which only costs a fill.
+const MAX_TWIN_DIST = 14;
 const SET_MISMATCH_FRAC = 0.3;  // more than this => the set's numbering premise is broken
 
 const hexToBytes = h => {
