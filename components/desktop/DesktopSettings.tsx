@@ -2,11 +2,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
+import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
 
 type Tab = 'profile' | 'preferences';
@@ -75,8 +75,9 @@ export default function DesktopSettings() {
     const initialTab: Tab = searchParams?.get('tab') === 'preferences' ? 'preferences' : 'profile';
 
     const [tab, setTab] = useState<Tab>(initialTab);
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
+    // Shared auth state from the cart provider (single gotrue subscription
+    // for the whole desktop shell).
+    const { user, authChecked } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -94,16 +95,6 @@ export default function DesktopSettings() {
     const avatarInputRef = useRef<HTMLInputElement>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user ?? null);
-            setAuthChecked(true);
-        });
-        const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     useEffect(() => {
         if (!authChecked) return;

@@ -16,7 +16,6 @@ import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useToast } from '@/lib/contexts/ToastContext';
 import AuthModal from '@/components/AuthModal';
-import type { User } from '@supabase/supabase-js';
 
 export default function DesktopCardDetail({
     cardId,
@@ -32,7 +31,9 @@ export default function DesktopCardDetail({
     // The card's set id, for the breadcrumb link to its set page.
     setId?: string | null;
 }) {
-    const { addItem } = useDesktopCart();
+    // Shared auth state from the cart provider (single gotrue subscription
+    // for the whole desktop shell).
+    const { addItem, user } = useDesktopCart();
     const { t } = useTranslation();
     const { showToast } = useToast();
     const { collections, addCollection, addCardToCollection } = useUserCollections();
@@ -43,16 +44,8 @@ export default function DesktopCardDetail({
     // If catalog art fails to load (TCGdex outages black out most EN card
     // art), fall back to a seller's condition photo from our own storage.
     const [catalogArtFailed, setCatalogArtFailed] = useState(false);
-    const [user, setUser] = useState<User | null>(null);
     const [authOpen, setAuthOpen] = useState(false);
     const [addingToCollection, setAddingToCollection] = useState(false);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-        const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     const handleAddToCollection = async () => {
         if (!card) return;

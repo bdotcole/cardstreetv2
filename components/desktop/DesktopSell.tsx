@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
 import { pokemonService } from '@/services/pokemonService';
@@ -16,6 +15,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import ListingForm from '@/components/ListingForm';
 import AuthModal from '@/components/AuthModal';
 import { Card } from '@/types';
+import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 
 interface StripeStatus {
@@ -29,8 +29,9 @@ export default function DesktopSell() {
     const { showToast } = useToast();
     const { t, isThai } = useTranslation();
 
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
+    // Shared auth state from the cart provider (single gotrue subscription
+    // for the whole desktop shell).
+    const { user, authChecked } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
 
     const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
@@ -50,18 +51,6 @@ export default function DesktopSell() {
 
     const [listingCard, setListingCard] = useState<Card | null>(null);
     const [myListings, setMyListings] = useState<MarketplaceListing[]>([]);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user ?? null);
-            setAuthChecked(true);
-        });
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     const refreshMyListings = useCallback(() => {
         marketplaceService.getMyListings().then(setMyListings);
@@ -369,7 +358,7 @@ export default function DesktopSell() {
                                         src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)}
                                         alt=""
                                         loading="lazy"
-                                        className="w-full h-full object-cover"
+                                        className={`w-full h-full ${listing.card_data.isSealed ? 'object-contain' : 'object-cover'}`}
                                     />
                                 </span>
                                 <div className="min-w-0">

@@ -1,12 +1,11 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react';
-import type { User } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
+import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 
 // Shapes returned by /api/profile/{orders,shipments,sales} — same contracts
@@ -83,8 +82,9 @@ function CardCell({ cardData, condition }: { cardData: any; condition?: string }
 export default function DesktopOrders() {
     const { showToast } = useToast();
     const { t } = useTranslation();
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
+    // Shared auth state from the cart provider (single gotrue subscription
+    // for the whole desktop shell).
+    const { user, authChecked } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
 
     const [tab, setTab] = useState<Tab>('purchases');
@@ -98,18 +98,6 @@ export default function DesktopOrders() {
     const [reviewScore, setReviewScore] = useState(5);
     const [reviewComment, setReviewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user ?? null);
-            setAuthChecked(true);
-        });
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     const fetchTab = useCallback(async (which: Tab) => {
         setLoading(true);

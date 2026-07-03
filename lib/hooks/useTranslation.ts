@@ -12,8 +12,6 @@ export function useTranslation() {
     const { settings } = useUserSettings();
     const lang = settings.language;
 
-    console.log('useTranslation: current language is', lang);
-
     // Use useMemo to ensure translations reload when language changes
     const translations = useMemo(() => {
         return lang === 'TH' ? thTranslations : enTranslations;

@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 import { CartItem } from '@/types';
 
 interface DesktopCartContextValue {
@@ -39,6 +40,7 @@ function readCart(userId: string | null): CartItem[] {
 }
 
 export default function DesktopCartProvider({ children }: { children: React.ReactNode }) {
+    const { t } = useTranslation();
     const [user, setUser] = useState<User | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
     const [items, setItems] = useState<CartItem[]>([]);
@@ -102,7 +104,7 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
         const prev = itemsRef.current;
         if (prev.length > 0 && prev[0].sellerId !== item.sellerId) {
             const replace = window.confirm(
-                `Your cart has cards from ${prev[0].sellerName}. Checkout is one seller at a time — replace the cart with this card?`
+                t('desktop.cart.replaceSellerConfirm').replace('{seller}', prev[0].sellerName)
             );
             if (!replace) return;
             setItems([item]);
@@ -115,7 +117,7 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
             return [...cur, item];
         });
         setIsOpen(true);
-    }, []);
+    }, [t]);
 
     const removeItem = useCallback((id: string) => {
         setItems((prev) => prev.filter((i) => i.id !== id));

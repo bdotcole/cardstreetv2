@@ -6,13 +6,10 @@ import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
 import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { formatTHB } from '@/lib/currency';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
-}
-
-function fmtTHB(n: number): string {
-    return `฿${n < 1 ? n.toFixed(2) : Math.round(n).toLocaleString()}`;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
@@ -101,7 +98,7 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                                         sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
                                         loading="lazy"
                                         unoptimized={shouldSkipNextOptimization(thumb)}
-                                        className="object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : 'object-cover'}`}
                                     />
                                 </div>
                                 <div className="p-3">
@@ -109,7 +106,7 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
                                         {listing.card_data.set}
                                     </p>
-                                    <p className="text-lg font-black text-brand-cyan mt-1.5">{fmtTHB(listing.price)}</p>
+                                    <p className="text-lg font-black text-brand-cyan mt-1.5">{formatTHB(listing.price)}</p>
                                 </div>
                             </Link>
                         );

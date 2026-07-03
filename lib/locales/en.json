@@ -556,8 +556,10 @@
             "signInToCheckout": "Sign in to checkout",
             "toastSaveFailed": "Could not save your shipping details",
             "toastPaymentReceived": "Payment received — track your order under Orders",
-            "toastPaymentFailed": "Payment failed"
-        }
+            "toastPaymentFailed": "Payment failed",
+            "replaceSellerConfirm": "Your cart has cards from {seller}. Checkout is one seller at a time — replace the cart with this card?"
+        },
+        "searchListingsFor": "See marketplace listings for"
     },
     "passwordPolicy": {
         "hint": "At least 6 characters, with a lowercase letter, an uppercase letter, and a number.",

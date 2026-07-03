@@ -57,18 +57,42 @@ export const getSetPageData = cache(
 );
 
 // Every set, newest first — for the /sets index and the sets sitemap.
+// PostgREST caps a single response at 1000 rows and the catalog is already
+// close (966 sets as of 2026-07, growing with every ingest), so page through
+// explicitly — a single query would start silently truncating.
 export const getAllSets = cache(async (): Promise<SetRow[]> => {
     const supabase = await createClient();
-    // 947 sets < the 1000-row PostgREST cap, so a single query is complete.
-    const { data } = await supabase
-        .from('pokemon_sets')
-        .select(SET_COLUMNS)
-        .order('release_date', { ascending: false, nullsFirst: false });
-    return (data || []) as SetRow[];
+    const PAGE = 1000;
+    const all: SetRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+        const { data } = await supabase
+            .from('pokemon_sets')
+            .select(SET_COLUMNS)
+            .order('release_date', { ascending: false, nullsFirst: false })
+            // Stable tiebreak so range pagination never skips/dupes rows that
+            // share a release_date.
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1);
+        const rows = (data || []) as SetRow[];
+        all.push(...rows);
+        if (rows.length < PAGE) break;
+    }
+    return all;
 });
 
 export async function getAllSetIds(): Promise<string[]> {
     const supabase = await createClient();
-    const { data } = await supabase.from('pokemon_sets').select('id').order('id', { ascending: true });
-    return (data || []).map((r: { id: string }) => r.id);
+    const PAGE = 1000;
+    const ids: string[] = [];
+    for (let from = 0; ; from += PAGE) {
+        const { data } = await supabase
+            .from('pokemon_sets')
+            .select('id')
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1);
+        const rows = (data || []) as { id: string }[];
+        ids.push(...rows.map((r) => r.id));
+        if (rows.length < PAGE) break;
+    }
+    return ids;
 }

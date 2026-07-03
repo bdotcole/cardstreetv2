@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
-    BUYER_PROFILE_FIELD_LABELS,
     checkBuyerProfileComplete,
     BuyerRequiredField,
 } from '@/lib/profileValidation';
@@ -32,6 +31,18 @@ const EMPTY_ADDRESS: Record<BuyerRequiredField, string> = {
     province: '',
     postcode: '',
     phone_number: '',
+};
+
+// Localized field labels, reusing the Settings form's keys so the two address
+// forms always read identically (Thai address hierarchy: district = tambon,
+// state = amphoe — see DesktopSettings).
+const ADDRESS_FIELD_LABEL_KEYS: Record<BuyerRequiredField, string> = {
+    address: 'desktop.settings.streetPlaceholder',
+    district: 'desktop.settings.districtPlaceholder',
+    state: 'desktop.settings.statePlaceholder',
+    province: 'desktop.settings.provincePlaceholder',
+    postcode: 'desktop.settings.postalPlaceholder',
+    phone_number: 'desktop.settings.phone',
 };
 
 export default function DesktopCartDrawer() {
@@ -156,7 +167,7 @@ export default function DesktopCartDrawer() {
                                 {BUYER_REQUIRED_PROFILE_FIELDS.map((field) => (
                                     <div key={field}>
                                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-                                            {BUYER_PROFILE_FIELD_LABELS[field]}
+                                            {t(ADDRESS_FIELD_LABEL_KEYS[field])}
                                         </label>
                                         <input
                                             type={field === 'phone_number' ? 'tel' : 'text'}

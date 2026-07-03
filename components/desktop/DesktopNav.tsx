@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
@@ -20,25 +19,18 @@ export default function DesktopNav() {
     const pathname = usePathname();
     const { t, language } = useTranslation();
     const { updateLanguage } = useUserSettings();
-    const { items: cartItems, openCart } = useDesktopCart();
+    // Auth state comes from the cart provider — one shared subscription for
+    // the whole desktop shell instead of one per component (multiple
+    // concurrent getUser() calls were contending on the gotrue auth lock).
+    const { items: cartItems, openCart, user } = useDesktopCart();
     const [query, setQuery] = useState('');
     const [game, setGame] = useState<GameId>('pokemon');
-    const [user, setUser] = useState<User | null>(null);
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [results, setResults] = useState<Card[]>([]);
     const [searching, setSearching] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     // Full-catalog search (not just marketplace listings): debounce the query
     // and hit the same client-side catalog search the sell/explore flows use,
@@ -82,9 +74,20 @@ export default function DesktopNav() {
         router.push(`/card/${id}`);
     };
 
+    // Marketplace listings search (the /?q= mode) — dropdown rows deep-link to
+    // catalog cards; Enter and the dropdown footer search live listings.
+    const goToListings = () => {
+        const q = query.trim();
+        if (q.length < 2) return;
+        setSearchOpen(false);
+        setQuery('');
+        setResults([]);
+        router.push(`/?q=${encodeURIComponent(q)}`);
+    };
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (results.length > 0) goToCard(results[0].id);
+        goToListings();
     };
 
     const handleSignOut = async () => {
@@ -179,6 +182,17 @@ export default function DesktopNav() {
                                         </button>
                                     );
                                 })
+                            )}
+                            {query.trim().length >= 2 && (
+                                <button
+                                    onClick={goToListings}
+                                    className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-bold text-brand-cyan hover:bg-white/5 border-t border-white/5 transition-colors text-left"
+                                >
+                                    <i className="fa-solid fa-store text-xs"></i>
+                                    <span className="truncate">
+                                        {t('desktop.searchListingsFor')} &ldquo;{query.trim()}&rdquo;
+                                    </span>
+                                </button>
                             )}
                         </div>
                     )}

@@ -12,6 +12,11 @@ const APP_UA_MARKER = 'CardStreetApp'
 // internal /desktop/* tree; phones hitting them are bounced to the mobile SPA.
 const DESKTOP_ONLY_PREFIXES = ['/card', '/sets', '/seller', '/sell', '/orders', '/collection', '/settings']
 
+// URLs that exist for BOTH experiences at the same path: desktop browsers get
+// the desktop-shell wrapper under /desktop/*, phones keep the standalone page
+// (never redirected — the native shells deep-link here).
+const DESKTOP_WRAPPED_PREFIXES = ['/premium']
+
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
 // the ?view= escape hatch below) is a manual override in either direction.
@@ -62,6 +67,12 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
         // param so the SPA can learn to deep-link into it later.
         const cardId = basePath.startsWith('/card/') ? basePath.slice('/card/'.length) : ''
         return { kind: 'redirect', pathname: '/', search: cardId ? `?card=${cardId}` : '', uaVary: true }
+    }
+
+    if (DESKTOP_WRAPPED_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
+        return isDesktopClient(request)
+            ? { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
+            : { kind: 'next', uaVary: true }
     }
 
     // /desktop/* is an internal rendering target, not a public URL. Rewrites
@@ -219,6 +230,7 @@ export const config = {
         '/orders',
         '/collection',
         '/settings',
+        '/premium',
         '/desktop/:path*',
         // Locale prefixes and the localized public content pages.
         '/en',

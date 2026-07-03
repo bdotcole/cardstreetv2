@@ -17,6 +17,8 @@ const GAME_LABEL: Record<string, string> = {
     yugioh: 'Yu-Gi-Oh!',
     mtg: 'Magic: The Gathering',
     onepiece: 'One Piece',
+    riftbound: 'Riftbound',
+    lorcana: 'Disney Lorcana',
 };
 
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {

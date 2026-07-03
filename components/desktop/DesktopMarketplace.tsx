@@ -12,14 +12,13 @@ import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
+import { formatTHB } from '@/lib/currency';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
 
-// Listings are priced in THB natively; desktop shows THB only for now.
-export function formatTHB(amount: number): string {
-    return `฿${amount < 1 ? amount.toFixed(2) : Math.round(amount).toLocaleString()}`;
-}
+// Re-exported for the desktop components that historically imported it here.
+export { formatTHB };
 
 type SortKey = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
 
@@ -41,7 +40,8 @@ export default function DesktopMarketplace() {
     const q = searchParams?.get('q') ?? '';
 
     const [game, setGame] = useState('all');
-    const [sort, setSort] = useState<SortKey>('newest');
+    // Deals-first, matching the mobile marketplace's default sort.
+    const [sort, setSort] = useState<SortKey>('best_deals');
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -75,7 +75,12 @@ export default function DesktopMarketplace() {
                 limit: PAGE_SIZE,
                 offset: listings.length,
             });
-            setListings((prev) => [...prev, ...rows]);
+            // Offset pagination over a live list: a listing created mid-browse
+            // shifts the pages, so drop anything already rendered.
+            setListings((prev) => {
+                const seen = new Set(prev.map((l) => l.id));
+                return [...prev, ...rows.filter((r) => !seen.has(r.id))];
+            });
             setHasMore(rows.length === PAGE_SIZE);
         } finally {
             setLoadingMore(false);

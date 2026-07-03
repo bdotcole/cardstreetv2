@@ -4,14 +4,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
-import type { User } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
 import { pokemonService, type ApiSet } from '@/services/pokemonService';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, type GameLanguageCode } from '@/lib/games';
@@ -34,23 +33,14 @@ interface FlatItem {
 
 export default function DesktopCollection() {
     const { t, isThai } = useTranslation();
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
+    // Shared auth state from the cart provider (single gotrue subscription
+    // for the whole desktop shell).
+    const { user, authChecked } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
     const [tab, setTab] = useState<Tab>('overview');
 
     const { collections, isLoading: colLoading, removeCardFromCollection } = useUserCollections();
     const { wishlist, isLoading: wlLoading, removeFromWishlist } = useWishlist();
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user ?? null);
-            setAuthChecked(true);
-        });
-        const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-        return () => sub.subscription.unsubscribe();
-    }, []);
 
     // Flat list of every owned card across collections.
     const allItems = useMemo<FlatItem[]>(() => {
@@ -526,11 +516,21 @@ function MasterSetsPanel({
         let cancelled = false;
         setLoadingSets(true);
         setSelectedSet(null);
-        pokemonService.fetchSets(language, 1, 300, game).then((res) => {
+        (async () => {
+            // Page through the whole catalog — Yu-Gi-Oh alone has 600+ sets,
+            // so a single page would silently truncate the tracker.
+            const PAGE_SIZE = 300;
+            const first = await pokemonService.fetchSets(language, 1, PAGE_SIZE, game);
+            let all = first.data;
+            for (let page = 2; all.length < first.totalCount && page <= 12; page++) {
+                const res = await pokemonService.fetchSets(language, page, PAGE_SIZE, game);
+                if (res.data.length === 0) break;
+                all = all.concat(res.data);
+            }
             if (cancelled) return;
-            setSets(res.data);
+            setSets(all);
             setLoadingSets(false);
-        });
+        })();
         return () => { cancelled = true; };
     }, [game, language]);
 

@@ -5,13 +5,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { formatTHB } from '@/lib/currency';
 import type { Card } from '@/types';
 
 type SortKey = 'number' | 'price_desc' | 'price_asc';
-
-function fmtTHB(n: number): string {
-    return `฿${n < 1 ? n.toFixed(2) : Math.round(n).toLocaleString()}`;
-}
 
 function cardNumber(c: Card): number {
     return parseInt(c.number.split('/')[0].replace(/[^0-9]/g, ''), 10) || 999999;
@@ -108,7 +105,7 @@ export default function DesktopSetCards({ cards }: { cards: Card[] }) {
                                         {card.number ? `#${card.number}` : ''}{card.rarity ? ` · ${card.rarity}` : ''}
                                     </p>
                                     {card.marketPrice > 0 && (
-                                        <p className="text-sm font-black text-brand-cyan mt-1.5">{fmtTHB(card.marketPrice)}</p>
+                                        <p className="text-sm font-black text-brand-cyan mt-1.5">{formatTHB(card.marketPrice)}</p>
                                     )}
                                 </div>
                             </Link>
