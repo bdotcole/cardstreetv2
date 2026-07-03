@@ -10,7 +10,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SETS_TTL_MS = 24 * 60 * 60 * 1000; // 24h — set lists rarely change
 const CARDS_TTL_MS = 6 * 60 * 60 * 1000; // 6h — card lists per set
-const STORAGE_PREFIX = 'pokemonCache:v1:';
+// v2: purge prices cached while the mapper could pick a graded ("PSA 10") or
+// unconverted-USD market_values row as the display price.
+const STORAGE_PREFIX = 'pokemonCache:v2:';
 
 async function readPersistent<T>(key: string, ttlMs: number): Promise<T | null> {
     try {
@@ -98,6 +100,27 @@ function tcgplayerMarketUsd(tcgData: any): number {
     }
 
     return 0;
+}
+
+// The market_values join returns one row PER CONDITION, including graded tiers
+// ("PSA 10", "BGS 10", ...) since the PriceCharting ingest — those run many
+// multiples of raw and must never become the shown price. Prefer the JustTCG-
+// refreshed 'Raw_NM', then 'Near Mint', then any other ungraded row, freshest
+// first. Mirrors pickDisplayMarketValue in the web lib/cardMapper.ts — keep in sync.
+const GRADED_CONDITION_RE = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i;
+export function pickDisplayMarketValue(marketValues: any): any | null {
+    if (!marketValues) return null;
+    const rows = (Array.isArray(marketValues) ? marketValues : [marketValues]).filter(
+        (r: any) => r && !GRADED_CONDITION_RE.test(String(r.condition || '').trim()),
+    );
+    const rank = (r: any) =>
+        r.condition === 'Raw_NM' ? 0 : r.condition === 'Near Mint' ? 1 : 2;
+    rows.sort(
+        (a: any, b: any) =>
+            rank(a) - rank(b) ||
+            (Date.parse(b.last_updated || '') || 0) - (Date.parse(a.last_updated || '') || 0),
+    );
+    return rows[0] ?? null;
 }
 
 // In-memory caches (fast path) — backed by AsyncStorage for persistence across restarts
@@ -197,7 +220,7 @@ export const pokemonService = {
             // preserving the set name/total and the price fallback that the mapper uses.
             const { data: cards, error } = await supabase
                 .from('pokemon_cards')
-                .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+                .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
                 .eq('set_id', setId)
                 .order('number', { ascending: true });
 
@@ -253,7 +276,7 @@ export const pokemonService = {
                     rarity, image_small, image_large, language,
                     raw_data->tcgplayer,
                     pokemon_sets(name, printed_total, total),
-                    market_values(market_avg, last_updated)
+                    market_values(condition, market_avg, currency, last_updated)
                 `)
                 .eq('game', game)
                 .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
@@ -302,12 +325,15 @@ export const pokemonService = {
         let marketThb = 0;
         let lastUpdated = '';
 
-        const marketValueData = Array.isArray(supabaseCard.market_values)
-            ? supabaseCard.market_values[0]
-            : supabaseCard.market_values;
+        const marketValueData = pickDisplayMarketValue(supabaseCard.market_values);
 
         if (marketValueData && marketValueData.market_avg > 0) {
-            marketThb = Math.round(marketValueData.market_avg);
+            // market_values stores USD for EN/JA-sourced rows and THB for Thai-derived
+            // rows — convert on currency, same as the web mapper.
+            const avg = marketValueData.currency === 'USD'
+                ? marketValueData.market_avg * EXCHANGE_RATE
+                : marketValueData.market_avg;
+            marketThb = Math.round(avg);
             lastUpdated = marketValueData.last_updated;
         } else {
             const marketUsd = tcgplayerMarketUsd(tcgData);

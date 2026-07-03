@@ -106,7 +106,7 @@ export const pokemonService = {
 
             // Explicit columns: raw_data is tens of KB per row; the mapper only
             // needs its tcgplayer slice (price fallback).
-            const baseSelect = 'id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, tcgplayer:raw_data->tcgplayer, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+            const baseSelect = 'id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, tcgplayer:raw_data->tcgplayer, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
             const nameSearch = `name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`;
 
             // TIER 1: The "Perfect" Strict Match (Name + Number + Set + Language)
@@ -227,7 +227,7 @@ export const pokemonService = {
                     id, name, english_name, set_id, number, supertype, subtypes,
                     rarity, hp, types, game, image_small, image_large, language,
                     tcgplayer_url, tcgplayer:raw_data->tcgplayer,
-                    market_values(market_avg, currency, last_updated),
+                    market_values(condition, market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
                 `)
                 .eq('game', game);
@@ -397,7 +397,7 @@ export const pokemonService = {
                     id, name, english_name, set_id, number, rarity, game,
                     image_small, image_large, language,
                     tcgplayer_url, tcgplayer:raw_data->tcgplayer,
-                    market_values(market_avg, currency, last_updated),
+                    market_values(condition, market_avg, currency, last_updated),
                     pokemon_sets(name, printed_total, total)
                 `)
                 .in('id', ids);

@@ -103,7 +103,7 @@ export default function DesktopCardDetail({
                 const supabase = createClient();
                 const { data } = await supabase
                     .from('pokemon_cards')
-                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)')
+                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
                     .eq('id', cardId)
                     .maybeSingle();
                 if (data) resolved = mapSupabaseCardToInternal(data);

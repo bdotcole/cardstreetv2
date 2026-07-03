@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import { Card } from '@/services/pokemonService';
+import { Card, pickDisplayMarketValue } from '@/services/pokemonService';
 
 export interface CollectionItem {
     id: string;
@@ -23,7 +23,7 @@ export const collectionService = {
                     *,
                     card:pokemon_cards!inner (
                         *,
-                        market_values(market_avg, last_updated)
+                        market_values(condition, market_avg, currency, last_updated)
                     )
                 `)
                 .eq('user_id', userId)
@@ -61,7 +61,7 @@ export const collectionService = {
             set: supabaseCard.set_id, // raw
             imageUrl: supabaseCard.image_small || supabaseCard.image_large || 'https://images.pokemontcg.io/placeholder.png',
             rarity: supabaseCard.rarity,
-            marketPrice: supabaseCard.market_values?.[0]?.market_avg || 0
+            marketPrice: pickDisplayMarketValue(supabaseCard.market_values)?.market_avg || 0
         };
     }
 };

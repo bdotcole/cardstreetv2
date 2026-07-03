@@ -25,7 +25,7 @@ export async function GET(request: Request, props: { params: Promise<{ setId: st
         // We drop 'raw_data' to convert a ~4MB payload per set into a ~40KB payload
         const { data: cards, error } = await supabase
             .from('pokemon_cards')
-            .select('id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, currency, last_updated)')
+            .select('id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
             .eq('set_id', setId)
             .order('number', { ascending: true });
 

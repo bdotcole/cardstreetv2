@@ -1,6 +1,7 @@
 import { Card } from '../types';
 import { EXCHANGE_RATES } from '../constants';
 import { englishJpSetName } from './japaneseSetNames';
+import { GRADED_CONDITION_RE } from './pricecharting';
 
 const EXCHANGE_RATE = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 
@@ -88,6 +89,27 @@ const THAI_SET_MAP: Record<string, string> = {
   SV9s: 'Destiny Threads',
 };
 
+// The market_values join returns one row PER CONDITION — since the PriceCharting
+// ingest that includes graded tiers ("PSA 10", "BGS 10", ...) whose prices run many
+// multiples of raw. The display price must come from an ungraded row: prefer the
+// JustTCG-refreshed 'Raw_NM', then 'Near Mint' (the two catalog conventions), then
+// any other ungraded condition, freshest first. Queries must project `condition`
+// for the graded filter to work; without it this degrades to freshest-row-first.
+export function pickDisplayMarketValue(marketValues: any): any | null {
+  if (!marketValues) return null;
+  const rows = (Array.isArray(marketValues) ? marketValues : [marketValues]).filter(
+    (r: any) => r && !GRADED_CONDITION_RE.test(String(r.condition || '').trim()),
+  );
+  const rank = (r: any) =>
+    r.condition === 'Raw_NM' ? 0 : r.condition === 'Near Mint' ? 1 : 2;
+  rows.sort(
+    (a: any, b: any) =>
+      rank(a) - rank(b) ||
+      (Date.parse(b.last_updated || '') || 0) - (Date.parse(a.last_updated || '') || 0),
+  );
+  return rows[0] ?? null;
+}
+
 export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // Pokemon-specific display rules (Thai rarity codes, Thai set-name aliases) must
   // not touch other games. They are also implicitly language-gated, but gate on
@@ -99,9 +121,7 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // whole raw_data blob, so the slice arrives as a top-level key.
   const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
 
-  const marketValueData = Array.isArray(supabaseCard.market_values)
-    ? supabaseCard.market_values[0]
-    : supabaseCard.market_values;
+  const marketValueData = pickDisplayMarketValue(supabaseCard.market_values);
 
   let marketThb = 0;
   let lastUpdated = '';

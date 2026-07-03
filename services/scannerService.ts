@@ -314,7 +314,7 @@ export const scannerService = {
     if (!numeratorRaw) return null;
 
     const numberOr = `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`;
-    const select = '*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+    const select = '*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
 
     // Set-id matching, in order of decreasing precision. For Pokémon the printed code IS
     // the set_id ("MA3", "swsh3"); other games prefix it ("mtg-big", "ygo-bach"), so the
@@ -357,7 +357,7 @@ export const scannerService = {
 
     let q = supabase
       .from('pokemon_cards')
-      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
       .eq('language', language);
     if (game) q = q.eq('game', game);
@@ -397,7 +397,7 @@ export const scannerService = {
 
     let q = supabase
       .from('pokemon_cards')
-      .select('*, market_values(market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .eq('language', language)
       .or(
         `number.eq.${numerator},number.eq.${stripped},number.ilike.${numerator}/%,number.ilike.${stripped}/%`,
@@ -446,12 +446,19 @@ export const scannerService = {
     const supabase = getSupabase();
     const ids = rows.map((r) => r.id);
     const [marketRes, setsRes] = await Promise.all([
-      supabase.from('market_values').select('card_id, market_avg, currency, last_updated').in('card_id', ids),
+      supabase.from('market_values').select('card_id, condition, market_avg, currency, last_updated').in('card_id', ids),
       supabase.from('pokemon_sets').select('id, name, printed_total, total')
         .in('id', Array.from(new Set(rows.map((r) => r.set_id).filter(Boolean)))),
     ]);
-    const marketBy = new Map<string, any>();
-    for (const m of marketRes.data ?? []) marketBy.set(m.card_id, m);
+    // Keep ALL condition rows per card; the card mapper picks the ungraded
+    // display row (cards can carry graded "PSA 10"-style rows since the
+    // PriceCharting ingest, and those must never become the shown price).
+    const marketBy = new Map<string, any[]>();
+    for (const m of marketRes.data ?? []) {
+      const list = marketBy.get(m.card_id) ?? [];
+      list.push(m);
+      marketBy.set(m.card_id, list);
+    }
     const setBy = new Map<string, any>();
     for (const s of setsRes.data ?? []) setBy.set(s.id, s);
     return rows.map((r) => ({
