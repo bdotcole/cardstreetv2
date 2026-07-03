@@ -42,10 +42,15 @@ function getSupabaseAdmin(): SupabaseClient {
  * environment via env (e.g. to aim a preview deploy at a draft template).
  */
 const TEMPLATES = {
-    sold: (process.env.COURIER_SOLD_TEMPLATE_ID || '5ab4f968-eea2-4f2a-9566-9328a40e6136').trim(),
-    labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '0000a8bc-335b-464b-a43f-299645c48113').trim(),
-    shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'b54699a4-8df2-43b0-869d-0de569e0fa5b').trim(),
-    orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'e29c52d4-1d3d-42b1-854f-0d72d1fb6aa1').trim(),
+    // IDs must match what each template's own Send tab prescribes (Content ->
+    // Templates -> <template> -> Send). The previous UUID-style ids here did
+    // not — Courier's snippets use the base32 content-template ids below, and
+    // the dashboard logs showed zero template sends ever succeeding, so treat
+    // any UUID-looking id in this table as wrong.
+    sold: (process.env.COURIER_SOLD_TEMPLATE_ID || 'BATFJT2XTH4YAHJNK96A3MG762DQ').trim(),
+    labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '000AHF66DDMCJVMGZJK5P8Q2824Z').trim(),
+    shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
+    orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'WAE55N73MYM5CAGN7GTWQT7XPN8B').trim(),
     firstTimeSale: (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'nt_01kvba0yzweh78ef8f9c1b49z7').trim(),
 } as const;
 
