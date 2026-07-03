@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { SealedProduct } from '../services/pokemonService';
 import { Card } from '@/types';
@@ -20,6 +21,10 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
   const { isThai } = useTranslation();
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
   const typeLabel = productTypeLabel(product.productType, isThai);
+  const [mounted, setMounted] = useState(false);
+
+  // Portal target is document.body, which only exists after mount.
+  useEffect(() => setMounted(true), []);
 
   // Prices arrive in THB (base); convert to the display currency.
   const fmt = (priceThb: number | null | undefined) => {
@@ -37,7 +42,14 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
     { key: 'loose', label: isThai ? 'เปิดแล้ว' : 'Loose', price: product.prices?.loose },
   ].filter((tt) => tt.price && tt.price > 0);
 
-  return (
+  if (!mounted) return null;
+
+  // Rendered through a portal: this component mounts inside <main> (a z-10
+  // stacking context), where fixed z-50 still paints BELOW the sibling bottom
+  // nav (z-40) — hiding the Add to Vault bar behind the tab bar. Escaping to
+  // document.body lets the overlay genuinely cover the app chrome, same as
+  // CardDetails (mounted after the nav) and AuthModal (also a portal).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
       {/* Header */}
       <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
@@ -135,7 +147,8 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
           </button>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 
