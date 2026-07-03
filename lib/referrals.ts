@@ -10,8 +10,10 @@
  *      stamps profiles.referred_by, logs a 'signup' event, and bumps the
  *      partner's total_downloads.
  *
- * total_downloads — the tier metric — counts attributed signups (plus any
- * future native install-referrer events), never raw clicks.
+ * total_downloads — the tier metric — counts attributed signups, iOS
+ * store_visit proxies, and confirmed Android installs (Play Install
+ * Referrer via /api/referrals/install) — never raw clicks, and never
+ * the same device twice.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -33,6 +35,17 @@ const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
 
 export function isValidSlugFormat(slug: unknown): slug is string {
     return typeof slug === 'string' && SLUG_PATTERN.test(slug);
+}
+
+/**
+ * Install ids are client-minted UUIDs (lib/installReferrer.ts) that dedupe
+ * Android install reports and let signup attribution recognize an
+ * already-counted device.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidInstallId(installId: unknown): installId is string {
+    return typeof installId === 'string' && UUID_PATTERN.test(installId);
 }
 
 /**

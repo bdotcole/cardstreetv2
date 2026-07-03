@@ -38,6 +38,7 @@ import { createClient } from '@/lib/supabase/client';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
+import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
@@ -254,6 +255,11 @@ export default function HomePage() {
         // signup this session can be attributed even if the cs_ref cookie
         // from /join/<slug> didn't survive.
         captureReferralParam();
+
+        // Android native shell only: report the Play install referrer once so
+        // the referring partner gets download credit (iOS earns it at QR-scan
+        // time in /join). No-op everywhere else.
+        void maybeReportInstallReferrer();
 
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {

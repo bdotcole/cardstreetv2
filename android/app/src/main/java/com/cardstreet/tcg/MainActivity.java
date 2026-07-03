@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         // npm-package plugins), so register the Meta app-events bridge before the
         // bridge spins up. Must precede super.onCreate().
         registerPlugin(FacebookAppEventsPlugin.class);
+        registerPlugin(InstallReferrerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

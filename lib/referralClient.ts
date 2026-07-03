@@ -9,7 +9,12 @@
  * link opened in a different browser.
  */
 
-const REF_STORAGE_KEY = 'cs_ref';
+export const REF_STORAGE_KEY = 'cs_ref';
+/** Client UUID identifying this Android install to /api/referrals/install. */
+export const INSTALL_ID_KEY = 'cs_install_id';
+/** Set once the install referrer has been reported (or found non-partner). */
+export const INSTALL_REPORTED_KEY = 'cs_install_reported';
+
 const attemptKey = (userId: string) => `cs_ref_attributed_${userId}`;
 
 /** Call on app mount: stash ?ref=<slug> from the URL for later attribution. */
@@ -33,10 +38,14 @@ export async function maybeAttributeReferral(userId: string): Promise<void> {
         if (localStorage.getItem(attemptKey(userId))) return;
 
         const slug = localStorage.getItem(REF_STORAGE_KEY) || undefined;
+        // The install id (Android only) lets the server see that this device's
+        // install already incremented total_downloads, so the signup sets
+        // referred_by without counting the same person twice.
+        const installId = localStorage.getItem(INSTALL_ID_KEY) || undefined;
         const res = await fetch('/api/referrals/attribute', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
+            body: JSON.stringify({ slug, installId }),
         });
         if (!res.ok) return; // transient failure — retry on next sign-in
 

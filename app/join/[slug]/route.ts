@@ -9,7 +9,8 @@
  *      the partner (POST /api/referrals/attribute).
  *   4. Routes by platform:
  *      - Android browser → Play Store, with the slug in the install-referrer
- *        param (readable by a future native Install Referrer integration).
+ *        param; after install the app reads it back and posts to
+ *        /api/referrals/install for confirmed download credit.
  *      - Android WebView (the Capacitor app intercepts cardstreet.app links
  *        via App Links, so an installed app opens this URL in-app) → stay in
  *        the app; the cookie lands directly in the WebView session.

@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { REF_COOKIE, ATTRIBUTION_WINDOW_DAYS, isValidSlugFormat } from '@/lib/referrals';
+import { REF_COOKIE, ATTRIBUTION_WINDOW_DAYS, isValidSlugFormat, isValidInstallId } from '@/lib/referrals';
 
 function clearCookie(response: NextResponse): NextResponse {
     response.cookies.set(REF_COOKIE, '', { maxAge: 0, path: '/' });
@@ -104,10 +104,29 @@ export async function POST(request: NextRequest) {
         });
         if (eventErr) console.error('[Referrals/Attribute] signup event insert failed:', eventErr);
 
-        const { error: rpcErr } = await admin.rpc('increment_partner_downloads', {
-            p_partner_id: partner.id,
-        });
-        if (rpcErr) console.error('[Referrals/Attribute] total_downloads bump failed:', rpcErr);
+        // Android devices report their install via /api/referrals/install, which
+        // already incremented total_downloads. When this signup comes from such a
+        // device (the shell sends its install id), skip the bump — the signup
+        // sets referred_by above, but one human is one download, not two.
+        let installAlreadyCounted = false;
+        const installId = body?.installId;
+        if (isValidInstallId(installId)) {
+            const { data: installRow } = await admin
+                .from('partner_downloads')
+                .select('id')
+                .eq('install_id', installId)
+                .eq('partner_id', partner.id)
+                .eq('event_type', 'install')
+                .maybeSingle();
+            installAlreadyCounted = !!installRow;
+        }
+
+        if (!installAlreadyCounted) {
+            const { error: rpcErr } = await admin.rpc('increment_partner_downloads', {
+                p_partner_id: partner.id,
+            });
+            if (rpcErr) console.error('[Referrals/Attribute] total_downloads bump failed:', rpcErr);
+        }
 
         return clearCookie(NextResponse.json({ attributed: true }));
     } catch (err: any) {
