@@ -20,7 +20,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { createShipment, generateLabel } from '@/lib/flashExpress';
+import {
+    createShipment,
+    generateLabel,
+    estimateParcelWeightGramsForItems,
+    estimateParcelDimsCmForItems,
+    type ParcelItemInfo,
+} from '@/lib/flashExpress';
 import { verifyLabelToken } from '@/lib/labelToken';
 
 // Statuses where a Flash label should exist (or be recoverable).
@@ -84,7 +90,7 @@ export async function GET(
 
         const { data: order, error: orderErr } = await admin
             .from('orders')
-            .select('id, seller_id, buyer_id, status, shipping_labels(tracking_number)')
+            .select('id, seller_id, buyer_id, status, transfer_group, shipping_labels(tracking_number)')
             .eq('id', orderId)
             .single();
 
@@ -145,6 +151,31 @@ export async function GET(
                 );
             }
 
+            // Declare the same parcel fulfillment would have: all of this
+            // seller's orders in the transfer group ride one waybill (see
+            // lib/fulfillOrder.ts), and sealed products (booster boxes, ETBs)
+            // must not fall back to the 500g single-card default — an
+            // under-declared parcel gets re-rated by Flash at pickup and the
+            // seller pays the difference against what the buyer was quoted.
+            let parcelItems: ParcelItemInfo[] = [];
+            try {
+                let itemsQuery = admin
+                    .from('orders')
+                    .select('id, listing:listings(card_data)')
+                    .eq('seller_id', order.seller_id);
+                itemsQuery = order.transfer_group
+                    ? itemsQuery.eq('transfer_group', order.transfer_group)
+                    : itemsQuery.eq('id', order.id);
+                const { data: groupOrders } = await itemsQuery;
+                parcelItems = (groupOrders || []).map(o => ({
+                    isSealed: (o as any).listing?.card_data?.isSealed === true,
+                    productType: (o as any).listing?.card_data?.productType ?? null,
+                }));
+            } catch (itemsErr) {
+                console.error('[Orders/Label] Parcel item lookup failed — using single-card default:', itemsErr);
+            }
+            if (parcelItems.length === 0) parcelItems = [{}];
+
             try {
                 const flashOrder = await createShipment({
                     outTradeNo: order.id,
@@ -162,7 +193,8 @@ export async function GET(
                     dstDistrictName: buyer.sub_district || buyer.district || 'บางรัก',
                     dstPostalCode: buyer.postcode || '10500',
                     dstDetailAddress: buyer.address || 'CardStreet Platform',
-                    weight: 500,
+                    weight: estimateParcelWeightGramsForItems(parcelItems),
+                    ...estimateParcelDimsCmForItems(parcelItems),
                     expressCategory: 1,
                     articleCategory: 3,
                     remark: 'CardStreet TCG - Handle with care',
