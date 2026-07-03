@@ -28,7 +28,7 @@ const EN: TermsContentData = {
       heading: '1. Acceptance of Terms',
       blocks: [
         {
-          body: 'By accessing or using the Cardstreet mobile application and website (the "Service"), operated by ELC Global Ventures, LLC d.b.a Cardstreet ("Company," "we," "us," or "our"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.',
+          body: 'By accessing or using the Cardstreet mobile application and website (the "Service"), operated by Cardstreet (Commercial Registration No. 1329900962791) ("Company," "we," "us," or "our"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.',
         },
       ],
     },
@@ -96,7 +96,7 @@ const EN: TermsContentData = {
       heading: '6. Limitation of Liability',
       blocks: [
         {
-          body: 'ELC Global Ventures, LLC provides the platform "as-is." We are not responsible for the quality, safety, or legality of the items advertised, nor the truth or accuracy of the listings. Our total liability is limited to the amount of fees paid to us by the user in the 12 months prior to the claim.',
+          body: 'Cardstreet provides the platform "as-is." We are not responsible for the quality, safety, or legality of the items advertised, nor the truth or accuracy of the listings. Our total liability is limited to the amount of fees paid to us by the user in the 12 months prior to the claim.',
         },
       ],
     },
@@ -111,7 +111,7 @@ const TH: TermsContentData = {
       heading: '1. การยอมรับข้อกำหนด',
       blocks: [
         {
-          body: 'การเข้าถึงหรือใช้งานแอปพลิเคชันมือถือและเว็บไซต์ Cardstreet ("บริการ") ซึ่งดำเนินการโดย ELC Global Ventures, LLC ในนาม Cardstreet ("บริษัท" "เรา" หรือ "ของเรา") ถือว่าคุณตกลงผูกพันตามข้อกำหนดการให้บริการนี้ หากคุณไม่ตกลง กรุณาอย่าใช้บริการ',
+          body: 'การเข้าถึงหรือใช้งานแอปพลิเคชันมือถือและเว็บไซต์ Cardstreet ("บริการ") ซึ่งดำเนินการโดย Cardstreet (ทะเบียนพาณิชย์เลขที่ 1329900962791) ("บริษัท" "เรา" หรือ "ของเรา") ถือว่าคุณตกลงผูกพันตามข้อกำหนดการให้บริการนี้ หากคุณไม่ตกลง กรุณาอย่าใช้บริการ',
         },
       ],
     },
@@ -179,7 +179,7 @@ const TH: TermsContentData = {
       heading: '6. ข้อจำกัดความรับผิด',
       blocks: [
         {
-          body: 'ELC Global Ventures, LLC ให้บริการแพลตฟอร์ม "ตามสภาพ" เราไม่รับผิดชอบต่อคุณภาพ ความปลอดภัย หรือความถูกต้องตามกฎหมายของสินค้าที่ลงขาย รวมถึงความจริงหรือความถูกต้องของรายการขาย ความรับผิดรวมของเราจำกัดอยู่ที่จำนวนค่าธรรมเนียมที่ผู้ใช้ชำระให้เราในช่วง 12 เดือนก่อนการเรียกร้อง',
+          body: 'Cardstreet ให้บริการแพลตฟอร์ม "ตามสภาพ" เราไม่รับผิดชอบต่อคุณภาพ ความปลอดภัย หรือความถูกต้องตามกฎหมายของสินค้าที่ลงขาย รวมถึงความจริงหรือความถูกต้องของรายการขาย ความรับผิดรวมของเราจำกัดอยู่ที่จำนวนค่าธรรมเนียมที่ผู้ใช้ชำระให้เราในช่วง 12 เดือนก่อนการเรียกร้อง',
         },
       ],
     },
