@@ -46,9 +46,17 @@ const GRADED_FIELD_MAP = {
 };
 
 // Our ingest game -> { catalog game, catalog language filter, market language, PC category }.
+//
+// There is NO working pokemon-japanese-cards category (every slug variant returns the
+// all-products fallback) — Japanese cards live INSIDE the pokemon-cards CSV under
+// "Pokemon Japanese <set>" console names (31k card rows / ~390 consoles). The two
+// Pokemon ingests therefore share one CSV, partitioned by consoleRe/consoleExcludeRe.
+// The exclude on the EN run is load-bearing: EN set names collide with prefix-stripped
+// JP console names ("Pokemon Japanese Rebel Clash" -> 'rebel clash' = EN swsh2), which
+// once mis-mapped 404 EN cards to JP products before the filters existed (2026-07-03).
 const GAME_CONFIG = {
-  pokemon:      { game: 'pokemon',  lang: 'en', marketLang: 'en', category: 'pokemon-cards' },
-  'pokemon-jp': { game: 'pokemon',  lang: 'ja', marketLang: 'jp', category: 'pokemon-japanese-cards' },
+  pokemon:      { game: 'pokemon',  lang: 'en', marketLang: 'en', category: 'pokemon-cards', consoleExcludeRe: /^pokemon japanese\b/i },
+  'pokemon-jp': { game: 'pokemon',  lang: 'ja', marketLang: 'jp', category: 'pokemon-cards', consoleRe: /^pokemon japanese\b/i },
   mtg:          { game: 'mtg',      lang: null, marketLang: 'en', category: 'magic-cards' },
   yugioh:       { game: 'yugioh',   lang: null, marketLang: 'en', category: 'yugioh-cards' },
   onepiece:     { game: 'onepiece', lang: null, marketLang: 'en', category: 'one-piece-cards' },
@@ -56,9 +64,49 @@ const GAME_CONFIG = {
 };
 
 // PriceCharting console-name -> our set_id, for sets whose names don't normalize-match.
-// Fill from the "unresolved console-name" warnings the script prints.
+// Keyed per ingest game (a bare key like 'jungle' means JP Jungle on the pokemon-jp
+// run but must NOT hijack the EN "Pokemon Jungle" console on the pokemon run).
+// Keys are norm(stripGamePrefix(console-name)). Fill from the "unresolved
+// console-name" warnings the script prints.
 const SET_NAME_OVERRIDES = {
-  // 'scarlet violet 151': 'sv2a',
+  pokemon: {
+    // 'scarlet violet 151': 'sv2a',
+  },
+  // Our ja pokemon_sets mostly carry Japanese names; PriceCharting consoles use the
+  // English set names, so all non-SV-era sets map by hand (verified against the
+  // console list in the CSV, 2026-07-03).
+  'pokemon-jp': {
+    'expedition expansion pack': 'E1',
+    'the town on no map': 'E2',
+    'wind from the sea': 'E3',
+    'split earth': 'E4',
+    'mysterious mountains': 'E5',
+    'gold silver new world': 'neo1',
+    'crossing the ruins': 'neo2',
+    'awakening legends': 'neo3',
+    'darkness and to light': 'neo4',
+    'flight of legends': 'PCG1',
+    'clash of the blue sky': 'PCG2',
+    'rocket gang strikes back': 'PCG3',
+    'golden sky silvery ocean': 'PCG4',
+    'mirage forest': 'PCG5',
+    'holon research': 'PCG6',
+    'holon phantom': 'PCG7',
+    'miracle crystal': 'PCG8',
+    'offense and defense of the furthest ends': 'PCG9',
+    'expansion pack': 'PMCG1',
+    'jungle': 'PMCG2',
+    'mystery of the fossils': 'PMCG3',
+    'rocket gang': 'PMCG4',
+    'leaders stadium': 'PMCG5',
+    'challenge from the darkness': 'PMCG6',
+    'glory of team rocket': 'SV10',
+    'stellar miracle deck build box': 'SVK',
+    'stellar tera starter set sylveon ex': 'SVLN',
+    'stellar tera starter set ceruledge ex': 'SVLS',
+    'vs': 'VS1',
+    'web': 'web1',
+  },
 };
 
 // Card detection + sealed classification — MUST stay in sync with lib/pricecharting.ts.
@@ -85,7 +133,9 @@ const SEALED_KEYWORDS = [
 ];
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const normNum = (s) => String(s || '').toLowerCase().replace(/(\D)0+(?=\d)/, '$1').replace(/^0+(?=\d)/, '');
+// Numerator only ("056/071" -> "56"): EN numbers have no slash (no-op), but some
+// catalogs store the printed total.
+const normNum = (s) => String(s || '').split('/')[0].toLowerCase().replace(/(\D)0+(?=\d)/, '$1').replace(/^0+(?=\d)/, '');
 // The bulk CSV formats prices as dollar strings ("$1,234.50") — NOT the integer
 // cents the JSON product API returns. This script reads the CSV, so parse dollars.
 const usd = (v) => { if (v == null || v === '') return null; const n = parseFloat(String(v).replace(/[$,]/g, '')); return Number.isFinite(n) && n > 0 ? n : null; };
@@ -155,6 +205,7 @@ async function downloadCsv(category) {
 async function loadCatalog(cfg, setFilter) {
   const byNumber = new Map(); // `${set_id}|${normNum}` -> card id
   const byName = new Map();   // `${set_id}|${normName}` -> card id
+  const namesById = new Map();// card id -> [normed name, normed english_name]
   const setByName = new Map();// normalized set name -> set_id
   const setIds = setFilter ? setFilter.split(',').flatMap((s) => [s.trim(), `${cfg.game}-${s.trim()}`]) : null;
   let from = 0;
@@ -169,21 +220,61 @@ async function loadCatalog(cfg, setFilter) {
     if (!data?.length) break;
     for (const c of data) {
       if (c.number) { const k = `${c.set_id}|${normNum(c.number)}`; if (!byNumber.has(k)) byNumber.set(k, c.id); }
+      const normedNames = [];
       for (const nm of [c.name, c.english_name]) {
-        if (nm) { const k = `${c.set_id}|${norm(nm)}`; if (!byName.has(k)) byName.set(k, c.id); }
+        if (nm) {
+          const n = norm(nm);
+          if (n) normedNames.push(n);
+          const k = `${c.set_id}|${n}`;
+          if (n && !byName.has(k)) byName.set(k, c.id);
+        }
       }
+      if (normedNames.length) namesById.set(c.id, normedNames);
       const setName = c.pokemon_sets?.name;
       if (setName) setByName.set(norm(setName), c.set_id);
     }
     if (data.length < 1000) break;
     from += 1000;
   }
-  return { byNumber, byName, setByName };
+  return { byNumber, byName, namesById, setByName };
 }
 
-function resolveSetId(consoleName, setByName) {
+// Small edit distance for PriceCharting typos ("Dreadnaw", "Killowattrel").
+function lev(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+}
+
+// Do a PriceCharting product name and one of our card names refer to the same card?
+// Exact, token-wise containment (PC adds qualifiers), or a typo-sized edit distance.
+function namesAgree(pcName, ourNames) {
+  for (const our of ourNames || []) {
+    if (!our) continue;
+    if (pcName === our) return true;
+    if (pcName.startsWith(our + ' ') || pcName.endsWith(' ' + our) || pcName.includes(' ' + our + ' ')) return true;
+    if (our.startsWith(pcName + ' ') || our.endsWith(' ' + pcName) || our.includes(' ' + pcName + ' ')) return true;
+    if (lev(pcName, our) <= (our.length > 6 ? 2 : 1)) return true;
+  }
+  return false;
+}
+
+// A product is in scope for this ingest run only if its console passes the game's
+// include/exclude filters (the two Pokemon runs partition one shared CSV).
+function consoleInScope(cfg, consoleName) {
+  const c = consoleName || '';
+  if (cfg.consoleRe && !cfg.consoleRe.test(c)) return false;
+  if (cfg.consoleExcludeRe && cfg.consoleExcludeRe.test(c)) return false;
+  return true;
+}
+
+function resolveSetId(ingestGame, consoleName, setByName) {
   const key = norm(stripGamePrefix(consoleName));
-  return SET_NAME_OVERRIDES[key] || setByName.get(key) || null;
+  return SET_NAME_OVERRIDES[ingestGame]?.[key] || setByName.get(key) || null;
 }
 
 async function upsert(table, rows, onConflict) {
@@ -200,11 +291,13 @@ async function runGraded(cfg, products, idx, dry, limit) {
   // a second time"). Prefer the base print (product-name with no [..]/(..) qualifier).
   const mvByKey = new Map();   // `${cardId}|${lang}|${condition}` -> { isBase, row }
   const mapByCard = new Map(); // cardId -> { isBase, row }
-  let cards = 0, matched = 0;
+  let cards = 0, matched = 0, nameGated = 0, numberUntrusted = 0;
   const unresolvedSets = new Set();
-  for (const p of products) {
+
+  // Shared product parse for both passes.
+  const parse = (p) => {
     const pname = p['product-name'] || '';
-    if (classifySealed(pname)) continue; // sealed handled separately
+    if (!consoleInScope(cfg, p['console-name']) || classifySealed(pname)) return null;
     // Extract collector number + clean name. Pokemon/Magic/Lorcana print "#123";
     // One Piece / Yu-Gi-Oh print a trailing set code ("OP07-002", "LOB-EN001").
     let rawNum = null, namePart = pname;
@@ -214,11 +307,58 @@ async function runGraded(cfg, products, idx, dry, limit) {
       const code = /\s([A-Za-z0-9]+-[A-Za-z0-9]+)\s*$/.exec(pname);
       if (code) { rawNum = code[1]; namePart = pname.slice(0, code.index); }
     }
-    const setId = resolveSetId(p['console-name'], idx.setByName);
-    if (!setId) { unresolvedSets.add(p['console-name']); continue; }
+    const setId = resolveSetId(cfg.ingestGame, p['console-name'], idx.setByName);
+    // Strip card-variant brackets ("[Reverse Holo]") before name comparison.
+    const name = norm(namePart.replace(/\[[^\]]*\]/g, ''));
+    return { pname, rawNum, name, setId, consoleName: p['console-name'] };
+  };
+
+  // Pass 1: per-set, how often does a number-hit AGREE on name? Some catalogs use a
+  // different numbering scheme than PriceCharting (vintage JP PMCG*/neo* are numbered
+  // by Pokedex there), which makes every number match a random pairing. A set must
+  // EARN number-matching; where it fails, only name matches are used — critically,
+  // this also blocks unverifiable number-hits (cards with no english name) in broken
+  // sets, which pass 2's per-row gate cannot see.
+  const setAgree = new Map(); // setId -> { ok, bad }
+  for (const p of products) {
+    const parsed = parse(p);
+    if (!parsed || !parsed.setId || !parsed.rawNum || !parsed.name) continue;
+    const hit = idx.byNumber.get(`${parsed.setId}|${normNum(parsed.rawNum)}`);
+    if (!hit || !idx.namesById.has(hit)) continue;
+    const s = setAgree.get(parsed.setId) || { ok: 0, bad: 0 };
+    if (namesAgree(parsed.name, idx.namesById.get(hit))) s.ok++; else s.bad++;
+    setAgree.set(parsed.setId, s);
+  }
+  const numberTrusted = (setId) => {
+    const s = setAgree.get(setId);
+    // No verifiable pairs at all -> distrust numbering (nothing proves it lines up).
+    if (!s || s.ok + s.bad < 5) return false;
+    return s.bad / (s.ok + s.bad) <= 0.1;
+  };
+  const distrusted = [...setAgree.entries()].filter(([id]) => !numberTrusted(id));
+  if (distrusted.length) {
+    console.log('[pc:graded] number-matching DISTRUSTED (name-only) in:',
+      distrusted.map(([id, s]) => `${id}(${s.bad}/${s.ok + s.bad} disagree)`).join(' '));
+  }
+
+  // Pass 2: match + collect rows.
+  for (const p of products) {
+    const parsed = parse(p);
+    if (!parsed) continue;
+    const { pname, rawNum, name, setId } = parsed;
+    if (!setId) { unresolvedSets.add(parsed.consoleName); continue; }
     cards++;
-    const name = norm(namePart);
-    let cardId = rawNum ? idx.byNumber.get(`${setId}|${normNum(rawNum)}`) : undefined;
+    let cardId;
+    if (rawNum && numberTrusted(setId)) {
+      cardId = idx.byNumber.get(`${setId}|${normNum(rawNum)}`);
+      // Even in a trusted set, a number hit must not contradict the name.
+      if (cardId && name && idx.namesById.has(cardId) && !namesAgree(name, idx.namesById.get(cardId))) {
+        nameGated++;
+        cardId = undefined;
+      }
+    } else if (rawNum) {
+      numberUntrusted++;
+    }
     if (!cardId && name) cardId = idx.byName.get(`${setId}|${name}`);
     if (!cardId) continue;
     matched++;
@@ -241,7 +381,7 @@ async function runGraded(cfg, products, idx, dry, limit) {
   }
   const mvRows = [...mvByKey.values()].map((v) => v.row);
   const mapRows = [...mapByCard.values()].map((v) => v.row);
-  console.log(`[pc:graded] CSV cards: ${cards}, matched rows: ${matched}, distinct cards: ${mapRows.length}, graded rows: ${mvRows.length}`);
+  console.log(`[pc:graded] CSV cards: ${cards}, matched rows: ${matched}, distinct cards: ${mapRows.length}, graded rows: ${mvRows.length}, name-gated: ${nameGated}, number-hits skipped in distrusted sets: ${numberUntrusted}`);
   if (unresolvedSets.size) console.log(`[pc:graded] unresolved console-names (add to SET_NAME_OVERRIDES): ${[...unresolvedSets].slice(0, 25).join(' | ')}`);
   if (dry) { console.log('[pc:graded] --dry: nothing written'); return; }
   await upsert('market_values', mvRows, 'card_id,language,condition');
@@ -254,10 +394,11 @@ async function runSealed(cfg, products, idx, dry, limit) {
   let found = 0, resolved = 0;
   const unresolved = new Set();
   for (const p of products) {
+    if (!consoleInScope(cfg, p['console-name'])) continue;
     const type = classifySealed(p['product-name']);
     if (!type) continue;
     found++;
-    const setId = resolveSetId(p['console-name'], idx.setByName);
+    const setId = resolveSetId(cfg.ingestGame, p['console-name'], idx.setByName);
     if (setId) resolved++; else unresolved.add(p['console-name']);
     rows.push({
       id: `pc-${p.id}`,
@@ -294,6 +435,7 @@ async function main() {
   const cfg = GAME_CONFIG[game];
   if (!['graded', 'sealed'].includes(mode)) throw new Error('mode must be "graded" or "sealed"');
   if (!cfg) throw new Error(`unknown game "${game}" (one of: ${Object.keys(GAME_CONFIG).join(', ')})`);
+  cfg.ingestGame = game;
 
   console.log(`[pc] ${mode} ${game} (category=${cfg.category})${dry ? ' [DRY]' : ''}${setFilter ? ` set=${setFilter}` : ''}`);
   const [products, idx] = await Promise.all([downloadCsv(cfg.category), loadCatalog(cfg, setFilter)]);
