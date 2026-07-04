@@ -28,9 +28,15 @@ const ENTITLEMENT_ID = 'pro';
 let configuredFor: string | null = null;
 let cachedPackage: any | null = null;
 
+// Never resolve a promise with the plugin proxy itself: Capacitor proxies
+// turn ANY property read -- including `then` -- into a native method call, so
+// the promise machinery mistakes the proxy for a thenable, fires a bogus
+// native `Purchases.then()` ("not implemented on android"), and the await
+// never settles. Wrapping in an object keeps the proxy out of the thenable
+// check; callers destructure it back out.
 async function purchasesPlugin() {
   const mod = await import('@revenuecat/purchases-capacitor');
-  return mod.Purchases;
+  return { Purchases: mod.Purchases };
 }
 
 function nativePlatform(): 'ios' | 'android' | null {
@@ -46,7 +52,7 @@ async function ensureConfigured(): Promise<boolean> {
   const apiKey = RC_API_KEYS[platform];
   const { data: { user } } = await createClient().auth.getUser();
   if (!user) return false;
-  const Purchases = await purchasesPlugin();
+  const { Purchases } = await purchasesPlugin();
   if (configuredFor !== platform) {
     await Purchases.configure({ apiKey, appUserID: user.id });
     configuredFor = platform;
@@ -67,7 +73,7 @@ export interface NativeProOffer {
 export async function loadNativeProOffer(): Promise<NativeProOffer | null> {
   try {
     if (!(await ensureConfigured())) return null;
-    const Purchases = await purchasesPlugin();
+    const { Purchases } = await purchasesPlugin();
     const { current } = await Purchases.getOfferings();
     const pkg = current?.availablePackages?.find((p: any) => p.packageType === 'MONTHLY')
       ?? current?.availablePackages?.[0];
@@ -83,7 +89,7 @@ export async function loadNativeProOffer(): Promise<NativeProOffer | null> {
 /** Run the store purchase sheet. 'cancelled' is the user backing out, not an error. */
 export async function purchaseNativePro(): Promise<'purchased' | 'cancelled'> {
   if (!cachedPackage) throw new Error('No package loaded');
-  const Purchases = await purchasesPlugin();
+  const { Purchases } = await purchasesPlugin();
   try {
     await Purchases.purchasePackage({ aPackage: cachedPackage });
     return 'purchased';
@@ -96,7 +102,7 @@ export async function purchaseNativePro(): Promise<'purchased' | 'cancelled'> {
 /** Apple-required restore path; true when the pro entitlement came back. */
 export async function restoreNativePro(): Promise<boolean> {
   if (!(await ensureConfigured())) return false;
-  const Purchases = await purchasesPlugin();
+  const { Purchases } = await purchasesPlugin();
   const { customerInfo } = await Purchases.restorePurchases();
   return !!customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
 }
