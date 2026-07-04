@@ -148,7 +148,7 @@ export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' 
   const Wrapper = variant === 'desktop' ? 'div' : 'main';
 
   return (
-    <Wrapper className={variant === 'desktop' ? 'text-white py-6' : 'min-h-screen bg-brand-darker text-white px-5 py-10'}>
+    <Wrapper className={variant === 'desktop' ? 'text-white py-6' : 'min-h-screen bg-brand-darker text-white px-5 pb-10 pt-[calc(var(--sat)+2.5rem)]'}>
       <div className="w-full max-w-[480px] mx-auto">
         {/* Mobile only: Pro lives outside the tab shell, so back returns to
             the Profile tab it is reached from. The desktop shell has its own

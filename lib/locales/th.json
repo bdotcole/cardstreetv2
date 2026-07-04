@@ -28,9 +28,8 @@
     },
     "marketplace": {
         "title": "ตลาด",
-        "globalExchange": "ตลาดโลก",
-        "market": "ราคาตลาด",
-        "live": "ล่าสุด",
+        "market": "ตลาด",
+        "live": "Cardstreet",
         "searchPlaceholder": "ค้นหาชื่อการ์ดหรือชุด...",
         "filters": "ตัวกรอง",
         "game": "เกม",

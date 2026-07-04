@@ -28,9 +28,8 @@
     },
     "marketplace": {
         "title": "Marketplace",
-        "globalExchange": "Global Exchange",
-        "market": "Market",
-        "live": "Live",
+        "market": "Cardstreet's",
+        "live": "Market",
         "searchPlaceholder": "Search by card name or set...",
         "filters": "Filters",
         "game": "Card Game",

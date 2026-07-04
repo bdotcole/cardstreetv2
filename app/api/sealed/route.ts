@@ -27,6 +27,40 @@ export async function GET(request: Request) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
+        // setsOnly=1 -> the distinct set_ids that have at least one sealed product,
+        // so the catalog's sealed mode can hide sets that would render empty.
+        // Keyset-paginated on set_id: PostgREST caps responses at 1000 rows and
+        // has no DISTINCT, but rows arrive sorted so dedupe is a last-value check.
+        if (searchParams.get('setsOnly') === '1') {
+            const setIds: string[] = [];
+            let cursor: string | null = null;
+            for (let page = 0; page < 20; page++) {
+                let idQuery = supabase
+                    .from('sealed_products')
+                    .select('set_id')
+                    .not('set_id', 'is', null)
+                    .order('set_id')
+                    .limit(1000);
+                if (game && game !== 'all') idQuery = idQuery.eq('game', game);
+                if (language) idQuery = idQuery.eq('language', language === 'jp' ? 'jp' : language);
+                if (cursor) idQuery = idQuery.gt('set_id', cursor);
+                const { data, error } = await idQuery;
+                if (error) {
+                    console.error('[Sealed] setsOnly Supabase error:', error);
+                    return NextResponse.json({ setIds: [] }, { status: 500 });
+                }
+                for (const row of data || []) {
+                    if (setIds[setIds.length - 1] !== row.set_id) setIds.push(row.set_id);
+                }
+                if (!data || data.length < 1000) break;
+                cursor = data[data.length - 1].set_id;
+            }
+            return new NextResponse(JSON.stringify({ setIds }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': defaultCacheControl },
+            });
+        }
+
         let query = supabase
             .from('sealed_products')
             .select('id, game, language, set_id, name, product_type, image_url, pricecharting_id, loose_price, cib_price, new_price, currency, last_updated');

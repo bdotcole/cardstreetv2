@@ -17,7 +17,7 @@ function TradePageInner() {
   const code = useSearchParams()?.get('code') ?? undefined;
 
   return (
-    <main className="min-h-screen bg-brand-darker text-white px-5 py-10">
+    <main className="min-h-screen bg-brand-darker text-white px-5 pb-10 pt-[calc(var(--sat)+2.5rem)]">
       <div className="w-full max-w-[480px] mx-auto mb-4">
         <Link
           href="/premium"

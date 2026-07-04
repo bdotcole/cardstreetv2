@@ -41,6 +41,11 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const [selectedSealed, setSelectedSealed] = useState<SealedProduct | null>(null);
   const sealedReqIdRef = useRef(0);
 
+  // Set ids that have at least one sealed product — sealed mode filters the set
+  // dropdown to these so empty sets never show. null = not loaded yet.
+  const [sealedSetIds, setSealedSetIds] = useState<Set<string> | null>(null);
+  const sealedSetIdsCache = useRef<Map<string, Set<string>>>(new Map());
+
   // In-memory sets cache: avoid re-fetching on language/game toggle
   const setsCache = useRef<Map<string, ApiSet[]>>(new Map());
 
@@ -164,6 +169,26 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     });
   }, [browseMode, selectedGame, selectedSetId, debouncedSearchTerm, selectedLanguage, showLanguageSelector]);
 
+  // Load which sets carry sealed products (cached per game+language).
+  useEffect(() => {
+    if (browseMode !== 'sealed') return;
+    const cacheKey = `${selectedGame}:${showLanguageSelector ? selectedLanguage : ''}`;
+    const cached = sealedSetIdsCache.current.get(cacheKey);
+    if (cached) { setSealedSetIds(cached); return; }
+    setSealedSetIds(null);
+    let cancelled = false;
+    pokemonService.fetchSealedSetIds({
+      game: selectedGame,
+      language: showLanguageSelector ? selectedLanguage : undefined,
+    }).then(ids => {
+      if (cancelled) return;
+      const idSet = new Set(ids);
+      sealedSetIdsCache.current.set(cacheKey, idSet);
+      setSealedSetIds(idSet);
+    });
+    return () => { cancelled = true; };
+  }, [browseMode, selectedGame, selectedLanguage, showLanguageSelector]);
+
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
   // ── O(1) listing lookups — precomputed Map instead of O(n) .filter() per row ─
@@ -191,6 +216,21 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   const scrollToTop = () => cardListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
   const selectedSet = sets.find(s => s.id === selectedSetId);
+
+  // Sealed mode only lists sets that actually have sealed products.
+  const visibleSets = useMemo(
+    () => (browseMode === 'sealed' && sealedSetIds ? sets.filter(s => sealedSetIds.has(s.id)) : sets),
+    [sets, browseMode, sealedSetIds]
+  );
+
+  // Keep the selection valid once the sealed filter kicks in: if the current
+  // set has no sealed products, jump to the first one that does.
+  useEffect(() => {
+    if (browseMode !== 'sealed' || !sealedSetIds) return;
+    if (selectedSetId && sealedSetIds.has(selectedSetId)) return;
+    const first = sets.find(s => sealedSetIds.has(s.id));
+    if (first) setSelectedSetId(first.id);
+  }, [browseMode, sealedSetIds, selectedSetId, sets]);
 
   // Sort cards based on option
   const sortedCards = useMemo(() => {
@@ -324,9 +364,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
             {/* Set Dropdown */}
             <div className="relative" ref={setListRef}>
-              {isLoadingSets ? (
+              {isLoadingSets || (browseMode === 'sealed' && !sealedSetIds) ? (
                 <div className="w-full h-10 bg-white/5 rounded-lg skeleton opacity-20"></div>
-              ) : sets.length === 0 ? (
+              ) : visibleSets.length === 0 ? (
                 <div className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center border border-white/10">
                   <span className="text-xs font-bold text-slate-500">No sets available</span>
                 </div>
@@ -348,9 +388,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
                       <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
-                        <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{sets.length} {t('explore.found')}</span>
+                        <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{visibleSets.length} {t('explore.found')}</span>
                       </div>
-                      {sets.map(set => (
+                      {visibleSets.map(set => (
                         <button
                           key={set.id}
                           onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}

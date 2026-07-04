@@ -412,6 +412,22 @@ export const pokemonService = {
         }
     },
 
+    // Distinct set ids with at least one sealed product — lets the catalog's
+    // sealed mode hide sets that would show an empty list.
+    async fetchSealedSetIds(opts: { game: string; language?: string }): Promise<string[]> {
+        try {
+            const params = new URLSearchParams({ game: opts.game, setsOnly: '1' });
+            if (opts.language) params.set('language', opts.language);
+            const res = await fetch(`/api/sealed?${params.toString()}`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.setIds || [];
+        } catch (error) {
+            console.error('Failed to fetch sealed set ids:', error);
+            return [];
+        }
+    },
+
     mapSupabaseCardToInternal(supabaseCard: any): Card {
         return mapSupabaseCardToInternal(supabaseCard);
     },

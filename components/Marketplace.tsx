@@ -113,7 +113,6 @@ const Marketplace: React.FC<MarketplaceProps> = ({
         <div>
           <div className="flex justify-between items-end mb-2">
             <div>
-              <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('marketplace.globalExchange')}</p>
               <h2 className="text-3xl font-black text-white tracking-tighter italic skew-x-[-6deg]">
                 {t('marketplace.market')} <span className="text-brand-green">{t('marketplace.live')}</span>
               </h2>
