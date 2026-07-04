@@ -441,20 +441,21 @@ const Vault: React.FC<VaultProps> = ({
           </button>
           <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{isThai ? 'กำลังประกาศขาย' : 'Active Listings'}</h3>
         </div>
+        {/* Toggles the asset picker; reads as Cancel while it's open so the
+            button is never a silent no-op. */}
         <button
-          onClick={() => setIsSelectingForListing(true)}
-          className="px-6 h-10 bg-brand-cyan text-brand-darker rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-brand-cyan/10 whitespace-nowrap"
+          onClick={() => setIsSelectingForListing(!isSelectingForListing)}
+          className={`px-6 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all whitespace-nowrap ${isSelectingForListing
+            ? 'glass border border-white/10 text-slate-300'
+            : 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/10'}`}
         >
-          {isThai ? 'ประกาศขายใหม่' : 'New Listing'}
+          {isSelectingForListing ? t('report.cancel') : (isThai ? 'ประกาศขายใหม่' : 'New Listing')}
         </button>
       </div>
 
       {isSelectingForListing ? (
         <div className="space-y-4 animate-fadeIn">
-          <div className="flex items-center justify-between px-2">
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('vault.selectAsset')}</p>
-            <button onClick={() => setIsSelectingForListing(false)} className="text-[9px] text-brand-red font-black uppercase tracking-widest">{t('report.cancel')}</button>
-          </div>
+          <p className="px-2 text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('vault.selectAsset')}</p>
           <div className="space-y-3">
             {allVaultItems.filter(({ item }) => !item.isListing).length === 0 ? (
               <div className="py-20 text-center glass rounded-[2.5rem] border-dashed border-white/5">

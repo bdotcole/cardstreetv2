@@ -117,10 +117,12 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!frontImageBlob || !backImageBlob) {
+    // Sealed products need one photo of the item; the second angle is optional.
+    // Raw cards still require both faces for condition assessment.
+    if (!frontImageBlob || (!isSealed && !backImageBlob)) {
       setError(isThai
-        ? (isSealed ? 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของกล่อง' : 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด')
-        : (isSealed ? 'Please provide both front and back photos of the sealed product.' : 'Please provide both front and back photos of the card.'));
+        ? (isSealed ? 'กรุณาอัปโหลดรูปถ่ายสินค้า' : 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด')
+        : (isSealed ? 'Please provide a photo of the sealed product.' : 'Please provide both front and back photos of the card.'));
       return;
     }
     
@@ -147,14 +149,16 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
       if (frontError) throw new Error("Failed to upload front image: " + frontError.message);
       front_url = supabase.storage.from('listing-images').getPublicUrl(frontData.path).data.publicUrl;
 
-      // Upload Back Image
-      const backPath = `listings/${card.id}/${Date.now()}_back.jpg`;
-      const { data: backData, error: backError } = await supabase.storage
-        .from('listing-images')
-        .upload(backPath, backImageBlob, { contentType: 'image/jpeg' });
-        
-      if (backError) throw new Error("Failed to upload back image: " + backError.message);
-      back_url = supabase.storage.from('listing-images').getPublicUrl(backData.path).data.publicUrl;
+      // Upload Back Image (optional for sealed products)
+      if (backImageBlob) {
+        const backPath = `listings/${card.id}/${Date.now()}_back.jpg`;
+        const { data: backData, error: backError } = await supabase.storage
+          .from('listing-images')
+          .upload(backPath, backImageBlob, { contentType: 'image/jpeg' });
+
+        if (backError) throw new Error("Failed to upload back image: " + backError.message);
+        back_url = supabase.storage.from('listing-images').getPublicUrl(backData.path).data.publicUrl;
+      }
 
       const listingData = {
         card_id: card.id,
@@ -312,7 +316,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
             {/* Mandatory Photos Section */}
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                {isThai ? 'รูปถ่ายจริง (บังคับ)' : 'Real Photos (Required)'}
+                {isThai ? 'รูปถ่ายจริง (บังคับ)' : (isSealed ? 'Real Photo (Required)' : 'Real Photos (Required)')}
               </label>
               
               <div className="flex gap-4">
@@ -339,7 +343,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                     ) : (
                       <div className="text-center p-2">
                         <i className="fa-solid fa-camera text-slate-400 text-2xl mb-2 group-hover:text-brand-cyan transition-colors"></i>
-                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isThai ? 'ด้านหน้า' : 'Front'}</p>
+                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isSealed ? (isThai ? 'รูปสินค้า' : 'Product') : (isThai ? 'ด้านหน้า' : 'Front')}</p>
                       </div>
                     )}
                   </div>
@@ -368,7 +372,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                     ) : (
                       <div className="text-center p-2">
                         <i className="fa-solid fa-camera text-slate-400 text-2xl mb-2 group-hover:text-brand-cyan transition-colors"></i>
-                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isThai ? 'ด้านหลัง' : 'Back'}</p>
+                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{isSealed ? (isThai ? 'มุมอื่น (ไม่บังคับ)' : 'Optional') : (isThai ? 'ด้านหลัง' : 'Back')}</p>
                       </div>
                     )}
                   </div>
