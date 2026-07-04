@@ -52,6 +52,11 @@ export default function DesktopSell() {
     const [listingCard, setListingCard] = useState<Card | null>(null);
     const [myListings, setMyListings] = useState<MarketplaceListing[]>([]);
 
+    // Inline quick price edit on a live listing (one at a time, keyed by listing id)
+    const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+    const [priceDraft, setPriceDraft] = useState('');
+    const [savingPrice, setSavingPrice] = useState(false);
+
     const refreshMyListings = useCallback(() => {
         marketplaceService.getMyListings().then(setMyListings);
     }, []);
@@ -159,6 +164,34 @@ export default function DesktopSell() {
             refreshMyListings();
         } else {
             showToast(t('desktop.sell.toastCancelFailed'), 'error');
+        }
+    };
+
+    const draftPrice = parseFloat(priceDraft);
+    // Mirror the bounds enforced by /api/listings' zod schema.
+    const isPriceDraftValid = Number.isFinite(draftPrice) && draftPrice > 0 && draftPrice <= 10_000_000;
+
+    const savePrice = async (listing: MarketplaceListing) => {
+        if (!isPriceDraftValid || savingPrice) return;
+        if (draftPrice === Number(listing.price)) {
+            setEditingPriceId(null);
+            return;
+        }
+        setSavingPrice(true);
+        try {
+            const ok = await marketplaceService.updateListingPrice(listing.id, draftPrice);
+            if (ok) {
+                showToast(t('desktop.sell.toastPriceUpdated'), 'success');
+                setEditingPriceId(null);
+            } else {
+                // Sold/cancelled while editing — the refresh below reconciles.
+                showToast(t('desktop.sell.toastPriceUpdateFailed'), 'error');
+            }
+            refreshMyListings();
+        } catch {
+            showToast(t('desktop.sell.toastPriceUpdateFailed'), 'error');
+        } finally {
+            setSavingPrice(false);
         }
     };
 
@@ -369,14 +402,60 @@ export default function DesktopSell() {
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 shrink-0">
-                                <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
-                                <button
-                                    onClick={() => cancelListing(listing)}
-                                    className="bg-white/5 hover:bg-brand-red/20 border border-white/10 hover:border-brand-red/40 text-slate-400 hover:text-rose-300 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-                                >
-                                    {t('desktop.sell.cancel')}
-                                </button>
+                            <div className="flex items-center gap-3 shrink-0">
+                                {editingPriceId === listing.id ? (
+                                    <>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-black">฿</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                autoFocus
+                                                value={priceDraft}
+                                                onChange={(e) => setPriceDraft(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') savePrice(listing);
+                                                    if (e.key === 'Escape') setEditingPriceId(null);
+                                                }}
+                                                className="w-32 bg-brand-darker border border-white/10 focus:border-brand-cyan/50 rounded-lg pl-7 pr-2 py-2 text-white text-sm font-black outline-none transition-colors"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => savePrice(listing)}
+                                            disabled={savingPrice || !isPriceDraftValid}
+                                            className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+                                        >
+                                            {savingPrice ? <i className="fa-solid fa-spinner fa-spin"></i> : t('desktop.sell.savePrice')}
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingPriceId(null)}
+                                            disabled={savingPrice}
+                                            aria-label={t('desktop.sell.cancel')}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors"
+                                        >
+                                            <i className="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
+                                        <button
+                                            onClick={() => {
+                                                setPriceDraft(String(listing.price));
+                                                setEditingPriceId(listing.id);
+                                            }}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                        >
+                                            {t('desktop.sell.editPrice')}
+                                        </button>
+                                        <button
+                                            onClick={() => cancelListing(listing)}
+                                            className="bg-white/5 hover:bg-brand-red/20 border border-white/10 hover:border-brand-red/40 text-slate-400 hover:text-rose-300 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                        >
+                                            {t('desktop.sell.cancel')}
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))}

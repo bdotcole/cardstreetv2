@@ -198,6 +198,12 @@
         "masterSets": "ชุดหลัก",
         "items": "รายการ",
         "noActiveListings": "ปัจจุบันคุณยังไม่มีรายการประกาศขายในตลาด CardStreet",
+        "editPrice": "แก้ไขราคา",
+        "newAskPrice": "ราคาขายใหม่ (บาท)",
+        "useMarket": "ราคาตลาด",
+        "savePrice": "บันทึก",
+        "priceUpdated": "อัปเดตราคาเรียบร้อยแล้ว",
+        "priceUpdateFailed": "อัปเดตราคาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         "startSelling": "เริ่มขาย",
         "wishlistEmpty": "รายการที่ต้องการว่างเปล่า",
         "noUnlisted": "ไม่มีรายการที่ยังไม่ประกาศขาย",
@@ -489,7 +495,11 @@
             "toastCompleteShipping": "กรอกข้อมูลการจัดส่งให้ครบก่อนลงขาย",
             "toastCancelled": "ยกเลิกรายการขายแล้ว",
             "toastCancelFailed": "ไม่สามารถยกเลิกรายการขายได้",
-            "toastStripeError": "ไม่สามารถเริ่มการตั้งค่า Stripe ได้"
+            "toastStripeError": "ไม่สามารถเริ่มการตั้งค่า Stripe ได้",
+            "editPrice": "แก้ไขราคา",
+            "savePrice": "บันทึก",
+            "toastPriceUpdated": "อัปเดตราคาเรียบร้อยแล้ว",
+            "toastPriceUpdateFailed": "อัปเดตราคาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
         },
         "orders": {
             "title": "คำสั่งซื้อ",

@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review } from '@/types';
-import { EXCHANGE_RATES } from '@/constants';
+import { EXCHANGE_RATES, CURRENCY_SYMBOLS } from '@/constants';
 import CurrencySwitcher from '@/components/CurrencySwitcher';
 import LanguagePicker from '@/components/LanguagePicker';
 import Explore from '@/components/Explore';
@@ -454,7 +454,8 @@ export default function HomePage() {
 
     // Currency Converter
     const exchangeRate = EXCHANGE_RATES[currency] || 1;
-    const currencySymbol = currency === 'THB' ? '฿' : currency;
+    // Proper symbol ($, €, ...) — the raw code ("USD") read like part of the amount.
+    const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
     // Dynamic Portfolio Value Calculation (Base THB)
     const totalValueTHB = useMemo(() => {
@@ -907,6 +908,32 @@ export default function HomePage() {
         }
     };
 
+    // Quick price edit on an active listing — updates the existing listings
+    // row in place (unlike the old "Edit Listing" flow, which re-ran the full
+    // form and INSERTed a duplicate listing). Rethrows on failure so the
+    // Vault keeps the inline editor open.
+    const handleUpdateListingPrice = async (colId: string, item: UserCollectionItem, card: Card, price: number) => {
+        try {
+            const updated = await marketplaceService.updateListingPriceForCard(card.id, item.condition, price);
+            if (!updated) {
+                // Listing sold/cancelled while editing — re-derive Vault flags
+                // so the stale card drops out of Active Listings.
+                await refreshCollections();
+                throw new Error('Listing no longer active');
+            }
+
+            await fetchGlobalListings();
+            // listingPrice is derived from the listings table; merge locally
+            // so the Vault reflects the new ask without a full reload.
+            await updateCollectionItem(colId, item.id, { listingPrice: price });
+            showToast(t('vault.priceUpdated'), 'success');
+        } catch (error) {
+            console.error('Failed to update listing price:', error);
+            showToast(t('vault.priceUpdateFailed'), 'error');
+            throw error;
+        }
+    };
+
     // Inverse of handlePublishListing. The Vault "Live on Market" flag is
     // derived from the DB `listings` table (see useUserCollections), so the
     // real removal is cancelling that listing — flipping a local flag alone
@@ -1275,6 +1302,7 @@ export default function HomePage() {
                                 onAddToCollection={handleAddToCollection}
                                 onListCard={handleStartListing}
                                 onRemoveListing={handleRemoveListing}
+                                onUpdateListingPrice={handleUpdateListingPrice}
                                 listingTarget={listingTarget}
                                 onCancelListing={() => setListingTarget(null)}
                                 onPublishListing={handlePublishListing}
@@ -1461,6 +1489,7 @@ export default function HomePage() {
                     onRemoveItem={handleRemoveFromCart}
                     onCheckout={handleCheckout}
                     currencySymbol={currencySymbol}
+                    exchangeRate={exchangeRate}
                 />
 
                 <PurchaseRegionModal

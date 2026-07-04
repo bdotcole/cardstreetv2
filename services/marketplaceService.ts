@@ -345,6 +345,63 @@ export const marketplaceService = {
     },
 
     /**
+     * Update the asking price of an active listing. Returns false when the
+     * listing is no longer active (sold/cancelled while the seller was
+     * editing), so callers can reconcile stale UI instead of silently
+     * "succeeding" on zero rows.
+     */
+    async updateListingPrice(listingId: string, price: number): Promise<boolean> {
+        // Mirror the bounds enforced by /api/listings' zod schema.
+        if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+            throw new Error('Invalid listing price');
+        }
+        const supabase = createClient();
+        try {
+            const { data, error } = await supabase
+                .from('listings')
+                .update({ price })
+                .eq('id', listingId)
+                .eq('status', 'active')
+                .select('id');
+
+            if (error) throw error;
+            return (data?.length ?? 0) > 0;
+        } catch (error) {
+            console.error('Error updating listing price:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Update the price of the signed-in user's active listing for a given
+     * card. Same id-less matching as cancelListingForCard: the mobile Vault
+     * only knows card_id (+ condition), not the listing id.
+     */
+    async updateListingPriceForCard(cardId: string, condition: string | undefined, price: number): Promise<boolean> {
+        const supabase = createClient();
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Must be signed in to update a listing');
+
+            const { data: listings, error: fetchError } = await supabase
+                .from('listings')
+                .select('id, condition')
+                .eq('seller_id', user.id)
+                .eq('card_id', cardId)
+                .eq('status', 'active');
+
+            if (fetchError) throw fetchError;
+            if (!listings || listings.length === 0) return false;
+
+            const target = listings.find(l => l.condition === condition) || listings[0];
+            return await this.updateListingPrice(target.id, price);
+        } catch (error) {
+            console.error('Error updating listing price for card:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Cancel an active listing
      */
     async cancelListing(listingId: string): Promise<boolean> {

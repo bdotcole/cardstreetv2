@@ -199,6 +199,12 @@
         "items": "Items",
         "noActiveListings": "You currently have no active sales listings in the CardStreet market.",
         "startSelling": "Start Selling",
+        "editPrice": "Edit Price",
+        "newAskPrice": "New Asking Price (THB)",
+        "useMarket": "Market",
+        "savePrice": "Save",
+        "priceUpdated": "Listing price updated",
+        "priceUpdateFailed": "Could not update the price. Please try again.",
         "wishlistEmpty": "Wishlist is Empty",
         "noUnlisted": "No unlisted assets available",
         "selectAsset": "Select an Asset from your Vault",
@@ -489,7 +495,11 @@
             "toastCompleteShipping": "Complete your shipping details before listing",
             "toastCancelled": "Listing cancelled",
             "toastCancelFailed": "Could not cancel listing",
-            "toastStripeError": "Could not start Stripe onboarding"
+            "toastStripeError": "Could not start Stripe onboarding",
+            "editPrice": "Edit price",
+            "savePrice": "Save",
+            "toastPriceUpdated": "Listing price updated",
+            "toastPriceUpdateFailed": "Could not update the price. Please try again."
         },
         "orders": {
             "title": "Orders",

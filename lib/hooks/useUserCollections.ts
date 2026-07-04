@@ -342,12 +342,17 @@ export function useUserCollections(): UseUserCollectionsReturn {
             if (updates.condition !== undefined) dbUpdates.condition = updates.condition;
             if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
 
-            const { error } = await supabase
-                .from('collection_items')
-                .update(dbUpdates)
-                .eq('id', itemId);
+            // Fields like isListing/listingPrice are derived from the
+            // listings table, not stored on collection_items — when only
+            // those change, skip the (empty) DB write and just merge locally.
+            if (Object.keys(dbUpdates).length > 0) {
+                const { error } = await supabase
+                    .from('collection_items')
+                    .update(dbUpdates)
+                    .eq('id', itemId);
 
-            if (error) throw error;
+                if (error) throw error;
+            }
 
             setCollections(prev => prev.map(col => {
                 if (col.id === collectionId) {

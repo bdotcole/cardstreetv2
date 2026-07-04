@@ -11,6 +11,7 @@ interface CartDrawerProps {
     onRemoveItem: (id: string) => void;
     onCheckout: (shippingFee: number) => void;
     currencySymbol: string;
+    exchangeRate?: number;
 }
 
 const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -19,11 +20,19 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     cart,
     onRemoveItem,
     onCheckout,
-    currencySymbol
+    currencySymbol,
+    exchangeRate = 1
 }) => {
     const { t } = useTranslation();
     const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
+
+    // Prices and shipping quotes are THB; convert for display only — checkout
+    // still receives the raw THB shipping fee.
+    const formatDisplayPrice = (thb: number) => {
+        const v = (thb || 0) * exchangeRate;
+        return `${currencySymbol}${v < 1 && v > 0 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
+    };
     
     const [shippingFee, setShippingFee] = useState<number>(0);
     const [isCalculatingShipping, setIsCalculatingShipping] = useState<boolean>(false);
@@ -95,7 +104,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                 <div className="flex-1 min-w-0 py-1">
                                     <h4 className="text-white text-sm font-bold truncate pr-6">{item.card.name}</h4>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{translateCondition(item.condition)} • {item.sellerName}</p>
-                                    <p className="text-brand-cyan font-black">{currencySymbol}{item.price.toLocaleString()}</p>
+                                    <p className="text-brand-cyan font-black">{formatDisplayPrice(item.price)}</p>
                                 </div>
                                 <button
                                     onClick={() => onRemoveItem(item.id)}
@@ -112,17 +121,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div className="p-6 bg-brand-darker/80 border-t border-white/5 backdrop-blur-xl">
                     <div className="flex justify-between items-end mb-2">
                         <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Subtotal</span>
-                        <span className="text-sm font-black text-white">{currencySymbol}{total.toLocaleString()}</span>
+                        <span className="text-sm font-black text-white">{formatDisplayPrice(total)}</span>
                     </div>
                     <div className="flex justify-between items-end mb-4">
                         <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Shipping</span>
                         <span className="text-sm font-black text-brand-cyan">
-                            {isCalculatingShipping ? '...' : `${currencySymbol}${shippingFee.toLocaleString()}`}
+                            {isCalculatingShipping ? '...' : formatDisplayPrice(shippingFee)}
                         </span>
                     </div>
                     <div className="flex justify-between items-end mb-4 pt-2 border-t border-white/10">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{t('cart.price')}</span>
-                        <span className="text-2xl font-black text-white">{currencySymbol}{(total + shippingFee).toLocaleString()}</span>
+                        <span className="text-2xl font-black text-white">{formatDisplayPrice(total + shippingFee)}</span>
                     </div>
                     <button
                         onClick={() => onCheckout(shippingFee)}

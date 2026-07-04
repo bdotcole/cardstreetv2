@@ -31,6 +31,7 @@ interface VaultProps {
   onToggleWishlist: (card: Card) => void;
   onListCard: (colId: string, item: UserCollectionItem, card: Card) => void;
   onRemoveListing: (colId: string, item: UserCollectionItem, card: Card) => void | Promise<void>;
+  onUpdateListingPrice: (colId: string, item: UserCollectionItem, card: Card, price: number) => Promise<void>;
   listingTarget: { colId: string, item: UserCollectionItem, card: Card } | null;
   onCancelListing: () => void;
   onPublishListing: (data: any) => void;
@@ -53,6 +54,7 @@ const Vault: React.FC<VaultProps> = ({
   onToggleWishlist,
   onListCard,
   onRemoveListing,
+  onUpdateListingPrice,
   listingTarget,
   onCancelListing,
   onPublishListing,
@@ -71,6 +73,10 @@ const Vault: React.FC<VaultProps> = ({
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
   const [isSelectingForListing, setIsSelectingForListing] = useState(false);
+  // Inline quick price edit on an active listing (one at a time, keyed by item id)
+  const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState('');
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
   const [timeframe, setTimeframe] = useState('1M');
   const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
@@ -393,6 +399,39 @@ const Vault: React.FC<VaultProps> = ({
     </div>
   );
 
+  // Listing/market amounts are stored in THB; convert for display the same
+  // way the Marketplace grid does (exchangeRate is 1 when displaying THB).
+  const formatDisplayPrice = (thb: number) => {
+    const v = (thb || 0) * exchangeRate;
+    return `${currencySymbol}${v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
+  };
+
+  const startPriceEdit = (item: UserCollectionItem) => {
+    setPriceDraft(item.listingPrice != null ? String(item.listingPrice) : '');
+    setEditingPriceItemId(item.id);
+  };
+
+  const draftPrice = parseFloat(priceDraft);
+  // Mirror the bounds enforced by /api/listings' zod schema.
+  const isPriceDraftValid = Number.isFinite(draftPrice) && draftPrice > 0 && draftPrice <= 10_000_000;
+
+  const savePriceEdit = async (colId: string, item: UserCollectionItem, card: Card) => {
+    if (!isPriceDraftValid || isSavingPrice) return;
+    if (draftPrice === item.listingPrice) {
+      setEditingPriceItemId(null);
+      return;
+    }
+    setIsSavingPrice(true);
+    try {
+      await onUpdateListingPrice(colId, item, card, draftPrice);
+      setEditingPriceItemId(null);
+    } catch {
+      // The page shell already toasts the failure; keep the editor open for retry.
+    } finally {
+      setIsSavingPrice(false);
+    }
+  };
+
   const renderListings = () => (
     <div className="space-y-6 animate-fadeIn pb-20">
       <div className="flex justify-between items-center pt-4 gap-4">
@@ -443,7 +482,7 @@ const Vault: React.FC<VaultProps> = ({
                     <p className="text-[9px] text-slate-500 uppercase font-black">{item.condition} • {card.set}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
+                    <p className="text-white text-xs font-black">{formatDisplayPrice(card.marketPrice)}</p>
                   </div>
                 </button>
               ))
@@ -484,34 +523,78 @@ const Vault: React.FC<VaultProps> = ({
                   <h4 className="text-white text-base font-black truncate">{card.name}</h4>
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} {isThai ? 'ใบ' : 'Unit(s)'}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-black text-brand-cyan">{currencySymbol}{item.listingPrice?.toLocaleString()}</p>
+                <button onClick={() => startPriceEdit(item)} className="text-right active:scale-95 transition-transform">
+                  <p className="text-xl font-black text-brand-cyan">
+                    {formatDisplayPrice(item.listingPrice ?? 0)}
+                    <i className="fa-solid fa-pen text-[10px] text-slate-500 ml-1.5 align-middle"></i>
+                  </p>
                   <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest">{t('card.askPrice')}</p>
+                </button>
+              </div>
+              {editingPriceItemId === item.id ? (
+                <div className="pt-2 space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('vault.newAskPrice')}</p>
+                    {card.marketPrice > 0 && (
+                      <button
+                        onClick={() => setPriceDraft(String(Math.round(card.marketPrice)))}
+                        className="text-[9px] text-brand-cyan font-black uppercase tracking-widest"
+                      >
+                        {t('vault.useMarket')}: ฿{Math.round(card.marketPrice).toLocaleString()}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-black">฿</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        autoFocus
+                        value={priceDraft}
+                        onChange={(e) => setPriceDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') savePriceEdit(colId, item, card); }}
+                        className="w-full h-12 bg-white/5 border border-white/10 focus:border-brand-cyan/50 rounded-xl pl-9 pr-3 text-white text-base font-black outline-none transition-colors"
+                      />
+                    </div>
+                    <button
+                      onClick={() => savePriceEdit(colId, item, card)}
+                      disabled={isSavingPrice || !isPriceDraftValid}
+                      className="px-5 h-12 bg-brand-cyan text-brand-darker rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
+                    >
+                      {isSavingPrice ? <i className="fa-solid fa-spinner fa-spin"></i> : t('vault.savePrice')}
+                    </button>
+                    <button
+                      onClick={() => setEditingPriceItemId(null)}
+                      disabled={isSavingPrice}
+                      aria-label={t('report.cancel')}
+                      className="w-12 h-12 glass border-white/5 rounded-xl text-slate-400 active:scale-95 transition-all"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2 pt-2">
-
-                <button
-                  onClick={() => {
-                    // Re-open listing form with current data
-                    onListCard(colId, item, card);
-                    setIsSelectingForListing(false);
-                  }}
-                  className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                >
-                  {isThai ? 'แก้ไข' : 'Edit Listing'}
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(isThai ? 'นำประกาศนี้ออกจากตลาดหรือไม่?' : 'Remove this listing from the market?')) {
-                      onRemoveListing(colId, item, card);
-                    }
-                  }}
-                  className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-brand-red/60 hover:text-brand-red transition-colors"
-                >
-                  {isThai ? 'ลบ' : 'Remove'}
-                </button>
-              </div>
+              ) : (
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => startPriceEdit(item)}
+                    className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+                  >
+                    {t('vault.editPrice')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(isThai ? 'นำประกาศนี้ออกจากตลาดหรือไม่?' : 'Remove this listing from the market?')) {
+                        onRemoveListing(colId, item, card);
+                      }
+                    }}
+                    className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-brand-red/60 hover:text-brand-red transition-colors"
+                  >
+                    {isThai ? 'ลบ' : 'Remove'}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -570,7 +653,7 @@ const Vault: React.FC<VaultProps> = ({
                 <p className="text-[9px] text-slate-500 uppercase font-bold">{card.set} • {card.rarity}</p>
               </div>
               <div className="text-right">
-                <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
+                <p className="text-white text-xs font-black">{formatDisplayPrice(card.marketPrice)}</p>
               </div>
             </div>
           ))
@@ -697,7 +780,7 @@ const Vault: React.FC<VaultProps> = ({
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  <p className="text-white text-xs font-black">{currencySymbol}{card.marketPrice.toLocaleString()}</p>
+                  <p className="text-white text-xs font-black">{formatDisplayPrice(card.marketPrice)}</p>
                   <button
                     onClick={(e) => handleRemoveCard(e, colId, item.id)}
                     className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 hover:bg-brand-red/20 hover:text-brand-red text-slate-600 transition-colors"
