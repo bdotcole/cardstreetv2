@@ -2,7 +2,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review } from '@/types';
@@ -36,6 +36,7 @@ import {
 } from '@/lib/profileValidation';
 
 import { createClient } from '@/lib/supabase/client';
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
@@ -61,6 +62,31 @@ type LandingTab = (typeof LANDING_TABS)[number];
 const isLandingTab = (v: string | null): v is LandingTab =>
     !!v && (LANDING_TABS as readonly string[]).includes(v);
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
+const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
+
+// Layout effect that is safe to reference from SSR'd client components —
+// effects never run on the server, this alias only silences the
+// "useLayoutEffect does nothing on the server" warning.
+const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+// The shell fully remounts when the user comes back from the standalone
+// routes (/premium, /grade, /trade, /insights, Stripe redirects). Auth then
+// re-resolves asynchronously, which used to paint the signed-out "Join
+// CardStreet" profile for a few frames before the session came back. This
+// snapshot lets the remount paint signed-in immediately; onAuthStateChange
+// stays the source of truth and clears it when the session is really gone.
+// Guests are in-memory only and intentionally not snapshotted.
+function readUserSnapshot(): UserProfile | null {
+    try {
+        const raw = sessionStorage.getItem(USER_SNAPSHOT_STORAGE_KEY);
+        if (!raw) return null;
+        const u = JSON.parse(raw);
+        if (!u || typeof u.id !== 'string' || u.provider === 'guest') return null;
+        return u as UserProfile;
+    } catch {
+        return null;
+    }
+}
 
 export default function HomePage() {
     const { t } = useTranslation();
@@ -76,8 +102,11 @@ export default function HomePage() {
     // already stripped the URL, and the second pass would fall into the
     // sessionStorage-restore branch (whose value is still stale in the same
     // cycle) and undo the landing choice.
+    //
+    // Before paint, not after: a passive effect let the marketplace default
+    // paint for a frame before the tab switch landed.
     const landingHandledRef = useRef(false);
-    useEffect(() => {
+    useBeforePaint(() => {
         if (typeof window === 'undefined') return;
         if (landingHandledRef.current) return;
         landingHandledRef.current = true;
@@ -154,6 +183,33 @@ export default function HomePage() {
         return () => { cancelled = true; };
     }, [viewingSeller?.id]);
     const [user, setUser] = useState<UserProfile | null>(null);
+
+    // Re-hydrate the last known signed-in user before first paint so a shell
+    // remount doesn't flash the signed-out profile (see readUserSnapshot).
+    useBeforePaint(() => {
+        const snapshot = readUserSnapshot();
+        if (snapshot) setUser(prev => prev ?? snapshot);
+    }, []);
+
+    // Keep the snapshot in step with auth: written on sign-in / profile
+    // hydration, removed on sign-out (also when INITIAL_SESSION reports the
+    // restored snapshot's session expired).
+    useEffect(() => {
+        try {
+            if (user && user.provider !== 'guest') {
+                sessionStorage.setItem(USER_SNAPSHOT_STORAGE_KEY, JSON.stringify({
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    avatar: user.avatar,
+                    provider: user.provider,
+                    isPartner: user.isPartner,
+                }));
+            } else if (!user) {
+                sessionStorage.removeItem(USER_SNAPSHOT_STORAGE_KEY);
+            }
+        } catch { /* storage unavailable (private mode) */ }
+    }, [user]);
     // Provisioned partner accounts must finish setup (real email/phone/password)
     // on first login before they can use the app.
     const [partnerSetup, setPartnerSetup] = useState<{ shopName: string } | null>(null);
@@ -315,33 +371,35 @@ export default function HomePage() {
         // time in /join). No-op everywhere else.
         void maybeReportInstallReferrer();
 
+        // Applies a live session to user state. Keeps the flags hydrated
+        // outside this effect (isPartner via /api/profile, or the pre-paint
+        // snapshot restore) when the same user is being refreshed — a token
+        // refresh must not visibly drop the partner menu until the next
+        // profile fetch.
+        const applySessionUser = (sessionUser: SupabaseAuthUser) => {
+            Sentry.setUser({ id: sessionUser.id, email: sessionUser.email });
+            void maybeAttributeReferral(sessionUser.id);
+            setUser(prev => ({
+                id: sessionUser.id,
+                name: sessionUser.user_metadata.full_name || sessionUser.email?.split('@')[0] || 'User',
+                email: sessionUser.email || '',
+                avatar: sessionUser.user_metadata.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + sessionUser.id,
+                provider: sessionUser.app_metadata.provider as any || 'email',
+                ...(prev && prev.id === sessionUser.id
+                    ? { isPartner: prev.isPartner, partnerStats: prev.partnerStats }
+                    : {}),
+            }));
+        };
+
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                Sentry.setUser({ id: session.user.id, email: session.user.email });
-                void maybeAttributeReferral(session.user.id);
-                setUser({
-                    id: session.user.id,
-                    name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
-                    email: session.user.email || '',
-                    avatar: session.user.user_metadata.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + session.user.id,
-                    provider: session.user.app_metadata.provider as any || 'email'
-                });
-            }
+            if (session?.user) applySessionUser(session.user);
         });
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
-                Sentry.setUser({ id: session.user.id, email: session.user.email });
-                void maybeAttributeReferral(session.user.id);
-                setUser({
-                    id: session.user.id,
-                    name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
-                    email: session.user.email || '',
-                    avatar: session.user.user_metadata.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + session.user.id,
-                    provider: session.user.app_metadata.provider as any || 'email'
-                });
+                applySessionUser(session.user);
             } else {
                 Sentry.setUser(null);
                 setUser(null);
