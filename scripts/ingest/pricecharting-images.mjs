@@ -123,7 +123,10 @@ async function loadSealed(gameFilter) {
   const rows = [];
   let from = 0;
   for (;;) {
-    let q = supabase.from('sealed_products').select('id, game, pricecharting_id, image_url');
+    // Thai rows are excluded: their pricecharting_id points at the JP TWIN's box,
+    // so tier 1 would overwrite their mirrored Thai packaging shots with JP photos.
+    // Thai images are owned by thai-sealed-images.mjs.
+    let q = supabase.from('sealed_products').select('id, game, pricecharting_id, image_url').neq('language', 'th');
     if (gameFilter) q = q.eq('game', gameFilter);
     const { data, error } = await q.order('id', { ascending: true }).range(from, from + 999);
     if (error) throw error;

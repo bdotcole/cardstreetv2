@@ -174,13 +174,18 @@ async function main() {
   if (!TOKEN) throw new Error('PRICECHARTING_TOKEN missing from .env.local');
   const commit = process.argv.includes('--commit');
 
-  const [{ data: thSets, error: e1 }, { data: jaSets, error: e2 }, jpBoxes] = await Promise.all([
+  const [{ data: thSets, error: e1 }, { data: jaSets, error: e2 }, { data: existing, error: e3 }, jpBoxes] = await Promise.all([
     supabase.from('pokemon_sets').select('id, name, release_date').eq('game', 'pokemon').eq('language', 'th').order('release_date', { ascending: false }),
     supabase.from('pokemon_sets').select('id, name').eq('game', 'pokemon').eq('language', 'ja'),
+    supabase.from('sealed_products').select('id, image_url').eq('language', 'th'),
     loadJpBoxes(),
   ]);
   if (e1) throw e1;
   if (e2) throw e2;
+  if (e3) throw e3;
+  // Images are owned by thai-sealed-images.mjs (mirrored Thai packaging shots);
+  // carry them through the upsert so a price re-run never blanks them.
+  const imageById = new Map((existing || []).map((r) => [r.id, r.image_url]));
 
   const jaNameById = new Map((jaSets || []).map((s) => [s.id.toLowerCase(), s.name]));
   const expansions = (thSets || []).filter((s) => !isDeck(s.id, s.name));
@@ -200,13 +205,14 @@ async function main() {
     console.log(`  ${s.id.padEnd(7)} ${(jp ? jp.console.replace(/^Pokemon Japanese /i, '') : '— SRP fallback').padEnd(45)} ${(jp ? `$${jp.boxUsd}` : '').padStart(8)} ฿${String(boxThb).padStart(6)}  ฿${String(packThb).padStart(5)}`);
 
     const common = {
-      game: 'pokemon', language: 'th', set_id: s.id, image_url: null,
+      game: 'pokemon', language: 'th', set_id: s.id,
       pricecharting_id: jp ? jp.boxId : null,
       console_name: jp ? jp.console : 'Thai (SRP)',
       loose_price: null, cib_price: null, currency: 'THB', last_updated: now,
     };
-    rows.push({ ...common, id: `th-${s.id}-box`, name: 'Booster Box', product_type: 'booster_box', new_price: boxThb });
-    rows.push({ ...common, id: `th-${s.id}-pack`, name: 'Booster Pack', product_type: 'booster_pack', new_price: packThb });
+    const boxId = `th-${s.id}-box`, packId = `th-${s.id}-pack`;
+    rows.push({ ...common, id: boxId, image_url: imageById.get(boxId) ?? null, name: 'Booster Box', product_type: 'booster_box', new_price: boxThb });
+    rows.push({ ...common, id: packId, image_url: imageById.get(packId) ?? null, name: 'Booster Pack', product_type: 'booster_pack', new_price: packThb });
   }
 
   console.log(`\n[thai-sealed] JP-derived: ${derived} sets | SRP-only: ${srpOnly} sets | rows: ${rows.length}`);
