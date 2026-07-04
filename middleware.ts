@@ -15,7 +15,7 @@ const DESKTOP_ONLY_PREFIXES = ['/card', '/sets', '/seller', '/sell', '/orders', 
 // URLs that exist for BOTH experiences at the same path: desktop browsers get
 // the desktop-shell wrapper under /desktop/*, phones keep the standalone page
 // (never redirected — the native shells deep-link here).
-const DESKTOP_WRAPPED_PREFIXES = ['/premium', '/auctions']
+const DESKTOP_WRAPPED_PREFIXES = ['/premium']
 
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
@@ -231,7 +231,6 @@ export const config = {
         '/collection',
         '/settings',
         '/premium',
-        '/auctions',
         '/desktop/:path*',
         // Locale prefixes and the localized public content pages.
         '/en',

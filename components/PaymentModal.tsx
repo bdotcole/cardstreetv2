@@ -49,12 +49,6 @@ interface PaymentModalProps {
     items: any[];
     apiEndpoint?: string; // New prop
     extraData?: any; // New prop
-    // Pay-existing-orders mode (auction wins): the pending_payment orders are
-    // already in the DB under this transfer_group, so the modal skips the
-    // /api/orders/estimate + /api/orders/checkout steps and pays them directly
-    // through /api/checkout. Totals + connected account come from
-    // /api/orders/pay-context.
-    existingTransferGroup?: string | null;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
 }
@@ -78,11 +72,10 @@ const PaymentElementForm: React.FC<{
     items: any[];
     apiEndpoint?: string;
     extraData?: any;
-    existingTransferGroup?: string | null;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
-}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, existingTransferGroup = null, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
+}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -98,8 +91,7 @@ const PaymentElementForm: React.FC<{
             onPaymentFailed('You must be signed in to complete a purchase.');
             return;
         }
-        // Pay-existing-orders mode has no cart — the orders are already in the DB.
-        if (!existingTransferGroup && (!items || items.length === 0)) {
+        if (!items || items.length === 0) {
             onPaymentFailed('Your cart is empty.');
             return;
         }
@@ -116,9 +108,8 @@ const PaymentElementForm: React.FC<{
 
             // Step 2: create pending orders first (reserve inventory + get a
             // transfer_group). buyerId is derived from the session server-side.
-            // In pay-existing mode the orders already exist — skip creation.
-            let transferGroup: string | undefined = existingTransferGroup || undefined;
-            if (apiEndpoint === '/api/checkout' && !existingTransferGroup) {
+            let transferGroup: string | undefined;
+            if (apiEndpoint === '/api/checkout') {
                 const orderRes = await fetch('/api/orders/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -259,7 +250,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     items,
     apiEndpoint,
     extraData,
-    existingTransferGroup = null,
     onPaymentSuccess,
     onPaymentFailed
 }) => {
@@ -287,26 +277,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             setEstimateError(null);
             return;
         }
-        if (!existingTransferGroup && !items?.length) return;
+        if (!items?.length) return;
 
         let cancelled = false;
         setEstimateLoading(true);
         setEstimateError(null);
 
-        // Pay-existing mode (auction wins): totals + connected account come off
-        // the already-created pending_payment orders, no simulation needed.
-        // Cart mode: /api/orders/estimate simulates the checkout. Either way,
-        // auth comes from the cookie session and the server derives prices
-        // from the DB.
-        const contextPromise = existingTransferGroup
-            ? fetch(`/api/orders/pay-context?transferGroup=${encodeURIComponent(existingTransferGroup)}`)
-            : fetch('/api/orders/estimate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: items.map(i => ({ id: i.id })) }),
-            });
-
-        contextPromise
+        // Auth comes from cookie session. Only the listing ids are sent — the
+        // server re-derives sellers and prices from the DB.
+        fetch('/api/orders/estimate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: items.map(i => ({ id: i.id })) }),
+        })
             .then(r => r.json())
             .then(data => {
                 if (cancelled) return;
@@ -333,7 +316,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             });
 
         return () => { cancelled = true; };
-    }, [isOpen, items, existingTransferGroup]);
+    }, [isOpen, items]);
 
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
@@ -454,7 +437,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         items={items}
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
-                                        existingTransferGroup={existingTransferGroup}
                                         onPaymentSuccess={onPaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}
                                         onTotalChanged={(newTotal) =>
