@@ -36,6 +36,14 @@ The Supabase Auth (GoTrue) password policy is enforced by the **dashboard** (Aut
 
 **`lib/passwordPolicy.ts`** is a hand-maintained client-side mirror of the *structural* rules (`getUnmetPasswordRules` / `isPasswordStructurallyValid`) so signup/reset forms give inline feedback instead of a server-side 422. The breached-password check stays server-side; its message is surfaced inline when it fires. Requirement text is localized via the `passwordPolicy.*` keys in `lib/locales/{en,th}.json`. Consumers: `components/AuthModal.tsx`, `app/reset-password/page.tsx`, `components/PartnerFinishSetup.tsx`. **If you change the dashboard policy, update `lib/passwordPolicy.ts` and the `passwordPolicy.*` locale strings to match** — they don't auto-sync. (The separate Expo app's signup is not yet aligned.)
 
+## Auth email links (confirmation / reset) — prefetch problem
+
+Supabase email links are **one-time**; mail providers' link scanners GET them before the human clicks, consuming the token — GoTrue then redirects the click to `/#error=access_denied&error_code=otp_expired&...` (the error rides the URL *fragment*, invisible to `/api/auth/callback`, and survives its redirect to `/`). For signup links the scanner's GET still *confirms* the email, so "just sign in" usually works. Three defenses, all client-side:
+
+- **`components/AuthLinkErrorNotice.tsx`** — mounted in both shells (`app/page.tsx`, `app/desktop/layout.tsx`); catches `#error=` hashes on landing, strips them, and shows a bilingual "link already used — try signing in" dialog with its own AuthModal (`authLinkError.*` locale keys).
+- **`components/AuthModal.tsx`** — the post-signup verify screen has a **Resend email** button (60s cooldown, `supabase.auth.resend`), and a sign-in failing with "Email not confirmed" routes to that screen instead of dead-ending.
+- **`app/auth/confirm/page.tsx`** — prefetch-proof landing: Supabase email templates should link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` (recovery: `&type=recovery`); the token is only redeemed when the user presses the button, so scanners can't consume it. Old-style `{{ .ConfirmationURL }}` links keep working in parallel. Android App Links intercept **all** cardstreet.app paths, so the `appUrlOpen` handler in `app/page.tsx` has a matching `/auth/confirm` branch that verifies immediately (a deep-link open is itself the user's click). **The dashboard email templates must be updated for this page to take effect** (Authentication → Email Templates).
+
 ## Card catalog
 
 `pokemon_cards` holds all card data, keyed by `id` (e.g. `sv4pt5-234`). Approximate language distribution:

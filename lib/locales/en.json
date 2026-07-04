@@ -192,6 +192,13 @@
         "payoutNudgeBanner": "Finish payout setup to start selling — about 2 minutes left",
         "payoutNudgeDismiss": "Dismiss"
     },
+    "authLinkError": {
+        "title": "That link didn't work",
+        "expiredBody": "This email link was already used or has expired. If you were confirming your account, it's most likely already verified — just sign in. If sign-in says your email isn't confirmed, you can resend the verification email from there.",
+        "genericBody": "Something went wrong with that sign-in link. Try signing in — you can request a fresh link from the sign-in screen.",
+        "signIn": "Sign in",
+        "close": "Close"
+    },
     "vault": {
         "myPortfolio": "My Portfolio",
         "collection": "Collection",

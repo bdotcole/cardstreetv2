@@ -16,6 +16,7 @@ import Vault from '@/components/Vault';
 import Profile from '@/components/Profile';
 import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
+import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
@@ -1112,6 +1113,37 @@ export default function HomePage() {
                     console.error('Browser close ignored or failed', e);
                 }
 
+                // Email-verification App Link. Android intercepts ALL
+                // cardstreet.app URLs, so the /auth/confirm link from the
+                // Supabase email templates opens the app instead of a browser
+                // tab. A deep-link open IS the user's click (mail scanners
+                // fetch URLs but never fire Android intents), so verify
+                // immediately rather than showing the web page's button.
+                try {
+                    const appLink = new URL(data.url);
+                    if (appLink.pathname === '/auth/confirm') {
+                        const tokenHash = appLink.searchParams.get('token_hash');
+                        const otpType = appLink.searchParams.get('type') || 'email';
+                        if (tokenHash) {
+                            const supabase = createClient();
+                            const { error: verifyErr } = await supabase.auth.verifyOtp({
+                                type: otpType as 'email' | 'signup' | 'recovery' | 'invite' | 'magiclink' | 'email_change',
+                                token_hash: tokenHash,
+                            });
+                            if (verifyErr) {
+                                console.error('[DeepLink] Email verification failed:', verifyErr);
+                                showToast('That link was already used or expired. Try signing in, or resend the email from the sign-in screen.', 'error');
+                            } else if (otpType === 'recovery') {
+                                window.location.href = '/reset-password';
+                            } else {
+                                // Session is set; onAuthStateChange updates the UI.
+                                showToast('Email confirmed — you are signed in!', 'success');
+                            }
+                            return;
+                        }
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Handle native HTTP App Links and Custom Schemes
                 if (data.url.includes('cardstreet://') || data.url.includes('/mobile-redirect')) {
                     // Parse URL parameters
@@ -1216,6 +1248,10 @@ export default function HomePage() {
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
             }}>
+
+            {/* Failed email-verification links land here with a #error hash
+                that would otherwise be silently ignored. */}
+            <AuthLinkErrorNotice />
 
             {/* Forced partner activation — blocks the app until a provisioned
                 partner sets their real email, phone, and password. */}
