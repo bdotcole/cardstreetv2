@@ -1,11 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
 import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
+
+// Gallery slide with pinch/double-tap zoom. One-finger drag is left to the
+// scroll-snap gallery until the image is actually zoomed in — otherwise the
+// zoom library claims the drag for panning and swiping between slides fights
+// the photo. Panning only wakes up past 1x, and the slide snaps back to 1x
+// when swiped away so the next visit starts unzoomed.
+const ZoomableSlide: React.FC<{
+    active: boolean;
+    wrapperClass: string;
+    children: React.ReactNode;
+}> = ({ active, wrapperClass, children }) => {
+    const zoomRef = useRef<ReactZoomPanPinchRef | null>(null);
+    const [isZoomed, setIsZoomed] = useState(false);
+
+    useEffect(() => {
+        if (!active && isZoomed) zoomRef.current?.resetTransform(200);
+    }, [active, isZoomed]);
+
+    return (
+        <TransformWrapper
+            ref={zoomRef}
+            initialScale={1}
+            minScale={1}
+            maxScale={4}
+            centerOnInit
+            panning={{ disabled: !isZoomed, velocityDisabled: true }}
+            doubleClick={{ mode: 'toggle' }}
+            wheel={{ wheelDisabled: true }}
+            onTransformed={(_, state) => setIsZoomed(state.scale > 1.02)}
+        >
+            <TransformComponent wrapperClass={wrapperClass} contentClass="w-full h-full">
+                {children}
+            </TransformComponent>
+        </TransformWrapper>
+    );
+};
 interface ListingDetailsProps {
     listing: {
         id: string;
@@ -37,7 +73,13 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     const card = listing.card_data;
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
-    
+
+    // Slide order is digital, front, back — but front/back only render when
+    // their photo exists, so the back photo's index shifts when front is absent.
+    const frontSlideIndex = listing.image_front_url ? 1 : -1;
+    const backSlideIndex = listing.image_back_url ? (listing.image_front_url ? 2 : 1) : -1;
+
+
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const scrollLeft = e.currentTarget.scrollLeft;
         const width = e.currentTarget.offsetWidth;
@@ -79,34 +121,32 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     >
                         {/* Slide 1: Digital Image */}
                         <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
-                            <Image
-                                src={card.imageUrl || ""}
-                                alt={card.name}
-                                width={280}
-                                height={392}
-                                className="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]"
-                            />
+                            <ZoomableSlide active={activeSlide === 0} wrapperClass="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]">
+                                <Image
+                                    src={card.imageUrl || ""}
+                                    alt={card.name}
+                                    width={280}
+                                    height={392}
+                                    className="w-full"
+                                />
+                            </ZoomableSlide>
                         </div>
 
                         {/* Slide 2: Real Front Photo */}
                         {listing.image_front_url && (
                             <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
-                                <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
-                                    <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
-                                        <Image src={listing.image_front_url} alt="Front condition" width={280} height={392} className="w-full object-contain bg-black/50" />
-                                    </TransformComponent>
-                                </TransformWrapper>
+                                <ZoomableSlide active={activeSlide === frontSlideIndex} wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10">
+                                    <Image src={listing.image_front_url} alt="Front condition" width={280} height={392} className="w-full object-contain bg-black/50" />
+                                </ZoomableSlide>
                             </div>
                         )}
 
                         {/* Slide 3: Real Back Photo */}
                         {listing.image_back_url && (
                             <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
-                                <TransformWrapper initialScale={1} minScale={1} maxScale={4} centerOnInit>
-                                    <TransformComponent wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10" contentClass="w-full h-full">
-                                        <Image src={listing.image_back_url} alt="Back condition" width={280} height={392} className="w-full object-contain bg-black/50" />
-                                    </TransformComponent>
-                                </TransformWrapper>
+                                <ZoomableSlide active={activeSlide === backSlideIndex} wrapperClass="w-full max-w-[280px] rounded-xl overflow-hidden drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] border border-white/10">
+                                    <Image src={listing.image_back_url} alt="Back condition" width={280} height={392} className="w-full object-contain bg-black/50" />
+                                </ZoomableSlide>
                             </div>
                         )}
                     </div>
@@ -116,10 +156,10 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         <div className="flex justify-center gap-2 pb-4">
                             <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 0 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
                             {listing.image_front_url && (
-                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 1 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
+                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === frontSlideIndex ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
                             )}
                             {listing.image_back_url && (
-                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === 2 ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
+                                <div className={`w-2 h-2 rounded-full transition-all ${activeSlide === backSlideIndex ? 'bg-brand-cyan w-4' : 'bg-white/20'}`} />
                             )}
                         </div>
                     )}
