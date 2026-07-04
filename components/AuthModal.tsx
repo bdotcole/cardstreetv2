@@ -93,6 +93,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     const [error, setError] = useState<string | null>(null);
     const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
+    // Resend-verification state for the 'verify' screen. Confirmation links
+    // are one-time and mail-provider link scanners often consume them before
+    // the user clicks (GoTrue then reports otp_expired), so a resend path is
+    // essential. Cooldown mirrors GoTrue's 60s resend rate limit.
+    const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+    const [resendCooldown, setResendCooldown] = useState(0);
+    useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const id = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+        return () => clearTimeout(id);
+    }, [resendCooldown]);
+
     // Form fields
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -246,6 +258,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             onClose();
         } catch (err: any) {
             console.error('Error signing in:', err);
+            // Unconfirmed email isn't a dead end — route to the verify screen,
+            // which explains the situation and offers a resend button (the
+            // original link may have been consumed by a mail-provider scanner).
+            if (/email not confirmed/i.test(err?.message || '')) {
+                setVerificationEmail(identifier);
+                setResendState('idle');
+                setMode('verify');
+                setError(null);
+                setLoading(false);
+                return;
+            }
             setError(err instanceof AuthTimeoutError
                 ? AUTH_TIMEOUT_USER_MESSAGE
                 : err.message || 'Invalid email or password');
@@ -280,6 +303,30 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 ? AUTH_TIMEOUT_USER_MESSAGE
                 : err.message || 'Failed to send reset email');
             setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        if (!verificationEmail || resendState === 'sending' || resendCooldown > 0) return;
+        setResendState('sending');
+        setError(null);
+        try {
+            const { error } = await withAuthWatchdog('resend-verification', () =>
+                supabase.auth.resend({
+                    type: 'signup',
+                    email: verificationEmail,
+                    options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+                })
+            );
+            if (error) throw error;
+            setResendState('sent');
+            setResendCooldown(60);
+        } catch (err: any) {
+            console.error('Error resending verification email:', err);
+            setResendState('idle');
+            setError(err instanceof AuthTimeoutError
+                ? AUTH_TIMEOUT_USER_MESSAGE
+                : err.message || 'Failed to resend verification email');
         }
     };
 
@@ -378,13 +425,51 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                             </p>
                             <p className="text-xs text-slate-500">
                                 Click the link in your email to complete your registration.
+                                Links work once — always use the newest email.
                             </p>
                         </div>
+
+                        {error && (
+                            <div className="bg-brand-red/10 border border-brand-red/20 rounded-xl p-4 flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-brand-red/20 flex items-center justify-center flex-shrink-0">
+                                    <i className="fa-solid fa-exclamation text-brand-red text-sm"></i>
+                                </div>
+                                <p className="text-sm text-red-200 flex-1">{error}</p>
+                            </div>
+                        )}
+
+                        {resendState === 'sent' && (
+                            <div className="bg-brand-cyan/10 border border-brand-cyan/20 rounded-xl p-4">
+                                <p className="text-sm text-cyan-100">
+                                    A fresh verification email is on its way. It replaces any
+                                    earlier links, so use the newest one.
+                                </p>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleResendVerification}
+                            disabled={resendState === 'sending' || resendCooldown > 0}
+                            className="w-full h-12 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-cyan/20 hover:shadow-brand-cyan/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                        >
+                            {resendState === 'sending' ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Sending...</span>
+                                </>
+                            ) : resendCooldown > 0 ? (
+                                <span>Resend email ({resendCooldown}s)</span>
+                            ) : (
+                                <span>Resend email</span>
+                            )}
+                        </button>
 
                         <button
                             onClick={() => {
                                 setMode('signin');
                                 setVerificationEmail(null);
+                                setResendState('idle');
+                                setError(null);
                             }}
                             className="w-full h-12 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors"
                         >

@@ -3,6 +3,7 @@ import DesktopNav from '@/components/desktop/DesktopNav';
 import DesktopFooter from '@/components/desktop/DesktopFooter';
 import DesktopCartProvider from '@/components/desktop/DesktopCartContext';
 import DesktopCartDrawer from '@/components/desktop/DesktopCartDrawer';
+import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 
 export const metadata: Metadata = {
     title: 'CardStreet — Trading Card Marketplace',
@@ -22,6 +23,9 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
                 <DesktopFooter />
             </div>
             <DesktopCartDrawer />
+            {/* Failed email-verification links redirect to / with a #error
+                hash (invisible to server routes) — surface it. */}
+            <AuthLinkErrorNotice />
         </DesktopCartProvider>
     );
 }
