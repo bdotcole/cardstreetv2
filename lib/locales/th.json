@@ -188,7 +188,9 @@
         "stripeCurrencyPickerLabel": "รับเงินเป็นสกุล",
         "stripeCurrencyThb": "THB · PromptPay",
         "stripeCurrencyUsd": "USD · บัตรเครดิต",
-        "stripeCurrencyLockedNote": "ไม่สามารถเปลี่ยนได้หลังตั้งค่าแล้ว — บัญชี Stripe ไม่สามารถย้ายระหว่างแพลตฟอร์มได้"
+        "stripeCurrencyLockedNote": "ไม่สามารถเปลี่ยนได้หลังตั้งค่าแล้ว — บัญชี Stripe ไม่สามารถย้ายระหว่างแพลตฟอร์มได้",
+        "payoutNudgeBanner": "ตั้งค่าการรับเงินให้เสร็จเพื่อเริ่มขาย — เหลืออีกประมาณ 2 นาที",
+        "payoutNudgeDismiss": "ปิด"
     },
     "vault": {
         "myPortfolio": "พอร์ตของฉัน",

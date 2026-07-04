@@ -190,6 +190,10 @@ Subscribed events for both: `payment_intent.succeeded`, `payment_intent.payment_
 
 **Return URL hardening**: `return_url`/`refresh_url` default to `getAppBaseUrl()` (cardstreet.app), **not** the request host. Stripe's "Return to CardStreet" button then deep-links into the Capacitor app via Android App Links (autoVerify on `cardstreet.app` per `AndroidManifest.xml`). Client can override via `returnUrl`/`refreshUrl` in the body, validated against an allowlist (cardstreet.app, NEXT_PUBLIC_APP_URL host, localhost).
 
+**Abandonment recovery** (TH KYC is a legal floor — the seller is MOR, so Stripe must fully verify them before `charges_enabled`; the lever is recovering abandoners, not shortening the form). Two nudges for sellers with `stripe_account_id` set but `stripe_details_submitted` false:
+- `app/api/cron/stripe-setup-nudge/route.ts` — daily Vercel cron (02:00 UTC = 09:00 Bangkok), one-time bilingual "finish your payout setup" email via `lib/courier.ts:sendStripeSetupReminderEmail`. One email per seller ever, CAS-guarded on `profiles.stripe_setup_nudge_sent_at` (migration `20260704_stripe_setup_nudge.sql`), only after the account sat unchanged >24h. The CTA links `/?stripe_connect=refresh`, which the shell + `Profile` + `StripeConnectSection` already turn into an immediate resume of hosted onboarding.
+- The mobile shell (`app/page.tsx`) shows a dismissible amber banner under the header for stalled sellers (cached flags via `/api/stripe/connect/status`); tapping it hands off to Profile's payouts panel via the `cs_open_payouts` sessionStorage flag. Desktop needs no equivalent — `/sell` already gates on Stripe status with a resume button.
+
 ### Charges (TH path)
 
 `/api/checkout` creates the PaymentIntent **on the seller's connected account** (direct charge) by passing `requestOptions.stripeAccount = seller.stripe_account_id`. It does **not** set `transfer_data.destination` or `on_behalf_of` — those belong to the destination-charge model, which TH does not use. The PaymentIntent carries:

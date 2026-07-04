@@ -21,6 +21,10 @@
         {
             "path": "/api/cron/pricecharting",
             "schedule": "0 3 * * 1"
+        },
+        {
+            "path": "/api/cron/stripe-setup-nudge",
+            "schedule": "0 2 * * *"
         }
     ]
 }

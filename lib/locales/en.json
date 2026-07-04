@@ -188,7 +188,9 @@
         "stripeCurrencyPickerLabel": "Receive payouts in",
         "stripeCurrencyThb": "THB · PromptPay",
         "stripeCurrencyUsd": "USD · Card",
-        "stripeCurrencyLockedNote": "You can't change this after setup — Stripe accounts can't move between platforms."
+        "stripeCurrencyLockedNote": "You can't change this after setup — Stripe accounts can't move between platforms.",
+        "payoutNudgeBanner": "Finish payout setup to start selling — about 2 minutes left",
+        "payoutNudgeDismiss": "Dismiss"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

@@ -712,6 +712,135 @@ export async function sendFirstTimeSaleEmail(
     }
 }
 
+// ─── Stalled Stripe onboarding reminder ──────────────────────────────────────
+
+/**
+ * One-time "finish your payout setup" email for sellers who created a Stripe
+ * connected account but abandoned the hosted onboarding (details never
+ * submitted). Candidates are selected by the daily cron
+ * (app/api/cron/stripe-setup-nudge); this function re-verifies eligibility so
+ * a seller who finished onboarding between the cron's query and the send is
+ * never nudged.
+ *
+ * Same idempotency scheme as sendFirstTimeSaleEmail: atomically CLAIM
+ * profiles.stripe_setup_nudge_sent_at (CAS on NULL) before sending, roll the
+ * claim back if the send fails. One email per seller, ever.
+ *
+ * Copy is inline and bilingual (TH first — the server can't know the seller's
+ * UI language). The CTA deep-links to /?stripe_connect=refresh, which the
+ * mobile shell + Profile + StripeConnectSection already turn into an immediate
+ * resume of the hosted flow; on a phone with the app installed, cardstreet.app
+ * App-Links straight into the native app.
+ */
+export async function sendStripeSetupReminderEmail(
+    userId: string,
+    deps: FirstTimeSaleDeps = {},
+): Promise<'sent' | 'skipped' | 'error'> {
+    const courier = deps.courier !== undefined ? deps.courier : getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping Stripe setup reminder');
+        return 'skipped';
+    }
+    const supabaseAdmin = deps.supabaseAdmin ?? getSupabaseAdmin();
+
+    try {
+        // ── 1. Re-verify eligibility (the cron's snapshot may be stale). ──
+        const { data: profile, error: profileErr } = await supabaseAdmin
+            .from('profiles')
+            .select('display_name, stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_setup_nudge_sent_at')
+            .eq('id', userId)
+            .single();
+
+        if (profileErr || !profile) {
+            console.error(`[Courier] ❌ setup-nudge: failed to load profile ${userId}:`, profileErr);
+            return 'error';
+        }
+        if (
+            !profile.stripe_account_id ||
+            profile.stripe_details_submitted === true ||
+            profile.stripe_charges_enabled === true ||
+            profile.stripe_setup_nudge_sent_at
+        ) {
+            return 'skipped';
+        }
+
+        // ── 2. Resolve the seller's email. ──
+        const { data: { user }, error: authErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const email = (!authErr && user?.email) ? user.email : null;
+        if (!email) {
+            console.warn(`[Courier] ⚠️  No email for seller ${userId} — skipping setup nudge`);
+            return 'skipped';
+        }
+
+        // ── 3. Atomically claim the one-shot slot. ──
+        const claimedAt = new Date().toISOString();
+        const { data: claimed, error: claimErr } = await supabaseAdmin
+            .from('profiles')
+            .update({ stripe_setup_nudge_sent_at: claimedAt })
+            .eq('id', userId)
+            .is('stripe_setup_nudge_sent_at', null)
+            .select('id');
+
+        if (claimErr) {
+            console.error(`[Courier] ❌ setup-nudge: claim update failed for ${userId}:`, claimErr);
+            return 'error';
+        }
+        if (!claimed || claimed.length === 0) {
+            return 'skipped'; // lost the race to a concurrent run
+        }
+
+        // ── 4. Send. Roll the claim back on failure so a later run retries. ──
+        const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
+
+        try {
+            const sendResult = await courier.send.message({
+                message: {
+                    to: { email },
+                    content: {
+                        title: 'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your CardStreet payout setup',
+                        body:
+                            `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
+                            'คุณเริ่มตั้งค่าการรับเงินบน CardStreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
+                            'เหลืออีกเพียงไม่กี่ขั้นตอน (ประมาณ 2 นาที) ก็พร้อมลงขายการ์ด ' +
+                            'และรับเงินเข้าบัญชีธนาคารของคุณโดยตรง\n\n' +
+                            `กลับมาทำต่อได้ที่: ${resumeUrl}\n\n` +
+                            '- - -\n\n' +
+                            `${firstName ? `Hi ${firstName},\n\n` : ''}` +
+                            'You started setting up payouts on CardStreet but didn\'t finish — ' +
+                            'only a few steps remain (about 2 minutes) before you can list cards ' +
+                            'for sale and get paid directly to your bank account.\n\n' +
+                            `Pick up where you left off: ${resumeUrl}\n\n` +
+                            `Questions? Contact ${supportEmail}`,
+                    },
+                    routing: { method: 'all', channels: ['email'] },
+                    data: { type: 'stripe_setup_nudge' },
+                },
+            });
+            console.log(
+                `[Courier] ✅ Stripe setup reminder sent to ${userId}. ` +
+                `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+            );
+            return 'sent';
+        } catch (sendErr) {
+            console.error(`[Courier] ❌ Error sending Stripe setup reminder to ${userId}:`, sendErr);
+            const { error: rollbackErr } = await supabaseAdmin
+                .from('profiles')
+                .update({ stripe_setup_nudge_sent_at: null })
+                .eq('id', userId)
+                .eq('stripe_setup_nudge_sent_at', claimedAt);
+            if (rollbackErr) {
+                console.error(`[Courier] ❌ setup-nudge: failed to roll back claim for ${userId} (email will not retry):`, rollbackErr);
+            }
+            return 'error';
+        }
+    } catch (err) {
+        console.error(`[Courier] ❌ Unexpected error in Stripe setup reminder for ${userId}:`, err);
+        return 'error';
+    }
+}
+
 /**
  * CardStreet Pro perk: tells a wishlister that a card on their wishlist was
  * just listed for sale. Entitlement filtering and dedupe happen in the caller
