@@ -9,6 +9,7 @@ import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { pokemonService } from '@/services/pokemonService';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
@@ -23,6 +24,8 @@ export default function DesktopNav() {
     // the whole desktop shell instead of one per component (multiple
     // concurrent getUser() calls were contending on the gotrue auth lock).
     const { items: cartItems, openCart, user } = useDesktopCart();
+    // Beta-only nav entries (e.g. the auction house) — non-beta users see nothing.
+    const { hasBeta } = useBetaFeatures();
     const [query, setQuery] = useState('');
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -188,6 +191,7 @@ export default function DesktopNav() {
                     {([
                         ['/', t('desktop.navMarketplace')],
                         ['/sets', t('desktop.navSets')],
+                        ...(hasBeta('auctions') ? [['/auctions', t('auction.entryButton') || 'Auctions']] : []),
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
                         ['/premium', t('desktop.navPro')],

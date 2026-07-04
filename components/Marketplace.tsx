@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { Card } from '@/types';
 import { GAMES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+
+// Beta-only surface; loaded lazily so non-beta users never pay for the bundle.
+const AuctionHub = dynamic(() => import('@/components/auctions/AuctionHub'), { ssr: false });
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -30,6 +35,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   exchangeRate = 1,
 }) => {
   const { t } = useTranslation();
+
+  // Auction house entry (beta-gated; non-beta users see no trace of it).
+  const { hasBeta } = useBetaFeatures();
+  const [auctionHubOpen, setAuctionHubOpen] = useState(false);
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,6 +126,15 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 {t('marketplace.market')} <span className="text-brand-green">{t('marketplace.live')}</span>
               </h2>
             </div>
+            {hasBeta('auctions') && (
+              <button
+                onClick={() => setAuctionHubOpen(true)}
+                className="h-9 px-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all"
+              >
+                <i className="fa-solid fa-gavel"></i>
+                {t('auction.entryButton') || 'Auctions'}
+              </button>
+            )}
           </div>
 
           {/* Search Bar */}
@@ -405,6 +423,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           )}
         </div>
       </div>
+
+      {auctionHubOpen && (
+        <AuctionHub isOpen={auctionHubOpen} onClose={() => setAuctionHubOpen(false)} />
+      )}
     </div>
   );
 };
