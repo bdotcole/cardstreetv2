@@ -347,6 +347,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     }
   }, []);
 
+  // Opened from the shell's stalled-payout banner: the shell sets this flag
+  // and switches to the profile tab (remounting us) — land on payouts.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('cs_open_payouts') === '1') {
+        sessionStorage.removeItem('cs_open_payouts');
+        setActivePanel('payouts');
+      }
+    } catch { /* storage unavailable (private mode) */ }
+  }, []);
+
   // Fetch profile data on mount
   // Fetch profile data on mount / when the authenticated user changes.
   // We clear profileData first so a previous user's data (or a stale

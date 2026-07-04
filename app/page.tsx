@@ -157,6 +157,59 @@ export default function HomePage() {
     // on first login before they can use the app.
     const [partnerSetup, setPartnerSetup] = useState<{ shopName: string } | null>(null);
 
+    // Stalled payout-onboarding nudge: a seller who created a Stripe connected
+    // account but never finished the hosted form gets a slim banner steering
+    // them back to the payouts panel. Reads the cached DB flags via
+    // /api/stripe/connect/status (no Stripe round-trip). Re-checked whenever
+    // the user leaves the profile tab, so completing setup clears it without
+    // a reload. Session-dismissible.
+    const [payoutSetupStalled, setPayoutSetupStalled] = useState(false);
+    // Fetch once per login, plus every time the user navigates AWAY from the
+    // profile tab (where payout setup lives) so completing setup clears the
+    // banner without a reload — not on every tab switch.
+    const payoutCheckedForRef = useRef<string | null>(null);
+    const prevTabForPayoutRef = useRef(activeTab);
+    useEffect(() => {
+        const leftProfile = prevTabForPayoutRef.current === 'profile' && activeTab !== 'profile';
+        prevTabForPayoutRef.current = activeTab;
+        if (!user || user.provider === 'guest') {
+            payoutCheckedForRef.current = null;
+            setPayoutSetupStalled(false);
+            return;
+        }
+        if (activeTab === 'profile') return; // hidden there; re-check on leave
+        if (payoutCheckedForRef.current === user.id && !leftProfile) return;
+        try {
+            if (sessionStorage.getItem('cs_payout_nudge_dismissed') === '1') return;
+        } catch { /* storage unavailable (private mode) */ }
+        payoutCheckedForRef.current = user.id;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/stripe/connect/status');
+                if (!res.ok) return; // banner is best-effort — fail quiet
+                const s = await res.json();
+                if (!cancelled) {
+                    setPayoutSetupStalled(
+                        !!s.connected && s.detailsSubmitted !== true && s.chargesEnabled !== true
+                    );
+                }
+            } catch { /* fail quiet */ }
+        })();
+        return () => { cancelled = true; };
+    }, [user, activeTab]);
+
+    const openPayoutSetup = () => {
+        // Profile reads this flag on mount and lands on the payouts panel.
+        try { sessionStorage.setItem('cs_open_payouts', '1'); } catch { /* opens Profile root instead */ }
+        setActiveTab('profile');
+    };
+
+    const dismissPayoutNudge = () => {
+        setPayoutSetupStalled(false);
+        try { sessionStorage.setItem('cs_payout_nudge_dismissed', '1'); } catch { /* re-shows next session */ }
+    };
+
     // Supabase hooks for data management
     const {
         collections: customCollections,
@@ -1238,6 +1291,24 @@ export default function HomePage() {
                             <CurrencySwitcher currentCurrency={currency} onCurrencyChange={(newCurrency) => updateCurrency(newCurrency)} />
                         </div>
                     </header>
+
+                    {/* Stalled Stripe onboarding: one tap back into payout setup */}
+                    {payoutSetupStalled && activeTab !== 'profile' && (
+                        <div className="w-full px-6 py-2.5 bg-amber-400/10 border-b border-amber-400/20 flex items-center gap-2 z-40 shrink-0">
+                            <button onClick={openPayoutSetup} className="flex-1 flex items-center gap-2.5 text-left min-w-0">
+                                <i className="fa-solid fa-circle-exclamation text-amber-400 text-sm shrink-0"></i>
+                                <span className="text-amber-200 text-xs font-bold leading-snug">{t('profile.payoutNudgeBanner')}</span>
+                                <i className="fa-solid fa-chevron-right text-amber-400/70 text-[10px] shrink-0 ml-auto"></i>
+                            </button>
+                            <button
+                                onClick={dismissPayoutNudge}
+                                aria-label={t('profile.payoutNudgeDismiss')}
+                                className="p-1.5 -mr-1.5 text-amber-400/60 hover:text-amber-200 transition-colors shrink-0"
+                            >
+                                <i className="fa-solid fa-xmark text-sm"></i>
+                            </button>
+                        </div>
+                    )}
 
                     <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6 pb-24' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
                         {/* Home Tab Removed - Default is Marketplace */}
