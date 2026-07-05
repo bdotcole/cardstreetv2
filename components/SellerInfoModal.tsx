@@ -31,7 +31,7 @@ const SellerInfoModal: React.FC<SellerInfoModalProps> = ({ isOpen, onClose }) =>
     return (
         // Above the listing form (z-50) and the cart/payment layers.
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-            <div className="bg-[#0f172a] w-full max-w-md rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="bg-slate-900 w-full max-w-md rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
                 <div className="p-7 pb-4 text-center">
                     <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center">
                         <i className="fa-solid fa-circle-info text-2xl text-brand-cyan"></i>

@@ -33,7 +33,7 @@ const TIER_INFO: Record<number, { name: string; emoji: string; color: string }> 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
-        <div className="bg-[#0f1419] border border-white/10 rounded-xl px-4 py-3 shadow-xl">
+        <div className="bg-brand-darker border border-white/10 rounded-xl px-4 py-3 shadow-xl">
             <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">{label}</p>
             <p className="text-lg font-black text-brand-cyan">{payload[0].value.toLocaleString()}</p>
         </div>

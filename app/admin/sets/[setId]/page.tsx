@@ -188,7 +188,7 @@ export default function SetInboxPage() {
                     <button 
                         onClick={() => setShowVerified(!showVerified)}
                         className={`text-xs px-4 py-2 rounded-xl font-bold transition-colors ${
-                            showVerified ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30' : 'bg-[#0f1419] text-slate-400 border border-white/10 hover:text-white'
+                            showVerified ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30' : 'bg-brand-darker text-slate-400 border border-white/10 hover:text-white'
                         }`}
                     >
                         {showVerified ? 'Viewing All Cards' : 'Viewing Unverified Only'}
@@ -224,7 +224,7 @@ export default function SetInboxPage() {
                         </div>
 
                         {/* Match Status Pivot */}
-                        <div className="w-full md:w-32 bg-[#0a0d12] border-y md:border-y-0 md:border-x border-white/5 flex flex-col items-center justify-center py-4 gap-2 shrink-0 relative group">
+                        <div className="w-full md:w-32 bg-brand-darker border-y md:border-y-0 md:border-x border-white/5 flex flex-col items-center justify-center py-4 gap-2 shrink-0 relative group">
                             {row.en ? (
                                 <>
                                     {row.mapping?.verified ? (
@@ -251,7 +251,7 @@ export default function SetInboxPage() {
                                 </>
                             )}
                             
-                            <div className="absolute inset-0 bg-[#0a0d12] flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2">
+                            <div className="absolute inset-0 bg-brand-darker flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2">
                                 {row.en && !row.mapping?.verified && (
                                     <button 
                                         onClick={() => verifyMatch(row)}
@@ -293,7 +293,7 @@ export default function SetInboxPage() {
             {/* Remap Modal */}
             {remapTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-[#0f1419] border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                    <div className="bg-brand-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
                             <div>
                                 <h2 className="text-lg font-black text-white italic">Remap Card</h2>
@@ -315,7 +315,7 @@ export default function SetInboxPage() {
                                         placeholder="Search English cards by name (e.g. Charizard ex)"
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full bg-[#0a0d12] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
+                                        className="w-full bg-brand-darker border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
                                     />
                                 </div>
                                 <button type="submit" className="bg-white/10 hover:bg-white/20 text-white px-6 rounded-xl font-bold transition-colors">

@@ -108,7 +108,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
 
       {/* Chart Card */}
       <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl">
-        <div className="bg-[#0f172a] rounded-2xl p-5">
+        <div className="bg-slate-900 rounded-2xl p-5">
           <div className="flex justify-between items-center mb-6">
             <div className="flex gap-2">
               {['1D', '1W', '1M', '1Y'].map((t) => (
@@ -199,7 +199,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
             onClick={() => onSelectGame('pokemon-en')}
             className="h-32 rounded-2xl relative overflow-hidden group border border-white/5 hover:border-brand-cyan/50 transition-all active:scale-95"
           >
-            <div className="absolute inset-0 bg-[#0f172a] group-hover:bg-[#1e293b] transition-colors"></div>
+            <div className="absolute inset-0 bg-slate-900 group-hover:bg-slate-800 transition-colors"></div>
             <div className="absolute inset-0 bg-gradient-to-br from-brand-cyan/20 to-transparent opacity-50"></div>
             <div className="absolute bottom-3 left-3 text-left">
               <p className="text-[10px] text-brand-cyan font-black uppercase tracking-widest mb-1">English</p>
@@ -215,7 +215,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
             onClick={() => onSelectGame('pokemon-jp')}
             className="h-32 rounded-2xl relative overflow-hidden group border border-white/5 hover:border-brand-red/50 transition-all active:scale-95"
           >
-            <div className="absolute inset-0 bg-[#0f172a] group-hover:bg-[#1e293b] transition-colors"></div>
+            <div className="absolute inset-0 bg-slate-900 group-hover:bg-slate-800 transition-colors"></div>
             <div className="absolute inset-0 bg-gradient-to-br from-brand-red/20 to-transparent opacity-50"></div>
             <div className="absolute bottom-3 left-3 text-left">
               <p className="text-[10px] text-brand-red font-black uppercase tracking-widest mb-1">Japanese</p>
@@ -231,7 +231,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
             onClick={() => onSelectGame('pokemon-th')}
             className="h-32 rounded-2xl relative overflow-hidden group border border-white/5 hover:border-amber-500/50 transition-all active:scale-95"
           >
-            <div className="absolute inset-0 bg-[#0f172a] group-hover:bg-[#1e293b] transition-colors"></div>
+            <div className="absolute inset-0 bg-slate-900 group-hover:bg-slate-800 transition-colors"></div>
             <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 to-transparent opacity-50"></div>
             <div className="absolute bottom-3 left-3 text-left">
               <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mb-1">Thai</p>
@@ -247,7 +247,7 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
             onClick={() => onSelectGame('onepiece-en')}
             className="h-32 rounded-2xl relative overflow-hidden group border border-white/5 hover:border-purple-500/50 transition-all active:scale-95"
           >
-            <div className="absolute inset-0 bg-[#0f172a] group-hover:bg-[#1e293b] transition-colors"></div>
+            <div className="absolute inset-0 bg-slate-900 group-hover:bg-slate-800 transition-colors"></div>
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent opacity-50"></div>
             <div className="absolute bottom-3 left-3 text-left">
               <p className="text-[10px] text-purple-500 font-black uppercase tracking-widest mb-1">English</p>

@@ -32,7 +32,7 @@ interface SetRow {
 }
 
 const inputClass =
-    'w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan text-sm'
+    'w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan text-sm'
 const labelClass = 'block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'
 
 export default function SetCardManagerPage() {
@@ -154,7 +154,7 @@ export default function SetCardManagerPage() {
                     placeholder="Filter cards by number or name..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full bg-[#0a0d12] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
+                    className="w-full bg-brand-darker border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
                 />
             </div>
 
@@ -329,7 +329,7 @@ function CardFormModal({
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <form onSubmit={submit} className="glass border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
-                <div className="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#0a0d12]/80 backdrop-blur z-10">
+                <div className="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-brand-darker/80 backdrop-blur z-10">
                     <div>
                         <h2 className="text-xl font-black text-white italic">{isEdit ? 'Edit Card' : 'Add Card'}</h2>
                         <p className="text-xs text-slate-500 mt-1 font-mono">{computedId}</p>

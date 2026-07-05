@@ -122,7 +122,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           {/* Search Bar */}
           <div className="relative group z-20">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-cyan via-brand-green to-brand-cyan rounded-xl opacity-20 group-focus-within:opacity-100 transition duration-500 blur"></div>
-            <div className="relative flex items-center bg-[#0f172a] rounded-xl border border-white/10 p-1">
+            <div className="relative flex items-center bg-slate-900 rounded-xl border border-white/10 p-1">
               <i className="fa-solid fa-magnifying-glass text-slate-500 ml-3 mr-2"></i>
               <input
                 type="text"
@@ -179,7 +179,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
           {/* Filter Panel */}
           {showFilters && (
-            <div className="mt-4 p-4 bg-[#0f172a] rounded-xl border border-white/10 space-y-4 animate-fadeIn">
+            <div className="mt-4 p-4 bg-slate-900 rounded-xl border border-white/10 space-y-4 animate-fadeIn">
               {/* Game Filter */}
               <div>
                 <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Game'}</label>
@@ -272,7 +272,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <div
                 key={listing.id}
                 onClick={() => onSelectListing ? onSelectListing(listing) : onSelectCard(listing.card_data)}
-                className="bg-[#1e293b]/50 border border-white/5 hover:border-brand-cyan/30 rounded-xl overflow-hidden flex flex-col group active:scale-[0.98] transition-all cursor-pointer"
+                className="bg-slate-800/50 border border-white/5 hover:border-brand-cyan/30 rounded-xl overflow-hidden flex flex-col group active:scale-[0.98] transition-all cursor-pointer"
               >
                 {/* Card Image — fixed aspect to prevent CLS */}
                 <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
@@ -385,7 +385,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
           {/* Loading skeleton */}
           {isLoading && [1, 2, 3, 4, 5, 6].map(i => (
-            <div key={`skeleton-${i}`} className="bg-[#1e293b]/50 border border-white/5 rounded-xl overflow-hidden animate-pulse">
+            <div key={`skeleton-${i}`} className="bg-slate-800/50 border border-white/5 rounded-xl overflow-hidden animate-pulse">
               <div className="aspect-[3/4] bg-white/5" />
               <div className="p-2 space-y-2">
                 <div className="h-3 bg-white/5 rounded w-3/4" />

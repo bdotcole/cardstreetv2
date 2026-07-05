@@ -138,7 +138,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
                 ? (isThai ? 'ประมาณจากตลาดญี่ปุ่น (ชุดเดียวกัน)' : 'Est. from JP market (same set)')
                 : 'PriceCharting';
             return (
-              <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{headline}</p>
                 <p className="text-3xl font-black text-white">{fmt(product.price)}</p>
@@ -151,7 +151,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
           {trendData.length > 0 && (
             <div className="space-y-4">
               <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">{isThai ? 'ราคาย้อนหลัง' : 'Price Over Time'}</h3>
-              <div className="bg-[#1e293b]/50 rounded-2xl border border-white/5 p-4">
+              <div className="bg-slate-800/50 rounded-2xl border border-white/5 p-4">
                 <div className="h-44">
                   <PriceChart data={trendData} />
                 </div>

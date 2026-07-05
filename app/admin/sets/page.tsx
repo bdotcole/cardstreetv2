@@ -171,7 +171,7 @@ function SetAccordion({
                 onClick={toggleExpanded}
             >
                 <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/20 transition-transform ${isExpanded ? 'rotate-90 bg-brand-cyan text-black border-brand-cyan' : 'bg-[#0f1419] text-white'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/20 transition-transform ${isExpanded ? 'rotate-90 bg-brand-cyan text-black border-brand-cyan' : 'bg-brand-darker text-white'}`}>
                         <i className="fa-solid fa-chevron-right text-sm" />
                     </div>
                     <div>
@@ -199,7 +199,7 @@ function SetAccordion({
 
             {/* Accordion Body */}
             {isExpanded && (
-                <div className="border-t border-white/5 bg-[#0a0d12]/50 p-4">
+                <div className="border-t border-white/5 bg-brand-darker/50 p-4">
                     {loading && (
                         <div className="py-12 text-center text-slate-500 animate-pulse">Loading cards for {config.thai_set_id}...</div>
                     )}
@@ -217,7 +217,7 @@ function SetAccordion({
                     {!loading && cards.length > 0 && (
                         <div className="grid grid-cols-1 gap-3">
                             {cards.map((row) => (
-                                <div key={row.th.id} className="bg-[#0f1419] rounded-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch hover:border-brand-cyan/30 transition-colors group relative shadow-md">
+                                <div key={row.th.id} className="bg-brand-darker rounded-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-stretch hover:border-brand-cyan/30 transition-colors group relative shadow-md">
                                     
                                     {/* Thai Card Data */}
                                     <div className="flex-1 p-3 flex flex-col md:flex-row items-center md:items-start gap-4">
@@ -277,7 +277,7 @@ function SetAccordion({
 
                                         {/* Verification Checkbox */}
                                         {row.en && (
-                                            <div className="absolute right-0 top-0 bottom-0 w-14 bg-[#0a0d12]/50 border-l border-white/10 flex items-center justify-center group-hover:bg-black/60 transition-colors z-10">
+                                            <div className="absolute right-0 top-0 bottom-0 w-14 bg-brand-darker/50 border-l border-white/10 flex items-center justify-center group-hover:bg-black/60 transition-colors z-10">
                                                 <label className="relative flex items-center justify-center cursor-pointer w-full h-full">
                                                     <input 
                                                         type="checkbox" 
@@ -399,7 +399,7 @@ function GlobalSetInboxPage() {
 
     return (
         <div className="space-y-6 animate-fadeIn pb-24">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 bg-[#0a0d12]/95 backdrop-blur py-4 border-b border-white/5">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 bg-brand-darker/95 backdrop-blur py-4 border-b border-white/5">
                 <div>
                     <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Card QC Workspace</h1>
                     <p className="text-slate-400 text-sm mt-1">Review Thai sets, click an English card to swap it, and verify matches seamlessly.</p>
@@ -449,15 +449,15 @@ function GlobalSetInboxPage() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Thai Set ID (e.g. sv8a)</label>
-                                <input required value={newThaiSet} onChange={e=>setNewThaiSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
+                                <input required value={newThaiSet} onChange={e=>setNewThaiSet(e.target.value)} className="w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">English ID (e.g. sv8.5)</label>
-                                <input required value={newEngSet} onChange={e=>setNewEngSet(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
+                                <input required value={newEngSet} onChange={e=>setNewEngSet(e.target.value)} className="w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">JustTCG Slug</label>
-                                <input required value={newSlug} onChange={e=>setNewSlug(e.target.value)} className="w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
+                                <input required value={newSlug} onChange={e=>setNewSlug(e.target.value)} className="w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                         </div>
                         <button type="submit" className="w-full bg-brand-cyan text-black font-black uppercase tracking-widest py-3 rounded-lg mt-6 hover:bg-white transition-colors">Save</button>
@@ -469,7 +469,7 @@ function GlobalSetInboxPage() {
             {remapTarget && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
                     <div className="glass border border-white/10 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-white/10 flex items-start justify-between bg-[#0a0d12]/50">
+                        <div className="p-6 border-b border-white/10 flex items-start justify-between bg-brand-darker/50">
                             <div>
                                 <h2 className="text-xl font-black text-white italic">Search English Card</h2>
                                 <div className="flex items-center gap-3 mt-3">
@@ -483,7 +483,7 @@ function GlobalSetInboxPage() {
                             </button>
                         </div>
                         
-                        <div className="p-6 shrink-0 border-b border-white/5 bg-[#0f1419]">
+                        <div className="p-6 shrink-0 border-b border-white/5 bg-brand-darker">
                             <form onSubmit={searchEnglishCards} className="flex gap-4">
                                 <div className="relative flex-1">
                                     <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -492,7 +492,7 @@ function GlobalSetInboxPage() {
                                         placeholder="Type name (e.g. Charizard ex) and press Enter..."
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full bg-[#0a0d12] border-2 border-white/10 rounded-xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-brand-cyan text-base font-bold shadow-inset transition-colors"
+                                        className="w-full bg-brand-darker border-2 border-white/10 rounded-xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-brand-cyan text-base font-bold shadow-inset transition-colors"
                                         autoFocus
                                     />
                                 </div>
@@ -502,7 +502,7 @@ function GlobalSetInboxPage() {
                             </form>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 bg-[#0a0d12]">
+                        <div className="flex-1 overflow-y-auto p-4 bg-brand-darker">
                             {searchResults.length === 0 && !searching && (
                                 <div className="h-40 flex flex-col items-center justify-center text-slate-500">
                                     <i className="fa-solid fa-keyboard text-4xl mb-4 opacity-20" />
@@ -511,7 +511,7 @@ function GlobalSetInboxPage() {
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {searchResults.map(c => (
-                                    <div key={c.id} className="bg-[#0f1419] rounded-xl p-3 border border-white/5 flex items-center justify-between hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer transition-all group/item" onClick={() => saveRemap(c.id)}>
+                                    <div key={c.id} className="bg-brand-darker rounded-xl p-3 border border-white/5 flex items-center justify-between hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer transition-all group/item" onClick={() => saveRemap(c.id)}>
                                         <div className="flex items-center gap-4 min-w-0 pr-4">
                                             {c.image_small ? (
                                         <img src={resolveImageUrl(c.image_small)} className="w-12 h-[66px] object-contain rounded drop-shadow bg-black/50 shrink-0" />

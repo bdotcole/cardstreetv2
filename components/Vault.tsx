@@ -333,7 +333,7 @@ const Vault: React.FC<VaultProps> = ({
 
         {/* Chart Card */}
         <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl mb-6 mx-1">
-          <div className="bg-[#0f172a] rounded-2xl p-4">
+          <div className="bg-slate-900 rounded-2xl p-4">
             <div className="flex justify-start items-center mb-4 gap-2">
               {['1D', '1W', '1M', '1Y'].map((t) => (
                 <button
@@ -685,7 +685,7 @@ const Vault: React.FC<VaultProps> = ({
             <input
               type="text"
               placeholder={t('vault.searchCards')}
-              className="w-full h-12 pl-10 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-green outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
+              className="w-full h-12 pl-10 pr-4 bg-slate-800 border border-white/10 rounded-xl focus:border-brand-green outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
               value={collectionSearchQuery}
               onChange={(e) => setCollectionSearchQuery(e.target.value)}
             />
@@ -694,13 +694,13 @@ const Vault: React.FC<VaultProps> = ({
           <div className="relative" ref={sortMenuRef}>
             <button
               onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
-              className="h-12 w-12 bg-[#1e293b] border border-white/10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:border-brand-green transition-all shadow-inner active:scale-95"
+              className="h-12 w-12 bg-slate-800 border border-white/10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:border-brand-green transition-all shadow-inner active:scale-95"
             >
               <i className="fa-solid fa-arrow-up-wide-short text-sm"></i>
             </button>
 
             {isSortMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
                 <div className="p-2 border-b border-white/5 bg-white/[0.02]">
                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{isThai ? 'จัดเรียงตาม' : 'Sort By'}</span>
                 </div>

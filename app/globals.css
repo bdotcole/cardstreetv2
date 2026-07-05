@@ -24,11 +24,90 @@
     box-sizing: border-box;
   }
 
+  html {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-brand-darker text-slate-200 antialiased;
     font-family: var(--font-sans);
     overflow-x: hidden;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT THEME
+   The app is authored dark-first with raw utilities (text-white,
+   bg-white/5, bg-slate-800, ...). Tailwind v4 compiles every color
+   utility to var(--color-*), so the light theme is a variable remap
+   under html.theme-light rather than per-component classes:
+   the whole monochrome axis mirrors (white <-> dark ink,
+   black <-> white, slate ramp inverted) while brand accents darken
+   one step for contrast on light backgrounds. The class is set
+   server-side in app/layout.tsx from the cs_theme cookie and kept
+   in sync by UserSettingsContext.
+   ═══════════════════════════════════════════════════════════ */
+html.theme-light {
+  color-scheme: light;
+
+  /* Brand surfaces */
+  --color-brand-darker: #f1f5f9; /* page background */
+  --color-brand-dark: #ffffff;   /* raised surface */
+
+  /* Brand accents, darkened for legibility on light backgrounds */
+  --color-brand-cyan: #0891b2;
+  --color-brand-red: #e11d48;
+  --color-brand-green: #4d7c0f;
+  /* hover:bg-cyan-400 pairs with bg-brand-cyan buttons — keep the
+     hover darker than the resting state in light mode too */
+  --color-cyan-400: #0e7490;
+
+  /* Monochrome axis mirror */
+  --color-white: #0f172a;
+  --color-black: #ffffff;
+
+  /* Slate ramp inverted; 500 is the pivot, 900/950 pin to white so
+     panels sit on the gray page background */
+  --color-slate-50: #020617;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #ffffff;
+  --color-slate-950: #ffffff;
+}
+
+/* Escape hatch: subtrees that must render dark in both themes
+   (camera/scanner chrome, brand-mandated dark buttons). Restores the
+   original dark-theme values for everything the light theme remaps. */
+html.theme-light .theme-dark-locked {
+  color-scheme: dark;
+
+  --color-brand-darker: #0f1419;
+  --color-brand-dark: #1a202c;
+  --color-brand-cyan: #06b6d4;
+  --color-brand-red: #f43f5e;
+  --color-brand-green: #84cc16;
+  --color-cyan-400: #22d3ee;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
 }
 
 
@@ -37,6 +116,18 @@
 .glass-panel {
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+html.theme-light .glass,
+html.theme-light .glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+html.theme-light .theme-dark-locked .glass,
+html.theme-light .theme-dark-locked .glass-panel {
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -49,6 +140,10 @@
   @apply absolute inset-0 -translate-x-full;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
   animation: shimmer 1.5s infinite;
+}
+
+html.theme-light .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.06), transparent);
 }
 
 .scrollbar-hide {
@@ -107,10 +202,19 @@
   animation: shimmer 2s infinite;
 }
 
+html.theme-light .animate-shimmer {
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.05) 25%, rgba(15, 23, 42, 0.12) 50%, rgba(15, 23, 42, 0.05) 75%);
+  background-size: 1000px 100%;
+}
+
 /* Selection */
 ::selection {
   background-color: rgba(6, 182, 212, 0.3);
   color: #fff;
+}
+
+html.theme-light ::selection {
+  color: #0f172a;
 }
 
 /* ═══════════════════════════════════════════════════════════

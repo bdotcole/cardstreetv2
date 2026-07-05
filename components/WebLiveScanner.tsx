@@ -382,8 +382,9 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
         triggerScan();
     };
 
+    // theme-dark-locked: camera chrome renders dark in both themes
     return (
-        <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
+        <div className="theme-dark-locked fixed inset-0 z-[100] bg-black overflow-hidden">
             <style dangerouslySetInnerHTML={{ __html: `
                 video::-webkit-media-controls { display: none !important; }
                 video::-webkit-media-controls-start-playback-button { display: none !important; opacity: 0; }

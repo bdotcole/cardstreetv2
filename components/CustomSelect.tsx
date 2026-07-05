@@ -83,7 +83,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             {isOpen && (
                 <ul
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-2 z-50 max-h-60 overflow-y-auto bg-[#0f1419] border border-white/10 rounded-xl shadow-2xl py-1"
+                    className="absolute left-0 right-0 top-full mt-2 z-50 max-h-60 overflow-y-auto bg-brand-darker border border-white/10 rounded-xl shadow-2xl py-1"
                 >
                     {options.map(option => {
                         const isSelected = option.value === value;

@@ -21,7 +21,7 @@ interface SetRow {
 }
 
 const inputClass =
-    'w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan text-sm'
+    'w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan text-sm'
 const labelClass = 'block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'
 
 export default function CatalogHomePage() {
@@ -131,7 +131,7 @@ export default function CatalogHomePage() {
                     placeholder="Filter sets by name or ID..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full bg-[#0a0d12] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
+                    className="w-full bg-brand-darker border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-cyan text-sm"
                 />
             </div>
 

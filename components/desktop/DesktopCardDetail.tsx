@@ -221,7 +221,7 @@ export default function DesktopCardDetail({
                             {listings.map((listing) => (
                                 <div
                                     key={listing.id}
-                                    className="flex items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3"
+                                    className="flex items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3"
                                 >
                                     <div className="flex items-center gap-3 min-w-0">
                                         <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded border bg-slate-700/60 text-slate-300 border-slate-600">

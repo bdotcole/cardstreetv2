@@ -13,12 +13,15 @@ export const metadata: Metadata = {
     manifest: '/manifest.json',
 }
 
-export const viewport = {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    viewportFit: 'cover' as const,
-    themeColor: '#0f1419',
+export async function generateViewport() {
+    const theme = (await cookies()).get('cs_theme')?.value
+    return {
+        width: 'device-width',
+        initialScale: 1,
+        maximumScale: 1,
+        viewportFit: 'cover' as const,
+        themeColor: theme === 'light' ? '#f1f5f9' : '#0f1419',
+    }
 }
 
 
@@ -35,8 +38,14 @@ export default async function RootLayout({
         ?? (await cookies()).get('cs_lang')?.value
     const lang: 'TH' | 'EN' = resolved === 'EN' ? 'EN' : 'TH'
 
+    // Theme is a plain cookie preference (set by UserSettingsContext when the
+    // user toggles it in settings). Rendering the class on <html> server-side
+    // means a light-mode user never sees a dark flash.
+    const theme: 'dark' | 'light' =
+        (await cookies()).get('cs_theme')?.value === 'light' ? 'light' : 'dark'
+
     return (
-        <html lang={lang === 'EN' ? 'en' : 'th'}>
+        <html lang={lang === 'EN' ? 'en' : 'th'} className={theme === 'light' ? 'theme-light' : undefined}>
             <head>
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
             </head>
@@ -75,7 +84,7 @@ fbq('track', 'PageView');`,
                         </noscript>
                     </>
                 )}
-                <UserSettingsProvider initialLanguage={lang}>
+                <UserSettingsProvider initialLanguage={lang} initialTheme={theme}>
                     <ToastProvider>
                         <HtmlLangSync />
                         <PushNotificationManager />

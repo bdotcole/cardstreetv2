@@ -236,7 +236,7 @@ function OverviewPanel({
     return (
         <div className="space-y-6">
             {/* Value + chart */}
-            <div className="bg-[#1e293b]/40 border border-white/5 rounded-2xl p-6">
+            <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-6">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{t('desktop.collection.totalValue')}</p>
@@ -293,7 +293,7 @@ function StatCard({ icon, label, value, onClick }: { icon: string; label: string
     return (
         <button
             onClick={onClick}
-            className="group text-left w-full bg-[#1e293b]/40 border border-white/5 rounded-2xl p-5 flex items-center gap-4 hover:border-brand-cyan/40 hover:bg-[#1e293b]/60 transition-colors"
+            className="group text-left w-full bg-slate-800/40 border border-white/5 rounded-2xl p-5 flex items-center gap-4 hover:border-brand-cyan/40 hover:bg-slate-800/60 transition-colors"
         >
             <span className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-brand-cyan/10 transition-colors">
                 <i className={`fa-solid ${icon} text-slate-400 group-hover:text-brand-cyan transition-colors`}></i>
@@ -383,7 +383,7 @@ function CollectionPanel({
                     {processed.map(({ colId, item, card }) => (
                         <div
                             key={item.id}
-                            className="group bg-[#1e293b]/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative"
+                            className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative"
                         >
                             <Link href={`/card/${card.id}`} className="block">
                                 <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
@@ -459,7 +459,7 @@ function WishlistPanel({
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
             {wishlist.map((card) => (
-                <div key={card.id} className="group bg-[#1e293b]/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative">
+                <div key={card.id} className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative">
                     <Link href={`/card/${card.id}`} className="block">
                         <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
                             <Image
@@ -599,7 +599,7 @@ function MasterSetsPanel({
                             <button
                                 key={s.id}
                                 onClick={() => setSelectedSet(s)}
-                                className="text-left bg-[#1e293b]/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
+                                className="text-left bg-slate-800/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <span className="w-16 h-10 shrink-0 flex items-center justify-center">

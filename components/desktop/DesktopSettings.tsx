@@ -341,7 +341,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function PreferencesTab({ prefs, togglePref }: { prefs: Prefs; togglePref: (k: keyof Prefs) => void }) {
     const { t, language } = useTranslation();
-    const { updateLanguage } = useUserSettings();
+    const { settings, updateLanguage, updateTheme } = useUserSettings();
     const router = useRouter();
 
     const setLang = async (lang: 'TH' | 'EN') => {
@@ -365,6 +365,28 @@ function PreferencesTab({ prefs, togglePref }: { prefs: Prefs; togglePref: (k: k
                             }`}
                         >
                             {l === 'TH' ? 'ไทย' : 'English'}
+                        </button>
+                    ))}
+                </div>
+            </section>
+
+            {/* Appearance */}
+            <section>
+                <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{t('desktop.settings.appearance')}</h2>
+                <div className="flex gap-2">
+                    {([
+                        { theme: 'dark' as const, label: t('desktop.settings.themeDark'), icon: 'fa-moon' },
+                        { theme: 'light' as const, label: t('desktop.settings.themeLight'), icon: 'fa-sun' },
+                    ]).map(({ theme, label, icon }) => (
+                        <button
+                            key={theme}
+                            onClick={() => updateTheme(theme)}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                                settings.theme === theme ? 'bg-brand-cyan text-brand-darker' : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                            }`}
+                        >
+                            <i className={`fa-solid ${icon} mr-2`}></i>
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -419,7 +441,7 @@ function ToggleRow({
     onToggle: () => void;
 }) {
     return (
-        <div className="flex items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3">
+        <div className="flex items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
                 <i className={`fa-solid ${icon} ${on ? 'text-brand-cyan' : 'text-slate-500'} w-5 text-center`}></i>
                 <div className="min-w-0">

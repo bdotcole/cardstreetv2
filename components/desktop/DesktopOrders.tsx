@@ -243,7 +243,7 @@ export default function DesktopOrders() {
                                     const label = order.shipping_labels?.[0];
                                     const canComplete = ['shipped', 'out_for_delivery', 'delivered'].includes(order.status);
                                     return (
-                                        <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3">
+                                        <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                             <CardCell cardData={order.listing?.card_data} condition={order.listing?.condition} />
                                             <div className="flex items-center gap-5 flex-wrap">
                                                 {label?.tracking_number && label.tracking_number !== 'MANUAL' && (
@@ -294,7 +294,7 @@ export default function DesktopOrders() {
                                     // applies to them.
                                     const isDelivered = ['delivered', 'completed'].includes(order.status);
                                     return (
-                                    <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3">
+                                    <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <CardCell cardData={order.listing?.card_data} condition={order.listing?.condition} />
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
@@ -331,7 +331,7 @@ export default function DesktopOrders() {
                         ) : (
                             <div className="space-y-2">
                                 {sales.map((sale) => (
-                                    <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3">
+                                    <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <CardCell cardData={sale.listing?.card_data} condition={sale.listing?.condition} />
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">
@@ -355,7 +355,7 @@ export default function DesktopOrders() {
             {reviewOrderId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setReviewOrderId(null)}></div>
-                    <div className="relative w-full max-w-sm bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-6">
+                    <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-6">
                         <h3 className="text-white font-black text-lg">{t('desktop.orders.confirmDelivery')}</h3>
                         <p className="text-slate-400 text-sm mt-1">{t('desktop.orders.rateSeller')}</p>
                         <div className="flex gap-2 mt-4">

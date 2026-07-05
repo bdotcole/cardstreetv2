@@ -186,7 +186,7 @@ function SetGrid({ sets, isThai }: { sets: SetRow[]; isThai: boolean }) {
                     <Link
                         key={`${s.id}-${s.language}`}
                         href={`/sets/${s.id}`}
-                        className="flex items-center gap-3 bg-[#1e293b]/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
+                        className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
                     >
                         <span className="w-16 h-10 shrink-0 flex items-center justify-center">
                             {logo ? (

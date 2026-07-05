@@ -7,7 +7,7 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil
+  Wallet, Loader2, Pencil, Moon, Sun
 } from 'lucide-react';
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
@@ -17,6 +17,7 @@ import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface ProfileProps {
@@ -253,6 +254,9 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
 const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
+  // App-level settings (theme); renamed to avoid clashing with the local
+  // user_settings state below.
+  const { settings: appSettings, updateTheme } = useUserSettings();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const supabase = createClient();
@@ -1228,6 +1232,30 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
                 <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.settingsPanel')}</h2>
+              </div>
+
+              {/* Appearance Section */}
+              <div className="space-y-3">
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{t('profile.appearance')}</h4>
+                <div className="glass rounded-2xl border border-white/5 p-2 flex gap-2">
+                  {([
+                    { theme: 'dark' as const, label: t('profile.themeDark'), Icon: Moon },
+                    { theme: 'light' as const, label: t('profile.themeLight'), Icon: Sun }
+                  ]).map(({ theme, label, Icon }) => (
+                    <button
+                      key={theme}
+                      onClick={() => updateTheme(theme)}
+                      className={`flex-1 h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-colors ${
+                        appSettings.theme === theme
+                          ? 'bg-brand-cyan text-brand-darker'
+                          : 'bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Security Section */}

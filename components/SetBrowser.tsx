@@ -220,7 +220,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
             <input
               type="text"
               placeholder={t('vault.searchSets')}
-              className="w-full h-11 pl-11 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
+              className="w-full h-11 pl-11 pr-4 bg-slate-800 border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all shadow-inner"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -240,7 +240,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
             <div className="relative" ref={sortMenuRef}>
               <button
                 onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
-                className="h-9 px-3 bg-[#1e293b] border border-white/10 rounded-lg flex items-center gap-2 text-slate-300 hover:text-white hover:border-brand-cyan transition-all active:scale-95"
+                className="h-9 px-3 bg-slate-800 border border-white/10 rounded-lg flex items-center gap-2 text-slate-300 hover:text-white hover:border-brand-cyan transition-all active:scale-95"
               >
                 <i className="fa-solid fa-arrow-down-wide-short text-xs"></i>
                 <span className="text-[10px] font-bold uppercase tracking-wider">{getSortLabel()}</span>
@@ -248,7 +248,7 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
               </button>
 
               {isSortMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
+                <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
                   <div className="p-2 border-b border-white/5 bg-white/[0.02]">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('vault.sortOptions')}</span>
                   </div>

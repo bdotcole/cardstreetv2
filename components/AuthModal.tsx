@@ -588,12 +588,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                         )}
 
                         {/* Social OAuth — Apple is required by App Store Guideline 4.8
-                            whenever a third-party social login (Google) is offered. */}
+                            whenever a third-party social login (Google) is offered.
+                            theme-dark-locked: both buttons keep their brand colors
+                            (white Google / black Apple) in light mode. */}
                         <div className="space-y-3">
                             <button
                                 onClick={() => handleOAuthLogin('google')}
                                 disabled={loading}
-                                className="w-full h-12 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-slate-900 shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="theme-dark-locked w-full h-12 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-slate-900 shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <i className="fa-brands fa-google text-xl text-red-500 group-hover:scale-110 transition-transform"></i>
                                 <span>Continue with Google</span>
@@ -602,7 +604,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                             <button
                                 onClick={() => handleOAuthLogin('apple')}
                                 disabled={loading}
-                                className="w-full h-12 bg-black hover:bg-zinc-900 active:bg-zinc-800 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-white shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
+                                className="theme-dark-locked w-full h-12 bg-black hover:bg-zinc-900 active:bg-zinc-800 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-white shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
                             >
                                 <i className="fa-brands fa-apple text-xl group-hover:scale-110 transition-transform"></i>
                                 <span>Continue with Apple</span>

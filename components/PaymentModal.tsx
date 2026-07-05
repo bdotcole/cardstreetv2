@@ -389,9 +389,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-            <div className="bg-[#0f172a] w-full max-w-sm rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+            <div className="bg-slate-900 w-full max-w-sm rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-brand-darker to-[#1e293b] p-6 border-b border-white/5 flex justify-between items-center">
+                <div className="bg-gradient-to-r from-brand-darker to-slate-800 p-6 border-b border-white/5 flex justify-between items-center">
                     <div>
                         <h3 className="text-white text-lg font-black italic skew-x-[-10deg]">{t('paymentFlow.secureTitle') || 'Secure Payment'}</h3>
                         <p className="text-[10px] text-brand-green font-bold uppercase tracking-widest">{t('paymentFlow.secureSubtitle') || 'Encrypted checkout'}</p>

@@ -3,9 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
+export type AppTheme = 'dark' | 'light';
+
 interface UserSettings {
     currency: string;
     language: 'TH' | 'EN';
+    theme: AppTheme;
     phoneNumber?: string;
     shippingAddress?: any;
     twoFactorEnabled: boolean;
@@ -20,12 +23,14 @@ interface UserSettingsContextType {
     error: string | null;
     updateCurrency: (currency: string) => Promise<void>;
     updateLanguage: (language: 'TH' | 'EN') => Promise<void>;
+    updateTheme: (theme: AppTheme) => Promise<void>;
     updateSettings: (updates: Partial<UserSettings>) => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
     currency: 'THB',
     language: 'EN',  // Default to English
+    theme: 'dark',   // The app is dark-first; light is opt-in
     twoFactorEnabled: false,
     notifyPriceDrops: true,
     notifyOrderUpdates: true,
@@ -58,20 +63,38 @@ function writeLangCookie(language: 'TH' | 'EN') {
     document.cookie = `cs_lang=${language}; path=/; max-age=31536000; samesite=lax`;
 }
 
+// Same idea for the theme: the root layout reads cs_theme to put
+// .theme-light on <html> server-side, so a light-mode user never sees a
+// dark flash on load (and vice versa).
+function writeThemeCookie(theme: AppTheme) {
+    if (typeof document === 'undefined') return;
+    document.cookie = `cs_theme=${theme}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function applyThemeToDocument(theme: AppTheme) {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('theme-light', theme === 'light');
+}
+
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
 
 export function UserSettingsProvider({
     children,
     initialLanguage,
+    initialTheme,
 }: {
     children: ReactNode;
     // Locale resolved on the server (cs_lang cookie / Accept-Language) so the
     // first client render matches the SSR HTML. Falls back to the default.
     initialLanguage?: 'TH' | 'EN';
+    // Theme resolved on the server (cs_theme cookie) — mirrors the class the
+    // root layout already put on <html>.
+    initialTheme?: AppTheme;
 }) {
     const [settings, setSettings] = useState<UserSettings>({
         ...DEFAULT_SETTINGS,
         language: initialLanguage ?? DEFAULT_SETTINGS.language,
+        theme: initialTheme ?? DEFAULT_SETTINGS.theme,
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +120,7 @@ export function UserSettingsProvider({
                     const merged = { ...DEFAULT_SETTINGS, ...parsed };
                     // Explicit choice wins; keep the server cookie aligned with it.
                     if (merged.language) writeLangCookie(merged.language);
+                    writeThemeCookie(merged.theme);
                     setSettings(merged);
                 } else {
                     // No saved choice: trust the server's resolved locale, else detect.
@@ -124,6 +148,7 @@ export function UserSettingsProvider({
                 const userSettings: UserSettings = {
                     currency: DEFAULT_SETTINGS.currency,
                     language: initialLanguage ?? detectBrowserLanguage(),
+                    theme: initialTheme ?? DEFAULT_SETTINGS.theme,
                     phoneNumber: data.phone_number,
                     shippingAddress: data.shipping_address,
                     twoFactorEnabled: data.two_factor_enabled,
@@ -138,9 +163,11 @@ export function UserSettingsProvider({
                     const parsed = JSON.parse(saved);
                     if (parsed.currency) userSettings.currency = parsed.currency;
                     if (parsed.language) userSettings.language = parsed.language;
+                    if (parsed.theme === 'light' || parsed.theme === 'dark') userSettings.theme = parsed.theme;
                 }
 
                 writeLangCookie(userSettings.language);
+                writeThemeCookie(userSettings.theme);
                 setSettings(userSettings);
             }
 
@@ -159,6 +186,14 @@ export function UserSettingsProvider({
         loadSettings();
     }, []);
 
+    // Keep <html class="theme-light"> in sync with the active theme. The
+    // server already rendered the right class from the cs_theme cookie; this
+    // covers in-session toggles and a saved localStorage preference from
+    // before the cookie existed.
+    useEffect(() => {
+        applyThemeToDocument(settings.theme);
+    }, [settings.theme]);
+
     const updateCurrency = async (currency: string) => {
         const newSettings = { ...settings, currency };
         localStorage.setItem('cardstreet-settings', JSON.stringify(newSettings));
@@ -171,6 +206,13 @@ export function UserSettingsProvider({
         // Keep the server-readable mirror in sync so the next navigation's SSR
         // (and <html lang>) render in the chosen language.
         writeLangCookie(language);
+        setSettings(newSettings);
+    };
+
+    const updateTheme = async (theme: AppTheme) => {
+        const newSettings = { ...settings, theme };
+        localStorage.setItem('cardstreet-settings', JSON.stringify(newSettings));
+        writeThemeCookie(theme);
         setSettings(newSettings);
     };
 
@@ -206,6 +248,7 @@ export function UserSettingsProvider({
         error,
         updateCurrency,
         updateLanguage,
+        updateTheme,
         updateSettings
     };
 

@@ -26,7 +26,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     return (
-        <div className="min-h-screen bg-[#0a0d12] text-slate-200 flex">
+        <div className="min-h-screen bg-brand-darker text-slate-200 flex">
             {/* Overlay for mobile */}
             {sidebarOpen && (
                 <div
@@ -36,7 +36,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-[#0f1419] border-r border-white/5 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static`}>
+            <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-brand-darker border-r border-white/5 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static`}>
                 {/* Brand */}
                 <div className="px-6 h-16 flex items-center gap-3 border-b border-white/5 shrink-0">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-blue-500 flex items-center justify-center">
@@ -86,7 +86,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-screen lg:ml-0">
                 {/* Top bar */}
-                <header className="h-16 bg-[#0f1419] border-b border-white/5 px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
+                <header className="h-16 bg-brand-darker border-b border-white/5 px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition"

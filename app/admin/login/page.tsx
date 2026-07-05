@@ -60,10 +60,10 @@ function LoginContent() {
                 <button
                     onClick={handleGoogleLogin}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-3 bg-white text-[#0f1419] font-black text-sm rounded-xl h-12 hover:brightness-95 active:scale-95 transition-all disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-3 bg-white text-brand-darker font-black text-sm rounded-xl h-12 hover:brightness-95 active:scale-95 transition-all disabled:opacity-60"
                 >
                     {loading ? (
-                        <div className="animate-spin h-5 w-5 border-2 border-[#0f1419]/20 border-t-[#0f1419] rounded-full" />
+                        <div className="animate-spin h-5 w-5 border-2 border-brand-darker/20 border-t-[#0f1419] rounded-full" />
                     ) : (
                         <>
                             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -93,7 +93,7 @@ function LoginContent() {
 
 export default function AdminLoginPage() {
     return (
-        <div className="min-h-screen bg-[#0a0d12] flex items-center justify-center px-4">
+        <div className="min-h-screen bg-brand-darker flex items-center justify-center px-4">
             <Suspense fallback={
                 <div className="animate-spin h-8 w-8 border-2 border-white/10 border-t-brand-cyan rounded-full" />
             }>

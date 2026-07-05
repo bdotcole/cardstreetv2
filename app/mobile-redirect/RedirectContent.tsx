@@ -44,9 +44,9 @@ export default function RedirectContent() {
     }, [searchParams]);
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-[#0f1419] text-white p-6 font-sans">
+        <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-brand-darker text-white p-6 font-sans">
             <div className="w-20 h-20 bg-gradient-to-br from-[#22d3ee] to-[#4ade80] rounded-[2rem] flex items-center justify-center mb-8 shadow-lg shadow-[#22d3ee]/20">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-[#0f1419]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-brand-darker" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
             </div>
@@ -64,7 +64,7 @@ export default function RedirectContent() {
                     const isAndroid = /Android/i.test(navigator.userAgent);
                     window.location.href = isAndroid ? intentUrl : url;
                 }}
-                className="bg-white text-[#0f1419] font-black py-4 px-10 rounded-2xl shadow-xl active:scale-95 transition-all text-lg flex items-center gap-3 w-full max-w-xs justify-center"
+                className="bg-white text-brand-darker font-black py-4 px-10 rounded-2xl shadow-xl active:scale-95 transition-all text-lg flex items-center gap-3 w-full max-w-xs justify-center"
             >
                 <span>Return to App</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -339,7 +339,7 @@ export default function DesktopSell() {
                     {results.map((card) => {
                         const imageUrl = getPreviewUrl(card.images?.small || card.imageUrl);
                         return (
-                            <div key={card.id} className="bg-[#1e293b]/40 border border-white/5 rounded-2xl overflow-hidden">
+                            <div key={card.id} className="bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden">
                                 <div className="relative aspect-[3/4] bg-brand-darker">
                                     <Image
                                         src={imageUrl}
@@ -382,7 +382,7 @@ export default function DesktopSell() {
                     {myListings.map((listing) => (
                         <div
                             key={listing.id}
-                            className="flex items-center justify-between gap-4 bg-[#1e293b]/40 border border-white/5 rounded-xl px-4 py-3"
+                            className="flex items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3"
                         >
                             <div className="flex items-center gap-3 min-w-0">
                                 <span className="w-10 h-14 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">

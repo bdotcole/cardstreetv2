@@ -77,7 +77,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             ></div>
 
             {/* Drawer */}
-            <div className="relative w-full max-w-sm bg-[#0f172a] h-full shadow-2xl border-l border-white/10 flex flex-col animate-slideLeft">
+            <div className="relative w-full max-w-sm bg-slate-900 h-full shadow-2xl border-l border-white/10 flex flex-col animate-slideLeft">
                 {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center bg-brand-darker/50">
                     <h2 className="text-xl font-black italic skew-x-[-10deg] text-white uppercase tracking-tight">

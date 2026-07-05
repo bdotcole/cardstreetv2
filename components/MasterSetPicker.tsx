@@ -12,9 +12,9 @@ interface MasterSetPickerProps {
 
 // Per-language card styling so each region reads at a glance.
 const REGION_STYLE: Record<GameLanguageCode, { gradient: string; text: string; chipText: string }> = {
-  en: { gradient: 'from-[#FFCB05] to-[#c79d00]', text: 'text-[#3c5aa6]', chipText: 'text-slate-800' },
-  jp: { gradient: 'from-[#e2e8f0] to-[#cbd5e1]', text: 'text-[#3c5aa6]', chipText: 'text-slate-800' },
-  th: { gradient: 'from-[#1e293b] to-[#0f172a]', text: 'text-white', chipText: 'text-white' },
+  en: { gradient: 'from-[#FFCB05] to-[#c79d00]', text: 'text-[#3c5aa6]', chipText: 'text-[#1e293b]' },
+  jp: { gradient: 'from-[#e2e8f0] to-[#cbd5e1]', text: 'text-[#3c5aa6]', chipText: 'text-[#1e293b]' },
+  th: { gradient: 'from-slate-800 to-slate-900', text: 'text-white', chipText: 'text-white' },
 };
 
 const MasterSetPicker: React.FC<MasterSetPickerProps> = ({ onBack, onSelectGame, game = 'pokemon' }) => {

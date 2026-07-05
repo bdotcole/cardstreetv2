@@ -33,7 +33,7 @@ export default function DesktopFaqTeaser() {
         {faqs.map((item) => (
           <details
             key={item.q}
-            className="group bg-[#1e293b]/40 border border-white/5 rounded-2xl p-5 [&_summary]:list-none"
+            className="group bg-slate-800/40 border border-white/5 rounded-2xl p-5 [&_summary]:list-none"
           >
             <summary className="flex items-center justify-between cursor-pointer gap-4">
               <span className="text-white font-bold text-sm">{item.q}</span>

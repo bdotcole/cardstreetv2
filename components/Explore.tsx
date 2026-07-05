@@ -268,7 +268,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           <input
             type="text"
             placeholder={t('explore.searchPlaceholder')}
-            className="relative w-full h-12 pl-12 pr-4 bg-[#1e293b] border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
+            className="relative w-full h-12 pl-12 pr-4 bg-slate-800 border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -314,7 +314,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isGameOpen ? 'rotate-180' : ''}`}></i>
               </button>
               {isGameOpen && (
-                <div className="absolute top-full left-0 w-full min-w-[160px] mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                <div className="absolute top-full left-0 w-full min-w-[160px] mt-1 bg-slate-900 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
                   {GAMES.map((g) => (
                     <button
                       key={g.id}
@@ -347,7 +347,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   <i className={`fa-solid fa-chevron-down text-slate-600 text-[10px] transition-transform ${isLanguageOpen ? 'rotate-180' : ''}`}></i>
                 </button>
                 {isLanguageOpen && (
-                  <div className="absolute top-full left-0 w-full mt-1 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+                  <div className="absolute top-full left-0 w-full mt-1 bg-slate-900 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
                     {getGameLanguages(selectedGame).map((lang) => (
                       <button
                         key={lang.code}
@@ -385,8 +385,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   </button>
 
                   {isSetListOpen && (
-                    <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
-                      <div className="sticky top-0 bg-[#0f172a]/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
+                    <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-slate-900 rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
+                      <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
                         <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{visibleSets.length} {t('explore.found')}</span>
                       </div>
@@ -433,7 +433,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
       {/* Scrollable Results Section */}
       <div className="flex-1 overflow-hidden px-3 pb-4">
-        <div className="h-full bg-[#1e293b]/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
+        <div className="h-full bg-slate-800/50 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl flex flex-col">
           {browseMode === 'sealed' ? (
             isLoadingSealed ? (
               <div className="p-6 space-y-3">

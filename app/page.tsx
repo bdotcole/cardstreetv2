@@ -345,9 +345,9 @@ export default function HomePage() {
                     const platform = Capacitor.getPlatform();
 
                     try {
-                        const { StatusBar, Style } = await import('@capacitor/status-bar');
+                        const { StatusBar } = await import('@capacitor/status-bar');
                         await StatusBar.setOverlaysWebView({ overlay: true });
-                        await StatusBar.setStyle({ style: Style.Dark });
+                        // Icon style is set by the theme-sync effect below.
                     } catch (e) {
                         console.warn('StatusBar plugin not available', e);
                     }
@@ -365,6 +365,22 @@ export default function HomePage() {
         };
         detectPlatform();
     }, []);
+
+    // Status bar icons follow the app theme: light icons over the dark UI,
+    // dark icons over the light UI. Native shell only; no-op on web.
+    useEffect(() => {
+        const syncStatusBarStyle = async () => {
+            try {
+                const { Capacitor } = await import('@capacitor/core');
+                if (!Capacitor.isNativePlatform()) return;
+                const { StatusBar, Style } = await import('@capacitor/status-bar');
+                await StatusBar.setStyle({ style: settings.theme === 'light' ? Style.Light : Style.Dark });
+            } catch {
+                // StatusBar plugin not available
+            }
+        };
+        syncStatusBarStyle();
+    }, [settings.theme]);
 
     // Supabase Auth and Persistence
     useEffect(() => {

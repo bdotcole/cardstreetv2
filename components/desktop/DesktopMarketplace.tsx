@@ -193,7 +193,7 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
     return (
         <Link
             href={`/card/${listing.card_id}`}
-            className="group bg-[#1e293b]/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
+            className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
         >
             <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
                 <Image

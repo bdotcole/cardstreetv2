@@ -10,8 +10,9 @@ interface ScanCandidateModalProps {
 }
 
 const ScanCandidateModal: React.FC<ScanCandidateModalProps> = ({ candidates, onSelect, onCancel }) => {
+  // theme-dark-locked: shown over the camera scanner, stays dark in light mode
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#121212]/95 backdrop-blur-md animate-fadeIn">
+    <div className="theme-dark-locked fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#121212]/95 backdrop-blur-md animate-fadeIn">
       <div className="w-full max-w-[400px] glass rounded-[2.5rem] border-white/10 p-8 flex flex-col max-h-[80vh]">
         <div className="text-center mb-6">
           <div className="w-12 h-12 rounded-full bg-brand-cyan/10 flex items-center justify-center mx-auto mb-4">

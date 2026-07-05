@@ -207,7 +207,7 @@ export default function DesktopCartDrawer() {
                             <>
                                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
                                     {items.map((item) => (
-                                        <div key={item.id} className="flex items-center gap-3 bg-[#1e293b]/40 border border-white/5 rounded-xl p-3">
+                                        <div key={item.id} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3">
                                             <span className="w-12 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img

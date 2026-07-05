@@ -157,7 +157,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
           {/* Metrics */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+            <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาปัจจุบัน' : 'Current Price'}</p>
               <p className="text-2xl font-black text-white">
@@ -167,7 +167,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                 <i className="fa-solid fa-arrow-trend-up"></i> +3.2%
               </div>
             </div>
-            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
+            <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาสูงสุด' : 'Market High'}</p>
               <p className="text-2xl font-black text-brand-red">
                 {formatPrice(card.prices?.high || 45000)}
@@ -176,7 +176,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             </div>
           </div>
 
-          <div className="bg-[#1e293b]/50 rounded-2xl border border-white/5 p-4">
+          <div className="bg-slate-800/50 rounded-2xl border border-white/5 p-4">
             <PriceChart data={card.priceHistory} />
           </div>
 

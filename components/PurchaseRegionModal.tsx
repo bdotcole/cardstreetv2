@@ -21,7 +21,7 @@ const PurchaseRegionModal: React.FC<PurchaseRegionModalProps> = ({ isOpen, onClo
     return (
         // Above the cart drawer / payment modal (z-60).
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-            <div className="bg-[#0f172a] w-full max-w-sm rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+            <div className="bg-slate-900 w-full max-w-sm rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
                 <div className="p-7 text-center">
                     <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center">
                         <i className="fa-solid fa-location-dot text-2xl text-brand-cyan"></i>
