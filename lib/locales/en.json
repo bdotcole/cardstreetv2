@@ -352,7 +352,9 @@
         "preparingCheckout": "Preparing secure checkout…",
         "sellerUnverified": "This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.",
         "pay": "Pay",
-        "processing": "Processing…"
+        "processing": "Processing…",
+        "chargedInThb": "Charged in Thai Baht as",
+        "bankRateNote": "Your bank sets the final exchange rate."
     },
     "desktop": {
         "searchPlaceholder": "Search cards by name...",

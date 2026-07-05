@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json().catch(() => ({}));
-        const { currency, token, metadata } = body || {};
+        const { token, metadata } = body || {};
         const transferGroup: string | undefined = metadata?.transfer_group;
 
         if (!transferGroup || typeof transferGroup !== 'string') {
@@ -83,8 +83,6 @@ export async function POST(req: Request) {
         if (token && typeof token !== 'string') {
             return NextResponse.json({ error: 'Invalid payment method token' }, { status: 400 });
         }
-        // Currency is optional now — if omitted, falls back to the region's
-        // default (USD on the US platform, THB on TH).
 
         // ─── Load the pending orders and verify ownership ───
         const admin = createAdminClient(
@@ -143,11 +141,12 @@ export async function POST(req: Request) {
         const region: StripeRegion = orders[0].stripe_region === 'th' ? 'th' : 'us';
         const stripe = getStripeForRegion(region);
         const baseUrl = getAppBaseUrl();
-        const chargeCurrency = (
-            typeof currency === 'string' && currency.length > 0
-                ? currency
-                : defaultCurrencyForRegion(region)
-        ).toLowerCase();
+        // Charge currency is fixed by the platform region — order amounts are
+        // stored in THB, so the currency is never client-controllable. (An
+        // earlier version trusted the client's *display* currency here, which
+        // paired the THB amount with `usd` and would have charged a ฿340 order
+        // as $340.)
+        const chargeCurrency = defaultCurrencyForRegion(region);
 
         // ─── Build PaymentIntent params per region. ───
         const idempotencyKey = `checkout:${transferGroup}`;

@@ -6,6 +6,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import type { StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { trackMetaEvent } from '@/lib/metaEvents';
+import { CURRENCY_SYMBOLS } from '@/constants';
 
 // Publishable key, region-aware to match the dual-platform server setup.
 // The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
@@ -43,9 +44,13 @@ function getStripePromise(stripeAccount?: string | null): ReturnType<typeof load
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
+    /** Cart subtotal in THB — the currency all listing prices are stored in. */
     amount: number;
     shippingFee?: number;
+    /** Display currency only. The charge itself is always THB on the TH platform. */
     currency: string;
+    /** THB → display-currency multiplier (EXCHANGE_RATES[currency]). Unused when currency is THB. */
+    exchangeRate?: number;
     items: any[];
     apiEndpoint?: string; // New prop
     extraData?: any; // New prop
@@ -67,15 +72,17 @@ interface PaymentModalProps {
 //                                 a QR and settles async (fulfilled by the webhook
 //                                 on payment_intent.succeeded).
 const PaymentElementForm: React.FC<{
-    displayAmount: number;
-    currency: string;
+    /** Order total in THB — the amount actually charged. */
+    amountThb: number;
+    /** Renders a THB amount in the user's display currency. */
+    formatAmount: (thb: number) => string;
     items: any[];
     apiEndpoint?: string;
     extraData?: any;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
-}> = ({ displayAmount, currency, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -118,17 +125,18 @@ const PaymentElementForm: React.FC<{
                     // the Stripe PaymentIntent. Keep it to avoid any column
                     // constraint surprise.
                     //
-                    // expectedTotal is the price the buyer is looking at right
-                    // now. The server refuses to charge more than this (returns
-                    // TOTAL_CHANGED) so the displayed total is what gets charged.
-                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: displayAmount }),
+                    // expectedTotal is the THB total the buyer is looking at
+                    // right now. The server refuses to charge more than this
+                    // (returns TOTAL_CHANGED) so the displayed total is what
+                    // gets charged.
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb }),
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
                     if (orderData.code === 'TOTAL_CHANGED' && typeof orderData.total === 'number') {
                         onTotalChanged?.(orderData.total);
                         onPaymentFailed(
-                            `Shipping updated — your new total is ${currency === 'THB' ? '฿' : '$'}${orderData.total.toLocaleString()}. Please review and pay again.`
+                            `Shipping updated — your new total is ${formatAmount(orderData.total)}. Please review and pay again.`
                         );
                     } else {
                         onPaymentFailed(orderData.error || 'Failed to create orders');
@@ -140,13 +148,15 @@ const PaymentElementForm: React.FC<{
             }
 
             // Step 3: create the PaymentIntent (no card token — PaymentElement
-            // flow). Server computes the authoritative amount from the orders.
+            // flow). Server computes the authoritative amount from the orders
+            // and pins the currency to the platform region (THB) — the user's
+            // display currency is never sent.
             const piRes = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(
                     apiEndpoint === '/api/checkout'
-                        ? { currency, metadata: { transfer_group: transferGroup } }
+                        ? { metadata: { transfer_group: transferGroup } }
                         : { orderId: items[0]?.id, ...extraData }
                 ),
             });
@@ -197,10 +207,11 @@ const PaymentElementForm: React.FC<{
                 }
                 // Meta Purchase event (web Pixel + native iOS app event). Fired
                 // only on settled card payments, not PromptPay 'processing', so
-                // unsettled authorizations aren't counted as purchases.
+                // unsettled authorizations aren't counted as purchases. Reports
+                // the real charge (THB), not the user's display currency.
                 trackMetaEvent('Purchase', {
-                    value: displayAmount,
-                    currency,
+                    value: amountThb,
+                    currency: 'THB',
                     content_ids: items.map((i) => i.cardId || i.id).filter(Boolean),
                     content_type: 'product',
                     num_items: items.length,
@@ -235,7 +246,7 @@ const PaymentElementForm: React.FC<{
             >
                 {loading
                     ? (t('paymentFlow.processing') || 'Processing…')
-                    : `${t('paymentFlow.pay') || 'Pay'} ${currency === 'THB' ? '฿' : '$'}${displayAmount.toLocaleString()}`}
+                    : `${t('paymentFlow.pay') || 'Pay'} ${formatAmount(amountThb)}`}
             </button>
         </>
     );
@@ -247,6 +258,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     amount,
     shippingFee = 0,
     currency,
+    exchangeRate = 1,
     items,
     apiEndpoint,
     extraData,
@@ -254,6 +266,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentFailed
 }) => {
     const { t } = useTranslation();
+
+    // All amounts in this modal are THB (listing prices and the server
+    // estimate are THB, and the Stripe charge is THB). A non-THB display
+    // currency only changes how they're *formatted* — converted via
+    // exchangeRate, with two decimals since the result is fractional.
+    const isThbDisplay = currency === 'THB';
+    const formatAmount = (thb: number) =>
+        isThbDisplay
+            ? `฿${thb.toLocaleString()}`
+            : `${CURRENCY_SYMBOLS[currency] || currency}${(thb * exchangeRate).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            })}`;
 
     // Server-computed estimate (shipping + total). Fetched on modal open via
     // /api/orders/estimate, which runs the same shipping math as
@@ -341,12 +366,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // reject. The authoritative block is server-side in /api/orders/checkout.
     const sellerNotReady = isMarketplaceCheckout && !!estimate && !estimate.sellerPayoutReady;
 
-    // Deferred PaymentElement options. amount is in the currency's smallest
-    // unit (satang/cents) and is only used to render eligible methods + wallet
-    // amounts; the authoritative charge amount is set server-side on the
-    // PaymentIntent. Dark theme to match the modal.
+    // Deferred PaymentElement options. amount is in satang and is only used to
+    // render eligible methods + wallet amounts; the authoritative charge
+    // amount is set server-side on the PaymentIntent. The currency is pinned
+    // to THB for the marketplace checkout — it must match the PaymentIntent
+    // /api/checkout creates, and mounting Elements in the user's *display*
+    // currency would both mismatch the PI and hide PromptPay (THB-only).
+    // Dark theme to match the modal.
     const amountMinor = Math.max(1, Math.round(effectiveAmount * 100));
-    const elementsCurrency = (currency || 'thb').toLowerCase();
+    const elementsCurrency = isMarketplaceCheckout ? 'thb' : (currency || 'thb').toLowerCase();
     const elementsOptions = useMemo<StripeElementsOptions>(() => ({
         mode: 'payment',
         amount: amountMinor,
@@ -377,7 +405,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="mb-6 bg-white/5 rounded-xl p-4 space-y-2">
                         <div className="flex justify-between items-center">
                             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Subtotal</span>
-                            <span className="text-sm font-bold text-slate-300">{currency === 'THB' ? '฿' : '$'}{(effectiveAmount - effectiveShipping).toLocaleString()}</span>
+                            <span className="text-sm font-bold text-slate-300">{formatAmount(effectiveAmount - effectiveShipping)}</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
@@ -385,8 +413,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 {estimateLoading
                                     ? 'Calculating…'
                                     : effectiveShipping > 0
-                                        ? `+${currency === 'THB' ? '฿' : '$'}${effectiveShipping.toLocaleString()}`
-                                        : `${currency === 'THB' ? '฿' : '$'}0`}
+                                        ? `+${formatAmount(effectiveShipping)}`
+                                        : formatAmount(0)}
                             </span>
                         </div>
                         {estimateError && (
@@ -397,8 +425,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
-                            <span className="text-2xl font-black text-white">{currency === 'THB' ? '฿' : '$'}{effectiveAmount.toLocaleString()}</span>
+                            <span className="text-2xl font-black text-white">{formatAmount(effectiveAmount)}</span>
                         </div>
+                        {!isThbDisplay && (
+                            <p className="text-[10px] text-slate-500 text-right">
+                                {t('paymentFlow.chargedInThb') || 'Charged in Thai Baht as'} ฿{effectiveAmount.toLocaleString()}.{' '}
+                                {t('paymentFlow.bankRateNote') || 'Your bank sets the final exchange rate.'}
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-3">
@@ -432,8 +466,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     key={`${amountMinor}-${elementsCurrency}-${estimate?.sellerStripeAccountId || 'platform'}`}
                                 >
                                     <PaymentElementForm
-                                        displayAmount={effectiveAmount}
-                                        currency={currency}
+                                        amountThb={effectiveAmount}
+                                        formatAmount={formatAmount}
                                         items={items}
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}

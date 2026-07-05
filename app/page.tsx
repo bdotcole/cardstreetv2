@@ -1674,8 +1674,9 @@ export default function HomePage() {
                 <PaymentModal
                     isOpen={isPaymentModalOpen}
                     onClose={() => setIsPaymentModalOpen(false)}
-                    amount={cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate)}
+                    amount={cart.reduce((s, i) => s + i.price, 0)}
                     currency={currency}
+                    exchangeRate={exchangeRate}
                     items={cart}
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
