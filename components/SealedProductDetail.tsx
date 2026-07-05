@@ -119,6 +119,9 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
               {typeLabel}
             </span>
             <h1 className="text-2xl font-black text-white leading-tight tracking-tight mt-2">{product.name}</h1>
+            {product.setName && (
+              <p className="text-sm text-slate-400 font-bold">{product.setName}</p>
+            )}
           </div>
 
           {/* Headline price */}

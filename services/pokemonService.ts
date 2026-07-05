@@ -40,6 +40,9 @@ export interface SealedProduct {
     name: string;
     productType: string | null;
     setId: string | null;
+    // Display name of the set the product belongs to (already run through the
+    // display-alias conventions); null when unresolvable (cross-set bundles).
+    setName?: string | null;
     game?: string;
     language?: string;
     imageUrl: string | null;

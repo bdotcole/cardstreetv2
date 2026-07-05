@@ -1,6 +1,7 @@
 import { Card, Rarity } from '@/types';
 import type { SealedProduct } from '@/services/pokemonService';
 import { EXCHANGE_RATES } from '@/constants';
+import { displaySetName } from '@/lib/cardMapper';
 
 // Bilingual display labels for sealed_products.product_type. Shared by the
 // catalog detail view, the vault, and the sell flows.
@@ -53,8 +54,10 @@ const toThb = (val: number | null | undefined, currency: string) => {
     return currency === 'THB' ? Math.round(val) : Math.round(val * USD_TO_THB);
 };
 
-/** DB row -> API shape (THB base prices). Single source for /api/sealed and SSR. */
-export function mapSealedRowToProduct(row: SealedProductRow): SealedProduct {
+/** DB row -> API shape (THB base prices). Single source for /api/sealed and SSR.
+ *  `setNameRaw` is the pokemon_sets.name for row.set_id (set_id is deliberately
+ *  not a FK, so callers resolve it with a second query and pass it in). */
+export function mapSealedRowToProduct(row: SealedProductRow, setNameRaw?: string | null): SealedProduct {
     const cur = row.currency || 'USD';
     const sealed = toThb(row.new_price, cur);
     const cib = toThb(row.cib_price, cur);
@@ -64,6 +67,7 @@ export function mapSealedRowToProduct(row: SealedProductRow): SealedProduct {
         name: row.name,
         productType: row.product_type,
         setId: row.set_id,
+        setName: setNameRaw ? displaySetName(row.game, row.language, row.set_id, setNameRaw) : null,
         game: row.game,
         language: row.language,
         imageUrl: row.image_url,
@@ -84,7 +88,9 @@ export function sealedProductToCard(p: SealedProduct): Card {
         id: p.id,
         name: p.name,
         thaiName: '',
-        set: productTypeLabel(p.productType, false),
+        // The set line under the product name. Real set name when the product
+        // resolves to one; the product-type label otherwise (cross-set bundles).
+        set: p.setName || productTypeLabel(p.productType, false),
         number: '—',
         // Renders as the badge text where rarity is shown; not a real card rarity.
         rarity: Rarity.Sealed,

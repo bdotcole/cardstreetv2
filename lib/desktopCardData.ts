@@ -57,7 +57,19 @@ export const getCardPageData = cache(
                 .select('id, game, language, set_id, name, product_type, image_url, pricecharting_id, loose_price, cib_price, new_price, currency, last_updated')
                 .eq('id', cardId)
                 .maybeSingle();
-            if (sealedRow) card = sealedProductToCard(mapSealedRowToProduct(sealedRow as SealedProductRow));
+            if (sealedRow) {
+                // set_id is not a FK, so the set name needs its own lookup.
+                let setName: string | null = null;
+                if (sealedRow.set_id) {
+                    const { data: setRow } = await supabase
+                        .from('pokemon_sets')
+                        .select('name')
+                        .eq('id', sealedRow.set_id)
+                        .maybeSingle();
+                    setName = setRow?.name ?? null;
+                }
+                card = sealedProductToCard(mapSealedRowToProduct(sealedRow as SealedProductRow, setName));
+            }
         }
 
         // set_id (for the breadcrumb link to the set page) — a tiny indexed

@@ -80,14 +80,34 @@ const THAI_SET_MAP: Record<string, string> = {
   SV1S: 'Scarlet ex',
   SV2D: 'Clay Burst',
   SV2P: 'Snow Hazard',
+  SV4a: 'Shiny Treasure ex',
   SV5K: 'Wild Force',
   SV5M: 'Cyber Judge',
+  SV8a: 'Terastal Festival ex',
   MA1: 'Mega Evolution',
   MA2: 'Crimson Haze',
   MA3: 'Mega Evolution Dream ex',
   SV10s: 'The Unbeatable Hero',
   SV9s: 'Destiny Threads',
 };
+
+// Shared set-name display convention (also used for sealed products): Thai sets
+// get the curated English alias prefixed, JP sets get the curated English name.
+// Sealed rows store language 'jp' where cards store 'ja'; accept both.
+export function displaySetName(
+  game: string,
+  language: string | null | undefined,
+  setId: string | null | undefined,
+  baseName: string,
+): string {
+  if (game !== 'pokemon') return baseName;
+  if (language === 'th') {
+    const engName = setId ? THAI_SET_MAP[setId] : undefined;
+    return engName && !baseName.includes(engName) ? `${engName} (${baseName})` : baseName;
+  }
+  if (language === 'ja' || language === 'jp') return englishJpSetName(setId, baseName);
+  return baseName;
+}
 
 // The market_values join returns one row PER CONDITION — since the PriceCharting
 // ingest that includes graded tiers ("PSA 10", "BGS 10", ...) whose prices run many
@@ -156,14 +176,12 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     imageSmall = fixTcgdexUrl(baseUrl);
   }
 
-  let setName = supabaseCard.pokemon_sets?.name || rawData.set?.name || 'Unknown Set';
-  if (isPokemon && supabaseCard.language === 'th') {
-    const engName = THAI_SET_MAP[supabaseCard.set_id];
-    if (engName && !setName.includes(engName)) setName = `${engName} (${setName})`;
-  } else if (isPokemon && supabaseCard.language === 'ja') {
-    // English-first app: show the English name for JP sets where we have one.
-    setName = englishJpSetName(supabaseCard.set_id, setName);
-  }
+  const setName = displaySetName(
+    game,
+    supabaseCard.language,
+    supabaseCard.set_id,
+    supabaseCard.pokemon_sets?.name || rawData.set?.name || 'Unknown Set',
+  );
 
   const setTotal =
     supabaseCard.pokemon_sets?.printed_total ||

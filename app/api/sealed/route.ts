@@ -86,7 +86,18 @@ export async function GET(request: Request) {
             return NextResponse.json({ products: [] }, { status: 500 });
         }
 
-        const products = (data || []).map((p) => mapSealedRowToProduct(p as SealedProductRow));
+        // set_id is intentionally not a FK (see the sealed_products migration), so
+        // PostgREST can't embed the set — resolve display names with a second query.
+        const setIds = [...new Set((data || []).map((p) => p.set_id).filter(Boolean))] as string[];
+        const setNames = new Map<string, string>();
+        if (setIds.length > 0) {
+            const { data: sets } = await supabase.from('pokemon_sets').select('id, name').in('id', setIds);
+            for (const s of sets || []) setNames.set(s.id, s.name);
+        }
+
+        const products = (data || []).map((p) =>
+            mapSealedRowToProduct(p as SealedProductRow, p.set_id ? setNames.get(p.set_id) : null)
+        );
 
         return new NextResponse(JSON.stringify({ products }), {
             status: 200,
