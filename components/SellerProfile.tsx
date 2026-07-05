@@ -117,6 +117,11 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
             {/* Content */}
             <div className="p-6 min-h-[300px]">
                 {activeTab === 'shop' && (
+                    listings.length === 0 ? (
+                        <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
+                            {t('seller.noListings')}
+                        </div>
+                    ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {listings.map(listing => (
                             <div key={listing.id} className="glass rounded-xl p-2 border border-white/5 group relative active:scale-95 transition-all">
@@ -135,6 +140,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                             </div>
                         ))}
                     </div>
+                    )
                 )}
 
                 {activeTab === 'reviews' && (

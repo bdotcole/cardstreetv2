@@ -306,6 +306,44 @@ export const marketplaceService = {
     },
 
     /**
+     * Fetch one seller's active listings, newest first. Used by the mobile
+     * seller profile's Shop tab (the desktop shop page has its own
+     * server-side query in lib/sellerPageData.ts).
+     */
+    async getSellerListings(sellerId: string, limit = 100): Promise<MarketplaceListing[]> {
+        const supabase = createClient();
+        try {
+            const { data, error } = await supabase
+                .from('listings')
+                .select(`
+                    id,
+                    seller_id,
+                    card_id,
+                    card_data,
+                    price,
+                    condition,
+                    is_graded,
+                    grading_company,
+                    grade,
+                    image_front_url,
+                    image_back_url,
+                    status,
+                    created_at,
+                    updated_at
+                `)
+                .eq('seller_id', sellerId)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (error) throw error;
+            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+        } catch (error) {
+            console.error('Error fetching seller listings:', error);
+            return [];
+        }
+    },
+
+    /**
      * Fetch the signed-in user's own active listings, newest first. Used by
      * the desktop Sell page.
      */

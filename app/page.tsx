@@ -164,12 +164,17 @@ export default function HomePage() {
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [viewingSellerReviews, setViewingSellerReviews] = useState<Review[]>([]);
+    const [viewingSellerListings, setViewingSellerListings] = useState<MarketplaceListing[]>([]);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
 
-    // Load a seller's reviews when their profile is opened.
+    // Load a seller's reviews and shop listings when their profile is opened.
     useEffect(() => {
         const sellerId = viewingSeller?.id;
-        if (!sellerId || sellerId === 'mock-id') { setViewingSellerReviews([]); return; }
+        if (!sellerId || sellerId === 'mock-id') {
+            setViewingSellerReviews([]);
+            setViewingSellerListings([]);
+            return;
+        }
         let cancelled = false;
         (async () => {
             try {
@@ -179,6 +184,10 @@ export default function HomePage() {
             } catch {
                 if (!cancelled) setViewingSellerReviews([]);
             }
+        })();
+        (async () => {
+            const listings = await marketplaceService.getSellerListings(sellerId);
+            if (!cancelled) setViewingSellerListings(listings);
         })();
         return () => { cancelled = true; };
     }, [viewingSeller?.id]);
@@ -1444,7 +1453,7 @@ export default function HomePage() {
                         {activeTab === 'seller_profile' && viewingSeller && (
                             <SellerProfile
                                 seller={viewingSeller}
-                                listings={activeListings.slice(0, 4)}
+                                listings={viewingSellerListings}
                                 reviews={viewingSellerReviews}
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectCard={setSelectedCard}
