@@ -18,7 +18,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-    estimateRate,
+    estimateRateWithCityFallback,
     isRegionError,
     fallbackShippingSatang,
     estimateParcelWeightGramsForItems,
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
             let baseSatang: number;
             let isFallback: boolean;
             try {
-                const quote = await estimateRate({
+                const quote = await estimateRateWithCityFallback({
                     srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
                     srcCityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
                     srcPostalCode: sellerProfile?.postcode || '10500',
@@ -149,6 +149,11 @@ export async function POST(req: Request) {
                 });
                 baseSatang = quote.estimatePrice + quote.upCountryAmount;
                 isFallback = false;
+                if (quote.usedCanonicalCity) {
+                    // Live quote recovered via the canonical-district retry —
+                    // a profile involved has a city field Flash can't match.
+                    console.warn(`[Orders/Estimate] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
+                }
             } catch (err) {
                 baseSatang = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province);
                 isFallback = true;

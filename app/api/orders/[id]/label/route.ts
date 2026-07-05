@@ -21,7 +21,7 @@ import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import {
-    createShipment,
+    createShipmentWithCityFallback,
     generateLabel,
     estimateParcelWeightGramsForItems,
     estimateParcelDimsCmForItems,
@@ -177,7 +177,7 @@ export async function GET(
             if (parcelItems.length === 0) parcelItems = [{}];
 
             try {
-                const flashOrder = await createShipment({
+                const flashOrder = await createShipmentWithCityFallback({
                     outTradeNo: order.id,
                     srcName: seller.display_name || 'CardStreet Seller',
                     srcPhone: seller.phone_number || '0000000000',

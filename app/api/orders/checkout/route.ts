@@ -29,7 +29,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import {
-    estimateRate,
+    estimateRateWithCityFallback,
     isRegionError,
     fallbackShippingSatang,
     estimateParcelWeightGramsForItems,
@@ -293,7 +293,7 @@ export async function POST(req: Request) {
                 }));
             let baseSatang: number;
             try {
-                const quote = await estimateRate({
+                const quote = await estimateRateWithCityFallback({
                     srcProvinceName: sp?.province || 'กรุงเทพมหานคร',
                     srcCityName: sp?.state || sp?.district || 'เขตบางรัก',
                     srcPostalCode: sp?.postcode || '10500',
@@ -305,6 +305,9 @@ export async function POST(req: Request) {
                 });
                 // Flash returns satang (cents) directly.
                 baseSatang = quote.estimatePrice + quote.upCountryAmount;
+                if (quote.usedCanonicalCity) {
+                    console.warn(`[Orders/Checkout] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
+                }
             } catch (err) {
                 baseSatang = fallbackShippingSatang(sp?.province, buyerProfile?.province);
                 if (isRegionError(err)) {

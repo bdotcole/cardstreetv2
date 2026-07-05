@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import {
-    estimateRate,
+    estimateRateWithCityFallback,
     fallbackShippingSatang,
     estimateParcelWeightGramsForItems,
     estimateParcelDimsCmForItems,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
                 baseSatang = fallbackShippingSatang(seller?.province, buyerProfile.province);
             } else {
                 try {
-                    const quote = await estimateRate({
+                    const quote = await estimateRateWithCityFallback({
                         srcProvinceName: seller.province || 'กรุงเทพมหานคร',
                         srcCityName: seller.state || seller.district || 'เขตบางรัก', // Amphoe/Khet
                         srcPostalCode: seller.postcode,
@@ -77,6 +77,9 @@ export async function POST(request: NextRequest) {
                         ...estimateParcelDimsCmForItems(sellerItems),
                     });
                     baseSatang = quote.estimatePrice + quote.upCountryAmount;
+                    if (quote.usedCanonicalCity) {
+                        console.warn(`[Shipping Calculate] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
+                    }
                 } catch (err) {
                     console.error(`[Shipping Calculate] Flash Express error for seller ${sellerId} — using fallback:`, err);
                     // Province-aware fallback (฿40 intra-Bangkok, ฿90 otherwise)

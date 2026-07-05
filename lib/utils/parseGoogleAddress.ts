@@ -73,11 +73,15 @@ export function parseGoogleAddressToThai(
     // Province: administrative_area_level_1
     const province = findComponent(components, 'administrative_area_level_1');
 
-    // District (Amphoe / Khet): try locality first, then admin_level_2
+    // District (Amphoe / Khet): administrative_area_level_2 IS the อำเภอ in
+    // Google's Thai data. `locality` is only a fallback — upcountry it is
+    // often the ตำบล/town, and saving that as the district made Flash Express
+    // reject the address ("Consignee region does not match"), silently
+    // degrading every shipping quote for the profile to the flat fallback.
     const district = findComponent(
         components,
-        'locality',
-        'administrative_area_level_2'
+        'administrative_area_level_2',
+        'locality'
     );
 
     // Sub-district (Tambon / Khwaeng): try sublocality_level_1, then sublocality, then sublocality_level_2

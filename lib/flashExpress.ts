@@ -159,7 +159,18 @@ async function makeFlashRequest(
         if (json.code === 1001) {
             errorMsg = `Customer not found (code: 1001). This usually means your Merchant ID (${config.mchId}) is invalid for the ${process.env.FLASH_EXPRESS_ENV || 'training'} environment. Please verify your Merchant ID in settings.`;
         }
-        throw new Error(`Flash Express: ${errorMsg} (code: ${json.code})`);
+        // Flash puts the useful validation detail in `data`, keyed by field
+        // (e.g. { base: ['Consignee region does not match'] }) while `message`
+        // is a generic "Failed to submit". Fold the detail into the thrown
+        // message so callers (and isRegionError) can act on it.
+        const detail =
+            json.data && typeof json.data === 'object'
+                ? Object.values(json.data as Record<string, unknown>)
+                    .flatMap(v => (Array.isArray(v) ? v : [v]))
+                    .filter((v): v is string => typeof v === 'string')
+                    .join('; ')
+                : '';
+        throw new Error(`Flash Express: ${errorMsg}${detail ? ` — ${detail}` : ''} (code: ${json.code})`);
     }
 
     return json;
@@ -325,6 +336,37 @@ export async function createShipment(params: FlashOrderParams): Promise<FlashOrd
 }
 
 /**
+ * createShipment with the same region-mismatch retry as
+ * estimateRateWithCityFallback: if Flash rejects the waybill because a
+ * profile's city field isn't a real อำเภอ/เขต (a blocked SALE, not just a bad
+ * quote), retry once with the canonical provincial-capital districts. The
+ * postcode and full detail address are unchanged — they're what routing and
+ * the courier actually deliver by — so the parcel still reaches the buyer.
+ * Safe to retry: the first call failed, so no waybill was minted (no duplicate
+ * pno risk). Non-region errors propagate untouched.
+ */
+export async function createShipmentWithCityFallback(
+    params: FlashOrderParams,
+): Promise<FlashOrderResult & { usedCanonicalCity: boolean }> {
+    try {
+        return { ...(await createShipment(params)), usedCanonicalCity: false };
+    } catch (err) {
+        if (!isRegionError(err)) throw err;
+        console.warn(
+            `[FlashExpress] Region mismatch creating waybill for ${params.outTradeNo} — retrying with canonical districts`,
+        );
+        const retried = await createShipment({
+            ...params,
+            srcProvinceName: canonicalProvinceForFlash(params.srcProvinceName),
+            srcCityName: canonicalCityForProvince(params.srcProvinceName),
+            dstProvinceName: canonicalProvinceForFlash(params.dstProvinceName),
+            dstCityName: canonicalCityForProvince(params.dstProvinceName),
+        });
+        return { ...retried, usedCanonicalCity: true };
+    }
+}
+
+/**
  * 2. Print Label (Big 100x180mm) — POST /open/v1/orders/{pno}/pre_print
  * Returns the raw PDF buffer.
  */
@@ -364,6 +406,35 @@ export async function estimateRate(params: FlashRateParams): Promise<FlashRateRe
     };
 }
 
+/**
+ * estimateRate with a region-mismatch retry. Profiles saved through the old
+ * Google Places parsing often carry a ตำบล (sub-district) in the field used as
+ * Flash's city name; Flash then rejects the quote ("Consignee region does not
+ * match") and callers previously dropped straight to the flat ฿90 fallback —
+ * ~2.5x the real freight on measured routes. Retrying once with the canonical
+ * provincial-capital district (postcodes unchanged — Flash tolerates a
+ * postcode from a sibling district and prices off it) recovers a live,
+ * route-accurate quote. Non-region failures (auth, network) are NOT retried;
+ * they propagate to the caller's flat fallback as before.
+ */
+export async function estimateRateWithCityFallback(
+    params: FlashRateParams,
+): Promise<FlashRateResult & { usedCanonicalCity: boolean }> {
+    try {
+        return { ...(await estimateRate(params)), usedCanonicalCity: false };
+    } catch (err) {
+        if (!isRegionError(err)) throw err;
+        const retried = await estimateRate({
+            ...params,
+            srcProvinceName: canonicalProvinceForFlash(params.srcProvinceName),
+            srcCityName: canonicalCityForProvince(params.srcProvinceName),
+            dstProvinceName: canonicalProvinceForFlash(params.dstProvinceName),
+            dstCityName: canonicalCityForProvince(params.dstProvinceName),
+        });
+        return { ...retried, usedCanonicalCity: true };
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Fallback shipping cost
 // ---------------------------------------------------------------------------
@@ -379,6 +450,31 @@ export function isBangkokProvince(province?: string | null): boolean {
     if (!province) return false;
     const p = province.trim().toLowerCase();
     return p.includes('กรุงเทพ') || p.includes('กทม') || p.includes('bangkok');
+}
+
+/**
+ * The official Thai province name Flash's region table accepts. Only Bangkok
+ * has aliases in our data ("กทม.", "Bangkok"); other provinces pass through
+ * unchanged. English province names from legacy manual entry can't be mapped
+ * here and keep falling to the flat-rate path.
+ */
+export function canonicalProvinceForFlash(province?: string | null): string {
+    const p = (province || '').trim();
+    return isBangkokProvince(p) ? 'กรุงเทพมหานคร' : p;
+}
+
+/**
+ * A city (อำเภอ/เขต) name Flash is guaranteed to accept for the province: the
+ * provincial-capital district "เมือง<province>", or a central เขต for Bangkok
+ * (which has no อำเภอเมือง). Used to retry rate quotes when a profile's city
+ * field holds something Flash can't match — typically a ตำบล saved by the old
+ * Google Places parsing. Freight pricing is province/postcode-driven, so
+ * substituting the capital district keeps the quote accurate for the route.
+ */
+export function canonicalCityForProvince(province?: string | null): string {
+    const p = canonicalProvinceForFlash(province);
+    if (!p || isBangkokProvince(p)) return 'เขตบางรัก';
+    return `เมือง${p}`;
 }
 
 /**
@@ -660,15 +756,18 @@ export async function setWebhookService(params: {
  * Identifies Flash Express region/area mismatch errors.
  *
  * Why: the training sandbox accepts only a narrow set of Thai province/district
- * combinations and rejects everything else with code 40004 / 40005. Callers
- * need to distinguish these (which warrant graceful degradation in training)
- * from hard failures like bad credentials or network outages.
+ * combinations and rejects everything else with code 40004 / 40005, and the
+ * production API rejects addresses whose city field isn't a real อำเภอ/เขต of
+ * the province with code 1000 + "Consignee region does not match" (the detail
+ * is folded into the message by makeFlashRequest). Callers need to distinguish
+ * these (which warrant a canonical-city retry / graceful degradation) from
+ * hard failures like bad credentials or network outages.
  */
 export function isRegionError(err: unknown): boolean {
     if (!err) return false;
     const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
     if (/code:\s*4000[45]\b/.test(msg)) return true;
-    return /\b(region|area|province|district)\b/.test(msg);
+    return /\b(region|area|province|district|city)\b/.test(msg);
 }
 
 /**

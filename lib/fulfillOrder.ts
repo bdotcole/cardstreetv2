@@ -11,7 +11,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
-import { createShipment, generateLabel, requestPickup, isRegionError, estimateParcelWeightGramsForItems, estimateParcelDimsCmForItems } from '@/lib/flashExpress';
+import { createShipmentWithCityFallback, generateLabel, requestPickup, isRegionError, estimateParcelWeightGramsForItems, estimateParcelDimsCmForItems } from '@/lib/flashExpress';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -264,7 +264,7 @@ export async function fulfillOrdersByTransferGroup(
             try {
                 // Create Flash Express shipment
                 console.log(`[Fulfillment] Creating Flash Express shipment for seller ${sellerId}...`);
-                const flashOrder = await createShipment({
+                const flashOrder = await createShipmentWithCityFallback({
                     outTradeNo: primaryOrder.id,
                     srcName: src.name,
                     srcPhone: src.phone,
