@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
 import ReportModal from './ReportModal';
-import { CURRENCY_SYMBOLS } from '@/constants';
+import PriceChart from './PriceChart';
+import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
@@ -73,6 +74,21 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     const card = listing.card_data;
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
+
+    const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+
+    // Market figures mirror the card database (CardDetails): same Thai-set
+    // market-estimate haircut so the two screens never disagree on a price.
+    const isThaiSet = THAI_SETS.some(s => card.set.includes(s) || s.includes(card.set));
+    const marketExchangeRate = exchangeRate * (isThaiSet ? 0.55 : 1.0);
+    const formatMarketPrice = (price?: number) => {
+        if (!price || price === 0) return 'N/A';
+        const val = price * marketExchangeRate;
+        if (currency === 'USD') {
+            return `${currencySymbol} ${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+        return `${currencySymbol} ${Math.round(val).toLocaleString()}`;
+    };
 
     // Slide order is digital, front, back — but front/back only render when
     // their photo exists, so the back photo's index shifts when front is absent.
@@ -218,6 +234,40 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                 })()}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Market data for the underlying card, as on the card database page */}
+                    <div className="space-y-3">
+                        <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">{isThai ? 'ข้อมูลตลาด' : 'Market Data'}</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาปัจจุบัน' : 'Current Price'}</p>
+                                <p className="text-2xl font-black text-white">
+                                    {formatMarketPrice(card.prices?.market || card.marketPrice)}
+                                </p>
+                                {typeof card.change7d === 'number' && card.change7d !== 0 && (
+                                    <div className={`mt-2 text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 ${card.change7d > 0 ? 'text-brand-green' : 'text-brand-red'}`}>
+                                        <i className={`fa-solid ${card.change7d > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}`}></i>
+                                        {card.change7d > 0 ? '+' : ''}{card.change7d.toFixed(1)}%
+                                    </div>
+                                )}
+                            </div>
+                            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาสูงสุด' : 'Market High'}</p>
+                                <p className="text-2xl font-black text-brand-red">
+                                    {formatMarketPrice(card.prices?.high)}
+                                </p>
+                                <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'สูงสุด' : 'High'}</div>
+                            </div>
+                        </div>
+                        {Array.isArray(card.priceHistory) && card.priceHistory.length > 1 && (
+                            <div className="bg-[#1e293b]/50 rounded-2xl border border-white/5 p-4">
+                                <div className="h-44">
+                                    <PriceChart data={card.priceHistory} />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, Review, Card } from '@/types';
+import { UserProfile, Review } from '@/types';
 import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
 import ReportModal from './ReportModal';
@@ -12,12 +12,12 @@ interface SellerProfileProps {
     listings: any[]; // Using existing listing structure
     reviews: Review[];
     onBack: () => void;
-    onSelectCard: (card: Card) => void;
+    onSelectListing: (listing: any) => void;
     currency?: string;
     exchangeRate?: number;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectCard, currency = 'THB', exchangeRate = 1 }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const { t } = useTranslation();
@@ -134,7 +134,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
                                 <p className="text-brand-green font-black text-xs">{currencySymbol}{(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}</p>
                                 <button
-                                    onClick={() => onSelectCard(listing.card_data)}
+                                    onClick={() => onSelectListing(listing)}
                                     className="absolute inset-0 w-full h-full opacity-0"
                                 ></button>
                             </div>

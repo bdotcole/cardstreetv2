@@ -189,6 +189,17 @@ export default function HomePage() {
             const listings = await marketplaceService.getSellerListings(sellerId);
             if (!cancelled) setViewingSellerListings(listings);
         })();
+        // The seller object built from listing joins carries no bio; fetch it
+        // separately and fail soft so the About tab just shows the default.
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data } = await supabase.from('profiles').select('bio').eq('id', sellerId).maybeSingle();
+                if (!cancelled && data?.bio) {
+                    setViewingSeller(prev => (prev && prev.id === sellerId) ? { ...prev, bio: data.bio } : prev);
+                }
+            } catch { /* column may not exist yet; default bio is fine */ }
+        })();
         return () => { cancelled = true; };
     }, [viewingSeller?.id]);
     const [user, setUser] = useState<UserProfile | null>(null);
@@ -1472,7 +1483,7 @@ export default function HomePage() {
                                 listings={viewingSellerListings}
                                 reviews={viewingSellerReviews}
                                 onBack={() => setActiveTab('marketplace')}
-                                onSelectCard={setSelectedCard}
+                                onSelectListing={setSelectedListing}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                             />

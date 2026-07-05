@@ -329,7 +329,8 @@ export const marketplaceService = {
                     image_back_url,
                     status,
                     created_at,
-                    updated_at
+                    updated_at,
+                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
                 `)
                 .eq('seller_id', sellerId)
                 .eq('status', 'active')

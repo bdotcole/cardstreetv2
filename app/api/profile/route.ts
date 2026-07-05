@@ -67,12 +67,18 @@ export async function PATCH(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { display_name, phone_number, address, district, state, province, postcode, sub_district, username } = body
+        const { display_name, phone_number, address, district, state, province, postcode, sub_district, username, bio } = body
 
         // Prepare profile update
         const profileUpdate: any = {}
         if (display_name !== undefined) profileUpdate.display_name = display_name
         if (phone_number !== undefined) profileUpdate.phone_number = phone_number
+        if (bio !== undefined) {
+            if (bio !== null && typeof bio !== 'string') {
+                return NextResponse.json({ error: 'Invalid bio.' }, { status: 400 })
+            }
+            profileUpdate.bio = bio ? bio.trim().slice(0, 500) : null
+        }
         if (address !== undefined) profileUpdate.address = address
         if (district !== undefined) profileUpdate.district = district
         if (state !== undefined) profileUpdate.state = state
@@ -123,10 +129,26 @@ export async function PATCH(request: NextRequest) {
         }
 
         if (Object.keys(profileUpdate).length > 0) {
-            const { error: profileError } = await supabase
+            let { error: profileError } = await supabase
                 .from('profiles')
                 .update(profileUpdate)
                 .eq('id', user.id)
+
+            // profiles.bio may not exist yet (migration 20260705_profile_bio
+            // pending). Don't let that fail the rest of the profile save —
+            // retry without bio; it starts persisting once the column exists.
+            if (profileError && 'bio' in profileUpdate &&
+                (profileError.code === 'PGRST204' || profileError.code === '42703')) {
+                const { bio: _bio, ...rest } = profileUpdate
+                if (Object.keys(rest).length > 0) {
+                    ({ error: profileError } = await supabase
+                        .from('profiles')
+                        .update(rest)
+                        .eq('id', user.id))
+                } else {
+                    profileError = null
+                }
+            }
 
             if (profileError) {
                 if (profileError.code === '23505') { // Postgres unique violation error code

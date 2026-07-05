@@ -7,7 +7,7 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun
+  Wallet, Loader2, Pencil, Moon, Sun, Store
 } from 'lucide-react';
 import { UserProfile } from '@/types';
 import AuthModal from './AuthModal';
@@ -287,6 +287,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editBio, setEditBio] = useState('');
   const [editAddress, setEditAddress] = useState({ address: '', district: '', state: '', province: '', postcode: '' });
   const [profileData, setProfileData] = useState<any>(null);
 
@@ -677,6 +678,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           display_name: editName,
           username: editUsername,
           phone_number: editPhone,
+          bio: editBio,
           ...editAddress
         })
       });
@@ -688,6 +690,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             display_name: editName,
             username: editUsername,
             phone_number: editPhone,
+            bio: editBio,
             ...editAddress
           }));
           showToast('Profile updated successfully', 'success');
@@ -750,6 +753,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       setEditName(user.name);
       setEditUsername(profileData?.username || '');
       setEditPhone(profileData?.phone_number || '');
+      setEditBio(profileData?.bio || '');
       setEditAddress({
         address: profileData?.address || '',
         district: profileData?.district || '',
@@ -1039,6 +1043,21 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         {t('profile.usernameChangeRule')}
                      </p>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <Store className="w-3 h-3" /> {t('profile.aboutShop')}
+                  </label>
+                  <textarea
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    rows={4}
+                    maxLength={500}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors resize-none"
+                    placeholder={t('profile.aboutShopPlaceholder')}
+                  />
+                  <p className="text-[10px] text-slate-600">{t('profile.aboutShopHint')}</p>
                 </div>
 
                 <div className="space-y-2">
