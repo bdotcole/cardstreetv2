@@ -18,6 +18,7 @@ import {
     sendLabelGeneratedNotification,
     sendFirstTimeSaleEmail,
 } from '@/lib/courier';
+import { voidOffersForSoldListing } from '@/lib/voidOffersForListing';
 
 function getAdminSupabase(): SupabaseClient {
     return createClient(
@@ -191,6 +192,20 @@ export async function fulfillOrdersByTransferGroup(
 
                         if (sellerItems && sellerItems.length > 0) {
                             await supabase.from('collection_items').delete().eq('id', sellerItems[0].id);
+                        }
+
+                        // OBO Best-Offer (Hook 1): this listing is now a confirmed
+                        // sale, so void any remaining open offers on it and notify
+                        // their offerors. Flag-gated (inert while offers are dark)
+                        // and non-fatal. Passing null is fine — the winning offer
+                        // was already stamped with accepted_order_id at checkout,
+                        // and flipping it to `expired` after the order exists is
+                        // harmless (the order is what matters).
+                        try {
+                            await voidOffersForSoldListing(listing.id, null);
+                        } catch (e) {
+                            console.error('[Fulfillment] voidOffers (non-fatal):', e);
+                            result.errors.push(`voidOffers: ${e}`);
                         }
                     }
                 }

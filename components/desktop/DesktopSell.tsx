@@ -141,6 +141,7 @@ export default function DesktopSell() {
                 grade: listingData.grade,
                 image_front_url: listingData.image_front_url,
                 image_back_url: listingData.image_back_url,
+                acceptsOffers: listingData.accepts_offers,
             });
             setListingCard(null);
             showToast(t('desktop.sell.toastPublished'), 'success');

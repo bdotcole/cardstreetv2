@@ -140,6 +140,41 @@ export interface CartItem {
   condition: string;
 }
 
+// ─── OBO Best-Offer ──────────────────────────────────────────────────────────
+export type OfferStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'countered'
+  | 'expired'
+  | 'withdrawn';
+
+export type OfferActorRole = 'buyer' | 'seller';
+
+export interface Offer {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  amount: number;
+  status: OfferStatus;
+  actor_role: OfferActorRole;
+  counter_of?: string | null;
+  accepted_order_id?: string | null;
+  message?: string | null;
+  stripe_region?: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  // Client-enrichment fields from GET /api/offers (not DB columns):
+  viewerRole?: OfferActorRole;
+  listing?: {
+    price: number;
+    status: string;
+    card_data: Card;
+  } | null;
+}
+
 export type ReportStatus = 'Open' | 'Reviewed' | 'Resolved' | 'Dismissed';
 export type ReportEntityType = 'listing' | 'seller' | 'other';
 

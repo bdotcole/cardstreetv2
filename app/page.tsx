@@ -1037,7 +1037,8 @@ export default function HomePage() {
                 gradingCompany: listingData.grading_company,
                 grade: listingData.grade,
                 image_front_url: listingData.image_front_url,
-                image_back_url: listingData.image_back_url
+                image_back_url: listingData.image_back_url,
+                acceptsOffers: listingData.accepts_offers
             });
 
             // 2. Refresh global marketplace listings
@@ -1683,6 +1684,8 @@ export default function HomePage() {
                         }}
                         currency={currency}
                         exchangeRate={exchangeRate}
+                        currentUserId={user?.id ?? null}
+                        onOfferSubmitted={() => showToast(t('offer.submitted') || 'Offer sent to the seller.', 'success')}
                     />
                 )}
 

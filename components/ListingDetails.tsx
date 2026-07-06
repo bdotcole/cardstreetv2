@@ -7,6 +7,7 @@ import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
+import OfferModal from './OfferModal';
 
 // Gallery slide with pinch/double-tap zoom. One-finger drag is left to the
 // scroll-snap gallery until the image is actually zoomed in — otherwise the
@@ -52,6 +53,8 @@ interface ListingDetailsProps {
         card_data: Card;
         image_front_url?: string;
         image_back_url?: string;
+        accepts_offers?: boolean;
+        seller_id?: string;
     };
     onClose: () => void;
     onBuyNow: () => void;
@@ -59,6 +62,10 @@ interface ListingDetailsProps {
     onSellerClick: (seller: any) => void;
     currency?: string;
     exchangeRate?: number;
+    /** Signed-in user id, so the OBO "Make an offer" button hides on own listings. */
+    currentUserId?: string | null;
+    /** Fired after an offer is submitted, so the shell can toast. */
+    onOfferSubmitted?: () => void;
 }
 
 const ListingDetails: React.FC<ListingDetailsProps> = ({
@@ -68,12 +75,24 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     onAddToCart,
     onSellerClick,
     currency = 'THB',
-    exchangeRate = 1
+    exchangeRate = 1,
+    currentUserId = null,
+    onOfferSubmitted
 }) => {
     const { isThai } = useTranslation();
     const card = listing.card_data;
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
+    const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+
+    // OBO "Make an offer": only when the feature flag is on, the listing accepts
+    // offers, and the viewer is not the seller.
+    const sellerId = listing.seller_id ?? listing.seller?.id;
+    const canOffer =
+        process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' &&
+        listing.accepts_offers === true &&
+        !!currentUserId &&
+        currentUserId !== sellerId;
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -272,22 +291,43 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex gap-3 z-50">
-                <button
-                    onClick={onAddToCart}
-                    className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
-                >
-                    <i className="fa-solid fa-cart-plus text-brand-cyan group-hover:scale-110 transition-transform text-lg"></i>
-                    {isThai ? 'เพิ่มลงรถเข็น' : 'Add to Cart'}
-                </button>
-                <button
-                    onClick={onBuyNow}
-                    className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
-                >
-                    {isThai ? 'ซื้อเลย' : 'Buy Now'}
-                    <i className="fa-solid fa-arrow-right"></i>
-                </button>
+            <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-50">
+                {canOffer && (
+                    <button
+                        onClick={() => setIsOfferModalOpen(true)}
+                        className="w-full h-12 bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+                    >
+                        <i className="fa-solid fa-hand-holding-dollar text-lg"></i>
+                        {isThai ? 'เสนอราคา' : 'Make an Offer'}
+                    </button>
+                )}
+                <div className="flex gap-3">
+                    <button
+                        onClick={onAddToCart}
+                        className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
+                    >
+                        <i className="fa-solid fa-cart-plus text-brand-cyan group-hover:scale-110 transition-transform text-lg"></i>
+                        {isThai ? 'เพิ่มลงรถเข็น' : 'Add to Cart'}
+                    </button>
+                    <button
+                        onClick={onBuyNow}
+                        className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+                    >
+                        {isThai ? 'ซื้อเลย' : 'Buy Now'}
+                        <i className="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
             </div>
+
+            {isOfferModalOpen && (
+                <OfferModal
+                    listingId={listing.id}
+                    listingPrice={listing.price}
+                    cardName={card.name}
+                    onClose={() => setIsOfferModalOpen(false)}
+                    onSubmitted={onOfferSubmitted}
+                />
+            )}
 
             <ReportModal 
                 isOpen={isReportModalOpen} 

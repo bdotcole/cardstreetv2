@@ -18,6 +18,7 @@ const ListingBodySchema = z.object({
     is_graded: z.boolean().optional(),
     grading_company: z.enum(['PSA', 'BGS', 'CGC', 'ARS']).nullable().optional(),
     grade: z.number().min(1).max(10).nullable().optional(),
+    accepts_offers: z.boolean().optional().default(false),
 })
 
 export async function GET(request: NextRequest) {
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
                 is_graded: body.is_graded || false,
                 grading_company: body.grading_company,
                 grade: body.grade,
+                accepts_offers: body.accepts_offers ?? false,
                 status: 'active'
             })
             .select()

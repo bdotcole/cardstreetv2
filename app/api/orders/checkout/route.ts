@@ -83,6 +83,15 @@ export async function POST(req: Request) {
 
         const body = await req.json().catch(() => ({}));
         const items: CheckoutItem[] = Array.isArray(body?.items) ? body.items : [];
+        // OBO Best-Offer: when the buyer is paying an accepted offer, this is the
+        // offer id. The PRICE is never trusted from the client — it's read from
+        // the offers table below (server-authoritative). Feature-gated: the
+        // override only applies while NEXT_PUBLIC_ENABLE_OFFERS === '1'.
+        const acceptedOfferId: string | null =
+            process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' &&
+            typeof body?.acceptedOfferId === 'string' && body.acceptedOfferId.length > 0
+                ? body.acceptedOfferId
+                : null;
         const paymentMethod: string = typeof body?.paymentMethod === 'string' ? body.paymentMethod : 'credit_card';
         // The total the buyer was shown in the modal (THB). We use it to GUARANTEE
         // we never charge more than what was displayed: if the server's freshly
@@ -325,7 +334,34 @@ export async function POST(req: Request) {
 
         for (const listing of listings) {
             const feePct = feeMap.get(listing.seller_id) || NON_PARTNER_FEE_FRACTION;
-            const priceSatang = Math.round(Number(listing.price) * 100);
+
+            // ─── Offer price override (server-authoritative) ───
+            // When paying an accepted offer, the price is the accepted offer
+            // amount from the DB — never the list price and never the client's
+            // number. The offer must be `accepted`, belong to this buyer, match
+            // this listing, and not already be linked to an order. platform_fee
+            // recomputes off the override automatically; shipping is
+            // price-independent. No reserve was taken on accept, so the
+            // reservation CAS below still arbitrates the Buy-Now race.
+            let priceSatang: number;
+            if (acceptedOfferId) {
+                const { data: offer } = await supabase
+                    .from('offers')
+                    .select('amount, status, buyer_id, listing_id, accepted_order_id')
+                    .eq('id', acceptedOfferId)
+                    .eq('listing_id', listing.id)
+                    .single();
+                if (!offer || offer.status !== 'accepted' || offer.buyer_id !== buyerId || offer.accepted_order_id) {
+                    return NextResponse.json(
+                        { error: 'Offer not payable', code: 'OFFER_NOT_PAYABLE' },
+                        { status: 400 },
+                    );
+                }
+                priceSatang = Math.round(Number(offer.amount) * 100);
+            } else {
+                priceSatang = Math.round(Number(listing.price) * 100);
+            }
+
             const platformFeeSatang = Math.round(priceSatang * feePct);
 
             let shippingSatang = 0;
@@ -411,6 +447,21 @@ export async function POST(req: Request) {
             console.error('[Orders/Checkout] Order insert failed:', insertErr);
             await supabase.from('listings').update({ status: 'active' }).in('id', listingIds);
             return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
+        }
+
+        // ─── Link the accepted offer to its order (OBO) ───
+        // Stamp accepted_order_id so the offer can't be re-paid and list-my-offers
+        // shows it resolved. Best-effort (non-fatal): the authoritative void of
+        // the OTHER offers on this listing happens post-payment in the fulfillment
+        // sweep (lib/voidOffersForListing) once the sale is confirmed. The CAS on
+        // status='accepted' + accepted_order_id IS NULL keeps this idempotent.
+        if (acceptedOfferId && insertedOrders?.[0]?.id) {
+            await supabase
+                .from('offers')
+                .update({ accepted_order_id: insertedOrders[0].id })
+                .eq('id', acceptedOfferId)
+                .eq('status', 'accepted')
+                .is('accepted_order_id', null);
         }
 
         // Inventory move happens post-payment in fulfillOrdersByTransferGroup.
