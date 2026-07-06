@@ -405,7 +405,19 @@ export default function HomePage() {
         // Android native shell only: report the Play install referrer once so
         // the referring partner gets download credit (iOS earns it at QR-scan
         // time in /join). No-op everywhere else.
-        void maybeReportInstallReferrer();
+        //
+        // The report seeds the attribution slug into localStorage, but it can
+        // resolve AFTER the session-restore below has already run attribution
+        // slug-less (the install->signup race). So once it hands back a slug,
+        // re-attempt attribution for whoever is signed in now — closing the
+        // Android install->signup stitch within the same session instead of
+        // leaving it to a later cold open that may fall outside the window.
+        void (async () => {
+            const seededSlug = await maybeReportInstallReferrer();
+            if (!seededSlug) return;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) void maybeAttributeReferral(session.user.id);
+        })();
 
         // Applies a live session to user state. Keeps the flags hydrated
         // outside this effect (isPartner via /api/profile, or the pre-paint

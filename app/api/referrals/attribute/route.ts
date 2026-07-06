@@ -119,6 +119,18 @@ export async function POST(request: NextRequest) {
                 .eq('event_type', 'install')
                 .maybeSingle();
             installAlreadyCounted = !!installRow;
+
+            // Back-stitch the confirmed install event to the account it became.
+            // The install row is written pre-signup with a null referred_user_id;
+            // stamping it here makes the event table itself queryable per-account
+            // (which install produced which user), not just profiles.referred_by.
+            if (installRow) {
+                const { error: stitchErr } = await admin
+                    .from('partner_downloads')
+                    .update({ referred_user_id: user.id })
+                    .eq('id', installRow.id);
+                if (stitchErr) console.error('[Referrals/Attribute] install back-stitch failed:', stitchErr);
+            }
         }
 
         if (!installAlreadyCounted) {
