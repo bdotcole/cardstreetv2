@@ -203,6 +203,7 @@ serve(async (req) => {
         let mapped = 0;
         let priced = 0;
         let failed = 0;
+        let skipped = 0;
 
         // Step 1: Get cards from specific sets that need matching/pricing
         // If targetSet provided, use ONLY that set.
@@ -342,6 +343,27 @@ serve(async (req) => {
         for (const [index, card] of unpricedCandidates.entries()) {
             // Add delay between requests to avoid rate limits
             if (index > 0) await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Feature B: skip any Thai key already learned from a realized sale. The
+            // clobber-guard trigger would revert this branch's write anyway, but the
+            // founder's requirement is an explicit SKIP — and here it is load-bearing:
+            // this branch's Thai path derives an average-of-ALL-sold-listings price
+            // (a different, wrong number than the materialized recent-sales price),
+            // so recomputing/upserting it every run just churns last_updated.
+            if ((card.language || 'th') === 'th') {
+                const { data: learned } = await supabase
+                    .from('market_values')
+                    .select('source')
+                    .eq('card_id', card.id)
+                    .eq('language', card.language || 'th')
+                    .eq('condition', 'Raw_NM')
+                    .eq('source', 'cardstreet')
+                    .maybeSingle();
+                if (learned) {
+                    skipped++;
+                    continue;
+                }
+            }
 
             try {
                 let calculatedPrice = 0;
@@ -526,6 +548,7 @@ serve(async (req) => {
                 mapped,
                 priced,
                 failed,
+                skipped,
                 debug: debugLog.slice(0, 20),
                 timestamp: new Date().toISOString(),
             }),
