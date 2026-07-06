@@ -109,6 +109,9 @@ $$;
 -- these REVOKEs, so the API route keeps working.
 REVOKE ALL ON FUNCTION public.counter_offer(UUID, UUID, NUMERIC) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.counter_offer(UUID, UUID, NUMERIC) FROM anon, authenticated;
+-- Re-GRANT explicitly so the service-role client is guaranteed EXECUTE even if the
+-- project's default privileges didn't grant service_role at CREATE time.
+GRANT EXECUTE ON FUNCTION public.counter_offer(UUID, UUID, NUMERIC) TO service_role;
 
 -- RLS: read-safety net. Writes go through the service-role admin client which
 -- bypasses RLS; API routes enforce transitions via CAS.
