@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { CartItem } from '@/types';
+import { CartItem, Offer } from '@/types';
 
 interface DesktopCartContextValue {
     user: User | null;
@@ -16,6 +16,18 @@ interface DesktopCartContextValue {
     clear: () => void;
     openCart: () => void;
     closeCart: () => void;
+    // OBO: id of an accepted offer being paid. When set, the drawer forwards it
+    // to <PaymentModal acceptedOfferId>, which passes it to /api/orders/checkout;
+    // the server reads the discounted price from the offer authoritatively (the
+    // client never sends the offer price). Null for a normal cart checkout.
+    acceptedOfferId: string | null;
+    // Set to true by payOffer to ask the drawer to run its geo/profile-gated
+    // beginCheckout automatically; the drawer clears it once consumed.
+    pendingOfferCheckout: boolean;
+    clearPendingOfferCheckout: () => void;
+    // OBO pay-an-accepted-offer entry: replaces the cart with the offer's single
+    // listing, pins acceptedOfferId, and requests an immediate gated checkout.
+    payOffer: (offer: Offer) => void;
 }
 
 const DesktopCartContext = createContext<DesktopCartContextValue | null>(null);
@@ -45,6 +57,8 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
     const [authChecked, setAuthChecked] = useState(false);
     const [items, setItems] = useState<CartItem[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [acceptedOfferId, setAcceptedOfferId] = useState<string | null>(null);
+    const [pendingOfferCheckout, setPendingOfferCheckout] = useState(false);
 
     // Which user's storage key the in-memory cart belongs to. undefined =
     // not hydrated yet; the persist effect must not write before hydration.
@@ -96,6 +110,11 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
     }, [items]);
 
     const addItem = useCallback((item: CartItem) => {
+        // A normal add cancels any in-progress offer checkout — the cart is
+        // reverting to a standard multi-item flow, so the accepted-offer price
+        // override must not leak onto it.
+        setAcceptedOfferId(null);
+        setPendingOfferCheckout(false);
         // TH checkout is a direct charge on one connected account, so a cart
         // holds one seller at a time — same constraint /api/orders/checkout
         // enforces server-side. The confirm() must stay outside the updater
@@ -123,13 +142,45 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
         setItems((prev) => prev.filter((i) => i.id !== id));
     }, []);
 
-    const clear = useCallback(() => setItems([]), []);
+    const clear = useCallback(() => {
+        setItems([]);
+        setAcceptedOfferId(null);
+        setPendingOfferCheckout(false);
+    }, []);
     const openCart = useCallback(() => setIsOpen(true), []);
     const closeCart = useCallback(() => setIsOpen(false), []);
+    const clearPendingOfferCheckout = useCallback(() => setPendingOfferCheckout(false), []);
+
+    // OBO: pay an accepted offer. Mirrors the mobile handlePayOffer — a
+    // single-item cart for the offer's listing plus acceptedOfferId, then hand
+    // off to the drawer's beginCheckout (which owns the geo/profile gate) via
+    // pendingOfferCheckout. Only accepted offers the viewer owns as buyer are
+    // payable; the server re-verifies. Price shown is display-only.
+    const payOffer = useCallback((offer: Offer) => {
+        if (offer.status !== 'accepted' || offer.viewerRole !== 'buyer') return;
+        const listingCard = offer.listing?.card_data;
+        if (!listingCard) return;
+        setItems([{
+            id: offer.listing_id,
+            cardId: listingCard.id,
+            card: listingCard,
+            // Display price only; the server charges offer.amount authoritatively.
+            price: offer.amount,
+            sellerId: offer.seller_id,
+            sellerName: '',
+            condition: (listingCard as any).condition || '',
+        }]);
+        setAcceptedOfferId(offer.id);
+        setPendingOfferCheckout(true);
+        setIsOpen(true);
+    }, []);
 
     return (
         <DesktopCartContext.Provider
-            value={{ user, authChecked, items, isOpen, addItem, removeItem, clear, openCart, closeCart }}
+            value={{
+                user, authChecked, items, isOpen, addItem, removeItem, clear, openCart, closeCart,
+                acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout, payOffer,
+            }}
         >
             {children}
         </DesktopCartContext.Provider>

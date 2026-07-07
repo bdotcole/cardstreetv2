@@ -16,6 +16,10 @@ import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useToast } from '@/lib/contexts/ToastContext';
 import AuthModal from '@/components/AuthModal';
+import OfferModal from '@/components/OfferModal';
+
+// OBO best-offer is dark-launched behind this flag; nothing renders when off.
+const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
 export default function DesktopCardDetail({
     cardId,
@@ -46,6 +50,8 @@ export default function DesktopCardDetail({
     const [catalogArtFailed, setCatalogArtFailed] = useState(false);
     const [authOpen, setAuthOpen] = useState(false);
     const [addingToCollection, setAddingToCollection] = useState(false);
+    // OBO: the listing the buyer is making an offer on (null = modal closed).
+    const [offerListing, setOfferListing] = useState<MarketplaceListing | null>(null);
 
     const handleAddToCollection = async () => {
         if (!card) return;
@@ -256,6 +262,17 @@ export default function DesktopCardDetail({
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
                                         <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
+                                        {/* OBO: buyers (not the seller) can make an
+                                            offer on OBO-enabled listings when the
+                                            feature flag is on. */}
+                                        {OFFERS_ENABLED && listing.accepts_offers && user && user.id !== listing.seller_id && (
+                                            <button
+                                                onClick={() => setOfferListing(listing)}
+                                                className="bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                            >
+                                                {t('offer.makeOffer')}
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => addItem(listingToCartItem(listing))}
                                             className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
@@ -271,6 +288,16 @@ export default function DesktopCardDetail({
             </div>
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+
+            {OFFERS_ENABLED && offerListing && (
+                <OfferModal
+                    listingId={offerListing.id}
+                    listingPrice={offerListing.price}
+                    cardName={offerListing.card_data?.name || card.name}
+                    onClose={() => setOfferListing(null)}
+                    onSubmitted={() => showToast(t('offer.submitted'), 'success')}
+                />
+            )}
         </div>
     );
 }

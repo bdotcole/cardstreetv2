@@ -5,8 +5,13 @@ import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
+import OffersInbox from '@/components/OffersInbox';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+
+// OBO best-offer is dark-launched behind this flag; the Offers tab is hidden
+// entirely when off.
+const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
 // Shapes returned by /api/profile/{orders,shipments,sales} — same contracts
 // the mobile Profile panels consume.
@@ -31,7 +36,7 @@ interface SaleRow {
     listing: { card_data: any; condition: string; price: number } | null;
 }
 
-type Tab = 'purchases' | 'shipments' | 'sales';
+type Tab = 'purchases' | 'shipments' | 'sales' | 'offers';
 
 // Raw order status -> Tailwind tone (CSS, locale-independent) and the i18n key
 // under desktop.orders.status. Several backend statuses collapse to one
@@ -84,7 +89,7 @@ export default function DesktopOrders() {
     const { t } = useTranslation();
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
-    const { user, authChecked } = useDesktopCart();
+    const { user, authChecked, payOffer } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
 
     const [tab, setTab] = useState<Tab>('purchases');
@@ -100,6 +105,9 @@ export default function DesktopOrders() {
     const [submittingReview, setSubmittingReview] = useState(false);
 
     const fetchTab = useCallback(async (which: Tab) => {
+        // The offers tab is self-fetching (OffersInbox hits /api/offers itself),
+        // so there's no data endpoint to load here.
+        if (which === 'offers') { setLoading(false); return; }
         setLoading(true);
         try {
             if (which === 'purchases') {
@@ -211,6 +219,8 @@ export default function DesktopOrders() {
                     ['purchases', t('desktop.orders.tabPurchases')],
                     ['shipments', t('desktop.orders.tabShipments')],
                     ['sales', t('desktop.orders.tabSales')],
+                    // OBO tab only when the offers feature flag is on.
+                    ...(OFFERS_ENABLED ? [['offers', t('desktop.orders.tabOffers')] as [Tab, string]] : []),
                 ] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
@@ -348,6 +358,14 @@ export default function DesktopOrders() {
                                 ))}
                             </div>
                         )
+                    )}
+
+                    {/* OBO offers inbox. Self-fetches; paying an accepted offer
+                        routes through the shared desktop cart (payOffer sets a
+                        single-item cart + acceptedOfferId and opens the gated
+                        checkout). OffersInbox is null-safe when the flag is off. */}
+                    {tab === 'offers' && OFFERS_ENABLED && (
+                        <OffersInbox onPayOffer={({ offer }) => payOffer(offer)} />
                     )}
                 </div>
             )}

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -49,7 +49,10 @@ export default function DesktopCartDrawer() {
     const router = useRouter();
     const { showToast } = useToast();
     const { t } = useTranslation();
-    const { user, items, isOpen, removeItem, clear, closeCart } = useDesktopCart();
+    const {
+        user, items, isOpen, removeItem, clear, closeCart,
+        acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout,
+    } = useDesktopCart();
 
     const [phase, setPhase] = useState<Phase>('cart');
     const [authOpen, setAuthOpen] = useState(false);
@@ -72,10 +75,12 @@ export default function DesktopCartDrawer() {
     // complete before mounting Stripe. /api/orders/checkout re-enforces this
     // server-side; the desktop difference is we collect the address inline
     // instead of bouncing to a profile screen.
-    const beginCheckout = async () => {
+    const beginCheckout = useCallback(async () => {
         if (items.length === 0) return;
         // Geo gate: limit purchases to Thailand for now (shipping isn't
         // configured elsewhere). Re-enforced server-side in /api/orders/checkout.
+        // This is the single desktop path into the payment phase, so the
+        // OBO pay-an-accepted-offer flow routes through it too.
         const region = await ensurePurchaseRegion();
         if (!region.purchaseAllowed) {
             setRegionBlocked(true);
@@ -112,7 +117,17 @@ export default function DesktopCartDrawer() {
         } finally {
             setCheckingProfile(false);
         }
-    };
+    }, [items.length, user]);
+
+    // OBO: payOffer (context) loaded a single-item offer cart and requested an
+    // immediate gated checkout. Run the same beginCheckout as the cart button so
+    // the geo/profile gate applies identically. Consume the flag once so it
+    // fires exactly once per pay tap.
+    useEffect(() => {
+        if (!pendingOfferCheckout) return;
+        clearPendingOfferCheckout();
+        void beginCheckout();
+    }, [pendingOfferCheckout, clearPendingOfferCheckout, beginCheckout]);
 
     const saveAddress = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -267,6 +282,9 @@ export default function DesktopCartDrawer() {
                 items={items}
                 apiEndpoint="/api/checkout"
                 extraData={{ buyerId: user?.id }}
+                // OBO: when an accepted offer is being paid, the server reads the
+                // discounted price from the offer; the client never sends it.
+                acceptedOfferId={acceptedOfferId ?? undefined}
                 onPaymentSuccess={handlePaymentSuccess}
                 onPaymentFailed={(err) => showToast(`${t('desktop.cart.toastPaymentFailed')}: ${err}`, 'error')}
             />
