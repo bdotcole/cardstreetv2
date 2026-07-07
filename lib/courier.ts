@@ -949,6 +949,27 @@ export interface OfferNotifDetails {
     cardName?: string;
 }
 
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/$/, '');
+
+/**
+ * Branded Courier Elemental content for an offer email. `meta.title` is the email
+ * subject; the two text blocks are the bilingual body (EN then TH, muted); the
+ * action is a CTA button. The Courier default brand wraps this with the logo /
+ * header. Push renders meta.title as the title and the text blocks as the body.
+ * Rendering falls to this only when no dashboard template id is set for the event.
+ */
+function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: string; cta: string }) {
+    return {
+        version: '2022-01-01',
+        elements: [
+            { type: 'meta', title: c.subject },
+            { type: 'text', content: c.bodyEn },
+            { type: 'text', content: c.bodyTh, color: '#6b7280' },
+            { type: 'action', content: c.cta, href: APP_URL, style: 'button', align: 'center', background_color: '#0891b2' },
+        ],
+    };
+}
+
 /**
  * Internal helper: send one offer notification. Mirrors sendSoldNotification's
  * prefs/channels/early-exit logic and sendWishlistListingAlert's template-or-
@@ -965,7 +986,7 @@ async function sendOfferNotification(
         pushPref: string;
         template: string;
         pushType: string;
-        inline: (priceLabel: string, cardName: string) => { title: string; body: string };
+        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string };
     },
 ): Promise<void> {
     const courier = getCourier();
@@ -1000,7 +1021,7 @@ async function sendOfferNotification(
     if (cfg.template) {
         message.template = cfg.template;
     } else {
-        message.content = cfg.inline(priceLabel, cardName);
+        message.content = buildOfferEmailContent(cfg.inline(priceLabel, cardName));
     }
 
     try {
@@ -1019,10 +1040,10 @@ export async function sendOfferReceivedNotification(recipientId: string, details
         template: TEMPLATES.offerReceived,
         pushType: 'offer_received',
         inline: (priceLabel, cardName) => ({
-            title: `New offer${priceLabel ? ` — ${priceLabel}` : ''} on ${cardName}`,
-            body:
-                `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline. ` +
-                `คุณได้รับข้อเสนอราคาใหม่ — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
+            subject: `New offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
+            bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
+            cta: 'Respond · ตอบกลับ',
         }),
     });
 }
@@ -1035,10 +1056,10 @@ export async function sendOfferAcceptedNotification(buyerId: string, details: Of
         template: TEMPLATES.offerAccepted,
         pushType: 'offer_accepted',
         inline: (priceLabel, cardName) => ({
-            title: `Offer accepted — ${cardName}`,
-            body:
-                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Open CardStreet and pay to complete the purchase before someone else buys it. ` +
-                `ข้อเสนอของคุณได้รับการตอบรับแล้ว — เปิด CardStreet เพื่อชำระเงินให้เสร็จก่อนใคร`,
+            subject: `Offer accepted — ${cardName}`,
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay now to complete the purchase before someone else buys it.`,
+            bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว — ชำระเงินให้เสร็จก่อนใคร`,
+            cta: 'Pay now · ชำระเงิน',
         }),
     });
 }
@@ -1051,10 +1072,10 @@ export async function sendOfferRejectedNotification(offerorId: string, details: 
         template: TEMPLATES.offerRejected,
         pushType: 'offer_rejected',
         inline: (priceLabel, cardName) => ({
-            title: `Offer declined — ${cardName}`,
-            body:
-                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. ` +
-                `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
+            subject: `Offer declined — ${cardName}`,
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. You can make a new offer anytime.`,
+            bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
+            cta: 'Browse · เลือกซื้อ',
         }),
     });
 }
@@ -1067,10 +1088,10 @@ export async function sendOfferCounteredNotification(offerorId: string, details:
         template: TEMPLATES.offerCountered,
         pushType: 'offer_countered',
         inline: (priceLabel, cardName) => ({
-            title: `Counter offer${priceLabel ? ` — ${priceLabel}` : ''} on ${cardName}`,
-            body:
-                `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline. ` +
-                `คุณได้รับข้อเสนอต่อรองราคา — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
+            subject: `Counter offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
+            bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
+            cta: 'Respond · ตอบกลับ',
         }),
     });
 }
@@ -1083,10 +1104,10 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
         template: TEMPLATES.offerExpired,
         pushType: 'offer_expired',
         inline: (priceLabel, cardName) => ({
-            title: `Offer expired — ${cardName}`,
-            body:
-                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold). ` +
-                `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
+            subject: `Offer expired — ${cardName}`,
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
+            bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
+            cta: 'Browse · เลือกซื้อ',
         }),
     });
 }
