@@ -25,6 +25,10 @@
         {
             "path": "/api/cron/stripe-setup-nudge",
             "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/cron/expire-offers",
+            "schedule": "0 * * * *"
         }
     ]
 }

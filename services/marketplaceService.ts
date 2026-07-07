@@ -58,6 +58,7 @@ export interface MarketplaceListing {
     grade?: number;
     image_front_url?: string;
     image_back_url?: string;
+    accepts_offers?: boolean;
     status: 'active' | 'sold' | 'cancelled';
     created_at: string;
     sold_at?: string;
@@ -112,6 +113,7 @@ export const marketplaceService = {
                         grade,
                         image_front_url,
                         image_back_url,
+                        accepts_offers,
                         status,
                         created_at,
                         updated_at,
@@ -199,6 +201,7 @@ export const marketplaceService = {
         grade?: number;
         image_front_url?: string;
         image_back_url?: string;
+        acceptsOffers?: boolean;
     }): Promise<MarketplaceListing | null> {
         const supabase = createClient();
 
@@ -240,6 +243,7 @@ export const marketplaceService = {
                     grade: params.grade || null,
                     image_front_url: params.image_front_url || null,
                     image_back_url: params.image_back_url || null,
+                    accepts_offers: params.acceptsOffers ?? false,
                     status: 'active'
                 })
                 .select(`
@@ -289,6 +293,7 @@ export const marketplaceService = {
                     grade,
                     image_front_url,
                     image_back_url,
+                    accepts_offers,
                     status,
                     created_at,
                     updated_at,
@@ -327,6 +332,7 @@ export const marketplaceService = {
                     grade,
                     image_front_url,
                     image_back_url,
+                    accepts_offers,
                     status,
                     created_at,
                     updated_at,

@@ -52,6 +52,17 @@ const TEMPLATES = {
     shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
     orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'WAE55N73MYM5CAGN7GTWQT7XPN8B').trim(),
     firstTimeSale: (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'nt_01kvba0yzweh78ef8f9c1b49z7').trim(),
+    // OBO Best-Offer templates. No default id yet — these dashboard templates
+    // are ops/founder action before go-live. When the env id is empty the send
+    // functions fall back to inline bilingual `content` (like
+    // sendWishlistListingAlert), so the dark->live flip doesn't have to wait on
+    // the dashboard work. Take the id from each template's own Send tab
+    // (base32), NOT a UUID (see the warning above).
+    offerReceived: (process.env.COURIER_OFFER_RECEIVED_TEMPLATE_ID || '').trim(),
+    offerAccepted: (process.env.COURIER_OFFER_ACCEPTED_TEMPLATE_ID || '').trim(),
+    offerRejected: (process.env.COURIER_OFFER_REJECTED_TEMPLATE_ID || '').trim(),
+    offerCountered: (process.env.COURIER_OFFER_COUNTERED_TEMPLATE_ID || '').trim(),
+    offerExpired: (process.env.COURIER_OFFER_EXPIRED_TEMPLATE_ID || '').trim(),
 } as const;
 
 /**
@@ -78,6 +89,15 @@ async function getUserNotifContext(userId: string): Promise<{
         sold_email: true, sold_push: true,
         label_email: true, label_push: true,
         shipped_email: true, shipped_push: true,
+        // OBO Best-Offer prefs. A user whose prefs row predates the
+        // 20260707_offer_notification_prefs migration (or has no row) still gets
+        // defaults. The migration is NOT NULL DEFAULT true, so a spread of the
+        // real row never overrides these with a NULL.
+        offer_email: true, offer_push: true,
+        offer_accepted_email: true, offer_accepted_push: true,
+        offer_rejected_email: true, offer_rejected_push: true,
+        offer_countered_email: true, offer_countered_push: true,
+        offer_expired_email: true, offer_expired_push: true,
     };
 
     return {
@@ -913,4 +933,160 @@ export async function sendWishlistListingAlert(
         console.error(`[Courier] ❌ Error sending wishlist alert to ${userId}:`, error);
         return false;
     }
+}
+
+// ─── OBO Best-Offer notifications ────────────────────────────────────────────
+
+/**
+ * Shape passed to every offer notification. Only `offerId` + `listingId` are
+ * required (they drive the FCM deep-link); the rest is display copy the
+ * template (or inline fallback) reads.
+ */
+export interface OfferNotifDetails {
+    offerId: string;
+    listingId: string;
+    amount?: number;
+    cardName?: string;
+}
+
+/**
+ * Internal helper: send one offer notification. Mirrors sendSoldNotification's
+ * prefs/channels/early-exit logic and sendWishlistListingAlert's template-or-
+ * inline-content fallback (so a dark->live flip doesn't require the dashboard
+ * templates to land first). Always passes `template:` + `data`, never `content`
+ * once a template id is set. Never throws.
+ */
+async function sendOfferNotification(
+    recipientId: string,
+    kind: 'received' | 'accepted' | 'rejected' | 'countered' | 'expired',
+    details: OfferNotifDetails,
+    cfg: {
+        emailPref: string;
+        pushPref: string;
+        template: string;
+        pushType: string;
+        inline: (priceLabel: string, cardName: string) => { title: string; body: string };
+    },
+): Promise<void> {
+    const courier = getCourier();
+    if (!courier) { console.warn(`[Courier] Client not initialized — skipping offer-${kind} notification`); return; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(recipientId);
+    // `!== false` so accounts predating the offer_* pref columns default to ON.
+    const wantEmail = prefs[cfg.emailPref] !== false && !!email;
+    const wantPush = prefs[cfg.pushPref] !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return;
+
+    const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
+    const routing = buildRouting(wantEmail, wantPush);
+    if (routing.channels.length === 0) return;
+
+    const priceLabel = details.amount != null ? `฿${Number(details.amount).toLocaleString('en-US')}` : '';
+    const cardName = details.cardName || 'a card';
+
+    const message: Record<string, unknown> = {
+        to: recipient,
+        routing,
+        data: {
+            offerId: details.offerId,
+            listingId: details.listingId,
+            amount: details.amount,
+            priceLabel,
+            cardName,
+            // Push deep-link payload (read by the mobile FCM handler).
+            type: cfg.pushType,
+        },
+    };
+    if (cfg.template) {
+        message.template = cfg.template;
+    } else {
+        message.content = cfg.inline(priceLabel, cardName);
+    }
+
+    try {
+        const sendResult = await courier.send.message({ message: message as any });
+        console.log(`[Courier] ✅ Offer-${kind} notification sent to ${recipientId} (offer ${details.offerId}). Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending offer-${kind} notification to ${recipientId}:`, error);
+    }
+}
+
+/** Seller (or the counterparty being countered) got a new offer. */
+export async function sendOfferReceivedNotification(recipientId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(recipientId, 'received', details, {
+        emailPref: 'offer_email',
+        pushPref: 'offer_push',
+        template: TEMPLATES.offerReceived,
+        pushType: 'offer_received',
+        inline: (priceLabel, cardName) => ({
+            title: `New offer${priceLabel ? ` — ${priceLabel}` : ''} on ${cardName}`,
+            body:
+                `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline. ` +
+                `คุณได้รับข้อเสนอราคาใหม่ — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
+        }),
+    });
+}
+
+/** The offer's buyer: their offer was accepted and can now be paid. */
+export async function sendOfferAcceptedNotification(buyerId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(buyerId, 'accepted', details, {
+        emailPref: 'offer_accepted_email',
+        pushPref: 'offer_accepted_push',
+        template: TEMPLATES.offerAccepted,
+        pushType: 'offer_accepted',
+        inline: (priceLabel, cardName) => ({
+            title: `Offer accepted — ${cardName}`,
+            body:
+                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Open CardStreet and pay to complete the purchase before someone else buys it. ` +
+                `ข้อเสนอของคุณได้รับการตอบรับแล้ว — เปิด CardStreet เพื่อชำระเงินให้เสร็จก่อนใคร`,
+        }),
+    });
+}
+
+/** The offeror: their offer was rejected. */
+export async function sendOfferRejectedNotification(offerorId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(offerorId, 'rejected', details, {
+        emailPref: 'offer_rejected_email',
+        pushPref: 'offer_rejected_push',
+        template: TEMPLATES.offerRejected,
+        pushType: 'offer_rejected',
+        inline: (priceLabel, cardName) => ({
+            title: `Offer declined — ${cardName}`,
+            body:
+                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. ` +
+                `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
+        }),
+    });
+}
+
+/** The offeror of the parent: the counterparty countered with a new amount. */
+export async function sendOfferCounteredNotification(offerorId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(offerorId, 'countered', details, {
+        emailPref: 'offer_countered_email',
+        pushPref: 'offer_countered_push',
+        template: TEMPLATES.offerCountered,
+        pushType: 'offer_countered',
+        inline: (priceLabel, cardName) => ({
+            title: `Counter offer${priceLabel ? ` — ${priceLabel}` : ''} on ${cardName}`,
+            body:
+                `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline. ` +
+                `คุณได้รับข้อเสนอต่อรองราคา — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
+        }),
+    });
+}
+
+/** The offeror: their offer expired at 48h, or was voided because the listing sold. */
+export async function sendOfferExpiredNotification(offerorId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(offerorId, 'expired', details, {
+        emailPref: 'offer_expired_email',
+        pushPref: 'offer_expired_push',
+        template: TEMPLATES.offerExpired,
+        pushType: 'offer_expired',
+        inline: (priceLabel, cardName) => ({
+            title: `Offer expired — ${cardName}`,
+            body:
+                `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold). ` +
+                `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
+        }),
+    });
 }

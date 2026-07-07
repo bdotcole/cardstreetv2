@@ -7,10 +7,11 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun, Store
+  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag
 } from 'lucide-react';
-import { UserProfile } from '@/types';
+import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
+import OffersInbox from './OffersInbox';
 import StripeConnectSection from './StripeConnectSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
@@ -28,6 +29,10 @@ interface ProfileProps {
   // Android hardware back button can close the panel instead of falling
   // through to the tab-switch fallback. See the back handler in app/page.tsx.
   onPanelStateChange?: (open: boolean) => void;
+  // OBO: opens the shell's payment modal to pay an accepted offer. The shell
+  // owns the PaymentModal + acceptedOfferId plumbing, so the Offers inbox just
+  // hands the accepted offer up. Undefined when the offers flag is off.
+  onPayOffer?: (args: { offer: Offer }) => void;
 }
 
 // Slide panel animation variants
@@ -131,7 +136,7 @@ interface Sale {
   };
 }
 
-type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts';
+type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers';
 
 const tierConfig = {
   bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
@@ -251,7 +256,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange }) => {
+const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -782,6 +787,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       title: t('profile.ordersSales'),
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
+        // OBO offers inbox (received as seller + made as buyer). Flag-gated so
+        // nothing appears while the feature is dark.
+        ...(process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1'
+          ? [{ name: t('offer.menuTitle'), icon: Tag, panel: 'offers' as ActivePanel, color: 'text-brand-cyan' }]
+          : []),
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
         { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
         { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
@@ -1419,6 +1429,38 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   ))
                 )}
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* OBO Offers Panel — received (as seller) + made (as buyer). The inbox
+            early-returns null when the offers flag is off, and the menu item
+            that opens this panel is itself flag-gated. */}
+        {activePanel === 'offers' && (
+          <motion.div
+            key="offers"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+          >
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
+              <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-slate-400" />
+                </button>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('offer.menuTitle')}</h2>
+              </div>
+
+              <OffersInbox
+                onPayOffer={(args) => {
+                  // Close the slide panel first so the shell's PaymentModal
+                  // (lower z-index) isn't hidden behind this overlay.
+                  setActivePanel('none');
+                  onPayOffer?.(args);
+                }}
+              />
             </div>
           </motion.div>
         )}

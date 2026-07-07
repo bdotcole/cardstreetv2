@@ -31,6 +31,10 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const [isGraded, setIsGraded] = useState(false);
   const [gradingCompany, setGradingCompany] = useState('PSA');
   const [grade, setGrade] = useState('10');
+  // OBO Best-Offer opt-in. The toggle only renders while the offers feature flag
+  // is on (see the JSX below); the field is always sent so the write path is
+  // consistent, and defaults false so non-OBO listings are unchanged.
+  const [acceptsOffers, setAcceptsOffers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recommendedPrice, setRecommendedPrice] = useState<number>(0);
@@ -168,7 +172,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
         grading_company: isGraded ? gradingCompany : null,
         grade: isGraded ? parseFloat(grade) : null,
         image_front_url: front_url,
-        image_back_url: back_url
+        image_back_url: back_url,
+        accepts_offers: acceptsOffers
       };
 
       await onSuccess(listingData);
@@ -310,6 +315,22 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                     step="0.5"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Accept offers (OBO) toggle — only while the offers feature is live */}
+            {process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && (
+              <div className="flex items-center gap-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setAcceptsOffers(!acceptsOffers)}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors ${acceptsOffers ? 'bg-brand-cyan' : 'bg-slate-700'}`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${acceptsOffers ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                </button>
+                <span className="text-sm font-bold text-white">
+                  {isThai ? 'รับข้อเสนอราคา (ต่อรองได้)' : 'Accept offers (OBO)'}
+                </span>
               </div>
             )}
 
