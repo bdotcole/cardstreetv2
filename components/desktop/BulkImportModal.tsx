@@ -45,8 +45,6 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
   const [importing, setImporting] = useState(false);
   const [doneMsg, setDoneMsg] = useState<{ imported: number; failed: number; gradedMissing: boolean } | null>(null);
 
-  if (!isOpen) return null;
-
   const reset = () => {
     setStep('input'); setRawText(''); setHeaderError(null); setRows([]); setChoices({}); setDoneMsg(null);
   };
@@ -179,6 +177,9 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
     for (const r of rows) (s as any)[r.status] += 1;
     return s;
   }, [rows]);
+
+  // Early-out after all hooks so hook order stays stable across renders.
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
