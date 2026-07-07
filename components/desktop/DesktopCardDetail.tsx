@@ -52,6 +52,12 @@ export default function DesktopCardDetail({
     const [addingToCollection, setAddingToCollection] = useState(false);
     // OBO: the listing the buyer is making an offer on (null = modal closed).
     const [offerListing, setOfferListing] = useState<MarketplaceListing | null>(null);
+    // OBO: listing ids on which the current buyer already has a pending offer.
+    // This screen can show several listings for one card, so it's a Set keyed by
+    // listing id. Seeded from the buyer's active offers on mount and updated
+    // optimistically after a successful submit (no refetch), so each per-listing
+    // "Make an Offer" button greys out to reflect the 409-OFFER_ALREADY_LIVE state.
+    const [pendingOfferListingIds, setPendingOfferListingIds] = useState<Set<string>>(new Set());
 
     const handleAddToCollection = async () => {
         if (!card) return;
@@ -117,6 +123,31 @@ export default function DesktopCardDetail({
             cancelled = true;
         };
     }, [cardId, initialCard]);
+
+    // OBO: seed the set of listings this buyer already has a pending offer on,
+    // so their per-listing "Make an Offer" button greys out. One fetch of the
+    // buyer's active offers; only runs when the offer button could show.
+    useEffect(() => {
+        if (!OFFERS_ENABLED || !user) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/offers?role=buyer&state=active');
+                if (!res.ok) return;
+                const data = await res.json().catch(() => ({}));
+                if (cancelled || !Array.isArray(data?.offers)) return;
+                const ids = new Set<string>(
+                    data.offers
+                        .filter((o: { status?: string }) => o.status === 'pending')
+                        .map((o: { listing_id: string }) => o.listing_id),
+                );
+                if (ids.size > 0) setPendingOfferListingIds(ids);
+            } catch { /* leave buttons enabled; server still guards with 409 */ }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
 
     if (loading) {
         return (
@@ -266,12 +297,21 @@ export default function DesktopCardDetail({
                                             offer on OBO-enabled listings when the
                                             feature flag is on. */}
                                         {OFFERS_ENABLED && listing.accepts_offers && user && user.id !== listing.seller_id && (
-                                            <button
-                                                onClick={() => setOfferListing(listing)}
-                                                className="bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black px-4 py-2 rounded-lg transition-colors"
-                                            >
-                                                {t('offer.makeOffer')}
-                                            </button>
+                                            pendingOfferListingIds.has(listing.id) ? (
+                                                <button
+                                                    disabled
+                                                    className="bg-white/5 border border-white/10 text-slate-500 text-xs font-black px-4 py-2 rounded-lg cursor-not-allowed"
+                                                >
+                                                    {t('offer.pending')}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => setOfferListing(listing)}
+                                                    className="bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                >
+                                                    {t('offer.makeOffer')}
+                                                </button>
+                                            )
                                         )}
                                         <button
                                             onClick={() => addItem(listingToCartItem(listing))}
@@ -295,7 +335,12 @@ export default function DesktopCardDetail({
                     listingPrice={offerListing.price}
                     cardName={offerListing.card_data?.name || card.name}
                     onClose={() => setOfferListing(null)}
-                    onSubmitted={() => showToast(t('offer.submitted'), 'success')}
+                    onSubmitted={() => {
+                        // Grey this listing's offer button immediately — no refetch.
+                        const submittedId = offerListing.id;
+                        setPendingOfferListingIds((prev) => new Set(prev).add(submittedId));
+                        showToast(t('offer.submitted'), 'success');
+                    }}
                 />
             )}
         </div>

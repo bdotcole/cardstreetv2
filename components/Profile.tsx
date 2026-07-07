@@ -368,6 +368,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     } catch { /* storage unavailable (private mode) */ }
   }, []);
 
+  // Opened from an offer-email CTA (/?view=offers): the shell sets this flag
+  // and switches to the profile tab (remounting us) — land on the Offers panel.
+  // The panel itself is already gated on the offers feature flag, so this is
+  // inert when offers are off.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('cs_open_offers') === '1') {
+        sessionStorage.removeItem('cs_open_offers');
+        setActivePanel('offers');
+      }
+    } catch { /* storage unavailable (private mode) */ }
+  }, []);
+
   // Fetch profile data on mount
   // Fetch profile data on mount / when the authenticated user changes.
   // We clear profileData first so a previous user's data (or a stale

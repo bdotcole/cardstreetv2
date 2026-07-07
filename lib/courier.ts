@@ -965,7 +965,7 @@ function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: st
             { type: 'meta', title: c.subject },
             { type: 'text', content: c.bodyEn },
             { type: 'text', content: c.bodyTh, color: '#6b7280' },
-            { type: 'action', content: c.cta, href: APP_URL, style: 'button', align: 'center', background_color: '#0891b2' },
+            { type: 'action', content: c.cta, href: `${APP_URL}/?view=offers`, style: 'button', align: 'center', background_color: '#0891b2' },
         ],
     };
 }

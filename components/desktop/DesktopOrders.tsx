@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -92,7 +93,13 @@ export default function DesktopOrders() {
     const { user, authChecked, payOffer } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
 
-    const [tab, setTab] = useState<Tab>('purchases');
+    // The offer-email CTA lands here as /orders?tab=offers (forwarded from the
+    // desktop home's /?view=offers). Preselect that tab when the flag is on;
+    // otherwise fall back to purchases.
+    const searchParams = useSearchParams();
+    const initialTab: Tab =
+        OFFERS_ENABLED && searchParams?.get('tab') === 'offers' ? 'offers' : 'purchases';
+    const [tab, setTab] = useState<Tab>(initialTab);
     const [orders, setOrders] = useState<OrderRow[]>([]);
     const [shipments, setShipments] = useState<OrderRow[]>([]);
     const [sales, setSales] = useState<SaleRow[]>([]);

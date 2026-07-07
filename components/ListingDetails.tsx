@@ -79,11 +79,16 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     currentUserId = null,
     onOfferSubmitted
 }) => {
-    const { isThai } = useTranslation();
+    const { t, isThai } = useTranslation();
     const card = listing.card_data;
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
     const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+    // OBO: true once the buyer has a live (pending) offer on this listing — the
+    // "Make an offer" button then greys out. Seeded from the buyer's active
+    // offers on mount and flipped optimistically after a successful submit so
+    // the button reflects the 409-OFFER_ALREADY_LIVE state without a refetch.
+    const [hasPendingOffer, setHasPendingOffer] = useState(false);
 
     // OBO "Make an offer": only when the feature flag is on, the listing accepts
     // offers, and the viewer is not the seller.
@@ -93,6 +98,30 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
         listing.accepts_offers === true &&
         !!currentUserId &&
         currentUserId !== sellerId;
+
+    // Seed pending state: does the buyer already have a pending offer on THIS
+    // listing? One fetch of their active offers; no-op when the button can't show.
+    useEffect(() => {
+        if (!canOffer) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/offers?role=buyer&state=active');
+                if (!res.ok) return;
+                const data = await res.json().catch(() => ({}));
+                const pending = Array.isArray(data?.offers)
+                    ? data.offers.some(
+                          (o: { listing_id?: string; status?: string }) =>
+                              o.status === 'pending' && o.listing_id === listing.id,
+                      )
+                    : false;
+                if (!cancelled && pending) setHasPendingOffer(true);
+            } catch { /* leave button enabled; server still guards with 409 */ }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [canOffer, listing.id]);
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -293,13 +322,23 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
 
             <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-50">
                 {canOffer && (
-                    <button
-                        onClick={() => setIsOfferModalOpen(true)}
-                        className="w-full h-12 bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
-                    >
-                        <i className="fa-solid fa-hand-holding-dollar text-lg"></i>
-                        {isThai ? 'เสนอราคา' : 'Make an Offer'}
-                    </button>
+                    hasPendingOffer ? (
+                        <button
+                            disabled
+                            className="w-full h-12 bg-white/5 border border-white/10 text-slate-500 font-black text-[10px] tracking-[0.2em] rounded-xl uppercase flex items-center justify-center gap-2 cursor-not-allowed"
+                        >
+                            <i className="fa-solid fa-hourglass-half text-lg"></i>
+                            {t('offer.pending')}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setIsOfferModalOpen(true)}
+                            className="w-full h-12 bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-solid fa-hand-holding-dollar text-lg"></i>
+                            {isThai ? 'เสนอราคา' : 'Make an Offer'}
+                        </button>
+                    )
                 )}
                 <div className="flex gap-3">
                     <button
@@ -325,7 +364,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     listingPrice={listing.price}
                     cardName={card.name}
                     onClose={() => setIsOfferModalOpen(false)}
-                    onSubmitted={onOfferSubmitted}
+                    onSubmitted={() => {
+                        // Grey the button immediately — no refetch needed.
+                        setHasPendingOffer(true);
+                        onOfferSubmitted?.();
+                    }}
                 />
             )}
 

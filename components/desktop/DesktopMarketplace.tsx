@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
 import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES } from '@/lib/games';
@@ -36,8 +36,20 @@ export function listingToCartItem(listing: MarketplaceListing): CartItem {
 
 export default function DesktopMarketplace() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const { t } = useTranslation();
     const q = searchParams?.get('q') ?? '';
+
+    // OBO: the offer-email CTA deep-links to /?view=offers; on desktop the
+    // middleware rewrites that to the desktop home. Forward it to the Offers
+    // inbox tab (the desktop offers inbox lives under /orders). Gated on the
+    // offers flag so it's inert when off.
+    useEffect(() => {
+        if (process.env.NEXT_PUBLIC_ENABLE_OFFERS !== '1') return;
+        if (searchParams?.get('view') === 'offers') {
+            router.replace('/orders?tab=offers');
+        }
+    }, [searchParams, router]);
 
     const [game, setGame] = useState('all');
     // Deals-first, matching the mobile marketplace's default sort.

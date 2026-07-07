@@ -638,6 +638,7 @@
         "minimum": "Minimum",
         "expiresIn": "expires in",
         "submitted": "Offer sent to the seller.",
+        "pending": "Offer pending",
         "menuTitle": "My Offers",
         "payUnavailable": "This listing is no longer available.",
         "title": "Offers",

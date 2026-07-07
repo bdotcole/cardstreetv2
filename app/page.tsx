@@ -117,6 +117,23 @@ export default function HomePage() {
             return;
         }
 
+        // /?view=offers lands in the profile's Offers panel — the offer-email
+        // CTA deep-links here. Flag it for Profile (which opens the panel on
+        // mount, like cs_open_payouts) and strip the param so a refresh doesn't
+        // re-apply it.
+        if (params.get('view') === 'offers') {
+            try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+            setActiveTab('profile');
+            params.delete('view');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
         // /?tab=<name> lands on an explicit tab — the Pro hub's back button
         // returns via /?tab=profile. Strip the param (keeping everything
         // else) so a refresh doesn't re-apply it.
@@ -1283,6 +1300,20 @@ export default function HomePage() {
                             }
                             return;
                         }
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
+                // Offer-email CTA App Link (cardstreet.app/?view=offers). Android
+                // intercepts all cardstreet.app URLs, so tapping the email button
+                // opens the app here. A deep-link open IS the user's tap, so
+                // navigate straight into the Offers panel (same flag Profile reads
+                // on mount as the web /?view=offers landing).
+                try {
+                    const appLink = new URL(data.url);
+                    if (appLink.searchParams.get('view') === 'offers') {
+                        try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+                        setActiveTab('profile');
+                        return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
