@@ -1029,6 +1029,20 @@ async function sendOfferNotification(
         console.log(`[Courier] ✅ Offer-${kind} notification sent to ${recipientId} (offer ${details.offerId}). Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
     } catch (error) {
         console.error(`[Courier] ❌ Error sending offer-${kind} notification to ${recipientId}:`, error);
+        // Safety net for the never-live-proven Elemental path: if we sent inline
+        // branded content and Courier rejected it, retry once with the proven simple
+        // {title, body} format (same shape as live wishlist alerts) so a formatting
+        // issue never means zero email. Skipped when a dashboard template was used.
+        if (!cfg.template) {
+            try {
+                const c = cfg.inline(priceLabel, cardName);
+                const fallbackMessage = { ...message, content: { title: c.subject, body: `${c.bodyEn} ${c.bodyTh}` } };
+                await courier.send.message({ message: fallbackMessage as any });
+                console.log(`[Courier] ↩︎ Offer-${kind} sent via simple-content fallback to ${recipientId}.`);
+            } catch (fallbackError) {
+                console.error(`[Courier] ❌ Offer-${kind} fallback send also failed for ${recipientId}:`, fallbackError);
+            }
+        }
     }
 }
 
