@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review } from '@/types';
+import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review, Offer } from '@/types';
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS } from '@/constants';
 import CurrencySwitcher from '@/components/CurrencySwitcher';
 import LanguagePicker from '@/components/LanguagePicker';
@@ -329,6 +329,10 @@ export default function HomePage() {
     const cartOwnerRef = useRef<string | null>(null);
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // OBO: when a buyer pays an accepted offer, this holds the offer id so the
+    // PaymentModal forwards it to /api/orders/checkout (server reads the
+    // discounted price from the offer authoritatively). Null for normal buys.
+    const [acceptedOfferId, setAcceptedOfferId] = useState<string | null>(null);
     // Purchases are Thailand-only for now (shipping isn't configured elsewhere).
     // Warm the geo lookup on mount so the checkout gate is instant; the popup
     // below explains the restriction when a non-TH buyer tries to check out.
@@ -786,6 +790,36 @@ export default function HomePage() {
         setIsPaymentModalOpen(true);
     };
 
+    // OBO pay-an-accepted-offer. Reuses the exact Buy-Now payment machinery:
+    // the same Thailand-only geo gate, a single-item cart for the offer's
+    // listing, and the shared PaymentModal — the only difference is that
+    // acceptedOfferId is set, so PaymentModal forwards it to
+    // /api/orders/checkout, which reads the discounted price from the offer
+    // server-side (we never send the offer price from the client).
+    const handlePayOffer = async ({ offer }: { offer: Offer }) => {
+        if (offer.status !== 'accepted' || offer.viewerRole !== 'buyer') return;
+        const listingCard = offer.listing?.card_data;
+        if (!listingCard) {
+            showToast(t('offer.payUnavailable') || 'This listing is no longer available.', 'error');
+            return;
+        }
+        if (!(await ensureCanPurchase())) return;
+        if (!requireAuth('complete your purchase')) return;
+
+        setCart([{
+            id: offer.listing_id,
+            cardId: listingCard.id,
+            card: listingCard,
+            // Display price only; the server charges offer.amount authoritatively.
+            price: offer.amount,
+            sellerId: offer.seller_id,
+            sellerName: '',
+            condition: (listingCard as any).condition || '',
+        }]);
+        setAcceptedOfferId(offer.id);
+        setIsPaymentModalOpen(true);
+    };
+
     // Post-payment cleanup. The order creation + Stripe charge already happened
     // inside PaymentModal; this just resets UI state and refreshes local data.
     // (Earlier versions of this handler re-POSTed to /api/orders/checkout — that
@@ -800,6 +834,7 @@ export default function HomePage() {
 
         setIsPaymentModalOpen(false);
         setCart([]);
+        setAcceptedOfferId(null);
 
         // Refresh local state aggressively to hide sold items and show new vault items
         fetchGlobalListings();
@@ -1532,6 +1567,7 @@ export default function HomePage() {
                                 user={user}
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
                                 onNavigatePartner={() => setActiveTab('partner')}
+                                onPayOffer={handlePayOffer}
                                 onGuestLogin={() => {
                                     setUser({
                                         id: 'guest',
@@ -1715,13 +1751,14 @@ export default function HomePage() {
 
                 <PaymentModal
                     isOpen={isPaymentModalOpen}
-                    onClose={() => setIsPaymentModalOpen(false)}
+                    onClose={() => { setIsPaymentModalOpen(false); setAcceptedOfferId(null); }}
                     amount={cart.reduce((s, i) => s + i.price, 0)}
                     currency={currency}
                     exchangeRate={exchangeRate}
                     items={cart}
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
+                    acceptedOfferId={acceptedOfferId ?? undefined}
                     onPaymentSuccess={handlePaymentSuccess}
                     onPaymentFailed={(err) => showToast(`${t('paymentFlow.paymentFailed') || 'Payment failed'}: ${err}`, 'error')}
                 />

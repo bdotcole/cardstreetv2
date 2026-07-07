@@ -606,6 +606,8 @@
         "minimum": "Minimum",
         "expiresIn": "expires in",
         "submitted": "Offer sent to the seller.",
+        "menuTitle": "My Offers",
+        "payUnavailable": "This listing is no longer available.",
         "title": "Offers",
         "empty": "No active offers.",
         "youOffered": "You offered",

@@ -54,6 +54,12 @@ interface PaymentModalProps {
     items: any[];
     apiEndpoint?: string; // New prop
     extraData?: any; // New prop
+    /**
+     * OBO: id of an accepted offer being paid. When set, it's forwarded to
+     * /api/orders/checkout, which reads the authoritative (discounted) price
+     * from the offer server-side. The client never sends the offer price.
+     */
+    acceptedOfferId?: string;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
 }
@@ -79,10 +85,11 @@ const PaymentElementForm: React.FC<{
     items: any[];
     apiEndpoint?: string;
     extraData?: any;
+    acceptedOfferId?: string;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -129,7 +136,9 @@ const PaymentElementForm: React.FC<{
                     // right now. The server refuses to charge more than this
                     // (returns TOTAL_CHANGED) so the displayed total is what
                     // gets charged.
-                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb }),
+                    // acceptedOfferId (OBO): the server reads the discounted
+                    // price from the accepted offer; we never send a price.
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb, ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
@@ -262,6 +271,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     items,
     apiEndpoint,
     extraData,
+    acceptedOfferId,
     onPaymentSuccess,
     onPaymentFailed
 }) => {
@@ -313,7 +323,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         fetch('/api/orders/estimate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: items.map(i => ({ id: i.id })) }),
+            body: JSON.stringify({ items: items.map(i => ({ id: i.id })), ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
         })
             .then(r => r.json())
             .then(data => {
@@ -341,7 +351,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             });
 
         return () => { cancelled = true; };
-    }, [isOpen, items]);
+    }, [isOpen, items, acceptedOfferId]);
 
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
@@ -476,6 +486,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         items={items}
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
+                                        acceptedOfferId={acceptedOfferId}
                                         onPaymentSuccess={onPaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}
                                         onTotalChanged={(newTotal) =>

@@ -40,6 +40,9 @@ const EstimateBodySchema = z.object({
         )
         .min(1)
         .max(50),
+    // OBO: when paying an accepted offer, the modal must show the AGREED price, not
+    // the list price. Server-authoritative — the price is read from the offer row.
+    acceptedOfferId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -58,6 +61,13 @@ export async function POST(req: Request) {
             );
         }
         const { items } = parsed.data;
+        // Gated identically to the /api/orders/checkout override so the estimate and
+        // the charge agree. Ignored unless offers are enabled.
+        const acceptedOfferId =
+            process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' &&
+            typeof parsed.data.acceptedOfferId === 'string' && parsed.data.acceptedOfferId.length > 0
+                ? parsed.data.acceptedOfferId
+                : null;
 
         const supabase = createAdminClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -104,6 +114,25 @@ export async function POST(req: Request) {
         }
         if (listings.some(l => l.status !== 'active')) {
             return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });
+        }
+
+        // OBO: resolve the agreed offer price (server-authoritative). Same validation
+        // as /api/orders/checkout so the shown subtotal equals the charged amount.
+        let offerPriceByListing: Map<string, number> | null = null;
+        if (acceptedOfferId) {
+            const { data: offer } = await supabase
+                .from('offers')
+                .select('amount, status, buyer_id, listing_id, accepted_order_id')
+                .eq('id', acceptedOfferId)
+                .single();
+            if (!offer || offer.status !== 'accepted' || offer.buyer_id !== user.id
+                || offer.accepted_order_id || !listings.some(l => l.id === offer.listing_id)) {
+                return NextResponse.json(
+                    { error: 'Offer not payable', code: 'OFFER_NOT_PAYABLE' },
+                    { status: 400 },
+                );
+            }
+            offerPriceByListing = new Map([[offer.listing_id, Number(offer.amount)]]);
         }
 
         const sellerIds = [...new Set(listings.map(l => l.seller_id))];
@@ -171,7 +200,10 @@ export async function POST(req: Request) {
             sellerShippingIsFallback.set(sellerId, isFallback);
         }
 
-        const subtotal = listings.reduce((sum, l) => sum + Number(l.price || 0), 0);
+        const subtotal = listings.reduce(
+            (sum, l) => sum + (offerPriceByListing?.get(l.id) ?? Number(l.price || 0)),
+            0,
+        );
         const shipping = Array.from(sellerShipping.values()).reduce((s, n) => s + n, 0);
         const total = subtotal + shipping;
         const shippingIsEstimate = Array.from(sellerShippingIsFallback.values()).some(Boolean);
