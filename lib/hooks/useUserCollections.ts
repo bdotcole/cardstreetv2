@@ -114,9 +114,12 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             addedAt: item.added_at,
                             isListing: !!matchedListing,
                             listingPrice: matchedListing ? parseFloat(matchedListing.price) : undefined,
-                            isGraded: matchedListing ? matchedListing.is_graded : false,
-                            gradingCompany: matchedListing ? matchedListing.grading_company : undefined,
-                            grade: matchedListing ? matchedListing.grade : undefined
+                            // Grading now lives on the collection_items row itself (bulk
+                            // import / graded copies), so it shows even when not listed.
+                            // Fall back to a matched listing for legacy rows without the columns.
+                            isGraded: item.is_graded ?? (matchedListing ? matchedListing.is_graded : false),
+                            gradingCompany: item.grading_company ?? (matchedListing ? matchedListing.grading_company : undefined),
+                            grade: item.grade != null ? Number(item.grade) : (matchedListing ? matchedListing.grade : undefined)
                         };
                     })
             }));

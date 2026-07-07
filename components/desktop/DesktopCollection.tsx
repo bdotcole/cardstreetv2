@@ -14,6 +14,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
 import { pokemonService, type ApiSet } from '@/services/pokemonService';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, type GameLanguageCode } from '@/lib/games';
+import BulkImportModal from '@/components/desktop/BulkImportModal';
 import type { Card, UserCollectionItem } from '@/types';
 
 // recharts is ~100KB — defer until the Overview chart actually renders.
@@ -38,8 +39,10 @@ export default function DesktopCollection() {
     const { user, authChecked } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
     const [tab, setTab] = useState<Tab>('overview');
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [canBulkImport, setCanBulkImport] = useState(false);
 
-    const { collections, isLoading: colLoading, removeCardFromCollection } = useUserCollections();
+    const { collections, isLoading: colLoading, removeCardFromCollection, refreshCollections } = useUserCollections();
     const { wishlist, isLoading: wlLoading, removeFromWishlist } = useWishlist();
 
     // Flat list of every owned card across collections.
@@ -89,6 +92,20 @@ export default function DesktopCollection() {
         return { totalValue: value, profitLoss: pl, plPct: invested > 0 ? (pl / invested) * 100 : 0 };
     }, [collections]);
 
+    // Bulk import is a partner-only tool (admins allowed through for testing).
+    useEffect(() => {
+        if (!user) { setCanBulkImport(false); return; }
+        let cancelled = false;
+        fetch('/api/profile')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+                if (cancelled || !d?.profile) return;
+                setCanBulkImport(!!d.profile.partner_joined_at || d.profile.role === 'admin');
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [user]);
+
     if (!authChecked) {
         return <div className="h-64 rounded-2xl bg-white/5 animate-pulse"></div>;
     }
@@ -126,6 +143,14 @@ export default function DesktopCollection() {
                     <h1 className="text-2xl font-black text-white">{t('desktop.collection.title')}</h1>
                     <p className="text-sm text-slate-400 mt-1">{t('desktop.collection.subtitle')}</p>
                 </div>
+                {canBulkImport && (
+                    <button
+                        onClick={() => setBulkOpen(true)}
+                        className="inline-flex items-center gap-2 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-4 py-2 rounded-xl transition-colors"
+                    >
+                        <i className="fa-solid fa-file-import text-xs"></i>{t('desktop.collection.bulkImport.button')}
+                    </button>
+                )}
             </div>
 
             {/* Sub-nav */}
@@ -171,6 +196,13 @@ export default function DesktopCollection() {
             </div>
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            <BulkImportModal
+                isOpen={bulkOpen}
+                onClose={() => setBulkOpen(false)}
+                collections={collections.map((c) => ({ id: c.id, name: c.name }))}
+                defaultCollectionId={collections[0]?.id}
+                onImported={refreshCollections}
+            />
         </div>
     );
 }
@@ -411,7 +443,11 @@ function CollectionPanel({
                                     </p>
                                     <div className="flex items-center justify-between mt-1.5">
                                         <p className="text-sm font-black text-brand-cyan">{formatTHB(card.marketPrice || 0)}</p>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{item.condition}</span>
+                                        {item.isGraded ? (
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">{item.gradingCompany} {item.grade}</span>
+                                        ) : (
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{item.condition}</span>
+                                        )}
                                     </div>
                                 </div>
                             </Link>
