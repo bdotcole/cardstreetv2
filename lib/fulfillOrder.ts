@@ -19,6 +19,7 @@ import {
     sendFirstTimeSaleEmail,
 } from '@/lib/courier';
 import { voidOffersForSoldListing } from '@/lib/voidOffersForListing';
+import { recordInternalSales } from '@/lib/internalPricing';
 
 function getAdminSupabase(): SupabaseClient {
     return createClient(
@@ -128,6 +129,29 @@ export async function fulfillOrdersByTransferGroup(
         }
 
         result.ordersUpdated = winningCount;
+
+        // ─── Feature B: record realized sales for internal pricing (dark) ───
+        // Reached only on a full CAS win (the partial-win branch returned above),
+        // so every `orders` row was won by this invocation and no other worker is
+        // handling them. Idempotent via market_value_sales.order_id UNIQUE, so a
+        // duplicate webhook / the /api/orders/finalize fallback can't double-count.
+        // Flag-gated so production is untouched until launch; NEVER throws (pricing
+        // must not block or roll back fulfillment).
+        if (process.env.INTERNAL_PRICING_ENABLED === 'true') {
+            try {
+                await recordInternalSales(
+                    supabase,
+                    orders.map(o => ({
+                        id: o.id,
+                        listing_id: o.listing_id,
+                        total_amount: o.total_amount,
+                    })),
+                );
+            } catch (pricingErr) {
+                console.error('[Fulfillment] Internal-pricing record error (non-fatal):', pricingErr);
+                result.errors.push(`Internal pricing: ${(pricingErr as Error).message}`);
+            }
+        }
 
         // All orders in a transfer_group share a buyer; pin it now so both the
         // inventory-transfer block (below) and the seller/buyer profile lookups

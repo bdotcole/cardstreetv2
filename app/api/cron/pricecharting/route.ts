@@ -108,6 +108,21 @@ export async function GET(request: NextRequest) {
         try {
             const product = await fetchProduct(s.pricecharting_id);
             if (s.currency === 'THB') {
+                // Feature B: if this Thai sealed product already sold, its price is
+                // learned from a realized sale — don't overwrite it with the JP-box
+                // estimate. sealed_products has no `source` column, so guard by the
+                // presence of a market_value_sales row (sealed listing card_id ===
+                // sealed_products.id, e.g. 'pc-<...>').
+                const { data: sold } = await supabase
+                    .from('market_value_sales')
+                    .select('order_id')
+                    .eq('card_id', s.id)
+                    .eq('language', 'th')
+                    .eq('is_sealed', true)
+                    .limit(1)
+                    .maybeSingle();
+                if (sold) { continue; }
+
                 // Thai estimate row: pricecharting_id points at the JP TWIN's box.
                 // Re-derive the THB estimate from the JP box market; never write the
                 // JP USD price into a THB row.
