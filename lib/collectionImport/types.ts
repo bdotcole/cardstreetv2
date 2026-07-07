@@ -21,6 +21,10 @@ export interface ParsedRow {
   purchasePrice?: number;
   language?: string;
   game?: string;
+  // Sealed products (booster boxes, ETBs, ...) are resolved against sealed_products
+  // by set + product_type, not by collector number. A `type` cell makes a row sealed.
+  isSealed: boolean;
+  productType?: string;
   parseError?: string; // set when the line can't be used (missing set/number, etc.)
 }
 
@@ -56,4 +60,5 @@ export interface ImportRow {
   gradingCompany?: GradingCompany;
   grade?: number;
   purchasePrice?: number;
+  isSealed?: boolean; // resolve the card_id against sealed_products, not pokemon_cards
 }

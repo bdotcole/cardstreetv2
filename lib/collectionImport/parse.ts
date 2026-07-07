@@ -20,11 +20,26 @@ const HEADER_ALIASES: Record<string, keyof ColumnFields> = {
   cost: 'purchasePrice', paid: 'purchasePrice', 'buy price': 'purchasePrice',
   language: 'language', lang: 'language',
   game: 'game',
+  type: 'productType', product: 'productType', 'product type': 'productType', 'product_type': 'productType', producttype: 'productType', sealed: 'productType',
 };
 
 interface ColumnFields {
   set: string; number: string; name: string; condition: string; quantity: string;
-  grade: string; gradingCompany: string; purchasePrice: string; language: string; game: string;
+  grade: string; gradingCompany: string; purchasePrice: string; language: string; game: string; productType: string;
+}
+
+// Normalize a `type` cell to a sealed_products.product_type. Anything non-empty but
+// unrecognized becomes 'other' (still treated as sealed; the resolver then matches by
+// set alone and lets the partner pick the variant).
+export function normalizeProductType(v: string): string {
+  const s = (v || '').toLowerCase().trim().replace(/[_-]+/g, ' ');
+  if (!s) return '';
+  if (['booster box', 'box', 'bb'].includes(s)) return 'booster_box';
+  if (['etb', 'elite trainer box', 'elite trainer'].includes(s)) return 'etb';
+  if (['booster pack', 'pack', 'packs'].includes(s)) return 'booster_pack';
+  if (['bundle', 'booster bundle'].includes(s)) return 'bundle';
+  if (['collection', 'collection box'].includes(s)) return 'collection';
+  return 'other';
 }
 
 export function normalizeCondition(v: string): CardCondition {
@@ -103,7 +118,8 @@ export function parseInventoryText(text: string): ParseResult {
   const fieldByCol = headerCells.map((h) => HEADER_ALIASES[h] ?? null);
   const recognized = [...new Set(fieldByCol.filter(Boolean) as string[])];
   const unrecognizedHeaders = headerCells.filter((_h, i) => fieldByCol[i] === null);
-  const headerFound = recognized.includes('set') && recognized.includes('number');
+  // A singles sheet needs set + number; a sealed sheet needs set + a product `type`.
+  const headerFound = recognized.includes('set') && (recognized.includes('number') || recognized.includes('productType'));
 
   if (!headerFound) {
     return { rows: [], headerFound: false, recognizedColumns: recognized, unrecognizedHeaders };
@@ -114,7 +130,7 @@ export function parseInventoryText(text: string): ParseResult {
     const cells = splitLine(lines[li], delim);
     const f: ColumnFields = {
       set: '', number: '', name: '', condition: '', quantity: '',
-      grade: '', gradingCompany: '', purchasePrice: '', language: '', game: '',
+      grade: '', gradingCompany: '', purchasePrice: '', language: '', game: '', productType: '',
     };
     fieldByCol.forEach((field, ci) => {
       if (field) f[field] = cells[ci] ?? '';
@@ -123,6 +139,8 @@ export function parseInventoryText(text: string): ParseResult {
     const rowIndex = li; // 1-based data line
     const set = f.set.trim();
     const number = f.number.trim();
+    const productType = normalizeProductType(f.productType);
+    const isSealed = !!productType;
     const grade = parseGrade(f.grade, f.gradingCompany);
     const qtyNum = parseInt(f.quantity.replace(/[^0-9]/g, ''), 10);
     const priceNum = parseFloat(f.purchasePrice.replace(/[^0-9.]/g, ''));
@@ -132,28 +150,37 @@ export function parseInventoryText(text: string): ParseResult {
       set,
       number,
       name: f.name.trim() || undefined,
-      condition: normalizeCondition(f.condition),
+      // Sealed rows carry no condition/grade of their own.
+      condition: isSealed ? CardCondition.Sealed : normalizeCondition(f.condition),
       quantity: Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1,
-      isGraded: grade.isGraded,
-      gradingCompany: grade.gradingCompany,
-      grade: grade.grade,
+      isGraded: isSealed ? false : grade.isGraded,
+      gradingCompany: isSealed ? undefined : grade.gradingCompany,
+      grade: isSealed ? undefined : grade.grade,
       purchasePrice: Number.isFinite(priceNum) && priceNum > 0 ? priceNum : undefined,
       language: f.language.trim().toLowerCase() || undefined,
       game: f.game.trim().toLowerCase() || undefined,
+      isSealed,
+      productType: productType || undefined,
     };
 
-    if (!set || !number) row.parseError = 'Missing set code or card number';
+    // Sealed needs only a set (matched by product type); singles need set + number.
+    if (!set) row.parseError = 'Missing set code';
+    else if (!isSealed && !number) row.parseError = 'Missing card number';
     rows.push(row);
   }
 
   return { rows, headerFound: true, recognizedColumns: recognized, unrecognizedHeaders };
 }
 
-// Sample sheet offered as a downloadable template in the importer UI.
+// Sample sheet offered as a downloadable template in the importer UI. The `type`
+// column is what makes a row a sealed product (booster_box / etb / booster_pack /
+// bundle / collection); leave it blank for singles.
 export const TEMPLATE_CSV = [
-  'set,number,name,condition,quantity,grade,company,price',
-  'sv4pt5,234,Charizard ex,NM,1,,,',
-  'sv4pt5,234,Charizard ex,NM,1,10,PSA,',
-  'MA3,087,,NM,3,,,',
-  'swsh3,20,Drednaw,LP,2,,,45',
+  'set,number,name,condition,quantity,grade,company,type,price',
+  'sv4pt5,234,Charizard ex,NM,1,,,,',
+  'sv4pt5,234,Charizard ex,NM,1,10,PSA,,',
+  'MA3,087,,NM,3,,,,',
+  'swsh3,20,Drednaw,LP,2,,,,45',
+  'sv4pt5,,,,1,,,booster_box,',
+  'sv4pt5,,,,2,,,etb,',
 ].join('\n');

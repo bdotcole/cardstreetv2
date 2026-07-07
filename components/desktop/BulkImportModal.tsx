@@ -141,11 +141,12 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
       items.push({
         cardId: cand.id,
         quantity: c.quantity,
-        condition: c.condition,
+        condition: r.input.isSealed ? CardCondition.Sealed : c.condition,
         isGraded: !!r.input.isGraded,
         gradingCompany: r.input.gradingCompany,
         grade: r.input.grade,
         purchasePrice: r.input.purchasePrice,
+        isSealed: !!r.input.isSealed,
       });
     }
     if (items.length === 0) { showToast(t('desktop.collection.bulkImport.nothingSelected'), 'error'); return; }
@@ -271,6 +272,9 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
                               {r.input.isGraded && (
                                 <span className="text-[9px] font-black uppercase tracking-wide bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">{r.input.gradingCompany} {r.input.grade}</span>
                               )}
+                              {r.input.isSealed && (
+                                <span className="text-[9px] font-black uppercase tracking-wide bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">Sealed</span>
+                              )}
                             </div>
                             <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">{cand.set} · #{cand.number} · {cand.language.toUpperCase()}</p>
                           </>
@@ -303,8 +307,9 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
                         <div className="flex items-center gap-2 shrink-0">
                           <select
                             value={c?.condition}
+                            disabled={r.input.isSealed}
                             onChange={(e) => setChoice(r.rowIndex, { condition: e.target.value as CardCondition })}
-                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
+                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-brand-cyan/50 disabled:opacity-50 [&>option]:bg-brand-dark"
                           >
                             {CONDITIONS.map((cond) => <option key={cond} value={cond}>{cond}</option>)}
                           </select>

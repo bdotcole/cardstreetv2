@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
-import { resolveCandidates, unitValueThb } from '@/lib/collectionImport/resolve';
+import { resolveCandidates, unitValueThb, resolveSealedCandidates, sealedSetNames, buildSealedSnapshot } from '@/lib/collectionImport/resolve';
 import { ParsedRow, ResolvedRow, ResolvedCandidate, ResolveStatus } from '@/lib/collectionImport/types';
 
 // Preview endpoint for the partner bulk importer: resolves each parsed inventory
@@ -58,8 +58,38 @@ export async function POST(request: NextRequest) {
   );
 
   const resolved = await pool<ParsedRow, ResolvedRow>(rows, 8, async (row) => {
-    if (row.parseError || !row.set || !row.number) {
-      return { rowIndex: row.rowIndex, input: row, status: 'error', candidates: [], message: row.parseError || 'Missing set or number' };
+    if (row.parseError) {
+      return { rowIndex: row.rowIndex, input: row, status: 'error', candidates: [], message: row.parseError };
+    }
+
+    if (row.isSealed) {
+      const scands = await resolveSealedCandidates(admin, {
+        set: row.set,
+        productType: row.productType || null,
+        language: row.language || null,
+        game: row.game || null,
+        name: row.name || null,
+      });
+      if (scands.length === 0) {
+        return { rowIndex: row.rowIndex, input: row, status: 'unmatched', candidates: [], message: 'No sealed product for this set + type' };
+      }
+      const top = scands.slice(0, MAX_CANDIDATES);
+      const names = await sealedSetNames(admin, top);
+      const candidates: ResolvedCandidate[] = top.map((c: any) => {
+        const { card, value } = buildSealedSnapshot(c, names.get(c.set_id) || null);
+        return {
+          id: card.id,
+          name: card.name,
+          set: card.set,
+          number: card.number,
+          image: card.images?.small || card.imageUrl,
+          language: card.language || 'en',
+          marketPrice: value,
+          value,
+        };
+      });
+      const status: ResolveStatus = candidates.length === 1 ? 'matched' : 'ambiguous';
+      return { rowIndex: row.rowIndex, input: row, status, candidates };
     }
 
     const graded = { isGraded: !!row.isGraded, gradingCompany: row.gradingCompany, grade: row.grade };

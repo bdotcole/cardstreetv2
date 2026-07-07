@@ -451,7 +451,7 @@
                 "chooseFile": "Upload CSV",
                 "downloadTemplate": "Download template",
                 "pasteLabel": "Paste inventory (CSV or tab-separated)",
-                "columnsHelp": "Columns: set, number, condition, quantity, grade, price. Only set and number are required. Add a grade (e.g. \"PSA 10\") for graded cards.",
+                "columnsHelp": "Columns: set, number, condition, quantity, grade, type, price. Singles need set + number; sealed products need set + a type (booster_box, etb, booster_pack, bundle, collection). Add a grade (e.g. \"PSA 10\") for graded cards.",
                 "noHeader": "Couldn't find a header row with 'set' and 'number' columns. Add a header row — download the template for the exact format.",
                 "noRows": "No inventory rows were found below the header.",
                 "cancel": "Cancel",

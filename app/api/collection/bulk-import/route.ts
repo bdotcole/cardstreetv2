@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { buildSnapshot } from '@/lib/collectionImport/resolve';
+import { buildSnapshot, buildSealedSnapshot, sealedSetNames } from '@/lib/collectionImport/resolve';
 import { ImportRow } from '@/lib/collectionImport/types';
 
 // Writes confirmed importer rows into the partner's collection. Partner-gated;
@@ -61,34 +61,58 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Collection not found', code: 'NOT_OWNER' }, { status: 403 });
   }
 
-  // Fetch every referenced catalog card once, keyed by id.
-  const ids = [...new Set(items.map((it) => it.cardId).filter(Boolean))];
+  // Fetch referenced catalog rows once. Sealed items (pc-<id> / isSealed) resolve
+  // against sealed_products; everything else against pokemon_cards.
+  const isSealedItem = (it: ImportRow) => !!it.isSealed || it.cardId.startsWith('pc-');
+  const cardIds = [...new Set(items.filter((it) => !isSealedItem(it)).map((it) => it.cardId).filter(Boolean))];
+  const sealedIds = [...new Set(items.filter(isSealedItem).map((it) => it.cardId).filter(Boolean))];
+
   const cardById = new Map<string, any>();
-  for (const idChunk of chunk(ids, 200)) {
+  for (const idChunk of chunk(cardIds, 200)) {
     const { data } = await admin.from('pokemon_cards').select(CARD_SELECT).in('id', idChunk);
     for (const c of data || []) cardById.set(c.id, c);
   }
 
+  const sealedById = new Map<string, any>();
+  for (const idChunk of chunk(sealedIds, 200)) {
+    const { data } = await admin.from('sealed_products').select('*').in('id', idChunk);
+    for (const s of data || []) sealedById.set(s.id, s);
+  }
+  const sealedNames = await sealedSetNames(admin, [...sealedById.values()]);
+
   const failed: { cardId: string; reason: string }[] = [];
   const inserts: Record<string, any>[] = [];
   for (const it of items) {
-    const cardRow = cardById.get(it.cardId);
-    if (!cardRow) {
-      failed.push({ cardId: it.cardId, reason: 'Card not found in catalog' });
-      continue;
+    let card: any;
+    let value: number;
+    let isGradedItem = false;
+    let gradingCompany: string | null = null;
+    let gradeVal: number | null = null;
+
+    if (isSealedItem(it)) {
+      const row = sealedById.get(it.cardId);
+      if (!row) { failed.push({ cardId: it.cardId, reason: 'Sealed product not found' }); continue; }
+      ({ card, value } = buildSealedSnapshot(row, sealedNames.get(row.set_id) || null));
+    } else {
+      const cardRow = cardById.get(it.cardId);
+      if (!cardRow) { failed.push({ cardId: it.cardId, reason: 'Card not found in catalog' }); continue; }
+      const graded = { isGraded: !!it.isGraded, gradingCompany: it.gradingCompany, grade: it.grade };
+      ({ card, value } = buildSnapshot(cardRow, graded));
+      isGradedItem = graded.isGraded;
+      gradingCompany = graded.isGraded ? graded.gradingCompany ?? null : null;
+      gradeVal = graded.isGraded ? graded.grade ?? null : null;
     }
-    const graded = { isGraded: !!it.isGraded, gradingCompany: it.gradingCompany, grade: it.grade };
-    const { card, value } = buildSnapshot(cardRow, graded);
+
     inserts.push({
       collection_id: collectionId,
       card_id: card.id,
       card_data: card,
       quantity: it.quantity && it.quantity > 0 ? it.quantity : 1,
-      condition: it.condition,
+      condition: isSealedItem(it) ? 'Sealed' : it.condition,
       purchase_price: it.purchasePrice != null && it.purchasePrice > 0 ? it.purchasePrice : value,
-      is_graded: graded.isGraded,
-      grading_company: graded.isGraded ? graded.gradingCompany ?? null : null,
-      grade: graded.isGraded ? graded.grade ?? null : null,
+      is_graded: isGradedItem,
+      grading_company: gradingCompany,
+      grade: gradeVal,
     });
   }
 

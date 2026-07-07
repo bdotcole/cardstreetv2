@@ -451,7 +451,7 @@
                 "chooseFile": "อัปโหลด CSV",
                 "downloadTemplate": "ดาวน์โหลดเทมเพลต",
                 "pasteLabel": "วางรายการสินค้า (CSV หรือคั่นด้วยแท็บ)",
-                "columnsHelp": "คอลัมน์: set, number, condition, quantity, grade, price ต้องมี set และ number เท่านั้น ใส่เกรด (เช่น \"PSA 10\") สำหรับการ์ดที่ประเมินเกรดแล้ว",
+                "columnsHelp": "คอลัมน์: set, number, condition, quantity, grade, type, price การ์ดเดี่ยวต้องมี set + number ส่วนสินค้าซีลต้องมี set + type (booster_box, etb, booster_pack, bundle, collection) ใส่เกรด (เช่น \"PSA 10\") สำหรับการ์ดที่ประเมินเกรดแล้ว",
                 "noHeader": "ไม่พบแถวหัวตารางที่มีคอลัมน์ 'set' และ 'number' กรุณาเพิ่มแถวหัวตาราง — ดาวน์โหลดเทมเพลตเพื่อดูรูปแบบที่ถูกต้อง",
                 "noRows": "ไม่พบข้อมูลสินค้าใต้แถวหัวตาราง",
                 "cancel": "ยกเลิก",

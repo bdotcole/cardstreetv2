@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Card, CardCondition } from '@/types';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
+import { SealedProductRow, mapSealedRowToProduct, sealedProductToCard } from '@/lib/sealedProduct';
 import { EXCHANGE_RATES } from '@/constants';
 import { GradingCompany } from './types';
 
@@ -121,4 +122,66 @@ export function buildSnapshot(supabaseCard: any, graded: GradedInput): { card: C
     };
   }
   return { card, value };
+}
+
+// ── Sealed products ──────────────────────────────────────────────────────────
+// Sealed live in `sealed_products` (keyed pc-<id>, no collector number), so they
+// resolve by set code + product_type instead of set + number.
+
+// Candidate sealed products for a row. `productType` narrows to a specific type
+// (booster_box/etb/...); 'other' or empty returns all sealed for the set so the
+// partner can pick. Name is a tiebreaker.
+export async function resolveSealedCandidates(
+  supabase: SupabaseClient,
+  input: { set: string; productType?: string | null; language?: string | null; game?: string | null; name?: string | null },
+): Promise<any[]> {
+  const firstToken = (input.set || '').trim().split(/\s+/)[0] ?? '';
+  const cleanSet = firstToken.replace(/[^a-zA-Z0-9]/g, '').trim();
+  if (!cleanSet) return [];
+
+  const type = input.productType && input.productType !== 'other' ? input.productType : null;
+  const setMatchers: Array<(q: any) => any> = [
+    (q) => q.ilike('set_id', cleanSet),
+    (q) => q.ilike('set_id', `${cleanSet}%`),
+    (q) => q.ilike('set_id', `%${cleanSet}`),
+  ];
+
+  for (const applySetMatcher of setMatchers) {
+    let q = applySetMatcher(supabase.from('sealed_products').select('*')).eq('game', input.game || 'pokemon');
+    if (input.language) q = q.eq('language', input.language);
+    if (type) q = q.eq('product_type', type);
+    const { data, error } = await q.limit(10);
+    if (error) {
+      console.warn('[collectionImport] resolveSealedCandidates error:', error);
+      return [];
+    }
+    if (data && data.length > 0) {
+      const name = (input.name || '').toLowerCase().trim();
+      if (name && data.length > 1) {
+        const narrowed = data.filter((r: any) => String(r.name || '').toLowerCase().includes(name));
+        if (narrowed.length >= 1) return narrowed;
+      }
+      return data;
+    }
+  }
+  return [];
+}
+
+// sealed_products.set_id is a plain link (no FK), so set names come from a separate
+// batch query. Returns set_id -> pokemon_sets.name.
+export async function sealedSetNames(supabase: SupabaseClient, rows: any[]): Promise<Map<string, string>> {
+  const ids = [...new Set(rows.map((r) => r.set_id).filter(Boolean))];
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const { data } = await supabase.from('pokemon_sets').select('id, name').in('id', ids);
+  for (const s of data || []) out.set(s.id, s.name);
+  return out;
+}
+
+// Build the card_data snapshot for a sealed row. Value = its factory-sealed price
+// (THB), already the marketPrice on the mapped Card.
+export function buildSealedSnapshot(row: any, setName?: string | null): { card: Card; value: number } {
+  const product = mapSealedRowToProduct(row as SealedProductRow, setName ?? null);
+  const card = sealedProductToCard(product);
+  return { card, value: Math.round(card.marketPrice || 0) };
 }
