@@ -249,6 +249,9 @@ BEGIN
   IF TG_OP = 'UPDATE' AND OLD.source IN ('cardstreet', 'admin') THEN
     NEW.api_reference_avg     := NEW.market_avg;   -- stash the incoming API price
     NEW.market_avg            := OLD.market_avg;   -- keep the learned/pinned price
+    NEW.currency              := OLD.currency;     -- ...and its display currency: the
+                                                   -- Thai daily cron writes THB, which
+                                                   -- would otherwise show a USD value as THB
     NEW.source                := OLD.source;
     NEW.internal_sale_count   := OLD.internal_sale_count;
     NEW.internal_last_sale_at := OLD.internal_last_sale_at;
