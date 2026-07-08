@@ -38,6 +38,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
+import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
@@ -837,6 +838,22 @@ export default function HomePage() {
         setIsPaymentModalOpen(true);
     };
 
+    // Open an offer's underlying card in the shared CardDetails overlay. It's a
+    // sibling of <main> (z-50) while the Offers panel lives inside <main>'s own
+    // stacking context, so the card paints on top and closing it (tap X or the
+    // hardware back button) drops the user right back on the Offers list — no
+    // panel teardown/rebuild needed. normalizeCard hardens the stored snapshot
+    // (and backfills the id from card_id) so the detail view can't crash on a
+    // sparse row.
+    const handleViewOfferListing = (offer: Offer) => {
+        const snapshot = offer.listing?.card_data;
+        if (!snapshot) {
+            showToast(t('offer.payUnavailable') || 'This listing is no longer available.', 'error');
+            return;
+        }
+        setSelectedCard(normalizeCard(snapshot, offer.listing?.card_id));
+    };
+
     // Post-payment cleanup. The order creation + Stripe charge already happened
     // inside PaymentModal; this just resets UI state and refreshes local data.
     // (Earlier versions of this handler re-POSTed to /api/orders/checkout — that
@@ -1600,6 +1617,7 @@ export default function HomePage() {
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
                                 onNavigatePartner={() => setActiveTab('partner')}
                                 onPayOffer={handlePayOffer}
+                                onViewListing={handleViewOfferListing}
                                 onGuestLogin={() => {
                                     setUser({
                                         id: 'guest',

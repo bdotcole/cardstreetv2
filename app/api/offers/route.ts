@@ -208,14 +208,16 @@ export async function GET(req: NextRequest) {
 
     // ─── Enrich with a listing snapshot for display (explicit columns, no select('*')). ───
     const listingIds = [...new Set((offers || []).map((o) => o.listing_id))];
-    const snapshots = new Map<string, { price: number; status: string; card_data: unknown }>();
+    // card_id rides along so the client can deep-link the offer row to the card
+    // page (/card/:id on desktop, the CardDetails overlay on mobile).
+    const snapshots = new Map<string, { card_id: string; price: number; status: string; card_data: unknown }>();
     if (listingIds.length > 0) {
         const { data: listingRows } = await admin
             .from('listings')
-            .select('id, price, status, card_data')
+            .select('id, card_id, price, status, card_data')
             .in('id', listingIds);
         for (const l of listingRows || []) {
-            snapshots.set(l.id, { price: l.price, status: l.status, card_data: l.card_data });
+            snapshots.set(l.id, { card_id: l.card_id, price: l.price, status: l.status, card_data: l.card_data });
         }
     }
 

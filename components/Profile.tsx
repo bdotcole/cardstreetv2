@@ -33,6 +33,10 @@ interface ProfileProps {
   // owns the PaymentModal + acceptedOfferId plumbing, so the Offers inbox just
   // hands the accepted offer up. Undefined when the offers flag is off.
   onPayOffer?: (args: { offer: Offer }) => void;
+  // OBO: opens the CardDetails overlay for an offer's listing. The overlay
+  // renders above this panel (it's a sibling of <main>), so closing it drops
+  // the user right back on the Offers panel. Undefined when offers are off.
+  onViewListing?: (offer: Offer) => void;
 }
 
 // Slide panel animation variants
@@ -259,7 +263,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer }) => {
+const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -1475,6 +1479,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   // (lower z-index) isn't hidden behind this overlay.
                   setActivePanel('none');
                   onPayOffer?.(args);
+                }}
+                onViewListing={(offer) => {
+                  // Leave the panel open — the CardDetails overlay renders above
+                  // it, so closing the card returns straight to this list.
+                  onViewListing?.(offer);
                 }}
               />
             </div>

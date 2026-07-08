@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { getThumbnailUrl } from '@/lib/imageUtils';
 import { Offer } from '@/types';
 
 interface OffersInboxProps {
@@ -9,6 +10,13 @@ interface OffersInboxProps {
    * listing id, amount, and the acceptedOfferId to pass to /api/orders/checkout.
    */
   onPayOffer?: (args: { offer: Offer }) => void;
+  /**
+   * Called when the user taps an offer's card preview to view the underlying
+   * listing. The parent owns navigation — desktop pushes /card/:id, mobile
+   * opens the CardDetails overlay — so closing that view returns here. Omitted
+   * when the host can't navigate (the row is then non-interactive).
+   */
+  onViewListing?: (offer: Offer) => void;
 }
 
 /**
@@ -20,7 +28,7 @@ interface OffersInboxProps {
  * All actions POST to the /api/offers* routes, which enforce the state machine
  * server-side via CAS — this UI only decides which buttons to SHOW.
  */
-const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer }) => {
+const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) => {
   const { isThai } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,20 +214,53 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer }) => {
         <div className="text-slate-500 text-sm py-6 text-center">{isThai ? 'ยังไม่มีข้อเสนอ' : 'No active offers.'}</div>
       ) : (
         <div className="space-y-2">
-          {offers.map((o) => (
-            <div key={o.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-white font-bold truncate">{o.listing?.card_data?.name || (isThai ? 'การ์ด' : 'Card')}</p>
-                <p className="text-xs text-slate-400">
-                  ฿{Number(o.amount).toLocaleString()} ·{' '}
-                  <span className="uppercase">{o.viewerRole === 'buyer' ? (isThai ? 'คุณเสนอ' : 'You offered') : (isThai ? 'ผู้ซื้อเสนอ' : 'Buyer offered')}</span>
-                  {' · '}
-                  <span className="uppercase">{o.status}</span>
-                </p>
-              </div>
+          {offers.map((o) => {
+            const card = o.listing?.card_data;
+            const thumb = card?.images?.small;
+            // The card preview is tappable when the host wired navigation and the
+            // listing still resolves to a card page.
+            const canView = !!onViewListing && !!o.listing?.card_id;
+            return (
+            <div key={o.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => { if (canView) onViewListing?.(o); }}
+                disabled={!canView}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left group disabled:cursor-default"
+              >
+                <span className="w-11 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
+                  {thumb && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={getThumbnailUrl(thumb)}
+                      alt=""
+                      loading="lazy"
+                      className={`w-full h-full ${card?.isSealed ? 'object-contain' : 'object-cover'}`}
+                    />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className={`text-white font-bold truncate ${canView ? 'group-hover:text-brand-cyan transition-colors' : ''}`}>
+                    {card?.name || (isThai ? 'การ์ด' : 'Card')}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    ฿{Number(o.amount).toLocaleString()} ·{' '}
+                    <span className="uppercase">{o.viewerRole === 'buyer' ? (isThai ? 'คุณเสนอ' : 'You offered') : (isThai ? 'ผู้ซื้อเสนอ' : 'Buyer offered')}</span>
+                    {' · '}
+                    <span className="uppercase">{o.status}</span>
+                  </p>
+                  {o.listing?.price != null && (
+                    <p className="text-[11px] text-slate-500">
+                      <span className="uppercase tracking-wide">{isThai ? 'ราคาตั้ง' : 'Listed'}</span>{' '}
+                      ฿{Number(o.listing.price).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </button>
               <div className="flex-shrink-0">{renderActions(o)}</div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

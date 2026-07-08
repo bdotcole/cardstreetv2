@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -94,12 +94,23 @@ export default function DesktopOrders() {
     const [authOpen, setAuthOpen] = useState(false);
 
     // The offer-email CTA lands here as /orders?tab=offers (forwarded from the
-    // desktop home's /?view=offers). Preselect that tab when the flag is on;
-    // otherwise fall back to purchases.
+    // desktop home's /?view=offers). The active tab is mirrored into the URL so
+    // it survives a round trip out to a card page and back (browser Back returns
+    // to the tab the user left, e.g. Offers, instead of resetting to Purchases).
+    const router = useRouter();
     const searchParams = useSearchParams();
-    const initialTab: Tab =
-        OFFERS_ENABLED && searchParams?.get('tab') === 'offers' ? 'offers' : 'purchases';
+    const isValidTab = (v: string | null | undefined): v is Tab =>
+        v === 'purchases' || v === 'shipments' || v === 'sales' || (v === 'offers' && OFFERS_ENABLED);
+    const urlTab = searchParams?.get('tab');
+    const initialTab: Tab = isValidTab(urlTab) ? urlTab : 'purchases';
     const [tab, setTab] = useState<Tab>(initialTab);
+
+    // Switch tabs and stamp the choice into the URL (replace, not push, so tab
+    // flipping doesn't pile up history entries).
+    const selectTab = (key: Tab) => {
+        setTab(key);
+        router.replace(`/orders?tab=${key}`, { scroll: false });
+    };
     const [orders, setOrders] = useState<OrderRow[]>([]);
     const [shipments, setShipments] = useState<OrderRow[]>([]);
     const [sales, setSales] = useState<SaleRow[]>([]);
@@ -231,7 +242,7 @@ export default function DesktopOrders() {
                 ] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
-                        onClick={() => setTab(key)}
+                        onClick={() => selectTab(key)}
                         className={`px-5 py-3 text-sm font-bold border-b-2 -mb-px transition-colors ${
                             tab === key
                                 ? 'text-white border-brand-cyan'
@@ -372,7 +383,15 @@ export default function DesktopOrders() {
                         single-item cart + acceptedOfferId and opens the gated
                         checkout). OffersInbox is null-safe when the flag is off. */}
                     {tab === 'offers' && OFFERS_ENABLED && (
-                        <OffersInbox onPayOffer={({ offer }) => payOffer(offer)} />
+                        <OffersInbox
+                            onPayOffer={({ offer }) => payOffer(offer)}
+                            onViewListing={(offer) => {
+                                // Tapping the card preview opens the full card page;
+                                // the offers tab is already mirrored into the URL, so
+                                // browser Back returns straight here.
+                                if (offer.listing?.card_id) router.push(`/card/${offer.listing.card_id}`);
+                            }}
+                        />
                     )}
                 </div>
             )}

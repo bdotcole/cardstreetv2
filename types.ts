@@ -172,6 +172,7 @@ export interface Offer {
   // Client-enrichment fields from GET /api/offers (not DB columns):
   viewerRole?: OfferActorRole;
   listing?: {
+    card_id: string;
     price: number;
     status: string;
     card_data: Card;
