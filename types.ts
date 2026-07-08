@@ -32,7 +32,10 @@ export interface CardPrices {
   low: number;
   mid: number;
   high: number;
-  lastUpdated: string;
+  // null when there's no real market-data timestamp (no market_values row and no
+  // embedded tcgplayer updatedAt). The mapper deliberately does NOT synthesize
+  // now() here, so consumers can treat a present value as genuine freshness.
+  lastUpdated: string | null;
 }
 
 export interface Card {

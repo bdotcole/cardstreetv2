@@ -35,11 +35,6 @@ interface GradedPrice {
 type SortKey = 'lowest' | 'highest' | 'best' | 'condition';
 type CondFilter = 'all' | 'raw' | 'graded';
 
-// cardMapper synthesizes prices.lastUpdated = now() when a card has no real
-// market_values row, which would always read "updated today" and imply false
-// freshness. Only trust a timestamp that is comfortably in the past.
-const FRESHNESS_MIN_AGE_MS = 10 * 60 * 1000;
-
 // Company accent for graded chips, matching the mobile Graded Dashboard.
 const GRADED_COMPANY_COLOR: Record<string, string> = {
     PSA: 'text-brand-cyan',
@@ -214,10 +209,10 @@ export default function DesktopCardDetail({
     );
     const lowestDeal = marketPrice > 0 && listings.length ? getDealPercent(lowest, marketPrice) : null;
 
-    // Freshness of the market price, guarded against cardMapper's synthetic now().
+    // Freshness of the market price. cardMapper now emits null when there's no
+    // real market-data timestamp, so any present, parseable value is genuine.
     const lastUpdatedMs = card?.prices?.lastUpdated ? Date.parse(card.prices.lastUpdated) : NaN;
-    const showUpdated =
-        marketPrice > 0 && Number.isFinite(lastUpdatedMs) && Date.now() - lastUpdatedMs > FRESHNESS_MIN_AGE_MS;
+    const showUpdated = marketPrice > 0 && Number.isFinite(lastUpdatedMs);
     const updatedText = showUpdated
         ? t('desktop.card.updatedOn').replace(
               '{date}',

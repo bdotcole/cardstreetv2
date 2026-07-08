@@ -214,7 +214,10 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
       low: Math.round(marketThb * 0.9),
       mid: marketThb,
       high: Math.round(marketThb * 1.1),
-      lastUpdated: lastUpdated || tcgData?.updatedAt || new Date().toISOString(),
+      // Real market-data timestamp only (our market_values row, else tcgplayer's
+      // embedded updatedAt). Never synthesize now() — a fabricated "updated today"
+      // reads as false freshness. null lets the UI hide the freshness stamp.
+      lastUpdated: lastUpdated || tcgData?.updatedAt || null,
     },
     change7d: parseFloat((Math.random() * 15 - 5).toFixed(1)),
     priceHistory: [
