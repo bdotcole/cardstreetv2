@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import type { StripeElementsOptions } from '@stripe/stripe-js';
@@ -89,7 +89,10 @@ const PaymentElementForm: React.FC<{
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged }) => {
+    /** Fired once orders are created + inventory reserved (before the charge),
+     *  so the modal can release the reservation if the buyer then abandons. */
+    onOrderReserved?: (transferGroup: string) => void;
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -154,6 +157,10 @@ const PaymentElementForm: React.FC<{
                     return;
                 }
                 transferGroup = orderData.transferGroup;
+                // Orders now exist at `pending_payment` and the listings are
+                // reserved (`sold`). Tell the modal so it can release them if the
+                // charge below fails or the buyer closes without paying.
+                if (transferGroup) onOrderReserved?.(transferGroup);
             }
 
             // Step 3: create the PaymentIntent (no card token — PaymentElement
@@ -276,6 +283,61 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentFailed
 }) => {
     const { t } = useTranslation();
+
+    // ─── Abandoned-checkout cleanup ───
+    // /api/orders/checkout reserves inventory (listings → `sold`) and creates
+    // `pending_payment` orders BEFORE the Stripe charge. If the buyer then
+    // abandons — payment fails, or they close the modal — those reservations
+    // would strand the listing as `sold` (gone from the marketplace) forever.
+    // We release them when the modal closes/unmounts without a settled payment.
+    const reservedGroupRef = useRef<string | null>(null);
+    // Set once payment succeeds OR a PromptPay auth begins settling (both call
+    // onPaymentSuccess). Guards the release so we never cancel a real order.
+    const settledRef = useRef(false);
+
+    const releaseIfAbandoned = useCallback(() => {
+        const group = reservedGroupRef.current;
+        reservedGroupRef.current = null;
+        if (!group || settledRef.current) return;
+        // Fire-and-forget; keepalive lets it complete through the unmount. The
+        // server CAS (pending_payment + payment_id IS NULL) is the real guard —
+        // a payment that already went through is never cancelled.
+        try {
+            fetch('/api/orders/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transferGroup: group }),
+                keepalive: true,
+            }).catch(() => {});
+        } catch { /* no-op */ }
+    }, []);
+
+    // Fresh session state each time the modal opens.
+    useEffect(() => {
+        if (isOpen) {
+            reservedGroupRef.current = null;
+            settledRef.current = false;
+        }
+    }, [isOpen]);
+
+    // Release on close (isOpen → false) or unmount while open.
+    useEffect(() => {
+        if (!isOpen) return;
+        return () => { releaseIfAbandoned(); };
+    }, [isOpen, releaseIfAbandoned]);
+
+    const handleOrderReserved = useCallback((transferGroup: string) => {
+        reservedGroupRef.current = transferGroup;
+    }, []);
+
+    const handlePaymentSuccess = useCallback(
+        (details: { paymentMethod: string; paymentId: string; transferGroup?: string }) => {
+            settledRef.current = true;      // payment settled/settling — do not release
+            reservedGroupRef.current = null;
+            onPaymentSuccess(details);
+        },
+        [onPaymentSuccess],
+    );
 
     // All amounts in this modal are THB (listing prices and the server
     // estimate are THB, and the Stripe charge is THB). A non-THB display
@@ -487,7 +549,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
                                         acceptedOfferId={acceptedOfferId}
-                                        onPaymentSuccess={onPaymentSuccess}
+                                        onOrderReserved={handleOrderReserved}
+                                        onPaymentSuccess={handlePaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}
                                         onTotalChanged={(newTotal) =>
                                             setEstimate((prev) =>

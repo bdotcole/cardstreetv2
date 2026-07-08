@@ -128,7 +128,10 @@ interface Sale {
   id: string;
   total_amount: number;
   platform_fee: number;
-  completed_at: string;
+  // Only set once an order is completed; null for paid/shipped/etc. Fall back
+  // to created_at when rendering so a null never becomes `new Date(null)` = epoch.
+  completed_at: string | null;
+  created_at: string;
   listing: {
     card_data: any;
     condition: string;
@@ -1534,7 +1537,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       <div className="text-right">
                         <p className="text-brand-green font-bold">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
                         <p className="text-slate-600 text-[10px]">
-                          {new Date(sale.completed_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}
+                          {new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}
                         </p>
                       </div>
                     </div>

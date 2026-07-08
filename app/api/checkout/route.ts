@@ -273,6 +273,23 @@ export async function POST(req: Request) {
 
         const paymentIntent = await stripe.paymentIntents.create(piParams, requestOptions);
 
+        // Record the PaymentIntent id on the group's orders so the
+        // reconciliation cron (app/api/cron/reconcile-pending-orders) can verify
+        // a stalled checkout against Stripe before cancelling — distinguishing an
+        // abandoned attempt from an in-flight PromptPay or a paid-but-webhook-lost
+        // order. Best-effort: never fail the charge over this (e.g. if the column
+        // hasn't been migrated yet). The webhook/finalize path remains canonical.
+        {
+            const { error: piIdErr } = await admin
+                .from('orders')
+                .update({ stripe_payment_intent_id: paymentIntent.id })
+                .eq('transfer_group', transferGroup)
+                .eq('status', 'pending_payment');
+            if (piIdErr) {
+                console.error('[Checkout] Could not record payment_intent_id (non-fatal):', piIdErr.message);
+            }
+        }
+
         return NextResponse.json({
             status: paymentIntent.status,
             id: paymentIntent.id,
