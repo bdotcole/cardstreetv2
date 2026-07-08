@@ -12,7 +12,7 @@ import type { MarketplaceListing } from '@/services/marketplaceService';
 // content server-side for SEO instead of fetching it in the browser.
 const LISTING_SELECT = `
     id, seller_id, card_id, card_data, price, condition, is_graded,
-    grading_company, grade, image_front_url, image_back_url, status,
+    grading_company, grade, image_front_url, image_back_url, accepts_offers, status,
     created_at, updated_at,
     seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
 `;
