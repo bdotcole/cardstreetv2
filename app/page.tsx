@@ -1563,6 +1563,7 @@ export default function HomePage() {
                                 reviews={viewingSellerReviews}
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectListing={setSelectedListing}
+                                onAddToCart={handleAddToCart}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                             />

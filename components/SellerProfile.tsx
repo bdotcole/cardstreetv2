@@ -13,11 +13,12 @@ interface SellerProfileProps {
     reviews: Review[];
     onBack: () => void;
     onSelectListing: (listing: any) => void;
+    onAddToCart?: (item: any) => void;
     currency?: string;
     exchangeRate?: number;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, currency = 'THB', exchangeRate = 1 }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const { t } = useTranslation();
@@ -132,7 +133,29 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     </span>
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
-                                <p className="text-brand-green font-black text-xs">{currencySymbol}{(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}</p>
+                                <div className="flex items-center justify-between gap-1">
+                                    <p className="text-brand-green font-black text-xs truncate">{currencySymbol}{(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}</p>
+                                    {/* Sits above the full-tile overlay button (relative z-10) so it
+                                        stays clickable; the overlay still handles taps elsewhere. */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAddToCart?.({
+                                                id: listing.id,
+                                                cardId: listing.card_id,
+                                                card: listing.card_data,
+                                                price: listing.price,
+                                                sellerId: listing.seller_id,
+                                                sellerName: seller.name || listing.seller?.display_name || 'Unknown',
+                                                condition: listing.condition,
+                                            });
+                                        }}
+                                        className="relative z-10 w-8 h-8 flex-shrink-0 rounded-full bg-white/5 hover:bg-brand-green hover:text-brand-darker text-brand-green flex items-center justify-center transition-all active:scale-90"
+                                        aria-label={`Add ${listing.card_data.name} to cart`}
+                                    >
+                                        <i className="fa-solid fa-cart-plus text-xs"></i>
+                                    </button>
+                                </div>
                                 <button
                                     onClick={() => onSelectListing(listing)}
                                     className="absolute inset-0 w-full h-full opacity-0"

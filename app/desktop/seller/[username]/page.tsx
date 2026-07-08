@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
-import { getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
-import { formatTHB } from '@/lib/currency';
+import SellerListingTile from '@/components/desktop/SellerListingTile';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
@@ -82,35 +80,9 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                 <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'This seller has no active listings right now.' : 'ผู้ขายรายนี้ยังไม่มีรายการขายในขณะนี้'}</p>
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
-                    {listings.map((listing) => {
-                        const thumb = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
-                        return (
-                            <Link
-                                key={listing.id}
-                                href={`/card/${listing.card_id}`}
-                                className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
-                            >
-                                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                                    <Image
-                                        src={thumb}
-                                        alt={listing.card_data.name || 'Card'}
-                                        fill
-                                        sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                                        loading="lazy"
-                                        unoptimized={shouldSkipNextOptimization(thumb)}
-                                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : 'object-cover'}`}
-                                    />
-                                </div>
-                                <div className="p-3">
-                                    <h2 className="text-sm font-bold text-white truncate">{listing.card_data.name}</h2>
-                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                                        {listing.card_data.set}
-                                    </p>
-                                    <p className="text-lg font-black text-brand-cyan mt-1.5">{formatTHB(listing.price)}</p>
-                                </div>
-                            </Link>
-                        );
-                    })}
+                    {listings.map((listing) => (
+                        <SellerListingTile key={listing.id} listing={listing} />
+                    ))}
                 </div>
             )}
         </div>
