@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
-import PriceChart from './PriceChart';
+import PriceHistoryChart from './PriceHistoryChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -155,30 +155,27 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <h2 className="text-lg font-bold text-slate-500 tracking-wide">{card.thaiName}</h2>
           </div>
 
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาปัจจุบัน' : 'Current Price'}</p>
-              <p className="text-2xl font-black text-white">
-                {formatPrice(card.prices?.market || card.marketPrice)}
-              </p>
-              <div className="mt-2 text-[8px] text-brand-green font-bold uppercase tracking-widest flex items-center gap-1">
-                <i className="fa-solid fa-arrow-trend-up"></i> +3.2%
-              </div>
-            </div>
-            <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาสูงสุด' : 'Market High'}</p>
-              <p className="text-2xl font-black text-brand-red">
-                {formatPrice(card.prices?.high || 45000)}
-              </p>
-              <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'สูงสุด' : 'High'}</div>
-            </div>
+          {/* Current market price — a single real value. No fabricated 7-day change
+              or "market high"; the real price range comes from live listings below. */}
+          <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
+            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาตลาด' : 'Market Price'}</p>
+            <p className="text-3xl font-black text-white">
+              {formatPrice(card.prices?.market || card.marketPrice)}
+            </p>
           </div>
 
-          <div className="bg-slate-800/50 rounded-2xl border border-white/5 p-4">
-            <PriceChart data={card.priceHistory} />
-          </div>
+          {/* Real market-value-over-time (price_snapshots). Self-hides until there
+              is genuine history to draw — no synthesized trend. */}
+          <PriceHistoryChart
+            subjectId={card.id}
+            language={card.language}
+            condition={card.isSealed ? 'Sealed' : 'Market'}
+            currentPriceThb={card.prices?.market || card.marketPrice}
+            isThai={isThai}
+            panelClassName="bg-slate-800/50 rounded-2xl border border-white/5 p-4"
+            chartClassName="h-44"
+          />
 
           {!isVaultView ? (
             <>

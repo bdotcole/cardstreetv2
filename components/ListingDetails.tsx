@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
 import ReportModal from './ReportModal';
-import PriceChart from './PriceChart';
+import PriceHistoryChart from './PriceHistoryChart';
 import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -287,35 +287,26 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                     {/* Market data for the underlying card, as on the card database page */}
                     <div className="space-y-3">
                         <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-cyan pl-3">{isThai ? 'ข้อมูลตลาด' : 'Market Data'}</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาปัจจุบัน' : 'Current Price'}</p>
-                                <p className="text-2xl font-black text-white">
-                                    {formatMarketPrice(card.prices?.market || card.marketPrice)}
-                                </p>
-                                {typeof card.change7d === 'number' && card.change7d !== 0 && (
-                                    <div className={`mt-2 text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 ${card.change7d > 0 ? 'text-brand-green' : 'text-brand-red'}`}>
-                                        <i className={`fa-solid ${card.change7d > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}`}></i>
-                                        {card.change7d > 0 ? '+' : ''}{card.change7d.toFixed(1)}%
-                                    </div>
-                                )}
-                            </div>
-                            <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5">
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาสูงสุด' : 'Market High'}</p>
-                                <p className="text-2xl font-black text-brand-red">
-                                    {formatMarketPrice(card.prices?.high)}
-                                </p>
-                                <div className="mt-2 text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'สูงสุด' : 'High'}</div>
-                            </div>
+                        {/* Current market price — a single real value. No fabricated
+                            7-day change or "market high"; the trend below is real. */}
+                        <div className="bg-[#1e293b]/50 backdrop-blur-sm p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-brand-cyan/10 rounded-bl-3xl"></div>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาตลาด' : 'Market Price'}</p>
+                            <p className="text-3xl font-black text-white">
+                                {formatMarketPrice(card.prices?.market || card.marketPrice)}
+                            </p>
                         </div>
-                        {Array.isArray(card.priceHistory) && card.priceHistory.length > 1 && (
-                            <div className="bg-[#1e293b]/50 rounded-2xl border border-white/5 p-4">
-                                <div className="h-44">
-                                    <PriceChart data={card.priceHistory} />
-                                </div>
-                            </div>
-                        )}
+                        {/* Real market-value-over-time (price_snapshots). Self-hides
+                            until there is genuine history to draw. */}
+                        <PriceHistoryChart
+                            subjectId={card.id}
+                            language={card.language}
+                            condition={card.isSealed ? 'Sealed' : 'Market'}
+                            currentPriceThb={card.prices?.market || card.marketPrice}
+                            isThai={isThai}
+                            panelClassName="bg-[#1e293b]/50 rounded-2xl border border-white/5 p-4"
+                            chartClassName="h-44"
+                        />
                     </div>
                 </div>
             </div>

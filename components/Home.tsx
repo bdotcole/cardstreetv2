@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import PriceChart from './PriceChart';
 import { pokemonService, ApiSet } from '@/services/pokemonService';
 import { Card } from '@/types';
 
@@ -14,7 +13,6 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, onSelectGame, localListings = [] }) => {
-  const [timeframe, setTimeframe] = useState('1M');
   const [trendingMovers, setTrendingMovers] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,48 +81,19 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
       .finally(() => setIsListingsLoading(false));
   }, [localListings]);
 
-  const chartData = useMemo(() => {
-    return trendingMovers[0]?.priceHistory || [];
-  }, [trendingMovers]);
-
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Street-Style Hero Section */}
       <div className="relative pt-6 pb-2">
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-cyan to-brand-green opacity-20 blur-3xl rounded-full"></div>
 
-        <div className="flex justify-between items-end mb-1">
+        <div className="mb-1">
           <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">My Portfolio</p>
-          <div className="flex items-center gap-1.5 bg-brand-green/10 px-2 py-1 rounded-md border border-brand-green/20">
-            <i className="fa-solid fa-arrow-trend-up text-brand-green text-[10px]"></i>
-            <span className="text-brand-green text-[10px] font-black">+4.2%</span>
-          </div>
         </div>
 
         <h2 className="text-6xl font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg">
           {currencySymbol}{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </h2>
-      </div>
-
-      {/* Chart Card */}
-      <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl">
-        <div className="bg-slate-900 rounded-2xl p-5">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex gap-2">
-              {['1D', '1W', '1M', '1Y'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTimeframe(t)}
-                  className={`px-3 py-1 rounded-md text-[10px] font-black tracking-widest transition-all skew-x-[-10deg] ${timeframe === t ? 'bg-brand-cyan text-brand-darker' : 'text-slate-600 hover:text-slate-300 bg-white/5'
-                    }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-          <PriceChart data={chartData} />
-        </div>
       </div>
 
       {/* Top Performers Carousel */}
@@ -157,11 +126,6 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
                   <div className="absolute inset-0 bg-brand-cyan/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                   <div className="relative aspect-[3/4] bg-brand-darker rounded-xl overflow-hidden border border-white/10 group-hover:border-brand-cyan/50 transition-colors p-1.5">
-                    <div className="absolute top-0 right-0 p-2 z-10">
-                      <div className="bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-sm italic skew-x-[-10deg] shadow-lg">
-                        +{card.change7d}%
-                      </div>
-                    </div>
                     <Image src={card.imageUrl || ""} sizes="(max-width: 768px) 160px, 160px" fill className="object-contain filter drop-shadow-md group-hover:scale-105 transition-transform duration-300" alt={card.name} />
                   </div>
                 </div>

@@ -210,22 +210,20 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     marketPrice: marketThb,
     tcgplayerUrl: supabaseCard.tcgplayer_url,
     prices: {
+      // We only have a single market value per card, not a real low/mid/high
+      // spread — so don't fabricate one. All three mirror the market price; the
+      // real range on the card page comes from live listings, not this field.
       market: marketThb,
-      low: Math.round(marketThb * 0.9),
+      low: marketThb,
       mid: marketThb,
-      high: Math.round(marketThb * 1.1),
+      high: marketThb,
       // Real market-data timestamp only (our market_values row, else tcgplayer's
       // embedded updatedAt). Never synthesize now() — a fabricated "updated today"
       // reads as false freshness. null lets the UI hide the freshness stamp.
       lastUpdated: lastUpdated || tcgData?.updatedAt || null,
     },
-    change7d: parseFloat((Math.random() * 15 - 5).toFixed(1)),
-    priceHistory: [
-      { date: '1D', price: Math.round(marketThb * (0.95 + Math.random() * 0.1)) },
-      { date: '7D', price: Math.round(marketThb * (0.9 + Math.random() * 0.1)) },
-      { date: '1M', price: Math.round(marketThb * (0.8 + Math.random() * 0.2)) },
-      { date: '3M', price: Math.round(marketThb * (0.7 + Math.random() * 0.3)) },
-      { date: '6M', price: marketThb },
-    ],
+    // No synthesized 7-day change or trend line. Real market-value-over-time is
+    // served from price_snapshots via /api/price-history (components/PriceHistoryChart).
+    priceHistory: [],
   };
 }

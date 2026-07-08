@@ -18,6 +18,7 @@ import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useToast } from '@/lib/contexts/ToastContext';
 import AuthModal from '@/components/AuthModal';
 import OfferModal from '@/components/OfferModal';
+import PriceHistoryChart from '@/components/PriceHistoryChart';
 
 // OBO best-offer is dark-launched behind this flag; nothing renders when off.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
@@ -64,7 +65,7 @@ export default function DesktopCardDetail({
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
     const { addItem, user } = useDesktopCart();
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const { collections, addCollection, addCardToCollection } = useUserCollections();
     const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
@@ -432,6 +433,20 @@ export default function DesktopCardDetail({
                             )}
                         </div>
                     )}
+
+                    {/* ─── Real market-value-over-time (price_snapshots via
+                        /api/price-history). Self-hides until there is genuine history
+                        to draw — no synthesized trend. Works for sealed and singles. ─── */}
+                    <PriceHistoryChart
+                        subjectId={card.id}
+                        language={card.language || 'en'}
+                        condition={card.isSealed ? 'Sealed' : 'Market'}
+                        currentPriceThb={marketPrice}
+                        isThai={isThai}
+                        title={isThai ? 'ราคาย้อนหลัง' : 'Price Over Time'}
+                        panelClassName="mt-6 rounded-2xl bg-white/5 border border-white/10 p-5"
+                        titleClassName={`${microLabel} mb-4`}
+                    />
 
                     {/* ─── Listings ─── */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mt-10 mb-4">
