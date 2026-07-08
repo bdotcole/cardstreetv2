@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -12,6 +12,7 @@ import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarket
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -20,6 +21,36 @@ import OfferModal from '@/components/OfferModal';
 
 // OBO best-offer is dark-launched behind this flag; nothing renders when off.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
+
+// Real graded market prices for a card (PriceCharting market + actual CardStreet
+// sales), served by /api/cards/[cardId]/graded-prices. Prices are already in THB.
+interface GradedPrice {
+    company: string;   // PSA | BGS | CGC | SGC | ARS
+    grade: number;
+    label: string;     // e.g. "PSA 10"
+    price: number;     // THB
+    source: 'app_sale' | 'market' | 'thai_estimate';
+}
+
+type SortKey = 'lowest' | 'highest' | 'best' | 'condition';
+type CondFilter = 'all' | 'raw' | 'graded';
+
+// cardMapper synthesizes prices.lastUpdated = now() when a card has no real
+// market_values row, which would always read "updated today" and imply false
+// freshness. Only trust a timestamp that is comfortably in the past.
+const FRESHNESS_MIN_AGE_MS = 10 * 60 * 1000;
+
+// Company accent for graded chips, matching the mobile Graded Dashboard.
+const GRADED_COMPANY_COLOR: Record<string, string> = {
+    PSA: 'text-brand-cyan',
+    BGS: 'text-brand-green',
+    CGC: 'text-brand-red',
+};
+
+// One grid template shared by the listings header and every row so prices read
+// straight down a single right-aligned column. Collapses to a wrapped flex row
+// below sm (rare on the desktop shell, but must never scroll the page body).
+const ROW_GRID = 'sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_7rem_auto] sm:items-center sm:gap-4';
 
 export default function DesktopCardDetail({
     cardId,
@@ -50,6 +81,12 @@ export default function DesktopCardDetail({
     const [catalogArtFailed, setCatalogArtFailed] = useState(false);
     const [authOpen, setAuthOpen] = useState(false);
     const [addingToCollection, setAddingToCollection] = useState(false);
+    // Real graded prices for this card; empty until a grade tier actually has
+    // data — the dashboard stays hidden rather than inventing values.
+    const [gradedPrices, setGradedPrices] = useState<GradedPrice[]>([]);
+    // Client-side listing controls (reorder/filter the already-fetched array; no refetch).
+    const [sortKey, setSortKey] = useState<SortKey>('lowest');
+    const [condFilter, setCondFilter] = useState<CondFilter>('all');
     // OBO: the listing the buyer is making an offer on (null = modal closed).
     const [offerListing, setOfferListing] = useState<MarketplaceListing | null>(null);
     // OBO: listing ids on which the current buyer already has a pending offer.
@@ -124,6 +161,19 @@ export default function DesktopCardDetail({
         };
     }, [cardId, initialCard]);
 
+    // Graded prices are a card-level signal (independent of active listings), so
+    // fetch them once per card. Mirrors the mobile CardDetails pattern.
+    useEffect(() => {
+        if (!card?.id) return;
+        let cancelled = false;
+        setGradedPrices([]);
+        fetch(`/api/cards/${encodeURIComponent(card.id)}/graded-prices`)
+            .then((res) => (res.ok ? res.json() : { prices: [] }))
+            .then((data) => { if (!cancelled) setGradedPrices(Array.isArray(data?.prices) ? data.prices : []); })
+            .catch(() => { if (!cancelled) setGradedPrices([]); });
+        return () => { cancelled = true; };
+    }, [card?.id]);
+
     // OBO: seed the set of listings this buyer already has a pending offer on,
     // so their per-listing "Make an Offer" button greys out. One fetch of the
     // buyer's active offers; only runs when the offer button could show.
@@ -148,6 +198,61 @@ export default function DesktopCardDetail({
             cancelled = true;
         };
     }, [user]);
+
+    // ─── Derived market stats (all real, straight off the live listings array) ──
+    const marketPrice = card?.marketPrice ?? 0;
+    const lowest = listings.length ? Math.min(...listings.map((l) => l.price)) : 0;
+    const highest = listings.length ? Math.max(...listings.map((l) => l.price)) : 0;
+    const hasRange = listings.length > 1 && highest !== lowest;
+    const sellerCount = useMemo(() => new Set(listings.map((l) => l.seller_id)).size, [listings]);
+    const gradedCount = useMemo(() => listings.filter((l) => l.is_graded).length, [listings]);
+    // The globally cheapest listing, computed from the RAW array so re-sorting
+    // never moves the "Best price" marker off the actually-cheapest row.
+    const bestId = useMemo(
+        () => (listings.length ? listings.reduce((a, b) => (a.price <= b.price ? a : b)).id : null),
+        [listings],
+    );
+    const lowestDeal = marketPrice > 0 && listings.length ? getDealPercent(lowest, marketPrice) : null;
+
+    // Freshness of the market price, guarded against cardMapper's synthetic now().
+    const lastUpdatedMs = card?.prices?.lastUpdated ? Date.parse(card.prices.lastUpdated) : NaN;
+    const showUpdated =
+        marketPrice > 0 && Number.isFinite(lastUpdatedMs) && Date.now() - lastUpdatedMs > FRESHNESS_MIN_AGE_MS;
+    const updatedText = showUpdated
+        ? t('desktop.card.updatedOn').replace(
+              '{date}',
+              new Date(lastUpdatedMs).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+          )
+        : '';
+
+    // Filter chips only make sense when there's an actual mix of raw and graded.
+    const showFilter = gradedCount > 0 && gradedCount < listings.length;
+    const gradedEstimateShown = gradedPrices.some((g) => g.source === 'thai_estimate');
+
+    const visibleListings = useMemo(() => {
+        let arr = listings;
+        if (showFilter && condFilter === 'raw') arr = arr.filter((l) => !l.is_graded);
+        else if (showFilter && condFilter === 'graded') arr = arr.filter((l) => l.is_graded);
+        const sorted = [...arr];
+        const dealRatio = (l: MarketplaceListing) => (marketPrice > 0 ? l.price / marketPrice : Infinity);
+        switch (sortKey) {
+            case 'highest':
+                sorted.sort((a, b) => b.price - a.price);
+                break;
+            case 'best':
+                // Deepest discount first; listings with no usable market price sort last.
+                sorted.sort((a, b) => dealRatio(a) - dealRatio(b));
+                break;
+            case 'condition':
+                sorted.sort(
+                    (a, b) => (isTopCondition(b) ? 1 : 0) - (isTopCondition(a) ? 1 : 0) || a.price - b.price,
+                );
+                break;
+            default:
+                sorted.sort((a, b) => a.price - b.price);
+        }
+        return sorted;
+    }, [listings, showFilter, condFilter, sortKey, marketPrice]);
 
     if (loading) {
         return (
@@ -182,6 +287,17 @@ export default function DesktopCardDetail({
     const imageUrl = catalogArtFailed && sellerPhoto
         ? getOptimizedImageUrl(sellerPhoto, 640, 85)
         : getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 640, 85);
+
+    const showMarketPanel = marketPrice > 0 || listings.length > 0 || gradedPrices.length > 0;
+
+    const microLabel = 'text-[10px] text-slate-500 font-black uppercase tracking-widest';
+
+    const gradedSourceLabel = (source: GradedPrice['source']) =>
+        source === 'app_sale'
+            ? t('desktop.card.gradedSourceSale')
+            : source === 'thai_estimate'
+                ? t('desktop.card.gradedSourceEstimate')
+                : t('desktop.card.gradedSourceMarket');
 
     return (
         <div>
@@ -222,14 +338,7 @@ export default function DesktopCardDetail({
                         {!card.isSealed && card.rarity ? ` · ${card.rarity}` : ''}
                     </p>
 
-                    {card.marketPrice > 0 && (
-                        <div className="inline-flex items-baseline gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 mt-5">
-                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{t('desktop.card.marketPrice')}</span>
-                            <span className="text-xl font-black text-white">{formatTHB(card.marketPrice)}</span>
-                        </div>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-3 mt-6">
+                    <div className="flex flex-wrap items-center gap-3 mt-5">
                         <button
                             onClick={handleAddToCollection}
                             disabled={addingToCollection}
@@ -247,81 +356,253 @@ export default function DesktopCardDetail({
                         </button>
                     </div>
 
-                    <h2 className="text-sm font-black text-white uppercase tracking-widest mt-10 mb-4">
-                        {t('desktop.card.activeListings')} <span className="text-slate-500">({listings.length})</span>
-                    </h2>
+                    {/* ─── Market overview: real price + live ask stats + graded dashboard ─── */}
+                    {showMarketPanel && (
+                        <div className="mt-6 rounded-2xl bg-white/5 border border-white/10 p-5">
+                            <div className={`${microLabel} mb-4`}>{t('desktop.card.marketTitle')}</div>
+
+                            {/* Band 1 — stat strip. Each block renders only when its data exists. */}
+                            <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+                                <div>
+                                    <div className={microLabel}>{t('desktop.card.marketPrice')}</div>
+                                    {marketPrice > 0 ? (
+                                        <div className="text-3xl font-black text-white leading-tight">{formatTHB(marketPrice)}</div>
+                                    ) : (
+                                        <div className="text-sm text-slate-500 font-bold mt-1">{t('desktop.card.noMarketPrice')}</div>
+                                    )}
+                                    {showUpdated && <div className="text-[10px] text-slate-500 mt-1">{updatedText}</div>}
+                                </div>
+
+                                {listings.length > 0 && (
+                                    <div>
+                                        <div className={microLabel}>{t('desktop.card.lowestAsk')}</div>
+                                        <div className="text-2xl font-black text-brand-cyan leading-tight">{formatTHB(lowest)}</div>
+                                        {lowestDeal != null && (
+                                            <div className="text-[11px] text-brand-green font-black mt-1">
+                                                {t('desktop.card.belowMarket').replace('{pct}', String(lowestDeal))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {hasRange && (
+                                    <div>
+                                        <div className={microLabel}>{t('desktop.card.priceRange')}</div>
+                                        <div className="text-lg font-black text-slate-200 leading-tight mt-1">
+                                            {formatTHB(lowest)} <span className="text-slate-600">–</span> {formatTHB(highest)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {listings.length > 0 && (
+                                    <div className="flex items-end gap-5">
+                                        <div>
+                                            <div className={microLabel}>{t('desktop.card.statListings')}</div>
+                                            <div className="text-lg font-black text-white leading-tight mt-1">{listings.length}</div>
+                                        </div>
+                                        <div>
+                                            <div className={microLabel}>{t('desktop.card.statSellers')}</div>
+                                            <div className="text-lg font-black text-white leading-tight mt-1">{sellerCount}</div>
+                                        </div>
+                                        {gradedCount > 0 && (
+                                            <div>
+                                                <div className={microLabel}>{t('desktop.card.statGraded')}</div>
+                                                <div className="text-lg font-black text-white leading-tight mt-1">{gradedCount}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Band 2 — real graded prices (hidden entirely when none exist). */}
+                            {gradedPrices.length > 0 && (
+                                <div className="mt-5 pt-5 border-t border-white/10">
+                                    <div className={`${microLabel} mb-3`}>{t('desktop.card.gradedTitle')}</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {gradedPrices.map((g) => (
+                                            <div
+                                                key={`${g.company}-${g.grade}`}
+                                                className="inline-flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5"
+                                            >
+                                                <span className={`text-xs font-black ${GRADED_COMPANY_COLOR[g.company] || 'text-white'}`}>{g.label}</span>
+                                                <span className="text-sm font-black text-white">{formatTHB(g.price)}</span>
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{gradedSourceLabel(g.source)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {gradedEstimateShown && (
+                                        <p className="text-[10px] text-slate-500 mt-2 max-w-lg">{t('desktop.card.gradedEstimateNote')}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ─── Listings ─── */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 mt-10 mb-4">
+                        <h2 className="text-sm font-black text-white uppercase tracking-widest">
+                            {t('desktop.card.activeListings')} <span className="text-slate-500">({listings.length})</span>
+                        </h2>
+                        {listings.length > 1 && (
+                            <div className="flex items-center gap-3">
+                                {showFilter && (
+                                    <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+                                        {(['all', 'raw', 'graded'] as CondFilter[]).map((f) => (
+                                            <button
+                                                key={f}
+                                                onClick={() => setCondFilter(f)}
+                                                className={`text-xs font-bold px-2.5 py-1 rounded-md transition-colors ${condFilter === f ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
+                                            >
+                                                {t(`desktop.card.filter${f === 'all' ? 'All' : f === 'raw' ? 'Raw' : 'Graded'}`)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <label className="flex items-center gap-2 text-xs text-slate-500 font-bold">
+                                    <span className="uppercase tracking-widest">{t('desktop.card.sortLabel')}</span>
+                                    <select
+                                        value={sortKey}
+                                        onChange={(e) => setSortKey(e.target.value as SortKey)}
+                                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
+                                    >
+                                        <option value="lowest">{t('desktop.card.sortLowest')}</option>
+                                        <option value="highest">{t('desktop.card.sortHighest')}</option>
+                                        <option value="best">{t('desktop.card.sortBestDeal')}</option>
+                                        <option value="condition">{t('desktop.card.sortTopCondition')}</option>
+                                    </select>
+                                </label>
+                            </div>
+                        )}
+                    </div>
 
                     {listings.length === 0 ? (
                         <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
                     ) : (
-                        <div className="space-y-2">
-                            {listings.map((listing) => (
-                                <div
-                                    key={listing.id}
-                                    className="flex items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3"
-                                >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded border bg-slate-700/60 text-slate-300 border-slate-600">
-                                            {listing.is_graded && listing.grading_company
-                                                ? `${listing.grading_company} ${listing.grade ?? ''}`.trim()
-                                                : listing.condition}
-                                        </span>
-                                        <span className="w-6 h-6 rounded-full bg-slate-700 overflow-hidden shrink-0">
-                                            {listing.seller?.avatar_url && (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={listing.seller.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
-                                            )}
-                                        </span>
-                                        {listing.seller?.username ? (
-                                            <Link
-                                                href={`/seller/${listing.seller.username}`}
-                                                className="text-sm font-bold text-slate-300 hover:text-brand-cyan truncate transition-colors"
-                                            >
-                                                {listing.seller.display_name || listing.seller.username}
-                                            </Link>
-                                        ) : (
-                                            <span className="text-sm font-bold text-slate-300 truncate">
-                                                {listing.seller?.display_name || t('desktop.unknownSeller')}
-                                            </span>
-                                        )}
-                                        {getSellerTrust(listing.seller).kind === 'partner' && (
-                                            <span className="shrink-0 text-[11px] text-brand-cyan font-bold whitespace-nowrap flex items-center gap-0.5">
-                                                <i className="fa-solid fa-circle-check"></i>
-                                                {t('seller.officialPartner')}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-4 shrink-0">
-                                        <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
-                                        {/* OBO: buyers (not the seller) can make an
-                                            offer on OBO-enabled listings when the
-                                            feature flag is on. */}
-                                        {OFFERS_ENABLED && listing.accepts_offers && user && user.id !== listing.seller_id && (
-                                            pendingOfferListingIds.has(listing.id) ? (
-                                                <button
-                                                    disabled
-                                                    className="bg-white/5 border border-white/10 text-slate-500 text-xs font-black px-4 py-2 rounded-lg cursor-not-allowed"
-                                                >
-                                                    {t('offer.pending')}
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setOfferListing(listing)}
-                                                    className="bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black px-4 py-2 rounded-lg transition-colors"
-                                                >
-                                                    {t('offer.makeOffer')}
-                                                </button>
-                                            )
-                                        )}
-                                        <button
-                                            onClick={() => addItem(listingToCartItem(listing))}
-                                            className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                        <div>
+                            {/* Column labels — aligned to the same grid as the rows (sm+ only). */}
+                            <div className={`hidden ${ROW_GRID} px-4 pb-2 ${microLabel}`}>
+                                <span>{t('desktop.card.conditionColumn')}</span>
+                                <span>{t('desktop.card.sellerColumn')}</span>
+                                <span className="text-right">{t('desktop.card.dealColumn')}</span>
+                                <span className="text-right">{t('desktop.card.priceColumn')}</span>
+                                <span></span>
+                            </div>
+
+                            <div className="space-y-2">
+                                {visibleListings.map((listing) => {
+                                    const trust = getSellerTrust(listing.seller);
+                                    const graded = listing.is_graded;
+                                    const top = isTopCondition(listing);
+                                    const dealPct = marketPrice > 0 ? getDealPercent(listing.price, marketPrice) : null;
+                                    const isBest = listings.length > 1 && listing.id === bestId;
+                                    const badgeClass = graded
+                                        ? 'bg-brand-cyan/15 text-brand-cyan border-brand-cyan/30'
+                                        : top
+                                            ? 'bg-brand-green/15 text-brand-green border-brand-green/30'
+                                            : 'bg-slate-700/60 text-slate-300 border-slate-600';
+                                    return (
+                                        <div
+                                            key={listing.id}
+                                            className={`rounded-xl border px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 transition-colors ${ROW_GRID} ${isBest ? 'bg-brand-green/[0.05] border-brand-green/30 border-l-2 border-l-brand-green' : 'bg-slate-800/40 border-white/5 hover:border-white/10'}`}
                                         >
-                                            {t('desktop.card.addToCart')}
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                            {/* Condition (+ best-price marker) */}
+                                            <div className="flex flex-col gap-1">
+                                                {isBest && (
+                                                    <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{t('desktop.card.bestPrice')}</span>
+                                                )}
+                                                <span className={`self-start text-[10px] font-black px-2 py-1 rounded border ${badgeClass}`}>
+                                                    {conditionBadgeLabel(listing)}
+                                                </span>
+                                            </div>
+
+                                            {/* Seller cluster */}
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <span className="w-6 h-6 rounded-full bg-slate-700 overflow-hidden shrink-0">
+                                                    {listing.seller?.avatar_url && (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img src={listing.seller.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                                    )}
+                                                </span>
+                                                <div className="min-w-0">
+                                                    {listing.seller?.username ? (
+                                                        <Link
+                                                            href={`/seller/${listing.seller.username}`}
+                                                            className="block text-sm font-bold text-slate-200 hover:text-brand-cyan truncate transition-colors"
+                                                        >
+                                                            {listing.seller.display_name || listing.seller.username}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="block text-sm font-bold text-slate-200 truncate">
+                                                            {listing.seller?.display_name || t('desktop.unknownSeller')}
+                                                        </span>
+                                                    )}
+                                                    {trust.kind === 'partner' && (
+                                                        <span className="text-[11px] text-brand-cyan font-bold whitespace-nowrap flex items-center gap-0.5">
+                                                            <i className="fa-solid fa-circle-check"></i>
+                                                            {t('seller.officialPartner')}
+                                                        </span>
+                                                    )}
+                                                    {(trust.kind === 'owner' || trust.kind === 'rated') && (
+                                                        <span className="text-[11px] text-slate-400 font-bold whitespace-nowrap">
+                                                            {trust.rating.toFixed(1)} ★
+                                                        </span>
+                                                    )}
+                                                    {trust.kind === 'new' && (
+                                                        <span className="text-[11px] text-slate-600 font-bold whitespace-nowrap">
+                                                            {t('desktop.card.newSeller')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Deal vs market */}
+                                            <div className="text-right shrink-0 sm:w-auto">
+                                                {dealPct != null ? (
+                                                    <span className="text-xs text-brand-green font-black whitespace-nowrap">
+                                                        {t('desktop.card.belowMarket').replace('{pct}', String(dealPct))}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-600 hidden sm:inline">—</span>
+                                                )}
+                                            </div>
+
+                                            {/* Price */}
+                                            <div className="text-right shrink-0">
+                                                <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+                                                {/* OBO: buyers (not the seller) can make an offer on
+                                                    OBO-enabled listings when the feature flag is on. */}
+                                                {OFFERS_ENABLED && listing.accepts_offers && user && user.id !== listing.seller_id && (
+                                                    pendingOfferListingIds.has(listing.id) ? (
+                                                        <button
+                                                            disabled
+                                                            className="bg-white/5 border border-white/10 text-slate-500 text-xs font-black px-4 py-2 rounded-lg cursor-not-allowed"
+                                                        >
+                                                            {t('offer.pending')}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setOfferListing(listing)}
+                                                            className="bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                        >
+                                                            {t('offer.makeOffer')}
+                                                        </button>
+                                                    )
+                                                )}
+                                                <button
+                                                    onClick={() => addItem(listingToCartItem(listing))}
+                                                    className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                >
+                                                    {t('desktop.card.addToCart')}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>
