@@ -17,6 +17,12 @@ const LISTING_SELECT = `
     seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
 `;
 
+// Catalog columns the card mapper needs to derive the live market price +
+// freshness (and the breadcrumb set_id). Mirrors the client fetch in
+// DesktopCardDetail and marketplaceService's catalog fallback.
+const CATALOG_SELECT =
+    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)';
+
 // React cache() dedupes the query across generateMetadata + the page body
 // within a single request (both call this for the same cardId).
 export const getCardPageData = cache(
@@ -35,18 +41,23 @@ export const getCardPageData = cache(
             card_data: normalizeCard(r.card_data, r.card_id),
         })) as MarketplaceListing[];
 
-        // No active listing — resolve from the catalog. pokemon_cards holds every
-        // game (Pokémon/MTG/Yu-Gi-Oh/One Piece), so this covers all of them.
+        // The card resolves from (in order) the cheapest active listing's frozen
+        // card_data snapshot, then the live catalog, then the sealed catalog.
+        // pokemon_cards holds every game (Pokémon/MTG/Yu-Gi-Oh/One Piece).
         let card: Card | null = listings[0]?.card_data ?? null;
+        const cardFromListing = !!card;
+        let setId: string | null = null;
+
         if (!card) {
             const { data } = await supabase
                 .from('pokemon_cards')
-                .select(
-                    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)'
-                )
+                .select(CATALOG_SELECT)
                 .eq('id', cardId)
                 .maybeSingle();
-            if (data) card = mapSupabaseCardToInternal(data);
+            if (data) {
+                card = mapSupabaseCardToInternal(data);
+                setId = (data as { set_id?: string | null }).set_id ?? null;
+            }
         }
 
         // Still nothing — sealed products live in their own catalog table, so a
@@ -72,16 +83,23 @@ export const getCardPageData = cache(
             }
         }
 
-        // set_id (for the breadcrumb link to the set page) — a tiny indexed
-        // lookup that works whether the card came from a listing or the catalog.
-        let setId: string | null = null;
-        if (card) {
+        // A card rendered from a listing carries that listing's FROZEN card_data,
+        // whose market price + "updated" freshness are snapshot-stale. Pull the
+        // live catalog row once to (a) get the breadcrumb set_id and (b) overlay
+        // the current market price + freshness. Listing prices/conditions stay
+        // as-is. Cards not in pokemon_cards (sealed) have no row, so they keep
+        // their snapshot values and setId stays null.
+        if (card && cardFromListing) {
             const { data: ref } = await supabase
                 .from('pokemon_cards')
-                .select('set_id')
+                .select(CATALOG_SELECT)
                 .eq('id', cardId)
                 .maybeSingle();
-            setId = ref?.set_id ?? null;
+            if (ref) {
+                setId = (ref as { set_id?: string | null }).set_id ?? null;
+                const live = mapSupabaseCardToInternal(ref);
+                card = { ...card, marketPrice: live.marketPrice, prices: live.prices };
+            }
         }
 
         return { card, listings, setId };
