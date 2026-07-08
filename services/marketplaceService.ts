@@ -126,9 +126,15 @@ export const marketplaceService = {
                     query = query.ilike('card_data->>name', `%${search.trim()}%`);
                 }
 
-                // Server-side language filter
+                // Server-side language filter. Japanese singles snapshot as 'ja'
+                // while sealed products snapshot as 'jp' (see cardMapper) — match
+                // both so a Japanese filter doesn't silently drop singles.
                 if (language && language !== 'all') {
-                    query = query.eq('card_data->>language', language);
+                    if (language === 'ja' || language === 'jp') {
+                        query = query.in('card_data->>language', ['ja', 'jp']);
+                    } else {
+                        query = query.eq('card_data->>language', language);
+                    }
                 }
 
                 // Server-side game filter. Legacy listings predate multi-game support

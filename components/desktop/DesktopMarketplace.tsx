@@ -17,6 +17,15 @@ import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
 
+// Language values match the listing snapshot's `card_data.language`. The service
+// expands 'ja' to also cover sealed's 'jp' code, so a single option covers both.
+const LANGUAGE_FILTERS = [
+    { id: 'all', labelKey: 'desktop.allLanguages' },
+    { id: 'en', labelKey: 'desktop.english' },
+    { id: 'ja', labelKey: 'desktop.japanese' },
+    { id: 'th', labelKey: 'desktop.thai' },
+] as const;
+
 // Re-exported for the desktop components that historically imported it here.
 export { formatTHB };
 
@@ -52,6 +61,7 @@ export default function DesktopMarketplace() {
     }, [searchParams, router]);
 
     const [game, setGame] = useState('all');
+    const [language, setLanguage] = useState('all');
     // Deals-first, matching the mobile marketplace's default sort.
     const [sort, setSort] = useState<SortKey>('best_deals');
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
@@ -63,7 +73,13 @@ export default function DesktopMarketplace() {
         let cancelled = false;
         setLoading(true);
         marketplaceService
-            .getActiveListings({ search: q || undefined, game, sort, limit: PAGE_SIZE })
+            .getActiveListings({
+                search: q || undefined,
+                game,
+                language: language === 'all' ? undefined : language,
+                sort,
+                limit: PAGE_SIZE,
+            })
             .then((rows) => {
                 if (cancelled) return;
                 setListings(rows);
@@ -75,7 +91,7 @@ export default function DesktopMarketplace() {
         return () => {
             cancelled = true;
         };
-    }, [q, game, sort]);
+    }, [q, game, language, sort]);
 
     const loadMore = async () => {
         setLoadingMore(true);
@@ -83,6 +99,7 @@ export default function DesktopMarketplace() {
             const rows = await marketplaceService.getActiveListings({
                 search: q || undefined,
                 game,
+                language: language === 'all' ? undefined : language,
                 sort,
                 limit: PAGE_SIZE,
                 offset: listings.length,
@@ -126,9 +143,21 @@ export default function DesktopMarketplace() {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-6">
-                <GameChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => setGame('all')} />
+                {LANGUAGE_FILTERS.map((l) => (
+                    <FilterChip
+                        key={l.id}
+                        label={t(l.labelKey)}
+                        active={language === l.id}
+                        tone="green"
+                        onClick={() => setLanguage(l.id)}
+                    />
+                ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-3">
+                <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => setGame('all')} />
                 {GAMES.filter((g) => g.enabled).map((g) => (
-                    <GameChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => setGame(g.id)} />
+                    <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => setGame(g.id)} />
                 ))}
             </div>
 
@@ -175,14 +204,23 @@ export default function DesktopMarketplace() {
     );
 }
 
-function GameChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterChip({
+    label,
+    active,
+    onClick,
+    tone = 'cyan',
+}: {
+    label: string;
+    active: boolean;
+    onClick: () => void;
+    tone?: 'cyan' | 'green';
+}) {
+    const activeClass = tone === 'green' ? 'bg-brand-green text-brand-darker' : 'bg-brand-cyan text-brand-darker';
     return (
         <button
             onClick={onClick}
             className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                active
-                    ? 'bg-brand-cyan text-brand-darker'
-                    : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                active ? activeClass : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
             }`}
         >
             {label}
