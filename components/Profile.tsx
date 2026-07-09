@@ -15,6 +15,7 @@ import OffersInbox from './OffersInbox';
 import StripeConnectSection from './StripeConnectSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -694,6 +695,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   };
 
   const saveProfile = async () => {
+    // A phone is required to buy or sell (the courier needs it). Don't block a
+    // bio-only save when it's still empty, but reject a malformed number early
+    // so the user fixes it here instead of hitting the checkout gate later.
+    if (editPhone.trim() && !isValidThaiPhone(editPhone)) {
+      showToast(t('profile.invalidPhone'), 'error');
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch('/api/profile', {
@@ -1104,7 +1112,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <Phone className="w-3 h-3" /> {t('profile.phoneNumber')}
+                    <Phone className="w-3 h-3" /> {t('profile.phoneNumber')} <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="tel"
@@ -1113,6 +1121,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
                     placeholder={t('profile.phonePlaceholder')}
                   />
+                  <p className="text-[10px] text-slate-600">{t('profile.phoneRequiredHint')}</p>
                 </div>
 
                 <div className="space-y-2">

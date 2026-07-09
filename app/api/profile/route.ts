@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { isValidThaiPhone, normalizePhone } from '@/lib/utils/phone'
 
 // GET - Fetch current user's profile with settings and rewards
 export async function GET() {
@@ -72,7 +73,23 @@ export async function PATCH(request: NextRequest) {
         // Prepare profile update
         const profileUpdate: any = {}
         if (display_name !== undefined) profileUpdate.display_name = display_name
-        if (phone_number !== undefined) profileUpdate.phone_number = phone_number
+        if (phone_number !== undefined) {
+            // Allow clearing the phone (so a user with no number can still edit
+            // other fields — e.g. bio-only saves), but reject a non-empty value
+            // that isn't a valid TH number and store the normalized digits so
+            // downstream Flash waybills get clean input. Purchase is gated on a
+            // valid phone separately in /api/orders/checkout.
+            if (phone_number === null || (typeof phone_number === 'string' && phone_number.trim() === '')) {
+                profileUpdate.phone_number = null
+            } else if (typeof phone_number === 'string' && isValidThaiPhone(phone_number)) {
+                profileUpdate.phone_number = normalizePhone(phone_number)
+            } else {
+                return NextResponse.json(
+                    { error: 'Please enter a valid Thai phone number (e.g. 081 234 5678).', code: 'INVALID_PHONE' },
+                    { status: 400 },
+                )
+            }
+        }
         if (bio !== undefined) {
             if (bio !== null && typeof bio !== 'string') {
                 return NextResponse.json({ error: 'Invalid bio.' }, { status: 400 })

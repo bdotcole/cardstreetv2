@@ -17,6 +17,7 @@ import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -99,7 +100,9 @@ export default function DesktopCartDrawer() {
                 .eq('id', user.id)
                 .single<Record<string, string | null>>();
             const completeness = checkBuyerProfileComplete(profile);
-            if (completeness.complete) {
+            // Also require a valid TH phone (not just non-empty) so a junk value
+            // can't slip past to Flash — mirrors the /api/orders/checkout gate.
+            if (completeness.complete && isValidThaiPhone(profile?.phone_number)) {
                 setPhase('payment');
             } else {
                 setAddressForm({
@@ -131,6 +134,12 @@ export default function DesktopCartDrawer() {
 
     const saveAddress = async (e: React.FormEvent) => {
         e.preventDefault();
+        // The <input required> only guarantees non-empty; enforce a dialable TH
+        // number here so the buyer fixes it before we mount the payment step.
+        if (!isValidThaiPhone(addressForm.phone_number)) {
+            showToast(t('desktop.cart.invalidPhone'), 'error');
+            return;
+        }
         setSavingAddress(true);
         try {
             const res = await fetch('/api/profile', {

@@ -46,6 +46,7 @@ import {
     SELLER_UNVERIFIED_TOAST,
     SELLER_UNVERIFIED_ERROR_CODE,
 } from '@/lib/profileValidation';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 
 interface CheckoutItem {
     id: string; // listing id
@@ -147,6 +148,20 @@ export async function POST(req: Request) {
                     error: BUYER_PROFILE_INCOMPLETE_TOAST,
                     code: BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
                     missing: buyerCompleteness.missing,
+                },
+                { status: 400 },
+            );
+        }
+
+        // Presence isn't enough for the phone: Flash needs a dialable number to
+        // deliver, and a junk value (e.g. "n/a") would pass the non-empty check
+        // above yet strand the parcel. Require a valid TH number specifically.
+        if (!isValidThaiPhone(buyerProfileGate.phone_number)) {
+            return NextResponse.json(
+                {
+                    error: BUYER_PROFILE_INCOMPLETE_TOAST,
+                    code: BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+                    missing: ['phone_number'],
                 },
                 { status: 400 },
             );

@@ -8,6 +8,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 
 type Tab = 'profile' | 'preferences';
 
@@ -137,6 +138,12 @@ export default function DesktopSettings() {
     const setField = (k: keyof ProfileForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
     const saveProfile = async () => {
+        // Required to buy or sell (the courier needs it). Allow an empty value
+        // for non-shipping edits, but reject a malformed number up front.
+        if (form.phone_number.trim() && !isValidThaiPhone(form.phone_number)) {
+            showToast(t('desktop.settings.invalidPhone'), 'error');
+            return;
+        }
         setSaving(true);
         try {
             const res = await fetch('/api/profile', {
@@ -290,7 +297,7 @@ export default function DesktopSettings() {
                         <input value={email} disabled className={`${inputCls} text-slate-500 cursor-not-allowed`} />
                     </Field>
 
-                    <Field label={t('desktop.settings.phone')}>
+                    <Field label={`${t('desktop.settings.phone')} *`} hint={t('desktop.settings.phoneRequiredHint')}>
                         <input value={form.phone_number} onChange={(e) => setField('phone_number', e.target.value)} className={inputCls} placeholder={t('desktop.settings.phonePlaceholder')} />
                     </Field>
 

@@ -34,6 +34,7 @@ import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
 } from '@/lib/profileValidation';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 
 import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
@@ -755,6 +756,39 @@ export default function HomePage() {
         return true;
     };
 
+    // Client-side mirror of the /api/orders/checkout buyer-profile gate: the
+    // buyer needs a complete shipping address AND a valid phone before we open
+    // the payment modal, so they hit a clean "fill your details" UX instead of
+    // failing halfway through checkout. Shared by both purchase entry points
+    // (cart Checkout + Buy Now). The server-side gate stays authoritative; this
+    // fails open (returns true) if the pre-check errors so a lookup hiccup never
+    // blocks a legitimate buyer. Assumes the caller already required auth.
+    const ensureBuyerProfileComplete = async (): Promise<boolean> => {
+        if (!user) return false;
+        try {
+            const supabase = createClient();
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select(BUYER_REQUIRED_PROFILE_FIELDS.join(','))
+                .eq('id', user.id)
+                .single<Record<string, string | null>>();
+            const completeness = checkBuyerProfileComplete(profile);
+            // Phone must be present AND a valid TH number — Flash can't deliver
+            // to a junk value that clears the non-empty completeness check.
+            if (!completeness.complete || !isValidThaiPhone(profile?.phone_number)) {
+                showToast(t('profile.incompleteBuyer'), 'error');
+                setIsCartOpen(false);
+                setSelectedListing(null);
+                setActiveTab('profile');
+                return false;
+            }
+            return true;
+        } catch (err) {
+            console.warn('[Checkout] Buyer profile pre-check failed:', err);
+            return true;
+        }
+    };
+
     const handleCheckout = async () => {
         if (!(await ensureCanPurchase())) return;
 
@@ -768,32 +802,7 @@ export default function HomePage() {
             return;
         }
 
-        // Pre-check buyer shipping profile so users hit a clean "fill your
-        // address" UX instead of getting bounced halfway through the payment
-        // modal. The server-side gate in /api/orders/checkout is the
-        // authoritative check; this is just a friendlier client-side mirror.
-        // requireAuth() above guarantees user is non-null here.
-        if (!user) return;
-        try {
-            const supabase = createClient();
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select(BUYER_REQUIRED_PROFILE_FIELDS.join(','))
-                .eq('id', user.id)
-                .single<Record<string, string | null>>();
-            const completeness = checkBuyerProfileComplete(profile);
-            if (!completeness.complete) {
-                showToast(t('profile.incompleteBuyer'), 'error');
-                setIsCartOpen(false);
-                setActiveTab('profile');
-                return;
-            }
-        } catch (err) {
-            // Don't block on the pre-check failing — the server-side gate
-            // still enforces it, and the modal will surface that error if
-            // it triggers.
-            console.warn('[Checkout] Buyer profile pre-check failed:', err);
-        }
+        if (!(await ensureBuyerProfileComplete())) return;
 
         setIsCartOpen(false);
         // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
@@ -823,6 +832,7 @@ export default function HomePage() {
         }
         if (!(await ensureCanPurchase())) return;
         if (!requireAuth('complete your purchase')) return;
+        if (!(await ensureBuyerProfileComplete())) return;
 
         setCart([{
             id: offer.listing_id,
@@ -1726,9 +1736,19 @@ export default function HomePage() {
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
                         onBuyNow={async () => {
-                            // Same Thailand-only gate as cart checkout — Buy Now
-                            // skips the cart and opens the payment modal directly.
+                            // Same gates as cart checkout — Buy Now skips the cart
+                            // and opens the payment modal directly, so it must run
+                            // the geo, auth, and buyer-profile (address + phone)
+                            // checks itself before mounting the payment step.
                             if (!(await ensureCanPurchase())) return;
+                            if (!requireAuth('complete your purchase')) return;
+                            if (user?.provider === 'guest') {
+                                showToast(t('paymentFlow.signInRequired') || 'Please sign in with a full account to complete a purchase.', 'error');
+                                setSelectedListing(null);
+                                setActiveTab('profile');
+                                return;
+                            }
+                            if (!(await ensureBuyerProfileComplete())) return;
                             setCart([{
                                 id: selectedListing.id,
                                 cardId: selectedListing.card_id,
