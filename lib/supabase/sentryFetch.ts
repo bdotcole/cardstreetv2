@@ -6,11 +6,27 @@ import * as Sentry from "@sentry/nextjs";
 // a weak password at signup (422 weak_password), an unconfirmed email, and an
 // already-registered user are all expected, user-driven outcomes. Reporting them
 // as Sentry exceptions only creates alert noise that buries genuine errors, so we
-// skip capture for them. Anything still worth seeing — 403 (e.g. signups disabled),
-// 404, 429 (rate limiting / abuse), and all 5xx — continues to report, as do
-// non-auth responses (e.g. PostgREST 401s, which can signal RLS issues).
+// skip capture for them. Anything still worth seeing — most 403s (e.g. signups
+// disabled), 404, 429 (rate limiting / abuse), and all 5xx — continues to
+// report, as do non-auth responses (e.g. PostgREST 401s, which can signal RLS
+// issues).
 const isExpectedAuthControlFlow = (urlStr: string, status: number): boolean =>
     urlStr.includes('/auth/v1/') && (status === 400 || status === 401 || status === 422);
+
+// GoTrue returns 403 when a one-time email link (signup confirm / password
+// recovery / magic link) has already been consumed or expired — most often
+// because a mail provider's link scanner GETs it before the human clicks (see
+// the auth email-link prefetch notes in CLAUDE.md). That is expected control
+// flow, not a fault, and was surfacing as fake "Supabase API Error: [403]"
+// issues. Scoped by message so a genuine auth 403 (e.g. signups disabled) is
+// unaffected. Needs the parsed body, so it runs after the response is read.
+const isConsumedAuthLink = (urlStr: string, status: number, body: unknown): boolean => {
+    if (!urlStr.includes('/auth/v1/') || status !== 403) return false;
+    const b = (body ?? {}) as { message?: unknown; error_code?: unknown; code?: unknown };
+    const message = String(b.message ?? '').toLowerCase();
+    const code = String(b.error_code ?? b.code ?? '').toLowerCase();
+    return code === 'otp_expired' || message.includes('link is invalid or has expired');
+};
 
 export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     try {
@@ -23,7 +39,11 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
                 const clonedResp = response.clone();
                 try {
                     const errorData = await clonedResp.json();
-                    
+
+                    if (isConsumedAuthLink(urlStr, response.status, errorData)) {
+                        return response;
+                    }
+
                     let parsedBody = undefined;
                     try {
                         if (init?.body && typeof init.body === 'string') {
