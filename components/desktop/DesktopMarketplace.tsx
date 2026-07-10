@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
 import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
-import { GAMES } from '@/lib/games';
+import { gamesAvailableInLanguage } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -149,14 +149,21 @@ export default function DesktopMarketplace() {
                         label={t(l.labelKey)}
                         active={language === l.id}
                         tone="green"
-                        onClick={() => setLanguage(l.id)}
+                        onClick={() => {
+                            setLanguage(l.id);
+                            // The selected game may not exist in the new language
+                            // (its chip is about to disappear) — fall back to all.
+                            if (game !== 'all' && !gamesAvailableInLanguage(l.id).some((g) => g.id === game)) {
+                                setGame('all');
+                            }
+                        }}
                     />
                 ))}
             </div>
 
             <div className="flex flex-wrap gap-2 mt-3">
                 <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => setGame('all')} />
-                {GAMES.filter((g) => g.enabled).map((g) => (
+                {gamesAvailableInLanguage(language).filter((g) => g.enabled).map((g) => (
                     <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => setGame(g.id)} />
                 ))}
             </div>

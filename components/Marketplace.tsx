@@ -5,7 +5,7 @@ import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from 
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { Card } from '@/types';
-import { GAMES } from '@/lib/games';
+import { gamesAvailableInLanguage } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
 
@@ -184,7 +184,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <div>
                 <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Game'}</label>
                 <div className="flex gap-2 flex-wrap">
-                  {[{ id: 'all', shortName: t('marketplace.allGames') || 'All' }, ...GAMES].map(g => (
+                  {[{ id: 'all', shortName: t('marketplace.allGames') || 'All' }, ...gamesAvailableInLanguage(selectedLanguage)].map(g => (
                     <button
                       key={g.id}
                       onClick={() => setSelectedGame(g.id)}
@@ -211,7 +211,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                   ].map(lang => (
                     <button
                       key={lang.id}
-                      onClick={() => setSelectedLanguage(lang.id)}
+                      onClick={() => {
+                        setSelectedLanguage(lang.id);
+                        // The selected game may not exist in the new language
+                        // (its chip is about to disappear) — fall back to all.
+                        if (selectedGame !== 'all' && !gamesAvailableInLanguage(lang.id).some(g => g.id === selectedGame)) {
+                          setSelectedGame('all');
+                        }
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedLanguage === lang.id
                         ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
                         : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'

@@ -131,3 +131,16 @@ export function gameHasMultipleLanguages(id: string | null | undefined): boolean
 export function defaultLanguageForGame(id: string | null | undefined): GameLanguageCode {
   return getGame(id).languages[0]?.code ?? 'en';
 }
+
+/**
+ * Games whose catalog exists in the given language, for language-dependent
+ * game filters (e.g. Marketplace: pick Thai -> only Pokémon remains).
+ * Accepts both Japanese conventions — 'jp' (this config / mobile UI) and
+ * 'ja' (DB + listing snapshots, used by the desktop marketplace filter).
+ * 'all' / empty means no language constraint.
+ */
+export function gamesAvailableInLanguage(code: string | null | undefined): GameConfig[] {
+  if (!code || code === 'all') return GAMES;
+  const normalized = code === 'ja' ? 'jp' : code;
+  return GAMES.filter((g) => g.languages.some((l) => l.code === normalized));
+}
