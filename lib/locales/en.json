@@ -665,6 +665,12 @@
         "error": "Password must be at least 6 characters and include a lowercase letter, an uppercase letter, and a number.",
         "mismatch": "Passwords do not match."
     },
+    "priceHistory": {
+        "title": "Price Over Time",
+        "proNote": "180-day and 1-year charts are part of CardStreet Pro.",
+        "upgrade": "Upgrade to Pro",
+        "noData": "No price data for this range"
+    },
     "offer": {
         "acceptOffers": "Accept offers (OBO)",
         "makeOffer": "Make an Offer",

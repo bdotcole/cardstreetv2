@@ -443,7 +443,7 @@ export default function DesktopCardDetail({
                         condition={card.isSealed ? 'Sealed' : 'Market'}
                         currentPriceThb={marketPrice}
                         isThai={isThai}
-                        title={isThai ? 'ราคาย้อนหลัง' : 'Price Over Time'}
+                        title={t('priceHistory.title')}
                         panelClassName="mt-6 rounded-2xl bg-white/5 border border-white/10 p-5"
                         titleClassName={`${microLabel} mb-4`}
                     />

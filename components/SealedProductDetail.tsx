@@ -19,7 +19,7 @@ interface SealedProductDetailProps {
 }
 
 const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onClose, currency = 'THB', exchangeRate = 1, onAddToCollection }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
   const typeLabel = productTypeLabel(product.productType, isThai);
   const [mounted, setMounted] = useState(false);
@@ -123,7 +123,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
             condition="Sealed"
             currentPriceThb={product.price}
             isThai={isThai}
-            title={isThai ? 'ราคาย้อนหลัง' : 'Price Over Time'}
+            title={t('priceHistory.title')}
             panelClassName="bg-slate-800/50 rounded-2xl border border-white/5 p-4"
             titleClassName="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider mb-4 border-l-4 border-brand-green pl-3"
             chartClassName="h-44"
