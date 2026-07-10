@@ -40,6 +40,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
+import { sendScanFeedback } from '@/lib/scanFeedback';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
@@ -185,6 +186,10 @@ export default function HomePage() {
     const [viewingSellerReviews, setViewingSellerReviews] = useState<Review[]>([]);
     const [viewingSellerListings, setViewingSellerListings] = useState<MarketplaceListing[]>([]);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
+    // Last scan's server event id + the candidate ids it returned. Confirm/reject
+    // feedback (candidate pick, add-to-vault, bail to search) references this so the
+    // learned-phash index only ever ingests user-verified matches.
+    const lastScanRef = useRef<{ scanId: string; cardIds: string[]; at: number } | null>(null);
 
     // Load a seller's reviews and shop listings when their profile is opened.
     useEffect(() => {
@@ -700,6 +705,14 @@ export default function HomePage() {
                 purchasePrice: card.marketPrice
             });
 
+            // Vaulting a just-scanned card is the strongest "the scan was right"
+            // signal — feed it to the learned-phash index.
+            const lastScan = lastScanRef.current;
+            if (lastScan && Date.now() - lastScan.at < 10 * 60_000 && lastScan.cardIds.includes(card.id)) {
+                sendScanFeedback(lastScan.scanId, 'confirmed', card.id);
+                lastScanRef.current = null;
+            }
+
             // Auto-remove from wishlist if present
             if (isInWishlist(card.id)) {
                 await removeFromWishlist(card.id);
@@ -905,6 +918,14 @@ export default function HomePage() {
         try {
             console.log('[Scan] Received match from WebLiveScanner:', scanData);
 
+            if (scanData?.scanId) {
+                lastScanRef.current = {
+                    scanId: scanData.scanId,
+                    cardIds: Array.isArray(scanData?.matches) ? scanData.matches.map((c: Card) => c.id) : [],
+                    at: Date.now(),
+                };
+            }
+
             // Fast path: the server already resolved pHash matches to full Card[].
             // Skip the metadata search entirely when we have direct hits.
             if (Array.isArray(scanData?.matches) && scanData.matches.length > 0) {
@@ -919,6 +940,7 @@ export default function HomePage() {
             }
 
             if (!scanData || !scanData.primary?.name) {
+                sendScanFeedback(scanData?.scanId, 'rejected');
                 redirectScanToSearch('', "Couldn't identify the card. Search for it manually instead.");
                 return;
             }
@@ -963,6 +985,7 @@ export default function HomePage() {
             } else {
                 // AI saw a card but the DB doesn't have it — drop the user into
                 // manual search with the detected name pre-filled.
+                sendScanFeedback(scanData?.scanId, 'rejected');
                 redirectScanToSearch(
                     scanData.primary.name,
                     `AI identified "${scanData.primary.name}" but it isn't in our database. Try refining your search.`
@@ -1707,7 +1730,7 @@ export default function HomePage() {
                     </button>
                 </nav>
 
-                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { setSelectedCard(card); setScanCandidates([]); }} onCancel={() => setScanCandidates([])} />}
+                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { sendScanFeedback(lastScanRef.current?.scanId, 'confirmed', card.id); setSelectedCard(card); setScanCandidates([]); }} onCancel={() => { sendScanFeedback(lastScanRef.current?.scanId, 'rejected'); setScanCandidates([]); }} />}
                 {selectedCard && (
                     <CardDetails
                         card={selectedCard}

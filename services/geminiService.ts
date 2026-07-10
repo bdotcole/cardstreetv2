@@ -59,7 +59,7 @@ export const geminiService = {
   },
 
   async identifyCardFromImage(base64Image: string): Promise<ScanResult | null> {
-    throw new Error('Deprecated: Please use /api/scan route which delegates to Google Lens & Gemini.');
+    throw new Error('Deprecated: Please use /api/scan route which delegates to pHash + Gemini.');
   },
 
   async getMarketInsights(currentPrices: any[]) {

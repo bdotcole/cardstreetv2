@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient as createAdminClient, SupabaseClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { computeDHash, base64ToBuffer, bufferToPostgresBytea } from '@/lib/phash';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
@@ -72,7 +73,10 @@ export interface ScanResult {
   // Distance of the top pHash match, when present. Lower = better.
   matchDistance?: number;
   // Which path produced the result, for telemetry.
-  source?: 'set-code-ocr' | 'phash' | 'gemini-text' | 'gemini-image' | 'lens';
+  source?: 'set-code-ocr' | 'phash' | 'gemini-text' | 'gemini-image';
+  // scan_events row id. Clients POST it to /api/scan/feedback with the user's
+  // confirm/reject outcome — confirmed photos feed the learned-phash index.
+  scanId?: string;
 }
 
 export interface ScanPayload {
@@ -83,28 +87,92 @@ export interface ScanPayload {
   // scans any card), so this is usually absent and the game is auto-detected. When a
   // future game-scoped scan flow passes it, it narrows lookups + the pHash search.
   gameHint?: GameId;
+  // 'live' = one frame of a continuous auto-capture loop: cheap tiers only (pHash +
+  // deterministic OCR lookups), a miss returns an empty result for the next frame to
+  // retry. 'single' (default) = a deliberate one-shot capture: full pipeline incl.
+  // the Gemini image fallback. Keeps auto-loops from paying full-pipeline cost on
+  // every miss — the failure mode that exhausted the SerpApi plan in 2026-07.
+  mode?: 'live' | 'single';
+}
+
+// Per-scan diagnostics accumulated across the pipeline for scan_events logging.
+interface ScanDiag {
+  hashHex?: string;
+  ocr?: {
+    game: GameId | null;
+    name: string | null;
+    setCode: string | null;
+    cardNumber: string | null;
+    language: string | null;
+    confidence?: number;
+  };
+}
+
+// Retry a Gemini call once on retryable failures (rate limit, transient 5xx,
+// network). A 429 means "wait a moment", not "give up" — before this existed,
+// transient Gemini failures cascaded into the paid Google Lens fallback.
+async function geminiWithRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    const status = typeof e?.status === 'number' ? e.status : undefined;
+    const retryable =
+      status === 429 ||
+      (status !== undefined && status >= 500) ||
+      /\b429\b|rate.?limit|quota|RESOURCE_EXHAUSTED|UNAVAILABLE|fetch failed|ECONNRESET|timed? ?out/i.test(msg);
+    if (!retryable) throw e;
+    console.warn(`[ScannerService] ${label} retryable failure, retrying once:`, msg);
+    await new Promise((r) => setTimeout(r, 800));
+    return call();
+  }
 }
 
 export const scannerService = {
   async scanCard(payload: ScanPayload): Promise<ScanResult> {
-    const serpApiKey = process.env.SERPAPI_API_KEY;
     const ai = getAi();
     const hasGemini = !!ai;
     const hasImage = !!payload.image;
     const hasText = !!payload.text;
+    const mode: 'live' | 'single' = payload.mode === 'live' ? 'live' : 'single';
+    const scanId = randomUUID();
+    const startedAt = Date.now();
+    const diag: ScanDiag = {};
+
+    // Every exit funnels through here so scan_events gets exactly one row per scan.
+    // Logging is best-effort — a telemetry hiccup must never fail a scan.
+    const finish = async (result: ScanResult | null, error?: string): Promise<ScanResult> => {
+      await this.logScanEvent({
+        scanId,
+        mode,
+        diag,
+        result,
+        error: error ?? null,
+        latencyMs: Date.now() - startedAt,
+      });
+      if (result) return { ...result, scanId };
+      if (mode === 'live') {
+        // A live-frame miss is expected — the client's next frame retries. Return an
+        // empty result instead of throwing so the loop stays cheap and quiet.
+        return { primary: null, candidates: [], matches: [], scanId };
+      }
+      throw new Error(error || 'All scan paths failed. Try a sharper, well-lit image.');
+    };
 
     // 1) pHash path — runs whenever an image is present. Far cheaper and more accurate
-    // than any LLM call when the card has been backfilled into the catalog.
+    // than any LLM call when the card has been backfilled into the catalog. Includes
+    // the deterministic set-code/number tiers and the learned photo-hash index.
     if (hasImage) {
       try {
         const phashResult = await this.phashScan(payload.image as string, {
           ocrText: payload.text,
           userLocale: payload.languageHint,
           gameHint: payload.gameHint,
+          diag,
         });
         if (phashResult && phashResult.matches && phashResult.matches.length > 0) {
           const bestDist = phashResult.matchDistance ?? 99;
-          if (bestDist <= DIST_CANDIDATE_CEILING) return phashResult;
+          if (bestDist <= DIST_CANDIDATE_CEILING) return finish(phashResult);
           console.log(`[ScannerService] pHash best distance ${bestDist} > ceiling, falling through`);
         }
       } catch (e) {
@@ -112,54 +180,83 @@ export const scannerService = {
       }
     }
 
+    // Live frames stop here: no LLM fallbacks on a continuous loop. The next frame
+    // (or the client's single-shot escalation) picks it up.
+    if (mode === 'live') {
+      return finish(null, hasImage ? undefined : 'Image payload missing.');
+    }
+
     // 2) Native OCR text path — when the device produced clean OCR text, parse with Flash.
     if (hasText && hasGemini) {
       try {
         console.log('[ScannerService] Engaging Native OCR Flow via Gemini Flash...');
         const r = await this.geminiTextScan(payload.text as string);
-        return { ...r, source: 'gemini-text' };
+        return finish({ ...r, source: 'gemini-text' });
       } catch (e) {
         console.warn('[ScannerService] Native Text Parse failed, falling back to Image evaluation...', e);
       }
     }
 
     if (!hasImage) {
-      if (!serpApiKey && !hasGemini) {
-        throw new Error('No scanning paths available. Configure GEMINI_API_KEY or SERPAPI_API_KEY.');
+      if (!hasGemini) {
+        return finish(null, 'No scanning paths available. Configure GEMINI_API_KEY.');
       }
-      throw new Error('Image payload missing and Native Text failed.');
+      return finish(null, 'Image payload missing and Native Text failed.');
     }
 
-    // 3) Vision LLM fallback (Flash, not Pro — speed matters when pHash has already missed).
+    // 3) Final fallback: vision LLM (Flash, not Pro — speed matters when pHash has
+    // already missed). The old Google Lens / SerpApi tier below this was removed
+    // 2026-07-10: it only fired when Gemini threw, yet needed Gemini itself to parse
+    // the Lens titles — so it consumed a paid search precisely when it couldn't
+    // succeed, and exhausted the 5k/mo plan. geminiWithRetry now absorbs the
+    // transient failures that used to cascade there.
     if (hasGemini) {
       try {
         console.log('[ScannerService] Engaging Gemini Flash (image fallback)...');
         const r = await this.geminiScan(payload.image as string, 'gemini-2.5-flash');
-        return { ...r, source: 'gemini-image' };
+        return finish({ ...r, source: 'gemini-image' });
       } catch (e) {
-        console.warn('[ScannerService] Gemini Flash failed, falling back to Lens:', e);
+        console.warn('[ScannerService] Gemini Flash failed:', e);
       }
     }
 
-    // 4) Last-resort Google Lens via SerpApi.
-    if (serpApiKey) {
-      try {
-        console.log('[ScannerService] Falling back to Google Lens (Slower)...');
-        const lensResult = await this.lensScan(payload.image as string, serpApiKey);
-        if (lensResult && lensResult.primary && lensResult.primary.confidence > 0.6) {
-          return { ...lensResult, source: 'lens' };
-        }
-      } catch (e) {
-        console.warn('[ScannerService] Google Lens failed:', e);
-      }
-    }
+    return finish(null, 'All scan paths failed. Try a sharper, well-lit image.');
+  },
 
-    throw new Error('All scan paths failed. Try a sharper, well-lit image.');
+  // Best-effort insert into scan_events. Fails soft in every direction: table not
+  // yet migrated, DB hiccup, oversized fields — none of it may break a scan.
+  async logScanEvent(entry: {
+    scanId: string;
+    mode: 'live' | 'single';
+    diag: ScanDiag;
+    result: ScanResult | null;
+    error: string | null;
+    latencyMs: number;
+  }): Promise<void> {
+    try {
+      const supabase = getSupabase();
+      const matches = entry.result?.matches ?? [];
+      const { error } = await supabase.from('scan_events').insert({
+        id: entry.scanId,
+        mode: entry.mode,
+        source: entry.result?.source ?? null,
+        phash: entry.diag.hashHex ?? null,
+        ocr: entry.diag.ocr ?? null,
+        matched_card_id: matches[0]?.id ?? null,
+        candidate_ids: matches.length > 0 ? matches.slice(0, 10).map((m) => m.id) : null,
+        match_distance: entry.result?.matchDistance ?? null,
+        latency_ms: entry.latencyMs,
+        error: entry.error ? entry.error.slice(0, 500) : null,
+      });
+      if (error) console.warn('[ScannerService] scan_events insert failed (non-fatal):', error.message);
+    } catch (e) {
+      console.warn('[ScannerService] scan_events insert failed (non-fatal):', e);
+    }
   },
 
   async phashScan(
     base64Image: string,
-    opts: { ocrText?: string; userLocale?: string; gameHint?: GameId } = {}
+    opts: { ocrText?: string; userLocale?: string; gameHint?: GameId; diag?: ScanDiag } = {}
   ): Promise<ScanResult | null> {
     const supabase = getSupabase();
     const imageBuffer = base64ToBuffer(base64Image);
@@ -177,6 +274,20 @@ export const scannerService = {
       this.extractCardMetadata(base64Image, opts.ocrText),
     ]);
     const hex = bufferToPostgresBytea(hash);
+
+    if (opts.diag) {
+      opts.diag.hashHex = hex;
+      if (ocr) {
+        opts.diag.ocr = {
+          game: ocr.game ?? null,
+          name: ocr.name ?? null,
+          setCode: ocr.setCode,
+          cardNumber: ocr.cardNumber,
+          language: ocr.language,
+          confidence: ocr.confidence,
+        };
+      }
+    }
 
     // Detected game (or the UI's hint). Scopes every catalog lookup below to one game so
     // a number/name printed on one game's card can't false-match another game's row.
@@ -238,6 +349,9 @@ export const scannerService = {
     // -------- Tier 2: pHash search, filtered by detected language + game --------
     // Cross-game artworks never collide, so the game filter is a precision/speed
     // optimisation, not a correctness requirement — we fall back fully unfiltered below.
+    // Runs in parallel with the learned photo-hash index (user-confirmed scans of real
+    // photos), whose matches are merged into the candidate pool below — a photo of a
+    // card matches previous photos of it far better than it matches catalog art.
     const langFilter = ocr?.language ?? null;
 
     const runRpc = (lang: string | null, game: string | null) =>
@@ -249,15 +363,30 @@ export const scannerService = {
         game_filter: game,
       });
 
-    let { data: rows, error } = await runRpc(langFilter, detectedGame);
-    if (error) {
-      console.error('[ScannerService] phash RPC error:', error);
-      return null;
+    const [catalogRes, learnedRes] = await Promise.all([
+      runRpc(langFilter, detectedGame),
+      supabase.rpc('search_learned_phash', {
+        query_phash: hex,
+        max_distance: DIST_CANDIDATE_CEILING,
+        result_limit: 5,
+      }),
+    ]);
+    // The learned index fails soft: before its migration runs (or on any error) we
+    // just proceed catalog-only.
+    const learned: Array<{ card_id: string; distance: number }> = learnedRes.error
+      ? []
+      : (learnedRes.data ?? []);
+
+    let rows = catalogRes.data;
+    if (catalogRes.error) {
+      console.error('[ScannerService] phash RPC error:', catalogRes.error);
+      if (learned.length === 0) return null;
+      rows = [];
     }
 
     // If the detected language/game returned nothing, the detection may have been wrong
     // (e.g. partial OCR, misjudged game). Retry fully unfiltered across the whole catalog.
-    if ((langFilter || detectedGame) && (!rows || rows.length === 0)) {
+    if ((langFilter || detectedGame) && (!rows || rows.length === 0) && learned.length === 0) {
       console.log(`[ScannerService] phash: 0 matches in lang=${langFilter} game=${detectedGame}, retrying unfiltered`);
       const retry = await runRpc(null, null);
       if (retry.error) {
@@ -265,6 +394,31 @@ export const scannerService = {
         return null;
       }
       rows = retry.data;
+    }
+
+    // Merge learned matches into the candidate pool: hydrate ids the catalog search
+    // didn't already surface, then keep the minimum distance per card.
+    if (learned.length > 0) {
+      const have = new Map<string, any>((rows ?? []).map((r: any) => [r.id, r]));
+      const missingIds = learned.filter((l) => !have.has(l.card_id)).map((l) => l.card_id);
+      if (missingIds.length > 0) {
+        const { data: learnedCards, error: hydrateErr } = await supabase
+          .from('pokemon_cards')
+          .select('id, name, english_name, set_id, number, rarity, supertype, image_small, image_large, language, game, raw_data')
+          .in('id', missingIds);
+        if (!hydrateErr && learnedCards) {
+          const distById = new Map(learned.map((l) => [l.card_id, l.distance]));
+          for (const c of learnedCards) {
+            have.set(c.id, { ...c, distance: distById.get(c.id) ?? 99 });
+          }
+        }
+      }
+      for (const l of learned) {
+        const row = have.get(l.card_id);
+        if (row && l.distance < row.distance) row.distance = l.distance;
+      }
+      rows = Array.from(have.values());
+      console.log(`[ScannerService] learned-phash contributed ${learned.length} match(es), best distance ${learned[0].distance}`);
     }
 
     if (!rows || rows.length === 0) return null;
@@ -572,7 +726,7 @@ export const scannerService = {
     }
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await geminiWithRetry('Flash extraction', () => ai.models.generateContent({
         // Flash (not Pro). Diagnostic on 10 random Thai cards: Flash hit 10/10 on
         // language, 10/10 on card number, 5/10 on set code (the misses are OCR
         // confusion of "8s" with "bs"/"B5" — handled by tier 1c which uses the
@@ -622,7 +776,7 @@ Return JSON only. Keep values terse — single short string per field.`,
             },
           },
         },
-      });
+      }));
       const parsed = JSON.parse(response.text || '{}');
       // Sanity-check field shapes — Pro occasionally hallucinates ultra-long strings
       // when it gets confused. Drop anything outside the expected envelope.
@@ -674,57 +828,13 @@ Return JSON only. Keep values terse — single short string per field.`,
     }
   },
 
-  async lensScan(base64Image: string, serpApiKey: string): Promise<ScanResult | null> {
-    const supabase = getSupabase();
-    const ai = getAi();
-    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-    const byteArray = new Uint8Array(byteNumbers);
-    const filename = `scans/temp_lens_${Date.now()}.jpg`;
-
-    const { error: uploadError } = await supabase.storage.from('listings').upload(filename, byteArray.buffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-    });
-    if (uploadError) throw new Error('Failed to upload temp image for Lens: ' + uploadError.message);
-
-    const { data: { publicUrl } } = supabase.storage.from('listings').getPublicUrl(filename);
-
-    const response = await fetch(`https://serpapi.com/search.json?engine=google_lens&url=${encodeURIComponent(publicUrl)}&api_key=${serpApiKey}`);
-    const json = await response.json();
-
-    supabase.storage.from('listings').remove([filename]).catch(e => console.error('Temp image cleanup failed:', e));
-
-    if (json.error) throw new Error('SerpApi Error: ' + json.error);
-
-    if (json.visual_matches && json.visual_matches.length > 0 && ai) {
-        const titles = json.visual_matches.map((m: any) => m.title).slice(0, 8);
-        const parseRes = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Act as a trading-card expert (Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Riftbound, or Disney Lorcana). Google Lens just identified an image with these titles: ${JSON.stringify(titles)}.
-
-Identify the EXACT card (Game, Name, Set Code, Number, Rarity) they represent. For game use one of "pokemon", "mtg", "yugioh", "onepiece", "riftbound", "lorcana".
-Return your best singular match as 'primary', and alternative matches as 'candidates'.
-If the titles are garbage or unrelated to trading cards, return a low confidence.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: scanResultSchema(),
-            }
-        });
-        return JSON.parse(parseRes.text || '{}') as ScanResult;
-    }
-    return null;
-  },
-
   async geminiScan(base64Image: string, modelName: string = 'gemini-2.5-flash'): Promise<ScanResult> {
     const ai = getAi();
     if (!ai) throw new Error("Gemini API key not configured");
 
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
-    const response = await ai.models.generateContent({
+    const response = await geminiWithRetry('Flash image scan', () => ai.models.generateContent({
       model: modelName,
       contents: [
         {
@@ -747,7 +857,7 @@ CRITICAL INSTRUCTIONS:
         responseMimeType: "application/json",
         responseSchema: scanResultSchema(),
       }
-    });
+    }));
 
     return JSON.parse(response.text || '{}') as ScanResult;
   },
@@ -756,7 +866,7 @@ CRITICAL INSTRUCTIONS:
     const ai = getAi();
     if (!ai) throw new Error("Gemini API key not configured");
 
-    const response = await ai.models.generateContent({
+    const response = await geminiWithRetry('Flash text scan', () => ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
@@ -773,7 +883,7 @@ CRITICAL INSTRUCTIONS:
         responseMimeType: "application/json",
         responseSchema: scanResultSchema(),
       }
-    });
+    }));
 
     return JSON.parse(response.text || '{}') as ScanResult;
   }

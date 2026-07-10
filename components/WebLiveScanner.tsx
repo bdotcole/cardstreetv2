@@ -319,7 +319,9 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
 
             // The server detects the card's actual language from OCR text (preferred) or
             // an image classifier. We just pass the user's app locale as a tiebreaker.
-            const body: any = { image: base64Image };
+            // mode 'single': this is one deliberate capture (the auto-fire gates ensure a
+            // sharp, settled frame), so the server may run its full pipeline on a miss.
+            const body: any = { image: base64Image, mode: 'single' };
             if (ocrText) body.text = ocrText;
             if (languageHint) body.languageHint = languageHint;
 
