@@ -80,6 +80,17 @@ const SET_NAME_OVERRIDES = {
   pokemon: {
     // 'scarlet violet 151': 'sv2a',
   },
+  // EN consoles whose names don't normalize-match the optcgapi set names
+  // (dropped articles, missing subtitle). Without these the sealed run leaves
+  // set_id null and the set-logo backfill (onepiece-set-meta.mjs) finds nothing.
+  onepiece: {
+    'fist of divine speed': 'op-op-11',
+    'azure sea s seven': 'op-op14-eb04',
+    'adventure on kami s island': 'op-op15-eb04',
+    'extra booster heroines edition': 'op-eb-03',
+    'premium booster': 'op-prb-01',
+    'premium booster 2': 'op-prb-02',
+  },
   // Our ja pokemon_sets mostly carry Japanese names; PriceCharting consoles use the
   // English set names, so all non-SV-era sets map by hand (verified against the
   // console list in the CSV, 2026-07-03).
