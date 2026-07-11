@@ -11,6 +11,10 @@ import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
+    // Why the modal opened ("Sign in to save cards to your vault") — shown in
+    // the header so a gate-triggered prompt reads as a step toward what the
+    // user was doing, not a generic interruption.
+    contextMessage?: string;
 }
 
 type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot' | 'forgot-sent';
@@ -87,7 +91,7 @@ function verifySessionPersisted(supabase: ReturnType<typeof createClient>) {
     }, 1500);
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }) => {
     const [mode, setMode] = useState<AuthMode>('signin');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -408,7 +412,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                             ? 'Check your email to verify your account'
                             : mode === 'forgot' || mode === 'forgot-sent'
                                 ? 'Reset your password to get back in'
-                                : 'Sign in to sync your collection across devices'}
+                                : contextMessage || 'Sign in to sync your collection across devices'}
                     </p>
                 </div>
 

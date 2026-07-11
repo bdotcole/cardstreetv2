@@ -207,6 +207,13 @@
         "signIn": "Sign in",
         "close": "Close"
     },
+    "authGate": {
+        "wishlist": "Sign in to manage your wishlist",
+        "vault": "Sign in to save cards to your vault",
+        "purchase": "Sign in to complete your purchase",
+        "list": "Sign in to list cards for sale",
+        "partner": "Sign in to apply as a partner"
+    },
     "vault": {
         "myPortfolio": "My Portfolio",
         "collection": "Collection",

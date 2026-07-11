@@ -16,6 +16,7 @@ import Vault from '@/components/Vault';
 import Profile from '@/components/Profile';
 import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
+import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
@@ -66,6 +67,18 @@ const isLandingTab = (v: string | null): v is LandingTab =>
     !!v && (LANDING_TABS as readonly string[]).includes(v);
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
+
+// An auth-gated action the user attempted while signed out. Remembered when
+// the sign-in modal opens and re-dispatched once a real session arrives, so
+// the tap that hit the gate completes instead of dying in a toast. In-memory
+// only by design: native OAuth keeps the webview alive and email sign-in
+// never leaves the page; a web OAuth redirect loses the whole shell state
+// anyway, so there is nothing meaningful to resume there.
+type PendingAuthAction =
+    | { type: 'wishlist'; card: Card }
+    | { type: 'vault'; card: Card; collectionId?: string }
+    | { type: 'checkout'; items: CartItem[] }
+    | { type: 'buyNow' };
 
 // Layout effect that is safe to reference from SSR'd client components —
 // effects never run on the server, this alias only silences the
@@ -659,18 +672,24 @@ export default function HomePage() {
 
     const displayValue = totalValueTHB * (currency === 'THB' ? 1 : exchangeRate); // Rough valid assumption, assuming mock prices are THB
 
-    // Helper function to check authentication
-    const requireAuth = (actionName: string): boolean => {
-        if (!user) {
-            showToast(`Please sign in to ${actionName}`, 'error');
-            setActiveTab('profile');
+    // Auth gate: a signed-out (or guest — guests have no server session, so
+    // every DB write would fail anyway) user tapping a gated action gets the
+    // sign-in modal right here, with the attempted action remembered so it
+    // resumes after sign-in. Replaces the old toast + jump to the Profile
+    // tab, which lost the user's context and buried the sign-in CTA.
+    const [authGateMessage, setAuthGateMessage] = useState<string | null>(null);
+    const pendingAuthActionRef = useRef<(PendingAuthAction & { at: number }) | null>(null);
+    const requireAuth = (message: string, pending?: PendingAuthAction): boolean => {
+        if (!user || user.provider === 'guest') {
+            pendingAuthActionRef.current = pending ? { ...pending, at: Date.now() } : null;
+            setAuthGateMessage(message);
             return false;
         }
         return true;
     };
 
     const handleToggleWishlist = async (card: Card) => {
-        if (!requireAuth('manage your wishlist')) return;
+        if (!requireAuth(t('authGate.wishlist') || 'Sign in to manage your wishlist', { type: 'wishlist', card })) return;
 
         try {
             if (isInWishlist(card.id)) {
@@ -686,7 +705,7 @@ export default function HomePage() {
     };
 
     const handleAddToCollection = async (card: Card, collectionId: string = 'default') => {
-        if (!requireAuth('add cards to your vault')) return;
+        if (!requireAuth(t('authGate.vault') || 'Sign in to save cards to your vault', { type: 'vault', card, collectionId })) return;
 
         try {
             // Use the first collection (Main Vault created on signup)
@@ -808,12 +827,9 @@ export default function HomePage() {
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
         // with a generic "missing required fields" message that's hard to debug.
-        if (!requireAuth('complete your purchase')) return;
-        if (user?.provider === 'guest') {
-            showToast(t('paymentFlow.signInRequired') || 'Please sign in with a full account to complete a purchase.', 'error');
-            setActiveTab('profile');
-            return;
-        }
+        // The cart items ride along on the pending action because the per-user
+        // cart hydration wipes the in-memory signed-out cart at sign-in.
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart })) return;
 
         if (!(await ensureBuyerProfileComplete())) return;
 
@@ -844,7 +860,7 @@ export default function HomePage() {
             return;
         }
         if (!(await ensureCanPurchase())) return;
-        if (!requireAuth('complete your purchase')) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase')) return;
         if (!(await ensureBuyerProfileComplete())) return;
 
         setCart([{
@@ -860,6 +876,69 @@ export default function HomePage() {
         setAcceptedOfferId(offer.id);
         setIsPaymentModalOpen(true);
     };
+
+    // Buy Now skips the cart and opens the payment modal directly, so it runs
+    // the same geo, auth, and buyer-profile (address + phone) gates as cart
+    // checkout itself. Reads selectedListing from state (rather than a param)
+    // so the post-sign-in resume can re-invoke it while the listing modal is
+    // still open behind the auth gate.
+    const handleBuyNow = async () => {
+        if (!selectedListing) return;
+        if (!(await ensureCanPurchase())) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow' })) return;
+        if (!(await ensureBuyerProfileComplete())) return;
+        setCart([{
+            id: selectedListing.id,
+            cardId: selectedListing.card_id,
+            card: selectedListing.card_data,
+            price: selectedListing.price, // Store base price for now
+            sellerId: selectedListing.seller_id,
+            sellerName: selectedListing.seller?.display_name || 'Unknown',
+            condition: selectedListing.condition
+        }]);
+        setSelectedListing(null);
+        setIsPaymentModalOpen(true);
+    };
+
+    // Resume the action that opened the auth gate once a real session lands.
+    // Vault adds additionally wait for the post-sign-in collections load —
+    // dispatching into a still-empty collections list would create a duplicate
+    // "Main Vault" next to the one the signup trigger just made. The 10-minute
+    // cap discards stale intents so a much-later organic sign-in can't replay
+    // a forgotten tap.
+    useEffect(() => {
+        const pending = pendingAuthActionRef.current;
+        if (!pending || !user || user.provider === 'guest') return;
+        if (Date.now() - pending.at > 10 * 60_000) {
+            pendingAuthActionRef.current = null;
+            return;
+        }
+        if (pending.type === 'vault' && (collectionsLoading || customCollections.length === 0)) return;
+        pendingAuthActionRef.current = null;
+        setAuthGateMessage(null);
+        if (pending.type === 'wishlist') {
+            void handleToggleWishlist(pending.card);
+        } else if (pending.type === 'vault') {
+            void handleAddToCollection(pending.card, pending.collectionId);
+        } else if (pending.type === 'checkout') {
+            // The signed-out cart lived only in memory and the per-user cart
+            // hydration effect just replaced it — merge the items back in
+            // before re-running the checkout gates.
+            setCart(prev => {
+                const merged = [...prev];
+                for (const item of pending.items) {
+                    if (!merged.some(i => i.id === item.id)) merged.push(item);
+                }
+                return merged;
+            });
+            void handleCheckout();
+        } else if (pending.type === 'buyNow') {
+            void handleBuyNow();
+        }
+        // Handlers are re-created every render and the pending ref is one-shot,
+        // so only the wake-up-relevant deps are listed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, collectionsLoading, customCollections]);
 
     // Open an offer's underlying card in the shared CardDetails overlay. It's a
     // sibling of <main> (z-50) while the Offers panel lives inside <main>'s own
@@ -1015,11 +1094,8 @@ export default function HomePage() {
     // mirrored in services/marketplaceService.createListing (real write
     // path) and /api/listings POST (defense in depth).
     const handleStartListing = async (colId: string, item: UserCollectionItem, card: Card) => {
-        if (!user || user.provider === 'guest') {
-            showToast(t('paymentFlow.signInToList') || 'Please sign in to list a card', 'error');
-            setActiveTab('profile');
-            return;
-        }
+        if (!requireAuth(t('authGate.list') || 'Sign in to list cards for sale')) return;
+        if (!user) return; // type narrowing — requireAuth guarantees a signed-in user
         try {
             const supabase = createClient();
             const { data: profile, error } = await supabase
@@ -1680,8 +1756,7 @@ export default function HomePage() {
                                             }
                                         });
                                     } else {
-                                        showToast("Please sign in to apply.", 'info');
-                                        setActiveTab('profile');
+                                        requireAuth(t('authGate.partner') || 'Sign in to apply as a partner');
                                     }
                                 }} />
                             )
@@ -1735,6 +1810,7 @@ export default function HomePage() {
                     <CardDetails
                         card={selectedCard}
                         isWishlisted={!!wishlist.find(c => c.id === selectedCard.id)}
+                        showSignInPrompt={!user || user.provider === 'guest'}
                         onClose={() => setSelectedCard(null)}
                         onToggleWishlist={handleToggleWishlist}
                         onAddToCollection={(card) => { handleAddToCollection(card); setSelectedCard(null); }}
@@ -1758,32 +1834,7 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
-                        onBuyNow={async () => {
-                            // Same gates as cart checkout — Buy Now skips the cart
-                            // and opens the payment modal directly, so it must run
-                            // the geo, auth, and buyer-profile (address + phone)
-                            // checks itself before mounting the payment step.
-                            if (!(await ensureCanPurchase())) return;
-                            if (!requireAuth('complete your purchase')) return;
-                            if (user?.provider === 'guest') {
-                                showToast(t('paymentFlow.signInRequired') || 'Please sign in with a full account to complete a purchase.', 'error');
-                                setSelectedListing(null);
-                                setActiveTab('profile');
-                                return;
-                            }
-                            if (!(await ensureBuyerProfileComplete())) return;
-                            setCart([{
-                                id: selectedListing.id,
-                                cardId: selectedListing.card_id,
-                                card: selectedListing.card_data,
-                                price: selectedListing.price, // Store base price for now
-                                sellerId: selectedListing.seller_id,
-                                sellerName: selectedListing.seller?.display_name || 'Unknown',
-                                condition: selectedListing.condition
-                            }]);
-                            setSelectedListing(null);
-                            setIsPaymentModalOpen(true);
-                        }}
+                        onBuyNow={handleBuyNow}
                         onAddToCart={() => {
                             handleAddToCart({
                                 id: selectedListing.id,
@@ -1835,6 +1886,21 @@ export default function HomePage() {
                     onCheckout={handleCheckout}
                     currencySymbol={currencySymbol}
                     exchangeRate={exchangeRate}
+                />
+
+                <AuthModal
+                    isOpen={authGateMessage !== null}
+                    contextMessage={authGateMessage ?? undefined}
+                    onClose={() => {
+                        setAuthGateMessage(null);
+                        // Distinguish cancel from post-sign-in close: the email
+                        // flow closes the modal itself right after signing in,
+                        // before user state has updated — so only a close with
+                        // no session abandons the pending action.
+                        void createClient().auth.getSession().then(({ data: { session } }) => {
+                            if (!session) pendingAuthActionRef.current = null;
+                        });
+                    }}
                 />
 
                 <PurchaseRegionModal

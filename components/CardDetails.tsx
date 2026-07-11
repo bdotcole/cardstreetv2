@@ -21,6 +21,9 @@ interface CardDetailsProps {
   exchangeRate?: number;
   isVaultView?: boolean;
   vaultActionButtons?: React.ReactNode;
+  // Signed-out viewers get a "sign in to save this" banner above the action
+  // bar — the post-scan moment is the strongest signup hook in the app.
+  showSignInPrompt?: boolean;
 }
 
 const CardDetails: React.FC<CardDetailsProps> = ({
@@ -37,7 +40,8 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   currency = 'THB',
   exchangeRate = 1,
   isVaultView = false,
-  vaultActionButtons
+  vaultActionButtons,
+  showSignInPrompt = false
 }) => {
   const { isThai } = useTranslation();
 
@@ -283,7 +287,22 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
       {/* Action Bar */}
       {actionButtons ? actionButtons : (
-        <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex gap-3 z-20">
+        <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-20">
+          {showSignInPrompt && (
+            <button
+              onClick={() => onAddToCollection(card)}
+              className="w-full flex items-center gap-3 bg-brand-cyan/10 border border-brand-cyan/25 rounded-xl px-4 py-3 text-left active:scale-[0.98] transition-all"
+            >
+              <i className="fa-solid fa-circle-user text-brand-cyan text-xl"></i>
+              <span className="flex-1 text-sm font-semibold text-white leading-snug">
+                {isThai
+                  ? 'เข้าสู่ระบบฟรีเพื่อบันทึกการ์ดนี้เข้าคลังของคุณ'
+                  : 'Sign in free to save this card to your vault'}
+              </span>
+              <i className="fa-solid fa-arrow-right text-brand-cyan"></i>
+            </button>
+          )}
+          <div className="flex gap-3">
           <button
             onClick={() => onAddToCollection(card)}
             className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
@@ -306,6 +325,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
             <i className="fa-solid fa-store"></i>
             {isThai ? 'ช้อปเลย' : 'Shop Now'}
           </button>
+          </div>
         </div>
       )}
     </div>
