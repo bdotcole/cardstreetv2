@@ -339,6 +339,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activePanel]);
 
+  // Seller tracking modal: poll Flash once for the viewed shipment so the
+  // timeline reflects reality even when the webhook/cron missed an event.
+  // Keyed on the modal opening only — the refetch below mutates `shipments`,
+  // and depending on it would refire the sweep in a loop.
+  useEffect(() => {
+    if (!trackingOrderId) return;
+    const s = shipments.find((x) => x.id === trackingOrderId);
+    const pno = s?.shipping_labels?.[0]?.tracking_number;
+    if (!s || !pno || pno === 'MANUAL') return;
+    if (!['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(s.status)) return;
+    fetch(`/api/orders/track?orderId=${trackingOrderId}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const labelMoved = d?.label?.status && d.label.status !== s.shipping_labels?.[0]?.status;
+        const orderMoved = d?.order?.status && d.order.status !== s.status;
+        if (labelMoved || orderMoved) fetchShipments();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingOrderId]);
+
   // Keep the parent shell informed about whether a sub-panel is open so the
   // Android hardware back button closes the panel instead of switching tabs.
   useEffect(() => {
@@ -416,7 +437,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     }
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (): Promise<Order[]> => {
     setOrdersError(null);
     try {
       const res = await fetch('/api/profile/orders?status=active', {
@@ -428,6 +449,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setOrders(data.orders || []);
+        return data.orders || [];
       } else {
         const msg = data.error || `Server returned ${res.status}`;
         console.error('Error fetching orders:', msg);
@@ -439,6 +461,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       setOrdersError(error?.message || 'Network error');
       setOrders([]);
     }
+    return [];
+  };
+
+  // Viewing Track Orders self-heals stale statuses: /api/orders/track polls
+  // Flash and advances the order server-side. Webhooks can be dropped and the
+  // reconcile cron runs hourly, so the moment the buyer actually looks is the
+  // one time staleness is guaranteed visible — sync it then. Capped at 10
+  // orders and one sweep per minute: each call is a signed Flash API request
+  // against a per-merchant rate limit, and a buyer toggling the panel must
+  // not burn it. Refetch only if something actually advanced.
+  const lastSweepAtRef = useRef(0);
+  const syncInFlightOrders = async (list: Order[]) => {
+    if (Date.now() - lastSweepAtRef.current < 60_000) return;
+    const inFlight = list
+      .filter((o) => {
+        const pno = o.shipping_labels?.[0]?.tracking_number;
+        return ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(o.status) && pno && pno !== 'MANUAL';
+      })
+      .slice(0, 10);
+    if (inFlight.length === 0) return;
+    lastSweepAtRef.current = Date.now();
+    const results = await Promise.allSettled(
+      inFlight.map((o) =>
+        fetch(`/api/orders/track?orderId=${o.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null))
+      )
+    );
+    const advanced = results.some((r, i) => {
+      if (r.status !== 'fulfilled' || !r.value) return false;
+      const before = inFlight[i];
+      return (
+        (r.value.label?.status && r.value.label.status !== before.shipping_labels?.[0]?.status) ||
+        (r.value.order?.status && r.value.order.status !== before.status)
+      );
+    });
+    if (advanced) fetchOrders();
   };
 
   const fetchSales = async () => {
@@ -779,7 +836,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // Open panel handlers
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
-    if (panel === 'orders') fetchOrders();
+    if (panel === 'orders') fetchOrders().then(syncInFlightOrders);
     if (panel === 'sales') fetchSales();
     if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {

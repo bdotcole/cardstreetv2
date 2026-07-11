@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { embedArray } from '@/lib/utils/embed'
 
 // GET - List user's active sales/shipments
 export async function GET(request: NextRequest) {
@@ -41,8 +42,15 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
+        // Same to-one embed normalization as /api/profile/orders: the seller
+        // panel reads shipping_labels[0] for tracking/label actions.
+        const normalized = (shipments || []).map((s: any) => ({
+            ...s,
+            shipping_labels: embedArray(s.shipping_labels),
+        }))
+
         return NextResponse.json({
-            shipments: shipments || [],
+            shipments: normalized,
             pagination: {
                 page,
                 limit,

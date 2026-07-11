@@ -23,6 +23,7 @@ import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { trackShipment, mapFlashStateToStatus } from '@/lib/flashExpress';
 import { sendShippedNotification, sendPackageDeliveredNotification } from '@/lib/courier';
+import { embedArray } from '@/lib/utils/embed';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -61,7 +62,10 @@ export async function GET(request: NextRequest) {
     for (const order of orders || []) {
         if (Date.now() - started > TIME_BUDGET_MS) break;
 
-        const label = (order.shipping_labels as { tracking_number: string | null; status: string | null }[] | null)?.[0];
+        // shipping_labels.order_id is UNIQUE, so PostgREST returns this embed
+        // as a bare object — a raw [0] here comes back undefined and the whole
+        // sweep silently no-ops. embedArray tolerates both shapes.
+        const label = embedArray(order.shipping_labels as { tracking_number: string | null; status: string | null }[] | { tracking_number: string | null; status: string | null } | null)[0];
         const pno = label?.tracking_number;
         if (!pno || pno === 'MANUAL') continue;
 
@@ -77,25 +81,51 @@ export async function GET(request: NextRequest) {
             // Keep the shipping label's status current regardless of the order.
             if (label?.status !== shippingStatus) {
                 await supabase.from('shipping_labels').update({ status: shippingStatus, updated_at: new Date().toISOString() }).eq('order_id', order.id);
+
+                // Flash states 6/7 (returned / cancelled) map to orderStatus
+                // 'cancelled', which is off the forward ladder and never
+                // applied below — correctly, since a return needs a human
+                // (refund, restock). Without an alert the order would just be
+                // re-polled every hour forever with nobody the wiser. Fires
+                // once, on the label-status transition.
+                if (orderStatus === 'cancelled') {
+                    Sentry.captureMessage(
+                        `reconcile-shipments: parcel ${pno} (order ${order.id}) reports Flash state ${tracking.state} (returned/cancelled) — needs manual handling`,
+                        { level: 'warning', extra: { orderId: order.id, pno, flashState: tracking.state, stateText: tracking.stateText } },
+                    );
+                }
             }
 
             const currentIdx = STATUS_ORDER.indexOf(order.status);
             const newIdx = STATUS_ORDER.indexOf(orderStatus);
-            if (newIdx <= currentIdx) continue; // forward-only; already handled (e.g. by the webhook)
+            if (currentIdx < 0 || newIdx <= currentIdx) continue; // forward-only; already handled (e.g. by the webhook)
 
             const updateData: Record<string, unknown> = { status: orderStatus, updated_at: new Date().toISOString() };
             if (orderStatus === 'delivered') {
+                // delivered_at records the carrier's actual delivery moment;
+                // the escrow window runs from DISCOVERY (now) so a late
+                // catch-up still gives the buyer their 48h before release.
                 const deliveredAt = tracking.stateChangeAt ? new Date(tracking.stateChangeAt * 1000) : new Date();
                 updateData.delivered_at = deliveredAt.toISOString();
-                updateData.funds_release_at = new Date(deliveredAt.getTime() + 48 * 3600 * 1000).toISOString();
+                updateData.funds_release_at = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
             }
 
-            const { error: upErr } = await supabase.from('orders').update(updateData).eq('id', order.id);
+            // CAS on the status from the batch read: the webhook (or the
+            // buyer's confirm-delivery) may have advanced this order while the
+            // cron was working through the batch. A 0-row match means someone
+            // else got there first — skip, and crucially don't re-notify.
+            const { data: applied, error: upErr } = await supabase
+                .from('orders')
+                .update(updateData)
+                .eq('id', order.id)
+                .eq('status', order.status)
+                .select('id');
             if (upErr) {
                 summary.errors++;
                 Sentry.captureException(new Error(`reconcile-shipments order update failed: ${upErr.message}`), { extra: { orderId: order.id, orderStatus } });
                 continue;
             }
+            if (!applied || applied.length === 0) continue;
 
             summary.advanced++;
             console.log(`[ReconcileShipments] Order ${order.id}: ${order.status} -> ${orderStatus} (pno ${pno})`);
@@ -116,6 +146,17 @@ export async function GET(request: NextRequest) {
             summary.errors++;
             console.error(`[ReconcileShipments] Track error for order ${order.id} (pno ${pno}):`, err instanceof Error ? err.message : err);
         }
+    }
+
+    // Watchdog: in-flight orders exist but none were scanned. That is exactly
+    // how the original ?.[0] embed-shape bug looked from the outside — the
+    // cron ran green while every order was skipped. Only MANUAL-waybill
+    // orders legitimately produce this, so a warning is cheap and loud.
+    if ((orders?.length ?? 0) > 0 && summary.scanned === 0) {
+        Sentry.captureMessage(
+            `reconcile-shipments scanned 0 of ${orders!.length} in-flight orders — label extraction may be broken`,
+            { level: 'warning', extra: { inFlight: orders!.length, ...summary } },
+        );
     }
 
     return NextResponse.json({ ok: true, ...summary, tookMs: Date.now() - started });

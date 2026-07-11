@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { embedArray } from '@/lib/utils/embed';
 import OrderDetailContent, { type OrderDetailData } from './OrderDetailContent';
 
 // Addressable, auth-gated order page — the deep-link target for the seller
@@ -52,7 +53,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
     const listing = (order.listing ?? null) as any;
     const card = (listing?.card_data ?? {}) as any;
-    const label = (order.shipping_labels ?? [])[0] as any | undefined;
+    const label = embedArray(order.shipping_labels)[0] as any | undefined;
     const trackingNumber = label?.tracking_number && label.tracking_number !== 'MANUAL'
         ? String(label.tracking_number)
         : null;

@@ -140,17 +140,21 @@ async function runTest() {
             .select('*, shipping_labels(*)')
             .eq('transfer_group', transferGroup)
 
+        // To-one embed: PostgREST returns shipping_labels as a bare object.
+        const labelsOf = (o: any): any[] =>
+            Array.isArray(o.shipping_labels) ? o.shipping_labels : o.shipping_labels ? [o.shipping_labels] : []
+
         console.log('--- DB STATE AFTER WEBHOOK ---')
         orders?.forEach(o => {
             console.log(`Order ${o.id}: Status = ${o.status}`)
-            o.shipping_labels?.forEach((l: any) => {
+            labelsOf(o).forEach((l: any) => {
                 console.log(`  -> Label: ${l.tracking_number} (Status: ${l.status})`)
             })
         })
 
         let trackingNumber = ''
-        if (orders![0].shipping_labels && orders![0].shipping_labels.length > 0) {
-            trackingNumber = orders![0].shipping_labels[0].tracking_number
+        if (labelsOf(orders![0]).length > 0) {
+            trackingNumber = labelsOf(orders![0])[0].tracking_number
         } else {
             console.log('⚠️ No shipping label generated natively (likely due to mock sandbox address). Creating a mock label to continue test...')
             trackingNumber = 'TH' + Math.floor(Math.random() * 1000000000)

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -26,6 +26,7 @@ interface OrderRow {
         tracking_number?: string | null;
         carrier_name?: string | null;
         courier_tracking_url?: string | null;
+        status?: string | null;
     }[];
 }
 
@@ -122,6 +123,44 @@ export default function DesktopOrders() {
     const [reviewComment, setReviewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
 
+    // Viewing purchases self-heals stale statuses: /api/orders/track polls
+    // Flash and advances the order server-side (webhooks can drop, the
+    // reconcile cron is hourly). One sweep per mount — the ref stops the
+    // post-sweep refetch from sweeping again. Capped at 10 orders: each call
+    // is a signed Flash API request against a per-merchant rate limit. The
+    // refetch is SILENT (no setLoading) — it lands seconds after mount, and
+    // toggling the shared loading flag would swap whichever tab the user has
+    // since opened for the skeleton state.
+    const sweptRef = useRef(false);
+    const silentRefetchPurchases = useCallback(async () => {
+        try {
+            const res = await fetch('/api/profile/orders?limit=50');
+            const data = await res.json();
+            if (res.ok) setOrders(data.orders || []);
+        } catch { /* keep the list we have */ }
+    }, []);
+    const syncInFlightOrders = useCallback(async (list: OrderRow[], refetch: () => void) => {
+        const inFlight = list
+            .filter((o) => {
+                const pno = o.shipping_labels?.[0]?.tracking_number;
+                return ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(o.status) && pno && pno !== 'MANUAL';
+            })
+            .slice(0, 10);
+        if (inFlight.length === 0) return;
+        const results = await Promise.allSettled(
+            inFlight.map((o) => fetch(`/api/orders/track?orderId=${o.id}`).then((r) => (r.ok ? r.json() : null)))
+        );
+        const advanced = results.some((r, i) => {
+            if (r.status !== 'fulfilled' || !r.value) return false;
+            const before = inFlight[i];
+            return (
+                (r.value.label?.status && r.value.label.status !== before.shipping_labels?.[0]?.status) ||
+                (r.value.order?.status && r.value.order.status !== before.status)
+            );
+        });
+        if (advanced) refetch();
+    }, []);
+
     const fetchTab = useCallback(async (which: Tab) => {
         // The offers tab is self-fetching (OffersInbox hits /api/offers itself),
         // so there's no data endpoint to load here.
@@ -131,7 +170,13 @@ export default function DesktopOrders() {
             if (which === 'purchases') {
                 const res = await fetch('/api/profile/orders?limit=50');
                 const data = await res.json();
-                if (res.ok) setOrders(data.orders || []);
+                if (res.ok) {
+                    setOrders(data.orders || []);
+                    if (!sweptRef.current) {
+                        sweptRef.current = true;
+                        syncInFlightOrders(data.orders || [], silentRefetchPurchases);
+                    }
+                }
             } else if (which === 'shipments') {
                 const res = await fetch('/api/profile/shipments');
                 const data = await res.json();

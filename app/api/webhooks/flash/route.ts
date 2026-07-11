@@ -23,7 +23,16 @@ import { verifyWebhookSignature, mapFlashStateToStatus } from '@/lib/flashExpres
  */
 export async function POST(request: NextRequest) {
     try {
-        const payload = await request.json()
+        // Flash pushes webhooks as application/x-www-form-urlencoded (their
+        // API-wide convention). This handler used to call request.json()
+        // unconditionally, so every real push threw, fell into the catch-all,
+        // and was acknowledged with 200 "success" — silently dropping every
+        // event Flash ever sent. Parse both encodings.
+        const payload = await parseWebhookBody(request)
+        if (!payload) {
+            console.warn('[FlashWebhook] Unparseable body')
+            return NextResponse.json({ errorCode: '1', state: 'success' })
+        }
 
         console.log('[FlashWebhook] Received:', JSON.stringify(payload).substring(0, 500))
 
@@ -40,10 +49,12 @@ export async function POST(request: NextRequest) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
 
-        // Flash posts the body either as a parsed `data` object or as a
-        // `dataJson` string (the signed form). Accept both so the freight
-        // webhooks — which may only ship `dataJson` — are not dropped.
-        const data = payload.data ?? parseDataJson(payload.dataJson)
+        // The event rides in `data` — an object when the body was JSON, a
+        // JSON string when it was form-encoded — or in a `dataJson` string.
+        // Accept all three so the freight webhooks are not dropped.
+        const data = (typeof payload.data === 'object' && payload.data !== null)
+            ? payload.data
+            : parseDataJson(payload.data) ?? parseDataJson(payload.dataJson)
         if (!data) {
             console.warn('[FlashWebhook] No data in payload')
             return NextResponse.json({ errorCode: '1', state: 'success' })
@@ -96,12 +107,16 @@ export async function POST(request: NextRequest) {
                 })
                 .eq('tracking_number', pno)
 
-            // Update order status (only move forward)
-            const statusOrder = ['pending', 'paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
+            // Update order status (only move forward). currentIdx must be ON
+            // the ladder — cancelled/disputed orders index to -1 and must not
+            // be resurrected to delivered by a late carrier event. CAS on the
+            // status we read so a concurrent advance (reconcile cron, buyer
+            // confirm) is skipped instead of clobbered/re-notified.
+            const statusOrder = ['pending', 'pending_payment', 'paid', 'awaiting_shipping_payment', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
             const currentIdx = statusOrder.indexOf(order.status)
             const newIdx = statusOrder.indexOf(orderStatus)
 
-            if (newIdx > currentIdx) {
+            if (currentIdx >= 0 && newIdx > currentIdx) {
                 const updateData: any = { status: orderStatus }
                 if (orderStatus === 'delivered') {
                     updateData.delivered_at = new Date().toISOString()
@@ -111,10 +126,12 @@ export async function POST(request: NextRequest) {
                     updateData.funds_release_at = releaseAt.toISOString()
                 }
 
-                const { error: orderUpdateError } = await supabase
+                const { data: applied, error: orderUpdateError } = await supabase
                     .from('orders')
                     .update(updateData)
                     .eq('id', order.id)
+                    .eq('status', order.status)
+                    .select('id')
 
                 if (orderUpdateError) {
                     // A silent failure here is how a delivered parcel stays
@@ -129,29 +146,35 @@ export async function POST(request: NextRequest) {
                     return NextResponse.json({ errorCode: '0', error: 'Order update failed' }, { status: 500 })
                 }
 
-                console.log(`[FlashWebhook] Order ${order.id} updated: ${order.status} → ${orderStatus}`)
+                if (!applied || applied.length === 0) {
+                    // CAS miss: another path advanced the order first — its
+                    // notification already went out, don't duplicate it.
+                    console.log(`[FlashWebhook] Order ${order.id}: status changed concurrently, skipping ${orderStatus}`)
+                } else {
+                    console.log(`[FlashWebhook] Order ${order.id} updated: ${order.status} → ${orderStatus}`)
 
-                // Fire notifications for significant status changes
-                try {
-                    const { sendShippedNotification, sendPackageDeliveredNotification } = await import('@/lib/courier')
+                    // Fire notifications for significant status changes
+                    try {
+                        const { sendShippedNotification, sendPackageDeliveredNotification } = await import('@/lib/courier')
 
-                    if (orderStatus === 'delivered') {
-                        // Notify buyer that package was delivered (Task 3 requirement)
-                        await sendPackageDeliveredNotification(
-                            order.buyer_id,
-                            order.id,
-                            pno
-                        )
-                    } else if (orderStatus === 'out_for_delivery') {
-                        // Keep using shipped notification for 'out for delivery' as a fallback
-                        await sendShippedNotification(
-                            order.buyer_id,
-                            { id: order.id, total_amount: 0 },
-                            pno
-                        )
+                        if (orderStatus === 'delivered') {
+                            // Notify buyer that package was delivered (Task 3 requirement)
+                            await sendPackageDeliveredNotification(
+                                order.buyer_id,
+                                order.id,
+                                pno
+                            )
+                        } else if (orderStatus === 'out_for_delivery') {
+                            // Keep using shipped notification for 'out for delivery' as a fallback
+                            await sendShippedNotification(
+                                order.buyer_id,
+                                { id: order.id, total_amount: 0 },
+                                pno
+                            )
+                        }
+                    } catch (notifError) {
+                        console.error('[FlashWebhook] Notification error (non-fatal):', notifError)
                     }
-                } catch (notifError) {
-                    console.error('[FlashWebhook] Notification error (non-fatal):', notifError)
                 }
             }
         }
@@ -166,6 +189,24 @@ export async function POST(request: NextRequest) {
         // Still return success to prevent infinite retries for malformed data
         return NextResponse.json({ errorCode: '1', state: 'success' })
     }
+}
+
+/**
+ * Reads the webhook body as JSON or form-urlencoded, whichever parses.
+ * Flash's pushes are form-encoded; JSON support is kept for manual testing
+ * and in case Flash ever switches.
+ */
+async function parseWebhookBody(request: NextRequest): Promise<Record<string, any> | null> {
+    const raw = await request.text()
+    if (!raw || raw.trim() === '') return null
+    try {
+        return JSON.parse(raw)
+    } catch {
+        // Not JSON — try form encoding
+    }
+    const obj: Record<string, any> = {}
+    for (const [k, v] of new URLSearchParams(raw)) obj[k] = v
+    return Object.keys(obj).length > 0 ? obj : null
 }
 
 /** Parse Flash's `dataJson` string form into an object; null on failure. */

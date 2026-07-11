@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { embedArray } from '@/lib/utils/embed'
 
 // GET - List user's orders with pagination
 export async function GET(request: NextRequest) {
@@ -45,9 +46,14 @@ export async function GET(request: NextRequest) {
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
-        // Filter by status
+        // Filter by status. 'active' must cover every state the tracking
+        // timeline can show: it was missing 'in_transit' and 'delivered', so
+        // the moment a sync advanced an order mid-route (or to delivered,
+        // where the confirm-delivery button lives) it vanished from the
+        // buyer's Track Orders panel. Delivered orders leave the active list
+        // when they complete (buyer confirms or escrow auto-releases).
         if (status === 'active') {
-            query = query.in('status', ['pending', 'paid', 'label_generated', 'processing', 'shipped', 'out_for_delivery'])
+            query = query.in('status', ['pending', 'paid', 'label_generated', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'])
         } else if (status === 'completed') {
             query = query.in('status', ['delivered', 'cancelled'])
         }
@@ -56,8 +62,16 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
+        // PostgREST returns the to-one shipping_labels embed as an object;
+        // clients (web, desktop) index it as an array. Normalize server-side
+        // so every consumer keeps the historical array shape.
+        const normalized = (orders || []).map((o: any) => ({
+            ...o,
+            shipping_labels: embedArray(o.shipping_labels),
+        }))
+
         return NextResponse.json({
-            orders: orders || [],
+            orders: normalized,
             pagination: {
                 page,
                 limit,

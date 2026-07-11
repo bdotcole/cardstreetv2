@@ -28,6 +28,7 @@ import {
     type ParcelItemInfo,
 } from '@/lib/flashExpress';
 import { verifyLabelToken } from '@/lib/labelToken';
+import { embedArray } from '@/lib/utils/embed';
 
 // Statuses where a Flash label should exist (or be recoverable).
 const LABEL_EXPECTED_STATUSES = ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
@@ -98,8 +99,11 @@ export async function GET(
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
 
-        const labels = order.shipping_labels as { tracking_number: string | null }[] | null;
-        let trackingNumber = labels?.[0]?.tracking_number || null;
+        // To-one embed: PostgREST returns an object, not an array (see
+        // lib/utils/embed.ts) — a raw [0] here left trackingNumber null and
+        // forced the recovery re-read on every request.
+        const labels = embedArray(order.shipping_labels as { tracking_number: string | null }[] | { tracking_number: string | null } | null);
+        let trackingNumber = labels[0]?.tracking_number || null;
 
         // ─── Recovery path ───
         // If the order has reached a status where a label should exist but

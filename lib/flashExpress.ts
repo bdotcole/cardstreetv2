@@ -666,9 +666,12 @@ export async function trackShipment(pno: string): Promise<FlashTrackingResult> {
 
     return {
         pno: response.data.pno,
-        state: response.data.state,
+        // Coerce: Flash returns numeric fields as strings on some endpoints,
+        // and a string state slips past callers' !state / Number.isNaN guards
+        // straight into mapFlashStateToStatus's default branch ('shipped').
+        state: Number(response.data.state),
         stateText: response.data.stateText || '',
-        stateChangeAt: response.data.stateChangeAt,
+        stateChangeAt: response.data.stateChangeAt != null ? Number(response.data.stateChangeAt) : response.data.stateChangeAt,
         routes: (response.data.routes || []).map((r: any) => ({
             routedAt: r.routedAt,
             routeAction: r.routeAction,
@@ -773,11 +776,13 @@ export function isRegionError(err: unknown): boolean {
 /**
  * Verifies the signature on an incoming Flash Express webhook payload.
  *
- * Flash's webhook callback signs every top-level non-empty primitive field
- * (notifyType, mchId, nonceStr, dataJson, etc.) using the same key=value&
- * sort + SHA256 algorithm as outbound requests. The verbatim `dataJson`
- * string is what gets signed (NOT the parsed `data` object), so we include
- * `dataJson` when present and skip the parsed `data` object.
+ * Per the Flash Open API docs, webhook pushes sign ONLY (mchId, nonceStr) —
+ * "Only (mchId, nonceStr) is involved in signing" — not the event data. We
+ * check that form first, then fall back to the outbound-request convention
+ * (every top-level non-empty primitive field) in case a payload variant
+ * signs the full set. Both computations require knowledge of the API key,
+ * and status transitions downstream are forward-only, so accepting either
+ * does not weaken the check.
  */
 export function verifyWebhookSignature(payload: Record<string, any>): boolean {
     const config = getFlashConfig();
@@ -785,9 +790,16 @@ export function verifyWebhookSignature(payload: Record<string, any>): boolean {
 
     if (!sign || typeof sign !== 'string') return false;
 
+    const minimal = generateSignature(
+        { mchId: String(rest.mchId ?? ''), nonceStr: String(rest.nonceStr ?? '') },
+        config.apiKey,
+    );
+    if (timingSafeEqualStr(minimal, sign)) return true;
+
     const params: Record<string, string> = {};
     for (const [k, v] of Object.entries(rest)) {
-        // Skip the parsed object — Flash signs `dataJson` (the raw string).
+        // Skip the parsed object — a full-set signature covers the raw
+        // `dataJson` string, never the parsed `data` object.
         if (k === 'data' && typeof v === 'object') continue;
         if (v === undefined || v === null) continue;
         const s = String(v);
@@ -795,15 +807,14 @@ export function verifyWebhookSignature(payload: Record<string, any>): boolean {
         params[k] = s;
     }
 
-    const computed = generateSignature(params, config.apiKey);
+    return timingSafeEqualStr(generateSignature(params, config.apiKey), sign);
+}
 
-    // Constant-time compare to avoid leaking the signature byte-by-byte.
-    if (computed.length !== sign.length) return false;
+/** Constant-time compare to avoid leaking the signature byte-by-byte. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
     try {
-        return crypto.timingSafeEqual(
-            Buffer.from(computed, 'utf8'),
-            Buffer.from(sign, 'utf8'),
-        );
+        return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
     } catch {
         return false;
     }
