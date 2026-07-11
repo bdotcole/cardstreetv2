@@ -94,12 +94,14 @@ async function loadTcgIdMap(category) {
 }
 
 // Tier 2: scrape the PriceCharting product page for its cover-image hash.
+// Hashes are base36 alphanumeric on card pages ("qxbh4umdzamyxelr") and hex on
+// (most) sealed pages — match both; a hex-only regex silently misses the former.
 async function scrapePcImage(pcId) {
   try {
     const res = await fetch(`${BASE}/offers?product=${encodeURIComponent(pcId)}`);
     if (!res.ok) return null;
     const html = await res.text();
-    const m = /images\.pricecharting\.com\/([a-f0-9]{16,})\//i.exec(html);
+    const m = /images\.pricecharting\.com\/([a-z0-9]{12,})\//i.exec(html);
     return m ? pcImageUrl(m[1]) : null;
   } catch { return null; }
 }

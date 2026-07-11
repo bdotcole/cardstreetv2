@@ -54,12 +54,20 @@ const GRADED_FIELD_MAP = {
 // The exclude on the EN run is load-bearing: EN set names collide with prefix-stripped
 // JP console names ("Pokemon Japanese Rebel Clash" -> 'rebel clash' = EN swsh2), which
 // once mis-mapped 404 EN cards to JP products before the filters existed (2026-07-03).
+// One Piece follows the same shared-CSV pattern: JP products live inside
+// one-piece-cards under "One Piece Japanese <set>" console names (there is no
+// working one-piece-japanese-cards category either). The JP CATALOG + prices are
+// primarily owned by scripts/ingest/onepiece-jp.mjs (exact product pairing, no
+// fuzzy matching); the onepiece-jp entry here exists for the sealed run and for
+// graded re-runs. The exclude + lang on the EN entry are load-bearing once ja
+// rows exist, same as the Pokemon partition.
 const GAME_CONFIG = {
   pokemon:      { game: 'pokemon',  lang: 'en', marketLang: 'en', category: 'pokemon-cards', consoleExcludeRe: /^pokemon japanese\b/i },
   'pokemon-jp': { game: 'pokemon',  lang: 'ja', marketLang: 'jp', category: 'pokemon-cards', consoleRe: /^pokemon japanese\b/i },
   mtg:          { game: 'mtg',      lang: null, marketLang: 'en', category: 'magic-cards' },
   yugioh:       { game: 'yugioh',   lang: null, marketLang: 'en', category: 'yugioh-cards' },
-  onepiece:     { game: 'onepiece', lang: null, marketLang: 'en', category: 'one-piece-cards' },
+  onepiece:     { game: 'onepiece', lang: 'en', marketLang: 'en', category: 'one-piece-cards', consoleExcludeRe: /^one piece japanese\b/i },
+  'onepiece-jp': { game: 'onepiece', lang: 'ja', marketLang: 'jp', category: 'one-piece-cards', consoleRe: /^one piece japanese\b/i },
   lorcana:      { game: 'lorcana',  lang: null, marketLang: 'en', category: 'lorcana-cards' },
 };
 
@@ -154,6 +162,7 @@ function stripGamePrefix(consoleName) {
     .replace(/^magic[:\- ]*the gathering/i, '')
     .replace(/^magic/i, '')
     .replace(/^yu-?gi-?oh!?/i, '')
+    .replace(/^one piece japanese/i, '')
     .replace(/^one piece( card game)?/i, '')
     .replace(/^(disney )?lorcana/i, '')
     .trim();

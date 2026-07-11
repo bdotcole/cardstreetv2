@@ -37,13 +37,21 @@ export const GRADED_CONDITIONS = Object.values(GRADED_FIELD_MAP);
 /** Matches a graded condition string like "PSA 10", "BGS 9.5", "CGC 10", "SGC 10". */
 export const GRADED_CONDITION_RE = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i;
 
-/** Our game id -> PriceCharting price-guide category (CSV download `category=`). */
+/**
+ * Our game id -> PriceCharting price-guide category (CSV download `category=`).
+ *
+ * There are NO *-japanese-* categories — those slugs silently return the
+ * all-products fallback (first console "3DO"). Japanese cards live INSIDE the
+ * main category CSV under "Pokemon Japanese <set>" / "One Piece Japanese <set>"
+ * console names; the ingests partition one shared CSV by console-name regex.
+ */
 export const PC_CATEGORY: Record<string, string> = {
   pokemon: 'pokemon-cards',
-  'pokemon-jp': 'pokemon-japanese-cards',
+  'pokemon-jp': 'pokemon-cards',
   mtg: 'magic-cards',
   yugioh: 'yugioh-cards',
   onepiece: 'one-piece-cards',
+  'onepiece-jp': 'one-piece-cards',
   lorcana: 'lorcana-cards',
 };
 

@@ -61,12 +61,16 @@ export async function GET(request: NextRequest) {
     // language (ja -> jp) so refreshes update the same row the ingest wrote.
     const cardIds = (maps || []).map((m) => m.card_id);
     const langByCard = new Map<string, string>();
+    const jpOnePiece = new Set<string>();
     if (cardIds.length) {
         const { data: cards } = await supabase
             .from('pokemon_cards')
             .select('id, language, game')
             .in('id', cardIds);
-        for (const c of cards || []) langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
+        for (const c of cards || []) {
+            langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
+            if (c.game === 'onepiece' && c.language === 'ja') jpOnePiece.add(c.id);
+        }
     }
 
     for (const m of maps || []) {
@@ -83,6 +87,22 @@ export async function GET(request: NextRequest) {
                 currency: 'USD',
                 last_updated: new Date().toISOString(),
             }));
+            // JP One Piece has no JustTCG coverage, so PriceCharting's loose price
+            // is the only ungraded source — refresh the Raw_NM headline row too.
+            if (jpOnePiece.has(m.card_id)) {
+                const loose = centsToUsd(product['loose-price']);
+                if (loose != null) {
+                    rows.push({
+                        card_id: m.card_id,
+                        language: lang,
+                        condition: 'Raw_NM',
+                        printing: null,
+                        market_avg: loose,
+                        currency: 'USD',
+                        last_updated: new Date().toISOString(),
+                    });
+                }
+            }
             if (rows.length) {
                 const { error } = await supabase.from('market_values').upsert(rows, { onConflict: 'card_id,language,condition' });
                 if (error) throw error;

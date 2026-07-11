@@ -82,7 +82,7 @@ export const GAMES: GameConfig[] = [
     id: 'onepiece',
     name: 'One Piece Card Game',
     shortName: 'One Piece',
-    languages: [LANG_EN],
+    languages: [LANG_EN, LANG_JP],
     logoUrl: '/games/onepiece.png',
     gradient: 'from-[#b21f24] to-[#5e0d10]',
     textColor: 'text-white',

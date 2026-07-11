@@ -221,6 +221,22 @@ const Home: React.FC<HomeProps> = ({ totalValue, currencySymbol, onSelectCard, o
               <i className="fa-solid fa-skull-crossbones text-white text-xl"></i>
             </div>
           </button>
+
+          {/* One Piece Japanese */}
+          <button
+            onClick={() => onSelectGame('onepiece-jp')}
+            className="h-32 rounded-2xl relative overflow-hidden group border border-white/5 hover:border-brand-red/50 transition-all active:scale-95"
+          >
+            <div className="absolute inset-0 bg-slate-900 group-hover:bg-slate-800 transition-colors"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-red/20 to-transparent opacity-50"></div>
+            <div className="absolute bottom-3 left-3 text-left">
+              <p className="text-[10px] text-brand-red font-black uppercase tracking-widest mb-1">Japanese</p>
+              <p className="text-xl font-black text-white italic skew-x-[-5deg] leading-none">ONE PIECE</p>
+            </div>
+            <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-100 transition-opacity">
+              <i className="fa-solid fa-sun text-white text-xl"></i>
+            </div>
+          </button>
         </div>
       </div>
     </div>
