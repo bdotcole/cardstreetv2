@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
 import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
-import { gamesAvailableInLanguage } from '@/lib/games';
+import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -19,12 +19,11 @@ const PAGE_SIZE = 60;
 
 // Language values match the listing snapshot's `card_data.language`. The service
 // expands 'ja' to also cover sealed's 'jp' code, so a single option covers both.
-const LANGUAGE_FILTERS = [
-    { id: 'all', labelKey: 'desktop.allLanguages' },
-    { id: 'en', labelKey: 'desktop.english' },
-    { id: 'ja', labelKey: 'desktop.japanese' },
-    { id: 'th', labelKey: 'desktop.thai' },
-] as const;
+const LANGUAGE_LABEL_KEYS: Record<string, string> = {
+    en: 'desktop.english',
+    ja: 'desktop.japanese',
+    th: 'desktop.thai',
+};
 
 // Re-exported for the desktop components that historically imported it here.
 export { formatTHB };
@@ -62,6 +61,19 @@ export default function DesktopMarketplace() {
 
     const [game, setGame] = useState('all');
     const [language, setLanguage] = useState('all');
+
+    // Game-first flow (mirrors the sets browser): the language sub-filter only
+    // appears once a specific multi-language game is picked. games.ts declares
+    // Japanese as 'jp'; listing snapshots use 'ja', so normalize for the chips.
+    const languageOptions = game === 'all'
+        ? []
+        : getGameLanguages(game).map((l) => (l.code === 'jp' ? 'ja' : l.code));
+
+    const selectGame = (g: string) => {
+        setGame(g);
+        // The language list belongs to the previous game — reset it.
+        setLanguage('all');
+    };
     // Deals-first, matching the mobile marketplace's default sort.
     const [sort, setSort] = useState<SortKey>('best_deals');
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
@@ -143,30 +155,37 @@ export default function DesktopMarketplace() {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-6">
-                {LANGUAGE_FILTERS.map((l) => (
-                    <FilterChip
-                        key={l.id}
-                        label={t(l.labelKey)}
-                        active={language === l.id}
-                        tone="green"
-                        onClick={() => {
-                            setLanguage(l.id);
-                            // The selected game may not exist in the new language
-                            // (its chip is about to disappear) — fall back to all.
-                            if (game !== 'all' && !gamesAvailableInLanguage(l.id).some((g) => g.id === game)) {
-                                setGame('all');
-                            }
-                        }}
-                    />
+                <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => selectGame('all')} />
+                {GAMES.filter((g) => g.enabled).map((g) => (
+                    <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => selectGame(g.id)} />
                 ))}
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-3">
-                <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => setGame('all')} />
-                {gamesAvailableInLanguage(language).filter((g) => g.enabled).map((g) => (
-                    <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => setGame(g.id)} />
-                ))}
-            </div>
+            {/* Language sub-filter — only when the selected game has more than one listing language */}
+            {languageOptions.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mr-1">
+                        {t('desktop.browse.language')}
+                    </span>
+                    <FilterChip
+                        label={t('desktop.browse.allLanguages')}
+                        active={language === 'all'}
+                        tone="green"
+                        small
+                        onClick={() => setLanguage('all')}
+                    />
+                    {languageOptions.map((l) => (
+                        <FilterChip
+                            key={l}
+                            label={t(LANGUAGE_LABEL_KEYS[l] ?? l)}
+                            active={language === l}
+                            tone="green"
+                            small
+                            onClick={() => setLanguage(l)}
+                        />
+                    ))}
+                </div>
+            )}
 
             {loading ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
@@ -216,17 +235,19 @@ function FilterChip({
     active,
     onClick,
     tone = 'cyan',
+    small,
 }: {
     label: string;
     active: boolean;
     onClick: () => void;
     tone?: 'cyan' | 'green';
+    small?: boolean;
 }) {
     const activeClass = tone === 'green' ? 'bg-brand-green text-brand-darker' : 'bg-brand-cyan text-brand-darker';
     return (
         <button
             onClick={onClick}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            className={`rounded-full font-bold transition-colors ${small ? 'px-3 py-1 text-[11px]' : 'px-4 py-1.5 text-xs'} ${
                 active ? activeClass : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
             }`}
         >
