@@ -44,6 +44,12 @@ function withUaVary(response: NextResponse): NextResponse {
 type Lang = 'EN' | 'TH'
 const LANG_COOKIE = 'cs_lang'
 
+// Shared attributes for the cookies middleware sets (cs_lang, cs_view). Secure
+// only in production so localhost dev over http still gets them; SameSite=Lax
+// keeps them on top-level navigations (how they're always set) while blocking
+// cross-site send.
+const COOKIE_OPTS = { path: '/', sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production' }
+
 // Resolve the internal render target for a locale-stripped path, applying the
 // existing desktop-vs-mobile routing. Kept separate from locale handling so the
 // two concerns don't tangle.
@@ -100,7 +106,7 @@ export async function middleware(request: NextRequest) {
         const url = request.nextUrl.clone()
         url.searchParams.delete('view')
         const response = NextResponse.redirect(url)
-        response.cookies.set('cs_view', viewParam, { path: '/' })
+        response.cookies.set('cs_view', viewParam, COOKIE_OPTS)
         return response
     }
 
@@ -115,7 +121,7 @@ export async function middleware(request: NextRequest) {
         const url = request.nextUrl.clone()
         url.pathname = pathname.slice('/th'.length) || '/'
         const res = NextResponse.redirect(url)
-        res.cookies.set(LANG_COOKIE, 'TH', { path: '/' })
+        res.cookies.set(LANG_COOKIE, 'TH', COOKIE_OPTS)
         return res
     }
 
@@ -129,7 +135,7 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-cs-lang', lang)
 
     const applyLang = (res: NextResponse): NextResponse => {
-        if (cookieLang !== lang) res.cookies.set(LANG_COOKIE, lang, { path: '/' })
+        if (cookieLang !== lang) res.cookies.set(LANG_COOKIE, lang, COOKIE_OPTS)
         return res
     }
 

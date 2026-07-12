@@ -11,7 +11,18 @@ export async function GET(request: Request) {
     const storedNext = cookieStore.get('cardstreet_auth_redirect')?.value
 
     // if "next" is in param, use it; otherwise fallback to cookie, then '/'
-    const next = searchParams.get('next') ?? storedNext ?? '/'
+    const requestedNext = searchParams.get('next') ?? storedNext ?? '/'
+    // Only honor same-site relative paths. `next` is concatenated onto the base
+    // origin below, so `//evil.com`, `/\evil.com` (protocol-relative host swaps)
+    // and `@evil.com` (userinfo host swap) would all redirect off-site — an
+    // open-redirect / phishing vector. Anything that isn't a clean single-slash
+    // path falls back to the homepage.
+    const next =
+        requestedNext.startsWith('/') &&
+        !requestedNext.startsWith('//') &&
+        !requestedNext.startsWith('/\\')
+            ? requestedNext
+            : '/'
 
     // Resolve the public-facing origin once. In production the request reaches us
     // behind a load balancer, so the original host is in x-forwarded-host; falling

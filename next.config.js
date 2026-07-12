@@ -122,6 +122,24 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['recharts', 'lucide-react'],
   },
+  // Baseline security headers, site-wide. Deliberately excludes a Content-Security
+  // -Policy (needs per-source auditing of the inline scripts / third-party origins
+  // this app loads) and leaves HSTS to the platform. X-Frame-Options is SAMEORIGIN
+  // rather than DENY because the app frames its own pages; it never needs to be
+  // embedded cross-origin. Stripe/OAuth flows are top-level navigations, unaffected.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        ],
+      },
+    ]
+  },
   eslint: {
     // Re-enabled: lint must pass at build time. Run `npm run lint` locally
     // before pushing to catch issues before CI does.

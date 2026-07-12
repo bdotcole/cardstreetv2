@@ -20,11 +20,22 @@ export async function POST(request: Request) {
         const { card, condition, maxPrice, quantity, notifyMe, currency } = body;
 
         // Validate required fields
-        if (!card || !card.id || !condition || !maxPrice || !quantity) {
+        if (!card || !card.id || !condition || maxPrice === undefined || quantity === undefined) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
                 { status: 400 }
             );
+        }
+
+        // Coerce + bound the numeric fields. parseFloat/parseInt alone let a
+        // non-numeric maxPrice through as NaN and accept negative/absurd values.
+        const price = Number(maxPrice);
+        const qty = Number(quantity);
+        if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+            return NextResponse.json({ error: 'Invalid max price' }, { status: 400 });
+        }
+        if (!Number.isInteger(qty) || qty < 1 || qty > 999) {
+            return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
         }
 
         // Insert buylist request into database
@@ -39,8 +50,8 @@ export async function POST(request: Request) {
                 card_rarity: card.rarity,
                 card_image_url: card.imageUrl,
                 condition: condition,
-                max_price: parseFloat(maxPrice),
-                quantity: parseInt(quantity),
+                max_price: price,
+                quantity: qty,
                 notify_on_availability: notifyMe !== undefined ? notifyMe : true,
                 currency: currency || 'THB',
                 status: 'active'
@@ -51,7 +62,7 @@ export async function POST(request: Request) {
         if (error) {
             console.error('Error inserting buylist request:', error);
             return NextResponse.json(
-                { error: 'Failed to create buylist request', details: error.message },
+                { error: 'Failed to create buylist request' },
                 { status: 500 }
             );
         }
