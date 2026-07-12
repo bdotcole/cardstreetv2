@@ -2,8 +2,21 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { getThumbnailUrl, getSetLogoUrl } from '@/lib/imageUtils'
+import { pickDisplayMarketValue } from '@/lib/cardMapper'
+import { EXCHANGE_RATES } from '@/constants'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+// Display-price row from the market_values join. One row per condition; the graded
+// tiers are filtered out by pickDisplayMarketValue (shared with the storefront mapper).
+interface MarketRow {
+    condition: string | null
+    language: string | null
+    market_avg: number | null
+    currency: string | null
+    source: string | null
+    last_updated: string | null
+}
 
 interface CardRow {
     id: string
@@ -18,6 +31,26 @@ interface CardRow {
     subtypes: string[] | null
     image_small: string | null
     image_large: string | null
+    market_values: MarketRow[] | null
+}
+
+// THB<->USD uses the same constant the storefront mapper does, so an admin edit
+// round-trips through the USD-storing pin RPC back to the exact THB shown here.
+const THB_PER_USD = 1 / (EXCHANGE_RATES['USD'] || 0.028)
+
+function rowToThb(row: MarketRow | null): number | null {
+    if (!row || !(Number(row.market_avg) > 0)) return null
+    const avg = Number(row.market_avg)
+    return row.currency === 'USD' ? avg * THB_PER_USD : avg
+}
+
+// The single price the card page shows: pickDisplayMarketValue's chosen ungraded row.
+function displayThb(card: CardRow): number | null {
+    return rowToThb(pickDisplayMarketValue(card.market_values) as MarketRow | null)
+}
+
+function fmtThb(n: number | null): string {
+    return n == null ? '—' : '฿' + Math.round(n).toLocaleString('en-US')
 }
 
 interface SetRow {
@@ -47,6 +80,7 @@ export default function SetCardManagerPage() {
     const [search, setSearch] = useState('')
     const [editing, setEditing] = useState<CardRow | null>(null)
     const [showForm, setShowForm] = useState(false)
+    const [pricing, setPricing] = useState<CardRow | null>(null)
 
     const loadAll = useCallback(async () => {
         setLoading(true)
@@ -58,7 +92,7 @@ export default function SetCardManagerPage() {
                 .maybeSingle(),
             supabase
                 .from('pokemon_cards')
-                .select('id, set_id, number, name, english_name, rarity, supertype, hp, types, subtypes, image_small, image_large')
+                .select('id, set_id, number, name, english_name, rarity, supertype, hp, types, subtypes, image_small, image_large, market_values(condition, language, market_avg, currency, source, last_updated)')
                 .eq('set_id', setId)
                 .order('number', { ascending: true }),
         ])
@@ -100,6 +134,14 @@ export default function SetCardManagerPage() {
     function openEdit(card: CardRow) {
         setEditing(card)
         setShowForm(true)
+    }
+
+    // Reflect a pin/release back into the grid immediately (the pinned row stores USD;
+    // rowToThb converts it back for the badge). Merged by (condition, language) so we
+    // replace the display row rather than stacking a duplicate.
+    function onPriceSaved(cardId: string, rows: MarketRow[]) {
+        setCards((prev) => prev.map((c) => (c.id === cardId ? { ...c, market_values: rows } : c)))
+        setPricing((p) => (p && p.id === cardId ? { ...p, market_values: rows } : p))
     }
 
     return (
@@ -196,10 +238,31 @@ export default function SetCardManagerPage() {
                                 <p className="text-[11px] font-mono text-slate-500">#{card.number}</p>
                                 <p className="text-sm font-bold text-white truncate">{card.name}</p>
                                 <p className="text-[10px] text-slate-500 truncate">{card.rarity || '—'}</p>
+                                {/* Market price — click to edit. A pin icon marks an admin override. */}
+                                <button
+                                    onClick={() => setPricing(card)}
+                                    title="Edit market price"
+                                    className="mt-1.5 w-full flex items-center gap-1.5 text-left group/price"
+                                >
+                                    <span className={`text-sm font-black tabular-nums ${displayThb(card) == null ? 'text-slate-600' : 'text-brand-green'}`}>
+                                        {fmtThb(displayThb(card))}
+                                    </span>
+                                    {pickDisplayMarketValue(card.market_values)?.source === 'admin' && (
+                                        <i className="fa-solid fa-thumbtack text-[9px] text-brand-cyan" title="Admin-set price" />
+                                    )}
+                                    <i className="fa-solid fa-pen text-[9px] text-slate-600 group-hover/price:text-brand-cyan transition-colors ml-auto" />
+                                </button>
                             </div>
 
                             {/* Hover actions */}
                             <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => setPricing(card)}
+                                    className="w-8 h-8 rounded-lg bg-black/70 hover:bg-brand-green hover:text-black text-white flex items-center justify-center transition-colors"
+                                    title="Edit price"
+                                >
+                                    <i className="fa-solid fa-baht-sign text-xs" />
+                                </button>
                                 <button
                                     onClick={() => openEdit(card)}
                                     className="w-8 h-8 rounded-lg bg-black/70 hover:bg-brand-cyan hover:text-black text-white flex items-center justify-center transition-colors"
@@ -225,8 +288,19 @@ export default function SetCardManagerPage() {
                     setId={setId}
                     editing={editing}
                     onClose={() => setShowForm(false)}
-                    onCreated={(card) => setCards((prev) => [...prev, card].sort(sortByNumber))}
-                    onUpdated={(card) => setCards((prev) => prev.map((c) => (c.id === card.id ? card : c)))}
+                    onCreated={(card) => setCards((prev) => [...prev, { ...card, market_values: card.market_values ?? [] }].sort(sortByNumber))}
+                    // Merge, don't replace: the card-edit API doesn't return market_values,
+                    // so a spread-replace would wipe the price out of the grid until reload.
+                    onUpdated={(card) => setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, ...card } : c)))}
+                />
+            )}
+
+            {pricing && (
+                <PriceEditorModal
+                    card={pricing}
+                    setLanguage={set?.language ?? 'en'}
+                    onClose={() => setPricing(null)}
+                    onSaved={onPriceSaved}
                 />
             )}
         </div>
@@ -235,6 +309,181 @@ export default function SetCardManagerPage() {
 
 function sortByNumber(a: CardRow, b: CardRow) {
     return (a.number ?? '').localeCompare(b.number ?? '', undefined, { numeric: true })
+}
+
+// Map the set's UI language to the market_values language code. Japanese cards
+// (pokemon_cards.language='ja') store prices under 'jp' (see the pricing-job notes),
+// everything else is 1:1.
+function marketLanguage(setLanguage: string): string {
+    return setLanguage === 'ja' || setLanguage === 'jp' ? 'jp' : setLanguage || 'en'
+}
+
+// Focused editor for a single card's displayed market price. Writes through the
+// existing /api/admin/internal-prices route, which pins a guard-protected
+// source='admin' row so the daily pricing crons can never clobber the manual value.
+function PriceEditorModal({
+    card,
+    setLanguage,
+    onClose,
+    onSaved,
+}: {
+    card: CardRow
+    setLanguage: string
+    onClose: () => void
+    onSaved: (cardId: string, rows: MarketRow[]) => void
+}) {
+    const displayRow = useMemo(
+        () => pickDisplayMarketValue(card.market_values) as MarketRow | null,
+        [card.market_values],
+    )
+    // Pin the exact key the card page renders: the display row's condition/language
+    // when one exists, else a sensible default so a priceless card can be given one.
+    const condition = displayRow?.condition ?? 'Raw_NM'
+    const language = displayRow?.language ?? marketLanguage(setLanguage)
+    const currentThb = rowToThb(displayRow)
+    const isPinned = displayRow?.source === 'admin'
+
+    const [value, setValue] = useState(currentThb != null ? String(Math.round(currentThb)) : '')
+    const [saving, setSaving] = useState<null | 'save' | 'release'>(null)
+    const [error, setError] = useState<string | null>(null)
+
+    const preview = card.image_small || card.image_large
+    const sourceLabel =
+        displayRow?.source === 'admin' ? 'Admin-set (pinned)'
+            : displayRow?.source === 'cardstreet' ? 'Learned from CardStreet sales'
+                : displayRow ? 'Automatic (price feed)'
+                    : 'No price on record'
+
+    // Merge the written row back into the card by (condition, language) so the grid
+    // badge updates without a refetch. The pin RPC stores USD; keep that shape.
+    function mergedRows(usd: number | null, source: string): MarketRow[] {
+        const kept = (card.market_values ?? []).filter(
+            (r) => !(r.condition === condition && (r.language ?? language) === language),
+        )
+        return [
+            ...kept,
+            { condition, language, market_avg: usd, currency: 'USD', source, last_updated: new Date().toISOString() },
+        ]
+    }
+
+    async function post(body: Record<string, unknown>) {
+        const res = await fetch('/api/admin/internal-prices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ card_id: card.id, language, condition, ...body }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Request failed')
+        return data.row as { market_avg?: number } | null
+    }
+
+    async function save() {
+        const thb = Number(value)
+        if (!(thb > 0)) { setError('Enter a price greater than 0'); return }
+        setSaving('save'); setError(null)
+        try {
+            const row = await post({ action: 'pin', thb })
+            onSaved(card.id, mergedRows(row?.market_avg ?? thb * (EXCHANGE_RATES['USD'] || 0.028), 'admin'))
+            onClose()
+        } catch (e: any) { setError(e.message) } finally { setSaving(null) }
+    }
+
+    async function release() {
+        setSaving('release'); setError(null)
+        try {
+            const row = await post({ action: 'release', to: 'api' })
+            onSaved(card.id, mergedRows(row?.market_avg ?? null, 'api'))
+            onClose()
+        } catch (e: any) { setError(e.message) } finally { setSaving(null) }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={onClose}>
+            <div
+                className="glass border border-white/10 rounded-2xl w-full max-w-md shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-black text-white italic">Market Price</h2>
+                        <p className="text-xs text-slate-500 mt-1 font-mono">{card.id}</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">
+                        <i className="fa-solid fa-xmark text-xl" />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-5">
+                    <div className="flex gap-4 items-center">
+                        <div className="w-16 h-[89px] rounded-lg bg-black/40 overflow-hidden shrink-0 flex items-center justify-center">
+                            {preview ? (
+                                <img src={getThumbnailUrl(preview)} alt="" className="w-full h-full object-contain" />
+                            ) : (
+                                <i className="fa-solid fa-image text-slate-700" />
+                            )}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-white truncate">{card.name || card.id}</p>
+                            <p className="text-[11px] text-slate-500">#{card.number} · {card.rarity || '—'}</p>
+                            <p className="text-2xl font-black text-brand-green tabular-nums mt-1">{fmtThb(currentThb)}</p>
+                            <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mt-0.5">
+                                {sourceLabel} · {condition}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className={labelClass}>New market price (THB)</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">฿</span>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="any"
+                                autoFocus
+                                value={value}
+                                onChange={(e) => { setValue(e.target.value); setError(null) }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') save() }}
+                                placeholder="e.g. 350"
+                                className={`${inputClass} pl-8 text-lg font-bold tabular-nums`}
+                            />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                            Sets a fixed price the automatic pricing feed will not overwrite.
+                            {isPinned && ' This card is currently pinned.'}
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="bg-brand-red/10 border border-brand-red/30 text-brand-red text-sm rounded-lg px-4 py-2.5">{error}</div>
+                    )}
+
+                    <div className="flex gap-3">
+                        {isPinned && (
+                            <button
+                                type="button"
+                                onClick={release}
+                                disabled={!!saving}
+                                className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
+                                title="Un-pin so automatic pricing can update this card again"
+                            >
+                                {saving === 'release' ? <i className="fa-solid fa-spinner fa-spin" /> : 'Reset to automatic'}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={save}
+                            disabled={!!saving}
+                            className="flex-1 bg-brand-green text-black font-black uppercase tracking-widest py-3 rounded-lg hover:bg-white transition-colors disabled:opacity-50"
+                        >
+                            {saving === 'save' ? <i className="fa-solid fa-spinner fa-spin" /> : 'Set price'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
 }
 
 function CardFormModal({
