@@ -20,18 +20,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import {
-    createShipmentWithCityFallback,
-    generateLabel,
-    estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
-    type ParcelItemInfo,
-} from '@/lib/flashExpress';
+import { generateLabel } from '@/lib/flashExpress';
+import { recoverShipmentForOrder } from '@/lib/flashRecovery';
 import { verifyLabelToken } from '@/lib/labelToken';
 import { embedArray } from '@/lib/utils/embed';
 
-// Statuses where a Flash label should exist (or be recoverable).
-const LABEL_EXPECTED_STATUSES = ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
+// Statuses where a Flash label should exist (or be recoverable). 'paid' is
+// included so a seller can self-recover an order that was charged but whose
+// Flash shipment failed during fulfillment (see the recover-unshipped-orders
+// cron, which normally beats them to it).
+const LABEL_EXPECTED_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
 
 export async function GET(
     req: NextRequest,
@@ -118,132 +116,47 @@ export async function GET(
         // now persists the pno up front, so this path should almost never fire;
         // we still re-read directly (bypassing the possibly-stale joined SELECT)
         // right before creating, and never overwrite an existing real pno.
-        let needsRecovery =
+        const needsRecovery =
             (!trackingNumber || trackingNumber === 'MANUAL') &&
             LABEL_EXPECTED_STATUSES.includes(order.status);
 
         if (needsRecovery) {
-            // Re-check the source of truth before minting a new waybill.
-            const { data: freshLabel } = await admin
-                .from('shipping_labels')
-                .select('tracking_number')
-                .eq('order_id', orderId)
-                .maybeSingle();
-            const freshTracking = freshLabel?.tracking_number || null;
-            if (freshTracking && freshTracking !== 'MANUAL') {
-                console.log(`[Orders/Label] Found existing waybill ${freshTracking} for order ${orderId} on re-check — reusing, skipping create.`);
-                trackingNumber = freshTracking;
-                needsRecovery = false;
-            }
-        }
-
-        if (needsRecovery) {
-            console.log(`[Orders/Label] No tracking number for order ${orderId} at status ${order.status} — attempting Flash recovery`);
-
-            const { data: profiles } = await admin
-                .from('profiles')
-                .select('id, display_name, phone_number, province, state, district, sub_district, postcode, address')
-                .in('id', [order.seller_id, order.buyer_id]);
-
-            const seller = profiles?.find(p => p.id === order.seller_id);
-            const buyer = profiles?.find(p => p.id === order.buyer_id);
-
-            if (!seller || !buyer) {
-                return NextResponse.json(
-                    { error: 'Seller or buyer profile missing — cannot recover label. Contact support.' },
-                    { status: 500 }
-                );
-            }
-
-            // Declare the same parcel fulfillment would have: all of this
-            // seller's orders in the transfer group ride one waybill (see
-            // lib/fulfillOrder.ts), and sealed products (booster boxes, ETBs)
-            // must not fall back to the 500g single-card default — an
-            // under-declared parcel gets re-rated by Flash at pickup and the
-            // seller pays the difference against what the buyer was quoted.
-            let parcelItems: ParcelItemInfo[] = [];
-            try {
-                let itemsQuery = admin
-                    .from('orders')
-                    .select('id, listing:listings(card_data)')
-                    .eq('seller_id', order.seller_id);
-                itemsQuery = order.transfer_group
-                    ? itemsQuery.eq('transfer_group', order.transfer_group)
-                    : itemsQuery.eq('id', order.id);
-                const { data: groupOrders } = await itemsQuery;
-                parcelItems = (groupOrders || []).map(o => ({
-                    isSealed: (o as any).listing?.card_data?.isSealed === true,
-                    productType: (o as any).listing?.card_data?.productType ?? null,
-                }));
-            } catch (itemsErr) {
-                console.error('[Orders/Label] Parcel item lookup failed — using single-card default:', itemsErr);
-            }
-            if (parcelItems.length === 0) parcelItems = [{}];
-
-            try {
-                const flashOrder = await createShipmentWithCityFallback({
-                    outTradeNo: order.id,
-                    srcName: seller.display_name || 'CardStreet Seller',
-                    srcPhone: seller.phone_number || '0000000000',
-                    srcProvinceName: seller.province || 'กรุงเทพมหานคร',
-                    srcCityName: seller.state || seller.district || 'เขตบางรัก',
-                    srcDistrictName: seller.sub_district || seller.district || 'บางรัก',
-                    srcPostalCode: seller.postcode || '10500',
-                    srcDetailAddress: seller.address || 'CardStreet Platform',
-                    dstName: buyer.display_name || 'CardStreet Buyer',
-                    dstPhone: buyer.phone_number || '0000000000',
-                    dstProvinceName: buyer.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyer.state || buyer.district || 'เขตบางรัก',
-                    dstDistrictName: buyer.sub_district || buyer.district || 'บางรัก',
-                    dstPostalCode: buyer.postcode || '10500',
-                    dstDetailAddress: buyer.address || 'CardStreet Platform',
-                    weight: estimateParcelWeightGramsForItems(parcelItems),
-                    ...estimateParcelDimsCmForItems(parcelItems),
-                    expressCategory: 1,
-                    articleCategory: 3,
-                    remark: 'CardStreet TCG - Handle with care',
-                });
-
-                // Persist so future clicks skip the recovery path and so the
-                // buyer's Track Orders picks up the tracking link.
-                const courierTrackingUrl = `https://www.flashexpress.com/fle/tracking?se=${flashOrder.pno}`;
-                const { error: upsertErr } = await admin
-                    .from('shipping_labels')
-                    .upsert(
-                        {
-                            order_id: order.id,
-                            tracking_number: flashOrder.pno,
-                            carrier_name: 'Flash Express',
-                            status: 'created',
-                            label_url: 'N/A',
-                            flash_order_id: flashOrder.outTradeNo,
-                            flash_sort_code: flashOrder.sortCode,
-                            pickup_id: null,
-                            pickup_status: 'pending',
-                            courier_tracking_url: courierTrackingUrl,
-                        },
-                        { onConflict: 'order_id' }
+            console.log(`[Orders/Label] No usable label for order ${orderId} at status ${order.status} — attempting Flash recovery`);
+            // Shared with the recover-unshipped-orders cron. Re-reads
+            // shipping_labels before minting and never double-mints (Flash does
+            // not dedupe on outTradeNo).
+            const rec = await recoverShipmentForOrder(admin, {
+                id: order.id,
+                seller_id: order.seller_id,
+                buyer_id: order.buyer_id,
+                transfer_group: order.transfer_group,
+            });
+            if (!rec.ok) {
+                if (rec.reason === 'profile_missing') {
+                    return NextResponse.json(
+                        { error: 'Seller or buyer profile missing — cannot recover label. Contact support.' },
+                        { status: 500 }
                     );
-
-                if (upsertErr) {
-                    // Not fatal for serving the PDF — we still have the pno.
-                    // Just means the next click will recover again instead of
-                    // hitting the fast path. Log so it can be investigated.
-                    console.error('[Orders/Label] Recovery upsert failed:', upsertErr);
                 }
-
-                trackingNumber = flashOrder.pno;
-            } catch (recoveryErr: any) {
-                console.error('[Orders/Label] Flash recovery failed:', recoveryErr);
                 return NextResponse.json(
                     {
                         error:
-                            `Could not retrieve label from Flash: ${recoveryErr.message}. ` +
+                            `Could not retrieve label from Flash: ${rec.error}. ` +
                             `This usually means the seller or buyer address is invalid for Flash, ` +
                             `or Flash production credentials need attention. Contact support.`,
                     },
                     { status: 502 }
                 );
+            }
+            trackingNumber = rec.trackingNumber;
+            // A recovered `paid` order never advanced past fulfillment's Flash
+            // step — advance it now so buyer delivery tracking picks it up.
+            if (order.status === 'paid') {
+                await admin
+                    .from('orders')
+                    .update({ status: 'label_generated', updated_at: new Date().toISOString() })
+                    .eq('id', order.id)
+                    .eq('status', 'paid');
             }
         }
 

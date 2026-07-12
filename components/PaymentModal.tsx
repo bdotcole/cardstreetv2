@@ -99,6 +99,15 @@ const PaymentElementForm: React.FC<{
     const [loading, setLoading] = useState(false);
     const [ready, setReady] = useState(false);
 
+    // A declined card (or 3DS failure) leaves the listings already reserved
+    // (`sold`) and a re-confirmable PaymentIntent already created. Cache the
+    // transfer_group + client_secret so a retry REUSES them instead of calling
+    // /api/orders/checkout again — which would re-hit the buyer's OWN reservation
+    // and 409 with a misleading "no longer available", locking them out of
+    // retrying their own purchase. Reset naturally when Elements remounts (amount
+    // /currency/account change) or the modal reopens.
+    const retryRef = useRef<{ transferGroup?: string; clientSecret: string | null } | null>(null);
+
     const handlePay = async () => {
         if (!stripe || !elements) {
             onPaymentFailed('Stripe is not loaded yet. Please try again.');
@@ -123,10 +132,16 @@ const PaymentElementForm: React.FC<{
                 return;
             }
 
-            // Step 2: create pending orders first (reserve inventory + get a
+            const isMarketplace = apiEndpoint === '/api/checkout';
+
+            // Step 2: create pending orders (reserve inventory + get a
             // transfer_group). buyerId is derived from the session server-side.
-            let transferGroup: string | undefined;
-            if (apiEndpoint === '/api/checkout') {
+            // SKIPPED on a retry that already reserved — retryRef holds the
+            // transfer_group from the first attempt, so a declined-card retry
+            // doesn't re-hit /api/orders/checkout and 409 on the buyer's own
+            // now-`sold` listings.
+            let transferGroup: string | undefined = retryRef.current?.transferGroup;
+            if (isMarketplace && !transferGroup) {
                 const orderRes = await fetch('/api/orders/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -158,27 +173,43 @@ const PaymentElementForm: React.FC<{
                 }
                 transferGroup = orderData.transferGroup;
                 // Orders now exist at `pending_payment` and the listings are
-                // reserved (`sold`). Tell the modal so it can release them if the
-                // charge below fails or the buyer closes without paying.
-                if (transferGroup) onOrderReserved?.(transferGroup);
+                // reserved (`sold`). Remember the group so a retry reuses it, and
+                // tell the modal so it can release them if the buyer abandons.
+                if (transferGroup) {
+                    retryRef.current = { transferGroup, clientSecret: null };
+                    onOrderReserved?.(transferGroup);
+                }
             }
 
-            // Step 3: create the PaymentIntent (no card token — PaymentElement
-            // flow). Server computes the authoritative amount from the orders
-            // and pins the currency to the platform region (THB) — the user's
-            // display currency is never sent.
-            const piRes = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(
-                    apiEndpoint === '/api/checkout'
-                        ? { metadata: { transfer_group: transferGroup } }
-                        : { orderId: items[0]?.id, ...extraData }
-                ),
-            });
-            const piData = await piRes.json();
-            if (!piRes.ok || !piData.client_secret) {
-                throw new Error(piData.error || 'Could not start payment');
+            // Step 3: create (or reuse) the PaymentIntent. On a retry we reuse the
+            // client_secret from the first attempt — a declined PI returns to
+            // `requires_payment_method` and is re-confirmable with a new card, so
+            // minting a second PI here would orphan the first. Server computes the
+            // authoritative amount from the orders and pins the currency to THB —
+            // the user's display currency is never sent.
+            let clientSecret = retryRef.current?.clientSecret ?? null;
+            if (!clientSecret) {
+                const piRes = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(
+                        isMarketplace
+                            ? { metadata: { transfer_group: transferGroup } }
+                            : { orderId: items[0]?.id, ...extraData }
+                    ),
+                });
+                const piData = await piRes.json();
+                if (!piRes.ok || !piData.client_secret) {
+                    throw new Error(piData.error || 'Could not start payment');
+                }
+                clientSecret = piData.client_secret;
+                // Cache for retry (marketplace path only — the non-marketplace
+                // path reserves nothing, so retryRef stays null there).
+                if (retryRef.current) retryRef.current.clientSecret = clientSecret;
+            }
+
+            if (!clientSecret) {
+                throw new Error('Could not start payment');
             }
 
             // Step 4: confirm. redirect:'if_required' keeps card + PromptPay
@@ -190,12 +221,15 @@ const PaymentElementForm: React.FC<{
 
             const { error, paymentIntent } = await stripe.confirmPayment({
                 elements,
-                clientSecret: piData.client_secret,
+                clientSecret,
                 confirmParams: { return_url: returnUrl },
                 redirect: 'if_required',
             });
 
             if (error) {
+                // Reservation + PaymentIntent are retained (retryRef untouched)
+                // so the buyer can fix their card and click Pay again without
+                // re-reserving their own listings.
                 onPaymentFailed(error.message || 'Payment failed');
                 setLoading(false);
                 return;
