@@ -94,6 +94,18 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
+    // Admin is not localized. A locale-prefixed admin URL (/en/admin, /th/admin)
+    // must be redirected to the canonical bare path FIRST — otherwise the /en
+    // branch below rewrites it to the internal /admin route without re-entering
+    // middleware, so adminGuard never runs and the console renders to anyone.
+    // Redirecting sends a fresh /admin request that re-enters middleware and
+    // hits adminGuard.
+    if (pathname.startsWith('/en/admin') || pathname.startsWith('/th/admin')) {
+        const url = request.nextUrl.clone()
+        url.pathname = pathname.replace(/^\/(en|th)/, '')
+        return NextResponse.redirect(url)
+    }
+
     // Admin is not localized and has its own auth flow.
     if (pathname.startsWith('/admin')) {
         return adminGuard(request)
@@ -174,12 +186,19 @@ export async function middleware(request: NextRequest) {
 async function adminGuard(request: NextRequest) {
     const { pathname } = request.nextUrl
 
+    // Forward the real admin path to the server layout (via a header middleware
+    // controls — it overwrites any client-supplied value) so the layout's
+    // defense-in-depth requireAdmin can let /admin/login through while guarding
+    // every other admin page.
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-pathname', pathname)
+
     if (pathname.startsWith('/admin/login')) {
-        return NextResponse.next()
+        return NextResponse.next({ request: { headers: requestHeaders } })
     }
 
     const response = NextResponse.next({
-        request: { headers: request.headers },
+        request: { headers: requestHeaders },
     })
 
     // Build a server-side Supabase client using cookies
