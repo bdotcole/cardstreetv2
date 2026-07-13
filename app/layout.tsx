@@ -7,10 +7,27 @@ import PushNotificationManager from '@/components/PushNotificationManager'
 import HtmlLangSync from '@/components/HtmlLangSync'
 import { GoogleAnalytics } from '@next/third-parties/google'
 export const metadata: Metadata = {
+    // Absolute base so the auto-generated OG image + canonical URLs resolve for
+    // crawlers (LINE / Facebook / Messenger, where Thai reshare traffic flows).
+    metadataBase: new URL('https://cardstreet.app'),
     title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
     description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan cards with AI, track your collection value, and trade with verified sellers.',
     keywords: ['Pokemon', 'TCG', 'Thailand', 'การ์ด', 'โปเกมอน', 'marketplace'],
     manifest: '/manifest.json',
+    // og:image / twitter:image are auto-populated from app/opengraph-image.tsx.
+    openGraph: {
+        type: 'website',
+        siteName: 'CardStreet TCG',
+        url: 'https://cardstreet.app',
+        title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
+        description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan with AI, track your collection value, and trade with verified sellers.',
+        locale: 'th_TH',
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
+        description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan with AI and track your collection value.',
+    },
 }
 
 export async function generateViewport() {

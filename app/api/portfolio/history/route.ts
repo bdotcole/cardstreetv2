@@ -97,10 +97,12 @@ export async function GET(request: NextRequest) {
                 .lte('timestamp', endTime.toISOString())
                 .order('timestamp', { ascending: true }),
 
-            // Query 2: current value via joined select (was 2 sequential queries before)
+            // Query 2: current value via joined select (was 2 sequential queries before).
+            // Only the price is needed for the sum — pulling the whole card_data
+            // JSONB blob per row was a large, pointless payload on big collections.
             supabase
                 .from('collection_items')
-                .select('card_data, quantity, collections!inner(user_id, include_in_portfolio)')
+                .select('quantity, card_data->marketPrice, collections!inner(user_id, include_in_portfolio)')
                 .eq('collections.user_id', user.id)
                 .eq('collections.include_in_portfolio', true),
         ]);
@@ -108,9 +110,9 @@ export async function GET(request: NextRequest) {
         if (snapshotResult.error) throw snapshotResult.error;
 
         // Calculate current portfolio value from joined items
-        const currentPortfolioValue = (itemsResult.data || []).reduce((total, item) => {
-            const marketPrice = (item.card_data as any)?.marketPrice || 0;
-            return total + marketPrice * (item.quantity || 1);
+        const currentPortfolioValue = (itemsResult.data || []).reduce((total: number, item: any) => {
+            const marketPrice = Number(item?.marketPrice) || 0;
+            return total + marketPrice * (item?.quantity || 1);
         }, 0);
 
         console.log(`[Portfolio API] User: ${user.id}, Range: ${timeRange}, Current: ฿${currentPortfolioValue}`);

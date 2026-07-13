@@ -261,8 +261,10 @@ export const pokemonService = {
                     dbQuery = dbQuery.or(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
                 }
             } else {
-                // Fallback: check if the query is a partial set name
-                const { data: partialSets } = await supabase.from('pokemon_sets').select('id').ilike('name', `%${cleanQuery}%`);
+                // Fallback: check if the query is a partial set name. Leading-
+                // wildcard ilike can't use an index; bound it so a broad query
+                // can't seq-scan the whole set table unboundedly.
+                const { data: partialSets } = await supabase.from('pokemon_sets').select('id').ilike('name', `%${cleanQuery}%`).limit(20);
                 const partialSetIds = partialSets?.map(s => s.id) || [];
                 
                 let orStr = `name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`;
@@ -379,10 +381,11 @@ export const pokemonService = {
                 .slice(0, 30)
                 .map(r => this.mapSupabaseCardToInternal(r.card));
 
-            // Track search popularity for top 10 results (learning!)
+            // Track search popularity for the top few results (learning!). Only
+            // the strongest matches — one RPC write each, fire-and-forget, so a
+            // keystroke-search doesn't fan out 10 writes site-wide at scale.
             if (topResults.length > 0) {
-                // Fire and forget - track search popularity
-                topResults.slice(0, 10).forEach(card => {
+                topResults.slice(0, 3).forEach(card => {
                     void supabase.rpc('increment_search_popularity', { p_card_id: card.id });
                 });
             }
