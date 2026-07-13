@@ -477,6 +477,59 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
     }
 }
 
+/**
+ * Notifies a user that a card they requested (which was missing from the
+ * catalog) has now been added and is searchable. Fired when a card_request
+ * transitions to status 'Added'.
+ *
+ * Opt-in by default (`card_request_email`/`card_request_push` !== false),
+ * matching the convention used by the payout/delivered notifications above.
+ * Never throws — a notification failure must not block the admin's add flow.
+ */
+export async function sendCardRequestFulfilledNotification(
+    requesterId: string,
+    details: { searchQuery: string; note?: string | null },
+) {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping card-request notification'); return; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(requesterId);
+
+    const wantEmail = prefs.card_request_email !== false;
+    const wantPush = prefs.card_request_push !== false;
+    if (!wantEmail && !wantPush) return;
+    if (!email && !fcmToken) {
+        console.warn(`[Courier] No email or FCM token for requester ${requesterId} — skipping card-request notification`);
+        return;
+    }
+
+    const recipient = buildRecipient(
+        wantEmail ? email : null,
+        wantPush ? fcmToken : null,
+    );
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    if (routing.channels.length === 0) return;
+
+    const card = details.searchQuery?.trim() || 'the card you requested';
+    const extra = details.note?.trim() ? ` ${details.note.trim()}` : '';
+
+    try {
+        await courier.send.message({
+            message: {
+                to: recipient,
+                content: {
+                    title: "CardStreet: Your requested card is here! 🎴",
+                    body: `Good news — "${card}" has been added to the CardStreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.`,
+                },
+                routing,
+                data: { type: 'card_request_fulfilled', searchQuery: card },
+            },
+        });
+        console.log(`[Courier] ✅ 'Card Request Fulfilled' notification sent to requester ${requesterId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Card Request Fulfilled' notification to ${requesterId}:`, error);
+    }
+}
+
 // ─── First-time seller sale email ───────────────────────────────────────────
 
 /**

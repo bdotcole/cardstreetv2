@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 class ErrorBoundary extends React.Component<any, any> {
     constructor(props: any) {
@@ -302,6 +302,377 @@ function SetAccordion({
     )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Card Requests — user-submitted "this card is missing" reports. Surfaced at the
+// top of the Mapping QC workspace so the request queue, its status/outcome, and
+// the ability to add the card live in one place.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CardRequest {
+    id: string
+    requester_id: string | null
+    search_query: string
+    language: string | null
+    notes: string | null
+    status: 'Open' | 'Reviewed' | 'Added' | 'Dismissed'
+    created_at: string
+    updated_at: string
+}
+
+const REQUEST_STATUSES: CardRequest['status'][] = ['Open', 'Reviewed', 'Added', 'Dismissed']
+
+const statusBadgeClass: Record<CardRequest['status'], string> = {
+    Open: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    Reviewed: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    Added: 'bg-green-500/15 text-green-400 border-green-500/30',
+    Dismissed: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+}
+
+function CardRequestsPanel({ supabase }: { supabase: any }) {
+    const [requests, setRequests] = useState<CardRequest[]>([])
+    const [loading, setLoading] = useState(true)
+    const [expanded, setExpanded] = useState(true)
+    const [filter, setFilter] = useState<'active' | 'all'>('active')
+    const [fulfilling, setFulfilling] = useState<CardRequest | null>(null)
+    const [savingId, setSavingId] = useState<string | null>(null)
+
+    const load = async () => {
+        setLoading(true)
+        const res = await fetch('/api/admin/card-requests')
+        const data = await res.json()
+        setRequests(res.ok ? (data.requests ?? []) : [])
+        setLoading(false)
+    }
+
+    useEffect(() => { load() }, [])
+
+    async function patchRequest(id: string, body: Record<string, unknown>) {
+        setSavingId(id)
+        const res = await fetch('/api/admin/card-requests', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, ...body }),
+        })
+        setSavingId(null)
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            alert('Failed to update request: ' + (data.error || res.statusText))
+            return null
+        }
+        const data = await res.json()
+        setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...data.request } : r)))
+        return data
+    }
+
+    const visible = requests.filter((r) => (filter === 'all' ? true : r.status === 'Open' || r.status === 'Reviewed'))
+    const openCount = requests.filter((r) => r.status === 'Open').length
+
+    return (
+        <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+            <div
+                className="p-5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                onClick={() => setExpanded((v) => !v)}
+            >
+                <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/20 transition-transform ${expanded ? 'rotate-90 bg-brand-cyan text-black border-brand-cyan' : 'bg-[#0f1419] text-white'}`}>
+                        <i className="fa-solid fa-chevron-right text-sm" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-white italic flex items-center gap-2">
+                            Card Requests
+                            {openCount > 0 && (
+                                <span className="bg-amber-500 text-black text-[11px] font-black px-2 py-0.5 rounded-full not-italic">{openCount} open</span>
+                            )}
+                        </h2>
+                        <p className="text-slate-400 text-xs">Missing-card reports from users. Add the card, then mark it added to notify the requester.</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                        onClick={() => setFilter(filter === 'active' ? 'all' : 'active')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${filter === 'all' ? 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30' : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'}`}
+                    >
+                        {filter === 'all' ? 'Viewing all' : 'Active only'}
+                    </button>
+                    <button
+                        onClick={load}
+                        className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition-colors"
+                        title="Refresh"
+                    >
+                        <i className="fa-solid fa-rotate text-sm" />
+                    </button>
+                </div>
+            </div>
+
+            {expanded && (
+                <div className="border-t border-white/5 bg-[#0a0d12]/50 p-4">
+                    {loading ? (
+                        <div className="py-10 text-center text-slate-500 animate-pulse">Loading requests...</div>
+                    ) : visible.length === 0 ? (
+                        <div className="py-10 text-center flex flex-col items-center">
+                            <div className="w-14 h-14 rounded-full bg-green-500/10 text-green-400 flex items-center justify-center mb-3">
+                                <i className="fa-solid fa-check-double text-xl" />
+                            </div>
+                            <h3 className="text-white font-black">Queue clear</h3>
+                            <p className="text-slate-400 mt-1 text-sm">{filter === 'active' ? 'No open or reviewed requests.' : 'No card requests yet.'}</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {visible.map((r) => (
+                                <div key={r.id} className="bg-[#0f1419] rounded-xl border border-white/10 p-4">
+                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass[r.status]}`}>{r.status}</span>
+                                                {r.language && (
+                                                    <span className="bg-white/5 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border border-white/10">{r.language}</span>
+                                                )}
+                                                <span className="text-[11px] text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                            <h3 className="font-bold text-white text-base mt-1.5 break-words">&ldquo;{r.search_query}&rdquo;</h3>
+                                            {r.notes && (
+                                                <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words border-l-2 border-white/10 pl-2">{r.notes}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <select
+                                                value={r.status}
+                                                disabled={savingId === r.id}
+                                                onChange={(e) => {
+                                                    const next = e.target.value
+                                                    // Flipping to Added by hand (card added elsewhere) offers to
+                                                    // notify; every other status change is silent.
+                                                    const notify = next === 'Added' && r.status !== 'Added'
+                                                        ? confirm('Mark as Added and notify the requester that the card is now available?')
+                                                        : false
+                                                    patchRequest(r.id, { status: next, notify })
+                                                }}
+                                                className="bg-[#0a0d12] border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-brand-cyan disabled:opacity-50"
+                                                title="Change status"
+                                            >
+                                                {REQUEST_STATUSES.map((s) => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={() => setFulfilling(r)}
+                                                className="bg-brand-cyan text-black px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-white transition-colors flex items-center gap-1.5"
+                                                title="Add this card to the catalog and notify the requester"
+                                            >
+                                                <i className="fa-solid fa-plus" /> Add card
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {fulfilling && (
+                <FulfillRequestModal
+                    request={fulfilling}
+                    supabase={supabase}
+                    onClose={() => setFulfilling(null)}
+                    onDone={(updated) => {
+                        setFulfilling(null)
+                        setRequests((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
+                    }}
+                />
+            )}
+        </div>
+    )
+}
+
+// Compact add-card form for fulfilling a request. Reuses the catalog card
+// endpoint (which mirrors the image into the card-images bucket), then marks the
+// request 'Added' — which fires the requester notification.
+function FulfillRequestModal({
+    request,
+    supabase,
+    onClose,
+    onDone,
+}: {
+    request: CardRequest
+    supabase: any
+    onClose: () => void
+    onDone: (updated: Partial<CardRequest> & { id: string }) => void
+}) {
+    const fileRef = useRef<HTMLInputElement>(null)
+    const [sets, setSets] = useState<{ id: string; name: string; language: string | null; game: string | null }[]>([])
+    const [form, setForm] = useState({
+        set_id: '',
+        number: '',
+        name: request.search_query,
+        english_name: '',
+        rarity: '',
+    })
+    const [file, setFile] = useState<File | null>(null)
+    const [imageUrl, setImageUrl] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+    // Pull the set list once for the datalist autocomplete. Prefer sets matching
+    // the request's language so the admin's likely target sorts to the top.
+    useEffect(() => {
+        (async () => {
+            const { data } = await supabase
+                .from('pokemon_sets')
+                .select('id, name, language, game')
+                .order('release_date', { ascending: false, nullsFirst: false })
+            const rows = (data ?? []) as any[]
+            const lang = request.language
+            rows.sort((a, b) => {
+                const am = lang && a.language === lang ? 0 : 1
+                const bm = lang && b.language === lang ? 0 : 1
+                return am - bm
+            })
+            setSets(rows)
+        })()
+    }, [supabase, request.language])
+
+    const filePreview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
+    useEffect(() => () => { if (filePreview) URL.revokeObjectURL(filePreview) }, [filePreview])
+    const preview = filePreview || imageUrl.trim() || null
+    const computedId = `${form.set_id || '?'}-${form.number || '?'}`
+
+    async function submit(e: React.FormEvent) {
+        e.preventDefault()
+        setError(null)
+        setSaving(true)
+        try {
+            const fd = new FormData()
+            fd.append('set_id', form.set_id.trim())
+            fd.append('number', form.number.trim())
+            fd.append('name', form.name.trim())
+            fd.append('english_name', form.english_name.trim())
+            fd.append('rarity', form.rarity.trim())
+            if (file) fd.append('image', file)
+            else if (imageUrl.trim()) fd.append('imageUrl', imageUrl.trim())
+
+            const res = await fetch('/api/admin/catalog/cards', { method: 'POST', body: fd })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Failed to create card')
+
+            const cardId = data.card?.id ?? computedId
+            // Mark the request Added (notifies the requester) and record the outcome.
+            const note = `Added as ${cardId}.`
+            const patchRes = await fetch('/api/admin/card-requests', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: request.id, status: 'Added', notes: note }),
+            })
+            const patchData = await patchRes.json().catch(() => ({}))
+            if (!patchRes.ok) {
+                // Card was created; only the status update failed. Surface it but
+                // don't lose the win — admin can flip status manually.
+                throw new Error(`Card ${cardId} created, but marking the request Added failed: ${patchData.error || patchRes.statusText}`)
+            }
+            onDone({ id: request.id, status: 'Added', notes: note, ...(patchData.request ?? {}) })
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <form onSubmit={submit} className="glass border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+                <div className="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#0a0d12]/80 backdrop-blur z-10">
+                    <div>
+                        <h2 className="text-xl font-black text-white italic">Add Requested Card</h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Request: &ldquo;{request.search_query}&rdquo;{request.language ? ` · ${request.language}` : ''} · <span className="font-mono">{computedId}</span>
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">
+                        <i className="fa-solid fa-xmark text-xl" />
+                    </button>
+                </div>
+
+                <div className="p-6 grid grid-cols-1 md:grid-cols-[180px_1fr] gap-6">
+                    {/* Image */}
+                    <div className="space-y-3">
+                        <label className={labelClassLocal}>Card image</label>
+                        <div
+                            onClick={() => fileRef.current?.click()}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { setFile(f); setImageUrl('') } }}
+                            className="aspect-[5/7] rounded-xl border-2 border-dashed border-white/15 hover:border-brand-cyan/50 bg-black/40 flex items-center justify-center overflow-hidden cursor-pointer transition-colors"
+                        >
+                            {preview ? (
+                                <img src={preview} alt="" className="w-full h-full object-contain" />
+                            ) : (
+                                <div className="text-center text-slate-500 p-4">
+                                    <i className="fa-solid fa-cloud-arrow-up text-2xl mb-2" />
+                                    <p className="text-xs">Click or drop an image</p>
+                                </div>
+                            )}
+                        </div>
+                        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setImageUrl('') } }} />
+                        <div>
+                            <label className={labelClassLocal}>…or paste an image URL</label>
+                            <input value={imageUrl} onChange={(e) => { setImageUrl(e.target.value); setFile(null) }} placeholder="https://..." className={`${inputClassLocal} font-mono text-xs`} />
+                        </div>
+                    </div>
+
+                    {/* Fields */}
+                    <div className="grid grid-cols-2 gap-4 content-start">
+                        <div className="col-span-2">
+                            <label className={labelClassLocal}>Set *</label>
+                            <input required list="fulfill-set-list" value={form.set_id} onChange={(e) => set('set_id', e.target.value)} placeholder="Start typing a set id or name..." className={`${inputClassLocal} font-mono`} />
+                            <datalist id="fulfill-set-list">
+                                {sets.map((s) => (
+                                    <option key={s.id} value={s.id}>{`${s.name} · ${s.game ?? 'pokemon'}/${s.language ?? '?'}`}</option>
+                                ))}
+                            </datalist>
+                        </div>
+                        <div>
+                            <label className={labelClassLocal}>Number *</label>
+                            <input required value={form.number} onChange={(e) => set('number', e.target.value)} placeholder="e.g. 25" className={`${inputClassLocal} font-mono`} />
+                        </div>
+                        <div>
+                            <label className={labelClassLocal}>Rarity</label>
+                            <input value={form.rarity} onChange={(e) => set('rarity', e.target.value)} placeholder="e.g. Rare" className={inputClassLocal} />
+                        </div>
+                        <div className="col-span-2">
+                            <label className={labelClassLocal}>Name *</label>
+                            <input required value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClassLocal} />
+                        </div>
+                        <div className="col-span-2">
+                            <label className={labelClassLocal}>English name (for non-English cards)</label>
+                            <input value={form.english_name} onChange={(e) => set('english_name', e.target.value)} className={inputClassLocal} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 pb-6 space-y-3">
+                    {error && (
+                        <div className="bg-brand-red/10 border border-brand-red/30 text-brand-red text-sm rounded-lg px-4 py-2.5">{error}</div>
+                    )}
+                    <p className="text-[11px] text-slate-500">
+                        <i className="fa-solid fa-bell mr-1.5" />Adding the card marks this request <span className="text-green-400 font-bold">Added</span> and emails/pushes the requester that it&apos;s available.
+                        Prices come from the nightly pipeline — leave pricing alone here.
+                    </p>
+                    <div className="flex gap-3">
+                        <button type="button" onClick={onClose} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-lg transition-colors">Cancel</button>
+                        <button type="submit" disabled={saving} className="flex-1 bg-brand-cyan text-black font-black uppercase tracking-widest py-3 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+                            {saving ? <i className="fa-solid fa-spinner fa-spin" /> : 'Add card & notify'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    )
+}
+
+const inputClassLocal = 'w-full bg-[#0a0d12] border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan text-sm'
+const labelClassLocal = 'block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'
+
 function GlobalSetInboxPage() {
     const supabase = createClient()
     
@@ -412,6 +783,10 @@ function GlobalSetInboxPage() {
                         {globalShowVerified ? 'Viewing All' : 'Unverified Only'}
                     </button>
                 </div>
+            </div>
+
+            <div className="max-w-6xl mx-auto mb-8">
+                <CardRequestsPanel supabase={supabase} />
             </div>
 
             <div className="max-w-6xl mx-auto" translate="no">
