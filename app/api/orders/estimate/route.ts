@@ -30,6 +30,7 @@ import {
     BUYER_PROFILE_INCOMPLETE_TOAST,
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const EstimateBodySchema = z.object({
     items: z
@@ -51,6 +52,17 @@ export async function POST(req: Request) {
         const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser();
         if (authErr || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Each call fans out a synchronous Flash rate quote per seller on the
+        // checkout hot path. Cap per buyer so a loop can't exhaust the Flash
+        // quota or wedge checkout latency. 30/min never limits a real buyer.
+        const rl = await checkRateLimit(`estimate:${user.id}:1m`, { windowSeconds: 60, max: 30 });
+        if (!rl.allowed) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please wait a moment and try again.' },
+                { status: 429, headers: { 'Retry-After': '30' } },
+            );
         }
 
         const parsed = EstimateBodySchema.safeParse(await req.json());

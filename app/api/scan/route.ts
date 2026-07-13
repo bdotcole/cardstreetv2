@@ -17,14 +17,22 @@ export async function POST(req: Request) {
         // never throttles a human; 500/day covers a full binder-cataloging
         // session. The limiter fails open — never blocks scans on a DB hiccup.
         const ip = requestIp(req);
-        const [minute, day] = await Promise.all([
+        // Coarse GLOBAL ceiling on top of the per-IP windows. Two reasons it's
+        // fail-CLOSED (unlike the per-IP checks): (1) it caps total Gemini spend
+        // even when an attacker rotates IPs to dodge the per-IP cap, and (2)
+        // because it blocks on a limiter outage, a Supabase hiccup can't uncap
+        // this unauthenticated, paid endpoint. Generous vs real traffic; tune via
+        // SCAN_GLOBAL_MAX_PER_MIN.
+        const globalMax = Number(process.env.SCAN_GLOBAL_MAX_PER_MIN) || 300;
+        const [minute, day, global] = await Promise.all([
             checkRateLimit(`scan:${ip}:1m`, { windowSeconds: 60, max: 15 }),
             checkRateLimit(`scan:${ip}:1d`, { windowSeconds: 86400, max: 500 }),
+            checkRateLimit('scan:global:1m', { windowSeconds: 60, max: globalMax, failClosed: true }),
         ]);
-        if (!minute.allowed || !day.allowed) {
+        if (!minute.allowed || !day.allowed || !global.allowed) {
             return NextResponse.json(
-                { error: 'Too many scans from this connection. Please wait a moment and try again.' },
-                { status: 429, headers: { 'Retry-After': minute.allowed ? '3600' : '30' } },
+                { error: 'Too many scans right now. Please wait a moment and try again.' },
+                { status: 429, headers: { 'Retry-After': !day.allowed ? '3600' : '30' } },
             );
         }
 

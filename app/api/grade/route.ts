@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requirePremium } from '@/lib/premiumAuth';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { gradeCard, type GradeAngle, type GradeImageInput } from '@/services/graderService';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // nodejs runtime is required: graderService uses `sharp` (a native module) to
 // normalize the photos, which is unavailable on Edge.
@@ -16,6 +17,16 @@ export async function POST(req: Request) {
   const gate = await requirePremium();
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
+
+  // Each grade is a paid Gemini vision call. Premium-gated but otherwise
+  // uncapped — bound per user so one subscriber can't run up unbounded spend.
+  const rl = await checkRateLimit(`grade:${user.id}:1d`, { windowSeconds: 86400, max: 20 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Daily grading limit reached. Please try again tomorrow.' },
+      { status: 429, headers: { 'Retry-After': '3600' } },
+    );
+  }
 
   try {
     const body = await req.json();

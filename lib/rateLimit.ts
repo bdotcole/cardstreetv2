@@ -4,12 +4,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * DB-backed fixed-window rate limiter (supabase/migrations/20260702_rate_limits.sql).
  * Server-side only — uses the service-role client.
  *
- * Fail-open by design: a limiter hiccup (DB error, missing migration) must
- * never take down the endpoint it protects, so errors log and allow.
+ * Fail-open by DEFAULT: a limiter hiccup (DB error, missing migration) must not
+ * take down the endpoint it protects, so errors log and allow. Pass
+ * `failClosed: true` for a coarse cost ceiling where "block on a limiter outage"
+ * is safer than "allow unbounded" — e.g. the global budget on the
+ * unauthenticated, paid /api/scan endpoint.
  */
 export async function checkRateLimit(
     key: string,
-    { windowSeconds, max }: { windowSeconds: number; max: number },
+    { windowSeconds, max, failClosed = false }: { windowSeconds: number; max: number; failClosed?: boolean },
 ): Promise<{ allowed: boolean; count: number }> {
     try {
         const admin = createAdminClient()
@@ -19,12 +22,12 @@ export async function checkRateLimit(
         })
         if (error || typeof data !== 'number') {
             if (error) console.error('[rateLimit] bump failed:', error.message)
-            return { allowed: true, count: 0 }
+            return { allowed: !failClosed, count: 0 }
         }
         return { allowed: data <= max, count: data }
     } catch (e) {
         console.error('[rateLimit] error:', e)
-        return { allowed: true, count: 0 }
+        return { allowed: !failClosed, count: 0 }
     }
 }
 

@@ -6,6 +6,7 @@ import {
     estimateParcelWeightGramsForItems,
     estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -13,6 +14,16 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Fans out a synchronous Flash rate quote per seller — cap per user so a
+    // loop can't drain the Flash quota. 30/min never limits a real buyer.
+    const rl = await checkRateLimit(`shipcalc:${user.id}:1m`, { windowSeconds: 60, max: 30 });
+    if (!rl.allowed) {
+        return NextResponse.json(
+            { error: 'Too many requests. Please wait a moment and try again.' },
+            { status: 429, headers: { 'Retry-After': '30' } },
+        );
     }
 
     try {
