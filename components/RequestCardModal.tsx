@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import {
+    GAMES,
+    DEFAULT_GAME,
+    getGame,
+    getGameLanguages,
+    gameHasMultipleLanguages,
+    defaultLanguageForGame,
+    type GameId,
+    type GameLanguageCode,
+} from '@/lib/games';
 
 interface RequestCardModalProps {
     isOpen: boolean;
@@ -9,23 +19,58 @@ interface RequestCardModalProps {
     initialQuery: string;
 }
 
+// Only offer games that are actually live in the catalog.
+const SELECTABLE_GAMES = GAMES.filter((g) => g.enabled);
+
+// PostgREST reports an insert against a not-yet-migrated column as PGRST204
+// ("Could not find the 'game' column ... in the schema cache"); Postgres itself
+// uses 42703 (undefined_column). Detect either so the form degrades gracefully
+// before the migration lands rather than dead-ending the user.
+function isMissingColumnError(err: { code?: string; message?: string } | null): boolean {
+    if (!err) return false;
+    return err.code === 'PGRST204' || err.code === '42703' || /column/i.test(err.message ?? '');
+}
+
 const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, initialQuery }) => {
     const { t, language } = useTranslation();
+    const [gameId, setGameId] = useState<GameId>(DEFAULT_GAME);
+    const [cardLanguage, setCardLanguage] = useState<GameLanguageCode | ''>('');
     const [cardName, setCardName] = useState(initialQuery);
+    const [cardNumber, setCardNumber] = useState('');
     const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
 
+    const gameLanguages = getGameLanguages(gameId);
+    const needsLanguage = gameHasMultipleLanguages(gameId);
+
     // The modal stays mounted (returns null when closed), so seed the form
     // from the latest search query each time it opens rather than only at mount.
     useEffect(() => {
         if (isOpen) {
+            setGameId(DEFAULT_GAME);
+            // Pre-select the current UI locale when the default game offers it,
+            // otherwise force an explicit pick for multi-language games.
+            const defaultGameLangs = getGameLanguages(DEFAULT_GAME).map((l) => l.code);
+            setCardLanguage(
+                defaultGameLangs.includes(language as GameLanguageCode)
+                    ? (language as GameLanguageCode)
+                    : '',
+            );
             setCardName(initialQuery);
+            setCardNumber('');
             setNotes('');
             setErrorMessage('');
         }
-    }, [isOpen, initialQuery]);
+    }, [isOpen, initialQuery, language]);
+
+    // When the game changes, reset the language: single-language games don't show
+    // the selector, so seed their only code; multi-language games force a pick.
+    const handleGameChange = (next: GameId) => {
+        setGameId(next);
+        setCardLanguage(gameHasMultipleLanguages(next) ? '' : defaultLanguageForGame(next));
+    };
 
     if (!isOpen) return null;
 
@@ -33,6 +78,18 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
         e.preventDefault();
         setIsSubmitting(true);
         setErrorMessage('');
+
+        // Multi-language games require an explicit language; single-language games
+        // resolve to their only code so the request still records one.
+        const effectiveLanguage: GameLanguageCode = needsLanguage
+            ? (cardLanguage as GameLanguageCode)
+            : defaultLanguageForGame(gameId);
+
+        if (needsLanguage && !cardLanguage) {
+            setErrorMessage(t('cardRequest.languageRequired'));
+            setIsSubmitting(false);
+            return;
+        }
 
         try {
             const supabase = createClient();
@@ -44,12 +101,36 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                 return;
             }
 
-            const { error: insertError } = await supabase.from('card_requests').insert({
-                requester_id: userData.user.id,
+            const requesterId = userData.user.id;
+            const trimmedNumber = cardNumber.trim();
+            const trimmedNotes = notes.trim();
+
+            let { error: insertError } = await supabase.from('card_requests').insert({
+                requester_id: requesterId,
                 search_query: cardName.trim(),
-                language,
-                notes: notes.trim() || null,
+                game: gameId,
+                card_number: trimmedNumber || null,
+                language: effectiveLanguage,
+                notes: trimmedNotes || null,
             });
+
+            // Graceful fallback if the game/card_number columns aren't migrated
+            // yet: fold them into notes so no request (or its data) is lost.
+            if (insertError && isMissingColumnError(insertError)) {
+                const foldedNotes = [
+                    `Game: ${getGame(gameId).name}`,
+                    trimmedNumber ? `Number: ${trimmedNumber}` : null,
+                    trimmedNotes || null,
+                ]
+                    .filter(Boolean)
+                    .join('\n');
+                ({ error: insertError } = await supabase.from('card_requests').insert({
+                    requester_id: requesterId,
+                    search_query: cardName.trim(),
+                    language: effectiveLanguage,
+                    notes: foldedNotes || null,
+                }));
+            }
 
             if (insertError) {
                 console.error('Card request insertion failed:', insertError);
@@ -68,6 +149,9 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
             setIsSubmitting(false);
         }
     };
+
+    const selectClass =
+        'w-full h-12 bg-black/40 border border-white/10 rounded-xl pl-4 pr-10 text-sm text-white outline-none focus:border-brand-cyan appearance-none cursor-pointer';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -88,10 +172,57 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                         <p className="font-bold text-white text-sm">{successMessage}</p>
                     </div>
                 ) : (
-                    <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
                         {errorMessage && (
                             <div className="text-xs font-bold text-brand-red bg-brand-red/10 p-3 rounded-lg border border-brand-red/20">
                                 {errorMessage}
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                {t('cardRequest.game')}
+                            </label>
+                            <div className="relative">
+                                <select
+                                    className={selectClass}
+                                    value={gameId}
+                                    onChange={(e) => handleGameChange(e.target.value as GameId)}
+                                    required
+                                >
+                                    {SELECTABLE_GAMES.map((g) => (
+                                        <option key={g.id} value={g.id} className="bg-brand-darker">
+                                            {g.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <i className="fa-solid fa-chevron-down text-slate-500 text-xs absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            </div>
+                        </div>
+
+                        {needsLanguage && (
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                    {t('cardRequest.language')}
+                                </label>
+                                <div className="relative">
+                                    <select
+                                        className={selectClass}
+                                        value={cardLanguage}
+                                        onChange={(e) => setCardLanguage(e.target.value as GameLanguageCode)}
+                                        required
+                                    >
+                                        <option value="" disabled className="bg-brand-darker">
+                                            {t('cardRequest.languagePlaceholder')}
+                                        </option>
+                                        {gameLanguages.map((l) => (
+                                            <option key={l.code} value={l.code} className="bg-brand-darker">
+                                                {l.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <i className="fa-solid fa-chevron-down text-slate-500 text-xs absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                </div>
                             </div>
                         )}
 
@@ -106,6 +237,19 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                                 value={cardName}
                                 onChange={(e) => setCardName(e.target.value)}
                                 required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                {t('cardRequest.cardNumber')}
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full h-12 bg-black/40 border border-white/10 rounded-xl px-4 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-cyan"
+                                placeholder={t('cardRequest.cardNumberPlaceholder')}
+                                value={cardNumber}
+                                onChange={(e) => setCardNumber(e.target.value)}
                             />
                         </div>
 
@@ -131,7 +275,7 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                             </button>
                             <button
                                 type="submit"
-                                disabled={isSubmitting || !cardName.trim()}
+                                disabled={isSubmitting || !cardName.trim() || (needsLanguage && !cardLanguage)}
                                 className="flex-1 h-12 bg-brand-cyan text-brand-darker font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                                 {isSubmitting ? (

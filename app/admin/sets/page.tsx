@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { getGame } from '@/lib/games'
 
 class ErrorBoundary extends React.Component<any, any> {
     constructor(props: any) {
@@ -312,6 +313,8 @@ interface CardRequest {
     id: string
     requester_id: string | null
     search_query: string
+    game: string | null
+    card_number: string | null
     language: string | null
     notes: string | null
     status: 'Open' | 'Reviewed' | 'Added' | 'Dismissed'
@@ -424,12 +427,20 @@ function CardRequestsPanel({ supabase }: { supabase: any }) {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass[r.status]}`}>{r.status}</span>
+                                                {r.game && (
+                                                    <span className="bg-brand-cyan/10 text-brand-cyan px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border border-brand-cyan/20">{getGame(r.game).shortName}</span>
+                                                )}
                                                 {r.language && (
                                                     <span className="bg-white/5 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border border-white/10">{r.language}</span>
                                                 )}
                                                 <span className="text-[11px] text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
                                             </div>
-                                            <h3 className="font-bold text-white text-base mt-1.5 break-words">&ldquo;{r.search_query}&rdquo;</h3>
+                                            <h3 className="font-bold text-white text-base mt-1.5 break-words">
+                                                &ldquo;{r.search_query}&rdquo;
+                                                {r.card_number && (
+                                                    <span className="ml-2 text-sm font-mono font-bold text-slate-400">#{r.card_number}</span>
+                                                )}
+                                            </h3>
                                             {r.notes && (
                                                 <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words border-l-2 border-white/10 pl-2">{r.notes}</p>
                                             )}
@@ -503,7 +514,7 @@ function FulfillRequestModal({
     const [sets, setSets] = useState<{ id: string; name: string; language: string | null; game: string | null }[]>([])
     const [form, setForm] = useState({
         set_id: '',
-        number: '',
+        number: request.card_number ?? '',
         name: request.search_query,
         english_name: '',
         rarity: '',
@@ -516,7 +527,8 @@ function FulfillRequestModal({
     const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
     // Pull the set list once for the datalist autocomplete. Prefer sets matching
-    // the request's language so the admin's likely target sorts to the top.
+    // the request's game (primary) then language (secondary) so the admin's likely
+    // target sorts to the top.
     useEffect(() => {
         (async () => {
             const { data } = await supabase
@@ -524,15 +536,18 @@ function FulfillRequestModal({
                 .select('id, name, language, game')
                 .order('release_date', { ascending: false, nullsFirst: false })
             const rows = (data ?? []) as any[]
-            const lang = request.language
-            rows.sort((a, b) => {
-                const am = lang && a.language === lang ? 0 : 1
-                const bm = lang && b.language === lang ? 0 : 1
-                return am - bm
-            })
+            const game = request.game
+            // card_requests stores the UI language code ('jp'); the catalog uses 'ja'.
+            const lang = request.language === 'jp' ? 'ja' : request.language
+            const score = (s: any) => {
+                const gameMiss = game && (s.game ?? 'pokemon') === game ? 0 : 1
+                const langMiss = lang && s.language === lang ? 0 : 1
+                return gameMiss * 2 + langMiss // game dominates the ranking, language breaks ties
+            }
+            rows.sort((a, b) => score(a) - score(b))
             setSets(rows)
         })()
-    }, [supabase, request.language])
+    }, [supabase, request.game, request.language])
 
     const filePreview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
     useEffect(() => () => { if (filePreview) URL.revokeObjectURL(filePreview) }, [filePreview])
@@ -586,7 +601,7 @@ function FulfillRequestModal({
                     <div>
                         <h2 className="text-xl font-black text-white italic">Add Requested Card</h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            Request: &ldquo;{request.search_query}&rdquo;{request.language ? ` · ${request.language}` : ''} · <span className="font-mono">{computedId}</span>
+                            Request: &ldquo;{request.search_query}&rdquo;{request.game ? ` · ${getGame(request.game).shortName}` : ''}{request.language ? ` · ${request.language}` : ''} · <span className="font-mono">{computedId}</span>
                         </p>
                     </div>
                     <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">

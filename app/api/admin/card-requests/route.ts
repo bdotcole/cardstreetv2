@@ -10,6 +10,19 @@ export const runtime = 'nodejs';
 const VALID_STATUSES = ['Open', 'Reviewed', 'Added', 'Dismissed'] as const;
 type Status = (typeof VALID_STATUSES)[number];
 
+// Columns added by 20260713_card_request_game_number.sql. Selecting them before
+// the migration runs errors with PGRST204 (schema cache) / 42703 (undefined
+// column); detect that so the panel degrades to the legacy shape instead of 500.
+const FULL_COLUMNS =
+    'id, requester_id, search_query, game, card_number, language, notes, status, created_at, updated_at';
+const LEGACY_COLUMNS =
+    'id, requester_id, search_query, language, notes, status, created_at, updated_at';
+
+function isMissingColumnError(err: { code?: string; message?: string } | null): boolean {
+    if (!err) return false;
+    return err.code === 'PGRST204' || err.code === '42703' || /column/i.test(err.message ?? '');
+}
+
 // GET /api/admin/card-requests?status=Open — list user-submitted missing-card
 // requests for the Mapping QC panel. Newest first; optional status filter.
 export async function GET(request: Request) {
@@ -20,17 +33,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    let query = supabase
-        .from('card_requests')
-        .select('id, requester_id, search_query, language, notes, status, created_at, updated_at')
-        .order('created_at', { ascending: false })
-        .limit(200);
+    const statusFilter =
+        status && (VALID_STATUSES as readonly string[]).includes(status) ? status : null;
 
-    if (status && (VALID_STATUSES as readonly string[]).includes(status)) {
-        query = query.eq('status', status);
+    const runList = (columns: string) => {
+        let query = supabase
+            .from('card_requests')
+            .select(columns)
+            .order('created_at', { ascending: false })
+            .limit(200);
+        if (statusFilter) query = query.eq('status', statusFilter);
+        return query;
+    };
+
+    let { data, error } = await runList(FULL_COLUMNS);
+    if (error && isMissingColumnError(error)) {
+        ({ data, error } = await runList(LEGACY_COLUMNS));
     }
-
-    const { data, error } = await query;
     if (error) {
         console.error('Admin card-requests list error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -77,12 +96,20 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
         }
 
-        const { data: updated, error: updErr } = await supabase
+        let { data: updated, error: updErr } = await supabase
             .from('card_requests')
             .update(update)
             .eq('id', id)
-            .select('id, requester_id, search_query, language, notes, status, created_at, updated_at')
+            .select(FULL_COLUMNS)
             .single();
+        if (updErr && isMissingColumnError(updErr)) {
+            ({ data: updated, error: updErr } = await supabase
+                .from('card_requests')
+                .update(update)
+                .eq('id', id)
+                .select(LEGACY_COLUMNS)
+                .single());
+        }
         if (updErr) throw updErr;
 
         // Fire-and-await the notification only on the Open/Reviewed -> Added edge.
