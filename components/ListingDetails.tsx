@@ -340,7 +340,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         {isThai ? 'เพิ่มลงรถเข็น' : 'Add to Cart'}
                     </button>
                     <button
-                        onClick={onBuyNow}
+                        // Call with no args — passing the bare handler hands the
+                        // click event to handleBuyNow as its `listingArg`, which
+                        // then builds a garbage cart (NaN total) and crashes the
+                        // payment modal. The shell reads `selectedListing` instead.
+                        onClick={() => onBuyNow()}
                         className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
                     >
                         {isThai ? 'ซื้อเลย' : 'Buy Now'}
