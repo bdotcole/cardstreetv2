@@ -914,6 +914,173 @@ export async function sendStripeSetupReminderEmail(
     }
 }
 
+// ─── Abandoned-checkout recovery nudge (buyer) ───────────────────────────────
+
+/**
+ * One-time "you didn't finish — the card's still available" email/push for a
+ * buyer whose checkout was abandoned (order cancelled, never paid). The buyer
+ * side of the seller onboarding nudge: /api/orders/checkout reserves the
+ * listing before charging, and an unpaid checkout (a PromptPay QR left
+ * unscanned, a closed payment sheet) is later cancelled by the reconcile cron
+ * or the webhook, freeing the listing. This re-engages the buyer while their
+ * intent is still warm and points them straight back to the (now buyable
+ * again) card.
+ *
+ * Candidates are picked by app/api/cron/buyer-payment-nudge; this function
+ * re-verifies eligibility so a buyer who already re-bought (or whose card sold
+ * to someone else) is never nudged wrongly.
+ *
+ * Idempotency mirrors sendStripeSetupReminderEmail: CLAIM
+ * orders.checkout_nudge_sent_at (CAS on NULL) before sending, roll the claim
+ * back only if the actual send fails. The claim is kept when we deliberately
+ * decline to send (listing no longer active, no contact channel) so the cron
+ * never reconsiders a settled order. Never throws.
+ *
+ * Copy is inline + bilingual (TH first — the server can't know the buyer's UI
+ * language). The CTA deep-links to /card/<id>, which resolves on desktop, on
+ * the mobile web shell (?card= overlay), and App-Links into the native app.
+ */
+export async function sendAbandonedCheckoutNudge(
+    orderId: string,
+    deps: FirstTimeSaleDeps = {},
+): Promise<'sent' | 'skipped' | 'error'> {
+    const courier = deps.courier !== undefined ? deps.courier : getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping checkout nudge');
+        return 'skipped';
+    }
+    const supabaseAdmin = deps.supabaseAdmin ?? getSupabaseAdmin();
+
+    try {
+        // ── 1. Re-verify the order is a genuine abandoned, un-nudged checkout. ──
+        // This `orderId` is the representative for its cart; the claim below
+        // covers the whole transfer_group so a multi-item cart nudges once.
+        const { data: order, error: orderErr } = await supabaseAdmin
+            .from('orders')
+            .select('id, buyer_id, listing_id, transfer_group, status, payment_id, checkout_nudge_sent_at')
+            .eq('id', orderId)
+            .single();
+
+        if (orderErr || !order) {
+            console.error(`[Courier] ❌ checkout-nudge: failed to load order ${orderId}:`, orderErr);
+            return 'error';
+        }
+        if (
+            order.status !== 'cancelled' ||
+            order.payment_id ||
+            order.checkout_nudge_sent_at ||
+            !order.listing_id ||
+            !order.buyer_id ||
+            !order.transfer_group
+        ) {
+            return 'skipped';
+        }
+
+        // ── 2. The card the buyer was trying to buy — needed for the CTA and
+        //       to confirm there's still something to recover. ──
+        const { data: listing } = await supabaseAdmin
+            .from('listings')
+            .select('id, status, card_id, card_data')
+            .eq('id', order.listing_id)
+            .single();
+
+        // ── 3. Resolve the buyer's channels (default-on, like payout/delivered). ──
+        const { email, fcmToken, prefs } = await getUserNotifContext(order.buyer_id);
+        const wantEmail = prefs.checkout_nudge_email !== false && !!email;
+        const wantPush = prefs.checkout_nudge_push !== false && !!fcmToken;
+
+        // ── 4. Atomically claim the one-shot slot for the WHOLE cart. ──
+        // Claiming by transfer_group (not just this row) means a multi-item
+        // single-seller cart — which becomes one cancelled order per card — is
+        // stamped in one shot, so the buyer gets a single nudge, not one per
+        // card. The status/payment guards keep us from ever stamping a sibling
+        // that somehow got paid.
+        const claimedAt = new Date().toISOString();
+        const { data: claimed, error: claimErr } = await supabaseAdmin
+            .from('orders')
+            .update({ checkout_nudge_sent_at: claimedAt })
+            .eq('transfer_group', order.transfer_group)
+            .eq('status', 'cancelled')
+            .is('payment_id', null)
+            .is('checkout_nudge_sent_at', null)
+            .select('id');
+
+        if (claimErr) {
+            console.error(`[Courier] ❌ checkout-nudge: claim update failed for ${orderId}:`, claimErr);
+            return 'error';
+        }
+        if (!claimed || claimed.length === 0) {
+            return 'skipped'; // lost the race to a concurrent run
+        }
+
+        // The claim is now ours. Decline (keeping the claim) when there's
+        // nothing to recover or no way to reach the buyer — these are terminal,
+        // not retryable, so we intentionally do NOT roll the claim back.
+        if (!listing || listing.status !== 'active') return 'skipped';
+        if (!wantEmail && !wantPush) return 'skipped';
+
+        // ── 5. Build payload + send. ──
+        const cardId: string | null = listing.card_id ?? null;
+        const cardName = ((listing.card_data as any)?.name || '').toString().trim() || 'the card';
+        const cardUrl = cardId ? `${appBaseUrl()}/card/${cardId}` : `${appBaseUrl()}/`;
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+
+        const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
+        const routing = buildRouting(wantEmail, wantPush);
+        if (routing.channels.length === 0) return 'skipped';
+
+        try {
+            const sendResult = await courier.send.message({
+                message: {
+                    to: recipient,
+                    content: {
+                        title: `ยังซื้อ ${cardName} ได้อยู่ — Still want ${cardName}?`,
+                        body:
+                            `คุณเริ่มสั่งซื้อ "${cardName}" ไว้แต่การชำระเงินยังไม่เสร็จ — ` +
+                            'การ์ดใบนี้ยังมีอยู่และพร้อมให้คุณซื้อ ' +
+                            `กดที่นี่เพื่อซื้อให้เสร็จก่อนใคร: ${cardUrl}\n\n` +
+                            '- - -\n\n' +
+                            `You started buying "${cardName}" but the payment didn't go through — ` +
+                            'good news, it\'s still available. Complete your purchase before ' +
+                            `someone else grabs it: ${cardUrl}\n\n` +
+                            `Need a hand? Contact ${supportEmail}`,
+                    },
+                    routing,
+                    // Push deep-link payload (read by the mobile FCM handler).
+                    data: {
+                        type: 'checkout_incomplete',
+                        orderId,
+                        listingId: listing.id,
+                        ...(cardId ? { cardId } : {}),
+                    },
+                },
+            });
+            console.log(
+                `[Courier] ✅ Checkout nudge sent to buyer ${order.buyer_id} (order ${orderId}). ` +
+                `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+            );
+            return 'sent';
+        } catch (sendErr) {
+            console.error(`[Courier] ❌ Error sending checkout nudge for ${orderId}:`, sendErr);
+            // Send failed — roll the whole cart's claim back so a later run
+            // retries. Guard on our own timestamp so we never clobber a newer
+            // claim, and scope to the transfer_group we just claimed.
+            const { error: rollbackErr } = await supabaseAdmin
+                .from('orders')
+                .update({ checkout_nudge_sent_at: null })
+                .eq('transfer_group', order.transfer_group)
+                .eq('checkout_nudge_sent_at', claimedAt);
+            if (rollbackErr) {
+                console.error(`[Courier] ❌ checkout-nudge: failed to roll back claim for ${orderId} (will not retry):`, rollbackErr);
+            }
+            return 'error';
+        }
+    } catch (err) {
+        console.error(`[Courier] ❌ Unexpected error in checkout nudge for ${orderId}:`, err);
+        return 'error';
+    }
+}
+
 /**
  * CardStreet Pro perk: tells a wishlister that a card on their wishlist was
  * just listed for sale. Entitlement filtering and dedupe happen in the caller

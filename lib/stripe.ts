@@ -134,6 +134,64 @@ export function paymentMethodTypesForRegion(region: StripeRegion): string[] {
 }
 
 /**
+ * Extracts the buyer's ACTUAL payment method from a PaymentIntent, normalized
+ * to our `orders.payment_method` vocabulary ('credit_card' | 'promptpay' | …).
+ *
+ * Why this exists: /api/orders/checkout seeds `orders.payment_method` from the
+ * client's declared method BEFORE the buyer picks one in Stripe's
+ * PaymentElement (which offers card + PromptPay via automatic_payment_methods).
+ * That seed defaults to 'credit_card' and is never corrected, so a PromptPay
+ * purchase — paid or abandoned — is mislabeled 'credit_card' in the DB, making
+ * it impossible to measure PromptPay completion vs. abandonment. Callers pass
+ * the retrieved PaymentIntent here (webhook on success, reconcile cron on
+ * cancel) to stamp the real method.
+ *
+ * Reads the most authoritative source available, in order:
+ *   1. the expanded PaymentMethod (`expand: ['payment_method']`) — set once the
+ *      buyer confirms, even for an abandoned/unpaid attempt;
+ *   2. the expanded latest Charge's payment_method_details — present after a
+ *      successful charge;
+ *   3. `payment_method_types` only when it has collapsed to a single method
+ *      (an unconfirmed automatic-methods PI lists several — ambiguous, skip).
+ * Returns null when the method can't be determined, so callers leave the
+ * existing value untouched rather than guessing.
+ */
+export function orderPaymentMethodFromIntent(pi: Stripe.PaymentIntent): string | null {
+    const normalize = (type: string | null | undefined): string | null => {
+        if (!type) return null;
+        // Stripe calls it 'card'; our schema/UI has always said 'credit_card'.
+        return type === 'card' ? 'credit_card' : type;
+    };
+
+    // 1. Expanded PaymentMethod object.
+    const pm = pi.payment_method;
+    if (pm && typeof pm !== 'string' && pm.type) {
+        return normalize(pm.type);
+    }
+
+    // 2. Expanded latest Charge (succeeded OR failed — a failed charge still
+    //    records which method was attempted).
+    const charge = pi.latest_charge;
+    if (charge && typeof charge !== 'string') {
+        const detailsType = charge.payment_method_details?.type;
+        if (detailsType) return normalize(detailsType);
+    }
+
+    // 3. The method that failed — e.g. a PromptPay QR that expired unpaid moves
+    //    the PI to requires_payment_method and detaches `payment_method`, but
+    //    the failed attempt's method survives here. Always embedded (no expand).
+    const failedType = pi.last_payment_error?.payment_method?.type;
+    if (failedType) return normalize(failedType);
+
+    // 4. Unambiguous single-method PI.
+    if (Array.isArray(pi.payment_method_types) && pi.payment_method_types.length === 1) {
+        return normalize(pi.payment_method_types[0]);
+    }
+
+    return null;
+}
+
+/**
  * Returns the canonical app base URL for Stripe redirect URLs.
  * Honors NEXT_PUBLIC_APP_URL, falls back to localhost in dev, prod URL otherwise.
  */

@@ -22,8 +22,50 @@ import {
     getAllWebhookSecretsForRegion,
     isRegionConfigured,
     deriveConnectStatus,
+    orderPaymentMethodFromIntent,
     type StripeRegion,
 } from '@/lib/stripe';
+
+/**
+ * Stamp the buyer's ACTUAL payment method onto a transfer_group's orders.
+ *
+ * `orders.payment_method` is seeded from the client's declared method at
+ * /api/orders/checkout, before the buyer picks one in Stripe's PaymentElement,
+ * so it's frequently wrong (a PromptPay purchase reads 'credit_card'). The raw
+ * webhook event object doesn't expand the method, so we retrieve the PI with
+ * the method + latest charge expanded and normalize it. Best-effort: a failure
+ * here must never affect the 200 we owe Stripe.
+ */
+async function stampOrderPaymentMethod(
+    stripe: Stripe,
+    transferGroup: string,
+    piId: string,
+    stripeAccount: string | null,
+    logPrefix: string,
+): Promise<void> {
+    try {
+        const pi = await stripe.paymentIntents.retrieve(
+            piId,
+            { expand: ['payment_method', 'latest_charge'] },
+            stripeAccount ? { stripeAccount } : undefined,
+        );
+        const method = orderPaymentMethodFromIntent(pi);
+        if (!method) return;
+
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        const { error } = await supabase
+            .from('orders')
+            .update({ payment_method: method })
+            .eq('transfer_group', transferGroup);
+        if (error) console.error(`${logPrefix} payment_method stamp failed:`, error.message);
+    } catch (e) {
+        console.error(`${logPrefix} payment_method stamp (non-fatal):`, (e as Error).message);
+    }
+}
 
 export async function handleStripeWebhook(
     request: NextRequest,
@@ -108,6 +150,10 @@ export async function handleStripeWebhook(
                     break;
                 }
 
+                // Correct the seeded payment_method with what Stripe actually
+                // processed (card vs. promptpay) before/alongside fulfillment.
+                await stampOrderPaymentMethod(stripe, transferGroup, paymentId, connectedAccount, logPrefix);
+
                 // Trigger fulfillment (idempotent — safe to call multiple times)
                 const result = await fulfillOrdersByTransferGroup(transferGroup, paymentId);
 
@@ -175,6 +221,12 @@ export async function handleStripeWebhook(
                     } catch (revertErr) {
                         console.error(`${logPrefix} Error reverting failed payment orders:`, revertErr);
                     }
+
+                    // Label the abandoned/failed order with the method that was
+                    // actually attempted (e.g. an expired PromptPay QR) so
+                    // abandonment analytics aren't polluted by the 'credit_card'
+                    // seed default.
+                    await stampOrderPaymentMethod(stripe, transferGroup, paymentIntent.id, connectedAccount, logPrefix);
                 }
 
                 break;

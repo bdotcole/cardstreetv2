@@ -28,7 +28,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getStripeForRegion, isRegionConfigured, type StripeRegion } from '@/lib/stripe';
+import { getStripeForRegion, isRegionConfigured, orderPaymentMethodFromIntent, type StripeRegion } from '@/lib/stripe';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 
 export const runtime = 'nodejs';
@@ -118,6 +118,18 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // Correct the seeded 'credit_card' default on a group's orders with the
+    // method the buyer actually used (read off the PI we just retrieved), so
+    // abandonment analytics can tell PromptPay from card. Best-effort.
+    async function stampPaymentMethod(tg: string, method: string | null): Promise<void> {
+        if (!method) return;
+        const { error } = await supabase
+            .from('orders')
+            .update({ payment_method: method })
+            .eq('transfer_group', tg);
+        if (error) console.error('[ReconcilePending] payment_method stamp failed:', error.message);
+    }
+
     for (const [tg, orders] of groups) {
         if (Date.now() - started > TIME_BUDGET_MS) break;
         summary.groups++;
@@ -152,7 +164,14 @@ export async function GET(request: NextRequest) {
                 }
             }
 
-            const pi = await stripe.paymentIntents.retrieve(piId, piOpts);
+            // Expand the method + latest charge so orderPaymentMethodFromIntent
+            // can read the real method (card vs. promptpay) off the retrieved PI.
+            const pi = await stripe.paymentIntents.retrieve(
+                piId,
+                { expand: ['payment_method', 'latest_charge'] },
+                piOpts,
+            );
+            const method = orderPaymentMethodFromIntent(pi);
 
             switch (pi.status) {
                 case 'succeeded': {
@@ -160,6 +179,7 @@ export async function GET(request: NextRequest) {
                     const result = await fulfillOrdersByTransferGroup(tg, pi.id);
                     if (result.success) summary.recovered++;
                     else { summary.errors++; result.errors.forEach(e => console.error('[ReconcilePending] recover:', e)); }
+                    await stampPaymentMethod(tg, method);
                     break;
                 }
                 case 'processing':
@@ -171,6 +191,7 @@ export async function GET(request: NextRequest) {
                 case 'requires_confirmation':
                 case 'canceled':
                     await cancelGroup(tg);
+                    await stampPaymentMethod(tg, method);
                     // Close the PI so a stale client can't confirm it after we've
                     // freed the listing. Only some states are cancelable.
                     if (pi.status !== 'canceled') {

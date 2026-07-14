@@ -39,6 +39,10 @@
             "schedule": "*/15 * * * *"
         },
         {
+            "path": "/api/cron/buyer-payment-nudge",
+            "schedule": "*/30 * * * *"
+        },
+        {
             "path": "/api/cron/recover-unshipped-orders",
             "schedule": "*/30 * * * *"
         },
