@@ -217,6 +217,12 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   const selectedSet = sets.find(s => s.id === selectedSetId);
 
+  // The catalog pickers (game / language / set) scope a *browse*. Once the user
+  // types a query the set no longer constrains results, so leaving "Pokémon /
+  // English / Mega Evolution" on screen next to free-text results reads as a
+  // mismatch. Collapse the whole selector block while there's a query in the box.
+  const isSearching = searchTerm.trim().length > 0;
+
   // Sealed mode only lists sets that actually have sealed products.
   const visibleSets = useMemo(
     () => (browseMode === 'sealed' && sealedSetIds ? sets.filter(s => sealedSetIds.has(s.id)) : sets),
@@ -292,7 +298,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           </button>
         </div>
 
-        {/* Database Selectors - Game → Language → Set */}
+        {/* Database Selectors - Game → Language → Set. Hidden while searching. */}
+        {!isSearching && (
         <div className="space-y-4">
           <div className="flex justify-between items-end">
             <h2 className="text-white text-lg font-black italic skew-x-[-10deg] uppercase tracking-tighter">
@@ -429,6 +436,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Scrollable Results Section */}
