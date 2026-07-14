@@ -1,84 +1,76 @@
 # Profiles read-isolation — durable fix (Phase 2)
 
-**Status:** designed, NOT yet applied. Ships as one unit: DB migration + app change + verify.
-**Depends on:** `20260714_profiles_anon_column_privacy.sql` (the anon stopgap) already applied.
+**Status:** view is built + additive (`20260714_public_profiles_view.sql`, safe to apply anytime).
+The app repoint + base-table lock are NOT done — they ship as one verified unit, and the lock is a
+gated final step (do NOT apply during a launch/traffic spike).
 
-## Problem
+## What's already closed
+- Anon (no-login) harvest: closed 2026-07-14 by `20260714_profiles_anon_column_privacy.sql`
+  (REVOKE sensitive columns from `anon`). This is the only zero-auth vector.
 
-`profiles` is world-readable: policy `"Public profiles are viewable by everyone" SELECT USING (true)`.
-The stopgap revoked sensitive columns from `anon`, which closes the **no-login** harvest. Two gaps remain:
+## What's still open (this fix closes it)
+1. **Authenticated harvest.** `profiles` SELECT is `USING (true)` and `authenticated` holds column
+   grants, so any signed-up user can `GET /rest/v1/profiles?select=*` and dump all PII. Column grants
+   can't be row-scoped (own-row PII is read by the browser in DesktopCartDrawer / DesktopSell /
+   UserSettingsContext), so the only fix is a **row-level lock to own-row** + a curated view for
+   public display.
+2. **`role` / admin-identity leak.** Public seller joins select `role`; replaced here by `is_official`.
 
-1. **Authenticated harvest.** `authenticated` still has SELECT on every column of every row, so any
-   signed-up user can `GET /rest/v1/profiles?select=*` and dump all users' PII/Stripe. Column grants
-   can't be row-scoped, so this can't be fixed by grants alone — the base-table SELECT policy must be
-   locked to the owner's own row, and legit public display must move to a whitelist view.
-2. **`role` / admin-identity leak.** Public seller/marketplace joins select `role` (to flag the owner
-   account), so `anon` can still see which accounts are admins. Closing it requires removing `role`
-   from the public projection first.
+## Key fact that makes this tractable
+A base-table SELECT policy of `USING (auth.uid() = id)` **does not break own-row reads** — every
+`.eq('id', user.id)` read (settings, checkout prefill, sell gate, /api/profile) still returns the
+caller's row. Only **cross-user** reads break. Full inventory of cross-user profile reads:
 
-## The fix
+| Site | Read | Fix |
+|---|---|---|
+| `lib/sellerPageData.ts` (direct `.eq('username', …)`) | seller row, safe cols only | `.from('public_profiles')` |
+| `lib/sellerPageData.ts` `LISTING_SELECT` | `seller:profiles(…)` embed | embed `public_profiles`, drop `role`→`is_official` |
+| `lib/desktopCardData.ts` | `seller:profiles(…)` embed | same |
+| `services/marketplaceService.ts` (~120/257/306/345) | 4× `seller:profiles(…)` embeds | same |
+| `app/api/listings/route.ts` | `seller:profiles(…)` embed | same |
+| `app/api/reviews/route.ts` | `reviewer:profiles!reviewer_id(…)` embed | embed `public_profiles` |
+| `app/api/shipping/calculate/route.ts` | `.in('id', sellerIds)` needs **address** | use **service-role** admin client (view lacks address) |
+| `app/api/orders/checkout/route.ts` (~192) | sellers for fees+address, buyer | confirm it already uses admin client; if not, switch |
 
-### 1. Whitelist view (safe columns only — new sensitive columns default to hidden)
+Mobile (`cardstreet-mobile`) reads profiles only through these `/api` routes, so it needs no change.
 
-```sql
-CREATE OR REPLACE VIEW public.public_profiles
-WITH (security_invoker = true) AS
-SELECT id, username, display_name, avatar_url, bio,
-       partner_tier, partner_qr_slug, partner_joined_at,
-       rating, review_count, is_verified_shop, created_at,
-       (role = 'admin') AS is_official   -- replaces raw `role` in public joins
-FROM public.profiles;
+### Embedding caveat (must verify on staging)
+No existing view in this repo is embedded via PostgREST, so `seller:public_profiles(…)` is **unproven
+here**. On staging, apply the view and confirm the embed returns the seller object. If PostgREST can't
+resolve the view relationship, fall back to a **two-step fetch** (fetch listings, then
+`from('public_profiles').in('id', sellerIds)` and stitch `seller` onto each row) — guaranteed to work,
+moderate refactor of the listing-fetch functions.
 
-GRANT SELECT ON public.public_profiles TO anon, authenticated;
-```
+## Deploy runbook (order matters)
+1. **Apply the view** — `20260714_public_profiles_view.sql` (additive, safe, no behavior change).
+2. **Deploy the app repoint** (table above). Still behavior-preserving: base table is still `USING(true)`,
+   so even a missed cross-user read keeps working. Smoke test seller page + marketplace + a logged-in
+   user viewing another seller + checkout shipping quote.
+3. **Pre-lock verification** — with a NON-owner authenticated JWT, confirm every seller surface renders
+   from the view and nothing null-outs. Run the count check below; it should match the view path.
+4. **Apply the base-table lock** (the gated SQL) — the only step that closes the harvest. Do this when
+   traffic is calm, not during a spike.
+5. **Post-lock smoke** — repeat step 2's checks; verify a stranger CANNOT read another user's
+   `phone_number`/`address` (should return no rows), and own-profile settings still load.
 
-### 2. Lock the base table to own-row reads
-
+### Gated lock SQL — DO NOT APPLY until steps 1–3 are done and verified
 ```sql
 DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Users can view own profile"
   ON public.profiles FOR SELECT
   USING ((SELECT auth.uid()) = id);
+NOTIFY pgrst, 'reload schema';
 ```
 
-> After this, `anon`/`authenticated` cannot read *other* users' rows from the base table at all —
-> so the leftover column grants on the base table no longer matter. All cross-user display must come
-> from `public_profiles`.
+### Pre-lock verification query (read-only; run before the lock)
+```sql
+-- Every cross-user seller surface must be reachable via public_profiles.
+-- This should return the seller rows the app now reads from the view.
+SELECT count(*) AS sellers_visible_via_view FROM public.public_profiles
+WHERE id IN (SELECT DISTINCT seller_id FROM public.listings WHERE status = 'active');
+```
 
-### 3. App change — repoint every cross-user profiles read to the view
-
-Embeds change from `seller:profiles(...)` to `seller:public_profiles(...)` and drop `role`
-(use `is_official` instead). Own-profile reads (`.eq('id', user.id)`) stay on `profiles`.
-
-Sites (verified 2026-07-14):
-- `lib/sellerPageData.ts` — direct seller select + `LISTING_SELECT` embed (drop `role`)
-- `lib/desktopCardData.ts` — seller embed
-- `services/marketplaceService.ts` — 4 seller embeds (lines ~120/257/306/345)
-- `app/api/listings/route.ts` — seller embed
-- `app/api/reviews/route.ts` — `reviewer:profiles!reviewer_id(...)` embed
-- Consumers of `SellerProfile.role` (marketplace tiles / seller header): switch admin-badge logic
-  from `role === 'admin'` to `is_official`.
-
-PostgREST embedding a view requires the relationship to resolve — **verify embeds return the seller
-object** (see below) before shipping; if PostgREST can't infer it, add a computed relationship or fall
-back to a two-step fetch.
-
-### 3b. Server-side authenticated cross-user reads — route through service-role, NOT the view
-
-Some server routes read *other* users' full rows (address / partner_fee) which the whitelist view
-deliberately omits. Once the base table is locked to own-row (step 2), these break unless they use the
-service-role (admin) client, which bypasses RLS + grants. Audit and switch before locking:
-- `app/api/shipping/calculate/route.ts` — `select('*').in('id', sellerIds)` reads seller origin
-  addresses (currently the authenticated cookie client → would return empty after step 2).
-- `app/api/orders/checkout/route.ts` (~line 192) — sellers for fees + addresses, buyer for shipping.
-- Any other `from('profiles')...eq('id', <not-self>)` / `.in('id', ...)` on the server client.
-Own-row `select('*')` reads (`app/api/profile/route.ts`) are fine — they stay on the base table.
-
-## Verify before deploy (do NOT skip — step 2 breaks all public seller display if the app isn't repointed)
-
-1. Apply the view (step 1) in a branch/staging DB.
-2. With the **anon key**, confirm: `public_profiles` returns rows; `GET /profiles?select=phone_number`
-   is denied for other rows; seller page + marketplace tiles still render seller name/avatar/badge.
-3. Only after the app repoint is deployed, apply step 2 (base-table lock). Ship SQL + code together.
-4. Post-deploy smoke: logged-out seller page, marketplace browse, a logged-in user viewing another
-   seller, own profile settings still load.
+## Rollback
+- Lock: `DROP POLICY "Users can view own profile" ON public.profiles;
+  CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);`
+- View: `DROP VIEW public.public_profiles;`
