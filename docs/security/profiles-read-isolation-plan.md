@@ -1,8 +1,10 @@
 # Profiles read-isolation — durable fix (Phase 2)
 
-**Status:** view is built + additive (`20260714_public_profiles_view.sql`, safe to apply anytime).
-The app repoint + base-table lock are NOT done — they ship as one verified unit, and the lock is a
-gated final step (do NOT apply during a launch/traffic spike).
+**Status: DONE — shipped + verified in prod 2026-07-14.** View (`20260714_public_profiles_view.sql`),
+app repoint (`lib/publicProfiles.ts` + all cross-user reads), and the base-table lock
+(`20260715_profiles_own_row_lock.sql`) are all live. Verified: anon base-table reads 231 -> 0;
+`public_profiles` still returns all rows; `/api/listings` + `/api/reviews` 200 with sellers hydrated.
+The runbook below is retained as the record of how it was rolled out.
 
 ## What's already closed
 - Anon (no-login) harvest: closed 2026-07-14 by `20260714_profiles_anon_column_privacy.sql`
