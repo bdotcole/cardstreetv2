@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { mapSealedRowToProduct, sealedProductToCard, SealedProductRow } from '@/lib/sealedProduct';
+import { attachSellers } from '@/lib/publicProfiles';
 import type { Card } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
@@ -13,8 +14,7 @@ import type { MarketplaceListing } from '@/services/marketplaceService';
 const LISTING_SELECT = `
     id, seller_id, card_id, card_data, price, condition, is_graded,
     grading_company, grade, image_front_url, image_back_url, accepts_offers, status,
-    created_at, updated_at,
-    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+    created_at, updated_at
 `;
 
 // Catalog columns the card mapper needs to derive the live market price +
@@ -36,10 +36,10 @@ export const getCardPageData = cache(
             .eq('status', 'active')
             .order('price', { ascending: true });
 
-        const listings = ((rows || []) as any[]).map((r) => ({
+        const listings = await attachSellers(supabase, ((rows || []) as any[]).map((r) => ({
             ...r,
             card_data: normalizeCard(r.card_data, r.card_id),
-        })) as MarketplaceListing[];
+        })) as MarketplaceListing[]);
 
         // The card resolves from (in order) the cheapest active listing's frozen
         // card_data snapshot, then the live catalog, then the sealed catalog.

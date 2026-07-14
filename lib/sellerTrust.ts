@@ -22,7 +22,11 @@ export type SellerTrust =
     | { kind: 'new' };
 
 export interface SellerTrustInput {
+    // `role` is only present on own-profile / admin (service-role) reads. Cross-user
+    // reads come from the public_profiles view, which exposes `is_official` instead
+    // (role='admin') so admin identity isn't enumerable. Accept either.
     role?: string | null;
+    is_official?: boolean | null;
     partner_joined_at?: string | null;
     rating?: number | string | null;
     // DB column is review_count (snake_case); reviewCount is accepted too for the
@@ -44,7 +48,7 @@ export function getSellerTrust(seller?: SellerTrustInput | null): SellerTrust {
 
     // Owner: show their real rating once reviews exist, else the flagship 5.0 so
     // the marketplace's own storefront never reads as a "New Seller".
-    if (seller.role === 'admin') {
+    if (seller.is_official || seller.role === 'admin') {
         return { kind: 'owner', rating: hasRealRating ? rating : OWNER_RATING };
     }
 

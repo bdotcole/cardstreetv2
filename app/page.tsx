@@ -236,7 +236,9 @@ export default function HomePage() {
         (async () => {
             try {
                 const supabase = createClient();
-                const { data } = await supabase.from('profiles').select('bio').eq('id', sellerId).maybeSingle();
+                // Cross-user read → public_profiles view (base table is locked to
+                // own-row SELECT). bio is a public column exposed by the view.
+                const { data } = await supabase.from('public_profiles').select('bio').eq('id', sellerId).maybeSingle();
                 if (!cancelled && data?.bio) {
                     setViewingSeller(prev => (prev && prev.id === sellerId) ? { ...prev, bio: data.bio } : prev);
                 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchPublicSellers } from '@/lib/publicProfiles'
 
 // GET /api/reviews?seller_id=<uuid> — public list of a seller's reviews, newest
 // first, mapped into the client `Review` shape consumed by ReviewList. Every
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
             comment,
             item_name,
             created_at,
-            reviewer:profiles!reviewer_id(display_name, avatar_url)
+            reviewer_id
         `)
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false })
@@ -31,18 +32,24 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    const reviews = (data || []).map((r: any) => ({
-        id: r.id,
-        // Reviewer identity is intentionally not exposed; only their public name.
-        reviewerId: '',
-        reviewerName: r.reviewer?.display_name || 'CardStreet buyer',
-        reviewerAvatar: r.reviewer?.avatar_url || '',
-        rating: r.rating,
-        comment: r.comment || '',
-        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : '',
-        verifiedPurchase: true,
-        itemName: r.item_name || undefined,
-    }))
+    // Reviewer display name/avatar come from the public_profiles view (the base
+    // table no longer allows cross-user reads, so a reviewer:profiles(...) embed
+    // would null out). Identity (reviewer_id) is still never returned to clients.
+    const reviewerMap = await fetchPublicSellers(supabase, (data || []).map((r: any) => r.reviewer_id))
+    const reviews = (data || []).map((r: any) => {
+        const reviewer = reviewerMap.get(r.reviewer_id)
+        return {
+            id: r.id,
+            reviewerId: '',
+            reviewerName: reviewer?.display_name || 'CardStreet buyer',
+            reviewerAvatar: reviewer?.avatar_url || '',
+            rating: r.rating,
+            comment: r.comment || '',
+            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : '',
+            verifiedPurchase: true,
+            itemName: r.item_name || undefined,
+        }
+    })
 
     return NextResponse.json(
         { reviews },

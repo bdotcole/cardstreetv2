@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
+import { attachSellers, fetchPublicSellers } from '@/lib/publicProfiles';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
 export interface SellerInfo {
@@ -20,8 +21,7 @@ export interface SellerInfo {
 const LISTING_SELECT = `
     id, seller_id, card_id, card_data, price, condition, is_graded,
     grading_company, grade, image_front_url, image_back_url, status,
-    created_at, updated_at,
-    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+    created_at, updated_at
 `;
 
 // Resolve a public seller shop by username, with their active listings. Cached
@@ -31,7 +31,7 @@ export const getSellerPageData = cache(
         const supabase = await createClient();
 
         const { data: seller } = await supabase
-            .from('profiles')
+            .from('public_profiles')
             .select('id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at')
             .eq('username', username)
             .maybeSingle<SellerInfo>();
@@ -44,10 +44,10 @@ export const getSellerPageData = cache(
             .eq('status', 'active')
             .order('created_at', { ascending: false });
 
-        const listings = ((rows || []) as any[]).map((r) => ({
+        const listings = await attachSellers(supabase, ((rows || []) as any[]).map((r) => ({
             ...r,
             card_data: normalizeCard(r.card_data, r.card_id),
-        })) as MarketplaceListing[];
+        })) as MarketplaceListing[]);
 
         return { seller, listings };
     }
@@ -59,20 +59,27 @@ export const getSellerPageData = cache(
 // PostgREST cap and deduped by username; usernames may be null on legacy rows.
 export async function getActiveSellerUsernames(): Promise<string[]> {
     const supabase = await createClient();
-    const usernames = new Set<string>();
+    // Collect distinct seller ids from active listings, then resolve their public
+    // usernames from public_profiles (the base table no longer allows cross-user
+    // reads, so a seller:profiles(...) embed would come back null).
+    const sellerIds = new Set<string>();
     for (let from = 0; ; from += 1000) {
         const { data } = await supabase
             .from('listings')
-            .select('seller:profiles(username)')
+            .select('seller_id')
             .eq('status', 'active')
             .order('seller_id', { ascending: true })
             .range(from, from + 999);
         if (!data?.length) break;
-        for (const row of data as any[]) {
-            const u = row.seller?.username;
-            if (u) usernames.add(u);
+        for (const row of data as { seller_id: string | null }[]) {
+            if (row.seller_id) sellerIds.add(row.seller_id);
         }
         if (data.length < 1000) break;
+    }
+    const sellers = await fetchPublicSellers(supabase, [...sellerIds]);
+    const usernames = new Set<string>();
+    for (const s of sellers.values()) {
+        if (s.username) usernames.add(s.username);
     }
     return [...usernames];
 }

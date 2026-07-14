@@ -7,6 +7,7 @@ import {
     PROFILE_INCOMPLETE_TOAST,
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
+import { attachSellers } from '@/lib/publicProfiles';
 
 /**
  * Thrown when a seller tries to create a listing while their profile is
@@ -37,9 +38,12 @@ export interface SellerProfile {
     avatar_url?: string;
     partner_tier?: string;
     // Canonical partner signal is partner_joined_at (partner_tier defaults to
-    // 'bronze' for everyone, so it can't distinguish partners). role === 'admin'
-    // marks the owner account, which keeps its rating display.
+    // 'bronze' for everyone, so it can't distinguish partners).
+    // `role` is legacy: populated only by own-profile/admin reads, never by the
+    // public_profiles view (which omits it so admin identity isn't enumerable).
+    // Cross-user reads use `is_official` for the owner-account chip instead.
     role?: string | null;
+    is_official?: boolean;
     partner_joined_at?: string | null;
     rating?: number | string;
     review_count?: number | null;
@@ -116,8 +120,7 @@ export const marketplaceService = {
                         accepts_offers,
                         status,
                         created_at,
-                        updated_at,
-                        seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+                        updated_at
                     `)
                     .eq('status', 'active');
 
@@ -187,7 +190,8 @@ export const marketplaceService = {
                 ({ data, error } = await buildQuery('newest'));
             }
             if (error) throw error;
-            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching active listings:', error);
             return [];
@@ -252,10 +256,7 @@ export const marketplaceService = {
                     accepts_offers: params.acceptsOffers ?? false,
                     status: 'active'
                 })
-                .select(`
-                    *,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
-                `)
+                .select()
                 .single();
 
             if (error) throw error;
@@ -271,7 +272,8 @@ export const marketplaceService = {
                 }).catch(() => { /* best-effort */ });
             }
 
-            return normalizeListing(data as MarketplaceListing);
+            const [withSeller] = await attachSellers(supabase, [normalizeListing(data as MarketplaceListing)]);
+            return withSeller;
         } catch (error) {
             console.error('Error creating listing:', error);
             throw error;
@@ -302,14 +304,14 @@ export const marketplaceService = {
                     accepts_offers,
                     status,
                     created_at,
-                    updated_at,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+                    updated_at
                 `)
                 .eq('card_id', cardId)
                 .eq('status', 'active')
                 .order('price', { ascending: true });
             if (error) throw error;
-            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching listings for card:', error);
             return [];
@@ -341,15 +343,15 @@ export const marketplaceService = {
                     accepts_offers,
                     status,
                     created_at,
-                    updated_at,
-                    seller:profiles(id, username, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+                    updated_at
                 `)
                 .eq('seller_id', sellerId)
                 .eq('status', 'active')
                 .order('created_at', { ascending: false })
                 .limit(limit);
             if (error) throw error;
-            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching seller listings:', error);
             return [];
@@ -388,7 +390,8 @@ export const marketplaceService = {
                 .eq('status', 'active')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            return ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+            return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching my listings:', error);
             return [];

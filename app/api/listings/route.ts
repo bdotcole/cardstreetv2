@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { z } from 'zod'
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts'
+import { attachSellers } from '@/lib/publicProfiles'
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -45,8 +46,7 @@ export async function GET(request: NextRequest) {
             condition,
             is_graded,
             status,
-            created_at,
-            seller:profiles(id, display_name, avatar_url, partner_tier, role, partner_joined_at, rating, review_count)
+            created_at
         `)
         .eq('status', 'active')
 
@@ -84,7 +84,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(listings, {
+    const withSellers = await attachSellers(supabase, (listings || []) as any[])
+
+    return NextResponse.json(withSellers, {
         headers: {
             // Cache for 30s, serve stale for up to 60s while revalidating
             'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',

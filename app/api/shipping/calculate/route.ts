@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import {
     estimateRateWithCityFallback,
@@ -47,8 +48,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Buyer address incomplete' }, { status: 400 });
         }
 
-        // Fetch seller profiles for origin
-        const { data: sellerProfiles } = await supabase
+        // Fetch seller profiles for origin. Cross-user read → service-role client:
+        // the base table is locked to own-row SELECT and the origin address is not
+        // in the public_profiles view.
+        const { data: sellerProfiles } = await createAdminClient()
             .from('profiles')
             .select('*')
             .in('id', sellerIds);
