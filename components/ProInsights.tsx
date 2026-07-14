@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { fitValueDomain } from '@/lib/chartDomain';
 
 /**
  * Pro Insights (premium): the business side of collecting. Portfolio value
@@ -76,6 +77,9 @@ const ProInsights: React.FC = () => {
     t: new Date(h.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     v: h.v,
   }));
+  // Fit the (hidden) axis to the portfolio's own value range so real movement shows
+  // instead of a flat sliver — the same treatment as the card price-history chart.
+  const yDomain = fitValueDomain(chart.map((c) => c.v));
 
   return (
     <div className="w-full max-w-[560px] mx-auto">
@@ -111,7 +115,7 @@ const ProInsights: React.FC = () => {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="t" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={40} />
-                <YAxis hide domain={['auto', 'auto']} />
+                <YAxis hide domain={yDomain} />
                 <Tooltip
                   contentStyle={{ background: '#0f1419', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 11 }}
                   labelStyle={{ color: '#94a3b8' }}

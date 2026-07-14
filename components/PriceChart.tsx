@@ -1,28 +1,16 @@
 
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { fitValueDomain } from '@/lib/chartDomain';
 
 interface PriceChartProps {
   data: { date: string; price: number }[];
 }
 
-// Recharts' default numeric YAxis anchors at 0 ([0, 'auto']), so a ฿15 card gets
-// drawn against a 0-16 scale and every real move collapses into a flat sliver at
-// the top. Fit the axis to the data's own range instead, with headroom so the line
-// never kisses an edge, and a floor of a few baht for a genuinely flat series so it
-// reads as a centered line rather than pinned to a border. Clamped at 0 (prices are
-// non-negative) and kept to whole baht to match the integer tick labels below.
-function fitDomain(prices: number[]): [number, number] {
-  if (prices.length === 0) return [0, 1];
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const span = max - min;
-  const pad = span > 0 ? span * 0.15 : Math.max(1, Math.round(max * 0.05));
-  return [Math.max(0, Math.floor(min - pad)), Math.ceil(max + pad)];
-}
-
 const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
-  const yDomain = fitDomain(data.map((d) => d.price));
+  // Fit the axis to the series' own range so real movement is visible instead of a
+  // flat sliver against a 0-anchored scale. See lib/chartDomain.ts.
+  const yDomain = fitValueDomain(data.map((d) => d.price));
   return (
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">

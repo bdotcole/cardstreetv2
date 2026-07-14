@@ -6,72 +6,37 @@ interface PortfolioHistoryPoint {
     value: number;
 }
 
-interface TimeConfig {
-    startTime: Date;
-    endTime: Date;
-    interval: 'hour' | 'day' | 'month';
-    pointCount: number;
-}
+type Interval = 'hour' | 'day' | 'month';
 
-function getTimeConfig(timeRange: string): TimeConfig {
+// Window start + the granularity we bucket real snapshots into for each range.
+// Snapshots are captured hourly, so a day/month bucket collapses many rows into the
+// last real value we saw in that period — never a fabricated one.
+function getRangeConfig(timeRange: string): { startTime: Date; interval: Interval } {
     const now = new Date();
-
+    const start = new Date(now);
     switch (timeRange) {
-        case '1D': {
-            const start = new Date(now);
+        case '1D':
             start.setHours(now.getHours() - 24);
-            return { startTime: start, endTime: now, interval: 'hour', pointCount: 24 };
-        }
-        case '1W': {
-            const start = new Date(now);
+            return { startTime: start, interval: 'hour' };
+        case '1W':
             start.setDate(now.getDate() - 7);
-            return { startTime: start, endTime: now, interval: 'day', pointCount: 7 };
-        }
-        case '1M': {
-            const start = new Date(now);
-            start.setDate(now.getDate() - 30);
-            return { startTime: start, endTime: now, interval: 'day', pointCount: 30 };
-        }
-        case '1Y': {
-            const start = new Date(now);
+            return { startTime: start, interval: 'day' };
+        case '1Y':
             start.setMonth(now.getMonth() - 12);
-            return { startTime: start, endTime: now, interval: 'month', pointCount: 12 };
-        }
-        default: {
-            const start = new Date(now);
+            return { startTime: start, interval: 'month' };
+        case '1M':
+        default:
             start.setDate(now.getDate() - 30);
-            return { startTime: start, endTime: now, interval: 'day', pointCount: 30 };
-        }
+            return { startTime: start, interval: 'day' };
     }
 }
 
-function generateTimeSlots(startTime: Date, endTime: Date, pointCount: number): Date[] {
-    const slots: Date[] = [];
-    const step = (endTime.getTime() - startTime.getTime()) / (pointCount - 1);
-    for (let i = 0; i < pointCount; i++) {
-        slots.push(new Date(startTime.getTime() + step * i));
-    }
-    return slots;
-}
-
-function zeroFillData(
-    slots: Date[],
-    snapshots: { timestamp: string; total_market_value: number }[]
-): { timestamp: Date; total_market_value: number }[] {
-    let lastKnownValue = snapshots.length > 0 ? snapshots[0].total_market_value : 0;
-    let snapshotIndex = 0;
-    const snapshotDates = snapshots.map(s => ({
-        timestamp: new Date(s.timestamp),
-        total_market_value: s.total_market_value
-    }));
-
-    return slots.map(slot => {
-        while (snapshotIndex < snapshotDates.length && snapshotDates[snapshotIndex].timestamp <= slot) {
-            lastKnownValue = snapshotDates[snapshotIndex].total_market_value;
-            snapshotIndex++;
-        }
-        return { timestamp: slot, total_market_value: lastKnownValue };
-    });
+// Truncate an ISO timestamp to the bucket granularity so one real value survives per
+// hour / day / month (the last snapshot in the bucket wins).
+function bucketKey(iso: string, interval: Interval): string {
+    if (interval === 'hour') return iso.slice(0, 13); // YYYY-MM-DDTHH
+    if (interval === 'day') return iso.slice(0, 10); // YYYY-MM-DD
+    return iso.slice(0, 7); // YYYY-MM
 }
 
 export async function GET(request: NextRequest) {
@@ -84,22 +49,21 @@ export async function GET(request: NextRequest) {
         }
 
         const timeRange = (request.nextUrl.searchParams.get('range') as '1D' | '1W' | '1M' | '1Y') || '1M';
-        const { startTime, endTime, interval, pointCount } = getTimeConfig(timeRange);
+        const { startTime, interval } = getRangeConfig(timeRange);
+        const now = new Date();
 
-        // ─── Collapsed: 3 sequential queries → 2 parallel queries ────────────
         const [snapshotResult, itemsResult] = await Promise.all([
-            // Query 1: recent snapshots for chart history
+            // Real snapshots inside the window, oldest first.
             supabase
                 .from('portfolio_snapshots')
                 .select('timestamp, total_market_value')
                 .eq('user_id', user.id)
                 .gte('timestamp', startTime.toISOString())
-                .lte('timestamp', endTime.toISOString())
+                .lte('timestamp', now.toISOString())
                 .order('timestamp', { ascending: true }),
 
-            // Query 2: current value via joined select (was 2 sequential queries before).
-            // Only the price is needed for the sum — pulling the whole card_data
-            // JSONB blob per row was a large, pointless payload on big collections.
+            // Current live value. Only the price is needed for the sum — pulling the
+            // whole card_data JSONB blob per row was a large, pointless payload.
             supabase
                 .from('collection_items')
                 .select('quantity, card_data->marketPrice, collections!inner(user_id, include_in_portfolio)')
@@ -109,28 +73,45 @@ export async function GET(request: NextRequest) {
 
         if (snapshotResult.error) throw snapshotResult.error;
 
-        // Calculate current portfolio value from joined items
         const currentPortfolioValue = (itemsResult.data || []).reduce((total: number, item: any) => {
             const marketPrice = Number(item?.marketPrice) || 0;
             return total + marketPrice * (item?.quantity || 1);
         }, 0);
 
-        console.log(`[Portfolio API] User: ${user.id}, Range: ${timeRange}, Current: ฿${currentPortfolioValue}`);
+        // Downsample the real snapshots to one point per bucket. No zero-fill and no
+        // carry-forward before the first tracked snapshot: the line reflects only
+        // value we actually recorded, so the fitted Y-axis shows real movement rather
+        // than a flat run of invented points. (Mirrors the card price-history chart,
+        // which plots stored snapshots and folds in the live price as "now".)
+        const byBucket = new Map<string, PortfolioHistoryPoint>();
+        for (const s of snapshotResult.data || []) {
+            byBucket.set(bucketKey(s.timestamp, interval), {
+                date: s.timestamp,
+                value: Number(s.total_market_value) || 0,
+            });
+        }
+        const data: PortfolioHistoryPoint[] = Array.from(byBucket.values());
 
-        const slots = generateTimeSlots(startTime, endTime, pointCount);
-        const filled = zeroFillData(slots, snapshotResult.data || []);
-
-        const data: PortfolioHistoryPoint[] = filled.map((p, i) => ({
-            date: p.timestamp.toISOString(),
-            // Last point always reflects current real value
-            value: i === filled.length - 1 ? currentPortfolioValue : p.total_market_value,
-        }));
+        // Fold the live value in as the final "now" point — it's the real valuation
+        // this instant. Replace the last point if it lands in the current bucket so we
+        // don't double-plot today; otherwise append it. Skip only when there is neither
+        // history nor a current value (nothing honest to draw).
+        if (currentPortfolioValue > 0 || data.length > 0) {
+            const nowIso = now.toISOString();
+            const nowKey = bucketKey(nowIso, interval);
+            const last = data[data.length - 1];
+            if (last && bucketKey(last.date, interval) === nowKey) {
+                data[data.length - 1] = { date: nowIso, value: currentPortfolioValue };
+            } else {
+                data.push({ date: nowIso, value: currentPortfolioValue });
+            }
+        }
 
         return NextResponse.json({ success: true, data, range: timeRange }, {
             headers: {
                 // Portfolio data is personal — private cache only. 60s is fine for a chart.
                 'Cache-Control': 'private, max-age=60, stale-while-revalidate=30',
-            }
+            },
         });
 
     } catch (error: any) {

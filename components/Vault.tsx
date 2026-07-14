@@ -81,87 +81,60 @@ const Vault: React.FC<VaultProps> = ({
   const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
 
-  // Fetch real portfolio history from API
+  // Fetch real portfolio history from API. Each point already carries a real ISO
+  // date and value from the snapshot pipeline — label every point from its own date
+  // and let the chart's minTickGap thin them (no index-based blanking, which fought
+  // the axis when the series was short).
   useEffect(() => {
+    let cancelled = false;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
     const fetchPortfolioHistory = async () => {
       setIsLoadingChart(true);
       try {
-        // Add timestamp to bypass cache
-        const timestamp = new Date().getTime();
-        console.log('[Vault] Fetching portfolio data:', { timeframe, timestamp });
-        const response = await fetch(`/api/portfolio/history?range=${timeframe}&t=${timestamp}`, {
+        const response = await fetch(`/api/portfolio/history?range=${timeframe}&t=${Date.now()}`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
         });
         const result = await response.json();
-        console.log('[Vault] API Response:', result);
+        if (cancelled) return;
 
-        if (result.success && result.data) {
-          // Transform API response to chart format with proper labels
-          const formattedData = result.data.map((point: any, index: number) => {
-            const dateObj = new Date(point.date);
-            let label = '';
-
-            if (timeframe === '1D') {
-              label = index % 6 === 0 ? `${dateObj.getHours()}h` : '';
-            } else if (timeframe === '1W') {
-              const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-              label = dayNames[dateObj.getDay()];
-            } else if (timeframe === '1M') {
-              label = index % 5 === 0 ? `${dateObj.getDate()}` : '';
-            } else {
-              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-              label = monthNames[dateObj.getMonth()];
-            }
-
-            return {
-              date: label,
-              price: point.value
-            };
+        if (result.success && Array.isArray(result.data)) {
+          const formattedData = result.data.map((point: { date: string; value: number }) => {
+            const d = new Date(point.date);
+            let label: string;
+            if (timeframe === '1D') label = `${d.getHours()}h`;
+            else if (timeframe === '1W') label = dayNames[d.getDay()];
+            else if (timeframe === '1M') label = `${d.getDate()}`;
+            else label = monthNames[d.getMonth()];
+            return { date: label, price: point.value };
           });
-
-          console.log('[Vault] Setting chart data:', {
-            points: formattedData.length,
-            firstPrice: formattedData[0]?.price,
-            lastPrice: formattedData[formattedData.length - 1]?.price,
-            sample: formattedData.slice(0, 3)
-          });
-
           setChartData(formattedData);
         } else {
-          // Fallback to empty data or show error
-          console.error('Failed to fetch portfolio history:', result.error);
           setChartData([]);
         }
-      } catch (error) {
-        console.error('Error fetching portfolio history:', error);
-        setChartData([]);
+      } catch {
+        if (!cancelled) setChartData([]);
       } finally {
-        setIsLoadingChart(false);
+        if (!cancelled) setIsLoadingChart(false);
       }
     };
 
     fetchPortfolioHistory();
+    return () => { cancelled = true; };
   }, [timeframe]);
 
-  // Calculate percentage change based on chart data
+  // Movement across the tracked window: first real point to the live "now" point.
   const percentageChange = useMemo(() => {
-    console.log('[Vault] Calculating percentage, chartData length:', chartData.length);
-    if (chartData.length < 2) {
-      console.log('[Vault] Not enough data points');
-      return 0;
-    }
+    if (chartData.length < 2) return 0;
     const firstPrice = chartData[0].price;
     const lastPrice = chartData[chartData.length - 1].price;
-    console.log('[Vault] Percentage calc:', { firstPrice, lastPrice, dataPoints: chartData.length });
-    if (firstPrice === 0) {
-      console.log('[Vault] First price is zero');
-      return 0;
-    }
-    const change = ((lastPrice - firstPrice) / firstPrice) * 100;
-    console.log('[Vault] Calculated percentage:', change.toFixed(2) + '%');
-    return change;
+    if (firstPrice === 0) return 0;
+    return ((lastPrice - firstPrice) / firstPrice) * 100;
   }, [chartData]);
+
+  const hasHistory = chartData.length >= 2;
 
   // Card Details Popup State
   const [viewingCard, setViewingCard] = useState<Card | null>(null);
@@ -319,12 +292,14 @@ const Vault: React.FC<VaultProps> = ({
 
         <div className="flex justify-between items-end mb-1 px-2">
           <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic skew-x-[-10deg]">{t('vault.myPortfolio')}</p>
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${percentageChange >= 0 ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-red/10 border-brand-red/20'}`}>
-            <i className={`fa-solid ${percentageChange >= 0 ? 'fa-arrow-trend-up text-brand-green' : 'fa-arrow-trend-down text-brand-red'} text-[10px]`}></i>
-            <span className={`${percentageChange >= 0 ? 'text-brand-green' : 'text-brand-red'} text-[10px] font-black`}>
-              {percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(1)}%
-            </span>
-          </div>
+          {hasHistory && (
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${percentageChange >= 0 ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-red/10 border-brand-red/20'}`}>
+              <i className={`fa-solid ${percentageChange >= 0 ? 'fa-arrow-trend-up text-brand-green' : 'fa-arrow-trend-down text-brand-red'} text-[10px]`}></i>
+              <span className={`${percentageChange >= 0 ? 'text-brand-green' : 'text-brand-red'} text-[10px] font-black`}>
+                {percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(1)}%
+              </span>
+            </div>
+          )}
         </div>
 
         <h2 className="px-2 text-5xl font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg mb-4">
@@ -347,7 +322,15 @@ const Vault: React.FC<VaultProps> = ({
               ))}
             </div>
             <div className="h-40">
-              <PriceChart data={chartData} />
+              {isLoadingChart ? (
+                <div className="w-full h-full rounded-lg bg-white/5 animate-pulse" />
+              ) : hasHistory ? (
+                <PriceChart data={chartData} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-center px-6 text-[11px] text-slate-500">
+                  {t('vault.historyEmpty')}
+                </div>
+              )}
             </div>
           </div>
         </div>

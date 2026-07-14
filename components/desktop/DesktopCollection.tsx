@@ -243,13 +243,15 @@ function OverviewPanel({
                 if (result?.success && Array.isArray(result.data)) {
                     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    // Label every real point from its own date; the chart's minTickGap
+                    // thins them (index-based blanking fought the axis on short series).
                     setChartData(
-                        result.data.map((p: { date: string; value: number }, i: number) => {
+                        result.data.map((p: { date: string; value: number }) => {
                             const d = new Date(p.date);
-                            let label = '';
-                            if (timeframe === '1D') label = i % 6 === 0 ? `${d.getHours()}h` : '';
+                            let label: string;
+                            if (timeframe === '1D') label = `${d.getHours()}h`;
                             else if (timeframe === '1W') label = dayNames[d.getDay()];
-                            else if (timeframe === '1M') label = i % 5 === 0 ? `${d.getDate()}` : '';
+                            else if (timeframe === '1M') label = `${d.getDate()}`;
                             else label = monthNames[d.getMonth()];
                             return { date: label, price: p.value };
                         }),
@@ -301,7 +303,7 @@ function OverviewPanel({
                 <div className="h-56 mt-6">
                     {loadingChart ? (
                         <div className="w-full h-full rounded-lg bg-brand-darker/40 animate-pulse" />
-                    ) : chartData.length === 0 ? (
+                    ) : chartData.length < 2 ? (
                         <div className="w-full h-full flex items-center justify-center text-slate-600 text-sm">
                             {t('desktop.collection.noHistory')}
                         </div>

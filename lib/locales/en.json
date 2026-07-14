@@ -218,6 +218,7 @@
     },
     "vault": {
         "myPortfolio": "My Portfolio",
+        "historyEmpty": "History builds as the hourly snapshot runs — check back tomorrow.",
         "collection": "Collection",
         "listings": "Listings",
         "wishlist": "Wishlist",
