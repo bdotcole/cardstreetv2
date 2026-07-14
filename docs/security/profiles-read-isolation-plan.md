@@ -63,6 +63,17 @@ PostgREST embedding a view requires the relationship to resolve — **verify emb
 object** (see below) before shipping; if PostgREST can't infer it, add a computed relationship or fall
 back to a two-step fetch.
 
+### 3b. Server-side authenticated cross-user reads — route through service-role, NOT the view
+
+Some server routes read *other* users' full rows (address / partner_fee) which the whitelist view
+deliberately omits. Once the base table is locked to own-row (step 2), these break unless they use the
+service-role (admin) client, which bypasses RLS + grants. Audit and switch before locking:
+- `app/api/shipping/calculate/route.ts` — `select('*').in('id', sellerIds)` reads seller origin
+  addresses (currently the authenticated cookie client → would return empty after step 2).
+- `app/api/orders/checkout/route.ts` (~line 192) — sellers for fees + addresses, buyer for shipping.
+- Any other `from('profiles')...eq('id', <not-self>)` / `.in('id', ...)` on the server client.
+Own-row `select('*')` reads (`app/api/profile/route.ts`) are fine — they stay on the base table.
+
 ## Verify before deploy (do NOT skip — step 2 breaks all public seller display if the app isn't repointed)
 
 1. Apply the view (step 1) in a branch/staging DB.
