@@ -16,10 +16,12 @@ import { hasFeature as hasFeaturePure, type PremiumFeature } from '@/lib/entitle
 export interface PremiumStatus {
   premium: boolean;
   premiumUntil: string | null;
+  /** Staff role, surfaced separately from `premium` for admin-only UX gates. */
+  isAdmin: boolean;
   features: Partial<Record<PremiumFeature, boolean>>;
 }
 
-const EMPTY: PremiumStatus = { premium: false, premiumUntil: null, features: {} };
+const EMPTY: PremiumStatus = { premium: false, premiumUntil: null, isAdmin: false, features: {} };
 
 let cached: PremiumStatus | null = null;
 let inflight: Promise<PremiumStatus> | null = null;
@@ -32,6 +34,7 @@ async function fetchStatus(): Promise<PremiumStatus> {
     return {
       premium: data?.premium === true,
       premiumUntil: typeof data?.premiumUntil === 'string' ? data.premiumUntil : null,
+      isAdmin: data?.isAdmin === true,
       features: data?.features && typeof data.features === 'object' ? data.features : {},
     };
   } catch {
@@ -85,6 +88,7 @@ export function usePremium() {
     status: resolved,
     loading: status === null,
     premium: resolved.premium,
+    isAdmin: resolved.isAdmin,
     hasFeature,
     refresh,
   };

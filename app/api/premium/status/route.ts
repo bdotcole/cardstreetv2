@@ -9,7 +9,9 @@ import { FEATURE_TIERS, PREMIUM_FEATURES, type PremiumFeature } from '@/lib/enti
 //
 // premium reflects the EFFECTIVE entitlement (subscription OR admin role);
 // premiumUntil stays null for role-granted access so the hub knows there's
-// no Stripe subscription to manage.
+// no Stripe subscription to manage. isAdmin is surfaced separately (not just
+// folded into premium) so admin-only UX -- e.g. the sub-floor listing price in
+// ListingForm -- can gate on staff role specifically, not on any Pro plan.
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
@@ -20,7 +22,7 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json(
-      { premium: false, premiumUntil: null, features: {} },
+      { premium: false, premiumUntil: null, isAdmin: false, features: {} },
       noStore,
     );
   }
@@ -31,7 +33,7 @@ export async function GET() {
   ) as Record<PremiumFeature, boolean>;
 
   return NextResponse.json(
-    { premium: ent.premium, premiumUntil: ent.premiumUntil, features },
+    { premium: ent.premium, premiumUntil: ent.premiumUntil, isAdmin: ent.isAdmin, features },
     noStore,
   );
 }

@@ -3,6 +3,7 @@ import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { usePremium } from '@/lib/hooks/usePremium';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
@@ -21,6 +22,12 @@ interface ListingFormProps {
 
 const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
   const { isThai } = useTranslation();
+  // Admins may seed the marketplace below the standard 20-baht floor (e.g. a
+  // 1-baht test/seed listing); everyone else keeps the 20 minimum. This is UX
+  // only -- usePremium fails closed, so a lookup miss safely keeps the 20 floor,
+  // and the server/DB independently enforce price > 0.
+  const { isAdmin } = usePremium();
+  const minPrice = isAdmin ? 1 : 20;
   // Sealed products list factory-sealed only: condition is locked and grading
   // doesn't apply, so both sections are hidden below.
   const isSealed = !!card.isSealed;
@@ -234,7 +241,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                 <input
                   type="number"
                   required
-                  min="20"
+                  min={minPrice}
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 text-white font-bold focus:border-brand-cyan outline-none transition-colors placeholder-slate-600"
