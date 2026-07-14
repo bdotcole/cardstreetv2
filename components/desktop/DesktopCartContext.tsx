@@ -28,6 +28,10 @@ interface DesktopCartContextValue {
     // OBO pay-an-accepted-offer entry: replaces the cart with the offer's single
     // listing, pins acceptedOfferId, and requests an immediate gated checkout.
     payOffer: (offer: Offer) => void;
+    // Buy Now: replace the cart with a single listing and request an immediate
+    // gated checkout — same machinery as payOffer but a normal full-price
+    // purchase (no accepted-offer price override).
+    buyNow: (item: CartItem) => void;
 }
 
 const DesktopCartContext = createContext<DesktopCartContextValue | null>(null);
@@ -175,11 +179,22 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
         setIsOpen(true);
     }, []);
 
+    // Buy Now: a normal single-item purchase that skips the multi-item cart.
+    // Replaces the cart with just this listing, clears any offer-price override,
+    // and asks the drawer to run beginCheckout immediately (same geo/auth/
+    // profile gate as a cart checkout) via the pendingOfferCheckout signal.
+    const buyNow = useCallback((item: CartItem) => {
+        setAcceptedOfferId(null);
+        setItems([item]);
+        setPendingOfferCheckout(true);
+        setIsOpen(true);
+    }, []);
+
     return (
         <DesktopCartContext.Provider
             value={{
                 user, authChecked, items, isOpen, addItem, removeItem, clear, openCart, closeCart,
-                acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout, payOffer,
+                acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout, payOffer, buyNow,
             }}
         >
             {children}

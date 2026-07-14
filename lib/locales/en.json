@@ -47,6 +47,7 @@
         "new": "New",
         "lowPrice": "Low $",
         "highPrice": "High $",
+        "buyNow": "Buy Now",
         "newest": "Newest",
         "priceHigh": "Price: High",
         "priceLow": "Price: Low",
@@ -212,7 +213,8 @@
         "vault": "Sign in to save cards to your vault",
         "purchase": "Sign in to complete your purchase",
         "list": "Sign in to list cards for sale",
-        "partner": "Sign in to apply as a partner"
+        "partner": "Sign in to apply as a partner",
+        "offer": "Sign in to make an offer"
     },
     "vault": {
         "myPortfolio": "My Portfolio",

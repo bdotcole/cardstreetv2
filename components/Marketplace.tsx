@@ -14,18 +14,29 @@ interface MarketplaceProps {
   onSelectCard: (card: Card) => void;
   onSelectListing?: (listing: any) => void;
   onSellerClick: (seller: any) => void;
-  onAddToCart?: (item: any) => void;
+  /** Straight-to-payment purchase of a single listing (skips the cart). */
+  onBuyNow?: (listing: MarketplaceListing) => void;
+  /** Opens the OBO "Make an offer" modal for an offer-accepting listing. */
+  onMakeOffer?: (listing: MarketplaceListing) => void;
+  /** Signed-in buyer id (null for guests) — gates which tiles show "Make Offer". */
+  currentUserId?: string | null;
   listings?: MarketplaceListing[];   // used only for Explore price overlay, marketplace fetches its own
   currency?: string;
   exchangeRate?: number;
 }
+
+// OBO offers are behind a single build-time flag; when off, every tile shows
+// "Buy Now" regardless of a listing's accepts_offers value.
+const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
 const Marketplace: React.FC<MarketplaceProps> = ({
   initialGame,
   onSelectCard,
   onSelectListing,
   onSellerClick,
-  onAddToCart,
+  onBuyNow,
+  onMakeOffer,
+  currentUserId = null,
   currency = 'THB',
   exchangeRate = 1,
 }) => {
@@ -271,6 +282,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
             const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+            // Show "Make Offer" only on offer-accepting listings, and only to a
+            // signed-in buyer who isn't the seller. Everyone else (incl. guests
+            // and the flag-off case) gets "Buy Now".
+            const showMakeOffer =
+              OFFERS_ENABLED &&
+              listing.accepts_offers === true &&
+              !!currentUserId &&
+              currentUserId !== listing.seller_id;
             const formatPrice = (thb: number) => {
               const v = thb * exchangeRate;
               return `${CURRENCY_SYMBOLS[currency] || currency}${v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
@@ -309,38 +328,16 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                   <h3 className="text-white font-bold text-xs truncate">{listing.card_data.name}</h3>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">{listing.card_data.set}</p>
 
-                  {/* Price & Action */}
-                  <div className="flex items-end justify-between gap-1 mt-auto pt-1.5">
-                    <div className="min-w-0">
-                      <p className="text-base font-black text-brand-cyan leading-none truncate">
-                        {formatPrice(listing.price)}
+                  {/* Price — asking price with the market price struck through beside it */}
+                  <div className="flex items-baseline gap-1.5 mt-auto pt-1.5 min-w-0">
+                    <p className="text-base font-black text-brand-cyan leading-none whitespace-nowrap">
+                      {formatPrice(listing.price)}
+                    </p>
+                    {dealPct !== null && (
+                      <p className="text-[9px] text-slate-500 font-bold line-through truncate">
+                        {formatPrice(listing.card_data.marketPrice)}
                       </p>
-                      {dealPct !== null && (
-                        <p className="text-[9px] text-slate-500 font-bold line-through mt-0.5 truncate">
-                          {formatPrice(listing.card_data.marketPrice)}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onAddToCart) {
-                          onAddToCart({
-                            id: listing.id,
-                            cardId: listing.card_id,
-                            card: listing.card_data,
-                            price: listing.price,
-                            sellerId: listing.seller_id,
-                            sellerName: listing.seller?.display_name || 'Unknown',
-                            condition: listing.condition
-                          });
-                        }
-                      }}
-                      className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 hover:bg-brand-green hover:text-brand-darker text-brand-green flex items-center justify-center transition-all shadow-lg shadow-black/20 active:scale-90"
-                      aria-label={`Add ${listing.card_data.name} to cart`}
-                    >
-                      <i className="fa-solid fa-cart-plus text-xs"></i>
-                    </button>
+                    )}
                   </div>
 
                   {/* Seller */}
@@ -371,6 +368,27 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       return <span className="text-[8px] text-yellow-500 whitespace-nowrap flex-shrink-0">★ {trust.rating.toFixed(1)}</span>;
                     })()}
                   </div>
+
+                  {/* Primary action: Make Offer (OBO) or Buy Now (straight to payment) */}
+                  {showMakeOffer ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onMakeOffer?.(listing); }}
+                      className="mt-2 w-full h-8 rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      aria-label={`Make an offer on ${listing.card_data.name}`}
+                    >
+                      <i className="fa-solid fa-hand-holding-dollar"></i>
+                      {t('offer.makeOffer')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onBuyNow?.(listing); }}
+                      className="mt-2 w-full h-8 rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all"
+                      aria-label={`Buy ${listing.card_data.name} now`}
+                    >
+                      <i className="fa-solid fa-bolt"></i>
+                      {t('marketplace.buyNow')}
+                    </button>
+                  )}
                 </div>
               </div>
             );

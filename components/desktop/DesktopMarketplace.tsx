@@ -9,6 +9,8 @@ import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_B
 import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
+import OfferModal from '@/components/OfferModal';
+import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
@@ -16,6 +18,10 @@ import { formatTHB } from '@/lib/currency';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
+
+// OBO offers are behind a single build-time flag; when off, every tile shows
+// "Buy Now" regardless of a listing's accepts_offers value.
+const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
 // Language values match the listing snapshot's `card_data.language`. The service
 // expands 'ja' to also cover sealed's 'jp' code, so a single option covers both.
@@ -46,7 +52,13 @@ export default function DesktopMarketplace() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const q = searchParams?.get('q') ?? '';
+
+    // OBO: listing whose "Make an offer" modal is open (from a grid tile). The
+    // tile only surfaces the button to a signed-in buyer, so opening the modal
+    // needs no auth gate here.
+    const [offerListing, setOfferListing] = useState<MarketplaceListing | null>(null);
 
     // OBO: the offer-email CTA deep-links to /?view=offers; on desktop the
     // middleware rewrites that to the desktop home. Forward it to the Offers
@@ -205,7 +217,7 @@ export default function DesktopMarketplace() {
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
                         {listings.map((listing, idx) => (
-                            <ListingTile key={listing.id} listing={listing} eager={idx < 6} />
+                            <ListingTile key={listing.id} listing={listing} eager={idx < 6} onMakeOffer={setOfferListing} />
                         ))}
                     </div>
 
@@ -226,6 +238,16 @@ export default function DesktopMarketplace() {
             {/* Homepage only: the FAQ teaser is a marketing/SEO surface, not a
                 search result. Hidden once the visitor is actively searching. */}
             {!q && <DesktopFaqTeaser />}
+
+            {OFFERS_ENABLED && offerListing && (
+                <OfferModal
+                    listingId={offerListing.id}
+                    listingPrice={offerListing.price}
+                    cardName={offerListing.card_data?.name || ''}
+                    onClose={() => setOfferListing(null)}
+                    onSubmitted={() => showToast(t('offer.submitted'), 'success')}
+                />
+            )}
         </div>
     );
 }
@@ -256,8 +278,8 @@ function FilterChip({
     );
 }
 
-function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: boolean }) {
-    const { addItem } = useDesktopCart();
+function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceListing; eager: boolean; onMakeOffer: (listing: MarketplaceListing) => void }) {
+    const { buyNow, user } = useDesktopCart();
     const { t } = useTranslation();
     // Catalog art is the default; if its host is unreachable (TCGdex outages
     // black out most EN card art) fall back to the seller's condition photo,
@@ -268,6 +290,11 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
         ? getOptimizedImageUrl(listing.image_front_url, 300, 80)
         : catalogUrl;
     const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
+    // Show "Make Offer" only on offer-accepting listings, and only to a signed-in
+    // buyer who isn't the seller. Everyone else (incl. signed-out visitors and
+    // the flag-off case) gets "Buy Now".
+    const showMakeOffer =
+        OFFERS_ENABLED && listing.accepts_offers === true && !!user && user.id !== listing.seller_id;
     return (
         <Link
             href={`/card/${listing.card_id}`}
@@ -302,26 +329,13 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
                     {listing.card_data.set}
                 </p>
-                <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-baseline gap-1.5 min-w-0">
-                        <p className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</p>
-                        {dealPct !== null && (
-                            <p className="text-[11px] text-slate-500 font-bold line-through truncate">
-                                {formatTHB(listing.card_data.marketPrice)}
-                            </p>
-                        )}
-                    </div>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            addItem(listingToCartItem(listing));
-                        }}
-                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-brand-cyan text-brand-cyan hover:text-brand-darker flex items-center justify-center transition-colors"
-                        aria-label={`Add ${listing.card_data.name} to cart`}
-                    >
-                        <i className="fa-solid fa-cart-plus text-xs"></i>
-                    </button>
+                <div className="flex items-baseline gap-1.5 min-w-0 mt-2">
+                    <p className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</p>
+                    {dealPct !== null && (
+                        <p className="text-[11px] text-slate-500 font-bold line-through truncate">
+                            {formatTHB(listing.card_data.marketPrice)}
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
                     <span className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden shrink-0">
@@ -338,6 +352,35 @@ function ListingTile({ listing, eager }: { listing: MarketplaceListing; eager: b
                         </span>
                     )}
                 </div>
+
+                {/* Primary action: Make Offer (OBO) or Buy Now (straight to payment) */}
+                {showMakeOffer ? (
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onMakeOffer(listing);
+                        }}
+                        className="mt-3 w-full py-2 rounded-lg bg-brand-cyan/10 hover:bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
+                        aria-label={`Make an offer on ${listing.card_data.name}`}
+                    >
+                        <i className="fa-solid fa-hand-holding-dollar"></i>
+                        {t('offer.makeOffer')}
+                    </button>
+                ) : (
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            buyNow(listingToCartItem(listing));
+                        }}
+                        className="mt-3 w-full py-2 rounded-lg bg-brand-green hover:bg-brand-green/90 text-brand-darker text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
+                        aria-label={`Buy ${listing.card_data.name} now`}
+                    >
+                        <i className="fa-solid fa-bolt"></i>
+                        {t('marketplace.buyNow')}
+                    </button>
+                )}
             </div>
         </Link>
     );

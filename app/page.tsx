@@ -21,6 +21,7 @@ import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
+import OfferModal from '@/components/OfferModal';
 
 // Lazy-loaded — these carry heavy deps (Stripe Elements, camera plugin) we
 // don't need until the user actually opens checkout or the scanner.
@@ -78,7 +79,7 @@ type PendingAuthAction =
     | { type: 'wishlist'; card: Card }
     | { type: 'vault'; card: Card; collectionId?: string }
     | { type: 'checkout'; items: CartItem[] }
-    | { type: 'buyNow' };
+    | { type: 'buyNow'; listing?: MarketplaceListing };
 
 // Layout effect that is safe to reference from SSR'd client components —
 // effects never run on the server, this alias only silences the
@@ -195,6 +196,10 @@ export default function HomePage() {
         }
     }, [selectedCard]);
     const [selectedListing, setSelectedListing] = useState<any | null>(null);
+    // OBO: listing whose "Make an offer" modal is open (from a grid tile). Null
+    // when closed. Distinct from selectedListing so the offer modal can open
+    // without also opening the full ListingDetails view.
+    const [offerListing, setOfferListing] = useState<MarketplaceListing | null>(null);
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [viewingSellerReviews, setViewingSellerReviews] = useState<Review[]>([]);
     const [viewingSellerListings, setViewingSellerListings] = useState<MarketplaceListing[]>([]);
@@ -879,25 +884,38 @@ export default function HomePage() {
 
     // Buy Now skips the cart and opens the payment modal directly, so it runs
     // the same geo, auth, and buyer-profile (address + phone) gates as cart
-    // checkout itself. Reads selectedListing from state (rather than a param)
-    // so the post-sign-in resume can re-invoke it while the listing modal is
-    // still open behind the auth gate.
-    const handleBuyNow = async () => {
-        if (!selectedListing) return;
+    // checkout itself. Callable two ways: from a ListingDetails "Buy Now" (no
+    // arg — reads selectedListing so the post-sign-in resume can re-invoke it
+    // while the listing modal is still open behind the auth gate), or from a
+    // marketplace grid tile (listing passed in, so it survives the auth resume
+    // even though no ListingDetails modal is open).
+    const handleBuyNow = async (listingArg?: MarketplaceListing) => {
+        const listing = listingArg ?? selectedListing;
+        if (!listing) return;
         if (!(await ensureCanPurchase())) return;
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow' })) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg })) return;
         if (!(await ensureBuyerProfileComplete())) return;
         setCart([{
-            id: selectedListing.id,
-            cardId: selectedListing.card_id,
-            card: selectedListing.card_data,
-            price: selectedListing.price, // Store base price for now
-            sellerId: selectedListing.seller_id,
-            sellerName: selectedListing.seller?.display_name || 'Unknown',
-            condition: selectedListing.condition
+            id: listing.id,
+            cardId: listing.card_id,
+            card: listing.card_data,
+            price: listing.price, // Store base price for now
+            sellerId: listing.seller_id,
+            sellerName: listing.seller?.display_name || 'Unknown',
+            condition: listing.condition
         }]);
         setSelectedListing(null);
         setIsPaymentModalOpen(true);
+    };
+
+    // OBO "Make an offer" from a marketplace grid tile: open the offer modal for
+    // the tapped listing. The grid only surfaces this button to a signed-in
+    // buyer who isn't the seller, but guard auth anyway (a guest session slips
+    // through the id check). The OfferModal POSTs to /api/offers, which is the
+    // server-side authority on the min-floor / anti-abuse rules.
+    const handleMakeOfferListing = (listing: MarketplaceListing) => {
+        if (!requireAuth(t('authGate.offer') || 'Sign in to make an offer')) return;
+        setOfferListing(listing);
     };
 
     // Resume the action that opened the auth gate once a real session lands.
@@ -933,7 +951,7 @@ export default function HomePage() {
             });
             void handleCheckout();
         } else if (pending.type === 'buyNow') {
-            void handleBuyNow();
+            void handleBuyNow(pending.listing);
         }
         // Handlers are re-created every render and the pending ref is one-shot,
         // so only the wake-up-relevant deps are listed.
@@ -1676,7 +1694,9 @@ export default function HomePage() {
                                     });
                                     setActiveTab('seller_profile');
                                 }}
-                                onAddToCart={handleAddToCart}
+                                onBuyNow={handleBuyNow}
+                                onMakeOffer={handleMakeOfferListing}
+                                currentUserId={user && user.provider !== 'guest' ? user.id : null}
                                 listings={activeListings}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
@@ -1866,6 +1886,16 @@ export default function HomePage() {
                         exchangeRate={exchangeRate}
                         currentUserId={user?.id ?? null}
                         onOfferSubmitted={() => showToast(t('offer.submitted') || 'Offer sent to the seller.', 'success')}
+                    />
+                )}
+
+                {offerListing && (
+                    <OfferModal
+                        listingId={offerListing.id}
+                        listingPrice={offerListing.price}
+                        cardName={offerListing.card_data.name}
+                        onClose={() => setOfferListing(null)}
+                        onSubmitted={() => showToast(t('offer.submitted') || 'Offer sent to the seller.', 'success')}
                     />
                 )}
 
