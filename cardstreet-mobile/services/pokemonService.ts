@@ -14,6 +14,32 @@ const CARDS_TTL_MS = 6 * 60 * 60 * 1000; // 6h — card lists per set
 // unconverted-USD market_values row as the display price.
 const STORAGE_PREFIX = 'pokemonCache:v2:';
 
+// Split a search query into a name part and an optional collector-number
+// filter. "Mewtwo 51" -> name "mewtwo" + number 51, so the search narrows by
+// number instead of matching "%mewtwo 51%" as literal name text (which finds
+// nothing). Kept in sync with the web pokemonService.parseNameAndNumber. The DB
+// stores the same card's number in several shapes ("51" / "051", "3" / "003",
+// "51/198"), so we emit the as-typed, zero-stripped, and zero-padded forms.
+function parseNameAndNumber(query: string): { name: string; numberOr: string | null } {
+    const raw = (query || '').trim();
+    if (!raw) return { name: '', numberOr: null };
+    const tokens = raw.split(/\s+/);
+    let numIdx = -1;
+    let numerator = '';
+    for (let i = tokens.length - 1; i >= 0; i--) {
+        const m = tokens[i].match(/^#?(\d{1,4})(?:\/\d{1,5})?$/);
+        if (m) { numIdx = i; numerator = m[1]; break; }
+    }
+    if (numIdx === -1) return { name: raw, numberOr: null };
+    const name = tokens.filter((_, i) => i !== numIdx).join(' ').trim();
+    const stripped = numerator.replace(/^0+/, '') || '0';
+    const variants = Array.from(new Set([
+        numerator, stripped, stripped.padStart(2, '0'), stripped.padStart(3, '0'),
+    ]));
+    const legs = variants.flatMap(v => [`number.eq.${v}`, `number.ilike.${v}/%`]);
+    return { name, numberOr: legs.join(',') };
+}
+
 async function readPersistent<T>(key: string, ttlMs: number): Promise<T | null> {
     try {
         const raw = await AsyncStorage.getItem(STORAGE_PREFIX + key);
@@ -269,22 +295,40 @@ export const pokemonService = {
         try {
             const cleanQuery = query.toLowerCase().trim();
 
-            const { data: cards, error } = await supabase
-                .from('pokemon_cards')
-                .select(`
+            // Recognize "name + collector number" (e.g. "Mewtwo 51") and narrow
+            // by both. Only when a name remains after splitting off the number,
+            // so a bare "151" stays a plain name search.
+            const parsed = parseNameAndNumber(cleanQuery);
+            const useNumber = !!parsed.numberOr && parsed.name.length >= 2;
+            const nameQuery = useNumber ? parsed.name : cleanQuery;
+
+            const select = `
                     id, name, english_name, set_id, number,
                     rarity, image_small, image_large, language,
                     raw_data->tcgplayer,
                     pokemon_sets(name, printed_total, total),
                     market_values(condition, market_avg, currency, last_updated)
-                `)
-                .eq('game', game)
-                .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
-                .limit(50); // Lower limit for mobile
+                `;
+            const runQuery = () => {
+                let q = supabase.from('pokemon_cards').select(select).eq('game', game)
+                    .or(`name.ilike.%${nameQuery}%,english_name.ilike.%${nameQuery}%`);
+                // Two .or() groups are ANDed by PostgREST: (name) AND (number).
+                if (useNumber) q = q.or(parsed.numberOr!);
+                return q.limit(50); // Lower limit for mobile
+            };
 
+            let { data: cards, error } = await runQuery();
             if (error) {
                 console.error('Search error:', error);
                 return [];
+            }
+            // Over-narrowed miss (wrong/nonexistent number): broaden to the name
+            // alone so the user still sees candidates instead of an empty screen.
+            if (useNumber && (!cards || cards.length === 0)) {
+                const retry = await supabase.from('pokemon_cards').select(select).eq('game', game)
+                    .or(`name.ilike.%${parsed.name}%,english_name.ilike.%${parsed.name}%`)
+                    .limit(50);
+                if (!retry.error) cards = retry.data;
             }
 
             // Simplified scoring logic for mobile performance
@@ -293,9 +337,9 @@ export const pokemonService = {
                 const englishLower = card.english_name?.toLowerCase() || '';
 
                 let score = 0;
-                if (nameLower === cleanQuery || englishLower === cleanQuery) score = 100;
-                else if (nameLower.startsWith(cleanQuery) || englishLower.startsWith(cleanQuery)) score = 75;
-                else if (nameLower.includes(cleanQuery) || englishLower.includes(cleanQuery)) score = 50;
+                if (nameLower === nameQuery || englishLower === nameQuery) score = 100;
+                else if (nameLower.startsWith(nameQuery) || englishLower.startsWith(nameQuery)) score = 75;
+                else if (nameLower.includes(nameQuery) || englishLower.includes(nameQuery)) score = 50;
                 else score = 25;
 
                 return { card, score };

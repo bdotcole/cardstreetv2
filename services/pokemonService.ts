@@ -21,6 +21,40 @@ const searchIndex = new Map<string, Card[]>();
 const setsCache = new Map<string, { data: ApiSet[], totalCount: number }>();
 let allSetsDbCache: { id: string, name: string }[] | null = null;
 
+// Split a search query into a name part and an optional collector-number filter.
+// Recognizes a standalone numeric token combined with a name — "Mewtwo 51",
+// "Charizard 4/102", "Pikachu #25", "Bulbasaur 001" — so the search can narrow
+// by number instead of matching the digits as literal name text (which returns
+// nothing, since no card is *named* "Mewtwo 51"). Returns the PostgREST or-string
+// for the number, or null when the query carries no collector number.
+//
+// The DB stores numbers in several shapes for the same card ("51" vs "051",
+// "3" vs "003", and "51/198" with the printed total), so we emit the as-typed,
+// zero-stripped, and zero-padded forms, each with an exact leg and an "n/total"
+// prefix leg. Mirrors the number-matching pattern in scannerService.
+function parseNameAndNumber(query: string): { name: string; numberOr: string | null } {
+    const raw = (query || '').trim();
+    if (!raw) return { name: '', numberOr: null };
+    const tokens = raw.split(/\s+/);
+    // Collector numbers usually trail the name; scan from the end for the first
+    // token that is purely a number (digits, optional "/total", optional #).
+    let numIdx = -1;
+    let numerator = '';
+    for (let i = tokens.length - 1; i >= 0; i--) {
+        const m = tokens[i].match(/^#?(\d{1,4})(?:\/\d{1,5})?$/);
+        if (m) { numIdx = i; numerator = m[1]; break; }
+    }
+    if (numIdx === -1) return { name: raw, numberOr: null };
+
+    const name = tokens.filter((_, i) => i !== numIdx).join(' ').trim();
+    const stripped = numerator.replace(/^0+/, '') || '0';
+    const variants = Array.from(new Set([
+        numerator, stripped, stripped.padStart(2, '0'), stripped.padStart(3, '0'),
+    ]));
+    const legs = variants.flatMap(v => [`number.eq.${v}`, `number.ilike.${v}/%`]);
+    return { name, numberOr: legs.join(',') };
+}
+
 export interface ApiSet {
     id: string;
     name: string;
@@ -253,10 +287,30 @@ export const pokemonService = {
                 }
                 return q;
             };
-            let dbQuery = newScopedQuery();
+            // Pull a collector number out of the residual query (the part not
+            // consumed by a matched set). "Mewtwo 51" -> name "mewtwo" + number
+            // 51; "Charizard 4/102" -> "charizard" + 4. Combined with a set this
+            // gives set + number narrowing ("Mega Evolution 3").
+            const hasSet = matchedSetIds.length > 0;
+            const parsed = parseNameAndNumber(hasSet ? queryWithoutSet : cleanQuery);
+            // Only treat digits as a collector number when there's context to
+            // anchor them: a matched set, or a residual name. A bare "151" stays
+            // a name search rather than dumping every #151 across the catalog.
+            const useNumber = !!parsed.numberOr && (hasSet || parsed.name.length >= 2);
+            // Score against just the name portion when a number was split off, so
+            // "Mewtwo 51" still scores the "Mewtwo" print as an exact-name match.
+            const effectiveNameQuery = useNumber && parsed.name.length > 0 ? parsed.name : cleanQuery;
 
-            if (matchedSetIds.length > 0) {
-                dbQuery = dbQuery.in('set_id', matchedSetIds);
+            let dbQuery = newScopedQuery();
+            if (hasSet) dbQuery = dbQuery.in('set_id', matchedSetIds);
+
+            if (useNumber) {
+                // Two .or() groups are ANDed by PostgREST: (name) AND (number).
+                if (parsed.name.length > 0) {
+                    dbQuery = dbQuery.or(`name.ilike.%${parsed.name}%,english_name.ilike.%${parsed.name}%`);
+                }
+                dbQuery = dbQuery.or(parsed.numberOr!);
+            } else if (hasSet) {
                 if (queryWithoutSet.length > 0) {
                     dbQuery = dbQuery.or(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
                 }
@@ -266,7 +320,7 @@ export const pokemonService = {
                 // can't seq-scan the whole set table unboundedly.
                 const { data: partialSets } = await supabase.from('pokemon_sets').select('id').ilike('name', `%${cleanQuery}%`).limit(20);
                 const partialSetIds = partialSets?.map(s => s.id) || [];
-                
+
                 let orStr = `name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`;
                 if (partialSetIds.length > 0) {
                     orStr += `,set_id.in.(${partialSetIds.join(',')})`;
@@ -276,13 +330,17 @@ export const pokemonService = {
 
             let { data: cards, error } = await dbQuery.limit(100);
 
-            // A matched "set" can be a false positive: common words double as
-            // set names ("Dragon" is Pokemon ex3), eating part of a card name
-            // ("Blue-Eyes White Dragon") and zeroing the result. Retry once
-            // with the untouched query when the set-scoped pass finds nothing.
-            if (!error && (!cards || cards.length === 0) && matchedSetIds.length > 0) {
+            // A narrowed pass can zero out on a false positive: a matched "set"
+            // can be a common word doubling as a set name ("Dragon" is Pokemon
+            // ex3), or the split-off "number" was really part of the name (or a
+            // wrong/nonexistent print, e.g. "Great Tusk 54"). Retry once when a
+            // narrowed pass finds nothing — broadening to the name alone (drop
+            // the number) rather than re-matching the raw "name + number" string,
+            // which never hits a card name.
+            if (!error && (!cards || cards.length === 0) && (hasSet || useNumber)) {
+                const retryName = useNumber && parsed.name.length >= 2 ? parsed.name : cleanQuery;
                 const retry = await newScopedQuery()
-                    .or(`name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`)
+                    .or(`name.ilike.%${retryName}%,english_name.ilike.%${retryName}%`)
                     .limit(100);
                 if (!retry.error) cards = retry.data;
             }
@@ -307,7 +365,7 @@ export const pokemonService = {
             const scoredResults = (cards || []).map(card => {
                 const nameLower = card.name?.toLowerCase() || '';
                 const englishLower = card.english_name?.toLowerCase() || '';
-                const queryLower = cleanQuery;
+                const queryLower = effectiveNameQuery;
 
                 // Extract root name (before any suffix like V, VMAX, EX, GX, etc.)
                 const suffixes = [' v', ' vmax', ' vstar', ' ex', ' gx', ' tag team', ' break', ' prime', '-v', '-ex', '-gx'];
