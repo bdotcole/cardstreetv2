@@ -26,6 +26,10 @@ export default function DesktopNav() {
     const [query, setQuery] = useState('');
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    // Compact-viewport nav drawer. The desktop link row, language toggle and
+    // account cluster collapse into this below lg (the pages under /desktop/*
+    // are served to phones too — see middleware.ts).
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [results, setResults] = useState<Card[]>([]);
     const [searching, setSearching] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -110,10 +114,10 @@ export default function DesktopNav() {
 
     return (
         <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur">
-            <div className="max-w-screen-2xl mx-auto px-8 h-16 flex items-center gap-8">
+            <div className="max-w-screen-2xl mx-auto px-4 md:px-8 h-16 flex items-center gap-3 md:gap-8">
                 <Link href="/" className="flex items-center gap-3 shrink-0">
                     <Image src="/logo.png" alt="CardStreet" width={40} height={40} priority className="object-contain" />
-                    <span className="text-lg font-black text-white tracking-tight">CardStreet</span>
+                    <span className="hidden sm:block text-lg font-black text-white tracking-tight">CardStreet</span>
                 </Link>
 
                 <div className="flex-1 max-w-xl relative">
@@ -184,7 +188,7 @@ export default function DesktopNav() {
                     )}
                 </div>
 
-                <nav className="flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
+                <nav className="hidden lg:flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
                         ['/', t('desktop.navMarketplace')],
                         ['/sets', t('desktop.navSets')],
@@ -211,7 +215,7 @@ export default function DesktopNav() {
 
                 <button
                     onClick={toggleLanguage}
-                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
+                    className="hidden lg:flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
                     title={language === 'TH' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
                     aria-label={language === 'TH' ? 'Switch to English' : 'Switch to Thai'}
                 >
@@ -234,7 +238,7 @@ export default function DesktopNav() {
                 </button>
 
                 {user ? (
-                    <div className="relative shrink-0">
+                    <div className="relative shrink-0 hidden lg:block">
                         <button
                             onClick={() => setMenuOpen((open) => !open)}
                             className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 rounded-xl pl-1.5 pr-3 py-1.5 transition-colors"
@@ -300,12 +304,80 @@ export default function DesktopNav() {
                 ) : (
                     <button
                         onClick={() => setAuthOpen(true)}
-                        className="shrink-0 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-5 py-2 rounded-xl transition-colors"
+                        className="hidden lg:block shrink-0 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-5 py-2 rounded-xl transition-colors"
                     >
                         {t('desktop.signIn')}
                     </button>
                 )}
+
+                <button
+                    onClick={() => setMobileNavOpen((open) => !open)}
+                    className="lg:hidden shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                    aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+                    aria-expanded={mobileNavOpen}
+                >
+                    <i className={`fa-solid ${mobileNavOpen ? 'fa-xmark' : 'fa-bars'} text-slate-300`}></i>
+                </button>
             </div>
+
+            {mobileNavOpen && (
+                <div className="lg:hidden border-t border-white/5 bg-brand-darker/95 backdrop-blur">
+                    <nav className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-col text-sm font-bold">
+                        {([
+                            ['/', t('desktop.navMarketplace')],
+                            ['/sets', t('desktop.navSets')],
+                            ['/sell', t('desktop.navSell')],
+                            ['/orders', t('desktop.navOrders')],
+                            ['/premium', t('desktop.navPro')],
+                        ] as [string, string][]).map(([href, label]) => {
+                            const current = (pathname ?? '/').replace(/^\/desktop/, '') || '/';
+                            const active = current === href;
+                            return (
+                                <Link
+                                    key={href}
+                                    href={href}
+                                    onClick={() => setMobileNavOpen(false)}
+                                    className={`py-2.5 transition-colors ${active ? 'text-brand-cyan' : 'text-white hover:text-brand-cyan'}`}
+                                >
+                                    {label}
+                                </Link>
+                            );
+                        })}
+                        {user && (
+                            <Link
+                                href="/collection"
+                                onClick={() => setMobileNavOpen(false)}
+                                className="py-2.5 text-white hover:text-brand-cyan transition-colors"
+                            >
+                                {t('desktop.navCollection')}
+                            </Link>
+                        )}
+                        <div className="flex items-center gap-3 pt-3 mt-1 border-t border-white/5">
+                            <button
+                                onClick={toggleLanguage}
+                                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] font-black text-slate-300 transition-colors"
+                            >
+                                {language === 'TH' ? 'EN' : 'ไทย'}
+                            </button>
+                            {user ? (
+                                <button
+                                    onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
+                                    className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
+                                >
+                                    {t('desktop.signOut')}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => { setMobileNavOpen(false); setAuthOpen(true); }}
+                                    className="px-4 py-2 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-brand-darker font-black transition-colors"
+                                >
+                                    {t('desktop.signIn')}
+                                </button>
+                            )}
+                        </div>
+                    </nav>
+                </div>
+            )}
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
         </header>

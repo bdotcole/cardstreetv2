@@ -32,6 +32,27 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     };
 }
 
+// schema.org OnlineStore — mirrors the Product JSON-LD on card pages so seller
+// shops are machine-readable too (name, rating, listing count).
+function buildSellerJsonLd(username: string, name: string, listingCount: number, rating: number | null, reviewCount: number | null) {
+    const jsonLd: Record<string, unknown> = {
+        '@context': 'https://schema.org',
+        '@type': 'OnlineStore',
+        name,
+        url: `${BASE_URL}/seller/${username}`,
+        parentOrganization: { '@id': `${BASE_URL}/#organization` },
+        description: `${name} sells trading cards on CardStreet, Thailand's trading card marketplace. ${listingCount} active listings.`,
+    };
+    if (reviewCount && reviewCount > 0 && rating != null) {
+        jsonLd.aggregateRating = {
+            '@type': 'AggregateRating',
+            ratingValue: Number(rating).toFixed(1),
+            reviewCount,
+        };
+    }
+    return jsonLd;
+}
+
 export default async function DesktopSellerPage({ params }: { params: Promise<{ username: string }> }) {
     const { username } = await params;
     const { seller, listings } = await getSellerPageData(username);
@@ -43,6 +64,14 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
 
     return (
         <div>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(
+                        buildSellerJsonLd(username, name, listings.length, seller.rating ?? null, seller.review_count ?? null)
+                    ),
+                }}
+            />
             <nav className="text-sm text-slate-500">
                 <Link href="/" className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Marketplace' : 'มาร์เก็ตเพลส'}</Link>
                 <span className="mx-2">›</span>

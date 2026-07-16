@@ -8,9 +8,22 @@ import { createServerClient } from '@supabase/ssr'
 // identify themselves as desktop Macs.
 const APP_UA_MARKER = 'CardStreetApp'
 
-// Clean public URLs owned by the desktop experience. They render from the
+// Public content URLs (card / set / seller pages + game landing pages). These
+// render from the internal /desktop/* tree for EVERY browser — the page bodies
+// are responsive, so phones get the same server-rendered HTML as desktops.
+// Serving one document per URL (instead of bouncing phones to the SPA) is what
+// makes these pages visible to Google's mobile-first crawler. Only the native
+// Capacitor app keeps the old redirect into the SPA, which deep-links /card/*
+// via the ?card= param.
+const PUBLIC_CONTENT_PREFIXES = ['/card', '/sets', '/seller']
+
+// Game landing pages: clean top-level URLs that render from /desktop/games/*.
+// Universal (all devices) like the other public content pages.
+const GAME_LANDING_PATHS = ['/pokemon', '/mtg', '/yugioh', '/one-piece', '/riftbound', '/lorcana']
+
+// Account/workflow URLs owned by the desktop experience. They render from the
 // internal /desktop/* tree; phones hitting them are bounced to the mobile SPA.
-const DESKTOP_ONLY_PREFIXES = ['/card', '/sets', '/seller', '/sell', '/orders', '/collection', '/settings']
+const DESKTOP_ONLY_PREFIXES = ['/sell', '/orders', '/collection', '/settings']
 
 // URLs that exist for BOTH experiences at the same path: desktop browsers get
 // the desktop-shell wrapper under /desktop/*, phones keep the standalone page
@@ -28,6 +41,13 @@ function isDesktopClient(request: NextRequest): boolean {
     const ua = request.headers.get('user-agent') ?? ''
     if (ua.includes(APP_UA_MARKER)) return false
     return !/Android|iPhone|iPod|iPad|Mobile|Mobi/i.test(ua)
+}
+
+// The native Capacitor shells navigate card links through the SPA's own
+// deep-link handling, so only they keep the redirect-to-SPA behavior on the
+// public content URLs. Every real browser (including crawlers) gets the page.
+function isNativeApp(request: NextRequest): boolean {
+    return (request.headers.get('user-agent') ?? '').includes(APP_UA_MARKER)
 }
 
 function withUaVary(response: NextResponse): NextResponse {
@@ -65,14 +85,27 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
             : { kind: 'next', uaVary: true }
     }
 
+    if (PUBLIC_CONTENT_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
+        // The native app bounces to the SPA (deep-linking /card/* via ?card=);
+        // every browser — phone, desktop, crawler — gets the server-rendered page.
+        if (isNativeApp(request)) {
+            const cardId = basePath.startsWith('/card/') ? basePath.slice('/card/'.length) : ''
+            return { kind: 'redirect', pathname: '/', search: cardId ? `?card=${cardId}` : '', uaVary: true }
+        }
+        return { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
+    }
+
+    if (GAME_LANDING_PATHS.includes(basePath)) {
+        return { kind: 'rewrite', pathname: `/desktop/games${basePath}`, uaVary: false }
+    }
+
     if (DESKTOP_ONLY_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
         if (isDesktopClient(request)) {
             return { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
         }
-        // Phones land on the mobile SPA. The card id rides along as a query
-        // param so the SPA can learn to deep-link into it later.
-        const cardId = basePath.startsWith('/card/') ? basePath.slice('/card/'.length) : ''
-        return { kind: 'redirect', pathname: '/', search: cardId ? `?card=${cardId}` : '', uaVary: true }
+        // Phones land on the mobile SPA — these are account surfaces whose
+        // mobile equivalents live inside the SPA's own tabs.
+        return { kind: 'redirect', pathname: '/', search: '', uaVary: true }
     }
 
     if (DESKTOP_WRAPPED_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
@@ -256,6 +289,13 @@ export const config = {
         '/collection',
         '/settings',
         '/premium',
+        // Game landing pages (see GAME_LANDING_PATHS).
+        '/pokemon',
+        '/mtg',
+        '/yugioh',
+        '/one-piece',
+        '/riftbound',
+        '/lorcana',
         '/desktop/:path*',
         // Locale prefixes and the localized public content pages.
         '/en',

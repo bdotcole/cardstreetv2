@@ -28,8 +28,28 @@ export default async function DesktopSetsIndexPage() {
     const lang = await resolveLang();
     const sets = await getAllSets();
 
+    // schema.org CollectionPage listing the newest sets (capped — the full
+    // catalog is ~1k sets and the links are all server-rendered below anyway).
+    const jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'Trading Card Sets',
+        url: `${BASE_URL}/sets`,
+        isPartOf: { '@id': `${BASE_URL}/#website` },
+        mainEntity: {
+            '@type': 'ItemList',
+            itemListElement: sets.slice(0, 50).map((s, i) => ({
+                '@type': 'ListItem',
+                position: i + 1,
+                name: s.name,
+                url: `${BASE_URL}/sets/${s.id}`,
+            })),
+        },
+    };
+
     return (
         <div>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <h1 className="text-2xl font-black text-white">{lang === 'EN' ? 'Trading Card Sets' : 'ชุดการ์ดทั้งหมด'}</h1>
             <p className="text-sm text-slate-400 mt-1">
                 {lang === 'EN'

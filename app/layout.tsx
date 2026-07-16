@@ -6,28 +6,49 @@ import { ToastProvider } from '@/lib/contexts/ToastContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
 import HtmlLangSync from '@/components/HtmlLangSync'
 import { GoogleAnalytics } from '@next/third-parties/google'
-export const metadata: Metadata = {
-    // Absolute base so the auto-generated OG image + canonical URLs resolve for
-    // crawlers (LINE / Facebook / Messenger, where Thai reshare traffic flows).
-    metadataBase: new URL('https://cardstreet.app'),
-    title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
-    description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan cards with AI, track your collection value, and trade with verified sellers.',
-    keywords: ['Pokemon', 'TCG', 'Thailand', 'การ์ด', 'โปเกมอน', 'marketplace'],
-    manifest: '/manifest.json',
-    // og:image / twitter:image are auto-populated from app/opengraph-image.tsx.
-    openGraph: {
-        type: 'website',
-        siteName: 'CardStreet TCG',
-        url: 'https://cardstreet.app',
-        title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
-        description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan with AI, track your collection value, and trade with verified sellers.',
-        locale: 'th_TH',
-    },
-    twitter: {
-        card: 'summary_large_image',
-        title: 'CardStreet TCG - Thai Pokémon Card Marketplace',
-        description: 'Buy, sell, and collect Pokémon cards in Thailand. Scan with AI and track your collection value.',
-    },
+// Sitewide metadata default, localized per request (middleware resolves the
+// locale into the x-cs-lang header; Thai is canonical). Pages with their own
+// generateMetadata override this. Copy names all six games — the marketplace
+// stopped being Pokémon-only long ago and Thai head terms (การ์ดโปเกมอน,
+// การ์ดวันพีช, ...) are what the Thai market actually searches.
+export async function generateMetadata(): Promise<Metadata> {
+    const lang = (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH'
+    const title =
+        lang === 'EN'
+            ? 'CardStreet — Buy & Sell Pokémon, One Piece, Yu-Gi-Oh & MTG Cards in Thailand'
+            : 'CardStreet — ตลาดซื้อขายการ์ดโปเกมอน วันพีช ยูกิ MTG ในไทย'
+    const description =
+        lang === 'EN'
+            ? 'Buy, sell, and collect Pokémon, One Piece, Yu-Gi-Oh!, Magic: The Gathering, Lorcana, and Riftbound cards in Thailand. AI card scanning, live market prices, verified sellers, nationwide shipping.'
+            : 'ซื้อ ขาย และสะสมการ์ดโปเกมอน การ์ดวันพีช การ์ดยูกิ Magic, Lorcana และ Riftbound ในประเทศไทย สแกนการ์ดด้วย AI เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ส่งไวทั่วไทย'
+    return {
+        // Absolute base so the auto-generated OG image + canonical URLs resolve for
+        // crawlers (LINE / Facebook / Messenger, where Thai reshare traffic flows).
+        metadataBase: new URL('https://cardstreet.app'),
+        title,
+        description,
+        keywords: [
+            'Pokemon TCG', 'การ์ดโปเกมอน', 'โปเกมอนการ์ด', 'การ์ดวันพีช', 'One Piece Card Game',
+            'การ์ดยูกิ', 'Yu-Gi-Oh', 'Magic The Gathering', 'MTG', 'Disney Lorcana', 'Riftbound',
+            'ตลาดการ์ด', 'เช็คราคาการ์ด', 'ร้านขายการ์ด', 'Thailand',
+        ],
+        manifest: '/manifest.webmanifest',
+        // og:image / twitter:image are auto-populated from app/opengraph-image.tsx.
+        openGraph: {
+            type: 'website',
+            siteName: 'CardStreet',
+            url: 'https://cardstreet.app',
+            title,
+            description,
+            locale: lang === 'EN' ? 'en_US' : 'th_TH',
+            alternateLocale: lang === 'EN' ? 'th_TH' : 'en_US',
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title,
+            description,
+        },
+    }
 }
 
 export async function generateViewport() {
@@ -67,6 +88,43 @@ export default async function RootLayout({
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
             </head>
             <body>
+                {/* Sitewide Organization + WebSite graph. The SearchAction target is
+                    the marketplace's /?q= listings search (see DesktopNav) — it makes
+                    the site eligible for the Google sitelinks search box and gives AI
+                    answer engines a machine-readable identity for CardStreet. */}
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify({
+                            '@context': 'https://schema.org',
+                            '@graph': [
+                                {
+                                    '@type': 'Organization',
+                                    '@id': 'https://cardstreet.app/#organization',
+                                    name: 'CardStreet',
+                                    url: 'https://cardstreet.app',
+                                    logo: 'https://cardstreet.app/logo.png',
+                                },
+                                {
+                                    '@type': 'WebSite',
+                                    '@id': 'https://cardstreet.app/#website',
+                                    name: 'CardStreet',
+                                    url: 'https://cardstreet.app',
+                                    inLanguage: ['th', 'en'],
+                                    publisher: { '@id': 'https://cardstreet.app/#organization' },
+                                    potentialAction: {
+                                        '@type': 'SearchAction',
+                                        target: {
+                                            '@type': 'EntryPoint',
+                                            urlTemplate: 'https://cardstreet.app/?q={search_term_string}',
+                                        },
+                                        'query-input': 'required name=search_term_string',
+                                    },
+                                },
+                            ],
+                        }),
+                    }}
+                />
                 {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
                     <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
                 )}

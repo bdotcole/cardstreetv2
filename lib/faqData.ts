@@ -36,12 +36,12 @@ const FAQ_EN: FaqCategory[] = [
     items: [
       {
         q: 'What is CardStreet?',
-        a: 'CardStreet is an online marketplace for trading card games, built for collectors and players in Thailand. You can buy and sell Pokémon, Magic: The Gathering, Yu-Gi-Oh!, and One Piece cards, scan a card to identify it instantly, and track live market values — all in one app. Every purchase is protected, and payment and shipping are handled end to end.',
+        a: 'CardStreet is an online marketplace for trading card games, built for collectors and players in Thailand. You can buy and sell Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana, and Riftbound cards, scan a card to identify it instantly, and track live market values — all in one app. Every purchase is protected, and payment and shipping are handled end to end.',
         featured: true,
       },
       {
         q: 'Which trading card games can I buy and sell on CardStreet?',
-        a: 'CardStreet supports Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, and the One Piece Card Game, with more games being added. The Pokémon catalog covers English, Thai, and Japanese printings, so you can collect across regions in one place.',
+        a: 'CardStreet supports Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, the One Piece Card Game, Disney Lorcana, and Riftbound (the League of Legends TCG), with more games being added. The Pokémon catalog covers English, Thai, and Japanese printings, so you can collect across regions in one place.',
         featured: true,
       },
       {
@@ -183,12 +183,12 @@ const FAQ_TH: FaqCategory[] = [
     items: [
       {
         q: 'CardStreet คืออะไร?',
-        a: 'CardStreet คือมาร์เก็ตเพลสออนไลน์สำหรับเกมการ์ดสะสม ออกแบบมาเพื่อนักสะสมและผู้เล่นในประเทศไทย คุณสามารถซื้อขายการ์ด Pokémon, Magic: The Gathering, Yu-Gi-Oh! และ One Piece สแกนการ์ดเพื่อระบุชนิดได้ทันที และดูมูลค่าตลาดแบบเรียลไทม์ ครบในแอปเดียว ทุกการสั่งซื้อได้รับการคุ้มครอง พร้อมระบบชำระเงินและจัดส่งครบวงจร',
+        a: 'CardStreet คือมาร์เก็ตเพลสออนไลน์สำหรับเกมการ์ดสะสม ออกแบบมาเพื่อนักสะสมและผู้เล่นในประเทศไทย คุณสามารถซื้อขายการ์ด Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana และ Riftbound สแกนการ์ดเพื่อระบุชนิดได้ทันที และดูมูลค่าตลาดแบบเรียลไทม์ ครบในแอปเดียว ทุกการสั่งซื้อได้รับการคุ้มครอง พร้อมระบบชำระเงินและจัดส่งครบวงจร',
         featured: true,
       },
       {
         q: 'ซื้อขายเกมการ์ดอะไรได้บ้างบน CardStreet?',
-        a: 'CardStreet รองรับ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh! และ One Piece Card Game และกำลังเพิ่มเกมอื่น ๆ อย่างต่อเนื่อง แคตตาล็อก Pokémon มีทั้งฉบับภาษาอังกฤษ ไทย และญี่ปุ่น คุณจึงสะสมข้ามภูมิภาคได้ในที่เดียว',
+        a: 'CardStreet รองรับ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Disney Lorcana และ Riftbound (การ์ดเกม League of Legends) และกำลังเพิ่มเกมอื่น ๆ อย่างต่อเนื่อง แคตตาล็อก Pokémon มีทั้งฉบับภาษาอังกฤษ ไทย และญี่ปุ่น คุณจึงสะสมข้ามภูมิภาคได้ในที่เดียว',
         featured: true,
       },
       {

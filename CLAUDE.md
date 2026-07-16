@@ -14,7 +14,7 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 
 ## Repo layout
 
-- `app/` — Next.js routes. `app/page.tsx` is the main shell (~1k lines).
+- `app/` — Next.js routes. The mobile SPA shell (~1k lines) lives at `components/MobileHome.tsx`; `app/page.tsx` is a thin server wrapper around it that owns the homepage metadata (canonical + hreflang).
 - `components/` — React components.
 - `services/` — Module-style services (`pokemonService`, `scannerService`, `marketplaceService`, `geminiService`).
 - `lib/` — Pure utilities, contexts, hooks, Supabase clients, the dHash util, the card mapper.
@@ -40,9 +40,9 @@ The Supabase Auth (GoTrue) password policy is enforced by the **dashboard** (Aut
 
 Supabase email links are **one-time**; mail providers' link scanners GET them before the human clicks, consuming the token — GoTrue then redirects the click to `/#error=access_denied&error_code=otp_expired&...` (the error rides the URL *fragment*, invisible to `/api/auth/callback`, and survives its redirect to `/`). For signup links the scanner's GET still *confirms* the email, so "just sign in" usually works. Three defenses, all client-side:
 
-- **`components/AuthLinkErrorNotice.tsx`** — mounted in both shells (`app/page.tsx`, `app/desktop/layout.tsx`); catches `#error=` hashes on landing, strips them, and shows a bilingual "link already used — try signing in" dialog with its own AuthModal (`authLinkError.*` locale keys).
+- **`components/AuthLinkErrorNotice.tsx`** — mounted in both shells (`components/MobileHome.tsx`, `app/desktop/layout.tsx`); catches `#error=` hashes on landing, strips them, and shows a bilingual "link already used — try signing in" dialog with its own AuthModal (`authLinkError.*` locale keys).
 - **`components/AuthModal.tsx`** — the post-signup verify screen has a **Resend email** button (60s cooldown, `supabase.auth.resend`), and a sign-in failing with "Email not confirmed" routes to that screen instead of dead-ending.
-- **`app/auth/confirm/page.tsx`** — prefetch-proof landing: Supabase email templates should link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` (recovery: `&type=recovery`); the token is only redeemed when the user presses the button, so scanners can't consume it. Old-style `{{ .ConfirmationURL }}` links keep working in parallel. Android App Links intercept **all** cardstreet.app paths, so the `appUrlOpen` handler in `app/page.tsx` has a matching `/auth/confirm` branch that verifies immediately (a deep-link open is itself the user's click). **The dashboard email templates must be updated for this page to take effect** (Authentication → Email Templates).
+- **`app/auth/confirm/page.tsx`** — prefetch-proof landing: Supabase email templates should link `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` (recovery: `&type=recovery`); the token is only redeemed when the user presses the button, so scanners can't consume it. Old-style `{{ .ConfirmationURL }}` links keep working in parallel. Android App Links intercept **all** cardstreet.app paths, so the `appUrlOpen` handler in `components/MobileHome.tsx` has a matching `/auth/confirm` branch that verifies immediately (a deep-link open is itself the user's click). **The dashboard email templates must be updated for this page to take effect** (Authentication → Email Templates).
 
 ## Card catalog
 
@@ -205,7 +205,7 @@ Subscribed events for both: `payment_intent.succeeded`, `payment_intent.payment_
 
 **Abandonment recovery** (TH KYC is a legal floor — the seller is MOR, so Stripe must fully verify them before `charges_enabled`; the lever is recovering abandoners, not shortening the form). Two nudges for sellers with `stripe_account_id` set but `stripe_details_submitted` false:
 - `app/api/cron/stripe-setup-nudge/route.ts` — daily Vercel cron (02:00 UTC = 09:00 Bangkok), one-time bilingual "finish your payout setup" email via `lib/courier.ts:sendStripeSetupReminderEmail`. One email per seller ever, CAS-guarded on `profiles.stripe_setup_nudge_sent_at` (migration `20260704_stripe_setup_nudge.sql`), only after the account sat unchanged >24h. The CTA links `/?stripe_connect=refresh`, which the shell + `Profile` + `StripeConnectSection` already turn into an immediate resume of hosted onboarding.
-- The mobile shell (`app/page.tsx`) shows a dismissible amber banner under the header for stalled sellers (cached flags via `/api/stripe/connect/status`); tapping it hands off to Profile's payouts panel via the `cs_open_payouts` sessionStorage flag. Desktop needs no equivalent — `/sell` already gates on Stripe status with a resume button.
+- The mobile shell (`components/MobileHome.tsx`) shows a dismissible amber banner under the header for stalled sellers (cached flags via `/api/stripe/connect/status`); tapping it hands off to Profile's payouts panel via the `cs_open_payouts` sessionStorage flag. Desktop needs no equivalent — `/sell` already gates on Stripe status with a resume button.
 
 ### Charges (TH path)
 
@@ -245,7 +245,7 @@ Shipping (Flash Express) is only configured for Thailand, so **buying is restric
 **UX (popup)**: `components/PurchaseRegionModal.tsx` — "available in Thailand only / coming soon to your country" (bilingual, `purchaseRegion.*` keys in `lib/locales/{en,th}.json`). It's shown by the client gate before the payment modal ever opens:
 - `GET /api/geo` returns `{ country, purchaseAllowed }` (per-IP, `no-store`).
 - `lib/hooks/usePurchaseRegion.ts` warms that lookup once per session (cached + deduped) and exposes `ensurePurchaseRegion()` for click handlers.
-- Mobile `app/page.tsx`: a shared `ensureCanPurchase()` guard fronts both cart **Checkout** (`handleCheckout`) and listing **Buy Now** (`onBuyNow` — which skips the cart and opens the payment modal directly, so it needs its own gate).
+- Mobile `components/MobileHome.tsx`: a shared `ensureCanPurchase()` guard fronts both cart **Checkout** (`handleCheckout`) and listing **Buy Now** (`onBuyNow` — which skips the cart and opens the payment modal directly, so it needs its own gate).
 - Desktop `components/desktop/DesktopCartDrawer.tsx`: gated in `beginCheckout`, the only path into the desktop payment phase.
 
 The client gate is UX only and **fails open** (a `/api/geo` hiccup leaves `purchaseAllowed` true); the server gate has the final say. The popup's blocked state can't be reproduced in local dev, since the browser never sends `x-vercel-ip-country` — exercise `/api/geo` with a forced header to verify the logic.
@@ -363,6 +363,8 @@ CardStreet is Thailand-first and bilingual (Thai + English), built so adding mar
 - `lib/faqData.ts` is the single source for FAQ content (bilingual, plain-string answers so they serialize into schema.org). `buildFaqJsonLd()` emits a `FAQPage` JSON-LD block.
 - `app/faq/page.tsx` is the canonical, server-rendered FAQ page (metadata + JSON-LD + `buildAlternates('/faq')` for canonical/hreflang). `components/FaqList.tsx` renders the bilingual accordion (native `<details>`, no-JS-friendly) and is reused by `app/help/page.tsx`. The desktop homepage shows a featured-questions teaser (`components/desktop/DesktopFaqTeaser.tsx`) linking to `/faq`.
 - `app/sitemap.ts` lists the public content routes with per-locale `hreflang`; `app/robots.ts` points to it and blocks `/admin`, `/api`, `/desktop`.
+- **Universal content pages (mobile-first indexing).** `/card/*`, `/sets/*`, `/seller/*`, and the six game landing pages (`/pokemon`, `/one-piece`, `/yugioh`, `/mtg`, `/lorcana`, `/riftbound` — content in `lib/gameLanding.ts`, route `app/desktop/games/[slug]/page.tsx`) are served from the `/desktop` tree to **every** device — phones included. Do NOT reintroduce a phone→`/` redirect on these paths: Google indexes with its smartphone crawler, and the redirect made the whole catalog invisible (the mid-2026 zero-traffic root cause). Only the native app UA (`CardStreetApp` marker) bounces to the SPA. `DesktopNav` collapses to a hamburger below `lg` to keep these pages phone-usable.
+- Sitewide `Organization` + `WebSite` (with `SearchAction`) JSON-LD is emitted by `app/layout.tsx`; card pages add `Product`, set pages `ItemList`, seller pages `OnlineStore`, game pages `FAQPage`/`CollectionPage`/`BreadcrumbList`. `app/llms.txt/route.ts` serves the AI-answer-engine overview.
 
 > Expansion roadmap (TH → SEA → US), phase status, and the open follow-ups (hreflang on the other `'use client'` content pages, language-toggle URL navigation, per-locale OG/JSON-LD) live in the agent memory note `project_i18n_market_expansion.md`, not here.
 
