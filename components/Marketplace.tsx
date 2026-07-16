@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { Card } from '@/types';
-import { gamesAvailableInLanguage } from '@/lib/games';
+import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
 
@@ -29,6 +30,36 @@ interface MarketplaceProps {
 // "Buy Now" regardless of a listing's accepts_offers value.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
+// The service treats maxPrice >= 100000 as "no upper bound" — keep that
+// sentinel so an untouched price filter never constrains the query.
+const PRICE_MAX = 100000;
+const PRICE_PRESETS: Array<[number, number]> = [
+  [0, PRICE_MAX],
+  [0, 500],
+  [500, 2000],
+  [2000, 10000],
+  [10000, PRICE_MAX],
+];
+
+/** Removable pill for a currently-applied filter, shown under the filter bar. */
+const AppliedChip: React.FC<{ label: React.ReactNode; onRemove: () => void }> = ({ label, onRemove }) => (
+  <button
+    onClick={onRemove}
+    className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 pl-3 pr-2 rounded-full bg-brand-green/10 border border-brand-green/30 text-brand-green text-[10px] font-bold whitespace-nowrap active:scale-95 transition-all"
+  >
+    {label}
+    <i className="fa-solid fa-xmark text-[9px] opacity-70"></i>
+  </button>
+);
+
+const sheetChipClass = (active: boolean) =>
+  `inline-flex items-center gap-2 h-9 px-4 rounded-full text-[11px] font-bold tracking-wide transition-all border active:scale-95 ${active
+    ? 'bg-brand-green text-brand-darker border-brand-green shadow-lg shadow-brand-green/20'
+    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+  }`;
+
+const sheetSectionLabelClass = 'text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-3 block';
+
 const Marketplace: React.FC<MarketplaceProps> = ({
   initialGame,
   onSelectCard,
@@ -49,8 +80,48 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   // Best deals first: discount vs. market snapshot is the default browse order.
   const [sortOrder, setSortOrder] = useState<ListingSort>('best_deals');
-  const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, PRICE_MAX]);
+
+  // ── Filter sheet ────────────────────────────────────────────────────────────
+  // Selections inside the sheet are drafts; they only hit the query (one fetch,
+  // no grid reflow mid-selection) when the user taps "Show Results".
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [draftGame, setDraftGame] = useState('all');
+  const [draftLanguage, setDraftLanguage] = useState('all');
+  const [draftPrice, setDraftPrice] = useState<[number, number]>([0, PRICE_MAX]);
+  // Portal target only exists in the browser; gate on mount so SSR is clean.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const openSheet = () => {
+    setDraftGame(selectedGame);
+    setDraftLanguage(selectedLanguage);
+    setDraftPrice(priceRange);
+    setSheetOpen(true);
+  };
+
+  const applyDrafts = () => {
+    const [min, max] = draftPrice;
+    // A hand-typed min above a bounded max is a swap, not an error.
+    const ordered: [number, number] = max !== PRICE_MAX && min > max ? [max, min] : [min, max];
+    setSelectedGame(draftGame);
+    setSelectedLanguage(draftLanguage);
+    setPriceRange(ordered);
+    setSheetOpen(false);
+  };
+
+  // Lock the page behind the sheet and allow Escape to dismiss it.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSheetOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [sheetOpen]);
 
   // ── Data state ──────────────────────────────────────────────────────────────
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
@@ -114,8 +185,22 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   const activeFilterCount = [
     selectedGame !== 'all',
     selectedLanguage !== 'all',
-    priceRange[0] > 0 || priceRange[1] < 100000,
+    priceRange[0] > 0 || priceRange[1] < PRICE_MAX,
   ].filter(Boolean).length;
+
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+  const formatFilterPrice = (n: number) => `${currencySymbol}${n.toLocaleString()}`;
+  const priceRangeLabel = ([min, max]: [number, number]) => {
+    if (min === 0 && max === PRICE_MAX) return t('marketplace.anyPrice') || 'Any';
+    if (min === 0) return `< ${formatFilterPrice(max)}`;
+    if (max === PRICE_MAX) return `${formatFilterPrice(min)}+`;
+    return `${formatFilterPrice(min)}–${formatFilterPrice(max)}`;
+  };
+  const languageLabel = (code: string) =>
+    code === 'en' ? (t('marketplace.english') || 'English')
+      : code === 'jp' ? (t('marketplace.japanese') || 'Japanese')
+        : code === 'th' ? (t('marketplace.thai') || 'Thai')
+          : (t('marketplace.allLanguages') || 'All');
 
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
@@ -150,27 +235,27 @@ const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
 
         {/* Filter & Sort Bar */}
-        <div className="bg-brand-darker/95 backdrop-blur-xl border-b border-white/5 py-3 px-6 shadow-2xl">
-          <div className="flex justify-between items-center">
-            {/* Filter Button */}
+        <div className="space-y-3">
+          <div className="flex justify-between items-center gap-2">
+            {/* Filter Button — opens the bottom sheet */}
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${showFilters || activeFilterCount > 0
-                ? 'bg-brand-purple/20 text-brand-purple border-brand-purple/30'
-                : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white'
+              onClick={openSheet}
+              className={`flex items-center gap-2 h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border active:scale-95 ${activeFilterCount > 0
+                ? 'bg-brand-green/15 text-brand-green border-brand-green/40'
+                : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               <i className="fa-solid fa-sliders"></i>
               {t('marketplace.filters') || 'Filters'}
               {activeFilterCount > 0 && (
-                <span className="ml-1 w-4 h-4 rounded-full bg-brand-purple text-white text-[8px] flex items-center justify-center">
+                <span className="w-4 h-4 rounded-full bg-brand-green text-brand-darker text-[8px] font-black flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}
             </button>
 
             {/* Sort Options */}
-            <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
+            <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
               {([
                 { id: 'best_deals', label: t('marketplace.deals') },
                 { id: 'newest', label: t('marketplace.new') },
@@ -180,7 +265,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 <button
                   key={sort.id}
                   onClick={() => setSortOrder(sort.id)}
-                  className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase transition-all ${sortOrder === sort.id ? 'bg-brand-cyan text-brand-darker shadow-md' : 'text-slate-500 hover:text-white'}`}
+                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase transition-all ${sortOrder === sort.id ? 'bg-brand-cyan text-brand-darker shadow-md' : 'text-slate-500 hover:text-white'}`}
                 >
                   {sort.label}
                 </button>
@@ -188,88 +273,17 @@ const Marketplace: React.FC<MarketplaceProps> = ({
             </div>
           </div>
 
-          {/* Filter Panel */}
-          {showFilters && (
-            <div className="mt-4 p-4 bg-slate-900 rounded-xl border border-white/10 space-y-4 animate-fadeIn">
-              {/* Game Filter */}
-              <div>
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.game') || 'Game'}</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[{ id: 'all', shortName: t('marketplace.allGames') || 'All' }, ...gamesAvailableInLanguage(selectedLanguage)].map(g => (
-                    <button
-                      key={g.id}
-                      onClick={() => setSelectedGame(g.id)}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedGame === g.id
-                        ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
-                        }`}
-                    >
-                      {g.shortName}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Language Filter */}
-              <div>
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">{t('marketplace.language') || 'Language'}</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: 'all', label: t('marketplace.allLanguages') || 'All' },
-                    { id: 'en', label: t('marketplace.english') || 'English' },
-                    { id: 'jp', label: t('marketplace.japanese') || 'Japanese' },
-                    { id: 'th', label: t('marketplace.thai') || 'Thai' }
-                  ].map(lang => (
-                    <button
-                      key={lang.id}
-                      onClick={() => {
-                        setSelectedLanguage(lang.id);
-                        // The selected game may not exist in the new language
-                        // (its chip is about to disappear) — fall back to all.
-                        if (selectedGame !== 'all' && !gamesAvailableInLanguage(lang.id).some(g => g.id === selectedGame)) {
-                          setSelectedGame('all');
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all border ${selectedLanguage === lang.id
-                        ? 'bg-brand-green/20 text-brand-green border-brand-green/30'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
-                        }`}
-                    >
-                      {lang.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Price Range */}
-              <div>
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">
-                  {t('marketplace.priceRange') || 'Price Range'}: {CURRENCY_SYMBOLS[currency] || currency}{priceRange[0].toLocaleString()} - {CURRENCY_SYMBOLS[currency] || currency}{priceRange[1].toLocaleString()}
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range" min="0" max="100000" step="500"
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([Math.min(Number(e.target.value), priceRange[1] - 500), priceRange[1]])}
-                    className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-cyan"
-                  />
-                  <input
-                    type="range" min="0" max="100000" step="500"
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], Math.max(Number(e.target.value), priceRange[0] + 500)])}
-                    className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-purple"
-                  />
-                </div>
-              </div>
-
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, 100000]); }}
-                  className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                >
-                  <i className="fa-solid fa-xmark mr-2"></i>
-                  {t('marketplace.clearFilters') || 'Clear All Filters'}
-                </button>
+          {/* Applied filters — removable without reopening the sheet */}
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto -mx-6 px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {selectedGame !== 'all' && (
+                <AppliedChip label={getGame(selectedGame).shortName} onRemove={() => setSelectedGame('all')} />
+              )}
+              {selectedLanguage !== 'all' && (
+                <AppliedChip label={languageLabel(selectedLanguage)} onRemove={() => setSelectedLanguage('all')} />
+              )}
+              {(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
+                <AppliedChip label={priceRangeLabel(priceRange)} onRemove={() => setPriceRange([0, PRICE_MAX])} />
               )}
             </div>
           )}
@@ -400,7 +414,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">Signal Lost</h3>
               <p className="text-slate-500 text-xs">No active listings found in this sector.</p>
               <button
-                onClick={() => { setSelectedLanguage('all'); setPriceRange([0, 100000]); setSearchQuery(''); }}
+                onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
               >
                 {t('marketplace.clearFilters') || 'Reset Filters'}
@@ -430,6 +444,164 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           )}
         </div>
       </div>
+
+      {/* Filter bottom sheet — portaled so the SPA shell's transforms/overflow
+          can't clip it. Stays mounted; open/close is pure CSS transitions with
+          `inert` gating interaction. Interactivity is state-driven on purpose:
+          exit-animation-driven unmounting (AnimatePresence-style) leaves an
+          invisible backdrop eating taps whenever the animation clock is
+          throttled (hidden/backgrounded tab), because the exit never finishes. */}
+      {mounted && createPortal(
+        <>
+          <div
+            onClick={() => setSheetOpen(false)}
+            inert={!sheetOpen}
+            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
+            style={{ opacity: sheetOpen ? 1 : 0, transition: 'opacity 300ms ease' }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('marketplace.filters') || 'Filters'}
+            inert={!sheetOpen}
+            className="fixed inset-x-0 bottom-0 z-[61] bg-slate-900 rounded-t-[1.75rem] border-t border-x border-white/10 shadow-2xl shadow-black/60 max-h-[85dvh] flex flex-col"
+            style={{
+              transform: sheetOpen ? 'translateY(0%)' : 'translateY(100%)',
+              transition: 'transform 350ms cubic-bezier(0.32, 0.72, 0, 1)',
+            }}
+          >
+                {/* Handle — also a tap target to dismiss */}
+                <div onClick={() => setSheetOpen(false)} className="pt-3 pb-1 flex justify-center flex-shrink-0">
+                  <div className="w-10 h-1 rounded-full bg-white/20" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 pt-1 pb-4 flex-shrink-0">
+                  <h3 className="text-white text-base font-black uppercase tracking-widest">
+                    {t('marketplace.filters') || 'Filters'}
+                  </h3>
+                  <button
+                    onClick={() => { setDraftGame('all'); setDraftLanguage('all'); setDraftPrice([0, PRICE_MAX]); }}
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+                  >
+                    {t('marketplace.reset') || 'Reset'}
+                  </button>
+                </div>
+
+                {/* Sections */}
+                <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-6 space-y-7">
+                  {/* Game */}
+                  <section>
+                    <label className={sheetSectionLabelClass}>{t('marketplace.game') || 'Card Game'}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[{ id: 'all', shortName: t('marketplace.allGames') || 'All Games' }, ...gamesAvailableInLanguage(draftLanguage)].map(g => (
+                        <button key={g.id} onClick={() => setDraftGame(g.id)} className={sheetChipClass(draftGame === g.id)}>
+                          {draftGame === g.id && <i className="fa-solid fa-check text-[10px]"></i>}
+                          {g.shortName}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* Language */}
+                  <section>
+                    <label className={sheetSectionLabelClass}>{t('marketplace.language') || 'Language'}</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setDraftLanguage('all')} className={sheetChipClass(draftLanguage === 'all')}>
+                        <i className="fa-solid fa-globe text-[11px]"></i>
+                        {t('marketplace.allLanguages') || 'All'}
+                      </button>
+                      {CATALOG_LANGUAGES.map(lang => (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setDraftLanguage(lang.code);
+                            // The drafted game may not exist in the new language
+                            // (its chip is about to disappear) — fall back to all.
+                            if (draftGame !== 'all' && !gamesAvailableInLanguage(lang.code).some(g => g.id === draftGame)) {
+                              setDraftGame('all');
+                            }
+                          }}
+                          className={sheetChipClass(draftLanguage === lang.code)}
+                        >
+                          <img src={lang.flagUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
+                          {languageLabel(lang.code)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* Price */}
+                  <section>
+                    <label className={sheetSectionLabelClass}>{t('marketplace.priceRange') || 'Price Range'}</label>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {PRICE_PRESETS.map(([min, max]) => (
+                        <button
+                          key={`${min}-${max}`}
+                          onClick={() => setDraftPrice([min, max])}
+                          className={sheetChipClass(draftPrice[0] === min && draftPrice[1] === max)}
+                        >
+                          {priceRangeLabel([min, max])}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5 block">
+                          {t('marketplace.minPrice') || 'Min'}
+                        </span>
+                        <div className="flex items-center h-11 rounded-xl bg-white/5 border border-white/10 focus-within:border-brand-green/50 px-3.5 transition-colors">
+                          <span className="text-slate-500 text-xs font-bold mr-1.5">{currencySymbol}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="0"
+                            value={draftPrice[0] === 0 ? '' : draftPrice[0]}
+                            onChange={(e) => {
+                              const n = Number(e.target.value.replace(/\D/g, '')) || 0;
+                              setDraftPrice([n, draftPrice[1]]);
+                            }}
+                            className="w-full bg-transparent text-white text-sm font-bold focus:outline-none placeholder:text-slate-600"
+                          />
+                        </div>
+                      </div>
+                      <span className="text-slate-600 font-bold mt-5">–</span>
+                      <div className="flex-1">
+                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5 block">
+                          {t('marketplace.maxPrice') || 'Max'}
+                        </span>
+                        <div className="flex items-center h-11 rounded-xl bg-white/5 border border-white/10 focus-within:border-brand-green/50 px-3.5 transition-colors">
+                          <span className="text-slate-500 text-xs font-bold mr-1.5">{currencySymbol}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="∞"
+                            value={draftPrice[1] === PRICE_MAX ? '' : draftPrice[1]}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, '');
+                              setDraftPrice([draftPrice[0], raw === '' ? PRICE_MAX : Number(raw)]);
+                            }}
+                            className="w-full bg-transparent text-white text-sm font-bold focus:outline-none placeholder:text-slate-600"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                {/* Apply */}
+                <div className="flex-shrink-0 px-6 pt-4 border-t border-white/10 bg-slate-900" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
+                  <button
+                    onClick={applyDrafts}
+                    className="w-full h-12 rounded-xl bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] text-xs hover:bg-brand-green/90 active:scale-[0.98] transition-all shadow-lg shadow-brand-green/20"
+                  >
+                    {t('marketplace.showResults') || 'Show Results'}
+                  </button>
+                </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 };

@@ -113,6 +113,12 @@ export const GAMES: GameConfig[] = [
   },
 ];
 
+/**
+ * Every catalog language with its flag, for filters that aren't scoped to a
+ * single game (e.g. the Marketplace filter sheet's language pills).
+ */
+export const CATALOG_LANGUAGES: GameLanguage[] = [LANG_EN, LANG_JP, LANG_TH];
+
 export const DEFAULT_GAME: GameId = 'pokemon';
 
 export function getGame(id: string | null | undefined): GameConfig {

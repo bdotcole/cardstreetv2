@@ -51,7 +51,12 @@
         "newest": "Newest",
         "priceHigh": "Price: High",
         "priceLow": "Price: Low",
-        "clearFilters": "Clear Filters"
+        "clearFilters": "Clear Filters",
+        "showResults": "Show Results",
+        "reset": "Reset",
+        "anyPrice": "Any",
+        "minPrice": "Min",
+        "maxPrice": "Max"
     },
     "common": {
         "loading": "Loading...",
