@@ -21,6 +21,18 @@ export async function generateMetadata(): Promise<Metadata> {
         lang === 'EN'
             ? 'Buy, sell, and collect Pokémon, One Piece, Yu-Gi-Oh!, Magic: The Gathering, Lorcana, and Riftbound cards in Thailand. AI card scanning, live market prices, verified sellers, nationwide shipping.'
             : 'ซื้อ ขาย และสะสมการ์ดโปเกมอน การ์ดวันพีช การ์ดยูกิ Magic, Lorcana และ Riftbound ในประเทศไทย สแกนการ์ดด้วย AI เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ส่งไวทั่วไทย'
+
+    // Search-engine site-verification tokens. Set these in Vercel env to verify
+    // ownership via the meta-tag method (no code change / redeploy of source):
+    //   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION — the token from Google Search
+    //     Console's "HTML tag" method (the content="..." value, not the whole tag).
+    //   NEXT_PUBLIC_BING_SITE_VERIFICATION — the token from Bing Webmaster Tools'
+    //     "meta tag" (msvalidate.01) option.
+    // Both render nothing until set, so this is inert by default. GSC can also be
+    // verified with zero config via the existing Google Analytics tag.
+    const googleVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    const bingVerification = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+
     return {
         // Absolute base so the auto-generated OG image + canonical URLs resolve for
         // crawlers (LINE / Facebook / Messenger, where Thai reshare traffic flows).
@@ -48,6 +60,12 @@ export async function generateMetadata(): Promise<Metadata> {
             title,
             description,
         },
+        ...((googleVerification || bingVerification) && {
+            verification: {
+                ...(googleVerification ? { google: googleVerification } : {}),
+                ...(bingVerification ? { other: { 'msvalidate.01': bingVerification } } : {}),
+            },
+        }),
     }
 }
 
