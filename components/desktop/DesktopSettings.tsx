@@ -198,6 +198,17 @@ export default function DesktopSettings() {
             const bustUrl = `${publicUrl}?v=${Date.now()}`;
             const { error: updErr } = await supabase.auth.updateUser({ data: { avatar_url: bustUrl } });
             if (updErr) throw updErr;
+            // Mirror onto the profiles table so the seller/shop pages (which read
+            // profiles.avatar_url via the public_profiles view — seeded once at
+            // signup from the OAuth/Gmail picture) reflect the new photo instead
+            // of the stale Gmail avatar. Fail-soft: user_metadata already updated.
+            const { error: profileAvatarError } = await supabase
+                .from('profiles')
+                .update({ avatar_url: bustUrl })
+                .eq('id', user.id);
+            if (profileAvatarError) {
+                console.error('Failed to mirror avatar to profiles table:', profileAvatarError);
+            }
             setAvatarOverride(bustUrl);
             showToast(t('desktop.settings.avatarUpdated'), 'success');
         } catch (err: any) {

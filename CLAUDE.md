@@ -1,6 +1,6 @@
 # CardStreet TCG — developer notes
 
-Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai market with English, Thai, and Japanese card catalogs. Web + Android (via Capacitor) + separate Expo companion app.
+Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai market with English, Thai, and Japanese card catalogs. Web + Android (via Capacitor). (A separate Expo/React Native companion app, `cardstreet-mobile/`, is **no longer used** as of 2026-07-16 — see the repo-layout note; don't spend effort keeping it in sync.)
 
 ## Stack
 
@@ -20,7 +20,7 @@ Marketplace for trading-card games (primarily Pokémon TCG), serving the Thai ma
 - `lib/` — Pure utilities, contexts, hooks, Supabase clients, the dHash util, the card mapper.
 - `supabase/migrations/` — Timestamped SQL migrations (`YYYYMMDD_short_description.sql`).
 - `scripts/` — One-off Node scripts. `.mjs` for ESM with raw fs + supabase-js; `.ts` for tsx-runnable.
-- `cardstreet-mobile/` — Separate Expo + React Native companion app. Hits the same `/api` endpoints via `EXPO_PUBLIC_API_URL`. No shared user-settings context yet.
+- `cardstreet-mobile/` — **DEPRECATED / no longer used (as of 2026-07-16).** Formerly a separate Expo + React Native companion app that hit the same `/api` endpoints via `EXPO_PUBLIC_API_URL`. The app is retired; **ignore the "keep the mobile mapper in sync" and mobile-performance notes elsewhere in this doc — they no longer apply.** Directory kept for history only; don't add features to it or maintain parity with the web app.
 
 ## Supabase clients
 
@@ -60,7 +60,7 @@ Each row may have `image_large`, `image_small`, and `raw_data` (full original AP
 - **pokemontcg.io**: `raw_data.tcgplayer.prices.<printing>.{market,mid,low}`
 - **TCGdex**: `raw_data.tcgplayer.<printing>.{marketPrice,midPrice,lowPrice}` (printing keys sit directly on `tcgplayer` alongside `unit`/`updated`)
 
-TCGdex-sourced EN sets (e.g. me03, me04) rendered priceless for a while because only the first shape was read. The mobile mapper in `cardstreet-mobile/services/pokemonService.ts` has the same helper — **keep the two in sync**. To instead materialize TCGdex prices into `market_values` rows (needed for downstream Thai derivation), use `scripts/price-en-from-rawdata.mjs`.
+TCGdex-sourced EN sets (e.g. me03, me04) rendered priceless for a while because only the first shape was read. The (retired) mobile mapper in `cardstreet-mobile/services/pokemonService.ts` had the same helper; syncing it is **no longer required** (the Expo app is deprecated — see the `cardstreet-mobile/` repo-layout note). To instead materialize TCGdex prices into `market_values` rows (needed for downstream Thai derivation), use `scripts/price-en-from-rawdata.mjs`.
 
 ## Card images (self-hosted)
 

@@ -823,6 +823,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       const { error: updateError } = await supabase.auth.updateUser({ data: { avatar_url: bustUrl } });
       if (updateError) throw updateError;
 
+      // Mirror the URL onto the profiles table too. The seller/shop pages read
+      // profiles.avatar_url (via the public_profiles view), which is otherwise
+      // only seeded once at signup from the OAuth (Gmail) picture — so without
+      // this, the shop kept showing the stale Gmail avatar. Fail-soft: the
+      // user's own profile already reflects the new photo via user_metadata.
+      const { error: profileAvatarError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: bustUrl })
+        .eq('id', user.id);
+      if (profileAvatarError) {
+        console.error('Failed to mirror avatar to profiles table:', profileAvatarError);
+      }
+
       setAvatarOverride(bustUrl);
       showToast('Profile photo updated', 'success');
     } catch (err: any) {
