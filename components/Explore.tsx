@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { pokemonService, ApiSet, SealedProduct } from '../services/pokemonService';
+import { marketplaceService } from '@/services/marketplaceService';
 import { Card } from '../types';
 import SealedProductDetail from './SealedProductDetail';
 import { CURRENCY_SYMBOLS } from '@/constants';
@@ -191,12 +192,33 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
+  // Active listings for the cards currently on screen, fetched per card-id
+  // batch. localListings (the 50 newest sitewide) alone is not enough: any
+  // listing older than that window would lose its "Buy from" overlay here
+  // while still being live in the marketplace tab.
+  const [gridListings, setGridListings] = useState<Array<{ id: string; card_id: string; price: number }>>([]);
+  const gridListingsReqIdRef = useRef(0);
+  useEffect(() => {
+    const ids = cards.map(c => c.id).filter(Boolean);
+    const myReq = ++gridListingsReqIdRef.current;
+    if (ids.length === 0) { setGridListings([]); return; }
+    marketplaceService.getActiveListingsForCards(ids).then(rows => {
+      if (myReq !== gridListingsReqIdRef.current) return;
+      setGridListings(rows);
+    });
+  }, [cards]);
+
   // ── O(1) listing lookups — precomputed Map instead of O(n) .filter() per row ─
   const listingMap = useMemo(() => {
     const map = new Map<string, { count: number; minPrice: number }>();
-    for (const l of localListings) {
+    const seen = new Set<string>();
+    for (const l of [...gridListings, ...localListings] as any[]) {
       const key = l.card_id || l.card_data?.id;
       if (!key) continue;
+      if (l.id) {
+        if (seen.has(l.id)) continue;
+        seen.add(l.id);
+      }
       const existing = map.get(key);
       if (existing) {
         existing.count++;
@@ -206,7 +228,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       }
     }
     return map;
-  }, [localListings]);
+  }, [localListings, gridListings]);
 
   // Handle scroll for back-to-top button
   const handleScroll = () => {

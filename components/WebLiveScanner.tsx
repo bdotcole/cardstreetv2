@@ -63,6 +63,11 @@ const DETECT_TIMEOUT_MS = 2_500;
 const FALLBACK_FRAMES_REQUIRED = 3;
 const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still (fallback path only).
 
+// Manual shutter: reuse the detector's card crop if it was seen within this window. The
+// overlay the user is confirming lags detection by at most a few frames, so a fresh box is
+// exactly what they're aiming at; anything older risks capturing a moved camera.
+const SHUTTER_BOX_FRESH_MS = 1_000;
+
 interface Box { x: number; y: number; w: number; h: number; score?: number; }
 
 // A detected rectangle plus why it is / isn't a usable lock target:
@@ -95,6 +100,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const centerCountRef = useRef(0);                              // consecutive sharp+stable frames (fallback path)
     const lastDetectAtRef = useRef(0);                             // timestamp of last successful detection
     const captureCropRef = useRef<Box | null>(null);              // crop (video px) to grab on the next trigger; null = use center crop
+    const lastCardCropRef = useRef<{ crop: Box; at: number } | null>(null); // most recent card-shaped detection (video px), for the manual shutter
     const isProcessingRef = useRef(false);
     const streamRef = useRef<MediaStream | null>(null);
 
@@ -194,6 +200,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 // downscale hides blur). Relax the floor once a card has been held a while so
                 // fixed-focus cameras that never hit the sharp threshold aren't stranded.
                 const videoBox = bufferBoxToVideo(box, dw, dh, vis);
+                lastCardCropRef.current = { crop: padCrop(videoBox, 0.04, vis.Vw, vis.Vh), at: now };
                 const sharpness = regionSharpness(video, videoBox, fcanvas);
                 const graced = now - firstDetectAtRef.current > FOCUS_GRACE_MS;
                 const focusFloor = graced ? SHARPNESS_MIN * FOCUS_GRACE_FACTOR : SHARPNESS_MIN;
@@ -370,6 +377,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
         prevBoxRef.current = null;
         smoothedBoxRef.current = null;
         captureCropRef.current = null;
+        lastCardCropRef.current = null;
         lastDetectAtRef.current = Date.now();
         setIsLocked(false);
         setStatusHint('searching');
@@ -379,8 +387,13 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     };
 
     const onShutter = () => {
-        // Manual override: grab whatever the camera currently sees (center crop).
-        captureCropRef.current = null;
+        // Manual override: the user is confirming what they see. If the detector has a
+        // fresh card-shaped box (the snapped overlay), capture that card — not the fixed
+        // center guide, which on a cluttered table pulls in neighboring cards and can even
+        // clip the target. Only fall back to the center crop when nothing card-shaped has
+        // been seen recently.
+        const last = lastCardCropRef.current;
+        captureCropRef.current = last && Date.now() - last.at <= SHUTTER_BOX_FRESH_MS ? last.crop : null;
         triggerScan();
     };
 

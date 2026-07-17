@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Card } from '../types';
 import PriceHistoryChart from './PriceHistoryChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { marketplaceService } from '@/services/marketplaceService';
 
 interface CardDetailsProps {
   card: Card;
@@ -63,6 +64,33 @@ const CardDetails: React.FC<CardDetailsProps> = ({
       .catch(() => { if (!cancelled) setGradedPrices([]); });
     return () => { cancelled = true; };
   }, [card?.id]);
+
+  // Active listings for THIS card, fetched from the DB. The `listings` prop is
+  // the 50 newest listings sitewide (Explore's price overlay cache) — a listing
+  // older than that window is still live but absent from it, which used to make
+  // this page claim "no listings" while the marketplace tab showed the card for
+  // sale. The prop is kept as an instant first paint and merged in below.
+  const [fetchedListings, setFetchedListings] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (!card?.id || isVaultView) return;
+    let cancelled = false;
+    setFetchedListings(null);
+    marketplaceService.getListingsForCard(card.id)
+      .then(rows => { if (!cancelled) setFetchedListings(rows); })
+      .catch(() => { if (!cancelled) setFetchedListings(null); });
+    return () => { cancelled = true; };
+  }, [card?.id, isVaultView]);
+
+  const cardListings = useMemo(() => {
+    const matchesCard = (l: any) =>
+      l.card_data?.id === card.id || (l.card_data?.name === card.name && l.card_data?.set === card.set);
+    const local = listings.filter(matchesCard);
+    if (!fetchedListings) return local;
+    // The per-card fetch joins on exact card_id; the prop's name+set fallback
+    // can still catch a listing created against a twin catalog row, so merge.
+    const seen = new Set(fetchedListings.map((l: any) => l.id));
+    return [...fetchedListings, ...local.filter((l: any) => !seen.has(l.id))];
+  }, [fetchedListings, listings, card.id, card.name, card.set]);
 
   // Thai Price Adjustment Logic
   const isThaiSet = THAI_SETS.some(s => card.set.includes(s) || s.includes(card.set));
@@ -187,9 +215,8 @@ const CardDetails: React.FC<CardDetailsProps> = ({
               <div className="space-y-4">
                 <h3 className="font-black italic skew-x-[-10deg] text-white text-sm uppercase tracking-wider px-1 border-l-4 border-brand-green pl-3">{isThai ? 'สถานะการวางขาย' : 'Marketplace Listings'}</h3>
                 <div className="space-y-2">
-                  {listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set)).length > 0 ? (
-                    listings
-                      .filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set))
+                  {cardListings.length > 0 ? (
+                    cardListings
                       .map((listing, idx) => (
                         <div key={idx} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:border-brand-green/30 transition-all">
                           <div className="flex items-center gap-3">
@@ -312,8 +339,6 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           </button>
           <button
             onClick={() => {
-              // Check if there are any listings for this card
-              const cardListings = listings.filter(l => l.card_data.id === card.id || (l.card_data.name === card.name && l.card_data.set === card.set));
               if (cardListings.length > 0 && onShopNow) {
                 onShopNow();
               } else if (onAddToBuylist) {

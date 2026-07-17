@@ -319,6 +319,39 @@ export const marketplaceService = {
     },
 
     /**
+     * Lightweight active-listing rows for a batch of catalog card ids. Powers
+     * the Explore grid's "Buy from ฿…" overlay: the grid used to key off the
+     * 50 newest listings sitewide, so any listing older than that window
+     * silently lost its buy button even while still active. Chunked so each
+     * PostgREST `in` filter stays well under URL-length limits.
+     */
+    async getActiveListingsForCards(cardIds: string[]): Promise<Array<{ id: string; card_id: string; price: number }>> {
+        if (cardIds.length === 0) return [];
+        const supabase = createClient();
+        const CHUNK = 150;
+        const chunks: string[][] = [];
+        for (let i = 0; i < cardIds.length; i += CHUNK) chunks.push(cardIds.slice(i, i + CHUNK));
+        try {
+            const results = await Promise.all(chunks.map(chunk =>
+                supabase
+                    .from('listings')
+                    .select('id, card_id, price')
+                    .eq('status', 'active')
+                    .in('card_id', chunk)
+            ));
+            const rows: Array<{ id: string; card_id: string; price: number }> = [];
+            for (const r of results) {
+                if (r.error) throw r.error;
+                rows.push(...((r.data || []) as Array<{ id: string; card_id: string; price: number }>));
+            }
+            return rows;
+        } catch (error) {
+            console.error('Error fetching listings for cards:', error);
+            return [];
+        }
+    },
+
+    /**
      * Fetch one seller's active listings, newest first. Used by the mobile
      * seller profile's Shop tab (the desktop shop page has its own
      * server-side query in lib/sellerPageData.ts).
