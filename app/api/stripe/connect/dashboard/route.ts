@@ -6,11 +6,18 @@
  * Two account shapes coexist:
  *   - Legacy Express accounts (US back-compat) have an Express Dashboard, so
  *     we hand back a single-use, fast-expiring `createLoginLink` URL.
- *   - Current TH accounts are full-dashboard v2 controller accounts. They have
- *     NO Express Dashboard, so createLoginLink fails with "...does not have
- *     access to the Express Dashboard." For these we fall back to a hosted
- *     AccountLink (`account_update` once onboarding is done, `account_onboarding`
- *     otherwise) so the seller can still review/update bank + identity info.
+ *   - Current TH accounts are full-dashboard v2 controller accounts
+ *     (`controller.requirement_collection = 'stripe'`). They have NO Express
+ *     Dashboard, so createLoginLink fails with "...does not have access to the
+ *     Express Dashboard." For these:
+ *       - if onboarding is already submitted, the seller owns a real Stripe
+ *         Dashboard login, so we send them to dashboard.stripe.com to review
+ *         bank + identity info;
+ *       - otherwise we hand back an `account_onboarding` AccountLink to surface
+ *         currently-due requirements.
+ *     We must NOT use an `account_update` AccountLink here: Stripe rejects it
+ *     for stripe-requirement-collection accounts ("You cannot create
+ *     `account_update` type Account Links for this account").
  *
  * Dual-platform: uses the seller's persisted `stripe_region` to pick which
  * Stripe client issues the link.
@@ -109,23 +116,30 @@ export async function POST(request: Request) {
         } catch (loginErr) {
             if (!isNoExpressDashboardError(loginErr)) throw loginErr;
 
-            // Full-dashboard controller account: no Express login link. Send the
-            // seller into the hosted onboarding/update flow instead. account_update
-            // is only valid once onboarding has been submitted; before that we
-            // must use account_onboarding to surface currently-due requirements.
+            // Full-dashboard controller account: no Express login link. Stripe
+            // manages this account's requirements (requirement_collection =
+            // 'stripe'), so the ONLY valid AccountLink type is
+            // account_onboarding — account_update is rejected outright.
+            const account = await stripe.accounts.retrieve(accountId);
+
+            // Onboarding already submitted (the common case — this is what an
+            // ACTIVE seller hits): they own a real Stripe Dashboard login, so
+            // send them straight to it to review/update bank + identity info.
+            if (account.details_submitted) {
+                return NextResponse.json({ url: 'https://dashboard.stripe.com' });
+            }
+
+            // Not yet submitted: surface currently-due requirements via a
+            // hosted onboarding link.
             const baseUrl = getAppBaseUrl();
             const returnUrl = bodyReturnUrl ?? `${baseUrl}/?stripe_connect=complete`;
             const refreshUrl = bodyRefreshUrl ?? `${baseUrl}/?stripe_connect=refresh`;
-
-            const account = await stripe.accounts.retrieve(accountId);
-            const linkType: 'account_update' | 'account_onboarding' =
-                account.details_submitted ? 'account_update' : 'account_onboarding';
 
             const accountLink = await stripe.accountLinks.create({
                 account: accountId,
                 return_url: returnUrl,
                 refresh_url: refreshUrl,
-                type: linkType,
+                type: 'account_onboarding',
             });
             return NextResponse.json({ url: accountLink.url });
         }
