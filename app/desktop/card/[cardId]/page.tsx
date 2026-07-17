@@ -5,6 +5,7 @@ import DesktopCardDetail from '@/components/desktop/DesktopCardDetail';
 import { getCardPageData } from '@/lib/desktopCardData';
 import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
+import { getGame } from '@/lib/games';
 import type { Card } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
@@ -60,18 +61,42 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
     };
 }
 
+// Merchant-listing fields GSC flags as missing when absent from offers.
+// Shipping is Flash Express within Thailand, quoted per order at checkout —
+// there is no flat rate to declare, so only the destination is stated.
+// CardStreet has no change-of-mind returns; damaged / not-as-described cases
+// are mediated refunds under buyer protection, which is dispute resolution,
+// not a merchant return policy — so returns are declared not permitted.
+const OFFER_SHIPPING_DETAILS = {
+    '@type': 'OfferShippingDetails',
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'TH' },
+};
+const OFFER_RETURN_POLICY = {
+    '@type': 'MerchantReturnPolicy',
+    applicableCountry: 'TH',
+    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+};
+
 // schema.org Product — eligible for rich results and quotable by AI answer
 // engines. Offers come from active listings (an AggregateOffer) or fall back to
-// the catalog market value.
-function buildProductJsonLd(card: Card, listings: MarketplaceListing[]) {
+// the catalog market value. Returns null when there is no price signal at all:
+// a Product with no offers/review/aggregateRating is a critical GSC error, so
+// those pages ship no Product block rather than a broken one.
+function buildProductJsonLd(card: Card, listings: MarketplaceListing[]): Record<string, unknown> | null {
+    if (!listings.length && !(card.marketPrice > 0)) return null;
+
     const image = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
+    const line = setLine(card);
     const jsonLd: Record<string, unknown> = {
         '@context': 'https://schema.org',
         '@type': 'Product',
         name: card.name,
+        sku: card.id,
+        url: `${BASE_URL}/card/${card.id}`,
+        description: `${card.name} trading card${line ? ` (${line})` : ''}. Buy and sell on CardStreet with live market prices, verified sellers, and nationwide delivery in Thailand.`,
         category: 'Trading Card',
         ...(image ? { image: [image] } : {}),
-        ...(card.set ? { brand: { '@type': 'Brand', name: card.set } } : {}),
+        brand: { '@type': 'Brand', name: getGame(card.game).name },
     };
     if (listings.length) {
         const prices = listings.map((l) => l.price);
@@ -82,13 +107,17 @@ function buildProductJsonLd(card: Card, listings: MarketplaceListing[]) {
             highPrice: Math.max(...prices),
             offerCount: listings.length,
             availability: 'https://schema.org/InStock',
+            shippingDetails: OFFER_SHIPPING_DETAILS,
+            hasMerchantReturnPolicy: OFFER_RETURN_POLICY,
         };
-    } else if (card.marketPrice > 0) {
+    } else {
         jsonLd.offers = {
             '@type': 'Offer',
             priceCurrency: 'THB',
             price: Math.round(card.marketPrice),
             availability: 'https://schema.org/OutOfStock',
+            shippingDetails: OFFER_SHIPPING_DETAILS,
+            hasMerchantReturnPolicy: OFFER_RETURN_POLICY,
         };
     }
     return jsonLd;
@@ -99,12 +128,16 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
     const { card, listings, setId } = await getCardPageData(cardId);
     if (!card) notFound();
 
+    const productJsonLd = buildProductJsonLd(card, listings);
+
     return (
         <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductJsonLd(card, listings)) }}
-            />
+            {productJsonLd && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+                />
+            )}
             <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} setId={setId} />
         </>
     );
