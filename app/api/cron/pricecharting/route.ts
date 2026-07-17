@@ -6,6 +6,7 @@ import {
     centsToUsd,
     thaiSealedEstimateThb,
 } from '@/lib/pricecharting';
+import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 
 // Weekly PriceCharting refresh. Graded + sealed prices move slowly, so this only
 // re-fetches a bounded, stalest-first slice each run (by PriceCharting product id,
@@ -133,12 +134,18 @@ export async function GET(request: NextRequest) {
                 // estimate. sealed_products has no `source` column, so guard by the
                 // presence of a market_value_sales row (sealed listing card_id ===
                 // sealed_products.id, e.g. 'pc-<...>').
+                //
+                // Sub-floor sales are admin seed listings and never set a price
+                // (lib/pricingFloors.ts), so they must not block the estimate either —
+                // otherwise a 1-baht seed sale would freeze the product on whatever
+                // stale estimate it happened to carry.
                 const { data: sold } = await supabase
                     .from('market_value_sales')
                     .select('order_id')
                     .eq('card_id', s.id)
                     .eq('language', 'th')
                     .eq('is_sealed', true)
+                    .gte('sale_amount_thb', PUBLIC_MIN_LISTING_PRICE_THB)
                     .limit(1)
                     .maybeSingle();
                 if (sold) { continue; }

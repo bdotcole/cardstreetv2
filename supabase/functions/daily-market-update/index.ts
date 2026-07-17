@@ -1,6 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
+// Minimum sale price (THB) that may teach market value. Mirrors
+// PUBLIC_MIN_LISTING_PRICE_THB in lib/pricingFloors.ts -- an edge function cannot
+// import from the Next.js tree, so change both together.
+const PUBLIC_MIN_LISTING_PRICE_THB = 20
+
 // Interfaces
 interface Card {
     id: string;
@@ -395,12 +400,20 @@ serve(async (req) => {
                     }
 
                 } else {
-                    // Thai Card: First check Cardstreet internal sales
+                    // Thai Card: First check Cardstreet internal sales.
+                    //
+                    // Admins may list below the public floor to seed the marketplace
+                    // (a 1-baht test listing), so a sub-floor sold listing is not a
+                    // market signal -- no ordinary seller can list that low. Excluded
+                    // here for the same reason recompute_internal_price() excludes it
+                    // (mirrors PUBLIC_MIN_LISTING_PRICE_THB in lib/pricingFloors.ts;
+                    // edge functions cannot import from the Next.js tree).
                     const { data: soldListings } = await supabase
                         .from('listings')
                         .select('price')
                         .eq('card_id', card.id)
-                        .eq('status', 'sold');
+                        .eq('status', 'sold')
+                        .gte('price', PUBLIC_MIN_LISTING_PRICE_THB);
 
                     if (soldListings && soldListings.length > 0) {
                         const sum = soldListings.reduce((acc, curr) => acc + Number(curr.price), 0);

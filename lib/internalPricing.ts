@@ -7,12 +7,18 @@
  * condition key + THB->USD conversion and drives the record/recompute from the
  * fulfillment path.
  *
+ * Not every recorded sale prices a card: sales below the public listing floor are
+ * admin seed listings and are excluded from every recompute (lib/pricingFloors.ts).
+ * The filter lives in the DB functions, so it applies to sale rows written by any
+ * version of this module.
+ *
  * Server-only (imports the service-role Supabase client from the caller). Never
  * import from a 'use client' module.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { EXCHANGE_RATES } from '@/constants';
+import { PUBLIC_MIN_LISTING_PRICE_THB, isMarketSignalPriceThb } from '@/lib/pricingFloors';
 
 // Same constant the display mapper converts back with (cardMapper.ts:6), so a
 // THB sale -> USD store -> THB display round-trip is lossless in aggregate.
@@ -114,6 +120,18 @@ export async function recordInternalSales(
 
     const thb = Number(order.total_amount);
     if (!(thb > 0)) continue; // reject 0 / negative / NaN
+
+    // Admin seed sales (below the public listing floor) are recorded for the audit
+    // trail but must never move a price -- see lib/pricingFloors.ts. The DB recompute
+    // is the authority and filters on the floor itself, so this is a log-and-continue,
+    // not the enforcement point: the recompute still runs, because dropping a sub-floor
+    // sale into a key's history must leave that key's price unchanged, and running it
+    // also releases a key whose only sale was a seed sale.
+    if (!isMarketSignalPriceThb(thb)) {
+      console.log(
+        `[InternalPricing] sale ${order.id} at ฿${thb} is below the ฿${PUBLIC_MIN_LISTING_PRICE_THB} floor -- recorded, not priced`,
+      );
+    }
 
     const isSealed = listing.condition === 'Sealed';
     const cardId = listing.card_id as string;

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { usePremium } from '@/lib/hooks/usePremium';
+import { minListingPriceThb } from '@/lib/pricingFloors';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
@@ -25,9 +26,10 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   // Admins may seed the marketplace below the standard 20-baht floor (e.g. a
   // 1-baht test/seed listing); everyone else keeps the 20 minimum. This is UX
   // only -- usePremium fails closed, so a lookup miss safely keeps the 20 floor,
-  // and the server/DB independently enforce price > 0.
+  // and the server/DB independently enforce price > 0. A sub-floor sale never
+  // teaches market value (lib/pricingFloors.ts).
   const { isAdmin } = usePremium();
-  const minPrice = isAdmin ? 1 : 20;
+  const minPrice = minListingPriceThb(isAdmin);
   // Sealed products list factory-sealed only: condition is locked and grading
   // doesn't apply, so both sections are hidden below.
   const isSealed = !!card.isSealed;
