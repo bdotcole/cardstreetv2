@@ -62,14 +62,25 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
 }
 
 // Merchant-listing fields GSC flags as missing when absent from offers.
-// Shipping is Flash Express within Thailand, quoted per order at checkout —
-// there is no flat rate to declare, so only the destination is stated.
+// Shipping is Flash Express within Thailand, quoted live per order at checkout
+// (buyers pay the real route rate — intra-Bangkok ~฿28, upcountry ~฿90+), so
+// there is no fixed price to bill. Google's merchant spec still requires a
+// concrete shippingRate.value + deliveryTime, so we declare Flash's domestic
+// base rate (the ฿40 intra-city floor buyers start from) and its real handling
+// (seller dispatch, 1-2 days) / transit (1-3 days nationwide) windows. These
+// are the structured-data floor for rich results, not the amount charged.
 // CardStreet has no change-of-mind returns; damaged / not-as-described cases
 // are mediated refunds under buyer protection, which is dispute resolution,
 // not a merchant return policy — so returns are declared not permitted.
 const OFFER_SHIPPING_DETAILS = {
     '@type': 'OfferShippingDetails',
+    shippingRate: { '@type': 'MonetaryAmount', value: 40, currency: 'THB' },
     shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'TH' },
+    deliveryTime: {
+        '@type': 'ShippingDeliveryTime',
+        handlingTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 2, unitCode: 'DAY' },
+        transitTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 3, unitCode: 'DAY' },
+    },
 };
 const OFFER_RETURN_POLICY = {
     '@type': 'MerchantReturnPolicy',
