@@ -365,6 +365,32 @@
             "other": "Other"
         }
     },
+    "supportTickets": {
+        "title": "Support Tickets",
+        "newTicket": "New Ticket",
+        "subject": "Subject",
+        "subjectPlaceholder": "Brief summary of your issue",
+        "category": "Category",
+        "description": "Description",
+        "descriptionPlaceholder": "Describe your issue in detail...",
+        "submit": "Submit Ticket",
+        "cancel": "Cancel",
+        "successMessage": "Ticket submitted. Our team will reply here soon.",
+        "failed": "Failed to submit ticket. Please try again.",
+        "noTickets": "No support tickets yet",
+        "adminReply": "Reply from the CardStreet team",
+        "status": {
+            "open": "Open",
+            "inProgress": "In Progress",
+            "resolved": "Resolved"
+        },
+        "categories": {
+            "general": "General",
+            "technical": "Technical",
+            "billing": "Billing",
+            "cardValuation": "Card Valuation"
+        }
+    },
     "paymentFlow": {
         "signInRequired": "Please sign in with a full account to complete a purchase.",
         "signInToList": "Please sign in to list a card.",

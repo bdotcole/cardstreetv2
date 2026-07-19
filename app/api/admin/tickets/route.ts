@@ -52,6 +52,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'subject or description too long' }, { status: 400 })
     }
 
+    // Clamp to the DB CHECK constraint's allowed set so a bad value 400s
+    // here instead of surfacing as a constraint-violation 500.
+    const ALLOWED_CATEGORIES = ['Technical', 'Billing', 'Card Valuation', 'General']
+    const safeCategory = typeof category === 'string' && ALLOWED_CATEGORIES.includes(category.trim())
+        ? category.trim()
+        : 'General'
+
     const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('support_tickets')
@@ -59,7 +66,7 @@ export async function POST(request: Request) {
             user_id: user.id,
             subject: subject.trim(),
             description: description.trim(),
-            category: typeof category === 'string' && category.trim() ? category.trim() : 'General',
+            category: safeCategory,
         })
         .select()
         .single()

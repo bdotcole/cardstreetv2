@@ -12,6 +12,7 @@ import {
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
 import OffersInbox from './OffersInbox';
+import SupportTickets from './SupportTickets';
 import StripeConnectSection from './StripeConnectSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
@@ -1821,6 +1822,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 </button>
                 <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.helpSupport')}</h2>
               </div>
+
+              {/* In-app support tickets: submit + track replies without leaving the app */}
+              <SupportTickets />
 
               <div className="glass rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
                 {[
