@@ -14,25 +14,47 @@ interface StatCard {
     sub?: string
 }
 
+// An order counts as a sale once payment lands; pending_payment carts and
+// cancellations are excluded (see the abandoned-checkout phantom-sale fix).
+const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
+
 async function getOverviewStats() {
     const supabase = createAdminClient()
 
-    const [usersRes, partnersRes, ticketsRes, downloadsRes, reportsRes] = await Promise.all([
+    const [usersRes, collectionsRes, listingsRes, ticketsRes, reportsRes, requestsRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).not('partner_joined_at', 'is', null),
+        supabase.from('collection_items').select('id', { count: 'exact', head: true }),
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('support_tickets').select('id, status', { count: 'exact' }).neq('status', 'Resolved'),
-        supabase.from('profiles').select('total_downloads').not('partner_joined_at', 'is', null),
         supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
+        supabase.from('card_requests').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
     ])
 
-    const totalDownloads = (downloadsRes.data ?? []).reduce((s, p) => s + (p.total_downloads ?? 0), 0)
+    // Paid-order count + GMV. total_amount is the item value in baht (shipping
+    // fee is a separate column). Paged because a single select caps at 1000 rows.
+    const PAGE = 1000
+    let paidOrders = 0
+    let gmvBaht = 0
+    for (let from = 0; ; from += PAGE) {
+        const { data, count } = await supabase
+            .from('orders')
+            .select('total_amount', { count: 'exact' })
+            .in('status', PAID_ORDER_STATUSES)
+            .range(from, from + PAGE - 1)
+        if (count != null) paidOrders = count
+        for (const row of data ?? []) gmvBaht += Number(row.total_amount) || 0
+        if (!data || data.length < PAGE) break
+    }
 
     return {
         totalUsers: usersRes.count ?? 0,
-        activePartners: partnersRes.count ?? 0,
+        collectionItems: collectionsRes.count ?? 0,
+        activeListings: listingsRes.count ?? 0,
+        paidOrders,
+        gmvBaht,
         openTickets: ticketsRes.count ?? 0,
         openReports: reportsRes.count ?? 0,
-        totalDownloads,
+        openCardRequests: requestsRes.count ?? 0,
     }
 }
 
@@ -77,10 +99,13 @@ export default async function AdminOverviewPage() {
 
     const statCards: StatCard[] = [
         { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts' },
-        { label: 'Active Partners', value: stats.activePartners.toLocaleString(), icon: 'fa-solid fa-handshake', color: 'text-yellow-400', sub: 'With partner role' },
+        { label: 'Collections', value: stats.collectionItems.toLocaleString(), icon: 'fa-solid fa-layer-group', color: 'text-brand-purple', sub: 'Cards in collections' },
+        { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace' },
+        { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid and later' },
+        { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'Paid order value, excl. shipping' },
         { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention' },
         { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review' },
-        { label: 'Total Downloads', value: stats.totalDownloads.toLocaleString(), icon: 'fa-solid fa-download', color: 'text-brand-green', sub: 'Via partner QR codes' },
+        { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests' },
     ]
 
     return (

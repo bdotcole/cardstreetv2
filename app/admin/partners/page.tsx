@@ -83,6 +83,7 @@ export default function PartnersPage() {
     const [removing, setRemoving] = useState<string | null>(null)
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [appCampaign, setAppCampaign] = useState('')
+    const [stats, setStats] = useState<{ activePartners: number; totalDownloads: number } | null>(null)
 
     // Add Partner (pre-provisioned shop accounts for welcome packages)
     const [showAdd, setShowAdd] = useState(false)
@@ -139,6 +140,7 @@ export default function PartnersPage() {
             const data = await res.json()
             setPartners(data.users ?? [])
             setTotal(data.total ?? 0)
+            if (data.partnerStats) setStats(data.partnerStats)
         } finally {
             setLoading(false)
         }
@@ -224,7 +226,6 @@ export default function PartnersPage() {
     }
 
     const totalPages = Math.ceil(total / 50)
-    const totalDownloads = partners.reduce((s, p) => s + (p.total_downloads ?? 0), 0)
 
     return (
         <div className="space-y-6 animate-fadeIn">
@@ -232,7 +233,7 @@ export default function PartnersPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-xl font-black text-white italic">Partners</h1>
-                    <p className="text-slate-500 text-sm">{total.toLocaleString()} partners · {totalDownloads.toLocaleString()} total downloads</p>
+                    <p className="text-slate-500 text-sm">{total.toLocaleString()} partners</p>
                 </div>
                 <form onSubmit={handleSearch} className="flex gap-2">
                     <input
@@ -300,6 +301,26 @@ export default function PartnersPage() {
                     </div>
                 )
             })()}
+
+            {/* Partner metrics (moved here from the admin overview) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="glass rounded-2xl p-5 border border-white/10 relative overflow-hidden group hover:border-white/20 transition-all">
+                    <div className="absolute top-3 right-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i className="fa-solid fa-handshake text-3xl text-yellow-400" />
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Active Partners</p>
+                    <p className="text-3xl font-black text-yellow-400">{stats ? stats.activePartners.toLocaleString() : '—'}</p>
+                    <p className="text-[10px] text-slate-600 mt-1 font-semibold">With partner role</p>
+                </div>
+                <div className="glass rounded-2xl p-5 border border-white/10 relative overflow-hidden group hover:border-white/20 transition-all">
+                    <div className="absolute top-3 right-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i className="fa-solid fa-download text-3xl text-brand-green" />
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Total Downloads</p>
+                    <p className="text-3xl font-black text-brand-green">{stats ? stats.totalDownloads.toLocaleString() : '—'}</p>
+                    <p className="text-[10px] text-slate-600 mt-1 font-semibold">Via partner QR codes</p>
+                </div>
+            </div>
 
             {/* Add Partner — pre-provision a shop account so its QR/link can be
                 printed for the welcome package before the shop ever signs in. */}

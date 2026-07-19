@@ -46,5 +46,21 @@ export async function GET(request: Request) {
     }
 
     const users = (data ?? []).map((u) => ({ ...u, email: emailMap[u.id] ?? '' }))
-    return NextResponse.json({ users, total: count ?? 0 })
+
+    // Global partner metrics for the Partners page stat cards (moved off the
+    // admin overview). Independent of pagination and search so the cards stay
+    // stable while the table is filtered.
+    let partnerStats: { activePartners: number; totalDownloads: number } | undefined
+    if (roleFilter === 'partner') {
+        const { data: dl, count: partnerCount } = await supabase
+            .from('profiles')
+            .select('total_downloads', { count: 'exact' })
+            .not('partner_joined_at', 'is', null)
+        partnerStats = {
+            activePartners: partnerCount ?? 0,
+            totalDownloads: (dl ?? []).reduce((s, p) => s + (p.total_downloads ?? 0), 0),
+        }
+    }
+
+    return NextResponse.json({ users, total: count ?? 0, ...(partnerStats ? { partnerStats } : {}) })
 }
