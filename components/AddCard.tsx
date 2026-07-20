@@ -210,6 +210,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
         isOpen={isRequestOpen}
         onClose={() => setIsRequestOpen(false)}
         initialQuery={searchQuery}
+        onFoundCard={onSelectCard}
       />
     </>
   );

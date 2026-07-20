@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { pokemonService } from '@/services/pokemonService';
+import { getThumbnailUrl } from '@/lib/imageUtils';
+import { Card } from '@/types';
 import {
     GAMES,
     DEFAULT_GAME,
@@ -17,6 +20,9 @@ interface RequestCardModalProps {
     onClose: () => void;
     // The search text that returned no matches — prefilled and editable
     initialQuery: string;
+    // When the "did you mean" lookup surfaces the card the user was after,
+    // tapping it hands the card back instead of filing a request.
+    onFoundCard?: (card: Card) => void;
 }
 
 // Only offer games that are actually live in the catalog.
@@ -31,7 +37,7 @@ function isMissingColumnError(err: { code?: string; message?: string } | null): 
     return err.code === 'PGRST204' || err.code === '42703' || /column/i.test(err.message ?? '');
 }
 
-const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, initialQuery }) => {
+const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, initialQuery, onFoundCard }) => {
     const { t, language } = useTranslation();
     const [gameId, setGameId] = useState<GameId>(DEFAULT_GAME);
     const [cardLanguage, setCardLanguage] = useState<GameLanguageCode | ''>('');
@@ -41,9 +47,33 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    const [candidates, setCandidates] = useState<Card[]>([]);
+    // Monotonic id guards against a slow earlier lookup overwriting a newer one.
+    const lookupSeq = useRef(0);
 
     const gameLanguages = getGameLanguages(gameId);
     const needsLanguage = gameHasMultipleLanguages(gameId);
+
+    // "Did you mean" lookup: most requests turn out to be catalog search misses
+    // (spelling variants, missing V/VSTAR suffixes), and nearly all carry a
+    // collector number that pinpoints the card. Surface likely matches before
+    // the user files a request.
+    useEffect(() => {
+        if (!isOpen) return;
+        const name = cardName.trim();
+        const number = cardNumber.trim();
+        if (!name && !number) {
+            setCandidates([]);
+            return;
+        }
+        const seq = ++lookupSeq.current;
+        const timer = setTimeout(async () => {
+            const effectiveLanguage = needsLanguage ? cardLanguage : defaultLanguageForGame(gameId);
+            const found = await pokemonService.findRequestCandidates(name, number, effectiveLanguage || '', gameId);
+            if (seq === lookupSeq.current) setCandidates(found);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [isOpen, cardName, cardNumber, gameId, cardLanguage, needsLanguage]);
 
     // The modal stays mounted (returns null when closed), so seed the form
     // from the latest search query each time it opens rather than only at mount.
@@ -62,6 +92,7 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
             setCardNumber('');
             setNotes('');
             setErrorMessage('');
+            setCandidates([]);
         }
     }, [isOpen, initialQuery, language]);
 
@@ -252,6 +283,48 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                                 onChange={(e) => setCardNumber(e.target.value)}
                             />
                         </div>
+
+                        {candidates.length > 0 && (
+                            <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-3 space-y-2">
+                                <p className="text-xs font-bold text-brand-cyan uppercase tracking-widest">
+                                    {t('cardRequest.didYouMean')}
+                                </p>
+                                <p className="text-[11px] text-slate-400">{t('cardRequest.didYouMeanHint')}</p>
+                                <div className="space-y-1.5">
+                                    {candidates.map((c) => (
+                                        <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() => {
+                                                if (onFoundCard) {
+                                                    onFoundCard(c);
+                                                    onClose();
+                                                }
+                                            }}
+                                            className={`w-full flex items-center gap-3 p-2 rounded-lg bg-black/30 border border-white/5 text-left ${onFoundCard ? 'hover:border-brand-cyan/50 transition-colors' : 'cursor-default'}`}
+                                        >
+                                            {c.images?.small && (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={getThumbnailUrl(c.images.small)}
+                                                    alt=""
+                                                    className="w-9 h-13 rounded object-contain shrink-0"
+                                                    loading="lazy"
+                                                />
+                                            )}
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-white truncate">{c.name}</p>
+                                                <p className="text-[10px] text-slate-400 truncate">
+                                                    {[c.set, c.number ? `#${c.number}` : null, c.rarity]
+                                                        .filter(Boolean)
+                                                        .join(' · ')}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">

@@ -204,6 +204,106 @@ export const pokemonService = {
         }
     },
 
+    /**
+     * Candidates for the card-request "did you mean" panel.
+     *
+     * Users land on the request modal precisely because the name they typed
+     * failed to match (misspellings, Thai vowel variants, missing V/VSTAR
+     * suffixes) — so unlike findCardByMetadata, a number-bearing lookup must
+     * NOT require a name match. The collector number + language narrow the
+     * catalog deterministically; the typed name only boosts ranking (bigram
+     * similarity, so one-character Thai spelling variants still rank first).
+     */
+    async findRequestCandidates(
+        name: string,
+        numberStr: string,
+        language: string,
+        game: string = 'pokemon',
+    ): Promise<Card[]> {
+        try {
+            const supabase = createClient();
+            // The catalog stores Japanese cards as 'ja'; the game config (and
+            // card_requests) use 'jp'. Map before filtering.
+            const dbLang = language === 'jp' ? 'ja' : language;
+            const baseSelect = 'id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, tcgplayer:raw_data->tcgplayer, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+
+            const cleanName = (name || '').trim();
+            // "049/067" -> numerator "049" + printed total "067"; keep letters
+            // for promo numbering (e.g. "SV-P 123").
+            const numerator = (numberStr || '').split('/')[0].replace(/[^0-9A-Za-z]/g, '');
+            const printedTotal = parseInt((numberStr || '').split('/')[1] || '', 10) || null;
+
+            let rows: any[] | null = null;
+            if (numerator) {
+                // Number formats vary per catalog era ("049", "049/067",
+                // "101/098") — match numerator-equal and numerator-prefixed,
+                // in raw / unpadded / 3-digit-padded spellings.
+                const unpadded = numerator.replace(/^0+(?=\d)/, '');
+                const padded = /^\d+$/.test(unpadded) ? unpadded.padStart(3, '0') : unpadded;
+                const variants = [...new Set([numerator, unpadded, padded])];
+                const numOr = variants.flatMap((v) => [`number.eq.${v}`, `number.ilike.${v}/%`]).join(',');
+                let q = supabase.from('pokemon_cards').select(baseSelect).or(numOr).eq('game', game);
+                if (dbLang) q = q.eq('language', dbLang);
+                // A popular collector number recurs across every set of the
+                // era (30+ rows for a Thai "049"), and rows come back in
+                // arbitrary order — fetch a wide pool so ranking sees the
+                // right card, then trim to 5 below.
+                ({ data: rows } = await q.limit(80));
+            }
+            if ((!rows || rows.length === 0) && cleanName.length >= 2) {
+                // No number (or no number hit): plain contains-match on both
+                // name fields. Strip PostgREST or() delimiters from the input.
+                const safe = cleanName.replace(/[,()%]/g, ' ').trim();
+                let q = supabase
+                    .from('pokemon_cards')
+                    .select(baseSelect)
+                    .or(`name.ilike.%${safe}%,english_name.ilike.%${safe}%`)
+                    .eq('game', game);
+                if (dbLang) q = q.eq('language', dbLang);
+                ({ data: rows } = await q.limit(8));
+            }
+            if (!rows || rows.length === 0) return [];
+
+            // Rank: name similarity (character-bigram Dice — language-agnostic,
+            // tolerant of one-character variants) + a bonus when the printed
+            // total in the typed number matches the candidate's set/number.
+            const bigrams = (s: string) => {
+                const t = s.toLowerCase().replace(/\s+/g, '');
+                const out = new Map<string, number>();
+                for (let i = 0; i < t.length - 1; i++) {
+                    const b = t.slice(i, i + 2);
+                    out.set(b, (out.get(b) || 0) + 1);
+                }
+                return out;
+            };
+            const dice = (a: string, b: string) => {
+                if (!a || !b) return 0;
+                const ba = bigrams(a), bb = bigrams(b);
+                let overlap = 0, total = 0;
+                ba.forEach((n, g) => { overlap += Math.min(n, bb.get(g) || 0); total += n; });
+                bb.forEach((n) => { total += n; });
+                return total ? (2 * overlap) / total : 0;
+            };
+            const scored = rows.map((r) => {
+                const sim = cleanName
+                    ? Math.max(dice(cleanName, r.name || ''), dice(cleanName, r.english_name || ''))
+                    : 0;
+                const totalBonus = printedTotal
+                    ? ((r.number || '').includes(`/${String(printedTotal).padStart(3, '0')}`)
+                        || (r.number || '').endsWith(`/${printedTotal}`)
+                        || r.pokemon_sets?.printed_total === printedTotal
+                        ? 0.5 : 0)
+                    : 0;
+                return { r, score: 2 * sim + totalBonus };
+            });
+            scored.sort((a, b) => b.score - a.score);
+            return scored.slice(0, 5).map(({ r }) => this.mapSupabaseCardToInternal(r));
+        } catch (error) {
+            console.error('findRequestCandidates failed:', error);
+            return [];
+        }
+    },
+
     async searchCards(query: string, useAiResolution: boolean = false, language?: 'en' | 'jp' | 'th', game: string = 'pokemon') {
         if (!query || query.trim().length < 2) return [];
 

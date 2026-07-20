@@ -286,7 +286,9 @@
         "submit": "Send Request",
         "successMessage": "Request sent. Thanks for helping us grow the catalog!",
         "loginRequired": "Please log in to request a card.",
-        "failed": "Could not send your request. Please try again."
+        "failed": "Could not send your request. Please try again.",
+        "didYouMean": "Is it one of these? It may already be in the catalog",
+        "didYouMeanHint": "Tap a card to use it instead of sending a request"
     },
     "card": {
         "common": "Common",
