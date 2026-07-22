@@ -66,6 +66,48 @@ const TEMPLATES = {
 } as const;
 
 /**
+ * Full email subjects for the templates above, forced onto the outbound email
+ * via a Postmark per-provider override on every template send.
+ *
+ * Why: Courier's email renderer truncates non-ASCII subjects to their first
+ * 48 UTF-8 bytes — exactly one 64-character base64 line of the RFC 2047
+ * encoded-word — so every Thai subject arrived cut to 16 characters
+ * ("คุณมีคำสั่งซื้อใหม่ — New sale!" arrived as "คุณมีคำสั่งซื้อใ").
+ * Verified 2026-07-22 against the Courier API: GET /notifications/{id}/content
+ * returns the full subject while GET /messages/{id}/output shows the rendered
+ * email subject cut at 48 bytes (message 1-6a60da35-e4b93517a8242321f89d75ef).
+ * The email body and the push title render fine — only the email subject is
+ * affected, and only when it contains non-ASCII. Postmark itself encodes
+ * multi-byte subjects correctly, so handing it the subject directly bypasses
+ * Courier's broken encoder.
+ *
+ * KEEP IN SYNC with the email subject authored in each Courier dashboard
+ * template — this override always wins over the dashboard subject. Remove
+ * once Courier fixes their subject rendering (support ticket filed 2026-07-22).
+ */
+const SUBJECTS: Partial<Record<keyof typeof TEMPLATES, string>> = {
+    sold: 'คุณมีคำสั่งซื้อใหม่ — New sale!',
+    labelGenerated: 'ใบปะหน้าพัสดุพร้อมแล้ว — Shipping label ready',
+    shipped: 'สินค้าถูกจัดส่งแล้ว Order Shipped!',
+    orderConfirmed: 'ยืนยันคำสั่งซื้อ Order Confirmed!',
+    // firstTimeSale: that subject is ASCII plus one emoji (43 UTF-8 bytes,
+    // under the 48-byte cliff) so it renders intact without an override.
+    // Offer templates: add entries alongside the env IDs when those dashboard
+    // templates go live, or any Thai subject on them will truncate.
+};
+
+/**
+ * Postmark provider override forcing the full email subject (see SUBJECTS).
+ * `extraBody` merges additional Postmark API fields into the same override
+ * (e.g. the shipping-label PDF in Attachments).
+ */
+function postmarkOverride(subject: string | undefined, extraBody?: Record<string, unknown>) {
+    const body = { ...(subject ? { Subject: subject } : {}), ...(extraBody ?? {}) };
+    if (Object.keys(body).length === 0) return undefined;
+    return { postmark: { override: { body } } };
+}
+
+/**
  * Helper to fetch a user's notification preferences AND email in one call.
  */
 async function getUserNotifContext(userId: string): Promise<{
@@ -157,6 +199,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
                 to: recipient,
                 template: TEMPLATES.sold,
                 routing,
+                providers: postmarkOverride(SUBJECTS.sold),
                 data: {
                     // Template references {orderDetails.total_amount} (and {orderDetails.id}).
                     // Pass only the fields the template reads, not the whole order row.
@@ -208,26 +251,23 @@ export async function sendLabelGeneratedNotification(
     const orderUrl = `${appBaseUrl()}/orders/${orderDetails.id}`;
     const hasAttachment = !!labelPdfBase64;
 
-    // Postmark attachment goes through Courier's per-provider override. The
-    // override body is merged into Postmark's email API request, so any
-    // standard Postmark field (Attachments included) is accepted there.
-    const providers = hasAttachment
-        ? {
-              postmark: {
-                  override: {
-                      body: {
-                          Attachments: [
-                              {
-                                  Name: `cardstreet-label-${orderDetails.id}.pdf`,
-                                  Content: labelPdfBase64,
-                                  ContentType: 'application/pdf',
-                              },
-                          ],
+    // Postmark attachment rides the same per-provider override as the subject
+    // fix. The override body is merged into Postmark's email API request, so
+    // any standard Postmark field (Attachments included) is accepted there.
+    const providers = postmarkOverride(
+        SUBJECTS.labelGenerated,
+        hasAttachment
+            ? {
+                  Attachments: [
+                      {
+                          Name: `cardstreet-label-${orderDetails.id}.pdf`,
+                          Content: labelPdfBase64,
+                          ContentType: 'application/pdf',
                       },
-                  },
-              },
-          }
-        : undefined;
+                  ],
+              }
+            : undefined,
+    );
 
     try {
         console.log(`[Courier] Sending 'Label Generated' notification to recipient:`, JSON.stringify(recipient), `(attachment: ${hasAttachment ? 'yes' : 'no'})`);
@@ -283,6 +323,7 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
                 to: recipient,
                 template: TEMPLATES.shipped,
                 routing,
+                providers: postmarkOverride(SUBJECTS.shipped),
                 data: {
                     // Template references {trackingLink} (full URL) + {orderDetails.id}.
                     orderDetails: { id: orderDetails.id },
@@ -335,6 +376,7 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
                 to: recipient,
                 template: TEMPLATES.orderConfirmed,
                 routing,
+                providers: postmarkOverride(SUBJECTS.orderConfirmed),
                 data: {
                     // Template references {orderDetails.total_amount} + {trackingNumbersText}.
                     orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
