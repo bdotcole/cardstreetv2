@@ -79,6 +79,36 @@ async function getTopPartners() {
     return data ?? []
 }
 
+async function getRecentSales() {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+        .from('orders')
+        .select(`
+            id, total_amount, status, created_at,
+            listing:listings(card_data),
+            buyer:profiles!orders_buyer_id_fkey(display_name),
+            seller:profiles!orders_seller_id_fkey(display_name)
+        `)
+        .in('status', PAID_ORDER_STATUSES)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    return data ?? []
+}
+
+async function getRecentOffers() {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+        .from('offers')
+        .select(`
+            id, amount, status, created_at,
+            listing:listings(price, card_data),
+            buyer:profiles!offers_buyer_id_fkey(display_name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    return data ?? []
+}
+
 const TIER_NAMES: Record<number, string> = {
     1: 'Bronze', 2: 'Silver', 3: 'Gold', 4: 'Platinum',
     5: 'Sapphire', 6: 'Ruby', 7: 'Emerald', 8: 'Diamond', 9: 'Black Opal',
@@ -90,11 +120,36 @@ const STATUS_COLORS: Record<string, string> = {
     'Resolved': 'bg-brand-green/20 text-brand-green',
 }
 
+// Order fulfillment stages: yellow = awaiting shipment, cyan = moving, green = done.
+const ORDER_STAGE_COLORS: Record<string, string> = {
+    paid: 'bg-yellow-500/20 text-yellow-400',
+    label_generated: 'bg-yellow-500/20 text-yellow-400',
+    shipped: 'bg-brand-cyan/20 text-brand-cyan',
+    in_transit: 'bg-brand-cyan/20 text-brand-cyan',
+    out_for_delivery: 'bg-brand-cyan/20 text-brand-cyan',
+    delivered: 'bg-brand-green/20 text-brand-green',
+    completed: 'bg-brand-green/20 text-brand-green',
+}
+
+const OFFER_STATUS_COLORS: Record<string, string> = {
+    pending: 'bg-yellow-500/20 text-yellow-400',
+    accepted: 'bg-brand-green/20 text-brand-green',
+    countered: 'bg-brand-cyan/20 text-brand-cyan',
+    rejected: 'bg-brand-red/20 text-brand-red',
+    expired: 'bg-white/10 text-slate-400',
+    withdrawn: 'bg-white/10 text-slate-400',
+}
+
+const shortDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
 export default async function AdminOverviewPage() {
-    const [stats, recentTickets, topPartners] = await Promise.all([
+    const [stats, recentTickets, topPartners, recentSales, recentOffers] = await Promise.all([
         getOverviewStats(),
         getRecentTickets(),
         getTopPartners(),
+        getRecentSales(),
+        getRecentOffers(),
     ])
 
     const statCards: StatCard[] = [
@@ -127,6 +182,60 @@ export default async function AdminOverviewPage() {
                         {card.sub && <p className="text-[10px] text-slate-600 mt-1 font-semibold">{card.sub}</p>}
                     </div>
                 ))}
+            </div>
+
+            {/* Sold Listings */}
+            <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                <div className="px-6 py-4 border-b border-white/5">
+                    <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Sold Listings</h2>
+                </div>
+                {recentSales.length === 0 ? (
+                    <p className="px-6 py-8 text-center text-slate-500 text-sm">No sales yet</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-white/5">
+                                    <th className="px-6 py-3">Card</th>
+                                    <th className="px-4 py-3">Seller</th>
+                                    <th className="px-4 py-3">Buyer</th>
+                                    <th className="px-4 py-3 text-right">Sold Price</th>
+                                    <th className="px-4 py-3">Order Stage</th>
+                                    <th className="px-6 py-3 text-right">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {recentSales.map((o: any) => {
+                                    const card = (o.listing as any)?.card_data
+                                    return (
+                                        <tr key={o.id} className="hover:bg-white/5 transition-colors">
+                                            <td className="px-6 py-3">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    {card?.images?.small && (
+                                                        <img src={card.images.small} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-semibold text-slate-200 truncate max-w-[220px]">{card?.name ?? 'Unknown card'}</p>
+                                                        {card?.number && <p className="text-[10px] text-slate-500">#{card.number}</p>}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-slate-300 whitespace-nowrap">{(o.seller as any)?.display_name ?? 'Unknown'}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-300 whitespace-nowrap">{(o.buyer as any)?.display_name ?? 'Unknown'}</td>
+                                            <td className="px-4 py-3 text-sm font-black text-brand-green text-right whitespace-nowrap">฿{Number(o.total_amount).toLocaleString()}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`inline-block text-[9px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap ${ORDER_STAGE_COLORS[o.status] ?? 'bg-white/10 text-slate-400'}`}>
+                                                    {String(o.status).replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-3 text-[11px] text-slate-500 text-right whitespace-nowrap">{shortDate(o.created_at)}</td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -177,6 +286,34 @@ export default async function AdminOverviewPage() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* Recent Offers */}
+                <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-white/5">
+                        <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Recent Offers</h2>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {recentOffers.length === 0 && (
+                            <p className="px-6 py-8 text-center text-slate-500 text-sm">No offers yet</p>
+                        )}
+                        {recentOffers.map((o: any) => {
+                            const listing = o.listing as any
+                            return (
+                                <div key={o.id} className="px-6 py-3 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-slate-200 truncate">{listing?.card_data?.name ?? 'Unknown card'}</p>
+                                        <p className="text-[10px] text-slate-500 truncate">{(o.buyer as any)?.display_name ?? 'Unknown'}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-sm font-black text-brand-green">฿{Number(o.amount).toLocaleString()}</p>
+                                        <p className="text-[10px] text-slate-500">list ฿{Number(listing?.price ?? 0).toLocaleString()}</p>
+                                    </div>
+                                    <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full ${OFFER_STATUS_COLORS[o.status] ?? 'bg-white/10 text-slate-400'}`}>{o.status}</span>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             </div>
