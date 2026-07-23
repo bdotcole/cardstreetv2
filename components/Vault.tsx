@@ -361,7 +361,9 @@ const Vault: React.FC<VaultProps> = ({
             return (
               <div
                 key={folder.id}
-                onClick={() => setView(targetView)}
+                // Reset any picker state left over from a previous visit so
+                // Listings always opens on the active-listings list.
+                onClick={() => { setIsSelectingForListing(false); setView(targetView); }}
                 className="glass p-5 rounded-[2rem] border-white/5 active:scale-95 transition-all group cursor-pointer hover:border-brand-cyan/20"
               >
                 <div className="w-12 h-12 rounded-2xl glass border-white/10 flex items-center justify-center mb-3 group-hover:border-white/20 transition-colors">
@@ -419,10 +421,17 @@ const Vault: React.FC<VaultProps> = ({
     <div className="space-y-6 animate-fadeIn pb-20">
       <div className="flex justify-between items-center pt-4 gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
+          {/* While the asset picker is open, back steps out to the listings
+              list (mirroring the hardware-back handler) instead of jumping
+              to the Vault root. */}
+          <button onClick={() => isSelectingForListing ? setIsSelectingForListing(false) : setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </button>
-          <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{isThai ? 'กำลังประกาศขาย' : 'Active Listings'}</h3>
+          <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">
+            {isSelectingForListing
+              ? (isThai ? 'ประกาศขายใหม่' : 'New Listing')
+              : (isThai ? 'กำลังประกาศขาย' : 'Active Listings')}
+          </h3>
         </div>
         {/* Toggles the asset picker; reads as Cancel while it's open so the
             button is never a silent no-op. */}
