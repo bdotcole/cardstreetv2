@@ -9,6 +9,7 @@ import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -314,27 +315,34 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 onClick={() => onSelectListing ? onSelectListing(listing) : onSelectCard(listing.card_data)}
                 className="bg-slate-800/50 border border-white/5 hover:border-brand-cyan/30 rounded-xl overflow-hidden flex flex-col group active:scale-[0.98] transition-all cursor-pointer"
               >
-                {/* Card Image — fixed aspect to prevent CLS */}
-                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                  <Image
-                    src={thumbUrl}
-                    alt={listing.card_data.name || 'Card'}
-                    fill
-                    sizes="(max-width: 768px) 45vw, 200px"
-                    loading={idx < 6 ? 'eager' : 'lazy'}
-                    placeholder="blur"
-                    blurDataURL={CARD_BLUR_DATA_URL}
-                    unoptimized={shouldSkipNextOptimization(thumbUrl)}
-                    className={listing.card_data.isSealed ? 'object-contain p-2' : 'object-cover'}
-                  />
-                  {dealPct !== null && (
-                    <span className="absolute top-1.5 left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40">
-                      -{dealPct}%
+                {/* Card Image — fixed aspect to prevent CLS. The extra wrapper
+                    lets the snipe badge hang past the image's overflow-hidden
+                    edge, straddling the image/details boundary. */}
+                <div className="relative">
+                  <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
+                    <Image
+                      src={thumbUrl}
+                      alt={listing.card_data.name || 'Card'}
+                      fill
+                      sizes="(max-width: 768px) 45vw, 200px"
+                      loading={idx < 6 ? 'eager' : 'lazy'}
+                      placeholder="blur"
+                      blurDataURL={CARD_BLUR_DATA_URL}
+                      unoptimized={shouldSkipNextOptimization(thumbUrl)}
+                      className={listing.card_data.isSealed ? 'object-contain p-2' : 'object-cover'}
+                    />
+                    {dealPct !== null && (
+                      <span className="absolute top-1.5 left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40">
+                        -{dealPct}%
+                      </span>
+                    )}
+                    <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
+                      {conditionBadgeLabel(listing)}
                     </span>
+                  </div>
+                  {isSnipeListing(listing.price) && (
+                    <SnipeBadge className="absolute -bottom-3 right-1.5 z-10 h-12 w-auto" />
                   )}
-                  <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
-                    {conditionBadgeLabel(listing)}
-                  </span>
                 </div>
 
                 {/* Card Details */}

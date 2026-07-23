@@ -15,6 +15,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
 import { formatTHB } from '@/lib/currency';
+import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -300,23 +301,30 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
             href={`/card/${listing.card_id}`}
             className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
         >
-            <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                <Image
-                    src={imageUrl}
-                    alt={listing.card_data.name || 'Card'}
-                    fill
-                    sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                    loading={eager ? 'eager' : 'lazy'}
-                    placeholder="blur"
-                    blurDataURL={CARD_BLUR_DATA_URL}
-                    unoptimized={shouldSkipNextOptimization(imageUrl)}
-                    onError={() => setCatalogArtFailed(true)}
-                    className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : 'object-cover'}`}
-                />
-                {dealPct !== null && (
-                    <span className="absolute top-2 left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40">
-                        -{dealPct}%
-                    </span>
+            {/* Extra wrapper lets the snipe badge hang past the image's
+                overflow-hidden edge, straddling the image/details boundary. */}
+            <div className="relative">
+                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
+                    <Image
+                        src={imageUrl}
+                        alt={listing.card_data.name || 'Card'}
+                        fill
+                        sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
+                        loading={eager ? 'eager' : 'lazy'}
+                        placeholder="blur"
+                        blurDataURL={CARD_BLUR_DATA_URL}
+                        unoptimized={shouldSkipNextOptimization(imageUrl)}
+                        onError={() => setCatalogArtFailed(true)}
+                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : 'object-cover'}`}
+                    />
+                    {dealPct !== null && (
+                        <span className="absolute top-2 left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40">
+                            -{dealPct}%
+                        </span>
+                    )}
+                </div>
+                {isSnipeListing(listing.price) && (
+                    <SnipeBadge className="absolute -bottom-3 right-2 z-10 h-14 w-auto" />
                 )}
             </div>
             <div className="p-3">
