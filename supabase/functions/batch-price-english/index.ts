@@ -11,7 +11,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 // Our DB set IDs → JustTCG set IDs via SET_ID_MAP below
 // =====================================================================
 
-const JUSTTCG_API_KEY = Deno.env.get('JUSTTCG_API_KEY') ?? '';
+// .trim() guards against a secret stored with trailing whitespace (parity with batch-price-games).
+const JUSTTCG_API_KEY = (Deno.env.get('JUSTTCG_API_KEY') ?? '').trim();
 const JUSTTCG_BASE = 'https://api.justtcg.com/v1';
 const DELAY_MS = 1300; // safe under 50 req/min
 
@@ -51,17 +52,24 @@ Deno.serve(async (req) => {
         );
 
         try {
-            // Get English set IDs from DB
+            // Get English set IDs from DB.
+            // Enumerate pokemon_sets (147 rows), NOT pokemon_cards: the row-level
+            // query silently capped at PostgREST's 1000-row limit, so the "all
+            // sets" run only ever saw the handful of set_ids in an arbitrary
+            // heap-order window — and since the catalog went multi-game,
+            // language='en' alone matched ygo/mtg rows whose sets have no
+            // JustTCG mapping, leaving entire runs pricing nothing.
             let dbSetIds: string[];
             if (targetSetId) {
                 dbSetIds = [targetSetId];
             } else {
                 const { data, error } = await supabase
-                    .from('pokemon_cards')
-                    .select('set_id')
+                    .from('pokemon_sets')
+                    .select('id')
+                    .eq('game', 'pokemon')
                     .eq('language', 'en');
                 if (error) throw new Error(`DB query failed: ${error.message}`);
-                dbSetIds = [...new Set((data ?? []).map((r: any) => r.set_id))];
+                dbSetIds = (data ?? []).map((r: any) => r.id);
             }
             console.log(`[${jobId}] ${dbSetIds.length} English sets to price`);
 
