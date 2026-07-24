@@ -34,13 +34,18 @@ for (const line of fs.readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
 }
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const COMMIT = process.argv.includes('--commit');
+// Optional positional set-code args scope the run (e.g. `node ... SV-P --commit`)
+// so re-ingesting one promo line never re-touches the others.
+const ONLY = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 
 // Promo-line set codes mirror the Japanese designations: S-P = Sword & Shield
-// era promos (gen-8 starters etc.), M-P = Mega-era promos. The collector
-// numbering is Thailand-specific (it does NOT track the Japanese promo numbers).
+// era promos (gen-8 starters etc.), M-P = Mega-era promos, SV-P = Scarlet &
+// Violet era promos. The collector numbering is Thailand-specific (it does NOT
+// track the Japanese promo numbers).
 const SETS = {
   'M-P': { name: 'การ์ดโปรโมชัน (เมกะ)', series: 'Mega Evolution', release_date: '2025-02-01' },
   'S-P': { name: 'การ์ดโปรโมชัน (ซอร์ด & ชีลด์)', series: 'Sword & Shield', release_date: '2020-12-04' },
+  'SV-P': { name: 'การ์ดโปรโมชัน (สกาเล็ต & ไวโอเล็ต)', series: 'Scarlet & Violet', release_date: '2023-03-01' },
 };
 
 // strip the angle brackets the official title wraps trainer-owner suffixes in
@@ -102,8 +107,13 @@ function buildRows(code, scraped, dict) {
 }
 
 async function main() {
+  const codes = ONLY.length ? Object.keys(SETS).filter((c) => ONLY.includes(c)) : Object.keys(SETS);
+  if (ONLY.length && codes.length !== ONLY.length) {
+    console.error(`Unknown set code(s): ${ONLY.filter((c) => !SETS[c]).join(', ')}`);
+    process.exit(1);
+  }
   const all = {};
-  for (const code of Object.keys(SETS)) {
+  for (const code of codes) {
     const cacheFile = `scripts/out/thai-promo-${code.replace('-', '')}.json`;
     const scraped = fs.existsSync(cacheFile)
       ? JSON.parse(fs.readFileSync(cacheFile, 'utf8'))
@@ -118,15 +128,32 @@ async function main() {
   const changesetDir = 'scripts/out/changesets';
   fs.mkdirSync(changesetDir, { recursive: true });
 
-  for (const code of Object.keys(SETS)) {
-    const { rows, enriched } = buildRows(code, all[code], dict);
+  for (const code of codes) {
+    let { rows, enriched } = buildRows(code, all[code], dict);
+    // Set-level stats must reflect the FULL set, computed before the
+    // mirrored-row filter below removes any card rows from the upsert.
+    const setTotal = rows.length;
+    const setMaxNum = rows.reduce((m, r) => Math.max(m, parseInt(r.number) || 0), 0);
+
+    // Never clobber rows whose art is already mirrored into our own storage
+    // (e.g. a card hand-added with a verified scan + pHash before the full
+    // set ingest) — the official-site URL here would replace the better image.
+    const { data: mirrored } = await supabase
+      .from('pokemon_cards')
+      .select('id')
+      .eq('set_id', code)
+      .ilike('image_small', '%supabase.co%');
+    const keep = new Set((mirrored ?? []).map((r) => r.id));
+    if (keep.size) {
+      rows = rows.filter((r) => !keep.has(r.id));
+      console.log(`  [skip] ${keep.size} row(s) already mirrored, left untouched: ${[...keep].join(', ')}`);
+    }
     const meta = SETS[code];
-    const maxNum = rows.reduce((m, r) => Math.max(m, parseInt(r.number) || 0), 0);
 
     // changeset record for review
     fs.writeFileSync(`${changesetDir}/${code}.json`, JSON.stringify({
       setId: code, generatedAt: new Date().toISOString(),
-      setMeta: { id: code, ...meta, total: rows.length, printed_total: maxNum, language: 'th', game: 'pokemon' },
+      setMeta: { id: code, ...meta, total: setTotal, printed_total: setMaxNum, language: 'th', game: 'pokemon' },
       stats: { scraped: all[code].length, rows: rows.length, enriched },
       rows,
     }, null, 2));
@@ -142,7 +169,7 @@ async function main() {
     if (COMMIT) {
       const { error: setErr } = await supabase.from('pokemon_sets').upsert({
         id: code, name: meta.name, series: meta.series, release_date: meta.release_date,
-        total: rows.length, printed_total: maxNum, language: 'th', game: 'pokemon',
+        total: setTotal, printed_total: setMaxNum, language: 'th', game: 'pokemon',
       }, { onConflict: 'id' });
       if (setErr) { console.error(`  set upsert failed: ${setErr.message}`); process.exit(1); }
       let written = 0;
