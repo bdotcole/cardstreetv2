@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, MessageSquare, ChevronDown, X } from 'lucide-react';
+import { Loader2, Plus, MessageSquare, ChevronDown, X, Send } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import CustomSelect from './CustomSelect';
@@ -14,6 +14,14 @@ interface SupportTicket {
     status: string;
     admin_reply: string | null;
     replied_at: string | null;
+    created_at: string;
+}
+
+interface TicketMessage {
+    id: string;
+    ticket_id: string;
+    sender_role: 'user' | 'admin';
+    body: string;
     created_at: string;
 }
 
@@ -43,7 +51,8 @@ const STATUS_COLORS: Record<string, string> = {
 // Rendered inside Profile's Support panel, which is only reachable when a
 // session exists — so no logged-out state is handled here. Reads go straight
 // through the browser Supabase client (RLS scopes rows to the owner); writes
-// go through POST /api/admin/tickets, which takes user_id from the session.
+// go through POST /api/admin/tickets and POST /api/tickets/[id]/messages,
+// which take user_id from the session.
 const SupportTickets: React.FC = () => {
     const { t } = useTranslation();
     const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -57,6 +66,15 @@ const SupportTickets: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+
+    // Thread state for the expanded ticket. Pre-migration the messages table
+    // doesn't exist — the read errors, the thread stays empty, and the legacy
+    // admin_reply block below still renders, so nothing breaks.
+    const [threads, setThreads] = useState<Record<string, TicketMessage[]>>({});
+    const [threadLoading, setThreadLoading] = useState<string | null>(null);
+    const [replyDraft, setReplyDraft] = useState('');
+    const [sendingReply, setSendingReply] = useState(false);
+    const [replyError, setReplyError] = useState('');
 
     const fetchTickets = useCallback(async () => {
         try {
@@ -72,6 +90,31 @@ const SupportTickets: React.FC = () => {
     }, []);
 
     useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+    const fetchThread = useCallback(async (ticketId: string) => {
+        setThreadLoading(ticketId);
+        try {
+            const supabase = createClient();
+            const { data, error } = await supabase
+                .from('support_ticket_messages')
+                .select('id, ticket_id, sender_role, body, created_at')
+                .eq('ticket_id', ticketId)
+                .order('created_at', { ascending: true });
+            setThreads(prev => ({ ...prev, [ticketId]: error ? [] : (data ?? []) as TicketMessage[] }));
+        } catch {
+            setThreads(prev => ({ ...prev, [ticketId]: [] }));
+        } finally {
+            setThreadLoading(prev => (prev === ticketId ? null : prev));
+        }
+    }, []);
+
+    const toggleTicket = (ticketId: string) => {
+        const next = expandedId === ticketId ? null : ticketId;
+        setExpandedId(next);
+        setReplyDraft('');
+        setReplyError('');
+        if (next) fetchThread(next);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -100,6 +143,37 @@ const SupportTickets: React.FC = () => {
             setErrorMessage(t('supportTickets.failed'));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleReply = async (ticket: SupportTicket) => {
+        const message = replyDraft.trim();
+        if (!message || sendingReply) return;
+        setSendingReply(true);
+        setReplyError('');
+        try {
+            const res = await fetch(`/api/tickets/${ticket.id}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message }),
+            });
+            if (res.ok) {
+                const { message: sent, status } = await res.json();
+                setThreads(prev => ({
+                    ...prev,
+                    [ticket.id]: [...(prev[ticket.id] ?? []), sent as TicketMessage],
+                }));
+                if (status && status !== ticket.status) {
+                    setTickets(prev => prev.map(tk => tk.id === ticket.id ? { ...tk, status } : tk));
+                }
+                setReplyDraft('');
+            } else {
+                setReplyError(t('supportTickets.replyFailed'));
+            }
+        } catch {
+            setReplyError(t('supportTickets.replyFailed'));
+        } finally {
+            setSendingReply(false);
         }
     };
 
@@ -207,10 +281,12 @@ const SupportTickets: React.FC = () => {
                     <p className="px-4 py-8 text-center text-slate-500 text-xs">{t('supportTickets.noTickets')}</p>
                 ) : tickets.map(ticket => {
                     const expanded = expandedId === ticket.id;
+                    const thread = threads[ticket.id] ?? [];
+                    const hasAdminMessage = thread.some(m => m.sender_role === 'admin');
                     return (
                         <div key={ticket.id}>
                             <button
-                                onClick={() => setExpandedId(expanded ? null : ticket.id)}
+                                onClick={() => toggleTicket(ticket.id)}
                                 className="w-full text-left p-4 hover:bg-white/[0.02] transition-colors"
                             >
                                 <div className="flex items-start justify-between gap-3">
@@ -232,19 +308,81 @@ const SupportTickets: React.FC = () => {
                             </button>
                             {expanded && (
                                 <div className="px-4 pb-4 space-y-3">
-                                    <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap bg-black/30 p-3 rounded-xl border border-white/5">
-                                        {ticket.description}
-                                    </p>
-                                    {ticket.admin_reply && (
-                                        <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-3 space-y-1.5">
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-brand-cyan">
-                                                {t('supportTickets.adminReply')}
-                                            </p>
-                                            <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{ticket.admin_reply}</p>
-                                            {ticket.replied_at && (
-                                                <p className="text-[9px] text-slate-600">{new Date(ticket.replied_at).toLocaleString()}</p>
-                                            )}
+                                    {/* Original message */}
+                                    <div className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-1.5">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                            {t('supportTickets.you')}
+                                        </p>
+                                        <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
+                                        <p className="text-[9px] text-slate-600">{new Date(ticket.created_at).toLocaleString()}</p>
+                                    </div>
+
+                                    {threadLoading === ticket.id ? (
+                                        <div className="flex items-center justify-center py-3">
+                                            <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
                                         </div>
+                                    ) : (
+                                        <>
+                                            {thread.map(msg => msg.sender_role === 'admin' ? (
+                                                <div key={msg.id} className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-3 space-y-1.5">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-brand-cyan">
+                                                        {t('supportTickets.adminReply')}
+                                                    </p>
+                                                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                                                    <p className="text-[9px] text-slate-600">{new Date(msg.created_at).toLocaleString()}</p>
+                                                </div>
+                                            ) : (
+                                                <div key={msg.id} className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-1.5">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                                        {t('supportTickets.you')}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                                                    <p className="text-[9px] text-slate-600">{new Date(msg.created_at).toLocaleString()}</p>
+                                                </div>
+                                            ))}
+
+                                            {/* Legacy single-shot reply, shown only until the
+                                                migration backfills it into the thread. */}
+                                            {!hasAdminMessage && ticket.admin_reply && (
+                                                <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-3 space-y-1.5">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-brand-cyan">
+                                                        {t('supportTickets.adminReply')}
+                                                    </p>
+                                                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{ticket.admin_reply}</p>
+                                                    {ticket.replied_at && (
+                                                        <p className="text-[9px] text-slate-600">{new Date(ticket.replied_at).toLocaleString()}</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Reply composer */}
+                                    {replyError && (
+                                        <div className="text-xs font-bold text-brand-red bg-brand-red/10 p-3 rounded-xl border border-brand-red/20">
+                                            {replyError}
+                                        </div>
+                                    )}
+                                    <div className="flex items-end gap-2">
+                                        <textarea
+                                            value={replyDraft}
+                                            onChange={e => setReplyDraft(e.target.value)}
+                                            maxLength={5000}
+                                            rows={2}
+                                            placeholder={t('supportTickets.replyPlaceholder')}
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-cyan resize-none"
+                                        />
+                                        <button
+                                            onClick={() => handleReply(ticket)}
+                                            disabled={sendingReply || !replyDraft.trim()}
+                                            aria-label={t('supportTickets.sendReply')}
+                                            className="h-11 w-11 shrink-0 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker rounded-xl active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-40"
+                                        >
+                                            {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                    {ticket.status === 'Resolved' && (
+                                        <p className="text-[10px] text-slate-500">{t('supportTickets.reopenNote')}</p>
                                     )}
                                 </div>
                             )}

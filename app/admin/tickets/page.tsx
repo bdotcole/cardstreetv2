@@ -15,6 +15,15 @@ interface Ticket {
     profiles: { display_name: string | null; avatar_url: string | null } | null
 }
 
+interface TicketMessage {
+    id: string
+    ticket_id: string
+    sender_id: string | null
+    sender_role: 'user' | 'admin'
+    body: string
+    created_at: string
+}
+
 const STATUS_OPTIONS = ['All', 'Open', 'In Progress', 'Resolved']
 const CATEGORY_OPTIONS = ['All', 'Technical', 'Billing', 'Card Valuation', 'General']
 
@@ -38,6 +47,8 @@ export default function TicketsPage() {
     const [statusFilter, setStatusFilter] = useState('All')
     const [categoryFilter, setCategoryFilter] = useState('All')
     const [selected, setSelected] = useState<Ticket | null>(null)
+    const [thread, setThread] = useState<TicketMessage[]>([])
+    const [threadLoading, setThreadLoading] = useState(false)
     const [replyText, setReplyText] = useState('')
     const [replyStatus, setReplyStatus] = useState('')
     const [saving, setSaving] = useState(false)
@@ -59,10 +70,21 @@ export default function TicketsPage() {
 
     useEffect(() => { fetchTickets() }, [fetchTickets])
 
-    const openTicket = (ticket: Ticket) => {
+    const openTicket = async (ticket: Ticket) => {
         setSelected(ticket)
-        setReplyText(ticket.admin_reply ?? '')
+        setReplyText('')
         setReplyStatus(ticket.status)
+        setThread([])
+        setThreadLoading(true)
+        try {
+            const res = await fetch(`/api/admin/tickets/${ticket.id}`)
+            if (res.ok) {
+                const data = await res.json()
+                setThread(data.messages ?? [])
+            }
+        } finally {
+            setThreadLoading(false)
+        }
     }
 
     const saveReply = async () => {
@@ -72,17 +94,22 @@ export default function TicketsPage() {
             const res = await fetch(`/api/admin/tickets/${selected.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: replyStatus, admin_reply: replyText }),
+                body: JSON.stringify({ status: replyStatus, admin_reply: replyText.trim() || undefined }),
             })
             if (res.ok) {
                 const updated = await res.json()
                 setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, ...updated.ticket } : t))
                 setSelected(prev => prev ? { ...prev, ...updated.ticket } : null)
+                if (updated.message) setThread(prev => [...prev, updated.message])
+                setReplyText('')
             }
         } finally {
             setSaving(false)
         }
     }
+
+    const hasAdminMessage = thread.some(m => m.sender_role === 'admin')
+    const userName = selected?.profiles?.display_name ?? 'User'
 
     return (
         <div className="flex gap-6 h-full animate-fadeIn">
@@ -161,7 +188,7 @@ export default function TicketsPage() {
                         </button>
                     </div>
 
-                    <div className="glass rounded-2xl border border-white/10 p-6 space-y-6 flex-1 overflow-y-auto">
+                    <div className="glass rounded-2xl border border-white/10 p-6 space-y-5 flex-1 overflow-y-auto">
                         {/* Header */}
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -175,25 +202,63 @@ export default function TicketsPage() {
                             </p>
                         </div>
 
-                        {/* Description */}
-                        <div className="bg-white/5 rounded-xl p-4">
-                            <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">User Message</p>
-                            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
+                        {/* Conversation thread */}
+                        <div className="space-y-3">
+                            <div className="bg-white/5 rounded-xl p-4">
+                                <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">{userName}</p>
+                                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
+                                <p className="text-[10px] text-slate-600 mt-2">{new Date(selected.created_at).toLocaleString()}</p>
+                            </div>
+
+                            {threadLoading ? (
+                                <div className="flex items-center justify-center py-4">
+                                    <div className="animate-spin h-5 w-5 border-2 border-white/10 border-t-brand-cyan rounded-full" />
+                                </div>
+                            ) : (
+                                <>
+                                    {thread.map(msg => msg.sender_role === 'admin' ? (
+                                        <div key={msg.id} className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">CardStreet Team</p>
+                                            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                                            <p className="text-[10px] text-slate-600 mt-2">{new Date(msg.created_at).toLocaleString()}</p>
+                                        </div>
+                                    ) : (
+                                        <div key={msg.id} className="bg-white/5 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">{userName}</p>
+                                            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                                            <p className="text-[10px] text-slate-600 mt-2">{new Date(msg.created_at).toLocaleString()}</p>
+                                        </div>
+                                    ))}
+
+                                    {/* Legacy single-shot reply, shown only until the
+                                        20260724 migration backfills it into the thread. */}
+                                    {!hasAdminMessage && selected.admin_reply && (
+                                        <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">CardStreet Team</p>
+                                            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selected.admin_reply}</p>
+                                            {selected.replied_at && (
+                                                <p className="text-[10px] text-slate-600 mt-2">{new Date(selected.replied_at).toLocaleString()}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
 
-                        {/* Admin Reply */}
+                        {/* Reply composer */}
                         <div className="space-y-3">
-                            <p className="text-[10px] font-bold uppercase text-slate-500">Admin Reply</p>
+                            <p className="text-[10px] font-bold uppercase text-slate-500">Reply</p>
                             <textarea
                                 value={replyText}
                                 onChange={e => setReplyText(e.target.value)}
-                                rows={5}
+                                rows={4}
+                                maxLength={5000}
                                 placeholder="Type your response here…"
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan/50 resize-none"
                             />
                         </div>
 
-                        {/* Status + Save */}
+                        {/* Status + Send */}
                         <div className="flex items-center gap-3">
                             <select
                                 value={replyStatus}
@@ -204,10 +269,10 @@ export default function TicketsPage() {
                             </select>
                             <button
                                 onClick={saveReply}
-                                disabled={saving}
+                                disabled={saving || (!replyText.trim() && replyStatus === selected.status)}
                                 className="px-5 py-2.5 bg-brand-cyan text-brand-darker font-black text-sm rounded-xl hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
                             >
-                                {saving ? 'Saving…' : 'Save Reply'}
+                                {saving ? 'Sending…' : replyText.trim() ? 'Send Reply' : 'Update Status'}
                             </button>
                         </div>
 

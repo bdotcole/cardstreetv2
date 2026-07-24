@@ -381,6 +381,11 @@
         "failed": "Failed to submit ticket. Please try again.",
         "noTickets": "No support tickets yet",
         "adminReply": "Reply from the CardStreet team",
+        "you": "You",
+        "replyPlaceholder": "Write a reply...",
+        "sendReply": "Send reply",
+        "replyFailed": "Failed to send reply. Please try again.",
+        "reopenNote": "Replying will reopen this ticket.",
         "status": {
             "open": "Open",
             "inProgress": "In Progress",
