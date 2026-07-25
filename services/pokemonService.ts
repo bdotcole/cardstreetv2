@@ -55,6 +55,36 @@ function parseNameAndNumber(query: string): { name: string; numberOr: string | n
     return { name, numberOr: legs.join(',') };
 }
 
+// --- Space-insensitive name matching ---
+// The Thai catalog is inconsistent about spacing before card suffixes: M-P-era
+// rows store "โครแบทex" while MA1-era rows store "โครแบท ex", and users type
+// both — raw ILIKE is whitespace-literal, so a spacing mismatch hides the card.
+// The 20260725_search_name_normalized migration adds generated columns
+// (search_name / search_english_name = lowercased + space-stripped) so both
+// sides of the comparison are normalized. Until that migration runs, the probe
+// reports the columns missing and every query keeps only the raw-column legs —
+// identical behavior to before this change.
+let normalizedColsProbe: Promise<boolean> | null = null;
+function normalizedColsAvailable(supabase: ReturnType<typeof createClient>): Promise<boolean> {
+    if (!normalizedColsProbe) {
+        normalizedColsProbe = Promise.resolve(
+            supabase.from('pokemon_cards').select('search_name').limit(1)
+        ).then(({ error }) => !error).catch(() => false);
+    }
+    return normalizedColsProbe;
+}
+
+const stripSpaces = (s: string) => s.replace(/\s+/g, '');
+
+// PostgREST or() legs matching a name query against the raw name columns and —
+// when the normalized columns exist — their space-stripped twins.
+function nameIlikeLegs(q: string, useNormalized: boolean): string {
+    const legs = `name.ilike.%${q}%,english_name.ilike.%${q}%`;
+    if (!useNormalized) return legs;
+    const stripped = stripSpaces(q);
+    return `${legs},search_name.ilike.%${stripped}%,search_english_name.ilike.%${stripped}%`;
+}
+
 export interface ApiSet {
     id: string;
     name: string;
@@ -150,7 +180,7 @@ export const pokemonService = {
             // Explicit columns: raw_data is tens of KB per row; the mapper only
             // needs its tcgplayer slice (price fallback).
             const baseSelect = 'id, name, english_name, set_id, number, rarity, game, image_small, image_large, language, tcgplayer_url, tcgplayer:raw_data->tcgplayer, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
-            const nameSearch = `name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`;
+            const nameSearch = nameIlikeLegs(cleanName, await normalizedColsAvailable(supabase));
 
             // TIER 1: The "Perfect" Strict Match (Name + Number + Set + Language)
             if (cleanSet && cleanNumber) {
@@ -257,7 +287,7 @@ export const pokemonService = {
                 let q = supabase
                     .from('pokemon_cards')
                     .select(baseSelect)
-                    .or(`name.ilike.%${safe}%,english_name.ilike.%${safe}%`)
+                    .or(nameIlikeLegs(safe, await normalizedColsAvailable(supabase)))
                     .eq('game', game);
                 if (dbLang) q = q.eq('language', dbLang);
                 ({ data: rows } = await q.limit(8));
@@ -320,6 +350,7 @@ export const pokemonService = {
         try {
             const supabase = createClient();
             const cleanQuery = query.toLowerCase().trim();
+            const useNormalized = await normalizedColsAvailable(supabase);
 
             // 1. Fetch all set names to extract set from query
             if (!allSetsDbCache) {
@@ -407,12 +438,12 @@ export const pokemonService = {
             if (useNumber) {
                 // Two .or() groups are ANDed by PostgREST: (name) AND (number).
                 if (parsed.name.length > 0) {
-                    dbQuery = dbQuery.or(`name.ilike.%${parsed.name}%,english_name.ilike.%${parsed.name}%`);
+                    dbQuery = dbQuery.or(nameIlikeLegs(parsed.name, useNormalized));
                 }
                 dbQuery = dbQuery.or(parsed.numberOr!);
             } else if (hasSet) {
                 if (queryWithoutSet.length > 0) {
-                    dbQuery = dbQuery.or(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
+                    dbQuery = dbQuery.or(nameIlikeLegs(queryWithoutSet, useNormalized));
                 }
             } else {
                 // Fallback: check if the query is a partial set name. Leading-
@@ -421,7 +452,7 @@ export const pokemonService = {
                 const { data: partialSets } = await supabase.from('pokemon_sets').select('id').ilike('name', `%${cleanQuery}%`).limit(20);
                 const partialSetIds = partialSets?.map(s => s.id) || [];
 
-                let orStr = `name.ilike.%${cleanQuery}%,english_name.ilike.%${cleanQuery}%`;
+                let orStr = nameIlikeLegs(cleanQuery, useNormalized);
                 if (partialSetIds.length > 0) {
                     orStr += `,set_id.in.(${partialSetIds.join(',')})`;
                 }
@@ -440,7 +471,7 @@ export const pokemonService = {
             if (!error && (!cards || cards.length === 0) && (hasSet || useNumber)) {
                 const retryName = useNumber && parsed.name.length >= 2 ? parsed.name : cleanQuery;
                 const retry = await newScopedQuery()
-                    .or(`name.ilike.%${retryName}%,english_name.ilike.%${retryName}%`)
+                    .or(nameIlikeLegs(retryName, useNormalized))
                     .limit(100);
                 if (!retry.error) cards = retry.data;
             }
@@ -484,10 +515,17 @@ export const pokemonService = {
                 const nameRoot = getRootName(nameLower);
                 const englishRoot = getRootName(englishLower);
 
+                // Space-stripped twins so a suffix-spacing mismatch ("โครแบท ex"
+                // vs "โครแบทex") scores as the near-match it is, not the floor.
+                const queryNorm = stripSpaces(queryLower);
+                const nameNorm = stripSpaces(nameLower);
+                const englishNorm = stripSpaces(englishLower);
+
                 let score = 0;
 
                 // Exact match = highest score
-                if (nameLower === queryLower || englishLower === queryLower) {
+                if (nameLower === queryLower || englishLower === queryLower
+                    || nameNorm === queryNorm || englishNorm === queryNorm) {
                     score = 100;
                 }
                 // Root name exact match (e.g., "pikachu" matches "Pikachu V")
@@ -495,7 +533,8 @@ export const pokemonService = {
                     score = 90;
                 }
                 // Starts with query
-                else if (nameLower.startsWith(queryLower) || englishLower.startsWith(queryLower)) {
+                else if (nameLower.startsWith(queryLower) || englishLower.startsWith(queryLower)
+                    || nameNorm.startsWith(queryNorm) || englishNorm.startsWith(queryNorm)) {
                     score = 75;
                 }
                 // Root starts with query
@@ -503,7 +542,8 @@ export const pokemonService = {
                     score = 70;
                 }
                 // Contains query
-                else if (nameLower.includes(queryLower) || englishLower.includes(queryLower)) {
+                else if (nameLower.includes(queryLower) || englishLower.includes(queryLower)
+                    || nameNorm.includes(queryNorm) || englishNorm.includes(queryNorm)) {
                     score = 50;
                 } else {
                     score = 25;
