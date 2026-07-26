@@ -125,13 +125,15 @@ The pipeline is intentionally redundant (3 lookup tiers off the same Flash call)
 
 ## Continuous capture (`components/WebLiveScanner.tsx`)
 
-Google-Lens-style: the scanner detects the card's edges in real time, snaps a highlight overlay onto it, and auto-fires the instant the detected card is sharp and settled. The detection loop runs at `ANALYSIS_FPS` (10fps) on a small grayscale buffer sized to the **visible** video region (object-cover crop), so detected-box coords map cleanly to both screen (overlay) and video pixels (capture).
+The scanner detects the card's edges in real time and auto-fires the instant the detected card is sharp and settled. The detection loop runs at `ANALYSIS_FPS` on a small grayscale buffer sized to the **visible** video region (object-cover crop), so detected-box coords map cleanly back to video pixels (capture).
+
+**The overlay never moves.** A stationary centered guide frame lights up cyan (border + corner brackets + scan line) while a card is being tracked, and reverts to a dashed hint frame otherwise. Detection coords drive only the *capture crop*, not the UI — an earlier version drew the detected box as a per-frame snapping highlight, and the re-snap jitter read as jarring (removed 2026-07-26). Don't reintroduce a moving detection overlay.
 
 Per frame:
 
 1. `sobel()` → directional gradients. `detectCardBox()` projects `|gx|` onto columns (left/right borders) and `|gy|` onto rows (top/bottom), takes the outermost strong-edge bins (above `EDGE_PEAK_FRAC` of the projection max, gated by `EDGE_GRADIENT_THRESHOLD`), then **validates** the box is card-shaped (aspect ≈ `CARD_ASPECT` within `ASPECT_TOLERANCE`) and sensibly sized (`MIN/MAX_CARD_AREA_FRAC`). Returns null otherwise.
-2. The accepted box is EMA-smoothed (`BOX_SMOOTHING`) and drawn as the snapping highlight.
-3. **Fire** when the detected sub-region is sharp (`laplacianVariance` ≥ `FOCUS_VARIANCE_THRESHOLD`) and the box has settled (corner movement < `BOX_STABILITY_PX`) for `STABLE_FRAMES_REQUIRED` frames. Capture uses the detected box (padded), mapped back to video pixels — a tighter crop than the old fixed guide box.
+2. A valid, fully-in-frame detection sets `cardDetected`, which lights the stationary guide frame and the "Locking in" pill.
+3. **Fire** when the detected sub-region is sharp (`laplacianVariance` ≥ `SHARPNESS_MIN`, measured on a hi-res redraw of the card region) and the box has settled (corner movement < `BOX_STABILITY_PX`) for `STABLE_FRAMES_REQUIRED` frames. Capture uses the detected box (padded), mapped back to video pixels — a tighter crop than the fixed guide box.
 
 On fire, a white flash + frozen still shows immediately (`frozenFrame`) so the grab reads as instant while the catalog match runs.
 

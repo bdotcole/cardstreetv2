@@ -44,7 +44,6 @@ const EDGE_MARGIN_FRAC = 0.02;         // A detected border within this fraction
 const EDGE_GRADIENT_THRESHOLD = 36;    // Per-pixel Sobel magnitude floor before it counts toward a projection (noise gate).
 const EDGE_PEAK_FRAC = 0.4;            // A projection bin counts as a card border when it exceeds this fraction of the projection max.
 const BOX_STABILITY_PX = 5;            // Max corner movement (buffer px) between frames to count the box as "settled".
-const BOX_SMOOTHING = 0.5;             // EMA factor for the displayed box (0 = frozen, 1 = instant). Smooths the overlay snap.
 
 // Focus gate. Measured as the variance of the Laplacian on the *actual* card region drawn
 // from the full-res video at SHARPNESS_SAMPLE_MAX px — NOT on the 160px detection buffer,
@@ -63,9 +62,8 @@ const DETECT_TIMEOUT_MS = 2_500;
 const FALLBACK_FRAMES_REQUIRED = 3;
 const STABILITY_DIFF_THRESHOLD = 6;    // Mean absolute per-pixel diff below this = scene is still (fallback path only).
 
-// Manual shutter: reuse the detector's card crop if it was seen within this window. The
-// overlay the user is confirming lags detection by at most a few frames, so a fresh box is
-// exactly what they're aiming at; anything older risks capturing a moved camera.
+// Manual shutter: reuse the detector's card crop if it was seen within this window. A fresh
+// box is exactly the card the user is aiming at; anything older risks capturing a moved camera.
 const SHUTTER_BOX_FRESH_MS = 1_000;
 
 interface Box { x: number; y: number; w: number; h: number; score?: number; }
@@ -93,7 +91,6 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
 
     const prevFrameRef = useRef<Uint8ClampedArray | null>(null);   // previous detection buffer (fallback stability)
     const prevBoxRef = useRef<Box | null>(null);                   // last raw detected box (for settle check)
-    const smoothedBoxRef = useRef<Box | null>(null);               // EMA-smoothed box in buffer coords (for overlay)
     const lockCountRef = useRef(0);                                // consecutive sharp+settled frames (detection path)
     const detectStreakRef = useRef(0);                             // consecutive frames with a valid, fully-in-frame card
     const firstDetectAtRef = useRef(0);                            // timestamp the current detection streak began (focus grace)
@@ -110,8 +107,9 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [isLocked, setIsLocked] = useState(false);
     const [statusHint, setStatusHint] = useState<'searching' | 'closer' | 'fit' | 'aligning' | 'sharpen' | 'scanning'>('searching');
-    // Smoothed detected card box in *screen* coords, drives the snapping highlight overlay. null = nothing found.
-    const [detectedBox, setDetectedBox] = useState<Box | null>(null);
+    // True while the detector is tracking a lock candidate. Lights up the stationary guide
+    // frame — the overlay itself never moves; detection coords are used only for capture.
+    const [cardDetected, setCardDetected] = useState(false);
     // Frozen still + white flash so the grab reads as instant while the network match runs.
     const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
     const [flash, setFlash] = useState(false);
@@ -147,8 +145,9 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
     }, [onClose]);
 
     // Continuous detection loop. Each tick: downscale the visible video region, detect the
-    // card's bounding box from edge projections, snap the overlay onto it, and fire when the
-    // box is sharp + settled. Falls back to a center sharp+stable heuristic if nothing locks.
+    // card's bounding box from edge projections, light the stationary guide frame while a
+    // card is tracked, and fire when the box is sharp + settled. Falls back to a center
+    // sharp+stable heuristic if nothing locks.
     useEffect(() => {
         if (!isVideoLoaded || isLocked) return;
         const intervalMs = Math.round(1000 / ANALYSIS_FPS);
@@ -188,10 +187,7 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 centerCountRef.current = 0;
                 if (detectStreakRef.current === 0) firstDetectAtRef.current = now;
                 detectStreakRef.current += 1;
-
-                // Smooth for the overlay; snap glide comes from EMA + a short CSS transition.
-                smoothedBoxRef.current = emaBox(smoothedBoxRef.current, box, BOX_SMOOTHING);
-                setDetectedBox(bufferBoxToScreen(smoothedBoxRef.current, dw, dh, screenW, screenH));
+                setCardDetected(true);
 
                 const settled = prevBoxRef.current != null && maxCornerDelta(box, prevBoxRef.current) < BOX_STABILITY_PX;
                 prevBoxRef.current = box;
@@ -226,10 +222,9 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 }
             } else {
                 prevBoxRef.current = null;
-                smoothedBoxRef.current = null;
                 lockCountRef.current = 0;
                 detectStreakRef.current = 0;
-                setDetectedBox(null);
+                setCardDetected(false);
                 // Tell the user how to fix the framing instead of silently grabbing a bad shot.
                 setStatusHint(det ? (det.status === 'far' ? 'closer' : 'fit') : 'searching');
 
@@ -375,23 +370,21 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
         centerCountRef.current = 0;
         prevFrameRef.current = null;
         prevBoxRef.current = null;
-        smoothedBoxRef.current = null;
         captureCropRef.current = null;
         lastCardCropRef.current = null;
         lastDetectAtRef.current = Date.now();
         setIsLocked(false);
         setStatusHint('searching');
-        setDetectedBox(null);
+        setCardDetected(false);
         setFrozenFrame(null);
         setFlash(false);
     };
 
     const onShutter = () => {
         // Manual override: the user is confirming what they see. If the detector has a
-        // fresh card-shaped box (the snapped overlay), capture that card — not the fixed
-        // center guide, which on a cluttered table pulls in neighboring cards and can even
-        // clip the target. Only fall back to the center crop when nothing card-shaped has
-        // been seen recently.
+        // fresh card-shaped box, capture that card — not the fixed center guide, which on
+        // a cluttered table pulls in neighboring cards and can even clip the target. Only
+        // fall back to the center crop when nothing card-shaped has been seen recently.
         const last = lastCardCropRef.current;
         captureCropRef.current = last && Date.now() - last.at <= SHUTTER_BOX_FRESH_MS ? last.crop : null;
         triggerScan();
@@ -434,34 +427,29 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 </div>
             )}
 
-            {/* Snapping highlight: follows the detected card. When nothing is found yet we show
-                a centered hint frame so the user knows where to aim. */}
+            {/* Stationary guide frame. It never moves — it lights up cyan while the detector
+                is tracking a card ("Locking in"), and stays a dashed hint frame otherwise.
+                Detection coords still drive the capture crop; they just don't drive the UI,
+                because a per-frame re-snapped box read as jarring jitter. */}
             {isVideoLoaded && !frozenFrame && (
-                <div className="absolute inset-0 pointer-events-none z-10">
-                    {detectedBox ? (
-                        <div
-                            className={`absolute rounded-xl border-[3px] transition-all duration-100 ease-out ${isLocked ? 'border-brand-cyan' : 'border-brand-cyan/90'}`}
-                            style={{
-                                left: detectedBox.x,
-                                top: detectedBox.y,
-                                width: detectedBox.w,
-                                height: detectedBox.h,
-                                boxShadow: '0 0 0 9999px rgba(0,0,0,0.6), 0 0 22px rgba(0,229,255,0.55)',
-                            }}
-                        >
-                            <CornerBrackets />
-                            {!isLocked && (
-                                <div className="absolute inset-x-0 h-[2px] bg-brand-cyan/80 blur-[1px] rounded-full top-1/2 -mt-[1px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] shadow-[0_0_15px_#00e5ff]" />
-                            )}
-                        </div>
-                    ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div
-                                className="relative w-[70vw] max-w-[280px] aspect-[2.5/3.5] rounded-xl border-2 border-dashed border-white/30"
-                                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }}
-                            />
-                        </div>
-                    )}
+                <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
+                    <div
+                        className={`relative w-[70vw] max-w-[280px] aspect-[2.5/3.5] rounded-xl transition-colors duration-200 ${
+                            cardDetected || isLocked
+                                ? 'border-[3px] border-brand-cyan'
+                                : 'border-2 border-dashed border-white/30'
+                        }`}
+                        style={{
+                            boxShadow: cardDetected || isLocked
+                                ? '0 0 0 9999px rgba(0,0,0,0.6), 0 0 22px rgba(0,229,255,0.55)'
+                                : '0 0 0 9999px rgba(0,0,0,0.45)',
+                        }}
+                    >
+                        {(cardDetected || isLocked) && <CornerBrackets />}
+                        {cardDetected && !isLocked && (
+                            <div className="absolute inset-x-0 h-[2px] bg-brand-cyan/80 blur-[1px] rounded-full top-1/2 -mt-[1px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] shadow-[0_0_15px_#00e5ff]" />
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -472,8 +460,8 @@ export default function WebLiveScanner({ onClose, onMatch, onScanFailed, languag
                 >
                     <i className="fa-solid fa-xmark text-xl"></i>
                 </button>
-                <div className={`bg-black/60 backdrop-blur-md px-4 py-2 rounded-full transition-colors ${isLocked || detectedBox ? 'border border-brand-cyan/50' : ''}`}>
-                    <span className={`text-sm font-bold tracking-widest uppercase ${isLocked || detectedBox ? 'text-brand-cyan' : 'text-white'}`}>
+                <div className={`bg-black/60 backdrop-blur-md px-4 py-2 rounded-full transition-colors ${isLocked || cardDetected ? 'border border-brand-cyan/50' : ''}`}>
+                    <span className={`text-sm font-bold tracking-widest uppercase ${isLocked || cardDetected ? 'text-brand-cyan' : 'text-white'}`}>
                         {statusHintLabel(statusHint)}
                     </span>
                 </div>
@@ -546,11 +534,6 @@ function detectBufferDims(vis: { w: number; h: number }) {
         : { w: Math.round(DETECT_MAX * a), h: DETECT_MAX };
 }
 
-function bufferBoxToScreen(box: Box, dw: number, dh: number, screenW: number, screenH: number): Box {
-    const sx = screenW / dw, sy = screenH / dh;
-    return { x: box.x * sx, y: box.y * sy, w: box.w * sx, h: box.h * sy };
-}
-
 function bufferBoxToVideo(box: Box, dw: number, dh: number, vis: { x: number; y: number; w: number; h: number }): Box {
     const sx = vis.w / dw, sy = vis.h / dh;
     return { x: vis.x + box.x * sx, y: vis.y + box.y * sy, w: box.w * sx, h: box.h * sy };
@@ -561,16 +544,6 @@ function padCrop(c: Box, frac: number, Vw: number, Vh: number): Box {
     const x = Math.max(0, c.x - px);
     const y = Math.max(0, c.y - py);
     return { x, y, w: Math.min(Vw - x, c.w + 2 * px), h: Math.min(Vh - y, c.h + 2 * py) };
-}
-
-function emaBox(prev: Box | null, next: Box, a: number): Box {
-    if (!prev) return next;
-    return {
-        x: prev.x + (next.x - prev.x) * a,
-        y: prev.y + (next.y - prev.y) * a,
-        w: prev.w + (next.w - prev.w) * a,
-        h: prev.h + (next.h - prev.h) * a,
-    };
 }
 
 function maxCornerDelta(a: Box, b: Box): number {
