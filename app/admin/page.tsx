@@ -102,7 +102,8 @@ async function getRecentOffers() {
         .select(`
             id, amount, status, created_at,
             listing:listings(price, card_data),
-            buyer:profiles!offers_buyer_id_fkey(display_name)
+            buyer:profiles!offers_buyer_id_fkey(display_name),
+            seller:profiles!offers_seller_id_fkey(display_name)
         `)
         .order('created_at', { ascending: false })
         .limit(5)
@@ -300,11 +301,17 @@ export default async function AdminOverviewPage() {
                         )}
                         {recentOffers.map((o: any) => {
                             const listing = o.listing as any
+                            const card = listing?.card_data
                             return (
                                 <div key={o.id} className="px-6 py-3 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+                                    {card?.images?.small && (
+                                        <img src={card.images.small} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
+                                    )}
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-slate-200 truncate">{listing?.card_data?.name ?? 'Unknown card'}</p>
-                                        <p className="text-[10px] text-slate-500 truncate">{(o.buyer as any)?.display_name ?? 'Unknown'}</p>
+                                        <p className="text-sm font-semibold text-slate-200 truncate">{card?.name ?? 'Unknown card'}</p>
+                                        <p className="text-[10px] text-slate-500 truncate">
+                                            {(o.buyer as any)?.display_name ?? 'Unknown'} → {(o.seller as any)?.display_name ?? 'Unknown'}
+                                        </p>
                                     </div>
                                     <div className="text-right shrink-0">
                                         <p className="text-sm font-black text-brand-green">฿{Number(o.amount).toLocaleString()}</p>
