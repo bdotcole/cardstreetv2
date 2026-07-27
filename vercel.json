@@ -20,7 +20,7 @@
         },
         {
             "path": "/api/cron/pricecharting",
-            "schedule": "0 3 * * 1"
+            "schedule": "0 3 * * *"
         },
         {
             "path": "/api/cron/price-snapshots",

@@ -8,9 +8,14 @@ import {
 } from '@/lib/pricecharting';
 import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 
-// Weekly PriceCharting refresh. Graded + sealed prices move slowly, so this only
+// Daily PriceCharting refresh. Graded + sealed prices move slowly, so this only
 // re-fetches a bounded, stalest-first slice each run (by PriceCharting product id,
 // so no re-matching). The initial backfill is the .mjs ingest; this keeps it fresh.
+//
+// Cadence is daily rather than weekly because the caps below bound throughput, not
+// the schedule: pricecharting_map has grown to ~56k rows, so at GRADED_CAP per run a
+// weekly cron needed ~141 weeks for a full cycle and most rows sat months stale.
+// Daily brings that to ~20 weeks. Raising GRADED_CAP instead is capped by maxDuration.
 //
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 // Needs PRICECHARTING_TOKEN in the Vercel env.
