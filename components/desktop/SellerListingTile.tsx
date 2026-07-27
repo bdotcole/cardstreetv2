@@ -24,7 +24,7 @@ export default function SellerListingTile({ listing }: { listing: MarketplaceLis
             className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
         >
             <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md">
+                <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md" title={listing.card_data.name} subtitle={listing.card_data.set}>
                     <Image
                         src={thumb}
                         alt={listing.card_data.name || 'Card'}

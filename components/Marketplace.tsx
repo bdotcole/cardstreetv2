@@ -339,7 +339,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       />
                     </GradedSlabFrame>
                     {dealPct !== null && (
-                      <span className={`absolute left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-8' : 'top-1.5'}`}>
+                      <span className={`absolute left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-11' : 'top-1.5'}`}>
                         -{dealPct}%
                       </span>
                     )}

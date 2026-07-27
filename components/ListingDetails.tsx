@@ -199,7 +199,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             <ZoomableSlide active={activeSlide === 0} wrapperClass="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]">
                                 {slabbed ? (
                                     <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden">
-                                        <GradedSlabFrame company={listing.grading_company} grade={listing.grade} size="md">
+                                        <GradedSlabFrame company={listing.grading_company} grade={listing.grade} size="md" title={card.name} subtitle={card.set}>
                                             <Image
                                                 src={card.imageUrl || ""}
                                                 alt={card.name}

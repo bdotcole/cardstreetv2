@@ -309,7 +309,7 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
                 overflow-hidden edge, straddling the image/details boundary. */}
             <div className="relative">
                 <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md">
+                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md" title={listing.card_data.name} subtitle={listing.card_data.set}>
                         <Image
                             src={imageUrl}
                             alt={listing.card_data.name || 'Card'}
@@ -324,7 +324,7 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
                         />
                     </GradedSlabFrame>
                     {dealPct !== null && (
-                        <span className={`absolute left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-12' : 'top-2'}`}>
+                        <span className={`absolute left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-16' : 'top-2'}`}>
                             -{dealPct}%
                         </span>
                     )}
