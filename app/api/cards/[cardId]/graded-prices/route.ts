@@ -27,8 +27,8 @@ const THAI_GRADED_FACTOR = 0.6;
 // real price. 'pending' isn't paid yet; 'cancelled'/'disputed' aren't settled.
 const SOLD_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'delivered', 'completed'];
 
-// A graded condition looks like "PSA 10", "BGS 9.5", "CGC 10", "SGC 10".
-const GRADED_CONDITION = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i;
+// A graded condition looks like "PSA 10", "BGS 9.5", "CGC 10", "TAG 10".
+const GRADED_CONDITION = /^(PSA|BGS|CGC|SGC|ARS|TAG)\s+(\d+(?:\.\d)?)$/i;
 
 // Normalize a collector number for matching: drop the "/total" suffix, lowercase,
 // strip leading zeros ("087/198" -> "87").

@@ -17,7 +17,7 @@ const ListingBodySchema = z.object({
     price: z.number().positive().max(10_000_000),
     condition: z.enum(['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']),
     is_graded: z.boolean().optional(),
-    grading_company: z.enum(['PSA', 'BGS', 'CGC', 'ARS']).nullable().optional(),
+    grading_company: z.enum(['PSA', 'BGS', 'CGC', 'SGC', 'ARS', 'TAG']).nullable().optional(),
     grade: z.number().min(1).max(10).nullable().optional(),
     accepts_offers: z.boolean().optional().default(false),
 })

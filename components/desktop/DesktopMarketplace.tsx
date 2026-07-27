@@ -16,6 +16,7 @@ import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
 import { formatTHB } from '@/lib/currency';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
+import GradedSlabFrame from '@/components/GradedSlabFrame';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -291,6 +292,9 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
         ? getOptimizedImageUrl(listing.image_front_url, 300, 80)
         : catalogUrl;
     const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
+    // Graded listings render inside the slab frame; the deal badge drops below
+    // its label bar.
+    const slabbed = !!listing.is_graded && !!listing.grading_company;
     // Show "Make Offer" only on offer-accepting listings, and only to a signed-in
     // buyer who isn't the seller. Everyone else (incl. signed-out visitors and
     // the flag-off case) gets "Buy Now".
@@ -305,20 +309,22 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
                 overflow-hidden edge, straddling the image/details boundary. */}
             <div className="relative">
                 <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                    <Image
-                        src={imageUrl}
-                        alt={listing.card_data.name || 'Card'}
-                        fill
-                        sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                        loading={eager ? 'eager' : 'lazy'}
-                        placeholder="blur"
-                        blurDataURL={CARD_BLUR_DATA_URL}
-                        unoptimized={shouldSkipNextOptimization(imageUrl)}
-                        onError={() => setCatalogArtFailed(true)}
-                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : 'object-cover'}`}
-                    />
+                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md">
+                        <Image
+                            src={imageUrl}
+                            alt={listing.card_data.name || 'Card'}
+                            fill
+                            sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
+                            loading={eager ? 'eager' : 'lazy'}
+                            placeholder="blur"
+                            blurDataURL={CARD_BLUR_DATA_URL}
+                            unoptimized={shouldSkipNextOptimization(imageUrl)}
+                            onError={() => setCatalogArtFailed(true)}
+                            className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : slabbed ? 'object-contain' : 'object-cover'}`}
+                        />
+                    </GradedSlabFrame>
                     {dealPct !== null && (
-                        <span className="absolute top-2 left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40">
+                        <span className={`absolute left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-12' : 'top-2'}`}>
                             -{dealPct}%
                         </span>
                     )}

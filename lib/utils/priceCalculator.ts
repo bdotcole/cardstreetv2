@@ -57,6 +57,9 @@ export const calculateRecommendedPrice = ({
         // CGC Pristine 10 is valuable, usually similar to PSA.
         // Old CGC 9.5 was ~= PSA 10, new scale matches PSA more.
         // Treating similar to PSA for MVP safety.
+    } else if (gradingCompany === 'TAG') {
+        // TAG 10 trades roughly in PSA 10 territory; no adjustment until we
+        // have real comps.
     }
 
     return Math.round(basePrice * multiplier);

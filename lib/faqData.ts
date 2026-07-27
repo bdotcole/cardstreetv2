@@ -83,7 +83,7 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'Can I buy graded cards?',
-        a: 'Yes. CardStreet lists raw (ungraded) cards as well as professionally graded cards from PSA, BGS, and CGC. Graded listings show the grading company and grade so you know exactly what you are buying.',
+        a: 'Yes. CardStreet lists raw (ungraded) cards as well as professionally graded cards from PSA, BGS, CGC, and TAG. Graded listings show the grading company and grade so you know exactly what you are buying.',
       },
     ],
   },
@@ -230,7 +230,7 @@ const FAQ_TH: FaqCategory[] = [
       },
       {
         q: 'ซื้อการ์ดเกรดได้ไหม?',
-        a: 'ได้ CardStreet มีทั้งการ์ดแบบ raw (ไม่เกรด) และการ์ดที่ผ่านการประเมินจาก PSA, BGS และ CGC รายการการ์ดเกรดจะแสดงบริษัทผู้ประเมินและเกรด คุณจึงรู้แน่ชัดว่ากำลังซื้ออะไร',
+        a: 'ได้ CardStreet มีทั้งการ์ดแบบ raw (ไม่เกรด) และการ์ดที่ผ่านการประเมินจาก PSA, BGS, CGC และ TAG รายการการ์ดเกรดจะแสดงบริษัทผู้ประเมินและเกรด คุณจึงรู้แน่ชัดว่ากำลังซื้ออะไร',
       },
     ],
   },

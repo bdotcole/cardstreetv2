@@ -4,7 +4,7 @@ import { CardCondition } from '@/types';
 // routes. Pure types only — this module is imported from both a 'use client'
 // component and server routes, so it must stay free of server-only imports.
 
-export const GRADING_COMPANIES = ['PSA', 'BGS', 'CGC', 'SGC', 'ARS'] as const;
+export const GRADING_COMPANIES = ['PSA', 'BGS', 'CGC', 'SGC', 'ARS', 'TAG'] as const;
 export type GradingCompany = (typeof GRADING_COMPANIES)[number];
 
 // One inventory line as parsed from the pasted CSV/TSV, before catalog resolution.

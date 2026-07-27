@@ -10,6 +10,7 @@ import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/game
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
+import GradedSlabFrame from '@/components/GradedSlabFrame';
 
 interface MarketplaceProps {
   initialGame?: string;
@@ -297,6 +298,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
             const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
+            // Graded listings render inside the slab frame; its label bar already
+            // shows "PSA 10", so the condition badge is dropped and the deal
+            // badge drops below the label.
+            const slabbed = !!listing.is_graded && !!listing.grading_company;
             // Show "Make Offer" only on offer-accepting listings, and only to a
             // signed-in buyer who isn't the seller. Everyone else (incl. guests
             // and the flag-off case) gets "Buy Now".
@@ -320,25 +325,29 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                     edge, straddling the image/details boundary. */}
                 <div className="relative">
                   <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                    <Image
-                      src={thumbUrl}
-                      alt={listing.card_data.name || 'Card'}
-                      fill
-                      sizes="(max-width: 768px) 45vw, 200px"
-                      loading={idx < 6 ? 'eager' : 'lazy'}
-                      placeholder="blur"
-                      blurDataURL={CARD_BLUR_DATA_URL}
-                      unoptimized={shouldSkipNextOptimization(thumbUrl)}
-                      className={listing.card_data.isSealed ? 'object-contain p-2' : 'object-cover'}
-                    />
+                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade}>
+                      <Image
+                        src={thumbUrl}
+                        alt={listing.card_data.name || 'Card'}
+                        fill
+                        sizes="(max-width: 768px) 45vw, 200px"
+                        loading={idx < 6 ? 'eager' : 'lazy'}
+                        placeholder="blur"
+                        blurDataURL={CARD_BLUR_DATA_URL}
+                        unoptimized={shouldSkipNextOptimization(thumbUrl)}
+                        className={listing.card_data.isSealed ? 'object-contain p-2' : slabbed ? 'object-contain' : 'object-cover'}
+                      />
+                    </GradedSlabFrame>
                     {dealPct !== null && (
-                      <span className="absolute top-1.5 left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40">
+                      <span className={`absolute left-1.5 bg-brand-green text-brand-darker text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-8' : 'top-1.5'}`}>
                         -{dealPct}%
                       </span>
                     )}
-                    <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
-                      {conditionBadgeLabel(listing)}
-                    </span>
+                    {!slabbed && (
+                      <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
+                        {conditionBadgeLabel(listing)}
+                      </span>
+                    )}
                   </div>
                   {isSnipeListing(listing.price) && (
                     <SnipeBadge className="absolute -bottom-3 right-1.5 z-10 h-12 w-auto" />

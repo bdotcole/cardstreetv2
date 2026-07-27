@@ -120,7 +120,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   };
 
   const gradedColor = (company: string) => (
-    { PSA: 'text-brand-cyan', BGS: 'text-brand-green', CGC: 'text-brand-red' } as Record<string, string>
+    { PSA: 'text-brand-cyan', BGS: 'text-brand-green', CGC: 'text-brand-red', TAG: 'text-amber-400' } as Record<string, string>
   )[company] || 'text-white';
 
   // Prioritize hires images if available
@@ -230,7 +230,11 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                             <div>
                               <p className="text-white text-xs font-bold">{listing.seller?.display_name || 'User'}</p>
                               <div className="flex items-center gap-2">
-                                <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{listing.condition}</span>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${listing.is_graded && listing.grading_company ? 'text-amber-400' : 'text-brand-green'}`}>
+                                  {listing.is_graded && listing.grading_company
+                                    ? `${listing.grading_company} ${listing.grade != null ? Number(listing.grade) : ''}`.trim()
+                                    : listing.condition}
+                                </span>
                                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                                 {(() => {
                                   const trust = getSellerTrust(listing.seller);

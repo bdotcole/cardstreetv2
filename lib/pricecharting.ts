@@ -34,8 +34,8 @@ export const GRADED_FIELD_MAP: Record<string, string> = {
 /** All graded condition labels we may write into market_values. */
 export const GRADED_CONDITIONS = Object.values(GRADED_FIELD_MAP);
 
-/** Matches a graded condition string like "PSA 10", "BGS 9.5", "CGC 10", "SGC 10". */
-export const GRADED_CONDITION_RE = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i;
+/** Matches a graded condition string like "PSA 10", "BGS 9.5", "CGC 10", "TAG 10". */
+export const GRADED_CONDITION_RE = /^(PSA|BGS|CGC|SGC|ARS|TAG)\s+(\d+(?:\.\d)?)$/i;
 
 /**
  * Our game id -> PriceCharting price-guide category (CSV download `category=`).

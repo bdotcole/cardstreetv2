@@ -6,6 +6,7 @@ import ReportModal from './ReportModal';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import GradedSlabFrame from './GradedSlabFrame';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -124,13 +125,19 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         </div>
                     ) : (
                     <div className="grid grid-cols-2 gap-3">
-                        {listings.map(listing => (
+                        {listings.map(listing => {
+                            const slabbed = !!listing.is_graded && !!listing.grading_company;
+                            return (
                             <div key={listing.id} className="glass rounded-xl p-2 border border-white/5 group relative active:scale-95 transition-all">
                                 <div className="aspect-[3/4] bg-brand-darker rounded-lg mb-2 relative overflow-hidden">
-                                    <img src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)} loading="lazy" decoding="async" className={`w-full h-full ${listing.card_data.isSealed ? 'object-contain p-1' : 'object-cover'}`} />
-                                    <span className="absolute top-1 right-1 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                                        {listing.condition}
-                                    </span>
+                                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade}>
+                                        <img src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)} loading="lazy" decoding="async" className={`w-full h-full ${listing.card_data.isSealed ? 'object-contain p-1' : slabbed ? 'object-contain' : 'object-cover'}`} />
+                                    </GradedSlabFrame>
+                                    {!slabbed && (
+                                        <span className="absolute top-1 right-1 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                            {listing.condition}
+                                        </span>
+                                    )}
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
                                 <div className="flex items-center justify-between gap-1">
@@ -161,7 +168,8 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     className="absolute inset-0 w-full h-full opacity-0"
                                 ></button>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     )
                 )}

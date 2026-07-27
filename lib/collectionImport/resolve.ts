@@ -16,7 +16,7 @@ import { GradingCompany } from './types';
 const USD_TO_THB = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 
 // A graded market_values row's condition looks like "PSA 10", "BGS 9.5", ...
-const GRADED_CONDITION = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i;
+const GRADED_CONDITION = /^(PSA|BGS|CGC|SGC|ARS|TAG)\s+(\d+(?:\.\d)?)$/i;
 
 // Same projection the scanner's deterministic lookup uses — the mapper needs the
 // market_values rows (all conditions, for both ungraded display and graded tiers)

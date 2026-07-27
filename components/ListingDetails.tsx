@@ -8,6 +8,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import OfferModal from './OfferModal';
+import GradedSlabFrame from './GradedSlabFrame';
 
 // Gallery slide with pinch/double-tap zoom. One-finger drag is left to the
 // scroll-snap gallery until the image is actually zoomed in — otherwise the
@@ -55,6 +56,9 @@ interface ListingDetailsProps {
         image_back_url?: string;
         accepts_offers?: boolean;
         seller_id?: string;
+        is_graded?: boolean;
+        grading_company?: string | null;
+        grade?: number | null;
     };
     onClose: () => void;
     onBuyNow: () => void;
@@ -143,6 +147,13 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     const frontSlideIndex = listing.image_front_url ? 1 : -1;
     const backSlideIndex = listing.image_back_url ? (listing.image_front_url ? 2 : 1) : -1;
 
+    // Graded listings render the catalog art inside a slab frame and show
+    // "PSA 10"-style labels in place of the raw condition.
+    const slabbed = !!listing.is_graded && !!listing.grading_company;
+    const gradedLabel = slabbed
+        ? `${listing.grading_company} ${listing.grade != null ? Number(listing.grade) : ''}`.trim()
+        : null;
+
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const scrollLeft = e.currentTarget.scrollLeft;
@@ -186,13 +197,27 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         {/* Slide 1: Digital Image */}
                         <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
                             <ZoomableSlide active={activeSlide === 0} wrapperClass="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]">
-                                <Image
-                                    src={card.imageUrl || ""}
-                                    alt={card.name}
-                                    width={280}
-                                    height={392}
-                                    className="w-full"
-                                />
+                                {slabbed ? (
+                                    <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden">
+                                        <GradedSlabFrame company={listing.grading_company} grade={listing.grade} size="md">
+                                            <Image
+                                                src={card.imageUrl || ""}
+                                                alt={card.name}
+                                                fill
+                                                sizes="280px"
+                                                className="object-contain"
+                                            />
+                                        </GradedSlabFrame>
+                                    </div>
+                                ) : (
+                                    <Image
+                                        src={card.imageUrl || ""}
+                                        alt={card.name}
+                                        width={280}
+                                        height={392}
+                                        className="w-full"
+                                    />
+                                )}
                             </ZoomableSlide>
                         </div>
 
@@ -247,7 +272,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             </div>
                             <div className="text-right">
                                 <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">
-                                    {listing.condition}
+                                    {gradedLabel ?? listing.condition}
                                 </span>
                             </div>
                         </div>

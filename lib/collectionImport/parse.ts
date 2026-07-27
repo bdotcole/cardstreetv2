@@ -63,7 +63,7 @@ export function parseGrade(gradeCell: string, companyCell: string): Pick<ParsedR
   let company = (companyCell || '').trim().toUpperCase();
   if (!g && !company) return { isGraded: false };
 
-  const m = g.match(/^(PSA|BGS|CGC|SGC|ARS)?\s*(\d+(?:\.\d)?)$/i);
+  const m = g.match(/^(PSA|BGS|CGC|SGC|ARS|TAG)?\s*(\d+(?:\.\d)?)$/i);
   if (!m) return { isGraded: false }; // company-only or unparseable -> treat as raw
   if (m[1]) company = m[1].toUpperCase();
   const num = parseFloat(m[2]);

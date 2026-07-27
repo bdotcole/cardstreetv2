@@ -308,6 +308,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                       { value: 'PSA', label: 'PSA' },
                       { value: 'BGS', label: 'BGS' },
                       { value: 'CGC', label: 'CGC' },
+                      { value: 'TAG', label: 'TAG' },
                     ]}
                     triggerClassName="w-full h-10 bg-brand-darker border border-white/10 rounded-lg px-3 text-white text-sm"
                   />

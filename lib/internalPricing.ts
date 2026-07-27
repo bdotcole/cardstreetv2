@@ -34,7 +34,7 @@ export const thbToUsd = (thb: number): number => thb / THB_PER_USD;
  * - Graded => '<COMPANY> <grade>' with a single space (PriceCharting convention,
  *   e.g. 'PSA 10', 'BGS 9.5'). grade is DECIMAL(3,1); Number() coercion renders
  *   10 / '10.0' as '10' and 9.5 as '9.5'. listings.grading_company is constrained
- *   to PSA/BGS/CGC/ARS, all of which match GRADED_CONDITION_RE.
+ *   to PSA/BGS/CGC/SGC/ARS/TAG, all of which match GRADED_CONDITION_RE.
  * - 'Sealed' passes through.
  * - Only Near Mint / Mint / unlabeled feed the API-populated headline key 'Raw_NM'.
  *   Played conditions keep their OWN key so a played sale never drags down the NM
