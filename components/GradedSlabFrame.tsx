@@ -1,4 +1,5 @@
 import React from 'react';
+import { GRADER_LOGOS } from './graderLogos';
 
 // Slab chrome drawn around a graded listing's card art so a graded card reads
 // as graded at a glance. The label bar mimics each grader's real label layout
@@ -24,7 +25,7 @@ type SlabStyle = {
     border: string;     // label bottom accent
     topStrip?: string;  // thin brand stripe along the label's top edge
     holoStrip?: string; // iridescent stripe along the label's bottom edge
-    wordmark: string;
+    wordmark: string;   // logo tint (currentColor SVGs) / text fallback color
     infoBar: string;    // faux cert-text lines (sm)
     infoText: string;   // real cert text (md)
     descriptor: string;
@@ -111,13 +112,13 @@ const COMPANY_DESCRIPTORS: Record<string, Record<string, string>> = {
 const SIZES = {
     sm: {
         pad: 'px-1.5 py-1', gap: 'gap-1.5', strip: 'h-[2px]',
-        wordmark: 'text-[8px]',
+        wordmark: 'text-[8px]', logo: 'h-2.5 w-auto',
         infoBar: 'h-[2px]', infoGap: 'gap-[2px]', infoText: 'text-[6px]',
         descriptor: 'text-[5px]', grade: 'text-xs',
     },
     md: {
         pad: 'px-2.5 py-1.5', gap: 'gap-2.5', strip: 'h-[3px]',
-        wordmark: 'text-sm',
+        wordmark: 'text-sm', logo: 'h-4 w-auto',
         infoBar: 'h-[3px]', infoGap: 'gap-[3px]', infoText: 'text-[8px]',
         descriptor: 'text-[7px]', grade: 'text-xl',
     },
@@ -156,7 +157,14 @@ const GradedSlabFrame: React.FC<GradedSlabFrameProps> = ({ company, grade, size 
                 <div className={`relative shrink-0 ${style.label} ${style.border}`}>
                     {style.topStrip && <div className={`${sz.strip} ${style.topStrip}`} />}
                     <div className={`flex items-center ${sz.gap} ${sz.pad}`}>
-                        <span className={`font-black tracking-wider leading-none shrink-0 ${sz.wordmark} ${style.wordmark}`}>{key}</span>
+                        {(() => {
+                            // Official wordmark where we have one (tinted via
+                            // currentColor); styled text for SGC/ARS.
+                            const Logo = GRADER_LOGOS[key];
+                            return Logo
+                                ? <span className={`shrink-0 ${style.wordmark}`}><Logo className={sz.logo} /></span>
+                                : <span className={`font-black tracking-wider leading-none shrink-0 ${sz.wordmark} ${style.wordmark}`}>{key}</span>;
+                        })()}
                         <div className="flex-1 min-w-0">
                             {size === 'md' && title ? (
                                 <div className="flex flex-col leading-tight min-w-0">
