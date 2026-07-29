@@ -15,17 +15,31 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 // Cadence is daily rather than weekly because the caps below bound throughput, not
 // the schedule: pricecharting_map has grown to ~56k rows, so at GRADED_CAP per run a
 // weekly cron needed ~141 weeks for a full cycle and most rows sat months stale.
-// Daily brings that to ~20 weeks. Raising GRADED_CAP instead is capped by maxDuration.
+//
+// WALL CLOCK, NOT THE CAPS, IS THE REAL LIMIT. Each item costs ~875ms end to end
+// (PriceCharting round trip + two Supabase writes), so the old 50s budget only ever
+// got through ~57 cards — 14% of GRADED_CAP. Worse, graded ran first against a single
+// shared budget and consumed all of it, so the sealed loop below broke on its very
+// first overBudget() check and `sealedUpdated` was 0 on every run: sealed prices sat
+// frozen from 2026-06-29/07-04 onward. Two fixes, both here:
+//   1. maxDuration 300s (same as /api/scan and /api/cron/mirror-images, so the plan
+//      already supports it) with the budget widened to match.
+//   2. Sealed gets a RESERVED slice at the end. Graded stops early at
+//      GRADED_DEADLINE_MS so the sealed pass can never be starved again.
+// Rough per-run yield: ~180 graded cards + ~135 sealed products, i.e. a ~10-month
+// graded cycle over 56k map rows and a ~33-day cycle over 4.5k sealed products.
 //
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 // Needs PRICECHARTING_TOKEN in the Vercel env.
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const GRADED_CAP = 400;   // mapped cards refreshed per run
 const SEALED_CAP = 200;   // sealed products refreshed per run
-const TIME_BUDGET_MS = 50_000;
+const TIME_BUDGET_MS = 280_000;
+const SEALED_RESERVE_MS = 120_000;  // tail of the budget the graded pass may not touch
+const GRADED_DEADLINE_MS = TIME_BUDGET_MS - SEALED_RESERVE_MS;
 const RATE_MS = 120;      // gentle pacing between PriceCharting calls
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -44,7 +58,9 @@ export async function GET(request: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     const started = Date.now();
-    const overBudget = () => Date.now() - started > TIME_BUDGET_MS;
+    const elapsed = () => Date.now() - started;
+    const overBudget = () => elapsed() > TIME_BUDGET_MS;
+    const gradedOverDeadline = () => elapsed() > GRADED_DEADLINE_MS;
 
     async function fetchProduct(id: string) {
         await sleep(RATE_MS);
@@ -80,7 +96,7 @@ export async function GET(request: NextRequest) {
     }
 
     for (const m of maps || []) {
-        if (overBudget()) break;
+        if (gradedOverDeadline()) break;
         try {
             const product = await fetchProduct(m.pricecharting_id);
             const lang = langByCard.get(m.card_id) || 'en';
@@ -120,6 +136,8 @@ export async function GET(request: NextRequest) {
             if (errors.length < 5) errors.push(`graded ${m.pricecharting_id}: ${e.message}`);
         }
     }
+
+    const gradedElapsedMs = elapsed();
 
     // --- Sealed: stalest sealed products ---------------------------------------
     const { data: sealed } = await supabase
@@ -188,7 +206,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         success: true,
         gradedCards, gradedRows, sealedUpdated,
-        elapsedMs: Date.now() - started,
+        // Phase timings make the budget split auditable: sealedUpdated === 0 with a
+        // non-trivial sealedElapsedMs means sealed genuinely had no stale rows, not
+        // that it was starved again.
+        gradedElapsedMs,
+        sealedElapsedMs: elapsed() - gradedElapsedMs,
+        gradedHitDeadline: gradedCards > 0 && gradedElapsedMs >= GRADED_DEADLINE_MS,
+        elapsedMs: elapsed(),
         errors,
         timestamp: new Date().toISOString(),
     });
