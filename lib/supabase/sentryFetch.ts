@@ -28,6 +28,19 @@ const isConsumedAuthLink = (urlStr: string, status: number, body: unknown): bool
     return code === 'otp_expired' || message.includes('link is invalid or has expired');
 };
 
+// A fetch that throws while the device reports itself offline is the user's
+// connectivity, not a fault on our side or Supabase's — a lost signal on the
+// BTS, a tunnel, a backgrounded Capacitor app. The browsers spell the same
+// failure differently ("Failed to fetch" on Blink, "Load failed" on WebKit),
+// so it arrived as several separate Sentry issues with nothing actionable in
+// any of them. Everything else still reports: a throw while ONLINE can mean
+// Supabase is genuinely unreachable, DNS is broken, or CORS regressed, which
+// is exactly the signal this capture was added for. navigator.onLine only
+// promises a false means offline (a true is unreliable), which is the
+// direction we depend on here.
+const isClientOffline = (): boolean =>
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+
 export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     try {
         const response = await fetch(input, init);
@@ -73,7 +86,7 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
         return response;
     } catch (error) {
         const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-        if (urlStr.includes('.supabase.co')) {
+        if (urlStr.includes('.supabase.co') && !isClientOffline()) {
             Sentry.captureException(error, {
                 extra: { url: urlStr, message: 'Network connectivity failure to Supabase' },
                 tags: { database_client: 'supabase' }

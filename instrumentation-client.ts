@@ -28,6 +28,21 @@ if (dsn) {
         // affected app users), so the WebKit twin is now filtered too — the
         // anchored regex matches only the script-compiler EOF, never a real
         // "JSON Parse error: ...Unexpected EOF" from app code.
+        // Android/Blink has a third wording for it: the same gtag failure
+        // reaching us through window.onerror rather than the appendChild throw,
+        // so neither the appendChild string nor /googletagmanager/ matches it
+        // (CARDSTREET-1B).
+        // Symbolicated, its stack bottoms out in next/script's loadScript —
+        // the <script> @next/third-parties injects for GA, failing to COMPILE on
+        // an old Android WebView (Chrome WebView 114 / Android 12). 16 events
+        // since 2026-06-27, zero affected users, same as the twins above.
+        // Message-matched because beforeSend can't do better: Sentry symbolicates
+        // server-side, so client-side the frames are minified chunk URLs, and
+        // react-dom is bundled into our own chunks — an injected script's stack
+        // is indistinguishable from ours at that point. The regex is anchored to
+        // the bare message; the tradeoff is the same one accepted for the WebKit
+        // twin, and a parse failure in our OWN bundle would take the app (and
+        // this SDK) down rather than arriving as one event from one device.
         // Android WebView / Capacitor bridge teardown (CARDSTREET-17/-18). The
         // native bridge throws "Error invoking postMessage: Java object is gone"
         // when JS reaches it after Android has destroyed the WebView's backing
@@ -37,6 +52,7 @@ if (dsn) {
             /googletagmanager/i,
             "Failed to execute 'appendChild' on 'Node': Invalid or unexpected token",
             /^(?:SyntaxError: )?Unexpected EOF$/,
+            /^(?:SyntaxError: )?Invalid or unexpected token$/,
             /Java object is gone/i,
             /Error invoking postMessage/i,
         ],
