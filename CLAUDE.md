@@ -327,10 +327,10 @@ The legacy `fixTcgdexUrl` helpers that append `.png` only work for *full-size* f
 The `raw_data` JSONB column is large (~tens of KB per row). For list queries, select explicit columns plus only the joins the mapper needs:
 
 ```ts
-.select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(market_avg, last_updated)')
+.select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
 ```
 
-The `raw_data->tcgplayer` JSONB path keeps the price fallback without pulling the rest of the blob. The web `/api/sets/[setId]/cards` route and the mobile `fetchCardsBySet`/`searchCards` both follow this pattern.
+The `raw_data->tcgplayer` JSONB path keeps the price fallback without pulling the rest of the blob. **Always project `currency` in a `market_values(...)` join** — `market_avg` is USD for most non-Thai rows, and `lib/cardMapper.ts` only converts when `currency === 'USD'`; omitting it silently renders USD amounts as THB (~36x too low). The web `/api/sets/[setId]/cards` route and the mobile `fetchCardsBySet`/`searchCards` both follow this pattern.
 
 ### `.eq('set_id', ...)` — never `.ilike` without wildcards
 
