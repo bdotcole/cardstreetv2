@@ -315,6 +315,14 @@
         "body": "Purchases are currently available only in Thailand while we set up shipping in your area. You can still browse the marketplace and build your collection — buying is coming soon to your country.",
         "gotIt": "Got it"
     },
+    "checkoutAddress": {
+        "title": "Shipping details",
+        "subtitle": "The courier needs a delivery address and phone number before checkout. Saved to your profile — you only do this once.",
+        "searchPlaceholder": "Search address to auto-fill...",
+        "searchHint": "Select from suggestions, then edit below if needed",
+        "saveContinue": "Save & continue to payment",
+        "saveFailed": "Could not save your address. Please try again."
+    },
     "sellerInfo": {
         "title": "How selling works",
         "subtitle": "A quick rundown of fees and what happens after a sale.",

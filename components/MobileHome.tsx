@@ -19,6 +19,7 @@ import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
+import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
 import OfferModal from '@/components/OfferModal';
@@ -80,6 +81,16 @@ type PendingAuthAction =
     | { type: 'vault'; card: Card; collectionId?: string }
     | { type: 'checkout'; items: CartItem[] }
     | { type: 'buyNow'; listing?: MarketplaceListing };
+
+// A purchase tap that hit the shipping-profile gate. The CheckoutAddressSheet
+// collects the missing address/phone inline and this records which entry point
+// to re-dispatch on save, so the purchase resumes instead of dead-ending in
+// the Profile tab. buyNow carries the resolved listing so the resume works
+// even after the ListingDetails modal behind the sheet is gone.
+type AddressGateResume =
+    | { type: 'checkout' }
+    | { type: 'buyNow'; listing: MarketplaceListing }
+    | { type: 'payOffer'; offer: Offer };
 
 // Layout effect that is safe to reference from SSR'd client components —
 // effects never run on the server, this alias only silences the
@@ -382,6 +393,11 @@ export default function HomePage() {
     // below explains the restriction when a non-TH buyer tries to check out.
     usePurchaseRegion();
     const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
+    // In-checkout shipping-details gate (see AddressGateResume above).
+    const [addressGate, setAddressGate] = useState<{
+        initial: CheckoutAddressValues;
+        resume: AddressGateResume;
+    } | null>(null);
 
     // Buylist State
     const [buylistCard, setBuylistCard] = useState<Card | null>(null);
@@ -798,11 +814,14 @@ export default function HomePage() {
     // Client-side mirror of the /api/orders/checkout buyer-profile gate: the
     // buyer needs a complete shipping address AND a valid phone before we open
     // the payment modal, so they hit a clean "fill your details" UX instead of
-    // failing halfway through checkout. Shared by both purchase entry points
-    // (cart Checkout + Buy Now). The server-side gate stays authoritative; this
-    // fails open (returns true) if the pre-check errors so a lookup hiccup never
-    // blocks a legitimate buyer. Assumes the caller already required auth.
-    const ensureBuyerProfileComplete = async (): Promise<boolean> => {
+    // failing halfway through checkout. Shared by all purchase entry points
+    // (cart Checkout + Buy Now + pay-an-offer). With a `resume` payload the
+    // missing details are collected inline in CheckoutAddressSheet and the
+    // purchase re-dispatches on save; without one it falls back to the old
+    // bounce into the Profile tab. The server-side gate stays authoritative;
+    // this fails open (returns true) if the pre-check errors so a lookup hiccup
+    // never blocks a legitimate buyer. Assumes the caller already required auth.
+    const ensureBuyerProfileComplete = async (resume?: AddressGateResume): Promise<boolean> => {
         if (!user) return false;
         try {
             const supabase = createClient();
@@ -815,10 +834,25 @@ export default function HomePage() {
             // Phone must be present AND a valid TH number — Flash can't deliver
             // to a junk value that clears the non-empty completeness check.
             if (!completeness.complete || !isValidThaiPhone(profile?.phone_number)) {
-                showToast(t('profile.incompleteBuyer'), 'error');
-                setIsCartOpen(false);
-                setSelectedListing(null);
-                setActiveTab('profile');
+                if (resume) {
+                    setIsCartOpen(false);
+                    setAddressGate({
+                        // Prefill whatever the buyer already saved (a junk
+                        // phone prefills too, so they see what to fix).
+                        initial: {
+                            ...EMPTY_CHECKOUT_ADDRESS,
+                            ...Object.fromEntries(
+                                BUYER_REQUIRED_PROFILE_FIELDS.map((f) => [f, profile?.[f] ?? '']),
+                            ),
+                        },
+                        resume,
+                    });
+                } else {
+                    showToast(t('profile.incompleteBuyer'), 'error');
+                    setIsCartOpen(false);
+                    setSelectedListing(null);
+                    setActiveTab('profile');
+                }
                 return false;
             }
             return true;
@@ -838,7 +872,7 @@ export default function HomePage() {
         // cart hydration wipes the in-memory signed-out cart at sign-in.
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart })) return;
 
-        if (!(await ensureBuyerProfileComplete())) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'checkout' }))) return;
 
         setIsCartOpen(false);
         // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
@@ -868,7 +902,7 @@ export default function HomePage() {
         }
         if (!(await ensureCanPurchase())) return;
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase')) return;
-        if (!(await ensureBuyerProfileComplete())) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'payOffer', offer }))) return;
 
         setCart([{
             id: offer.listing_id,
@@ -896,7 +930,7 @@ export default function HomePage() {
         if (!listing) return;
         if (!(await ensureCanPurchase())) return;
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg })) return;
-        if (!(await ensureBuyerProfileComplete())) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing }))) return;
         setCart([{
             id: listing.id,
             cardId: listing.card_id,
@@ -908,6 +942,23 @@ export default function HomePage() {
         }]);
         setSelectedListing(null);
         setIsPaymentModalOpen(true);
+    };
+
+    // Shipping details saved from the in-checkout sheet — re-dispatch the
+    // purchase that hit the gate. The handler re-runs every gate from the top
+    // (geo, auth, profile — the profile one now passes) and opens the payment
+    // modal with a fresh shipping estimate against the just-saved address.
+    const handleAddressGateSaved = () => {
+        const gate = addressGate;
+        setAddressGate(null);
+        if (!gate) return;
+        if (gate.resume.type === 'checkout') {
+            void handleCheckout();
+        } else if (gate.resume.type === 'buyNow') {
+            void handleBuyNow(gate.resume.listing);
+        } else {
+            void handlePayOffer({ offer: gate.resume.offer });
+        }
     };
 
     // OBO "Make an offer" from a marketplace grid tile: open the offer modal for
@@ -1938,6 +1989,13 @@ export default function HomePage() {
                 <PurchaseRegionModal
                     isOpen={isRegionBlockOpen}
                     onClose={() => setIsRegionBlockOpen(false)}
+                />
+
+                <CheckoutAddressSheet
+                    isOpen={!!addressGate}
+                    initialValues={addressGate?.initial ?? EMPTY_CHECKOUT_ADDRESS}
+                    onClose={() => setAddressGate(null)}
+                    onSaved={handleAddressGateSaved}
                 />
 
                 <PaymentModal
