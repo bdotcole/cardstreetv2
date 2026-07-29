@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import type { StripeElementsOptions } from '@stripe/stripe-js';
+import type { Stripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
@@ -36,6 +36,14 @@ function getStripePromise(stripeAccount?: string | null): ReturnType<typeof load
     let promise = stripePromiseCache.get(cacheKey);
     if (!promise) {
         promise = loadStripe(PUBLISHABLE_KEY, stripeAccount ? { stripeAccount } : undefined);
+        // Evict a failed load. loadStripe rejects with "Failed to load
+        // Stripe.js" whenever js.stripe.com can't be fetched — an ad/tracker
+        // blocker, a captive-portal wifi, a flaky mobile connection. Keeping
+        // the rejected promise in the cache would replay that same failure for
+        // the rest of the session, so the buyer could never retry the purchase
+        // without a full page reload. The catch also marks this promise as
+        // handled; consumers attach their own handlers independently.
+        promise.catch(() => { stripePromiseCache.delete(cacheKey); });
         stripePromiseCache.set(cacheKey, promise);
     }
     return promise;
@@ -460,11 +468,53 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // swapping later would tokenize the card on the wrong account. Other
     // (non-marketplace) callers tokenize on the platform immediately.
     const isMarketplaceCheckout = (apiEndpoint ?? '/api/checkout') === '/api/checkout';
-    const stripePromise = useMemo(
-        () => getStripePromise(isMarketplaceCheckout ? estimate?.sellerStripeAccountId : undefined),
-        [isMarketplaceCheckout, estimate?.sellerStripeAccountId],
-    );
+    const stripeAccountForElements = isMarketplaceCheckout ? estimate?.sellerStripeAccountId ?? null : null;
     const waitingForEstimate = isMarketplaceCheckout && !estimate && !estimateError;
+
+    // Resolve Stripe.js here instead of handing the promise to <Elements>.
+    // react-stripe-js calls .then() on the prop with no rejection handler, so a
+    // blocked js.stripe.com surfaced in Sentry as an *unhandled* "Failed to
+    // load Stripe.js" and left the buyer on a permanently empty card field —
+    // no error, no way to retry. Resolving it ourselves gives both.
+    // Tagged with the account it was loaded for: <Elements> refuses to swap its
+    // `stripe` prop after mount, so handing it a platform-scoped instance while
+    // the seller's account is still resolving would pin the whole checkout to
+    // the wrong account (the failure the comment above warns about).
+    const [stripe, setStripe] = useState<{ account: string | null; instance: Stripe } | null>(null);
+    const [stripeLoadFailed, setStripeLoadFailed] = useState(false);
+    const [stripeAttempt, setStripeAttempt] = useState(0);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // On the marketplace path the connected account isn't known until the
+        // estimate lands. Stripe.js itself is already downloading by then (the
+        // SDK injects its script on import), so this costs no real latency.
+        if (waitingForEstimate) return;
+
+        const account = stripeAccountForElements;
+        const promise = getStripePromise(account);
+        if (!promise) return;
+
+        let cancelled = false;
+        setStripeLoadFailed(false);
+        promise.then(
+            (loaded) => {
+                if (cancelled) return;
+                setStripe(loaded ? { account, instance: loaded } : null);
+                // A null resolve means an invalid/blank publishable key —
+                // same dead-field outcome as a failed script load.
+                setStripeLoadFailed(!loaded);
+            },
+            () => {
+                if (cancelled) return;
+                setStripe(null);
+                setStripeLoadFailed(true);
+            },
+        );
+        return () => { cancelled = true; };
+    }, [isOpen, waitingForEstimate, stripeAccountForElements, stripeAttempt]);
+
+    const stripeInstance = stripe && stripe.account === stripeAccountForElements ? stripe.instance : null;
 
     // List-first: a seller may list before finishing Stripe verification, but a
     // buyer can't pay until that seller's account can receive charges. Block the
@@ -547,7 +597,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
 
                     <div className="space-y-3">
-                        {!stripePromise ? (
+                        {!PUBLISHABLE_KEY ? (
                             // PUBLISHABLE_KEY missing/empty — render a clear message
                             // instead of a silently dead card field + greyed button.
                             <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-4 text-center">
@@ -567,10 +617,31 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 {t('paymentFlow.sellerUnverified')
                                     || 'This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.'}
                             </div>
+                        ) : stripeLoadFailed ? (
+                            // js.stripe.com never loaded — almost always an
+                            // ad/tracker blocker or a dropped connection, both
+                            // of which a retry can clear.
+                            <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-4 text-center space-y-3">
+                                <p>
+                                    {t('paymentFlow.stripeBlocked')
+                                        || "Couldn't load the secure payment form. An ad blocker or your network may be blocking Stripe — disable it for this site and try again."}
+                                </p>
+                                <button
+                                    onClick={() => setStripeAttempt(n => n + 1)}
+                                    className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    {t('paymentFlow.retry') || 'Try again'}
+                                </button>
+                            </div>
+                        ) : !stripeInstance ? (
+                            <div className="flex items-center justify-center gap-2 text-slate-400 text-xs py-6">
+                                <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                {t('paymentFlow.preparingCheckout') || 'Preparing secure checkout…'}
+                            </div>
                         ) : (
                             <>
                                 <Elements
-                                    stripe={stripePromise}
+                                    stripe={stripeInstance}
                                     options={elementsOptions}
                                     // Deferred Elements can't change amount/currency/account in
                                     // place — remount when any of them changes.

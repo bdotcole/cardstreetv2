@@ -416,7 +416,9 @@
         "pay": "Pay",
         "processing": "Processing…",
         "chargedInThb": "Charged in Thai Baht as",
-        "bankRateNote": "Your bank sets the final exchange rate."
+        "bankRateNote": "Your bank sets the final exchange rate.",
+        "stripeBlocked": "Couldn't load the secure payment form. An ad blocker or your network may be blocking Stripe — disable it for this site and try again.",
+        "retry": "Try again"
     },
     "desktop": {
         "searchPlaceholder": "Search cards by name...",

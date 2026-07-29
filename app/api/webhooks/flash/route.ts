@@ -67,15 +67,38 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
 
-        // Find the shipping label by tracking number. shipping_fee is what the
+        // Find the shipping labels by tracking number. shipping_fee is what the
         // buyer was charged up front — needed to compute the reconciliation delta.
-        const { data: label, error: labelError } = await supabase
+        //
+        // A waybill covers MANY orders, not one: fulfillment creates a single
+        // Flash shipment per seller per cart and writes a shipping_labels row
+        // for EVERY order in that group, all carrying the same pno. This lookup
+        // used to end in `.single()`, so a multi-item cart made PostgREST fail
+        // with PGRST116 ("multiple rows returned") — which this handler read as
+        // "no matching shipment" and reported as a waybill divergence. Every
+        // status event for a multi-item cart was therefore dropped, and those
+        // orders only advanced when the hourly reconcile-shipments cron caught
+        // up. Read all matching rows and advance each order.
+        const { data: labels, error: labelError } = await supabase
             .from('shipping_labels')
             .select('*, orders!inner(id, status, buyer_id, seller_id, shipping_fee)')
             .eq('tracking_number', pno)
-            .single()
 
-        if (labelError || !label) {
+        if (labelError) {
+            // A DB-side failure is transient, not a mapping problem — 500 so
+            // Flash retries rather than us dropping a real event.
+            console.error('[FlashWebhook] shipping_labels lookup failed:', labelError.message)
+            Sentry.captureException(new Error(`Flash webhook label lookup failed: ${labelError.message}`), {
+                extra: { pno, state: data.state },
+            })
+            return NextResponse.json({ errorCode: '0', error: 'Lookup failed' }, { status: 500 })
+        }
+
+        const orders = (labels ?? [])
+            .map(l => (l as any).orders)
+            .filter((o): o is { id: string; status: string; buyer_id: string; seller_id: string; shipping_fee: number | null } => !!o)
+
+        if (orders.length === 0) {
             // An unmatched pno means Flash is sending us real events for a
             // waybill we don't have on any order — which is exactly how a
             // waybill divergence (e.g. a duplicate shipment created for one
@@ -89,8 +112,6 @@ export async function POST(request: NextRequest) {
             )
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
-
-        const order = (label as any).orders
 
         // ─── Status transition (code 0) ───
         const flashState = parseInt(data.state, 10)
@@ -113,10 +134,22 @@ export async function POST(request: NextRequest) {
             // status we read so a concurrent advance (reconcile cron, buyer
             // confirm) is skipped instead of clobbered/re-notified.
             const statusOrder = ['pending', 'pending_payment', 'paid', 'awaiting_shipping_payment', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
-            const currentIdx = statusOrder.indexOf(order.status)
             const newIdx = statusOrder.indexOf(orderStatus)
 
-            if (currentIdx >= 0 && newIdx > currentIdx) {
+            // One parcel, one notification. Every order under this waybill
+            // belongs to the same buyer (a cart is grouped by seller), so
+            // notifying per order would mail the buyer N times for the single
+            // box they received.
+            let notified = false
+            // Collect rather than return early: a failure on one order must not
+            // abandon its siblings. Flash retries on the 500 and the forward-only
+            // guard makes the already-advanced ones no-ops.
+            let updateFailed: { orderId: string; message: string } | null = null
+
+            for (const order of orders) {
+                const currentIdx = statusOrder.indexOf(order.status)
+                if (currentIdx < 0 || newIdx <= currentIdx) continue
+
                 const updateData: any = { status: orderStatus }
                 if (orderStatus === 'delivered') {
                     updateData.delivered_at = new Date().toISOString()
@@ -143,44 +176,59 @@ export async function POST(request: NextRequest) {
                         level: 'error',
                         extra: { orderId: order.id, from: order.status, to: orderStatus, updateData },
                     })
-                    return NextResponse.json({ errorCode: '0', error: 'Order update failed' }, { status: 500 })
+                    updateFailed = { orderId: order.id, message: orderUpdateError.message }
+                    continue
                 }
 
                 if (!applied || applied.length === 0) {
                     // CAS miss: another path advanced the order first — its
                     // notification already went out, don't duplicate it.
                     console.log(`[FlashWebhook] Order ${order.id}: status changed concurrently, skipping ${orderStatus}`)
-                } else {
-                    console.log(`[FlashWebhook] Order ${order.id} updated: ${order.status} → ${orderStatus}`)
-
-                    // Fire notifications for significant status changes
-                    try {
-                        const { sendShippedNotification, sendPackageDeliveredNotification } = await import('@/lib/courier')
-
-                        if (orderStatus === 'delivered') {
-                            // Notify buyer that package was delivered (Task 3 requirement)
-                            await sendPackageDeliveredNotification(
-                                order.buyer_id,
-                                order.id,
-                                pno
-                            )
-                        } else if (orderStatus === 'out_for_delivery') {
-                            // Keep using shipped notification for 'out for delivery' as a fallback
-                            await sendShippedNotification(
-                                order.buyer_id,
-                                { id: order.id, total_amount: 0 },
-                                pno
-                            )
-                        }
-                    } catch (notifError) {
-                        console.error('[FlashWebhook] Notification error (non-fatal):', notifError)
-                    }
+                    continue
                 }
+
+                console.log(`[FlashWebhook] Order ${order.id} updated: ${order.status} → ${orderStatus}`)
+
+                // Fire notifications for significant status changes
+                if (notified) continue
+                try {
+                    const { sendShippedNotification, sendPackageDeliveredNotification } = await import('@/lib/courier')
+
+                    if (orderStatus === 'delivered') {
+                        // Notify buyer that package was delivered (Task 3 requirement)
+                        await sendPackageDeliveredNotification(
+                            order.buyer_id,
+                            order.id,
+                            pno
+                        )
+                        notified = true
+                    } else if (orderStatus === 'out_for_delivery') {
+                        // Keep using shipped notification for 'out for delivery' as a fallback
+                        await sendShippedNotification(
+                            order.buyer_id,
+                            { id: order.id, total_amount: 0 },
+                            pno
+                        )
+                        notified = true
+                    }
+                } catch (notifError) {
+                    console.error('[FlashWebhook] Notification error (non-fatal):', notifError)
+                }
+            }
+
+            if (updateFailed) {
+                return NextResponse.json({ errorCode: '0', error: 'Order update failed' }, { status: 500 })
             }
         }
 
         // ─── Freight reconciliation (weight code 1, price code 2) ───
-        await reconcileFreight(supabase, order, data)
+        // Freight is assessed once for the PARCEL. Attribute it to the order
+        // that actually carries the buyer's shipping charge (the primary order
+        // of the seller group) — the siblings have shipping_fee 0, so running
+        // this for each would record the full freight as an under-quote and
+        // fire a bogus "freight exceeded the quote" alert per sibling.
+        const freightOrder = orders.find(o => Number(o.shipping_fee || 0) > 0) ?? orders[0]
+        await reconcileFreight(supabase, freightOrder, data)
 
         return NextResponse.json({ errorCode: '1', state: 'success' })
 
