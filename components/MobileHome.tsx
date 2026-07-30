@@ -1514,6 +1514,30 @@ export default function HomePage() {
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
+                // Setup-nudge email CTA App Link (cardstreet.app/?stripe_connect=
+                // refresh|complete). Android intercepts all cardstreet.app URLs,
+                // so the email tap opens the app HERE — the web landing branch
+                // never runs and no StripeConnectSection is mounted to hear an
+                // event. Stash the resume intent for Profile (opens the payouts
+                // panel) and StripeConnectSection (acts on the resume) to pick
+                // up on mount, then switch tabs. https only — the cardstreet://
+                // bounce from Stripe's own return flow is handled below.
+                try {
+                    const appLink = new URL(data.url);
+                    const stripeConnect = appLink.searchParams.get('stripe_connect');
+                    if (
+                        appLink.protocol.startsWith('http') &&
+                        (stripeConnect === 'refresh' || stripeConnect === 'complete')
+                    ) {
+                        try {
+                            sessionStorage.setItem('cs_open_payouts', '1');
+                            sessionStorage.setItem('cs_stripe_connect_resume', stripeConnect);
+                        } catch { /* opens Profile root instead */ }
+                        setActiveTab('profile');
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Handle native HTTP App Links and Custom Schemes
                 if (data.url.includes('cardstreet://') || data.url.includes('/mobile-redirect')) {
                     // Parse URL parameters
@@ -1531,6 +1555,17 @@ export default function HomePage() {
                         const stripeConnect = url.searchParams.get('stripe_connect');
                         if (stripeConnect) {
                             console.log('[DeepLink] Stripe Connect return:', stripeConnect);
+                            // Cold-start safety: if the app process died while
+                            // the seller was in Stripe's browser flow, nothing
+                            // is mounted to hear the event. Stash the same
+                            // mount-time flags the email-CTA branch above uses;
+                            // a still-mounted StripeConnectSection handles the
+                            // event instead and clears the resume flag.
+                            try {
+                                sessionStorage.setItem('cs_open_payouts', '1');
+                                sessionStorage.setItem('cs_stripe_connect_resume', stripeConnect);
+                            } catch { /* event path only */ }
+                            setActiveTab('profile');
                             window.dispatchEvent(
                                 new CustomEvent('stripe-connect-return', { detail: stripeConnect })
                             );

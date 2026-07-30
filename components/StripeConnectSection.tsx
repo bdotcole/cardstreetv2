@@ -16,27 +16,21 @@
  * rewrite — at that point we'll re-add a currency picker here.
  *
  * Before Stripe's hosted flow, a bilingual pre-screen lists what Stripe will
- * ask for (ID, bank, address, phone) so users know what they're walking
- * into. Skipped on resume — the user has already seen it.
+ * ask for (ID + laser code, selfie, bank, address, phone) so users know what
+ * they're walking into. It is shown to everyone who hasn't submitted the KYC
+ * form yet — including resumers and the ?stripe_connect=refresh nudge CTA.
+ * Resumers are precisely the people who bounced off Stripe's page the first
+ * time, so they need the prep reminder most; only a seller who already
+ * submitted the form skips it (nothing left to prepare).
  *
  * Handles the ?stripe_connect=complete|refresh query string Stripe redirects
  * back to: refreshes status from Stripe and clears the param.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-    CheckCircle,
-    AlertCircle,
-    ExternalLink,
-    Loader2,
-    CreditCard,
-    IdCard,
-    MapPin,
-    Phone,
-    Shield,
-    X,
-} from 'lucide-react';
+import { CheckCircle, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import StripePreScreen from '@/components/StripePreScreen';
 
 interface ConnectStatus {
     connected: boolean;
@@ -110,6 +104,9 @@ export default function StripeConnectSection() {
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPreScreen, setShowPreScreen] = useState(false);
+    // Set when we land on ?stripe_connect=refresh: we can't decide whether to
+    // show the prep step until status tells us if the form was ever submitted.
+    const [resumeAfterStatus, setResumeAfterStatus] = useState(false);
 
     const fetchStatus = useCallback(async (refresh = false) => {
         try {
@@ -154,10 +151,13 @@ export default function StripeConnectSection() {
         }
     }, []);
 
-    // On mount: check for Stripe redirect query params, then load status.
+    // On mount: check for Stripe redirect query params (web), then the
+    // deep-link resume flag (native App Link taps stash it in sessionStorage
+    // because the WebView's URL never carries ?stripe_connect=...), then load
+    // status.
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const cn = params.get('stripe_connect');
+        let cn = params.get('stripe_connect');
 
         if (cn === 'complete' || cn === 'refresh') {
             // Strip the param so a refresh doesn't re-trigger
@@ -168,16 +168,28 @@ export default function StripeConnectSection() {
                 '',
                 window.location.pathname + (newSearch ? `?${newSearch}` : '')
             );
+        } else {
+            try {
+                const stored = sessionStorage.getItem('cs_stripe_connect_resume');
+                if (stored === 'complete' || stored === 'refresh') {
+                    cn = stored;
+                    sessionStorage.removeItem('cs_stripe_connect_resume');
+                }
+            } catch { /* fall through to a plain status load */ }
+        }
 
-            if (cn === 'refresh') {
-                // Link expired — kick off a new one. The server uses the
-                // persisted region for existing accounts; for fresh ones it
-                // defaults to TH via preferred_currency.
-                startOnboarding();
-                return;
-            }
+        if (cn === 'refresh') {
+            // Link expired, or the seller clicked the setup-nudge email's
+            // CTA. Either way a new link is needed — but load status first
+            // so the effect below can decide whether to show the prep step
+            // rather than dumping them straight onto Stripe's KYC page.
+            setResumeAfterStatus(true);
+            fetchStatus(false);
+            return;
+        }
 
-            // 'complete' — refresh from Stripe to pick up the latest state
+        if (cn === 'complete') {
+            // Refresh from Stripe to pick up the latest state
             fetchStatus(true);
             return;
         }
@@ -185,6 +197,17 @@ export default function StripeConnectSection() {
         fetchStatus(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Resolve a ?stripe_connect=refresh resume once status has landed. An
+    // unfinished form means this seller has never made it through Stripe's
+    // page — show the prep step. A submitted form has nothing left to prepare,
+    // so send them straight back.
+    useEffect(() => {
+        if (!resumeAfterStatus || !status) return;
+        setResumeAfterStatus(false);
+        if (status.detailsSubmitted) startOnboarding();
+        else setShowPreScreen(true);
+    }, [resumeAfterStatus, status, startOnboarding]);
 
     // Native return path: the WebView never navigates to ?stripe_connect=...
     // (Stripe redirects an external browser, not the WebView), so the mount
@@ -195,9 +218,18 @@ export default function StripeConnectSection() {
     useEffect(() => {
         const onReturn = (e: Event) => {
             const detail = (e as CustomEvent).detail;
+            // The deep-link handler stashes a mount-time resume flag before
+            // dispatching (cold-start safety). We're mounted and handling the
+            // event, so consume it — a later Profile visit must not re-fire.
+            try { sessionStorage.removeItem('cs_stripe_connect_resume'); } catch { /* noop */ }
             setActionLoading(false);
             if (detail === 'refresh') {
-                startOnboarding();
+                // Same prep gate as the web ?stripe_connect=refresh path above:
+                // an unfinished form means Stripe's page already lost them once.
+                // A null status (not loaded yet) falls through to the prep step,
+                // which is the safe default.
+                if (status?.detailsSubmitted) startOnboarding();
+                else setShowPreScreen(true);
             } else {
                 setLoading(true);
                 fetchStatus(true);
@@ -205,7 +237,7 @@ export default function StripeConnectSection() {
         };
         window.addEventListener('stripe-connect-return', onReturn);
         return () => window.removeEventListener('stripe-connect-return', onReturn);
-    }, [fetchStatus, startOnboarding]);
+    }, [fetchStatus, startOnboarding, status]);
 
     // Open the seller's account management. For legacy Express accounts this
     // is a single-use Express Dashboard login link; for full-dashboard v2
@@ -256,14 +288,14 @@ export default function StripeConnectSection() {
                 ? t('profile.stripeRegionUsd')
                 : null;
 
-    // First-time onboarding gets the pre-screen so the user knows what
-    // Stripe is about to ask for. Resume/restricted users skip it.
-    const onSetUpClick = () => {
-        if (!status?.connected) {
-            setShowPreScreen(true);
-        } else {
-            startOnboarding();
-        }
+    // Anyone who hasn't submitted the KYC form gets the prep step — first-time
+    // AND resume/restricted. Resumers bounced off Stripe's page once already,
+    // so the "have your ID + bank ready" reminder is aimed squarely at them.
+    // Once details are submitted there's nothing left to prepare and the
+    // seller is usually fixing one specific field, so go straight to Stripe.
+    const launchOnboarding = () => {
+        if (status?.detailsSubmitted) startOnboarding();
+        else setShowPreScreen(true);
     };
 
     return (
@@ -309,7 +341,7 @@ export default function StripeConnectSection() {
 
                 {!status?.connected && (
                     <button
-                        onClick={onSetUpClick}
+                        onClick={launchOnboarding}
                         disabled={actionLoading}
                         className="w-full h-11 bg-brand-cyan text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
@@ -320,7 +352,7 @@ export default function StripeConnectSection() {
 
                 {inProgress && (
                     <button
-                        onClick={() => startOnboarding()}
+                        onClick={launchOnboarding}
                         disabled={actionLoading}
                         className="w-full h-11 bg-brand-cyan text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
@@ -331,7 +363,7 @@ export default function StripeConnectSection() {
 
                 {isRestricted && (
                     <button
-                        onClick={() => startOnboarding()}
+                        onClick={launchOnboarding}
                         disabled={actionLoading}
                         className="w-full h-11 bg-amber-400 text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-amber-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
@@ -369,90 +401,5 @@ export default function StripeConnectSection() {
                 />
             )}
         </>
-    );
-}
-
-interface StripePreScreenProps {
-    onCancel: () => void;
-    onContinue: () => void;
-    loading: boolean;
-}
-
-function StripePreScreen({ onCancel, onContinue, loading }: StripePreScreenProps) {
-    const { t } = useTranslation();
-
-    const items = [
-        { icon: IdCard, label: t('profile.stripePreIdItem') },
-        { icon: CreditCard, label: t('profile.stripePreBankItem') },
-        { icon: MapPin, label: t('profile.stripePreAddressItem') },
-        { icon: Phone, label: t('profile.stripePrePhoneItem') },
-    ];
-
-    return (
-        <div
-            className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="stripe-prescreen-title"
-            onClick={onCancel}
-        >
-            <div
-                className="bg-brand-darker border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h2 id="stripe-prescreen-title" className="text-white font-black text-xl">
-                            {t('profile.stripePreTitle')}
-                        </h2>
-                        <p className="text-slate-400 text-sm mt-1">
-                            {t('profile.stripePreSubtitle')}
-                        </p>
-                    </div>
-                    <button
-                        onClick={onCancel}
-                        aria-label={t('profile.stripePreCancel')}
-                        className="p-1.5 -mr-1.5 -mt-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <ul className="space-y-3">
-                    {items.map(({ icon: Icon, label }, i) => (
-                        <li
-                            key={i}
-                            className="flex items-center gap-3 bg-white/5 border border-white/5 rounded-xl px-4 py-3"
-                        >
-                            <Icon className="w-5 h-5 text-brand-cyan shrink-0" />
-                            <span className="text-white text-sm">{label}</span>
-                        </li>
-                    ))}
-                </ul>
-
-                <div className="flex items-start gap-2 text-xs text-slate-400 bg-slate-900/40 border border-white/5 rounded-xl px-3 py-2.5">
-                    <Shield className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-                    <span>{t('profile.stripePreNote')}</span>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                    <button
-                        onClick={onCancel}
-                        disabled={loading}
-                        className="flex-1 h-11 bg-white/5 border border-white/10 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-white/10 transition-colors disabled:opacity-50"
-                    >
-                        {t('profile.stripePreCancel')}
-                    </button>
-                    <button
-                        onClick={onContinue}
-                        disabled={loading}
-                        className="flex-1 h-11 bg-brand-cyan text-brand-darker font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                        {t('profile.stripePreContinue')}
-                    </button>
-                </div>
-            </div>
-        </div>
     );
 }

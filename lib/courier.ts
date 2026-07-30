@@ -829,23 +829,90 @@ export async function sendFirstTimeSaleEmail(
 
 // ─── Stalled Stripe onboarding reminder ──────────────────────────────────────
 
+// How many "finish your payout setup" touches a stalled seller gets, and the
+// minimum gap between them. Three touches over ~5 days: enough follow-up to
+// beat the one-shot email (which the 2026-07-16 funnel showed was saturated —
+// 34 of 38 stalled sellers had it and were still stalled), while still ending.
+export const NUDGE_MAX_TOUCHES = 3;
+export const NUDGE_MIN_SPACING_MS = 48 * 3600_000;
+
 /**
- * One-time "finish your payout setup" email for sellers who created a Stripe
- * connected account but abandoned the hosted onboarding (details never
- * submitted). Candidates are selected by the daily cron
- * (app/api/cron/stripe-setup-nudge); this function re-verifies eligibility so
- * a seller who finished onboarding between the cron's query and the send is
- * never nudged.
+ * Per-touch bilingual copy (TH first — the server can't know the seller's UI
+ * language). Escalates in urgency, and every touch repeats the prep hint that
+ * components/StripePreScreen.tsx shows in-app: the two things sellers don't
+ * have to hand (the laser code on the back of the Thai ID, and a selfie) are
+ * what makes them bounce off Stripe's page.
+ */
+function stripeNudgeCopy(
+    touch: number,
+    firstName: string,
+    resumeUrl: string,
+    supportEmail: string,
+): { title: string; body: string } {
+    const thHi = firstName ? `สวัสดีคุณ ${firstName},\n\n` : '';
+    const enHi = firstName ? `Hi ${firstName},\n\n` : '';
+    const thPrep =
+        'เตรียมบัตรประชาชน (พร้อมเลขเลเซอร์หลังบัตร) และเลขที่บัญชีธนาคารไว้ให้พร้อม ' +
+        'แล้วจะใช้เวลาประมาณ 2 นาที';
+    const enPrep =
+        'Have your Thai ID card (with the laser code on the back) and your bank ' +
+        'account number ready and it takes about 2 minutes.';
+
+    const titles = [
+        'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your CardStreet payout setup',
+        'การ์ดของคุณยังรอลงขายอยู่ — Your CardStreet listings are waiting',
+        'เตือนครั้งสุดท้าย: ตั้งค่าการรับเงินให้เสร็จ — Last reminder: finish your payout setup',
+    ];
+    const thBodies = [
+        'คุณเริ่มตั้งค่าการรับเงินบน CardStreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
+            'เหลืออีกเพียงไม่กี่ขั้นตอนก็พร้อมลงขายการ์ด และรับเงินเข้าบัญชีธนาคารของคุณโดยตรง',
+        'คุณยังตั้งค่าการรับเงินไม่เสร็จ จึงยังลงขายการ์ดไม่ได้ ' +
+            'ทำให้เสร็จวันนี้แล้วเริ่มขายได้เลย',
+        'นี่เป็นการเตือนครั้งสุดท้ายเรื่องการตั้งค่าการรับเงินของคุณ ' +
+            'ทำให้เสร็จเมื่อไหร่ก็เริ่มลงขายการ์ดและรับเงินได้ทันที',
+    ];
+    const enBodies = [
+        'You started setting up payouts on CardStreet but didn\'t finish — only a few ' +
+            'steps remain before you can list cards for sale and get paid directly to your bank account.',
+        'Your payout setup is still unfinished, so you can\'t list cards yet. ' +
+            'Finish it today and you can start selling right away.',
+        'This is our last reminder about your payout setup. Finish it whenever you\'re ' +
+            'ready and you can list cards and get paid straight away.',
+    ];
+
+    const i = Math.min(Math.max(touch, 1), titles.length) - 1;
+    return {
+        title: titles[i],
+        body:
+            `${thHi}${thBodies[i]}\n\n${thPrep}\n\n` +
+            `ทำต่อได้ที่: ${resumeUrl}\n\n` +
+            '- - -\n\n' +
+            `${enHi}${enBodies[i]}\n\n${enPrep}\n\n` +
+            `Pick up where you left off: ${resumeUrl}\n\n` +
+            `Questions? Contact ${supportEmail}`,
+    };
+}
+
+/**
+ * "Finish your payout setup" nudge for sellers who created a Stripe connected
+ * account but abandoned the hosted onboarding (details never submitted).
+ * Candidates are selected by the daily cron (app/api/cron/stripe-setup-nudge);
+ * this function re-verifies eligibility so a seller who finished onboarding
+ * between the cron's query and the send is never nudged.
  *
- * Same idempotency scheme as sendFirstTimeSaleEmail: atomically CLAIM
- * profiles.stripe_setup_nudge_sent_at (CAS on NULL) before sending, roll the
- * claim back if the send fails. One email per seller, ever.
+ * Sends a SEQUENCE, not a single email: up to NUDGE_MAX_TOUCHES touches spaced
+ * at least NUDGE_MIN_SPACING_MS apart, over email + push. Idempotency is a CAS
+ * on profiles.stripe_setup_nudge_count (claim `count = old+1 WHERE count = old`
+ * before sending, roll both fields back if the send fails), so concurrent cron
+ * runs can never double-send and the sequence is bounded.
  *
- * Copy is inline and bilingual (TH first — the server can't know the seller's
- * UI language). The CTA deep-links to /?stripe_connect=refresh, which the
- * mobile shell + Profile + StripeConnectSection already turn into an immediate
- * resume of the hosted flow; on a phone with the app installed, cardstreet.app
- * App-Links straight into the native app.
+ * The CTA deep-links to /?stripe_connect=refresh, which the mobile shell +
+ * Profile + StripeConnectSection turn into a resume of the hosted flow — now
+ * via the prep pre-screen rather than a cold hand-off to Stripe. On a phone
+ * with the app installed, cardstreet.app App-Links into the native app.
+ *
+ * Fails soft (returns 'skipped') if the 20260716_stripe_nudge_sequence
+ * migration hasn't been applied yet.
  */
 export async function sendStripeSetupReminderEmail(
     userId: string,
@@ -862,38 +929,62 @@ export async function sendStripeSetupReminderEmail(
         // ── 1. Re-verify eligibility (the cron's snapshot may be stale). ──
         const { data: profile, error: profileErr } = await supabaseAdmin
             .from('profiles')
-            .select('display_name, stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_setup_nudge_sent_at')
+            .select('display_name, stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_setup_nudge_sent_at, stripe_setup_nudge_count')
             .eq('id', userId)
             .single();
 
         if (profileErr || !profile) {
+            if (profileErr && /column|does not exist/i.test(profileErr.message || '')) {
+                console.warn('[Courier] setup-nudge: awaiting migration 20260716_stripe_nudge_sequence — skipping');
+                return 'skipped';
+            }
             console.error(`[Courier] ❌ setup-nudge: failed to load profile ${userId}:`, profileErr);
             return 'error';
         }
         if (
             !profile.stripe_account_id ||
             profile.stripe_details_submitted === true ||
-            profile.stripe_charges_enabled === true ||
-            profile.stripe_setup_nudge_sent_at
+            profile.stripe_charges_enabled === true
         ) {
             return 'skipped';
         }
 
-        // ── 2. Resolve the seller's email. ──
+        // ── 2. Sequence position: stop at the cap, respect the spacing. ──
+        const touchesSent: number = profile.stripe_setup_nudge_count ?? 0;
+        if (touchesSent >= NUDGE_MAX_TOUCHES) return 'skipped';
+
+        const lastSentAt: string | null = profile.stripe_setup_nudge_sent_at ?? null;
+        if (lastSentAt && Date.now() - new Date(lastSentAt).getTime() < NUDGE_MIN_SPACING_MS) {
+            return 'skipped';
+        }
+
+        // ── 3. Resolve the seller's email + push token. ──
         const { data: { user }, error: authErr } = await supabaseAdmin.auth.admin.getUserById(userId);
         const email = (!authErr && user?.email) ? user.email : null;
         if (!email) {
             console.warn(`[Courier] ⚠️  No email for seller ${userId} — skipping setup nudge`);
             return 'skipped';
         }
+        // Read the token through the injected client rather than
+        // getUserNotifContext(), which always uses the real admin client and
+        // would bypass deps in tests.
+        const { data: notifPrefs } = await supabaseAdmin
+            .from('notification_preferences')
+            .select('fcm_token')
+            .eq('user_id', userId)
+            .maybeSingle();
+        const fcmToken: string | null = notifPrefs?.fcm_token || null;
 
-        // ── 3. Atomically claim the one-shot slot. ──
+        // ── 4. Atomically claim this touch (CAS on the count we just read). ──
         const claimedAt = new Date().toISOString();
         const { data: claimed, error: claimErr } = await supabaseAdmin
             .from('profiles')
-            .update({ stripe_setup_nudge_sent_at: claimedAt })
+            .update({
+                stripe_setup_nudge_count: touchesSent + 1,
+                stripe_setup_nudge_sent_at: claimedAt,
+            })
             .eq('id', userId)
-            .is('stripe_setup_nudge_sent_at', null)
+            .eq('stripe_setup_nudge_count', touchesSent)
             .select('id');
 
         if (claimErr) {
@@ -904,37 +995,27 @@ export async function sendStripeSetupReminderEmail(
             return 'skipped'; // lost the race to a concurrent run
         }
 
-        // ── 4. Send. Roll the claim back on failure so a later run retries. ──
+        // ── 5. Send. Roll the claim back on failure so a later run retries. ──
+        const touch = touchesSent + 1;
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
+        const { title, body } = stripeNudgeCopy(touch, firstName, resumeUrl, supportEmail);
 
         try {
             const sendResult = await courier.send.message({
                 message: {
-                    to: { email },
-                    content: {
-                        title: 'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your CardStreet payout setup',
-                        body:
-                            `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
-                            'คุณเริ่มตั้งค่าการรับเงินบน CardStreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
-                            'เหลืออีกเพียงไม่กี่ขั้นตอน (ประมาณ 2 นาที) ก็พร้อมลงขายการ์ด ' +
-                            'และรับเงินเข้าบัญชีธนาคารของคุณโดยตรง\n\n' +
-                            `กลับมาทำต่อได้ที่: ${resumeUrl}\n\n` +
-                            '- - -\n\n' +
-                            `${firstName ? `Hi ${firstName},\n\n` : ''}` +
-                            'You started setting up payouts on CardStreet but didn\'t finish — ' +
-                            'only a few steps remain (about 2 minutes) before you can list cards ' +
-                            'for sale and get paid directly to your bank account.\n\n' +
-                            `Pick up where you left off: ${resumeUrl}\n\n` +
-                            `Questions? Contact ${supportEmail}`,
-                    },
-                    routing: { method: 'all', channels: ['email'] },
-                    data: { type: 'stripe_setup_nudge' },
+                    to: buildRecipient(email, fcmToken),
+                    content: { title, body },
+                    routing: buildRouting(true, !!fcmToken),
+                    data: { type: 'stripe_setup_nudge', touch },
+                    // Thai-first subject exceeds Courier's 48-byte encoded-word
+                    // cliff (see SUBJECTS) — force the full subject at Postmark.
+                    providers: postmarkOverride(title),
                 },
             });
             console.log(
-                `[Courier] ✅ Stripe setup reminder sent to ${userId}. ` +
+                `[Courier] ✅ Stripe setup reminder (touch ${touch}/${NUDGE_MAX_TOUCHES}) sent to ${userId}. ` +
                 `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
             );
             return 'sent';
@@ -942,11 +1023,15 @@ export async function sendStripeSetupReminderEmail(
             console.error(`[Courier] ❌ Error sending Stripe setup reminder to ${userId}:`, sendErr);
             const { error: rollbackErr } = await supabaseAdmin
                 .from('profiles')
-                .update({ stripe_setup_nudge_sent_at: null })
+                .update({
+                    stripe_setup_nudge_count: touchesSent,
+                    stripe_setup_nudge_sent_at: lastSentAt,
+                })
                 .eq('id', userId)
+                .eq('stripe_setup_nudge_count', touchesSent + 1)
                 .eq('stripe_setup_nudge_sent_at', claimedAt);
             if (rollbackErr) {
-                console.error(`[Courier] ❌ setup-nudge: failed to roll back claim for ${userId} (email will not retry):`, rollbackErr);
+                console.error(`[Courier] ❌ setup-nudge: failed to roll back claim for ${userId} (touch will not retry):`, rollbackErr);
             }
             return 'error';
         }

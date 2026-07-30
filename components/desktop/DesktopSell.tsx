@@ -14,6 +14,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import ListingForm from '@/components/ListingForm';
 import AuthModal from '@/components/AuthModal';
+import StripePreScreen from '@/components/StripePreScreen';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
@@ -36,6 +37,7 @@ export default function DesktopSell() {
 
     const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
     const [stripeLoading, setStripeLoading] = useState(false);
+    const [showPreScreen, setShowPreScreen] = useState(false);
     const [profileIncomplete, setProfileIncomplete] = useState(false);
 
     const [game, setGame] = useState('pokemon');
@@ -106,6 +108,14 @@ export default function DesktopSell() {
             showToast(err.message || t('desktop.sell.toastStripeError'), 'error');
             setStripeLoading(false);
         }
+    };
+
+    // Show the prep step before handing off, unless the seller already
+    // submitted the KYC form (nothing left to prepare — they're fixing a
+    // specific field). Mirrors StripeConnectSection's launchOnboarding.
+    const launchStripeOnboarding = () => {
+        if (stripeStatus?.detailsSubmitted) startStripeOnboarding();
+        else setShowPreScreen(true);
     };
 
     const runSearch = async (e?: React.FormEvent) => {
@@ -237,7 +247,7 @@ export default function DesktopSell() {
                         </p>
                     </div>
                     <button
-                        onClick={startStripeOnboarding}
+                        onClick={launchStripeOnboarding}
                         disabled={stripeLoading}
                         className="bg-amber-400 hover:bg-amber-300 text-brand-darker text-xs font-black px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
                     >
@@ -468,6 +478,17 @@ export default function DesktopSell() {
                     card={listingCard}
                     onClose={() => setListingCard(null)}
                     onSuccess={publishListing}
+                />
+            )}
+
+            {showPreScreen && (
+                <StripePreScreen
+                    onCancel={() => setShowPreScreen(false)}
+                    onContinue={() => {
+                        setShowPreScreen(false);
+                        startStripeOnboarding();
+                    }}
+                    loading={stripeLoading}
                 />
             )}
         </div>
