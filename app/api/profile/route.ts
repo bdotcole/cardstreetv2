@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { isValidThaiPhone, normalizePhone } from '@/lib/utils/phone'
+import { validateThaiAddressTrio } from '@/lib/thaiAdminAreas'
 
 // GET - Fetch current user's profile with settings and rewards
 export async function GET() {
@@ -102,6 +103,39 @@ export async function PATCH(request: NextRequest) {
         if (province !== undefined) profileUpdate.province = province
         if (postcode !== undefined) profileUpdate.postcode = postcode
         if (sub_district !== undefined) profileUpdate.sub_district = sub_district
+
+        // The address forms send province/state/district together. When the
+        // trio resolves against the canonical dataset, store canonical names —
+        // and correct the khet↔khwaeng swap free-text entry used to produce
+        // (profiles.state = อำเภอ/เขต, profiles.district = ตำบล/แขวง; a swap
+        // here is what made Flash reject order d307f84c's waybill). Values
+        // that don't resolve are stored as-is so older clients keep working —
+        // fulfillment has its own dataset-backed retry (lib/flashExpress.ts).
+        if (
+            typeof profileUpdate.province === 'string' && profileUpdate.province.trim() &&
+            typeof profileUpdate.state === 'string' && profileUpdate.state.trim() &&
+            typeof profileUpdate.district === 'string' && profileUpdate.district.trim()
+        ) {
+            const trio = validateThaiAddressTrio({
+                province: profileUpdate.province,
+                district: profileUpdate.state,
+                subdistrict: profileUpdate.district,
+            })
+            if (trio.status !== 'invalid') {
+                if (trio.status === 'swapped') {
+                    console.warn(`[Profile] Corrected swapped district/sub-district for user ${user.id}`)
+                }
+                profileUpdate.province = trio.canonical.province
+                profileUpdate.state = trio.canonical.district
+                profileUpdate.district = trio.canonical.subdistrict
+                // The dataset's per-subdistrict zip beats a missing or
+                // mismatched hand-typed one.
+                const givenPostcode = typeof profileUpdate.postcode === 'string' ? profileUpdate.postcode.trim() : ''
+                if (givenPostcode !== trio.canonical.postcode) {
+                    profileUpdate.postcode = trio.canonical.postcode
+                }
+            }
+        }
 
         // Username update logic
         if (username) {

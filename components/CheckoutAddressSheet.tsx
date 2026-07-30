@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import GooglePlacesAddressInput from '@/components/GooglePlacesAddressInput';
+import ThaiAddressFields from '@/components/ThaiAddressFields';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -184,42 +185,20 @@ const CheckoutAddressSheet: React.FC<CheckoutAddressSheetProps> = ({
                         className={FIELD_INPUT_CLASS}
                         placeholder={t('profile.streetPlaceholder')}
                     />
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="text"
-                            required
-                            value={form.district}
-                            onChange={(e) => setField('district', e.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder={t('profile.districtPlaceholder')}
-                        />
-                        <input
-                            type="text"
-                            required
-                            value={form.state}
-                            onChange={(e) => setField('state', e.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder={t('profile.statePlaceholder')}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="text"
-                            required
-                            value={form.province}
-                            onChange={(e) => setField('province', e.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder={t('profile.provincePlaceholder')}
-                        />
-                        <input
-                            type="text"
-                            required
-                            value={form.postcode}
-                            onChange={(e) => setField('postcode', e.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder={t('profile.postalCodePlaceholder')}
-                        />
-                    </div>
+                    <ThaiAddressFields
+                        required
+                        values={{
+                            province: form.province,
+                            state: form.state,
+                            district: form.district,
+                            postcode: form.postcode,
+                        }}
+                        onChange={(patch) => {
+                            setForm(prev => ({ ...prev, ...patch }));
+                            if (error) setError(null);
+                        }}
+                        inputClassName={FIELD_INPUT_CLASS}
+                    />
 
                     {error && (
                         <p className="text-xs text-rose-400">{error}</p>

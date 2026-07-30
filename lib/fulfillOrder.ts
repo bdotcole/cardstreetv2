@@ -468,10 +468,36 @@ export async function fulfillOrdersByTransferGroup(
                     result.errors.push(
                         `Flash Express region mismatch for seller ${sellerId} — manual label required`
                     );
+                    // The seller UI promises "support will contact you" — make
+                    // that true. result.success stays true on this path (the
+                    // order moved forward on a placeholder), so the webhook's
+                    // failure capture never fires; without this explicit event
+                    // nobody is told a label needs manual handling (order
+                    // d307f84c sat silent until the seller sent a screenshot).
+                    Sentry.captureMessage('Flash region mismatch — manual label inserted', {
+                        level: 'error',
+                        tags: { handler: 'fulfill-order', kind: 'manual_label' },
+                        extra: {
+                            sellerId,
+                            orderIds: sellerOrders.map(o => o.id),
+                            flashError: flashErr.message,
+                        },
+                    });
                 } else {
                     console.error(`[Fulfillment] Flash Express error for seller ${sellerId}:`, flashErr);
                     result.errors.push(`Flash Express error for seller ${sellerId}: ${flashErr.message}`);
-                    // Orders stay as 'paid' — seller can manually ship via the dashboard
+                    // Orders stay as 'paid' — the recover-unshipped-orders cron
+                    // retries them, but a paid order with no waybill is still
+                    // worth a page.
+                    Sentry.captureMessage('Flash shipment creation failed — orders held at paid', {
+                        level: 'error',
+                        tags: { handler: 'fulfill-order', kind: 'flash_error' },
+                        extra: {
+                            sellerId,
+                            orderIds: sellerOrders.map(o => o.id),
+                            flashError: flashErr.message,
+                        },
+                    });
                 }
             }
         }

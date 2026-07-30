@@ -4,12 +4,22 @@
  * Parses a Google Maps `address_components` array into a structured
  * Thai address object suitable for Flash Express shipping integration.
  *
- * Mapping:
+ * Mapping (upcountry):
  *   administrative_area_level_1 -> province (จังหวัด)
- *   locality | administrative_area_level_2 -> district (อำเภอ/เขต)
- *   sublocality | sublocality_level_1 -> sub_district (ตำบล/แขวง)
+ *   administrative_area_level_2 | locality -> district (อำเภอ)
+ *   sublocality_level_1 | sublocality -> sub_district (ตำบล)
  *   postal_code -> postal_code (รหัสไปรษณีย์)
  *   street_number + route -> detail_address (ที่อยู่)
+ *
+ * Mapping (Bangkok): Google gives Bangkok NO administrative_area_level_2 —
+ * the เขต (khet) rides sublocality_level_1 and the แขวง (khwaeng)
+ * sublocality_level_2. The upcountry mapping therefore used to drop the khet
+ * into sub_district and leave district empty; users hand-patched the empty
+ * box with their khwaeng, saving a swapped address that Flash Express
+ * rejected at waybill time ("Consignee region does not match" — order
+ * d307f84c, 2026-07-30). Bangkok now maps:
+ *   sublocality_level_1 -> district (เขต)
+ *   sublocality_level_2 -> sub_district (แขวง)
  *
  * NOTE: Google's address_components order is NOT guaranteed.
  *       We use .find() to match by `types` array membership.
@@ -72,25 +82,48 @@ export function parseGoogleAddressToThai(
 
     // Province: administrative_area_level_1
     const province = findComponent(components, 'administrative_area_level_1');
+    const isBangkok = /กรุงเทพ|กทม|bangkok/i.test(province);
 
-    // District (Amphoe / Khet): administrative_area_level_2 IS the อำเภอ in
-    // Google's Thai data. `locality` is only a fallback — upcountry it is
-    // often the ตำบล/town, and saving that as the district made Flash Express
-    // reject the address ("Consignee region does not match"), silently
-    // degrading every shipping quote for the profile to the flat fallback.
-    const district = findComponent(
-        components,
-        'administrative_area_level_2',
-        'locality'
-    );
+    let district: string;
+    let sub_district: string;
+    if (isBangkok) {
+        // Bangkok has no administrative_area_level_2: the khet is
+        // sublocality_level_1 and the khwaeng sublocality_level_2 (see the
+        // header comment — the generic branch below misfiles the khet as
+        // sub_district here).
+        district = findComponent(
+            components,
+            'administrative_area_level_2',
+            'sublocality_level_1',
+            'locality'
+        );
+        sub_district = findComponent(components, 'sublocality_level_2');
+    } else {
+        // District (Amphoe): administrative_area_level_2 IS the อำเภอ in
+        // Google's Thai data. `locality` is only a fallback — upcountry it is
+        // often the ตำบล/town, and saving that as the district made Flash
+        // Express reject the address ("Consignee region does not match"),
+        // silently degrading every shipping quote for the profile to the flat
+        // fallback.
+        district = findComponent(
+            components,
+            'administrative_area_level_2',
+            'locality'
+        );
 
-    // Sub-district (Tambon / Khwaeng): try sublocality_level_1, then sublocality, then sublocality_level_2
-    const sub_district = findComponent(
-        components,
-        'sublocality_level_1',
-        'sublocality',
-        'sublocality_level_2'
-    );
+        // Sub-district (Tambon): try sublocality_level_1, then sublocality,
+        // then sublocality_level_2 — never reusing the component already taken
+        // as the district (locality can match both lists).
+        sub_district = findComponent(
+            components,
+            'sublocality_level_1',
+            'sublocality',
+            'sublocality_level_2'
+        );
+        if (sub_district && sub_district === district) {
+            sub_district = findComponent(components, 'sublocality_level_2');
+        }
+    }
 
     // Postal code
     const postal_code = findComponent(components, 'postal_code');

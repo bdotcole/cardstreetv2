@@ -12,6 +12,7 @@
  */
 
 import crypto from 'crypto';
+import { resolveFlashLeg, canonicalCapitalForProvince } from '@/lib/thaiAdminAreas';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -352,15 +353,60 @@ export async function createShipmentWithCityFallback(
         return { ...(await createShipment(params)), usedCanonicalCity: false };
     } catch (err) {
         if (!isRegionError(err)) throw err;
+
+        // Rung 2: repair each leg against the canonical dataset — spelling,
+        // khet/khwaeng swap, postcode-guided recovery. Unlike the old
+        // city-only substitution, this also fixes districtName: createShipment
+        // validates the full trio, so swapping the city alone could never
+        // rescue a bad-district address (order d307f84c, 2026-07-30).
+        const src = resolveFlashLeg({
+            provinceName: params.srcProvinceName,
+            cityName: params.srcCityName,
+            districtName: params.srcDistrictName,
+            postalCode: params.srcPostalCode,
+        });
+        const dst = resolveFlashLeg({
+            provinceName: params.dstProvinceName,
+            cityName: params.dstCityName,
+            districtName: params.dstDistrictName,
+            postalCode: params.dstPostalCode,
+        });
+        if (src?.changed || dst?.changed) {
+            console.warn(
+                `[FlashExpress] Region mismatch creating waybill for ${params.outTradeNo} — retrying with dataset-resolved names`,
+            );
+            try {
+                const retried = await createShipment({
+                    ...params,
+                    ...(src ? { srcProvinceName: src.provinceName, srcCityName: src.cityName, srcDistrictName: src.districtName } : {}),
+                    ...(dst ? { dstProvinceName: dst.provinceName, dstCityName: dst.cityName, dstDistrictName: dst.districtName } : {}),
+                });
+                return { ...retried, usedCanonicalCity: true };
+            } catch (err2) {
+                if (!isRegionError(err2)) throw err2;
+            }
+        }
+
+        // Rung 3: last resort — provincial-capital trio per leg (always
+        // dataset-valid). The postcode and full detail address are unchanged —
+        // they're what routing and the courier actually deliver by. If even
+        // the province can't be resolved, let the region error propagate (the
+        // manual-label path alerts support) rather than mint a waybill into
+        // the wrong province.
+        const srcCap = canonicalCapitalForProvince(src?.provinceName || params.srcProvinceName);
+        const dstCap = canonicalCapitalForProvince(dst?.provinceName || params.dstProvinceName);
+        if (!srcCap || !dstCap) throw err;
         console.warn(
-            `[FlashExpress] Region mismatch creating waybill for ${params.outTradeNo} — retrying with canonical districts`,
+            `[FlashExpress] Region mismatch persists for ${params.outTradeNo} — retrying with provincial-capital districts`,
         );
         const retried = await createShipment({
             ...params,
-            srcProvinceName: canonicalProvinceForFlash(params.srcProvinceName),
-            srcCityName: canonicalCityForProvince(params.srcProvinceName),
-            dstProvinceName: canonicalProvinceForFlash(params.dstProvinceName),
-            dstCityName: canonicalCityForProvince(params.dstProvinceName),
+            srcProvinceName: srcCap.provinceName,
+            srcCityName: srcCap.cityName,
+            srcDistrictName: srcCap.districtName,
+            dstProvinceName: dstCap.provinceName,
+            dstCityName: dstCap.cityName,
+            dstDistrictName: dstCap.districtName,
         });
         return { ...retried, usedCanonicalCity: true };
     }
@@ -424,12 +470,49 @@ export async function estimateRateWithCityFallback(
         return { ...(await estimateRate(params)), usedCanonicalCity: false };
     } catch (err) {
         if (!isRegionError(err)) throw err;
+
+        // Rung 2: dataset-resolved province+city (rates have no district
+        // param). Keeps the quote on the real route — e.g. a misspelled city
+        // with a valid postcode resolves to its actual district instead of
+        // being priced from the provincial capital.
+        const src = resolveFlashLeg({
+            provinceName: params.srcProvinceName,
+            cityName: params.srcCityName,
+            districtName: null,
+            postalCode: params.srcPostalCode,
+        });
+        const dst = resolveFlashLeg({
+            provinceName: params.dstProvinceName,
+            cityName: params.dstCityName,
+            districtName: null,
+            postalCode: params.dstPostalCode,
+        });
+        const srcChanged = src && (src.provinceName !== params.srcProvinceName || src.cityName !== params.srcCityName);
+        const dstChanged = dst && (dst.provinceName !== params.dstProvinceName || dst.cityName !== params.dstCityName);
+        if (srcChanged || dstChanged) {
+            try {
+                const retried = await estimateRate({
+                    ...params,
+                    ...(src ? { srcProvinceName: src.provinceName, srcCityName: src.cityName } : {}),
+                    ...(dst ? { dstProvinceName: dst.provinceName, dstCityName: dst.cityName } : {}),
+                });
+                return { ...retried, usedCanonicalCity: true };
+            } catch (err2) {
+                if (!isRegionError(err2)) throw err2;
+            }
+        }
+
+        // Rung 3: provincial capital, as before. Unresolvable province —
+        // propagate; callers already fall back to the flat rate.
+        const srcCap = canonicalCapitalForProvince(src?.provinceName || params.srcProvinceName);
+        const dstCap = canonicalCapitalForProvince(dst?.provinceName || params.dstProvinceName);
+        if (!srcCap || !dstCap) throw err;
         const retried = await estimateRate({
             ...params,
-            srcProvinceName: canonicalProvinceForFlash(params.srcProvinceName),
-            srcCityName: canonicalCityForProvince(params.srcProvinceName),
-            dstProvinceName: canonicalProvinceForFlash(params.dstProvinceName),
-            dstCityName: canonicalCityForProvince(params.dstProvinceName),
+            srcProvinceName: srcCap.provinceName,
+            srcCityName: srcCap.cityName,
+            dstProvinceName: dstCap.provinceName,
+            dstCityName: dstCap.cityName,
         });
         return { ...retried, usedCanonicalCity: true };
     }

@@ -323,6 +323,16 @@
         "saveContinue": "บันทึกและไปชำระเงิน",
         "saveFailed": "บันทึกที่อยู่ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
     },
+    "addressFields": {
+        "province": "จังหวัด",
+        "district": "เขต/อำเภอ",
+        "subdistrict": "แขวง/ตำบล",
+        "postcode": "รหัสไปรษณีย์",
+        "selectProvince": "เลือกจังหวัด",
+        "selectDistrict": "เลือกเขต/อำเภอ",
+        "selectSubdistrict": "เลือกแขวง/ตำบล",
+        "postcodePlaceholder": "เช่น 10220"
+    },
     "sellerInfo": {
         "title": "การขายทำงานอย่างไร",
         "subtitle": "สรุปสั้นๆ เรื่องค่าธรรมเนียมและสิ่งที่ต้องทำหลังการขาย",

@@ -8,6 +8,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
+import ThaiAddressFields from '@/components/ThaiAddressFields';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
 type Tab = 'profile' | 'preferences';
@@ -316,14 +317,17 @@ export default function DesktopSettings() {
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">{t('desktop.settings.shippingAddress')}</p>
                         <div className="space-y-2">
                             <input value={form.address} onChange={(e) => setField('address', e.target.value)} className={inputCls} placeholder={t('desktop.settings.streetPlaceholder')} />
-                            <div className="grid grid-cols-2 gap-2">
-                                <input value={form.district} onChange={(e) => setField('district', e.target.value)} className={inputCls} placeholder={t('desktop.settings.districtPlaceholder')} />
-                                <input value={form.state} onChange={(e) => setField('state', e.target.value)} className={inputCls} placeholder={t('desktop.settings.statePlaceholder')} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <input value={form.province} onChange={(e) => setField('province', e.target.value)} className={inputCls} placeholder={t('desktop.settings.provincePlaceholder')} />
-                                <input value={form.postcode} onChange={(e) => setField('postcode', e.target.value)} className={inputCls} placeholder={t('desktop.settings.postalPlaceholder')} />
-                            </div>
+                            <ThaiAddressFields
+                                values={{
+                                    province: form.province,
+                                    state: form.state,
+                                    district: form.district,
+                                    postcode: form.postcode,
+                                }}
+                                onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+                                inputClassName={inputCls}
+                                labelClassName="text-[10px] font-black uppercase tracking-widest text-slate-500"
+                            />
                         </div>
                     </div>
 

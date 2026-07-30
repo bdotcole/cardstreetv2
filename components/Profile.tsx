@@ -15,6 +15,7 @@ import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import StripeConnectSection from './StripeConnectSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
+import ThaiAddressFields from './ThaiAddressFields';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 import { createClient } from '@/lib/supabase/client';
@@ -1227,38 +1228,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
                     placeholder={t('profile.streetPlaceholder')}
                   />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={editAddress.district}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, district: e.target.value }))}
-                      className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder={t('profile.districtPlaceholder')}
-                    />
-                    <input
-                      type="text"
-                      value={editAddress.state}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, state: e.target.value }))}
-                      className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder={t('profile.statePlaceholder')}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={editAddress.province}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, province: e.target.value }))}
-                      className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder={t('profile.provincePlaceholder')}
-                    />
-                    <input
-                      type="text"
-                      value={editAddress.postcode}
-                      onChange={(e) => setEditAddress(prev => ({ ...prev, postcode: e.target.value }))}
-                      className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan/50 focus:outline-none transition-colors"
-                      placeholder={t('profile.postalCodePlaceholder')}
-                    />
-                  </div>
+                  <ThaiAddressFields
+                    values={{
+                      province: editAddress.province,
+                      state: editAddress.state,
+                      district: editAddress.district,
+                      postcode: editAddress.postcode,
+                    }}
+                    onChange={(patch) => setEditAddress(prev => ({ ...prev, ...patch }))}
+                  />
                 </div>
               </div>
 

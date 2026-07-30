@@ -14,6 +14,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
+import ThaiAddressFields from '@/components/ThaiAddressFields';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
@@ -188,7 +189,7 @@ export default function DesktopCartDrawer() {
                                 <p className="text-slate-400 text-xs">
                                     {t('desktop.cart.addressHint')}
                                 </p>
-                                {BUYER_REQUIRED_PROFILE_FIELDS.map((field) => (
+                                {(['phone_number', 'address'] as BuyerRequiredField[]).map((field) => (
                                     <div key={field}>
                                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
                                             {t(ADDRESS_FIELD_LABEL_KEYS[field])}
@@ -202,6 +203,21 @@ export default function DesktopCartDrawer() {
                                         />
                                     </div>
                                 ))}
+                                {/* Cascading canonical selects — free-text let a
+                                    Bangkok buyer save khet/khwaeng swapped, which
+                                    Flash rejects at waybill time. */}
+                                <ThaiAddressFields
+                                    required
+                                    values={{
+                                        province: addressForm.province,
+                                        state: addressForm.state,
+                                        district: addressForm.district,
+                                        postcode: addressForm.postcode,
+                                    }}
+                                    onChange={(patch) => setAddressForm((prev) => ({ ...prev, ...patch }))}
+                                    inputClassName="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none focus:border-brand-cyan/50 transition-colors"
+                                    labelClassName="block text-[10px] font-black uppercase tracking-widest text-slate-500"
+                                />
                                 <div className="flex gap-3 pt-2">
                                     <button
                                         type="button"

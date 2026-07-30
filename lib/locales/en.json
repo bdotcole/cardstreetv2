@@ -102,8 +102,8 @@
         "invalidPhone": "Please enter a valid Thai phone number (e.g. 081 234 5678).",
         "shippingAddress": "Shipping Address",
         "streetPlaceholder": "House/Building Number, Street",
-        "districtPlaceholder": "District / Sub-district",
-        "statePlaceholder": "State / District",
+        "districtPlaceholder": "Sub-district (แขวง/ตำบล)",
+        "statePlaceholder": "District (เขต/อำเภอ)",
         "provincePlaceholder": "Province",
         "postalCodePlaceholder": "Postal Code",
         "saveChanges": "Save Changes",
@@ -322,6 +322,16 @@
         "searchHint": "Select from suggestions, then edit below if needed",
         "saveContinue": "Save & continue to payment",
         "saveFailed": "Could not save your address. Please try again."
+    },
+    "addressFields": {
+        "province": "Province",
+        "district": "District (เขต/อำเภอ)",
+        "subdistrict": "Sub-district (แขวง/ตำบล)",
+        "postcode": "Postal code",
+        "selectProvince": "Select province",
+        "selectDistrict": "Select district",
+        "selectSubdistrict": "Select sub-district",
+        "postcodePlaceholder": "e.g. 10220"
     },
     "sellerInfo": {
         "title": "How selling works",
