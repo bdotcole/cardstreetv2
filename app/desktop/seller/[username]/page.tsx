@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -23,12 +23,13 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
             ? `Browse ${listings.length} trading card${listings.length === 1 ? '' : 's'} for sale from ${name} on CardStreet. Verified seller, live prices, nationwide shipping in Thailand.`
             : `เลือกชมการ์ด ${listings.length} รายการจาก ${name} บน CardStreet ผู้ขายที่ยืนยันแล้ว ราคาเรียลไทม์ จัดส่งทั่วไทย`;
 
+    const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title,
         description,
-        alternates: buildAlternates(`/seller/${username}`),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: `/seller/${username}` },
+        alternates: buildAlternates(`/seller/${username}`, pathLocale),
+        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl(`/seller/${username}`, pathLocale) },
     };
 }
 

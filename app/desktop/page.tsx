@@ -5,14 +5,14 @@ import Link from 'next/link';
 import DesktopMarketplace from '@/components/desktop/DesktopMarketplace';
 import { GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGame } from '@/lib/games';
-import { buildAlternates } from '@/lib/i18nRouting';
+import { buildAlternatesForRequest } from '@/lib/i18nRouting';
 
 // Homepage canonical + hreflang (title/description come from the root layout's
 // localized generateMetadata — this is the same URL the mobile SPA serves, so
 // both experiences share one canonical).
-export const metadata: Metadata = {
-    alternates: buildAlternates('/'),
-};
+export async function generateMetadata(): Promise<Metadata> {
+    return { alternates: await buildAlternatesForRequest('/') };
+}
 
 // Server-rendered game directory under the (client-fetched) marketplace grid.
 // This is the homepage's crawlable content: links + copy that exist in the

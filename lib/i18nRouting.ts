@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 
 // Locale-in-URL scheme (lightweight, middleware-driven):
 //   - Thai is the canonical default and lives at the BARE path  (/, /faq, ...)
@@ -20,11 +21,14 @@ export function localizedUrl(path: string, locale: UiLocale): string {
 
 /**
  * Canonical + hreflang alternates for a page, for use in a route's exported
- * `metadata`. Thai (bare URL) is both the `th-TH` target and `x-default`.
+ * `metadata`. Thai (bare URL) is the `x-default`, and the canonical is the
+ * URL of the locale variant being served — every hreflang alternate must be
+ * self-canonical, or search engines drop the non-canonical variant entirely
+ * (which is what kept the /en pages out of the index).
  */
-export function buildAlternates(path: string): NonNullable<Metadata['alternates']> {
+export function buildAlternates(path: string, pathLocale: UiLocale = 'th'): NonNullable<Metadata['alternates']> {
   return {
-    canonical: localizedUrl(path, 'th'),
+    canonical: localizedUrl(path, pathLocale),
     languages: {
       'th-TH': localizedUrl(path, 'th'),
       'en-TH': localizedUrl(path, 'en'),
@@ -33,10 +37,32 @@ export function buildAlternates(path: string): NonNullable<Metadata['alternates'
   };
 }
 
-/** Sitemap-shaped alternate languages map for a path. */
+/**
+ * The locale of the URL variant actually being served (bare Thai path vs /en
+ * prefix), read from the `x-cs-path-locale` header middleware derives from the
+ * URL alone. The `cs_lang` cookie (and so `x-cs-lang`) must never steer
+ * canonicals or og:url — a bare-path render stays the Thai canonical even when
+ * a returning EN-cookie user sees it in English.
+ */
+export async function requestPathLocale(): Promise<UiLocale> {
+  return (await headers()).get('x-cs-path-locale') === 'en' ? 'en' : 'th';
+}
+
+/** Request-aware alternates: canonical follows the URL variant being served. */
+export async function buildAlternatesForRequest(path: string): Promise<NonNullable<Metadata['alternates']>> {
+  return buildAlternates(path, await requestPathLocale());
+}
+
+/**
+ * Sitemap-shaped alternate languages map for a path. Must use the same
+ * hreflang vocabulary as the page <head> clusters and the XML catalog
+ * sitemaps (th-TH / en-TH / x-default) — Google requires hreflang annotations
+ * declared via multiple methods to agree.
+ */
 export function sitemapAlternates(path: string): Record<string, string> {
   return {
-    th: localizedUrl(path, 'th'),
-    en: localizedUrl(path, 'en'),
+    'th-TH': localizedUrl(path, 'th'),
+    'en-TH': localizedUrl(path, 'en'),
+    'x-default': localizedUrl(path, 'th'),
   };
 }

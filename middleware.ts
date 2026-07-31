@@ -178,6 +178,9 @@ export async function middleware(request: NextRequest) {
     // very first request, before the cookie round-trips.
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set('x-cs-lang', lang)
+    // URL-derived locale only (never the cookie): buildAlternatesForRequest
+    // uses this to keep each locale variant's canonical pointing at itself.
+    requestHeaders.set('x-cs-path-locale', locale === 'EN' ? 'en' : 'th')
 
     const applyLang = (res: NextResponse): NextResponse => {
         if (cookieLang !== lang) res.cookies.set(LANG_COOKIE, lang, COOKIE_OPTS)

@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
@@ -40,17 +40,18 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
 
     const ogImage = set.logo_url ? getSetLogoUrl(set.logo_url, 600, 85) : undefined;
 
+    const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title,
         description,
-        alternates: buildAlternates(`/sets/${setId}`),
+        alternates: buildAlternates(`/sets/${setId}`, pathLocale),
         openGraph: {
             title,
             description,
             type: 'website',
             siteName: 'CardStreet',
-            url: `/sets/${setId}`,
+            url: localizedUrl(`/sets/${setId}`, pathLocale),
             images: ogImage ? [{ url: ogImage }] : undefined,
         },
     };

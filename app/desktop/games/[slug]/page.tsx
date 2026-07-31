@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGame } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
 
 // Per-game landing pages (/pokemon, /one-piece, /yugioh, /mtg, /lorcana,
@@ -26,17 +26,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     if (!landing) return { title: 'Not found | CardStreet', robots: { index: false, follow: false } };
 
     const lang = (await resolveLang()) === 'EN' ? 'en' : 'th';
+    const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title: landing.title[lang],
         description: landing.description[lang],
-        alternates: buildAlternates(`/${landing.slug}`),
+        alternates: buildAlternates(`/${landing.slug}`, pathLocale),
         openGraph: {
             title: landing.title[lang],
             description: landing.description[lang],
             type: 'website',
             siteName: 'CardStreet',
-            url: `/${landing.slug}`,
+            url: localizedUrl(`/${landing.slug}`, pathLocale),
         },
     };
 }

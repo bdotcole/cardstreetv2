@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import DesktopCardDetail from '@/components/desktop/DesktopCardDetail';
 import { getCardPageData } from '@/lib/desktopCardData';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import type { Card } from '@/types';
@@ -45,17 +45,18 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
 
     const ogImage = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
 
+    const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title,
         description,
-        alternates: buildAlternates(`/card/${cardId}`),
+        alternates: buildAlternates(`/card/${cardId}`, pathLocale),
         openGraph: {
             title,
             description,
             type: 'website',
             siteName: 'CardStreet',
-            url: `/card/${cardId}`,
+            url: localizedUrl(`/card/${cardId}`, pathLocale),
             images: ogImage ? [{ url: ogImage }] : undefined,
         },
     };

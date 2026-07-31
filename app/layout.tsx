@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { headers, cookies } from 'next/headers'
 import './globals.css'
+import { localizedUrl, requestPathLocale } from '@/lib/i18nRouting'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
@@ -49,7 +50,9 @@ export async function generateMetadata(): Promise<Metadata> {
         openGraph: {
             type: 'website',
             siteName: 'CardStreet',
-            url: 'https://cardstreet.app',
+            // Follow the URL variant being served — a bare-path og:url on an /en
+            // render is a stray canonical hint back at the Thai URL.
+            url: localizedUrl('/', await requestPathLocale()),
             title,
             description,
             locale: lang === 'EN' ? 'en_US' : 'th_TH',

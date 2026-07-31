@@ -14,7 +14,8 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['ch
   { path: '/lorcana', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/riftbound', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/faq', changeFrequency: 'monthly', priority: 0.8 },
-  { path: '/help', changeFrequency: 'monthly', priority: 0.6 },
+  // /help is deliberately absent: it duplicates the /faq accordion and
+  // canonicalizes there (app/help/page.tsx) — sitemaps list canonicals only.
   { path: '/contact', changeFrequency: 'yearly', priority: 0.4 },
   { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },

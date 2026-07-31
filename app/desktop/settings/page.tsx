@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { BASE_URL } from '@/lib/i18nRouting';
 import DesktopSettings from '@/components/desktop/DesktopSettings';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -14,8 +14,8 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
         metadataBase: new URL(BASE_URL),
         title,
-        alternates: buildAlternates('/settings'),
-        // Personal, auth-gated page — keep it out of the index.
+        // Personal, auth-gated page — keep it out of the index. No hreflang
+        // alternates either: annotating a noindexed page is a conflicting signal.
         robots: { index: false, follow: false },
     };
 }

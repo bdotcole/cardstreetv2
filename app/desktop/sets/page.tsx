@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getAllSets } from '@/lib/setPageData';
-import { buildAlternates, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import DesktopSetsBrowser from '@/components/desktop/DesktopSetsBrowser';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -15,12 +15,13 @@ export async function generateMetadata(): Promise<Metadata> {
         lang === 'EN'
             ? 'Browse every Pokémon, Yu-Gi-Oh!, Magic, One Piece, Riftbound, and Lorcana set on CardStreet. Live prices and listings for every card, with nationwide shipping in Thailand.'
             : 'เลือกชมชุดการ์ดโปเกมอน ยูกิโอ เมจิก วันพีซ Riftbound และ Lorcana ทั้งหมดบน CardStreet ราคาและรายการขายของทุกใบ จัดส่งทั่วไทย';
+    const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title,
         description,
-        alternates: buildAlternates('/sets'),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: '/sets' },
+        alternates: buildAlternates('/sets', pathLocale),
+        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/sets', pathLocale) },
     };
 }
 
