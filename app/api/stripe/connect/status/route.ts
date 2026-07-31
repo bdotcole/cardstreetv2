@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getStripeForRegion, deriveConnectStatus, type StripeRegion } from '@/lib/stripe';
+import { publishDraftListings } from '@/lib/draftListings';
 
 export async function GET(request: NextRequest) {
     try {
@@ -77,6 +78,18 @@ export async function GET(request: NextRequest) {
                         stripe_account_updated_at: new Date().toISOString(),
                     })
                     .eq('id', user.id);
+
+                // Draft-first listings: onboarding is done, so anything the
+                // seller listed while unverified goes live now. Best-effort —
+                // a publish failure must never fail the status read; the
+                // webhook's account.updated handler is the backstop.
+                if (account.details_submitted) {
+                    try {
+                        await publishDraftListings(admin, [user.id], '[Connect/Status]');
+                    } catch (publishErr) {
+                        console.error('[Connect/Status] Draft publish failed:', publishErr);
+                    }
+                }
 
                 return NextResponse.json({
                     connected: true,

@@ -8,7 +8,7 @@ import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '
 import { pokemonService } from '@/services/pokemonService';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
-import { SELLER_REQUIRED_PROFILE_FIELDS, checkSellerProfileComplete } from '@/lib/profileValidation';
+import { SELLER_REQUIRED_PROFILE_FIELDS, checkSellerProfileComplete, isStripeOnlyIncomplete } from '@/lib/profileValidation';
 import { GAMES, gameHasMultipleLanguages, getGameLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -85,7 +85,15 @@ export default function DesktopSell() {
             .eq('id', user.id)
             .single<Record<string, string | boolean | null>>()
             .then(({ data }) => {
-                if (data) setProfileIncomplete(!checkSellerProfileComplete(data).complete);
+                if (data) {
+                    // Stripe-only incompleteness is the amber payouts banner's
+                    // job (and listings save as drafts now) — the red profile
+                    // panel is for missing shipping fields only.
+                    const completeness = checkSellerProfileComplete(data);
+                    setProfileIncomplete(
+                        !completeness.complete && !isStripeOnlyIncomplete(completeness.missing)
+                    );
+                }
             });
     }, [user, searchParams, refreshMyListings]);
 
@@ -141,7 +149,7 @@ export default function DesktopSell() {
     const publishListing = async (listingData: any) => {
         if (!listingCard) return;
         try {
-            await marketplaceService.createListing({
+            const created = await marketplaceService.createListing({
                 cardId: listingCard.id,
                 cardData: listingCard,
                 price: listingData.price,
@@ -154,7 +162,14 @@ export default function DesktopSell() {
                 acceptsOffers: listingData.accepts_offers,
             });
             setListingCard(null);
-            showToast(t('desktop.sell.toastPublished'), 'success');
+            if (created?.status === 'draft') {
+                // Stripe onboarding unfinished — saved as a draft that goes
+                // live automatically once the seller completes setup. The
+                // amber payouts banner above carries the resume CTA.
+                showToast(t('desktop.sell.toastDraftSaved'), 'success');
+            } else {
+                showToast(t('desktop.sell.toastPublished'), 'success');
+            }
             refreshMyListings();
         } catch (error) {
             if (error instanceof ProfileIncompleteError) {
@@ -406,7 +421,14 @@ export default function DesktopSell() {
                                     />
                                 </span>
                                 <div className="min-w-0">
-                                    <p className="text-sm font-bold text-white truncate">{listing.card_data.name}</p>
+                                    <p className="text-sm font-bold text-white truncate">
+                                        {listing.card_data.name}
+                                        {listing.status === 'draft' && (
+                                            <span className="ml-2 align-middle inline-block bg-amber-400/15 border border-amber-400/40 text-amber-300 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">
+                                                {t('desktop.sell.draftBadge')}
+                                            </span>
+                                        )}
+                                    </p>
                                     <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide truncate">
                                         {listing.card_data.set} · {listing.condition}
                                         {listing.is_graded && listing.grading_company ? ` · ${listing.grading_company} ${listing.grade ?? ''}` : ''}

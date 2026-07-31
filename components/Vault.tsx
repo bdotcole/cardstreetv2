@@ -510,8 +510,17 @@ const Vault: React.FC<VaultProps> = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
-                    <span className="text-[8px] text-brand-green font-black uppercase tracking-widest">{isThai ? 'วางขายในตลาด' : 'Live on Market'}</span>
+                    {item.listingStatus === 'draft' ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                        <span className="text-[8px] text-amber-400 font-black uppercase tracking-widest">{isThai ? 'ฉบับร่าง — รอตั้งค่าการรับเงิน' : 'Draft — finish payout setup'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
+                        <span className="text-[8px] text-brand-green font-black uppercase tracking-widest">{isThai ? 'วางขายในตลาด' : 'Live on Market'}</span>
+                      </>
+                    )}
                   </div>
                   <h4 className="text-white text-base font-black truncate">{card.name}</h4>
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} {isThai ? 'ใบ' : 'Unit(s)'}</p>

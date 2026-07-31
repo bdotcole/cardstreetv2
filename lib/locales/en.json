@@ -205,7 +205,9 @@
         "stripeCurrencyUsd": "USD · Card",
         "stripeCurrencyLockedNote": "You can't change this after setup — Stripe accounts can't move between platforms.",
         "payoutNudgeBanner": "Finish payout setup to start selling — about 2 minutes left",
-        "payoutNudgeDismiss": "Dismiss"
+        "payoutNudgeDismiss": "Dismiss",
+        "firstListingBanner": "You're all set to sell — list your first card from your Vault",
+        "firstListingDismiss": "Dismiss"
     },
     "authLinkError": {
         "title": "That link didn't work",
@@ -421,6 +423,7 @@
         "signInRequired": "Please sign in with a full account to complete a purchase.",
         "signInToList": "Please sign in to list a card.",
         "listingPublished": "Listing successfully published to the market!",
+        "listingDraftSaved": "Saved as a draft — finish your payout setup and it goes live automatically.",
         "listingFailed": "Failed to publish listing. Please try again.",
         "listingRemoved": "Listing removed from the market.",
         "listingRemoveFailed": "Failed to remove listing. Please try again.",
@@ -627,6 +630,8 @@
             "cancel": "Cancel",
             "cancelConfirm": "Cancel this listing?",
             "toastPublished": "Listing published to the marketplace",
+            "toastDraftSaved": "Saved as a draft — finish your payout setup and it goes live automatically",
+            "draftBadge": "Draft",
             "toastCompleteShipping": "Complete your shipping details before listing",
             "toastCancelled": "Listing cancelled",
             "toastCancelFailed": "Could not cancel listing",

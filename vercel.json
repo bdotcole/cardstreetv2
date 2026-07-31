@@ -31,6 +31,10 @@
             "schedule": "0 2 * * *"
         },
         {
+            "path": "/api/cron/first-listing-nudge",
+            "schedule": "30 2 * * *"
+        },
+        {
             "path": "/api/cron/expire-offers",
             "schedule": "0 * * * *"
         },

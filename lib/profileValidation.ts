@@ -54,6 +54,22 @@ export const SELLER_REQUIRED_PROFILE_FIELDS = [
 
 export type SellerRequiredField = (typeof SELLER_REQUIRED_PROFILE_FIELDS)[number];
 
+/**
+ * Draft-first listings: a seller whose ONLY missing fields are the Stripe
+ * ones may create listings as status='draft' — they publish automatically
+ * the moment onboarding completes (details_submitted). Shipping fields stay
+ * a hard block regardless: Flash Express needs them at fulfillment, and
+ * they're filled in-app in seconds, unlike Stripe's KYC.
+ */
+export function isStripeOnlyIncomplete(missing: readonly SellerRequiredField[]): boolean {
+    return (
+        missing.length > 0 &&
+        missing.every((f) =>
+            (SELLER_CONNECT_REQUIRED_FIELDS as readonly string[]).includes(f),
+        )
+    );
+}
+
 export const SELLER_PROFILE_FIELD_LABELS: Record<SellerRequiredField, string> = {
     address: 'Street address',
     district: 'District',

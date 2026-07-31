@@ -4,6 +4,7 @@ import { normalizeCard } from '@/lib/utils/normalizeCard';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
+    isStripeOnlyIncomplete,
     PROFILE_INCOMPLETE_TOAST,
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
@@ -63,7 +64,11 @@ export interface MarketplaceListing {
     image_front_url?: string;
     image_back_url?: string;
     accepts_offers?: boolean;
-    status: 'active' | 'sold' | 'cancelled';
+    // 'draft': created before Stripe onboarding finished. Owner-only (RLS
+    // hides it from everyone else) and auto-published when details_submitted
+    // flips true. Never surfaces on any buyer-facing query, which all filter
+    // status = 'active'.
+    status: 'active' | 'sold' | 'cancelled' | 'draft';
     created_at: string;
     sold_at?: string;
     updated_at: string;
@@ -232,8 +237,17 @@ export const marketplaceService = {
                 .single<Record<string, string | boolean | null>>();
             if (profileErr) throw profileErr;
             const completeness = checkSellerProfileComplete(sellerProfile);
+            // Draft-first: shipping fields stay a hard block (Flash needs
+            // them), but a seller who is ONLY missing Stripe onboarding may
+            // save the listing as a draft — it auto-publishes when
+            // details_submitted flips true (connect status refresh + the
+            // account.updated webhook both flip drafts).
+            let asDraft = false;
             if (!completeness.complete) {
-                throw new ProfileIncompleteError(completeness.missing);
+                if (!isStripeOnlyIncomplete(completeness.missing)) {
+                    throw new ProfileIncompleteError(completeness.missing);
+                }
+                asDraft = true;
             }
 
             // Normalize on write so card_data can never be stored with null
@@ -254,17 +268,31 @@ export const marketplaceService = {
                     image_front_url: params.image_front_url || null,
                     image_back_url: params.image_back_url || null,
                     accepts_offers: params.acceptsOffers ?? false,
-                    status: 'active'
+                    status: asDraft ? 'draft' : 'active'
                 })
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                // Pre-migration fail-soft: until 20260730_draft_listings.sql
+                // widens the status CHECK, a 'draft' insert violates it
+                // (23514). Degrade to the old hard block so the seller gets
+                // the familiar "finish Stripe first" path, not a raw error.
+                if (
+                    asDraft &&
+                    (error.code === '23514' || /listings_status_check/i.test(error.message || ''))
+                ) {
+                    throw new ProfileIncompleteError(completeness.missing);
+                }
+                throw error;
+            }
 
             // Wake the wishlist-alert fan-out (Pro perk). This insert runs in
             // the browser, so alerting needs a server round-trip -- strictly
             // fire-and-forget: a failed alert must never fail the listing.
-            if (data?.id && typeof fetch !== 'undefined') {
+            // Drafts skip it: wishlisters are alerted at publish time instead
+            // (see the auto-publish hooks), never about an unbuyable listing.
+            if (!asDraft && data?.id && typeof fetch !== 'undefined') {
                 void fetch('/api/alerts/listing-created', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -420,7 +448,10 @@ export const marketplaceService = {
                     updated_at
                 `)
                 .eq('seller_id', user.id)
-                .eq('status', 'active')
+                // Drafts are the seller's own pre-Stripe listings — they
+                // belong on the "my listings" surface (with a Draft badge),
+                // else the seller re-lists the card and duplicates it.
+                .in('status', ['active', 'draft'])
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
@@ -448,7 +479,9 @@ export const marketplaceService = {
                 .from('listings')
                 .update({ price })
                 .eq('id', listingId)
-                .eq('status', 'active')
+                // Drafts are price-editable too — only sold/cancelled rows
+                // report false so callers reconcile stale UI.
+                .in('status', ['active', 'draft'])
                 .select('id');
 
             if (error) throw error;
@@ -475,7 +508,7 @@ export const marketplaceService = {
                 .select('id, condition')
                 .eq('seller_id', user.id)
                 .eq('card_id', cardId)
-                .eq('status', 'active');
+                .in('status', ['active', 'draft']);
 
             if (fetchError) throw fetchError;
             if (!listings || listings.length === 0) return false;
@@ -528,7 +561,7 @@ export const marketplaceService = {
                 .select('id, condition')
                 .eq('seller_id', user.id)
                 .eq('card_id', cardId)
-                .eq('status', 'active');
+                .in('status', ['active', 'draft']);
 
             if (fetchError) throw fetchError;
             if (!listings || listings.length === 0) return false;

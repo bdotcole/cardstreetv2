@@ -59,12 +59,15 @@ export function useUserCollections(): UseUserCollectionsReturn {
 
             if (itemsError) throw itemsError;
 
-            // Fetch user's active listings to map them to vault items
+            // Fetch user's active + draft listings to map them to vault items.
+            // Drafts (created before Stripe onboarding finished) must count as
+            // "listed" here, else the Vault shows the card as unlisted and the
+            // seller re-lists it into a duplicate.
             const { data: listingsData, error: listingsError } = await supabase
                 .from('listings')
                 .select('*')
                 .eq('seller_id', user.id)
-                .eq('status', 'active');
+                .in('status', ['active', 'draft']);
 
             if (listingsError) throw listingsError;
 
@@ -114,6 +117,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             addedAt: item.added_at,
                             isListing: !!matchedListing,
                             listingPrice: matchedListing ? parseFloat(matchedListing.price) : undefined,
+                            listingStatus: matchedListing ? matchedListing.status : undefined,
                             // Grading now lives on the collection_items row itself (bulk
                             // import / graded copies), so it shows even when not listed.
                             // Fall back to a matched listing for legacy rows without the columns.

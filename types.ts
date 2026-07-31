@@ -71,6 +71,8 @@ export interface UserCollectionItem {
   addedAt: string;
   isListing?: boolean;
   listingPrice?: number;
+  /** 'draft' = created before Stripe onboarding finished; goes live on completion. */
+  listingStatus?: 'active' | 'draft';
   isGraded?: boolean;
   gradingCompany?: string;
   grade?: number;

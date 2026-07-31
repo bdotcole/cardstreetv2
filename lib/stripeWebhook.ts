@@ -17,6 +17,7 @@ import type Stripe from 'stripe';
 import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 import { syncPremiumFromSubscription } from '@/lib/premiumEntitlement';
+import { publishDraftListings } from '@/lib/draftListings';
 import {
     getStripeForRegion,
     getAllWebhookSecretsForRegion,
@@ -208,12 +209,16 @@ export async function handleStripeWebhook(
                                 .update({ status: 'cancelled', updated_at: new Date().toISOString() })
                                 .in('id', orderIds);
 
-                            // Restore listings to active
+                            // Restore listings to active. Guard on 'sold' (the
+                            // reservation state) like the cancel/reconcile
+                            // release paths do, so this can never force-publish
+                            // a row in any other state (e.g. a draft).
                             if (listingIds.length > 0) {
                                 await supabase
                                     .from('listings')
                                     .update({ status: 'active' })
-                                    .in('id', listingIds);
+                                    .in('id', listingIds)
+                                    .eq('status', 'sold');
                             }
 
                             console.log(`${logPrefix} Reverted ${orderIds.length} orders and ${listingIds.length} listings for failed payment`);
@@ -275,6 +280,22 @@ export async function handleStripeWebhook(
                             `${logPrefix} Synced Connect account ${account.id} → status=${status}, ` +
                             `charges=${account.charges_enabled}, payouts=${account.payouts_enabled}`
                         );
+                        // Draft-first listings: onboarding just completed, so
+                        // publish anything this seller drafted while
+                        // unverified. Async backstop for the status-route
+                        // publish (covers sellers who never return to the
+                        // app). Best-effort — never fail the webhook over it.
+                        if (account.details_submitted) {
+                            try {
+                                await publishDraftListings(
+                                    supabase,
+                                    updRows.map((r: { id: string }) => r.id),
+                                    logPrefix,
+                                );
+                            } catch (publishErr) {
+                                console.error(`${logPrefix} Draft publish failed:`, publishErr);
+                            }
+                        }
                     }
                 } catch (syncErr) {
                     console.error(`${logPrefix} account.updated handler error:`, syncErr);

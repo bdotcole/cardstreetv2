@@ -34,6 +34,7 @@ import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
+    isStripeOnlyIncomplete,
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
 } from '@/lib/profileValidation';
@@ -152,6 +153,20 @@ export default function HomePage() {
         if (params.get('view') === 'offers') {
             try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
             setActiveTab('profile');
+            params.delete('view');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
+        // /?view=vault lands in the Vault — the first-listing activation
+        // email's CTA deep-links here. Strip the param like the branches above.
+        if (params.get('view') === 'vault') {
+            setActiveTab('vault');
             params.delete('view');
             const rest = params.toString();
             window.history.replaceState(
@@ -296,6 +311,11 @@ export default function HomePage() {
     // the user leaves the profile tab, so completing setup clears it without
     // a reload. Session-dismissible.
     const [payoutSetupStalled, setPayoutSetupStalled] = useState(false);
+    // First-listing activation: the seller is fully verified but has never
+    // listed a card. Shares the status fetch below; the "has no listings"
+    // half of the condition is derived from the vault (hasAnyListing).
+    const [firstListingEligible, setFirstListingEligible] = useState(false);
+    const [firstListingDismissed, setFirstListingDismissed] = useState(false);
     // Fetch once per login, plus every time the user navigates AWAY from the
     // profile tab (where payout setup lives) so completing setup clears the
     // banner without a reload — not on every tab switch.
@@ -307,24 +327,30 @@ export default function HomePage() {
         if (!user || user.provider === 'guest') {
             payoutCheckedForRef.current = null;
             setPayoutSetupStalled(false);
+            setFirstListingEligible(false);
             return;
         }
         if (activeTab === 'profile') return; // hidden there; re-check on leave
         if (payoutCheckedForRef.current === user.id && !leftProfile) return;
+        let payoutNudgeDismissed = false;
         try {
-            if (sessionStorage.getItem('cs_payout_nudge_dismissed') === '1') return;
+            payoutNudgeDismissed = sessionStorage.getItem('cs_payout_nudge_dismissed') === '1';
+            setFirstListingDismissed(sessionStorage.getItem('cs_first_listing_prompt_dismissed') === '1');
         } catch { /* storage unavailable (private mode) */ }
         payoutCheckedForRef.current = user.id;
         let cancelled = false;
         (async () => {
             try {
                 const res = await fetch('/api/stripe/connect/status');
-                if (!res.ok) return; // banner is best-effort — fail quiet
+                if (!res.ok) return; // banners are best-effort — fail quiet
                 const s = await res.json();
                 if (!cancelled) {
-                    setPayoutSetupStalled(
-                        !!s.connected && s.detailsSubmitted !== true && s.chargesEnabled !== true
-                    );
+                    if (!payoutNudgeDismissed) {
+                        setPayoutSetupStalled(
+                            !!s.connected && s.detailsSubmitted !== true && s.chargesEnabled !== true
+                        );
+                    }
+                    setFirstListingEligible(s.chargesEnabled === true);
                 }
             } catch { /* fail quiet */ }
         })();
@@ -354,6 +380,30 @@ export default function HomePage() {
         updateCollectionItem,
         refreshCollections
     } = useUserCollections();
+
+    // First-listing activation banner, second half: does the vault know of any
+    // listing (active or draft)? Derived here because useUserCollections is
+    // the mobile app's only listings-of-mine surface. The cron's candidate
+    // query is the authoritative zero-listings check; this only gates a banner.
+    const hasAnyListing = useMemo(
+        () => customCollections.some((col) => col.items.some((item) => item.isListing)),
+        [customCollections],
+    );
+    const showFirstListingPrompt =
+        firstListingEligible &&
+        !firstListingDismissed &&
+        !collectionsLoading &&
+        !hasAnyListing &&
+        !payoutSetupStalled;
+
+    const openFirstListing = () => {
+        setActiveTab('vault');
+    };
+
+    const dismissFirstListingPrompt = () => {
+        setFirstListingDismissed(true);
+        try { sessionStorage.setItem('cs_first_listing_prompt_dismissed', '1'); } catch { /* re-shows next session */ }
+    };
 
     const {
         wishlist,
@@ -1177,9 +1227,16 @@ export default function HomePage() {
             if (error) throw error;
             const completeness = checkSellerProfileComplete(profile);
             if (!completeness.complete) {
-                showToast(t('profile.incompleteSeller'), 'error');
-                setActiveTab('profile');
-                return;
+                // Draft-first: missing ONLY the Stripe fields is no longer a
+                // block — the form opens and the listing saves as a draft
+                // that goes live when onboarding completes. Missing shipping
+                // fields still block: Flash needs them and they're filled
+                // in-app in seconds.
+                if (!isStripeOnlyIncomplete(completeness.missing)) {
+                    showToast(t('profile.incompleteSeller'), 'error');
+                    setActiveTab('profile');
+                    return;
+                }
             }
         } catch (err) {
             // Don't block listing on a transient profile-read failure —
@@ -1276,8 +1333,9 @@ export default function HomePage() {
         if (!listingTarget) return;
 
         try {
-            // 1. Create true database listing
-            await marketplaceService.createListing({
+            // 1. Create true database listing (may come back as a draft when
+            //    Stripe onboarding isn't finished yet)
+            const created = await marketplaceService.createListing({
                 cardId: listingTarget.card.id,
                 cardData: listingTarget.card,
                 price: listingData.price,
@@ -1289,6 +1347,7 @@ export default function HomePage() {
                 image_back_url: listingData.image_back_url,
                 acceptsOffers: listingData.accepts_offers
             });
+            const isDraft = created?.status === 'draft';
 
             // 2. Refresh global marketplace listings
             await fetchGlobalListings();
@@ -1297,12 +1356,21 @@ export default function HomePage() {
             await updateCollectionItem(listingTarget.colId, listingTarget.item.id, {
                 isListing: true,
                 listingPrice: listingData.price,
+                listingStatus: isDraft ? 'draft' : 'active',
                 // condition: listingData.condition, (avoid overwriting base item stats if we only want the listing to hold them)
                 // isGraded: listingData.is_graded,
             });
 
             setListingTarget(null);
-            showToast(t('paymentFlow.listingPublished') || 'Listing successfully published to the market!', 'success');
+            if (isDraft) {
+                showToast(
+                    t('paymentFlow.listingDraftSaved') ||
+                        'Saved as a draft — finish your payout setup and it goes live automatically.',
+                    'success',
+                );
+            } else {
+                showToast(t('paymentFlow.listingPublished') || 'Listing successfully published to the market!', 'success');
+            }
         } catch (error) {
             if (error instanceof ProfileIncompleteError) {
                 // Race against the click-time gate: profile became
@@ -1510,6 +1578,12 @@ export default function HomePage() {
                     if (appLink.searchParams.get('view') === 'offers') {
                         try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
                         setActiveTab('profile');
+                        return;
+                    }
+                    // First-listing activation email CTA (cardstreet.app/
+                    // ?view=vault): straight into the Vault.
+                    if (appLink.searchParams.get('view') === 'vault') {
+                        setActiveTab('vault');
                         return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
@@ -1745,6 +1819,24 @@ export default function HomePage() {
                                 onClick={dismissPayoutNudge}
                                 aria-label={t('profile.payoutNudgeDismiss')}
                                 className="p-1.5 -mr-1.5 text-amber-400/60 hover:text-amber-200 transition-colors shrink-0"
+                            >
+                                <i className="fa-solid fa-xmark text-sm"></i>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Verified but never listed: one tap into the Vault to list a first card */}
+                    {showFirstListingPrompt && activeTab !== 'vault' && (
+                        <div className="w-full px-6 py-2.5 bg-brand-cyan/10 border-b border-brand-cyan/20 flex items-center gap-2 z-40 shrink-0">
+                            <button onClick={openFirstListing} className="flex-1 flex items-center gap-2.5 text-left min-w-0">
+                                <i className="fa-solid fa-tag text-brand-cyan text-sm shrink-0"></i>
+                                <span className="text-cyan-100 text-xs font-bold leading-snug">{t('profile.firstListingBanner')}</span>
+                                <i className="fa-solid fa-chevron-right text-brand-cyan/70 text-[10px] shrink-0 ml-auto"></i>
+                            </button>
+                            <button
+                                onClick={dismissFirstListingPrompt}
+                                aria-label={t('profile.firstListingDismiss')}
+                                className="p-1.5 -mr-1.5 text-brand-cyan/60 hover:text-cyan-100 transition-colors shrink-0"
                             >
                                 <i className="fa-solid fa-xmark text-sm"></i>
                             </button>

@@ -441,10 +441,12 @@ export async function POST(req: Request) {
         }
 
         if (!reserved || reserved.length !== listingIds.length) {
-            // Roll back any partial reservation by flipping winners back to active.
+            // Roll back any partial reservation by flipping winners back to
+            // active. Guard on 'sold' (the reservation state) so this can
+            // never activate a row in any other state.
             const reservedIds = (reserved || []).map(r => r.id);
             if (reservedIds.length > 0) {
-                await supabase.from('listings').update({ status: 'active' }).in('id', reservedIds);
+                await supabase.from('listings').update({ status: 'active' }).in('id', reservedIds).eq('status', 'sold');
             }
             return NextResponse.json(
                 { error: 'One or more listings were just sold by another buyer' },
@@ -460,7 +462,8 @@ export async function POST(req: Request) {
 
         if (insertErr || !insertedOrders) {
             console.error('[Orders/Checkout] Order insert failed:', insertErr);
-            await supabase.from('listings').update({ status: 'active' }).in('id', listingIds);
+            // Same 'sold' guard as the partial-reservation rollback above.
+            await supabase.from('listings').update({ status: 'active' }).in('id', listingIds).eq('status', 'sold');
             return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
         }
 

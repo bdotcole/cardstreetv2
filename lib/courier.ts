@@ -1041,6 +1041,151 @@ export async function sendStripeSetupReminderEmail(
     }
 }
 
+// ─── First-listing activation nudge (verified sellers) ───────────────────────
+
+/**
+ * One-time "you're all set — list your first card" email/push for a seller who
+ * FINISHED Stripe onboarding (charges_enabled) but never created a listing.
+ * The other half of the funnel: 21 of 34 fully-verified sellers had zero
+ * listings as of 2026-07-30 — the KYC wall wasn't their problem, activation is.
+ *
+ * Candidates are picked by app/api/cron/first-listing-nudge; this function
+ * re-verifies eligibility (a listing created between the cron's query and the
+ * send cancels the nudge). One touch ever, CAS on
+ * profiles.first_listing_nudge_sent_at exactly like the original one-shot
+ * setup nudge. Fails soft until 20260730_first_listing_nudge.sql is applied.
+ *
+ * The CTA links /?view=vault: the web landing branch and the appUrlOpen
+ * deep-link branch in components/MobileHome.tsx both land it on the Vault tab,
+ * where "New Listing" lives.
+ */
+export async function sendFirstListingNudgeEmail(
+    userId: string,
+    deps: FirstTimeSaleDeps = {},
+): Promise<'sent' | 'skipped' | 'error'> {
+    const courier = deps.courier !== undefined ? deps.courier : getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping first-listing nudge');
+        return 'skipped';
+    }
+    const supabaseAdmin = deps.supabaseAdmin ?? getSupabaseAdmin();
+
+    try {
+        // ── 1. Re-verify eligibility. ──
+        const { data: profile, error: profileErr } = await supabaseAdmin
+            .from('profiles')
+            .select('display_name, stripe_charges_enabled, first_listing_nudge_sent_at')
+            .eq('id', userId)
+            .single();
+
+        if (profileErr || !profile) {
+            if (profileErr && /column|does not exist/i.test(profileErr.message || '')) {
+                console.warn('[Courier] first-listing nudge: awaiting migration 20260730_first_listing_nudge — skipping');
+                return 'skipped';
+            }
+            console.error(`[Courier] ❌ first-listing nudge: failed to load profile ${userId}:`, profileErr);
+            return 'error';
+        }
+        if (profile.stripe_charges_enabled !== true || profile.first_listing_nudge_sent_at) {
+            return 'skipped';
+        }
+
+        // Any listing row — active, draft, sold or cancelled — means the
+        // seller has activated before and needs no nudge.
+        const { count: listingCount, error: listingErr } = await supabaseAdmin
+            .from('listings')
+            .select('id', { count: 'exact', head: true })
+            .eq('seller_id', userId);
+        if (listingErr) {
+            console.error(`[Courier] ❌ first-listing nudge: listings check failed for ${userId}:`, listingErr);
+            return 'error';
+        }
+        if ((listingCount ?? 0) > 0) return 'skipped';
+
+        // ── 2. Resolve email + push token. ──
+        const { data: { user }, error: authErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const email = (!authErr && user?.email) ? user.email : null;
+        if (!email) {
+            console.warn(`[Courier] ⚠️  No email for seller ${userId} — skipping first-listing nudge`);
+            return 'skipped';
+        }
+        const { data: notifPrefs } = await supabaseAdmin
+            .from('notification_preferences')
+            .select('fcm_token')
+            .eq('user_id', userId)
+            .maybeSingle();
+        const fcmToken: string | null = notifPrefs?.fcm_token || null;
+
+        // ── 3. Atomically claim the one-shot slot. ──
+        const claimedAt = new Date().toISOString();
+        const { data: claimed, error: claimErr } = await supabaseAdmin
+            .from('profiles')
+            .update({ first_listing_nudge_sent_at: claimedAt })
+            .eq('id', userId)
+            .is('first_listing_nudge_sent_at', null)
+            .select('id');
+
+        if (claimErr) {
+            console.error(`[Courier] ❌ first-listing nudge: claim failed for ${userId}:`, claimErr);
+            return 'error';
+        }
+        if (!claimed || claimed.length === 0) {
+            return 'skipped'; // lost the race to a concurrent run
+        }
+
+        // ── 4. Send. Roll the claim back on failure so a later run retries. ──
+        const vaultUrl = `${appBaseUrl()}/?view=vault`;
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
+        const title =
+            'บัญชีของคุณพร้อมขายแล้ว — ลงขายการ์ดใบแรกเลย! — You\'re verified, list your first card on CardStreet';
+        const body =
+            `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
+            'การตั้งค่าการรับเงินของคุณเสร็จสมบูรณ์แล้ว — ตอนนี้ลงขายการ์ดได้เลย ' +
+            'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ก็เริ่มขายได้ทันที เงินจากการขายเข้าบัญชีธนาคารของคุณโดยตรง\n\n' +
+            `ลงขายการ์ดใบแรก: ${vaultUrl}\n\n` +
+            '- - -\n\n' +
+            `${firstName ? `Hi ${firstName},\n\n` : ''}` +
+            'Your payout setup is complete — you can sell now. Scan cards into your vault, ' +
+            'tap "New Listing", and the money from every sale goes straight to your bank account.\n\n' +
+            `List your first card: ${vaultUrl}\n\n` +
+            `Questions? Contact ${supportEmail}`;
+
+        try {
+            const sendResult = await courier.send.message({
+                message: {
+                    to: buildRecipient(email, fcmToken),
+                    content: { title, body },
+                    routing: buildRouting(true, !!fcmToken),
+                    data: { type: 'first_listing_nudge' },
+                    // Thai-first subject exceeds Courier's 48-byte encoded-word
+                    // cliff (see SUBJECTS) — force the full subject at Postmark.
+                    providers: postmarkOverride(title),
+                },
+            });
+            console.log(
+                `[Courier] ✅ First-listing nudge sent to ${userId}. ` +
+                `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+            );
+            return 'sent';
+        } catch (sendErr) {
+            console.error(`[Courier] ❌ Error sending first-listing nudge to ${userId}:`, sendErr);
+            const { error: rollbackErr } = await supabaseAdmin
+                .from('profiles')
+                .update({ first_listing_nudge_sent_at: null })
+                .eq('id', userId)
+                .eq('first_listing_nudge_sent_at', claimedAt);
+            if (rollbackErr) {
+                console.error(`[Courier] ❌ first-listing nudge: rollback failed for ${userId} (will not retry):`, rollbackErr);
+            }
+            return 'error';
+        }
+    } catch (err) {
+        console.error(`[Courier] ❌ Unexpected error in first-listing nudge for ${userId}:`, err);
+        return 'error';
+    }
+}
+
 // ─── Abandoned-checkout recovery nudge (buyer) ───────────────────────────────
 
 /**
