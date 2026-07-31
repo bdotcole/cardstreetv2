@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts';
+import { submitCardIdsToIndexNow } from '@/lib/indexNow';
 
 // Wishlist-alert fan-out trigger for the CLIENT-SIDE listing path
 // (services/marketplaceService.createListing inserts straight from the
@@ -21,12 +22,15 @@ export async function POST(req: Request) {
   // log in notifyWishlistersOfListing makes repeat calls harmless.
   const { data: listing } = await supabase
     .from('listings')
-    .select('id, seller_id')
+    .select('id, seller_id, card_id')
     .eq('id', listingId)
     .single();
   if (!listing || listing.seller_id !== user.id) {
     return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
   }
+
+  // Best-effort recrawl hint for the card page this listing appears on.
+  void submitCardIdsToIndexNow([listing.card_id]);
 
   const result = await notifyWishlistersOfListing(listingId);
   return NextResponse.json(result);

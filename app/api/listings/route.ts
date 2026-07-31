@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { z } from 'zod'
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts'
+import { submitCardIdsToIndexNow } from '@/lib/indexNow'
 import { attachSellers } from '@/lib/publicProfiles'
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
@@ -171,6 +172,10 @@ export async function POST(request: NextRequest) {
                 console.error('[Listings] wishlist alert fan-out failed:', e),
             ),
         )
+
+        // The card page just gained an offer -- tell IndexNow so Bing recrawls
+        // it instead of waiting its turn behind ~80k queued card URLs.
+        after(() => submitCardIdsToIndexNow([listing.card_id]))
 
         return NextResponse.json(listing)
     } catch (error: any) {

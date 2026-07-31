@@ -75,7 +75,11 @@ const COOKIE_OPTS = { path: '/', sameSite: 'lax' as const, secure: process.env.N
 // two concerns don't tangle.
 type Decision =
     | { kind: 'rewrite'; pathname: string; uaVary: boolean }
-    | { kind: 'redirect'; pathname: string; search?: string; uaVary: boolean }
+    // `permanent` marks a redirect that is a property of the URL itself (a
+    // fixed alias) rather than of this request's user-agent. Only those may be
+    // 308 — a UA-conditional bounce must stay temporary, or a browser that
+    // cached it would keep bouncing after the UA (or cs_view override) changes.
+    | { kind: 'redirect'; pathname: string; search?: string; uaVary: boolean; permanent?: boolean }
     | { kind: 'next'; uaVary: boolean }
 
 function resolveExperience(request: NextRequest, basePath: string): Decision {
@@ -118,7 +122,7 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
     // don't re-enter middleware, so any request seen here was typed directly —
     // send it to the canonical clean URL.
     if (basePath === '/desktop' || basePath.startsWith('/desktop/')) {
-        return { kind: 'redirect', pathname: basePath === '/desktop' ? '/' : basePath.slice('/desktop'.length), uaVary: false }
+        return { kind: 'redirect', pathname: basePath === '/desktop' ? '/' : basePath.slice('/desktop'.length), uaVary: false, permanent: true }
     }
 
     return { kind: 'next', uaVary: false }
@@ -163,9 +167,11 @@ export async function middleware(request: NextRequest) {
         basePath = pathname.slice('/en'.length) || '/'
     } else if (pathname === '/th' || pathname.startsWith('/th/')) {
         // Thai is canonical at the bare path — strip the redundant prefix.
+        // 308 (permanent): /th/* is a fixed alias, so search engines should
+        // consolidate its signals onto the bare URL rather than keep recrawling.
         const url = request.nextUrl.clone()
         url.pathname = pathname.slice('/th'.length) || '/'
-        const res = NextResponse.redirect(url)
+        const res = NextResponse.redirect(url, 308)
         res.cookies.set(LANG_COOKIE, 'TH', COOKIE_OPTS)
         return res
     }
@@ -194,7 +200,7 @@ export async function middleware(request: NextRequest) {
         const url = request.nextUrl.clone()
         url.pathname = `${prefix}${decision.pathname}`
         url.search = decision.search ?? ''
-        const res = NextResponse.redirect(url)
+        const res = NextResponse.redirect(url, decision.permanent ? 308 : 307)
         return decision.uaVary ? withUaVary(applyLang(res)) : applyLang(res)
     }
 

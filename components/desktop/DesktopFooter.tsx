@@ -36,8 +36,10 @@ export default function DesktopFooter() {
                         <Link href="/terms" className="hover:text-slate-300 transition-colors">{t('desktop.footerTerms')}</Link>
                         <Link href="/privacy" className="hover:text-slate-300 transition-colors">{t('desktop.footerPrivacy')}</Link>
                         {/* Plain anchor on purpose: the ?view= switch needs a full request so
-                            middleware can set the cs_view cookie and re-route. */}
-                        <a href="/?view=mobile" className="hover:text-slate-300 transition-colors">{t('desktop.switchToMobile')}</a>
+                            middleware can set the cs_view cookie and re-route. nofollow because
+                            that re-route is a redirect on every page of the site -- crawlers
+                            should not spend budget rediscovering it sitewide. */}
+                        <a href="/?view=mobile" rel="nofollow" className="hover:text-slate-300 transition-colors">{t('desktop.switchToMobile')}</a>
                     </nav>
                 </div>
             </div>

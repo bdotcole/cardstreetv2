@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts';
+import { submitCardIdsToIndexNow } from '@/lib/indexNow';
 
 export async function publishDraftListings(
     admin: SupabaseClient,
@@ -23,7 +24,7 @@ export async function publishDraftListings(
         .update({ status: 'active', updated_at: new Date().toISOString() })
         .in('seller_id', sellerIds)
         .eq('status', 'draft')
-        .select('id');
+        .select('id, card_id');
 
     if (error) throw error;
 
@@ -38,6 +39,9 @@ export async function publishDraftListings(
         for (const row of published) {
             void notifyWishlistersOfListing(row.id).catch(() => { /* best-effort */ });
         }
+        // One batched IndexNow submission for every card page that just gained
+        // a buyable listing (a seller's whole draft backlog publishes at once).
+        void submitCardIdsToIndexNow(published.map((row) => row.card_id));
     }
     return published.length;
 }

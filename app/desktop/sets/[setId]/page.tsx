@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
+import { getSetIntro } from '@/lib/setLanding';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
 
@@ -12,14 +13,24 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
 }
 
-const GAME_LABEL: Record<string, string> = {
-    pokemon: 'Pokémon',
-    yugioh: 'Yu-Gi-Oh!',
-    mtg: 'Magic: The Gathering',
-    onepiece: 'One Piece',
-    riftbound: 'Riftbound',
-    lorcana: 'Disney Lorcana',
+// Localized game names. The Thai forms matter: the TH title reads
+// "การ์ด<game>", so an English label there produced mixed-script titles like
+// "การ์ดPokémon". Riftbound and Lorcana stay in English in both locales (brand
+// names Thai players use as-is), matching components/desktop/DesktopSetsBrowser.
+const GAME_LABEL: Record<string, { en: string; th: string }> = {
+    pokemon: { en: 'Pokémon', th: 'โปเกมอน' },
+    yugioh: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
+    mtg: { en: 'Magic: The Gathering', th: 'เมจิก' },
+    onepiece: { en: 'One Piece', th: 'วันพีซ' },
+    riftbound: { en: 'Riftbound', th: 'Riftbound' },
+    lorcana: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
 };
+
+function gameLabel(game: string, lang: 'EN' | 'TH'): string {
+    const entry = GAME_LABEL[game];
+    if (!entry) return game;
+    return lang === 'EN' ? entry.en : entry.th;
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
     const { setId } = await params;
@@ -28,11 +39,11 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
 
     const lang = await resolveLang();
     const count = cards.length || set.printed_total || set.total || 0;
-    const game = GAME_LABEL[set.game] ?? set.game;
+    const game = gameLabel(set.game, lang);
     const title =
         lang === 'EN'
             ? `${set.name} — ${game} Cards & Prices | CardStreet`
-            : `${set.name} — การ์ด${game} ราคาและรายการขาย | CardStreet`;
+            : `${set.name} — การ์ด${game} เช็คราคาและรายการขาย | CardStreet`;
     const description =
         lang === 'EN'
             ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
@@ -82,8 +93,9 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
     if (!set) notFound();
 
     const lang = await resolveLang();
-    const game = GAME_LABEL[set.game] ?? set.game;
+    const game = gameLabel(set.game, lang);
     const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
+    const intro = getSetIntro(setId);
 
     return (
         <div>
@@ -116,6 +128,12 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
                     </p>
                 </div>
             </header>
+
+            {intro && (
+                <p className="text-sm text-slate-400 leading-relaxed mt-6 max-w-3xl">
+                    {lang === 'EN' ? intro.en : intro.th}
+                </p>
+            )}
 
             {cards.length === 0 ? (
                 <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'No cards found for this set.' : 'ไม่พบการ์ดในชุดนี้'}</p>
