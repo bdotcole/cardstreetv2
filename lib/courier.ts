@@ -162,11 +162,29 @@ function buildRecipient(email: string | null, fcmToken: string | null) {
 
 /**
  * Build the routing config based on user prefs.
+ *
+ * `contentSource` decides how the push channel is addressed, and the
+ * distinction is load-bearing — verified against the live Courier API
+ * 2026-07-31 by sending the same inline payload to the same device token twice,
+ * varying only this value:
+ *
+ * - `'template'` leaves it as the generic `push` channel. The dashboard
+ *   template binds that channel to the FCM integration, so Courier resolves it
+ *   to `firebase-fcm` and the device gets the notification.
+ * - `'inline'` has no such binding, and Courier silently falls back to its own
+ *   Courier Inbox provider instead of Firebase. The email still goes out, so
+ *   the send looks healthy in the logs while the push is quietly dropped.
+ *   Naming the provider pins it to FCM.
+ *
+ * This is why every inline notification produced zero pushes while the four
+ * template-backed ones worked: over a 30-day window, 154 of 191 sends routed to
+ * Inbox rather than FCM. Keep `'template'` on the bare channel — that path has
+ * been delivering in production and re-pinning it was not worth the risk.
  */
-function buildRouting(wantEmail: boolean, wantPush: boolean) {
+function buildRouting(wantEmail: boolean, wantPush: boolean, contentSource: 'template' | 'inline') {
     const channels: string[] = [];
     if (wantEmail) channels.push("email");
-    if (wantPush) channels.push("push");
+    if (wantPush) channels.push(contentSource === 'inline' ? "firebase-fcm" : "push");
     return { method: "all" as const, channels };
 }
 
@@ -187,7 +205,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         prefs.sold_email ? email : null,
         prefs.sold_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken);
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'template');
     if (routing.channels.length === 0) return;
 
     try {
@@ -245,7 +263,7 @@ export async function sendLabelGeneratedNotification(
         prefs.label_email ? email : null,
         prefs.label_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken);
+    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken, 'template');
     if (routing.channels.length === 0) return;
 
     const orderUrl = `${appBaseUrl()}/orders/${orderDetails.id}`;
@@ -313,7 +331,7 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
         prefs.shipped_email ? email : null,
         prefs.shipped_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken);
+    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken, 'template');
     if (routing.channels.length === 0) return;
 
     const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`;
@@ -367,7 +385,7 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
         wantEmail ? email : null,
         wantPush ? fcmToken : null
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'template');
     if (routing.channels.length === 0) return;
 
     try {
@@ -412,7 +430,7 @@ export async function sendPurchaseCompletedNotification(sellerId: string, orderD
         prefs.sold_email ? email : null,
         prefs.sold_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken);
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
@@ -455,7 +473,7 @@ export async function sendPayoutCompletedNotification(sellerId: string, orderId:
         wantEmail ? email : null,
         wantPush ? fcmToken : null
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
@@ -498,7 +516,7 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
         wantEmail ? email : null,
         wantPush ? fcmToken : null
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
@@ -548,7 +566,7 @@ export async function sendCardRequestFulfilledNotification(
         wantEmail ? email : null,
         wantPush ? fcmToken : null,
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken);
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     const card = details.searchQuery?.trim() || 'the card you requested';
@@ -1007,7 +1025,7 @@ export async function sendStripeSetupReminderEmail(
                 message: {
                     to: buildRecipient(email, fcmToken),
                     content: { title, body },
-                    routing: buildRouting(true, !!fcmToken),
+                    routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'stripe_setup_nudge', touch },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
                     // cliff (see SUBJECTS) — force the full subject at Postmark.
@@ -1156,7 +1174,7 @@ export async function sendFirstListingNudgeEmail(
                 message: {
                     to: buildRecipient(email, fcmToken),
                     content: { title, body },
-                    routing: buildRouting(true, !!fcmToken),
+                    routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'first_listing_nudge' },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
                     // cliff (see SUBJECTS) — force the full subject at Postmark.
@@ -1298,7 +1316,7 @@ export async function sendAbandonedCheckoutNudge(
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
 
         const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
-        const routing = buildRouting(wantEmail, wantPush);
+        const routing = buildRouting(wantEmail, wantPush, 'inline');
         if (routing.channels.length === 0) return 'skipped';
 
         try {
@@ -1387,10 +1405,12 @@ export async function sendWishlistListingAlert(
     if (!wantEmail && !wantPush) return false;
 
     const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
-    const routing = buildRouting(wantEmail, wantPush);
 
     const priceLabel = `฿${Number(listing.price).toLocaleString('en-US')}`;
+    // Resolved before the routing below: which branch we take decides how the
+    // push channel must be addressed (see buildRouting).
     const templateId = (process.env.COURIER_WISHLIST_ALERT_TEMPLATE_ID || '').trim();
+    const routing = buildRouting(wantEmail, wantPush, templateId ? 'template' : 'inline');
 
     const message: Record<string, unknown> = {
         to: recipient,
@@ -1491,7 +1511,10 @@ async function sendOfferNotification(
     if (!wantEmail && !wantPush) return;
 
     const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
-    const routing = buildRouting(wantEmail, wantPush);
+    // The offer templates are unset until the dashboard work lands, so these
+    // sends currently take the inline branch below and must pin the FCM
+    // provider or the push is dropped (see buildRouting).
+    const routing = buildRouting(wantEmail, wantPush, cfg.template ? 'template' : 'inline');
     if (routing.channels.length === 0) return;
 
     const priceLabel = details.amount != null ? `฿${Number(details.amount).toLocaleString('en-US')}` : '';
