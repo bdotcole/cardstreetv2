@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { mapSupabaseCardToInternal } from '@/lib/cardMapper'
+import WishlistBoard, { type WishlistBoardRow } from './_WishlistBoard'
 
 // The admin dashboard queries Supabase at render time via the service-role
 // client. Prerendering it at build would require Supabase env vars to be
@@ -110,72 +112,101 @@ async function getRecentOffers() {
     return data ?? []
 }
 
-interface WishlistCardAgg {
-    cardId: string
-    name: string
-    setName: string | null
-    number: string | null
-    image: string | null
-    wanters: number
-    lastAdded: string
-    activeListings: number
-}
+// Cap on how many cards are shipped to the client for filtering. The whole
+// board filters in the browser (instant, no round-trips), which is only sound
+// while the payload stays small; the UI says so when the tail is cut.
+const WISHLIST_BOARD_LIMIT = 400
 
 // Feeds the weekly "Buy List" post: which cards do buyers want, and do any
 // active listings exist to satisfy them? PostgREST has no GROUP BY, so page
 // narrow JSON-path projections (never the full card_data blob) and count here.
-async function getTopWishlistCards() {
+// Facets (rarity, type, price) come from the live catalog rather than the
+// wishlist's frozen card_data snapshot, so a card repriced since it was
+// wishlisted sorts on today's number.
+async function getWishlistBoard() {
     const supabase = createAdminClient()
     const PAGE = 1000
-    const byCard = new Map<string, WishlistCardAgg>()
-    let totalRows = 0
+    const CHUNK = 100
+
+    const agg = new Map<string, { wishers: number; lastAdded: string; snap: any }>()
+    let totalWants = 0
     for (let from = 0; ; from += PAGE) {
         const { data } = await supabase
             .from('wishlists')
-            .select('card_id, added_at, name:card_data->>name, number:card_data->>number, set_name:card_data->>set, image:card_data->images->>small, image_url:card_data->>imageUrl')
+            .select('card_id, added_at, snapName:card_data->>name, snapSet:card_data->>set, snapNumber:card_data->>number, snapImage:card_data->images->>small, snapImageUrl:card_data->>imageUrl, snapPrice:card_data->>marketPrice, snapRarity:card_data->>rarity, snapLang:card_data->>language')
             .order('added_at', { ascending: false })
             .order('id')
             .range(from, from + PAGE - 1)
         for (const row of (data ?? []) as any[]) {
-            totalRows++
-            const existing = byCard.get(row.card_id)
-            if (existing) {
-                existing.wanters++
-            } else {
-                byCard.set(row.card_id, {
-                    cardId: row.card_id,
-                    name: row.name ?? 'Unknown card',
-                    setName: row.set_name ?? null,
-                    number: row.number ?? null,
-                    image: row.image ?? row.image_url ?? null,
-                    wanters: 1,
-                    // Rows arrive newest-first, so the first row seen per card
-                    // is its most recent add.
-                    lastAdded: row.added_at,
-                    activeListings: 0,
-                })
-            }
+            totalWants++
+            const hit = agg.get(row.card_id)
+            // Rows arrive newest-first, so the first row seen per card is its
+            // most recent add.
+            if (hit) hit.wishers++
+            else agg.set(row.card_id, { wishers: 1, lastAdded: row.added_at, snap: row })
         }
         if (!data || data.length < PAGE) break
     }
 
-    const top = [...byCard.values()]
-        .sort((a, b) => b.wanters - a.wanters || (a.lastAdded < b.lastAdded ? 1 : -1))
-        .slice(0, 10)
+    const ranked = [...agg.entries()]
+        .sort((a, b) => b[1].wishers - a[1].wishers || (a[1].lastAdded < b[1].lastAdded ? 1 : -1))
+    const ids = ranked.slice(0, WISHLIST_BOARD_LIMIT).map(([id]) => id)
 
-    if (top.length > 0) {
-        const { data: listed } = await supabase
-            .from('listings')
-            .select('card_id')
-            .eq('status', 'active')
-            .in('card_id', top.map((c) => c.cardId))
-        for (const l of (listed ?? []) as any[]) {
-            const agg = top.find((c) => c.cardId === l.card_id)
-            if (agg) agg.activeListings++
+    const catalog = new Map<string, any>()
+    const listingCount = new Map<string, number>()
+    for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK)
+        const { data: cards } = await supabase
+            .from('pokemon_cards')
+            .select('id, name, english_name, set_id, number, rarity, language, game, image_small, image_large, tcgplayer:raw_data->tcgplayer, types:raw_data->types, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
+            .in('id', slice)
+        for (const r of (cards ?? []) as any[]) catalog.set(r.id, r)
+
+        // Paged: a chunk's active listings can exceed the 1000-row default.
+        for (let from = 0; ; from += PAGE) {
+            const { data } = await supabase
+                .from('listings')
+                .select('card_id')
+                .eq('status', 'active')
+                .in('card_id', slice)
+                .order('id')
+                .range(from, from + PAGE - 1)
+            for (const l of (data ?? []) as any[]) {
+                listingCount.set(l.card_id, (listingCount.get(l.card_id) ?? 0) + 1)
+            }
+            if (!data || data.length < PAGE) break
         }
     }
 
-    return { top, uniqueCards: byCard.size, totalRows }
+    const rows: WishlistBoardRow[] = ids.map((id) => {
+        const { wishers, lastAdded, snap } = agg.get(id)!
+        const cat = catalog.get(id)
+        // Sealed products and delisted cards have no pokemon_cards row; fall
+        // back to the snapshot so they still appear instead of vanishing.
+        const mapped = cat ? mapSupabaseCardToInternal(cat) : null
+        return {
+            cardId: id,
+            name: mapped?.name ?? snap.snapName ?? 'Unknown card',
+            setName: mapped?.set ?? snap.snapSet ?? '—',
+            number: mapped?.number ?? snap.snapNumber ?? '',
+            image: mapped?.images?.small ?? snap.snapImage ?? snap.snapImageUrl ?? null,
+            rarity: mapped?.rarity ?? snap.snapRarity ?? null,
+            types: Array.isArray(cat?.types) ? cat.types.filter((t: any) => typeof t === 'string') : [],
+            game: cat?.game ?? 'pokemon',
+            language: cat?.language ?? snap.snapLang ?? 'en',
+            priceThb: Math.round(mapped?.marketPrice || Number(snap.snapPrice) || 0),
+            wishers,
+            lastAdded,
+            activeListings: listingCount.get(id) ?? 0,
+        }
+    })
+
+    return {
+        rows,
+        totalWants,
+        uniqueCards: agg.size,
+        truncated: agg.size > WISHLIST_BOARD_LIMIT,
+    }
 }
 
 const TIER_NAMES: Record<number, string> = {
@@ -219,7 +250,7 @@ export default async function AdminOverviewPage() {
         getTopPartners(),
         getRecentSales(),
         getRecentOffers(),
-        getTopWishlistCards(),
+        getWishlistBoard(),
     ])
 
     const statCards: StatCard[] = [
@@ -393,42 +424,17 @@ export default async function AdminOverviewPage() {
                     </div>
                 </div>
 
-                {/* Most Wishlisted — source list for the weekly Buy List post */}
-                <div className="glass rounded-2xl border border-white/10 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-                        <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Most Wishlisted</h2>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                            {wishlist.uniqueCards.toLocaleString()} cards · {wishlist.totalRows.toLocaleString()} wants
-                        </span>
-                    </div>
-                    <div className="divide-y divide-white/5">
-                        {wishlist.top.length === 0 && (
-                            <p className="px-6 py-8 text-center text-slate-500 text-sm">No wishlist cards yet</p>
-                        )}
-                        {wishlist.top.map((c, i) => (
-                            <div key={c.cardId} className="px-6 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
-                                <span className="text-sm font-black text-slate-600 w-5 text-right shrink-0">#{i + 1}</span>
-                                {c.image && (
-                                    <img src={c.image} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
-                                )}
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-slate-200 truncate">{c.name}</p>
-                                    <p className="text-[10px] text-slate-500 truncate">
-                                        {[c.setName, c.number ? `#${c.number}` : null].filter(Boolean).join(' · ') || c.cardId}
-                                    </p>
-                                </div>
-                                <div className="text-right shrink-0">
-                                    <p className="text-sm font-black text-brand-cyan">{c.wanters}</p>
-                                    <p className="text-[9px] text-slate-500">{c.wanters === 1 ? 'wisher' : 'wishers'}</p>
-                                </div>
-                                <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap ${c.activeListings > 0 ? 'bg-brand-green/20 text-brand-green' : 'bg-brand-red/20 text-brand-red'}`}>
-                                    {c.activeListings > 0 ? `${c.activeListings} listed` : 'none listed'}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
+
+            {/* Most Wishlisted — source list for the weekly Buy List post. Full
+                width rather than a grid cell: the filter bar and per-card facets
+                need the room. */}
+            <WishlistBoard
+                rows={wishlist.rows}
+                totalWants={wishlist.totalWants}
+                uniqueCards={wishlist.uniqueCards}
+                truncated={wishlist.truncated}
+            />
         </div>
     )
 }
