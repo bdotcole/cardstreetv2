@@ -130,12 +130,14 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     });
   }, [selectedSetId, debouncedSearchTerm, selectedLanguage, selectedGame]);
 
-  // Perform search when debounced term changes (same sequence guard — see cardsReqIdRef above)
+  // Perform search when debounced term changes (same sequence guard — see cardsReqIdRef above).
+  // Search is universal — every game and language — regardless of the browse
+  // pickers above: the pickers scope *browsing*, not the search box.
   useEffect(() => {
     if (debouncedSearchTerm.length > 2) {
       const myReq = ++cardsReqIdRef.current;
       setIsLoadingCards(true);
-      pokemonService.searchCards(debouncedSearchTerm, false, selectedLanguage, selectedGame).then(results => {
+      pokemonService.searchCards(debouncedSearchTerm, false, undefined, 'all').then(results => {
         if (myReq !== cardsReqIdRef.current) return;
         setCards(results);
         setIsLoadingCards(false);
@@ -152,6 +154,8 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame]);
 
   // Fetch sealed products when in sealed mode (driven by the same set / search box).
+  // Like card search, a typed query searches every game and language; the
+  // game/language pickers only scope set browsing.
   useEffect(() => {
     if (browseMode !== 'sealed') return;
     const searching = debouncedSearchTerm.length > 2;
@@ -159,10 +163,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     const myReq = ++sealedReqIdRef.current;
     setIsLoadingSealed(true);
     pokemonService.fetchSealedProducts({
-      game: selectedGame,
+      game: searching ? 'all' : selectedGame,
       setId: searching ? undefined : selectedSetId,
       q: searching ? debouncedSearchTerm : undefined,
-      language: showLanguageSelector ? selectedLanguage : undefined,
+      language: searching ? undefined : (showLanguageSelector ? selectedLanguage : undefined),
     }).then(rows => {
       if (myReq !== sealedReqIdRef.current) return;
       setSealedProducts(rows);

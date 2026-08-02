@@ -37,10 +37,10 @@ export default function DesktopNav() {
 
     // Full-catalog search (not just marketplace listings): debounce the query
     // and hit the same client-side catalog search the sell/explore flows use,
-    // across every enabled game — no game picker, typing a name is enough.
-    // Multi-language catalogs follow the UI language (cross-language name
-    // matching still surfaces the English/Thai twin); single-language catalogs
-    // always match regardless of UI language. Results deep-link to /card/[id].
+    // across every enabled game and language — no game picker, typing a name
+    // is enough. Deliberately ignores the UI language: search is universal, so
+    // an English-UI user can find Thai/Japanese prints (and vice versa) via
+    // cross-language name matching. Results deep-link to /card/[id].
     useEffect(() => {
         const q = query.trim();
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -54,8 +54,7 @@ export default function DesktopNav() {
         setSearchOpen(true);
         debounceRef.current = setTimeout(async () => {
             try {
-                const lang = language === 'TH' ? 'th' as const : 'en' as const;
-                const cards = await pokemonService.searchCards(q, false, lang, 'all');
+                const cards = await pokemonService.searchCards(q, false, undefined, 'all');
                 setResults(cards.slice(0, 8));
             } catch {
                 setResults([]);
@@ -66,7 +65,7 @@ export default function DesktopNav() {
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [query, language]);
+    }, [query]);
 
     const goToCard = (id: string) => {
         setSearchOpen(false);

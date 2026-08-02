@@ -30,7 +30,9 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
       const needsAi = /[\u0E00-\u0E7F]/.test(val) || val.split(' ').length > 1;
       if (needsAi) setIsAiResolving(true);
 
-      const data = await pokemonService.searchCards(val);
+      // Universal search: every game and language, so adding e.g. a One Piece
+      // or Thai card by name works without a game picker.
+      const data = await pokemonService.searchCards(val, false, undefined, 'all');
 
       setResults(data);
       setIsSearching(false);
