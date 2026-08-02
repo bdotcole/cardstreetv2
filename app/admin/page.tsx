@@ -110,6 +110,74 @@ async function getRecentOffers() {
     return data ?? []
 }
 
+interface WishlistCardAgg {
+    cardId: string
+    name: string
+    setName: string | null
+    number: string | null
+    image: string | null
+    wanters: number
+    lastAdded: string
+    activeListings: number
+}
+
+// Feeds the weekly "Buy List" post: which cards do buyers want, and do any
+// active listings exist to satisfy them? PostgREST has no GROUP BY, so page
+// narrow JSON-path projections (never the full card_data blob) and count here.
+async function getTopWishlistCards() {
+    const supabase = createAdminClient()
+    const PAGE = 1000
+    const byCard = new Map<string, WishlistCardAgg>()
+    let totalRows = 0
+    for (let from = 0; ; from += PAGE) {
+        const { data } = await supabase
+            .from('wishlists')
+            .select('card_id, added_at, name:card_data->>name, number:card_data->>number, set_name:card_data->>set, image:card_data->images->>small, image_url:card_data->>imageUrl')
+            .order('added_at', { ascending: false })
+            .order('id')
+            .range(from, from + PAGE - 1)
+        for (const row of (data ?? []) as any[]) {
+            totalRows++
+            const existing = byCard.get(row.card_id)
+            if (existing) {
+                existing.wanters++
+            } else {
+                byCard.set(row.card_id, {
+                    cardId: row.card_id,
+                    name: row.name ?? 'Unknown card',
+                    setName: row.set_name ?? null,
+                    number: row.number ?? null,
+                    image: row.image ?? row.image_url ?? null,
+                    wanters: 1,
+                    // Rows arrive newest-first, so the first row seen per card
+                    // is its most recent add.
+                    lastAdded: row.added_at,
+                    activeListings: 0,
+                })
+            }
+        }
+        if (!data || data.length < PAGE) break
+    }
+
+    const top = [...byCard.values()]
+        .sort((a, b) => b.wanters - a.wanters || (a.lastAdded < b.lastAdded ? 1 : -1))
+        .slice(0, 10)
+
+    if (top.length > 0) {
+        const { data: listed } = await supabase
+            .from('listings')
+            .select('card_id')
+            .eq('status', 'active')
+            .in('card_id', top.map((c) => c.cardId))
+        for (const l of (listed ?? []) as any[]) {
+            const agg = top.find((c) => c.cardId === l.card_id)
+            if (agg) agg.activeListings++
+        }
+    }
+
+    return { top, uniqueCards: byCard.size, totalRows }
+}
+
 const TIER_NAMES: Record<number, string> = {
     1: 'Bronze', 2: 'Silver', 3: 'Gold', 4: 'Platinum',
     5: 'Sapphire', 6: 'Ruby', 7: 'Emerald', 8: 'Diamond', 9: 'Black Opal',
@@ -145,12 +213,13 @@ const shortDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 
 export default async function AdminOverviewPage() {
-    const [stats, recentTickets, topPartners, recentSales, recentOffers] = await Promise.all([
+    const [stats, recentTickets, topPartners, recentSales, recentOffers, wishlist] = await Promise.all([
         getOverviewStats(),
         getRecentTickets(),
         getTopPartners(),
         getRecentSales(),
         getRecentOffers(),
+        getTopWishlistCards(),
     ])
 
     const statCards: StatCard[] = [
@@ -321,6 +390,42 @@ export default async function AdminOverviewPage() {
                                 </div>
                             )
                         })}
+                    </div>
+                </div>
+
+                {/* Most Wishlisted — source list for the weekly Buy List post */}
+                <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                        <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Most Wishlisted</h2>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                            {wishlist.uniqueCards.toLocaleString()} cards · {wishlist.totalRows.toLocaleString()} wants
+                        </span>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {wishlist.top.length === 0 && (
+                            <p className="px-6 py-8 text-center text-slate-500 text-sm">No wishlist cards yet</p>
+                        )}
+                        {wishlist.top.map((c, i) => (
+                            <div key={c.cardId} className="px-6 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
+                                <span className="text-sm font-black text-slate-600 w-5 text-right shrink-0">#{i + 1}</span>
+                                {c.image && (
+                                    <img src={c.image} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-200 truncate">{c.name}</p>
+                                    <p className="text-[10px] text-slate-500 truncate">
+                                        {[c.setName, c.number ? `#${c.number}` : null].filter(Boolean).join(' · ') || c.cardId}
+                                    </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <p className="text-sm font-black text-brand-cyan">{c.wanters}</p>
+                                    <p className="text-[9px] text-slate-500">{c.wanters === 1 ? 'wisher' : 'wishers'}</p>
+                                </div>
+                                <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap ${c.activeListings > 0 ? 'bg-brand-green/20 text-brand-green' : 'bg-brand-red/20 text-brand-red'}`}>
+                                    {c.activeListings > 0 ? `${c.activeListings} listed` : 'none listed'}
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
