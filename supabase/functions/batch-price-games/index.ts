@@ -22,6 +22,12 @@ const DELAY_MS = 1300;        // safe under 50 req/min
 const MAX_API_CALLS = 700;    // safety cap; leaves headroom under 1K/day shared quota
 const PAGE = 100;
 
+// Set-rotation knobs (see the ordering block in run()). These bound only Postgres
+// reads, not JustTCG calls, so they are cheap.
+const NEW_SET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;  // "recently ingested" head
+const STALE_PROBE_PAGE = 1000;                        // PostgREST's max rows per request
+const STALE_PROBE_PAGES = 8;                          // 8k oldest rows is far more than one run can price
+
 // Our game -> JustTCG game slug + which language rows to price/store.
 // `key` selects the group via the POST body { "group": "<key>" }. One group per
 // invocation keeps each run under the Edge Function wall-clock limit; cron fires
@@ -108,13 +114,61 @@ Deno.serve(async (req) => {
     for (const grp of groups) {
       if (apiCalls >= MAX_API_CALLS) break;
 
-      // Our sets for this game
       const { data: ourSets, error: setErr } = await supabase
         .from('pokemon_sets')
-        .select('id, name')
+        .select('id, name, created_at')
         .eq('game', grp.game)
         .eq('language', grp.cardLang === 'ja' ? 'ja' : 'en');
       if (setErr) { console.error(`[${grp.game}] set query: ${setErr.message}`); continue; }
+
+      // Set order: recently-ingested head, then STALEST-FIRST tail.
+      //
+      // A plain created_at DESC ordering starves games with more sets than the
+      // MAX_API_CALLS budget can cover. Yu-Gi-Oh has ~636 set rows against a
+      // 700-call cap, so the same leading sets won every night and the rest sat
+      // frozen for over a month while the cron still reported success (measured
+      // 2026-08-02: 1 of the 40 newest YGO sets refreshed, the other 39 stuck at
+      // 2026-06-29). Ordering the tail stalest-first is self-balancing: pricing a
+      // set stamps last_updated = now, which drops it to the back of the queue,
+      // so every set rotates in instead of the same head repeating.
+      //
+      // The staleness probe reads the oldest Raw_NM rows for this game and takes
+      // the order in which their sets first appear. Ties (a bulk backfill stamps
+      // thousands of rows at the same instant) break arbitrarily, but progress is
+      // still monotonic — a set that gets priced leaves the stale pool for good.
+      const staleRank = new Map<string, number>();
+      for (let p = 0; p < STALE_PROBE_PAGES; p++) {
+        const { data: probe, error: probeErr } = await supabase
+          .from('market_values')
+          .select('last_updated, pokemon_cards!inner(set_id)')
+          .eq('game', grp.game)
+          .eq('language', grp.storeLang)
+          .eq('condition', 'Raw_NM')
+          .order('last_updated', { ascending: true })
+          .range(p * STALE_PROBE_PAGE, (p + 1) * STALE_PROBE_PAGE - 1);
+        if (probeErr) { console.error(`[${grp.game}] stale probe: ${probeErr.message}`); break; }
+        if (!probe?.length) break;
+        for (const r of probe) {
+          const sid = (r as any).pokemon_cards?.set_id;
+          if (sid && !staleRank.has(sid)) staleRank.set(sid, staleRank.size);
+        }
+        if (probe.length < STALE_PROBE_PAGE) break;
+      }
+
+      // A set absent from the probe is fresher than the probe window, so it sorts
+      // last. The exception — a set with no priced rows at all — is covered by the
+      // recently-ingested head; an older set that is still unpriced is one with no
+      // resolvable JustTCG slug, which costs zero API calls when we reach it.
+      const createdMs = (s: any) => Date.parse(s.created_at ?? '') || 0;
+      const isNew = (s: any) => Date.now() - createdMs(s) < NEW_SET_WINDOW_MS;
+      const orderedSets = [...(ourSets ?? [])].sort((a, b) => {
+        if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
+        if (isNew(a)) return createdMs(b) - createdMs(a);
+        const ra = staleRank.has(a.id) ? staleRank.get(a.id)! : Number.MAX_SAFE_INTEGER;
+        const rb = staleRank.has(b.id) ? staleRank.get(b.id)! : Number.MAX_SAFE_INTEGER;
+        return ra !== rb ? ra - rb : createdMs(b) - createdMs(a);
+      });
+      console.log(`[${grp.game}] ${orderedSets.length} sets, ${staleRank.size} ranked stale, head=${orderedSets.slice(0, 5).map((s) => s.id).join(',')}`);
 
       // JustTCG sets for this game (one call), build resolver
       let jtcgSets: any[] = [];
@@ -122,7 +176,7 @@ Deno.serve(async (req) => {
       catch (e) { console.error(`[${grp.game}] /sets: ${(e as Error).message}`); continue; }
       const byName = new Map(jtcgSets.map((s: any) => [norm(s.name), s.id]));
 
-      for (const set of ourSets ?? []) {
+      for (const set of orderedSets) {
         if (apiCalls >= MAX_API_CALLS) break;
 
         let slug: string | undefined;

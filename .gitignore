@@ -66,3 +66,6 @@ aab_inspect_temp/
 inspect.zip
 /out/
 scripts/out/
+
+# Ingest scratch caches (bulk upstream dumps, re-downloadable)
+scripts/.cache/
