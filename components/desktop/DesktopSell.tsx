@@ -9,7 +9,6 @@ import { pokemonService } from '@/services/pokemonService';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { SELLER_REQUIRED_PROFILE_FIELDS, checkSellerProfileComplete, isStripeOnlyIncomplete } from '@/lib/profileValidation';
-import { GAMES, gameHasMultipleLanguages, getGameLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import ListingForm from '@/components/ListingForm';
@@ -40,8 +39,6 @@ export default function DesktopSell() {
     const [showPreScreen, setShowPreScreen] = useState(false);
     const [profileIncomplete, setProfileIncomplete] = useState(false);
 
-    const [game, setGame] = useState('pokemon');
-    const [language, setLanguage] = useState<GameLanguageCode>('en');
     // What's being listed: single cards or sealed products (boxes, ETBs, ...).
     // Sealed results are mapped to Card-shaped snapshots so the same results
     // grid and ListingForm flow works unchanged.
@@ -126,6 +123,9 @@ export default function DesktopSell() {
         else setShowPreScreen(true);
     };
 
+    // Universal search: every game and every language. A seller listing a Thai
+    // print or a One Piece box shouldn't have to pick the right catalog first —
+    // the result tiles carry set + number + art to disambiguate.
     const runSearch = async (e?: React.FormEvent) => {
         e?.preventDefault();
         const q = query.trim();
@@ -134,11 +134,10 @@ export default function DesktopSell() {
         setSearched(true);
         try {
             if (mode === 'sealed') {
-                const products = await pokemonService.fetchSealedProducts({ game, q });
+                const products = await pokemonService.fetchSealedProducts({ game: 'all', q });
                 setResults(products.map(sealedProductToCard));
             } else {
-                const lang = gameHasMultipleLanguages(game) ? language : defaultLanguageForGame(game);
-                const cards = await pokemonService.searchCards(q, false, lang, game);
+                const cards = await pokemonService.searchCards(q, false, undefined, 'all');
                 setResults(cards);
             }
         } finally {
@@ -284,25 +283,10 @@ export default function DesktopSell() {
 
             <form onSubmit={runSearch} className="mt-8">
                 <div className="flex flex-wrap gap-2 mb-4">
-                    {GAMES.filter((g) => g.enabled).map((g) => (
-                        <button
-                            key={g.id}
-                            type="button"
-                            onClick={() => {
-                                setGame(g.id);
-                                setLanguage(defaultLanguageForGame(g.id));
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                                game === g.id
-                                    ? 'bg-brand-cyan text-brand-darker'
-                                    : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
-                            }`}
-                        >
-                            {g.shortName}
-                        </button>
-                    ))}
-                    {/* Cards / Sealed toggle — mirrors the mobile Explore toggle */}
-                    <div className="flex gap-1 ml-auto bg-white/5 border border-white/10 rounded-full p-1">
+                    {/* Cards / Sealed toggle — mirrors the mobile Explore toggle.
+                        There is deliberately no game or language picker: search
+                        spans every catalog, so typing the name is enough. */}
+                    <div className="flex gap-1 bg-white/5 border border-white/10 rounded-full p-1">
                         {(['cards', 'sealed'] as const).map((m) => (
                             <button
                                 key={m}
@@ -335,17 +319,6 @@ export default function DesktopSell() {
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                         />
                     </div>
-                    {mode === 'cards' && gameHasMultipleLanguages(game) && (
-                        <select
-                            value={language}
-                            onChange={(e) => setLanguage(e.target.value as GameLanguageCode)}
-                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
-                        >
-                            {getGameLanguages(game).map((l) => (
-                                <option key={l.code} value={l.code}>{l.label}</option>
-                            ))}
-                        </select>
-                    )}
                     <button
                         type="submit"
                         disabled={searching || query.trim().length < 2}
