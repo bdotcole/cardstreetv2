@@ -21,12 +21,86 @@ function setLine(card: Card): string {
     // Sealed products carry a placeholder collector number ('—'); printing it
     // put a bare "#—" in the <title> and OG tags of every sealed page.
     const number = card.number && !card.isSealed ? `#${card.number}` : '';
-    return [card.set, number, card.rarity].filter(Boolean).join(' ');
+    return [setName(card), number, card.rarity].filter(Boolean).join(' ');
+}
+
+/** Some catalog rows carry trailing whitespace in the set name. */
+function setName(card: Card): string {
+    return (card.set || '').trim();
 }
 
 function lowestPrice(card: Card, listings: MarketplaceListing[]): number {
     if (listings.length) return Math.min(...listings.map((l) => l.price));
     return card.marketPrice || 0;
+}
+
+function thb(amount: number): string {
+    return `฿${Math.round(amount).toLocaleString('en-US')}`;
+}
+
+/**
+ * One or two sentences of real prose for the card page, which otherwise ships
+ * a heading and a price panel with no indexable sentence on it.
+ *
+ * Deliberately built from THIS card's own facts (name, set, number, rarity,
+ * market price, live listing count and floor) rather than a fixed sentence
+ * templated across ~86k pages — identical boilerplate at that scale reads as
+ * thin content, which both Bing and Semrush already flag on this domain.
+ *
+ * Prices are a server-render snapshot; the panel below stays live.
+ */
+function buildCardSummary(card: Card, listings: MarketplaceListing[], lang: 'EN' | 'TH'): string {
+    const market = card.marketPrice && card.marketPrice > 0 ? thb(card.marketPrice) : null;
+    const count = listings.length;
+    const floor = count ? thb(Math.min(...listings.map((l) => l.price))) : null;
+
+    const set = setName(card);
+
+    if (lang === 'EN') {
+        // Rarity trails the noun rather than modifying it ("a AR card" vs "an AR
+        // card") — rarity codes are letter salad and no a/an rule handles them all.
+        const what = [
+            card.name,
+            card.isSealed ? ' is a sealed product' : ' is a trading card',
+            set ? ` from ${set}` : '',
+            !card.isSealed && card.number ? ` (#${card.number})` : '',
+            !card.isSealed && card.rarity ? `, rarity ${card.rarity}` : '',
+            '.',
+        ].join('');
+
+        let state: string;
+        if (market && count) {
+            state = ` The current market price is ${market}, and ${count} ${count === 1 ? 'listing starts' : 'listings start'} at ${floor} from verified sellers with nationwide delivery in Thailand.`;
+        } else if (market) {
+            state = ` The current market price is ${market}. No one has it listed right now — add it to your wishlist to be alerted when a seller does.`;
+        } else if (count) {
+            state = ` ${count} ${count === 1 ? 'listing starts' : 'listings start'} at ${floor} from verified sellers with nationwide delivery in Thailand.`;
+        } else {
+            state = ' Track its market price and get alerted when a seller lists one on CardStreet.';
+        }
+        return what + state;
+    }
+
+    const what = [
+        card.name,
+        ' เป็น',
+        card.isSealed ? 'สินค้าซีล' : 'การ์ด',
+        !card.isSealed && card.rarity ? `ระดับ ${card.rarity}` : '',
+        set ? ` จากชุด ${set}` : '',
+        !card.isSealed && card.number ? ` หมายเลข ${card.number}` : '',
+    ].join('');
+
+    let state: string;
+    if (market && count) {
+        state = ` ราคาตลาดล่าสุดอยู่ที่ ${market} ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
+    } else if (market) {
+        state = ` ราคาตลาดล่าสุดอยู่ที่ ${market} ขณะนี้ยังไม่มีผู้ขายลงการ์ดใบนี้ กดถูกใจไว้เพื่อรับแจ้งเตือนเมื่อมีรายการขายใหม่`;
+    } else if (count) {
+        state = ` ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
+    } else {
+        state = ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน CardStreet';
+    }
+    return what + state;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ cardId: string }> }): Promise<Metadata> {
@@ -39,12 +113,18 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
     const lang = await resolveLang();
     const line = setLine(card);
     const low = lowestPrice(card, listings);
-    const priceTxt = low > 0 ? `฿${Math.round(low).toLocaleString()}` : '';
-    const title = `${card.name}${line ? ` — ${line}` : ''} | CardStreet`;
+    const priceTxt = low > 0 ? thb(low) : '';
+    // Thai leads with ราคา: price-check is the intent that actually converts here
+    // ("เช็คราคาการ์ดโปเกม่อน" is the site's best-ranking query), and branching by
+    // locale also stops the bare and /en variants emitting one identical title.
+    const title =
+        lang === 'EN'
+            ? `${card.name}${line ? ` — ${line}` : ''} | CardStreet`
+            : `ราคา ${card.name}${line ? ` — ${line}` : ''} | CardStreet`;
     const description =
         lang === 'EN'
-            ? `Buy ${card.name}${card.set ? ` from ${card.set}` : ''} on CardStreet${priceTxt ? ` starting at ${priceTxt}` : ''}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
-            : `ซื้อ ${card.name}${card.set ? ` ชุด ${card.set}` : ''} บน CardStreet${priceTxt ? ` เริ่มต้น ${priceTxt}` : ''} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`;
+            ? `Buy ${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet${priceTxt ? ` starting at ${priceTxt}` : ''}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
+            : `ซื้อ ${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet${priceTxt ? ` เริ่มต้น ${priceTxt}` : ''} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`;
 
     const ogImage = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
 
@@ -144,6 +224,7 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
     if (!card) notFound();
 
     const productJsonLd = buildProductJsonLd(card, listings);
+    const summary = buildCardSummary(card, listings, await resolveLang());
 
     return (
         <>
@@ -153,7 +234,7 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
                 />
             )}
-            <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} setId={setId} />
+            <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} setId={setId} summary={summary} />
         </>
     );
 }

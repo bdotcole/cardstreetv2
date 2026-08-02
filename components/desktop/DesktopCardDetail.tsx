@@ -53,6 +53,7 @@ export default function DesktopCardDetail({
     initialCard = null,
     initialListings = [],
     setId = null,
+    summary = null,
 }: {
     cardId: string;
     // Provided by the server component so the initial HTML is fully rendered
@@ -61,6 +62,10 @@ export default function DesktopCardDetail({
     initialListings?: MarketplaceListing[];
     // The card's set id, for the breadcrumb link to its set page.
     setId?: string | null;
+    // Localized, per-card prose built server-side (buildCardSummary) so the page
+    // ships an indexable sentence about this specific card. A server-render
+    // snapshot: the live market panel below is the source of truth for prices.
+    summary?: string | null;
 }) {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
@@ -333,6 +338,10 @@ export default function DesktopCardDetail({
                         {!card.isSealed && card.number ? ` · #${card.number}` : ''}
                         {!card.isSealed && card.rarity ? ` · ${card.rarity}` : ''}
                     </p>
+
+                    {summary && (
+                        <p className="text-sm text-slate-400 leading-relaxed mt-4 max-w-2xl">{summary}</p>
+                    )}
 
                     <div className="flex flex-wrap items-center gap-3 mt-5">
                         <button
