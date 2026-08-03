@@ -21,13 +21,28 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 // got through ~57 cards — 14% of GRADED_CAP. Worse, graded ran first against a single
 // shared budget and consumed all of it, so the sealed loop below broke on its very
 // first overBudget() check and `sealedUpdated` was 0 on every run: sealed prices sat
-// frozen from 2026-06-29/07-04 onward. Two fixes, both here:
+// frozen from 2026-06-29/07-04 onward. Two fixes:
 //   1. maxDuration 300s (same as /api/scan and /api/cron/mirror-images, so the plan
 //      already supports it) with the budget widened to match.
 //   2. Sealed gets a RESERVED slice at the end. Graded stops early at
 //      GRADED_DEADLINE_MS so the sealed pass can never be starved again.
-// Rough per-run yield: ~180 graded cards + ~135 sealed products, i.e. a ~10-month
-// graded cycle over 56k map rows and a ~33-day cycle over 4.5k sealed products.
+//
+// THAT WAS NOT ENOUGH, because the work was still strictly sequential. Measured
+// 2026-08-03: throughput rose from ~57/day to ~145/day, but `pricecharting_map` had
+// grown to 71,809 rows (the Japanese Yu-Gi-Oh ingest added 15,557), so a full graded
+// cycle still took ~1.4 YEARS and sealed ~89 days.
+//
+// The bottleneck is PriceCharting's own latency, not our rate limiting: a sequential
+// product fetch measured 819ms, while 16 issued concurrently completed in 2,242ms
+// total — 140ms each, a 5.9x speedup with 16/16 succeeding. So each pass now runs a
+// bounded worker pool instead of a for-loop. Per item that turns ~1,160ms of
+// wall clock into ~90ms, and the CAPS become the binding constraint again, so they
+// are raised to match. Expected yield: ~1,000 graded cards + ~600 sealed per run,
+// i.e. a ~72-day graded cycle and a ~8-day sealed cycle.
+//
+// Concurrency is deliberately below the measured-safe 16 to leave headroom, and
+// fetchProduct retries 429/5xx with backoff so a rate limit degrades into slower
+// progress rather than a burned budget.
 //
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 // Needs PRICECHARTING_TOKEN in the Vercel env.
@@ -35,14 +50,43 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-const GRADED_CAP = 400;   // mapped cards refreshed per run
-const SEALED_CAP = 200;   // sealed products refreshed per run
+// 1000 is PostgREST's hard response ceiling — `.limit(1500)` verifiably still
+// returns 1000 rows. Raising this alone buys nothing; going past it needs a paged
+// candidate query, and paging an `order by last_priced_at` full of NULL ties can
+// duplicate or skip rows, so it is not worth it for the extra ~24 days of cycle.
+const GRADED_CAP = 1000;  // mapped cards refreshed per run
+const SEALED_CAP = 600;   // sealed products refreshed per run
+const GRADED_CONCURRENCY = 12;
+const SEALED_CONCURRENCY = 8;   // gentler: each sealed item may also run a sales lookup
 const TIME_BUDGET_MS = 280_000;
 const SEALED_RESERVE_MS = 120_000;  // tail of the budget the graded pass may not touch
 const GRADED_DEADLINE_MS = TIME_BUDGET_MS - SEALED_RESERVE_MS;
-const RATE_MS = 120;      // gentle pacing between PriceCharting calls
+const FETCH_RETRIES = 2;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Run `worker` over `items` with at most `concurrency` in flight, stopping early
+ * once `stop()` goes true. Workers pull from a shared cursor rather than being
+ * pre-sharded, so one slow item can't leave a whole lane idle.
+ */
+async function pool<T>(
+    items: T[],
+    concurrency: number,
+    stop: () => boolean,
+    worker: (item: T) => Promise<void>,
+): Promise<void> {
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+        while (true) {
+            if (stop()) return;
+            const i = next++;
+            if (i >= items.length) return;
+            await worker(items[i]);
+        }
+    });
+    await Promise.all(lanes);
+}
 
 export async function GET(request: NextRequest) {
     if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -62,11 +106,17 @@ export async function GET(request: NextRequest) {
     const overBudget = () => elapsed() > TIME_BUDGET_MS;
     const gradedOverDeadline = () => elapsed() > GRADED_DEADLINE_MS;
 
+    // Retries 429/5xx with backoff. With a worker pool the throttle is the
+    // concurrency cap rather than a fixed inter-request sleep, so a rate limit has
+    // to be absorbed here or it would just burn budget on failures.
     async function fetchProduct(id: string) {
-        await sleep(RATE_MS);
-        const res = await fetch(buildProductByIdUrl(token!, id));
-        if (!res.ok) throw new Error(`PriceCharting ${res.status}`);
-        return res.json();
+        for (let attempt = 0; ; attempt++) {
+            const res = await fetch(buildProductByIdUrl(token!, id));
+            if (res.ok) return res.json();
+            const retryable = res.status === 429 || res.status >= 500;
+            if (!retryable || attempt >= FETCH_RETRIES) throw new Error(`PriceCharting ${res.status}`);
+            await sleep(500 * (attempt + 1));
+        }
     }
 
     let gradedCards = 0, gradedRows = 0, sealedUpdated = 0;
@@ -81,22 +131,25 @@ export async function GET(request: NextRequest) {
 
     // The market_values unique key includes language; reuse the card's market
     // language (ja -> jp) so refreshes update the same row the ingest wrote.
+    // Chunked to stay clear of PostgREST's 1000-row response cap, which GRADED_CAP now
+    // sits exactly on. A truncated lookup fails SILENTLY and badly: every missing card
+    // falls back to 'en', writing English-language price rows onto Japanese and Thai
+    // cards instead of updating the rows the ingest actually wrote.
     const cardIds = (maps || []).map((m) => m.card_id);
     const langByCard = new Map<string, string>();
     const jpOnePiece = new Set<string>();
-    if (cardIds.length) {
+    for (let i = 0; i < cardIds.length; i += 500) {
         const { data: cards } = await supabase
             .from('pokemon_cards')
             .select('id, language, game')
-            .in('id', cardIds);
+            .in('id', cardIds.slice(i, i + 500));
         for (const c of cards || []) {
             langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
             if (c.game === 'onepiece' && c.language === 'ja') jpOnePiece.add(c.id);
         }
     }
 
-    for (const m of maps || []) {
-        if (gradedOverDeadline()) break;
+    await pool(maps || [], GRADED_CONCURRENCY, gradedOverDeadline, async (m) => {
         try {
             const product = await fetchProduct(m.pricecharting_id);
             const lang = langByCard.get(m.card_id) || 'en';
@@ -135,7 +188,7 @@ export async function GET(request: NextRequest) {
         } catch (e: any) {
             if (errors.length < 5) errors.push(`graded ${m.pricecharting_id}: ${e.message}`);
         }
-    }
+    });
 
     const gradedElapsedMs = elapsed();
 
@@ -147,8 +200,7 @@ export async function GET(request: NextRequest) {
         .order('last_updated', { ascending: true, nullsFirst: true })
         .limit(SEALED_CAP);
 
-    for (const s of sealed || []) {
-        if (overBudget()) break;
+    await pool(sealed || [], SEALED_CONCURRENCY, overBudget, async (s) => {
         try {
             const product = await fetchProduct(s.pricecharting_id);
             if (s.currency === 'THB') {
@@ -171,7 +223,7 @@ export async function GET(request: NextRequest) {
                     .gte('sale_amount_thb', PUBLIC_MIN_LISTING_PRICE_THB)
                     .limit(1)
                     .maybeSingle();
-                if (sold) { continue; }
+                if (sold) { return; }
 
                 // Thai estimate row: pricecharting_id points at the JP TWIN's box.
                 // Re-derive the THB estimate from the JP box market; never write the
@@ -201,7 +253,7 @@ export async function GET(request: NextRequest) {
         } catch (e: any) {
             if (errors.length < 10) errors.push(`sealed ${s.pricecharting_id}: ${e.message}`);
         }
-    }
+    });
 
     return NextResponse.json({
         success: true,
