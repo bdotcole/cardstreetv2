@@ -349,7 +349,8 @@ async function main() {
   // Sets before cards — a card row with no set row renders unlabelled.
   await chunk('pokemon_sets', setRows, 'id');
   await chunk('pokemon_cards', cardRows, 'id');
-  await chunk('pricecharting_map', mapRows, 'card_id,pricecharting_id');
+  // pricecharting_map is keyed on card_id alone (PK), not the pair.
+  await chunk('pricecharting_map', mapRows, 'card_id');
   if (priceRows.length) await chunk('market_values', priceRows, 'card_id,language,condition');
 
   console.log('\n[ygo-jp] done.');
