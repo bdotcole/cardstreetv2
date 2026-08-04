@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const description =
         lang === 'EN'
             ? 'Browse every Pokémon, Yu-Gi-Oh!, Magic, One Piece, Riftbound, and Lorcana set on CardStreet. Live prices and listings for every card, with nationwide shipping in Thailand.'
-            : 'เลือกชมชุดการ์ดโปเกมอน ยูกิโอ เมจิก วันพีซ Riftbound และ Lorcana ทั้งหมดบน CardStreet ราคาและรายการขายของทุกใบ จัดส่งทั่วไทย';
+            : 'เลือกชมชุดการ์ดโปเกมอน ยูกิโอ เมจิก วันพีช Riftbound และ Lorcana ทั้งหมดบน CardStreet ราคาและรายการขายของทุกใบ จัดส่งทั่วไทย';
     const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),

@@ -14,7 +14,8 @@ const GAME_LABELS: Record<string, { en: string; th: string }> = {
     pokemon: { en: 'Pokémon', th: 'โปเกมอน' },
     yugioh: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
     mtg: { en: 'Magic: The Gathering', th: 'เมจิก' },
-    onepiece: { en: 'One Piece', th: 'วันพีซ' },
+    // วันพีช, not วันพีซ — see the note on GAME_LABEL in app/desktop/sets/[setId]/page.tsx.
+    onepiece: { en: 'One Piece', th: 'วันพีช' },
     riftbound: { en: 'Riftbound', th: 'Riftbound' },
     lorcana: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
 };

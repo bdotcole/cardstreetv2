@@ -17,11 +17,17 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 // "การ์ด<game>", so an English label there produced mixed-script titles like
 // "การ์ดPokémon". Riftbound and Lorcana stay in English in both locales (brand
 // names Thai players use as-is), matching components/desktop/DesktopSetsBrowser.
+//
+// One Piece is วันพีช, not วันพีซ. Both transliterations are in circulation, but
+// วันพีช is the one the rest of the site uses (root layout, /one-piece landing,
+// footer, keywords) and the one the tracked query "การ์ดวันพีช" uses. Two
+// spellings across the site split the signal for the same head term. Keep this
+// map and DesktopSetsBrowser's in agreement.
 const GAME_LABEL: Record<string, { en: string; th: string }> = {
     pokemon: { en: 'Pokémon', th: 'โปเกมอน' },
     yugioh: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
     mtg: { en: 'Magic: The Gathering', th: 'เมจิก' },
-    onepiece: { en: 'One Piece', th: 'วันพีซ' },
+    onepiece: { en: 'One Piece', th: 'วันพีช' },
     riftbound: { en: 'Riftbound', th: 'Riftbound' },
     lorcana: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
 };
