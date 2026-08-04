@@ -3,22 +3,9 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSetLogoUrl } from '@/lib/imageUtils';
-import { getGame } from '@/lib/games';
+import { getGame, getGameLabel } from '@/lib/games';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import type { SetRow } from '@/lib/setPageData';
-
-// Full, localized game names for the "All games" section headings. Chips use
-// the compact shortName from lib/games. Riftbound/Lorcana are brand names left
-// in English in both locales.
-const GAME_LABELS: Record<string, { en: string; th: string }> = {
-    pokemon: { en: 'Pokémon', th: 'โปเกมอน' },
-    yugioh: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
-    mtg: { en: 'Magic: The Gathering', th: 'เมจิก' },
-    // วันพีช, not วันพีซ — see the note on GAME_LABEL in app/desktop/sets/[setId]/page.tsx.
-    onepiece: { en: 'One Piece', th: 'วันพีช' },
-    riftbound: { en: 'Riftbound', th: 'Riftbound' },
-    lorcana: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
-};
 
 // Display order for game chips + "All games" sections.
 const GAME_ORDER = ['pokemon', 'yugioh', 'mtg', 'onepiece', 'riftbound', 'lorcana'];
@@ -31,10 +18,10 @@ const LANG_LABELS: Record<string, { en: string; th: string }> = {
     th: { en: 'Thai', th: 'ไทย' },
 };
 
+// Full, localized game names for the "All games" section headings, from
+// lib/games. Chips use the compact shortName from the same config.
 function gameLabel(game: string, isThai: boolean): string {
-    const l = GAME_LABELS[game];
-    if (!l) return game;
-    return isThai ? l.th : l.en;
+    return getGameLabel(game, isThai ? 'th' : 'en');
 }
 
 function orderedGames(present: Set<string>): string[] {

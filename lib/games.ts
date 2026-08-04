@@ -25,6 +25,18 @@ export interface GameConfig {
   name: string;
   /** Compact label for filter chips / dropdowns, e.g. "Magic". */
   shortName: string;
+  /**
+   * Localized name for prose and page titles, e.g. the Thai set title reads
+   * "การ์ด<th>". Distinct from `name` and `shortName` because it is neither
+   * consistently: Magic wants the full "Magic: The Gathering" here but the
+   * short "Magic" on a chip, while Pokémon wants the short "Pokémon" here and
+   * the full "Pokémon TCG" as its name.
+   *
+   * Riftbound and Disney Lorcana keep Latin script in Thai — Thai players use
+   * those brand names as-is, so transliterating them would look wrong and match
+   * nothing anyone searches.
+   */
+  localizedName: { en: string; th: string };
   languages: GameLanguage[];
   /** Game wordmark. Surfaces fall back to the name if this fails to load. */
   logoUrl: string;
@@ -49,6 +61,7 @@ export const GAMES: GameConfig[] = [
     id: 'pokemon',
     name: 'Pokémon TCG',
     shortName: 'Pokémon',
+    localizedName: { en: 'Pokémon', th: 'โปเกมอน' },
     languages: [LANG_EN, LANG_JP, LANG_TH],
     logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/98/International_Pok%C3%A9mon_logo.svg',
     gradient: 'from-[#FFCB05] to-[#c79d00]',
@@ -60,6 +73,7 @@ export const GAMES: GameConfig[] = [
     id: 'mtg',
     name: 'Magic: The Gathering',
     shortName: 'Magic',
+    localizedName: { en: 'Magic: The Gathering', th: 'เมจิก' },
     languages: [LANG_EN],
     logoUrl: '/games/mtg.svg',
     gradient: 'from-[#1a1410] to-[#3b2f2a]',
@@ -71,6 +85,7 @@ export const GAMES: GameConfig[] = [
     id: 'yugioh',
     name: 'Yu-Gi-Oh!',
     shortName: 'Yu-Gi-Oh!',
+    localizedName: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
     languages: [LANG_EN],
     logoUrl: '/games/yugioh.png',
     gradient: 'from-[#3a1c71] to-[#1b1035]',
@@ -82,6 +97,10 @@ export const GAMES: GameConfig[] = [
     id: 'onepiece',
     name: 'One Piece Card Game',
     shortName: 'One Piece',
+    // วันพีช, not วันพีซ. Both transliterations circulate, but วันพีช is what the
+    // rest of the site uses and what the tracked query "การ์ดวันพีช" uses; two
+    // spellings split the signal for one head term (fixed in fe76f86).
+    localizedName: { en: 'One Piece', th: 'วันพีช' },
     languages: [LANG_EN, LANG_JP],
     logoUrl: '/games/onepiece.png',
     gradient: 'from-[#b21f24] to-[#5e0d10]',
@@ -93,6 +112,7 @@ export const GAMES: GameConfig[] = [
     id: 'riftbound',
     name: 'Riftbound',
     shortName: 'Riftbound',
+    localizedName: { en: 'Riftbound', th: 'Riftbound' },
     languages: [LANG_EN],
     logoUrl: '/games/riftbound.png',
     gradient: 'from-[#1c2742] to-[#0a0f1c]',
@@ -104,6 +124,7 @@ export const GAMES: GameConfig[] = [
     id: 'lorcana',
     name: 'Disney Lorcana',
     shortName: 'Lorcana',
+    localizedName: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
     languages: [LANG_EN],
     logoUrl: '/games/lorcana.png',
     gradient: 'from-[#3b1d6e] to-[#140a2e]',
@@ -123,6 +144,21 @@ export const DEFAULT_GAME: GameId = 'pokemon';
 
 export function getGame(id: string | null | undefined): GameConfig {
   return GAMES.find((g) => g.id === id) ?? GAMES[0];
+}
+
+/**
+ * Localized game name for titles and headings. Unknown ids fall back to the id
+ * itself, which is what the per-surface maps this replaced used to do — a set
+ * row for a game not yet in GAMES still renders something rather than blank.
+ *
+ * This exists so Thai game names live in exactly one place. They previously sat
+ * in duplicate maps in app/desktop/sets/[setId]/page.tsx and
+ * components/desktop/DesktopSetsBrowser.tsx, which is how One Piece ended up
+ * spelled two different ways across the site.
+ */
+export function getGameLabel(id: string | null | undefined, locale: 'en' | 'th'): string {
+  const game = GAMES.find((g) => g.id === id);
+  return game ? game.localizedName[locale] : (id ?? '');
 }
 
 export function getGameLanguages(id: string | null | undefined): GameLanguage[] {

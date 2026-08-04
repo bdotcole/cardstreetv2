@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
+import { getGameLabel } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
@@ -13,29 +14,11 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
 }
 
-// Localized game names. The Thai forms matter: the TH title reads
-// "การ์ด<game>", so an English label there produced mixed-script titles like
-// "การ์ดPokémon". Riftbound and Lorcana stay in English in both locales (brand
-// names Thai players use as-is), matching components/desktop/DesktopSetsBrowser.
-//
-// One Piece is วันพีช, not วันพีซ. Both transliterations are in circulation, but
-// วันพีช is the one the rest of the site uses (root layout, /one-piece landing,
-// footer, keywords) and the one the tracked query "การ์ดวันพีช" uses. Two
-// spellings across the site split the signal for the same head term. Keep this
-// map and DesktopSetsBrowser's in agreement.
-const GAME_LABEL: Record<string, { en: string; th: string }> = {
-    pokemon: { en: 'Pokémon', th: 'โปเกมอน' },
-    yugioh: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
-    mtg: { en: 'Magic: The Gathering', th: 'เมจิก' },
-    onepiece: { en: 'One Piece', th: 'วันพีช' },
-    riftbound: { en: 'Riftbound', th: 'Riftbound' },
-    lorcana: { en: 'Disney Lorcana', th: 'Disney Lorcana' },
-};
-
+// Localized game names come from lib/games.ts. The Thai forms matter: the TH
+// title reads "การ์ด<game>", so an English label there produced mixed-script
+// titles like "การ์ดPokémon".
 function gameLabel(game: string, lang: 'EN' | 'TH'): string {
-    const entry = GAME_LABEL[game];
-    if (!entry) return game;
-    return lang === 'EN' ? entry.en : entry.th;
+    return getGameLabel(game, lang === 'EN' ? 'en' : 'th');
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
@@ -77,7 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
 // schema.org ItemList — declares the set's cards (and their URLs) so search and
 // AI answer engines see this as a structured collection. Capped to keep the
 // payload bounded; the full set is linked as crawlable HTML below regardless.
-function buildItemListJsonLd(set: SetRow, cards: Card[]) {
+function buildItemListJsonLd(set: SetRow, cards: Card[], lang: 'EN' | 'TH') {
     const items = cards.slice(0, 100).map((c, i) => ({
         '@type': 'ListItem',
         position: i + 1,
@@ -87,7 +70,10 @@ function buildItemListJsonLd(set: SetRow, cards: Card[]) {
     return {
         '@context': 'https://schema.org',
         '@type': 'ItemList',
-        name: `${set.name} — ${GAME_LABEL[set.game] ?? set.game}`,
+        // This read `GAME_LABEL[set.game]` — the whole {en, th} object — so every
+        // set page shipped "<set> — [object Object]" in its structured data.
+        name: `${set.name} — ${gameLabel(set.game, lang)}`,
+        inLanguage: lang === 'EN' ? 'en-TH' : 'th-TH',
         numberOfItems: cards.length,
         itemListElement: items,
     };
@@ -107,7 +93,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
         <div>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildItemListJsonLd(set, cards)) }}
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildItemListJsonLd(set, cards, lang)) }}
             />
 
             <nav className="text-sm text-slate-500">
