@@ -25,8 +25,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const landing = getGameLanding(slug);
     if (!landing) return { title: 'Not found | CardStreet', robots: { index: false, follow: false } };
 
-    const lang = (await resolveLang()) === 'EN' ? 'en' : 'th';
+    // Metadata follows the URL variant, never the cs_lang cookie. The bare path
+    // IS the Thai canonical, so an English-cookie visitor there must still get
+    // the Thai title and description — otherwise title/description and the
+    // canonical + og:url below (which already use pathLocale) disagree on the
+    // same URL. Same rule as /faq. The visible body stays cookie-driven.
     const pathLocale = await requestPathLocale();
+    const lang = pathLocale === 'en' ? 'en' : 'th';
     return {
         metadataBase: new URL(BASE_URL),
         title: landing.title[lang],
@@ -42,8 +47,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     };
 }
 
-function buildJsonLd(landing: NonNullable<ReturnType<typeof getGameLanding>>, gameName: string, sets: SetRow[]) {
-    const url = `${BASE_URL}/${landing.slug}`;
+function buildJsonLd(
+    landing: NonNullable<ReturnType<typeof getGameLanding>>,
+    gameName: string,
+    sets: SetRow[],
+    pathLocale: 'th' | 'en',
+) {
+    const isThai = pathLocale === 'th';
+    const url = localizedUrl(`/${landing.slug}`, pathLocale);
     return {
         '@context': 'https://schema.org',
         '@graph': [
@@ -56,9 +67,9 @@ function buildJsonLd(landing: NonNullable<ReturnType<typeof getGameLanding>>, ga
             },
             {
                 '@type': 'CollectionPage',
-                name: landing.h1.en,
+                name: isThai ? landing.h1.th : landing.h1.en,
                 url,
-                inLanguage: ['th', 'en'],
+                inLanguage: isThai ? 'th-TH' : 'en-TH',
                 isPartOf: { '@id': `${BASE_URL}/#website` },
                 mainEntity: {
                     '@type': 'ItemList',
@@ -71,11 +82,15 @@ function buildJsonLd(landing: NonNullable<ReturnType<typeof getGameLanding>>, ga
                 },
             },
             {
+                // Locale-matched, like /faq's FAQPage: answer engines quote
+                // structured data verbatim, so a Thai canonical page that emits
+                // English Q&A gets quoted in English to Thai searchers.
                 '@type': 'FAQPage',
+                inLanguage: isThai ? 'th-TH' : 'en-TH',
                 mainEntity: landing.faqs.map((f) => ({
                     '@type': 'Question',
-                    name: f.q.en,
-                    acceptedAnswer: { '@type': 'Answer', text: f.a.en },
+                    name: isThai ? f.q.th : f.q.en,
+                    acceptedAnswer: { '@type': 'Answer', text: isThai ? f.a.th : f.a.en },
                 })),
             },
         ],
@@ -90,6 +105,9 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
     const lang = await resolveLang();
     const isThai = lang === 'TH';
     const l = isThai ? ('th' as const) : ('en' as const);
+    // Structured data is a search-engine artifact, so it follows the URL variant
+    // like the metadata does, not the visitor's cookie.
+    const pathLocale = await requestPathLocale();
     const game = getGame(landing.gameId);
 
     const allSets = await getAllSets();
@@ -101,7 +119,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
         <>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildJsonLd(landing, game.name, newest)) }}
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildJsonLd(landing, game.name, newest, pathLocale)) }}
             />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">

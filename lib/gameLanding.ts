@@ -28,12 +28,18 @@ export const GAME_LANDINGS: GameLandingContent[] = [
     {
         slug: 'pokemon',
         gameId: 'pokemon',
+        // Thai writes Pokémon two ways: โปเกมอน and the colloquial โปเกม่อน (with
+        // ไม้เอก). โปเกม่อน is the spelling in this site's best-ranking query
+        // ("เช็คราคาการ์ดโปเกม่อน"), yet the page that should own that term used
+        // only โปเกมอน. Both now appear here — in the title, the description, the
+        // intro and one FAQ answer — so a single URL serves both variants without
+        // reading as keyword stuffing. The h1 keeps the formal spelling.
         title: {
-            th: 'การ์ดโปเกมอน — ซื้อ ขาย เช็คราคาการ์ดโปเกมอนในไทย | CardStreet',
+            th: 'การ์ดโปเกมอน — ซื้อ ขาย เช็คราคาการ์ดโปเกม่อนในไทย | CardStreet',
             en: 'Pokémon Cards Thailand — Buy, Sell & Check Prices | CardStreet',
         },
         description: {
-            th: 'ตลาดซื้อขายการ์ดโปเกมอนออนไลน์ในไทย ครบทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่นกว่า 30,000 ใบ เช็คราคาตลาดเรียลไทม์ สแกนการ์ดด้วย AI ผู้ขายยืนยันตัวตน ส่งทั่วไทย',
+            th: 'ตลาดซื้อขายการ์ดโปเกมอนออนไลน์ในไทย ครบทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่นกว่า 30,000 ใบ เช็คราคาการ์ดโปเกม่อนแบบเรียลไทม์ สแกนการ์ดด้วย AI ผู้ขายยืนยันตัวตน ส่งทั่วไทย',
             en: 'Buy and sell Pokémon TCG cards in Thailand — Thai, English, and Japanese sets with live market prices, AI card scanning, verified sellers, and nationwide delivery.',
         },
         h1: {
@@ -43,7 +49,7 @@ export const GAME_LANDINGS: GameLandingContent[] = [
         intro: {
             th: [
                 'CardStreet คือตลาดซื้อขายการ์ดโปเกมอนออนไลน์สำหรับนักสะสมชาวไทย รวมการ์ดโปเกมอนภาษาไทย ภาษาอังกฤษ และภาษาญี่ปุ่นไว้ในที่เดียว พร้อมราคาตลาดที่อัปเดตทุกวัน ไม่ว่าจะเป็นชุดล่าสุดหรือการ์ดหายากระดับ Secret Rare ก็เช็คราคาและหาซื้อได้ที่นี่',
-                'ทุกการซื้อได้รับความคุ้มครองผ่านระบบชำระเงินที่ปลอดภัย ผู้ขายทุกคนผ่านการยืนยันตัวตน และจัดส่งทั่วประเทศด้วย Flash Express นักสะสมยังสแกนการ์ดด้วย AI เพื่อเช็คราคาและเก็บเข้าคอลเลกชันได้ฟรีผ่านแอป CardStreet',
+                'ทุกการซื้อได้รับความคุ้มครองผ่านระบบชำระเงินที่ปลอดภัย ผู้ขายทุกคนผ่านการยืนยันตัวตน และจัดส่งทั่วประเทศด้วย Flash Express นักสะสมยังสแกนการ์ดโปเกม่อนด้วย AI เพื่อเช็คราคาและเก็บเข้าคอลเลกชันได้ฟรีผ่านแอป CardStreet',
             ],
             en: [
                 'CardStreet is Thailand’s online marketplace for Pokémon TCG collectors, bringing Thai, English, and Japanese Pokémon cards together in one catalog with market prices updated daily — from the newest sets to chase Secret Rares.',
@@ -61,7 +67,7 @@ export const GAME_LANDINGS: GameLandingContent[] = [
             {
                 q: { th: 'เช็คราคาการ์ดโปเกมอนยังไง?', en: 'How do I check Pokémon card prices?' },
                 a: {
-                    th: 'ดูราคาตลาดล่าสุดได้ฟรีบนหน้าการ์ดทุกใบใน CardStreet หรือสแกนการ์ดจริงด้วยแอป CardStreet เพื่อเช็คราคาทันที รองรับทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่น',
+                    th: 'ดูราคาตลาดล่าสุดได้ฟรีบนหน้าการ์ดทุกใบใน CardStreet หรือสแกนการ์ดจริงด้วยแอป CardStreet เพื่อเช็คราคาการ์ดโปเกม่อนได้ทันที รองรับทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่น',
                     en: 'Every card page on CardStreet shows a live market price for free, or scan a physical card with the CardStreet app for an instant price — Thai, English, and Japanese cards are all supported.',
                 },
             },
