@@ -49,6 +49,21 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
+// PriceCharting's Cloudflare answers this route's Singapore egress with a 429 "Just
+// a moment..." challenge on 93.7% of requests (4,146 of 4,424 on the 2026-08-04
+// 19:47 UTC run), so throughput is bounded by how many calls get admitted, not by our
+// concurrency. Datacenter-ASN bot scoring varies by PoP, so try a US egress nearer
+// PriceCharting's origin.
+//
+// A route-level override, NOT a change to `regions: ["sin1"]` in vercel.json — that
+// is set for Thai user latency and must stay. This is the one route whose traffic is
+// outbound to a US host rather than inbound from Thailand.
+//
+// TRADE-OFF: Supabase goes from same-region to cross-Pacific, and each graded item
+// costs two round trips (market_values upsert + pricecharting_map update). If the 429
+// share does not drop sharply this is a straight loss — revert it. Judge on
+// statusCounts, not on gradedCards alone.
+export const preferredRegion = 'iad1';
 
 // 1000 is PostgREST's hard response ceiling — `.limit(1500)` verifiably still
 // returns 1000 rows. Raising this alone buys nothing; going past it needs a paged
