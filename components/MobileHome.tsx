@@ -54,6 +54,8 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import LiveShopChooser from '@/components/live/LiveShopChooser';
 
 import PartnerPortal from '@/components/PartnerPortal';
 import PartnerRequest from '@/components/PartnerRequest';
@@ -121,6 +123,16 @@ export default function HomePage() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
+
+    // Live-breaks beta: the Shop tab opens with a Live-vs-Marketplace chooser
+    // for 'live_streams' beta users only. hasBeta fails CLOSED while the status
+    // is loading (and on any lookup error), so non-beta users render the
+    // existing Marketplace path with no chooser flash and no live fetches.
+    // Component state (not storage) remembers a Marketplace pick, so returning
+    // from /live remounts the shell and lands on the chooser again.
+    const { hasBeta: hasLiveBeta } = useBetaFeatures();
+    const [shopChooserDismissed, setShopChooserDismissed] = useState(false);
+    const showShopChooser = hasLiveBeta('live_streams') && !shopChooserDismissed;
 
     // Deep-link handling for Stripe Connect onboarding redirects.
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
@@ -1869,7 +1881,10 @@ export default function HomePage() {
                                 onAddToCollection={handleAddToCollection}
                             />
                         )}
-                        {activeTab === 'marketplace' && (
+                        {activeTab === 'marketplace' && showShopChooser && (
+                            <LiveShopChooser onMarketplace={() => setShopChooserDismissed(true)} />
+                        )}
+                        {activeTab === 'marketplace' && !showShopChooser && (
                             <Marketplace
                                 initialGame={marketGameFilter}
                                 onSelectCard={setSelectedCard}

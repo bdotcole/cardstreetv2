@@ -35,6 +35,9 @@ export async function POST(
                 alreadyLive: true,
                 room,
                 token,
+                // The wss:// signal URL the client connects to — the client
+                // never carries its own LiveKit config.
+                url: process.env.LIVEKIT_URL || null,
                 cameraSlot: 'main',
                 egressId: stream.livekit_egress_id,
             });
@@ -83,6 +86,7 @@ export async function POST(
             success: true,
             room,
             token,
+            url: process.env.LIVEKIT_URL || null,
             cameraSlot: 'main',
             egressId,
         });

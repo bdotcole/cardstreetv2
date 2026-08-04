@@ -35,7 +35,14 @@ export async function POST(
             }
             const room = stream.livekit_room || roomNameForStream(stream.id);
             const token = await mintPublisherToken(room, user.id, 'table');
-            return NextResponse.json({ room, token, cameraSlot: 'table' });
+            // url: the wss:// signal host — clients (incl. the QR-launched
+            // table-cam page) get it from here, never from their own env.
+            return NextResponse.json({
+                room,
+                token,
+                url: process.env.LIVEKIT_URL || null,
+                cameraSlot: 'table',
+            });
         }
 
         if (role === 'viewer') {
@@ -51,7 +58,11 @@ export async function POST(
             }
             const room = stream.livekit_room || roomNameForStream(stream.id);
             const token = await mintViewerToken(room, user.id);
-            return NextResponse.json({ room, token });
+            return NextResponse.json({
+                room,
+                token,
+                url: process.env.LIVEKIT_URL || null,
+            });
         }
 
         return NextResponse.json(

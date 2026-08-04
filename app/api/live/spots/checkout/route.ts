@@ -281,6 +281,11 @@ export async function POST(req: Request) {
             totalAmount: totalSatang / 100,
             totalSatang,
             region: orderRegion,
+            // TH direct charge: the client must load Stripe.js bound to the
+            // seller's connected account BEFORE mounting Elements, or the card
+            // would tokenize on the platform and the confirm would fail with
+            // "No such payment_method" (same contract as /api/orders/estimate).
+            sellerStripeAccount: seller.stripe_account_id,
         });
     } catch (err: any) {
         console.error('[Live/SpotsCheckout] error:', err);
