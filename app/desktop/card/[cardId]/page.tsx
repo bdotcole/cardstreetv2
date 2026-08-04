@@ -18,7 +18,10 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 }
 
 function setLine(card: Card): string {
-    return [card.set, card.number ? `#${card.number}` : '', card.rarity].filter(Boolean).join(' ');
+    // Sealed products carry a placeholder collector number ('—'); printing it
+    // put a bare "#—" in the <title> and OG tags of every sealed page.
+    const number = card.number && !card.isSealed ? `#${card.number}` : '';
+    return [card.set, number, card.rarity].filter(Boolean).join(' ');
 }
 
 function lowestPrice(card: Card, listings: MarketplaceListing[]): number {

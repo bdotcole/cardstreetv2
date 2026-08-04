@@ -153,12 +153,16 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     }
   }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame]);
 
-  // Fetch sealed products when in sealed mode (driven by the same set / search box).
-  // Like card search, a typed query searches every game and language; the
-  // game/language pickers only scope set browsing.
+  // Fetch sealed products for the sealed tab, and *also* whenever there's a
+  // query — a search must find boxes even while the Cards tab is showing, so
+  // the toggle can report how many sealed matches are waiting. Like card
+  // search, a typed query spans every game and language; the game/language
+  // pickers only scope set browsing.
   useEffect(() => {
-    if (browseMode !== 'sealed') return;
     const searching = debouncedSearchTerm.length > 2;
+    // Clearing the box on the Cards tab must drop the sealed hits too, or the
+    // toggle keeps advertising a count for a query that's no longer there.
+    if (browseMode !== 'sealed' && !searching) { setSealedProducts([]); return; }
     if (!searching && !selectedSetId) { setSealedProducts([]); return; }
     const myReq = ++sealedReqIdRef.current;
     setIsLoadingSealed(true);
@@ -248,6 +252,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   // English / Mega Evolution" on screen next to free-text results reads as a
   // mismatch. Collapse the whole selector block while there's a query in the box.
   const isSearching = searchTerm.trim().length > 0;
+  // The pickers collapse as soon as anything is typed, but result counts must
+  // track the query the fetches actually ran (>2 chars, debounced) or they'd
+  // report stale numbers for the first couple of keystrokes.
+  const hasSearchResults = debouncedSearchTerm.length > 2;
 
   // Sealed mode only lists sets that actually have sealed products.
   const visibleSets = useMemo(
@@ -306,7 +314,11 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           />
         </div>
 
-        {/* Cards / Sealed toggle — switches the catalog between individual cards and sealed products */}
+        {/* Cards / Sealed toggle — switches the catalog between individual cards
+            and sealed products. While a search is running both catalogs are
+            queried, so each side shows its hit count: a "booster box" search
+            typed on the Cards tab has to advertise the sealed matches, not
+            look like a dead end. */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-brand-darker rounded-xl border border-white/10">
           <button
             onClick={() => setBrowseMode('cards')}
@@ -314,6 +326,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           >
             <i className="fa-solid fa-clone text-[11px]"></i>
             {isThai ? 'การ์ด' : 'Cards'}
+            {hasSearchResults && !isLoadingCards && (
+              <span className={browseMode === 'cards' ? 'text-brand-darker/60' : 'text-slate-500'}>({cards.length})</span>
+            )}
           </button>
           <button
             onClick={() => setBrowseMode('sealed')}
@@ -321,6 +336,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           >
             <i className="fa-solid fa-box text-[11px]"></i>
             {isThai ? 'สินค้าซีล' : 'Sealed'}
+            {hasSearchResults && !isLoadingSealed && (
+              <span className={browseMode === 'sealed' ? 'text-brand-darker/60' : 'text-slate-500'}>({sealedProducts.length})</span>
+            )}
           </button>
         </div>
 
@@ -534,9 +552,24 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 <i className="fa-solid fa-box-open text-2xl text-slate-600"></i>
               </div>
               <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">{t('explore.noCards')}</h3>
-              <p className="text-slate-500 text-xs text-center">
-                {!getGame(selectedGame).enabled ? `${getGame(selectedGame).name} coming soon` : t('explore.selectSet')}
-              </p>
+              {/* A query that matches only sealed ("booster box", an ETB name)
+                  would otherwise dead-end here while its results sit one tab
+                  away. Hand the user the results instead of a shrug. */}
+              {hasSearchResults && sealedProducts.length > 0 ? (
+                <button
+                  onClick={() => setBrowseMode('sealed')}
+                  className="mt-1 px-4 py-2 rounded-lg bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-xs font-black uppercase tracking-wider hover:bg-brand-cyan hover:text-brand-darker transition-colors flex items-center gap-2"
+                >
+                  <i className="fa-solid fa-box text-[11px]"></i>
+                  {isThai
+                    ? `พบสินค้าซีล ${sealedProducts.length} รายการ`
+                    : `${sealedProducts.length} sealed ${sealedProducts.length === 1 ? 'product' : 'products'} match`}
+                </button>
+              ) : (
+                <p className="text-slate-500 text-xs text-center">
+                  {!getGame(selectedGame).enabled ? `${getGame(selectedGame).name} coming soon` : t('explore.selectSet')}
+                </p>
+              )}
             </div>
           ) : (
             <div className="flex flex-col h-full">

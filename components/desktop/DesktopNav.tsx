@@ -10,6 +10,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
+import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import { Card } from '@/types';
@@ -40,7 +41,13 @@ export default function DesktopNav() {
     // across every enabled game and language — no game picker, typing a name
     // is enough. Deliberately ignores the UI language: search is universal, so
     // an English-UI user can find Thai/Japanese prints (and vice versa) via
-    // cross-language name matching. Results deep-link to /card/[id].
+    // cross-language name matching.
+    //
+    // Singles and sealed products are searched together: "booster box" or an
+    // ETB name has to resolve here, not just under the catalog's sealed tab.
+    // Sealed rows ride the same Card shape via sealedProductToCard, so one
+    // result list renders both, and /card/[id] resolves sealed ids too (see
+    // lib/desktopCardData.ts).
     useEffect(() => {
         const q = query.trim();
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -54,8 +61,15 @@ export default function DesktopNav() {
         setSearchOpen(true);
         debounceRef.current = setTimeout(async () => {
             try {
-                const cards = await pokemonService.searchCards(q, false, undefined, 'all');
-                setResults(cards.slice(0, 8));
+                // Independent catalogs — one failing must not blank the other.
+                const [cards, sealed] = await Promise.all([
+                    pokemonService.searchCards(q, false, undefined, 'all').catch(() => [] as Card[]),
+                    pokemonService.fetchSealedProducts({ game: 'all', q }).catch(() => []),
+                ]);
+                // Reserve room for sealed rather than letting 8 singles crowd
+                // them out — a box search is often the whole intent.
+                const sealedCards = sealed.slice(0, 3).map(sealedProductToCard);
+                setResults([...cards.slice(0, sealedCards.length ? 6 : 8), ...sealedCards]);
             } catch {
                 setResults([]);
             } finally {
@@ -144,7 +158,7 @@ export default function DesktopNav() {
                                 </div>
                             ) : results.length === 0 ? (
                                 <div className="px-4 py-6 text-center text-sm text-slate-500">
-                                    {language === 'TH' ? 'ไม่พบการ์ด' : 'No cards found'}
+                                    {language === 'TH' ? 'ไม่พบผลลัพธ์' : 'No results found'}
                                 </div>
                             ) : (
                                 results.map((card) => {
@@ -157,15 +171,19 @@ export default function DesktopNav() {
                                         >
                                             <span className="w-9 h-12 rounded bg-brand-darker overflow-hidden shrink-0 border border-white/10">
                                                 {thumb && (
+                                                    // Sealed packshots are product renders on their own
+                                                    // background — contain them instead of cropping.
                                                     // eslint-disable-next-line @next/next/no-img-element
-                                                    <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                                    <img src={thumb} alt="" loading="lazy" className={`w-full h-full ${card.isSealed ? 'object-contain' : 'object-cover'}`} />
                                                 )}
                                             </span>
                                             <span className="min-w-0">
                                                 <span className="block text-sm font-bold text-white truncate">{card.name}</span>
                                                 <span className="block text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">
                                                     {card.game && card.game !== 'pokemon' ? `${getGame(card.game).shortName} · ` : ''}
-                                                    {card.set}{card.number ? ` · #${card.number}` : ''}
+                                                    {card.set}
+                                                    {/* Sealed rows carry a placeholder number ('—') — don't print it as "#—". */}
+                                                    {!card.isSealed && card.number ? ` · #${card.number}` : ''}
                                                 </span>
                                             </span>
                                         </button>
