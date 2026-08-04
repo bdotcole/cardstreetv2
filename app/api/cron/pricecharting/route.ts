@@ -58,10 +58,27 @@ const GRADED_CAP = 1000;  // mapped cards refreshed per run
 const SEALED_CAP = 600;   // sealed products refreshed per run
 const GRADED_CONCURRENCY = 12;
 const SEALED_CONCURRENCY = 8;   // gentler: each sealed item may also run a sales lookup
-const TIME_BUDGET_MS = 280_000;
+// 280s left almost no headroom under maxDuration: a manual run on 2026-08-04 was
+// killed with FUNCTION_INVOCATION_TIMEOUT at exactly 300s and returned no body at
+// all, so the diagnostics never surfaced. The gap must cover the slowest in-flight
+// operation a lane can still be holding when the budget expires (one FETCH_TIMEOUT_MS
+// plus its Supabase writes) with room to serialize the response.
+const TIME_BUDGET_MS = 250_000;
 const SEALED_RESERVE_MS = 120_000;  // tail of the budget the graded pass may not touch
 const GRADED_DEADLINE_MS = TIME_BUDGET_MS - SEALED_RESERVE_MS;
 const FETCH_RETRIES = 2;
+// THE BUDGETS ABOVE WERE UNENFORCEABLE WITHOUT THIS. `pool()` can only check stop()
+// between items, so an in-flight fetch is not preemptible: a connection that hangs
+// parks its worker lane forever, neither deadline can bound it, and Promise.all over
+// the lanes never resolves — which is exactly the 300s kill above. Measured latency
+// to this host is avg 245ms / P99 3.62s, so 10s is ~3x the tail: generous for a slow
+// response, fatal to a hung one.
+// A timed-out request is NOT retried: the throw escapes the retry loop, which only
+// retries non-ok statuses. That is deliberate — retrying would let one hung host
+// consume 3 x FETCH_TIMEOUT_MS of a lane, and the item is not lost, since
+// stalest-first ordering brings it back on a later run.
+const FETCH_TIMEOUT_MS = 10_000;
+const HEARTBEAT_MS = 15_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -106,18 +123,20 @@ export async function GET(request: NextRequest) {
     const overBudget = () => elapsed() > TIME_BUDGET_MS;
     const gradedOverDeadline = () => elapsed() > GRADED_DEADLINE_MS;
 
-    // Per-attempt HTTP status tally. Vercel's Observability "External APIs" panel
-    // reported 945 calls at P75 21.6ms with "Error Rate 0%" for the 2026-08-04 run,
-    // which cannot be real product JSON: the same endpoint probed from outside
-    // Vercel answers in 419-1,351ms (avg 673ms), and sin1 -> US cannot beat ~150ms.
-    // Vercel's error rate evidently does not count 4xx/5xx here, so the only way to
-    // learn what PriceCharting actually returns to this egress is to count it
-    // ourselves. 945 attempts against 296 committed items is 3.19x, exactly the
-    // 1 + FETCH_RETRIES shape, which points at 429/5xx — but that is inference, and
-    // this makes it fact.
+    // Per-attempt HTTP status tally. Vercel's own numbers could not settle what this
+    // host returns to the sin1 egress: its External APIs panel reports two
+    // contradictory latencies for the same host and window (per-endpoint row P75
+    // 22.8ms vs hostname chart avg 245ms / P75 251ms / P99 3.62s), so we count it
+    // ourselves rather than reason from either.
+    //
+    // `inFlight` is the load-bearing one. A parked lane is invisible in latency
+    // percentiles — a request that never completes is never sampled — so a hang looks
+    // identical to idleness. inFlight pinned at the concurrency cap while
+    // fetchAttempts stops climbing is the signature, and nothing else shows it.
     const statusCounts: Record<string, number> = {};
     const bodySamples: string[] = [];
     let fetchAttempts = 0;
+    let inFlight = 0;
     function noteStatus(key: string, body?: string) {
         statusCounts[key] = (statusCounts[key] || 0) + 1;
         // A challenge/block page identifies itself in its first line; two samples is
@@ -135,13 +154,20 @@ export async function GET(request: NextRequest) {
         for (let attempt = 0; ; attempt++) {
             fetchAttempts++;
             let res: Response;
+            inFlight++;
             try {
-                res = await fetch(buildProductByIdUrl(token!, id));
+                res = await fetch(buildProductByIdUrl(token!, id), {
+                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+                });
             } catch (e: any) {
                 // A transport-level failure never reaches the status tally otherwise,
                 // and would be indistinguishable from a slow success in the totals.
+                // AbortSignal.timeout surfaces as TimeoutError, so a hang is counted
+                // under its own key rather than blurred into generic network errors.
                 noteStatus(`network:${e?.name || 'error'}`);
                 throw e;
+            } finally {
+                inFlight--;
             }
             // Only drain the body while samples are still wanted. This is a wall-clock
             // investigation, so the failure path must not get slower to run it.
@@ -155,6 +181,25 @@ export async function GET(request: NextRequest) {
     }
 
     let gradedCards = 0, gradedRows = 0, sealedUpdated = 0;
+
+    // The response body is not a reliable channel: when the function is killed at
+    // maxDuration there is no body at all, which is how the 2026-08-04 investigation
+    // lost its diagnostics. stdout survives the kill, so emit the same numbers on a
+    // timer. A timer rather than a per-item counter on purpose — if lanes are parked,
+    // the counters stop moving and per-item logging goes silent exactly when the
+    // evidence matters most.
+    const snapshot = () => ({
+        elapsedMs: elapsed(), gradedCards, gradedRows, sealedUpdated,
+        fetchAttempts, inFlight, statusCounts,
+    });
+    // Self-limiting: if either pass throws, the clearInterval below is skipped, and on
+    // a warm instance an orphaned timer would log forever. Stopping itself past the
+    // budget bounds that without wrapping the whole handler in try/finally.
+    const heartbeat: ReturnType<typeof setInterval> = setInterval(() => {
+        if (elapsed() > TIME_BUDGET_MS + 30_000) { clearInterval(heartbeat); return; }
+        console.log('[pricecharting] heartbeat', JSON.stringify(snapshot()));
+    }, HEARTBEAT_MS);
+
     // Raised from 5/10: the old caps truncated the evidence to a handful of ids and
     // hid whether failures were uniform or clustered. Bounded well below the item
     // count so a total outage still cannot balloon the response.
@@ -230,6 +275,7 @@ export async function GET(request: NextRequest) {
     });
 
     const gradedElapsedMs = elapsed();
+    console.log('[pricecharting] graded pass done', JSON.stringify(snapshot()));
 
     // --- Sealed: stalest sealed products ---------------------------------------
     const { data: sealed } = await supabase
@@ -294,6 +340,9 @@ export async function GET(request: NextRequest) {
         }
     });
 
+    clearInterval(heartbeat);
+    console.log('[pricecharting] run complete', JSON.stringify(snapshot()));
+
     return NextResponse.json({
         success: true,
         gradedCards, gradedRows, sealedUpdated,
@@ -309,6 +358,8 @@ export async function GET(request: NextRequest) {
         // retries and the backoff sleeps are eating the budget. statusCounts says
         // which status is driving it.
         fetchAttempts,
+        // inFlight should be 0 here. Anything else means a lane outlived its pass.
+        inFlight,
         statusCounts,
         bodySamples,
         errors,
