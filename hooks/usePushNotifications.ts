@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token, ActionPerformed, PushNotificationSchema } from '@capacitor/push-notifications';
 
+// Route a notification tap by the Courier `data.type` payload. Offer pushes
+// land in the Offers panel — the same destination as the offer-email CTA
+// (/?view=offers). When the mobile shell is mounted it consumes the event and
+// switches tabs in place (no reload); otherwise (cold start from a killed app,
+// or the webview sitting on a non-SPA page) fall back to a full navigation,
+// which MobileHome's /?view=offers landing branch handles on mount.
+function routeNotificationTap(data: unknown) {
+    const type = (data as { type?: unknown } | null | undefined)?.type;
+    if (typeof type !== 'string' || !type.startsWith('offer_')) return;
+    try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* landing fallback still opens Profile */ }
+    const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-offers', { cancelable: true }));
+    if (unconsumed) window.location.assign('/?view=offers');
+}
+
 // Persist the device token under the user. The backend column is FCM-based, so the
 // value sent here must be an FCM token on BOTH platforms (see iOS note below).
 async function saveToken(token: string) {
@@ -53,8 +67,9 @@ export const usePushNotifications = () => {
                 const notificationReceived = await FirebaseMessaging.addListener('notificationReceived', () => {
                     console.log('Push received in foreground');
                 });
-                const notificationActionPerformed = await FirebaseMessaging.addListener('notificationActionPerformed', () => {
+                const notificationActionPerformed = await FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
                     console.log('Push action performed');
+                    routeNotificationTap(event.notification?.data);
                 });
 
                 try {
@@ -109,8 +124,9 @@ export const usePushNotifications = () => {
             console.log('Push received in foreground:', notification);
         });
 
-        PushNotifications.addListener('pushNotificationActionPerformed', (notification: ActionPerformed) => {
-            console.log('Push action performed:', notification);
+        PushNotifications.addListener('pushNotificationActionPerformed', (action: ActionPerformed) => {
+            console.log('Push action performed:', action);
+            routeNotificationTap(action.notification?.data);
         });
 
         registerPushNotifications();

@@ -28,6 +28,29 @@ interface OffersInboxProps {
  * All actions POST to the /api/offers* routes, which enforce the state machine
  * server-side via CAS — this UI only decides which buttons to SHOW.
  */
+// Status chip styling per offer state. Pending is the "needs your attention"
+// color; accepted is the success color; terminal states are muted.
+const STATUS_STYLES: Record<string, string> = {
+  pending: 'bg-amber-400/10 text-amber-300 border-amber-400/30',
+  accepted: 'bg-brand-green/10 text-brand-green border-brand-green/30',
+  countered: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30',
+  rejected: 'bg-white/5 text-slate-400 border-white/10',
+  expired: 'bg-white/5 text-slate-400 border-white/10',
+  withdrawn: 'bg-white/5 text-slate-400 border-white/10',
+};
+
+const statusLabel = (status: string, isThai: boolean): string => {
+  switch (status) {
+    case 'pending': return isThai ? 'รอตอบรับ' : 'Pending';
+    case 'accepted': return isThai ? 'ตอบรับแล้ว' : 'Accepted';
+    case 'countered': return isThai ? 'ต่อรองแล้ว' : 'Countered';
+    case 'rejected': return isThai ? 'ปฏิเสธแล้ว' : 'Declined';
+    case 'expired': return isThai ? 'หมดอายุ' : 'Expired';
+    case 'withdrawn': return isThai ? 'ถอนแล้ว' : 'Withdrawn';
+    default: return status;
+  }
+};
+
 const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) => {
   const { isThai } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -108,19 +131,20 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     const busy = busyId === o.id;
 
     if (o.status === 'accepted') {
-      // Only the offer's buyer can pay.
+      // Only the offer's buyer can pay; the seller side needs no action row —
+      // the status chip already says "accepted".
       if (o.viewerRole === 'buyer') {
         return (
           <button
             disabled={busy}
             onClick={() => onPayOffer?.({ offer: o })}
-            className="h-9 px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+            className="w-full sm:w-auto h-10 px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
           >
             {isThai ? `ชำระเงิน ฿${Number(o.amount).toLocaleString()}` : `Pay ฿${Number(o.amount).toLocaleString()}`}
           </button>
         );
       }
-      return <span className="text-[10px] text-brand-green font-bold uppercase">{isThai ? 'ตอบรับแล้ว' : 'Accepted'}</span>;
+      return null;
     }
 
     if (o.status !== 'pending') return null;
@@ -131,7 +155,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
         <button
           disabled={busy}
           onClick={() => act(o.id, 'withdraw')}
-          className="h-9 px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+          className="w-full sm:w-auto h-10 px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ถอนข้อเสนอ' : 'Withdraw'}
         </button>
@@ -147,18 +171,19 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
             value={counterAmount}
             onChange={(e) => setCounterAmount(e.target.value)}
             placeholder="฿"
-            className="w-24 h-9 bg-white/5 border border-white/10 rounded-lg px-2 text-white text-sm"
+            autoFocus
+            className="flex-1 sm:flex-none sm:w-28 min-w-0 h-10 bg-white/5 border border-white/10 rounded-lg px-3 text-white text-sm"
           />
           <button
             disabled={busy}
             onClick={() => submitCounter(o.id)}
-            className="h-9 px-3 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+            className="h-10 px-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
           >
             {isThai ? 'ส่ง' : 'Send'}
           </button>
           <button
             onClick={() => { setCounterFor(null); setCounterAmount(''); }}
-            className="h-9 px-3 text-slate-400 text-[10px] uppercase"
+            className="h-10 px-3 text-slate-400 text-[10px] font-bold uppercase"
           >
             {isThai ? 'ยกเลิก' : 'Cancel'}
           </button>
@@ -167,25 +192,25 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
 
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-stretch gap-2">
         <button
           disabled={busy}
           onClick={() => act(o.id, 'accept')}
-          className="h-9 px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+          className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ตอบรับ' : 'Accept'}
         </button>
         <button
           disabled={busy}
           onClick={() => { setCounterFor(o.id); setCounterAmount(''); }}
-          className="h-9 px-4 bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+          className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ต่อรอง' : 'Counter'}
         </button>
         <button
           disabled={busy}
           onClick={() => act(o.id, 'reject')}
-          className="h-9 px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+          className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ปฏิเสธ' : 'Decline'}
         </button>
@@ -220,44 +245,51 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
             // The card preview is tappable when the host wired navigation and the
             // listing still resolves to a card page.
             const canView = !!onViewListing && !!o.listing?.card_id;
+            // Actions render on their own full-width row below the card info —
+            // sharing a row squeezed the title/price to nothing on phones.
+            const actions = renderActions(o);
             return (
-            <div key={o.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => { if (canView) onViewListing?.(o); }}
-                disabled={!canView}
-                className="flex items-center gap-3 min-w-0 flex-1 text-left group disabled:cursor-default"
-              >
-                <span className="w-11 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
-                  {thumb && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={getThumbnailUrl(thumb)}
-                      alt=""
-                      loading="lazy"
-                      className={`w-full h-full ${card?.isSealed ? 'object-contain' : 'object-cover'}`}
-                    />
-                  )}
-                </span>
-                <div className="min-w-0">
-                  <p className={`text-white font-bold truncate ${canView ? 'group-hover:text-brand-cyan transition-colors' : ''}`}>
-                    {card?.name || (isThai ? 'การ์ด' : 'Card')}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    ฿{Number(o.amount).toLocaleString()} ·{' '}
-                    <span className="uppercase">{o.viewerRole === 'buyer' ? (isThai ? 'คุณเสนอ' : 'You offered') : (isThai ? 'ผู้ซื้อเสนอ' : 'Buyer offered')}</span>
-                    {' · '}
-                    <span className="uppercase">{o.status}</span>
-                  </p>
-                  {o.listing?.price != null && (
-                    <p className="text-[11px] text-slate-500">
-                      <span className="uppercase tracking-wide">{isThai ? 'ราคาตั้ง' : 'Listed'}</span>{' '}
-                      ฿{Number(o.listing.price).toLocaleString()}
+            <div key={o.id} className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => { if (canView) onViewListing?.(o); }}
+                  disabled={!canView}
+                  className="flex items-start gap-3 min-w-0 flex-1 text-left group disabled:cursor-default"
+                >
+                  <span className="w-11 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
+                    {thumb && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={getThumbnailUrl(thumb)}
+                        alt=""
+                        loading="lazy"
+                        className={`w-full h-full ${card?.isSealed ? 'object-contain' : 'object-cover'}`}
+                      />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-white font-bold text-sm truncate ${canView ? 'group-hover:text-brand-cyan transition-colors' : ''}`}>
+                      {card?.name || (isThai ? 'การ์ด' : 'Card')}
                     </p>
-                  )}
-                </div>
-              </button>
-              <div className="flex-shrink-0">{renderActions(o)}</div>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">
+                      <span className="text-white font-bold">฿{Number(o.amount).toLocaleString()}</span>
+                      {' · '}
+                      {o.viewerRole === 'buyer' ? (isThai ? 'คุณเสนอ' : 'You offered') : (isThai ? 'ผู้ซื้อเสนอ' : 'Buyer offered')}
+                    </p>
+                    {o.listing?.price != null && (
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        <span className="uppercase tracking-wide">{isThai ? 'ราคาตั้ง' : 'Listed'}</span>{' '}
+                        ฿{Number(o.listing.price).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </button>
+                <span className={`shrink-0 mt-0.5 px-2 py-1 rounded-md border text-[9px] font-black uppercase tracking-widest ${STATUS_STYLES[o.status] || STATUS_STYLES.rejected}`}>
+                  {statusLabel(o.status, isThai)}
+                </span>
+              </div>
+              {actions && <div>{actions}</div>}
             </div>
             );
           })}

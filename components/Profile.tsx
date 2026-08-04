@@ -412,6 +412,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     } catch { /* storage unavailable (private mode) */ }
   }, []);
 
+  // Offer push tap while Profile is already mounted (user was on this tab):
+  // the shell's tab switch is a no-op and nothing remounts, so the flag read
+  // above never re-runs — open the panel directly and clear the flag so it
+  // doesn't fire again on a later remount.
+  useEffect(() => {
+    const onOpenOffers = () => {
+      try { sessionStorage.removeItem('cs_open_offers'); } catch { /* mount-time read handles it */ }
+      setActivePanel('offers');
+    };
+    window.addEventListener('cs-open-offers', onOpenOffers);
+    return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+  }, []);
+
   // Fetch profile data on mount
   // Fetch profile data on mount / when the authenticated user changes.
   // We clear profileData first so a previous user's data (or a stale

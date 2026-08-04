@@ -208,6 +208,20 @@ export default function HomePage() {
         if (!isLandingTab(activeTab)) return;
         try { sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab); } catch { /* storage unavailable */ }
     }, [activeTab]);
+
+    // Offer push-notification tap (hooks/usePushNotifications dispatches this
+    // instead of hard-navigating when the shell is running): consume the event
+    // and switch to Profile without a reload. The dispatcher already set the
+    // cs_open_offers flag, which Profile reads on mount; Profile's own listener
+    // covers the already-on-profile case where no remount happens.
+    useEffect(() => {
+        const onOpenOffers = (e: Event) => {
+            e.preventDefault();
+            setActiveTab('profile');
+        };
+        window.addEventListener('cs-open-offers', onOpenOffers);
+        return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+    }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
 
