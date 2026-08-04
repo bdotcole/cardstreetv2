@@ -106,12 +106,47 @@ export async function GET(request: NextRequest) {
     const overBudget = () => elapsed() > TIME_BUDGET_MS;
     const gradedOverDeadline = () => elapsed() > GRADED_DEADLINE_MS;
 
+    // Per-attempt HTTP status tally. Vercel's Observability "External APIs" panel
+    // reported 945 calls at P75 21.6ms with "Error Rate 0%" for the 2026-08-04 run,
+    // which cannot be real product JSON: the same endpoint probed from outside
+    // Vercel answers in 419-1,351ms (avg 673ms), and sin1 -> US cannot beat ~150ms.
+    // Vercel's error rate evidently does not count 4xx/5xx here, so the only way to
+    // learn what PriceCharting actually returns to this egress is to count it
+    // ourselves. 945 attempts against 296 committed items is 3.19x, exactly the
+    // 1 + FETCH_RETRIES shape, which points at 429/5xx — but that is inference, and
+    // this makes it fact.
+    const statusCounts: Record<string, number> = {};
+    const bodySamples: string[] = [];
+    let fetchAttempts = 0;
+    function noteStatus(key: string, body?: string) {
+        statusCounts[key] = (statusCounts[key] || 0) + 1;
+        // A challenge/block page identifies itself in its first line; two samples is
+        // enough to tell Cloudflare from a plain rate-limit JSON without bloating
+        // the response.
+        if (body !== undefined && bodySamples.length < 2) {
+            bodySamples.push(`${key}: ${body.replace(/\s+/g, ' ').slice(0, 200)}`);
+        }
+    }
+
     // Retries 429/5xx with backoff. With a worker pool the throttle is the
     // concurrency cap rather than a fixed inter-request sleep, so a rate limit has
     // to be absorbed here or it would just burn budget on failures.
     async function fetchProduct(id: string) {
         for (let attempt = 0; ; attempt++) {
-            const res = await fetch(buildProductByIdUrl(token!, id));
+            fetchAttempts++;
+            let res: Response;
+            try {
+                res = await fetch(buildProductByIdUrl(token!, id));
+            } catch (e: any) {
+                // A transport-level failure never reaches the status tally otherwise,
+                // and would be indistinguishable from a slow success in the totals.
+                noteStatus(`network:${e?.name || 'error'}`);
+                throw e;
+            }
+            // Only drain the body while samples are still wanted. This is a wall-clock
+            // investigation, so the failure path must not get slower to run it.
+            const wantSample = !res.ok && bodySamples.length < 2;
+            noteStatus(String(res.status), wantSample ? await res.clone().text() : undefined);
             if (res.ok) return res.json();
             const retryable = res.status === 429 || res.status >= 500;
             if (!retryable || attempt >= FETCH_RETRIES) throw new Error(`PriceCharting ${res.status}`);
@@ -120,6 +155,10 @@ export async function GET(request: NextRequest) {
     }
 
     let gradedCards = 0, gradedRows = 0, sealedUpdated = 0;
+    // Raised from 5/10: the old caps truncated the evidence to a handful of ids and
+    // hid whether failures were uniform or clustered. Bounded well below the item
+    // count so a total outage still cannot balloon the response.
+    const ERROR_SAMPLE_CAP = 40;
     const errors: string[] = [];
 
     // --- Graded: stalest-mapped cards ------------------------------------------
@@ -186,7 +225,7 @@ export async function GET(request: NextRequest) {
             await supabase.from('pricecharting_map').update({ last_priced_at: new Date().toISOString() }).eq('card_id', m.card_id);
             gradedCards++;
         } catch (e: any) {
-            if (errors.length < 5) errors.push(`graded ${m.pricecharting_id}: ${e.message}`);
+            if (errors.length < ERROR_SAMPLE_CAP) errors.push(`graded ${m.pricecharting_id}: ${e.message}`);
         }
     });
 
@@ -251,7 +290,7 @@ export async function GET(request: NextRequest) {
                 sealedUpdated++;
             }
         } catch (e: any) {
-            if (errors.length < 10) errors.push(`sealed ${s.pricecharting_id}: ${e.message}`);
+            if (errors.length < ERROR_SAMPLE_CAP) errors.push(`sealed ${s.pricecharting_id}: ${e.message}`);
         }
     });
 
@@ -265,6 +304,13 @@ export async function GET(request: NextRequest) {
         sealedElapsedMs: elapsed() - gradedElapsedMs,
         gradedHitDeadline: gradedCards > 0 && gradedElapsedMs >= GRADED_DEADLINE_MS,
         elapsedMs: elapsed(),
+        // fetchAttempts / (gradedCards + sealedUpdated) is the retry amplification:
+        // ~1.0 means the caps bind, ~3.0 means nearly every item exhausts its
+        // retries and the backoff sleeps are eating the budget. statusCounts says
+        // which status is driving it.
+        fetchAttempts,
+        statusCounts,
+        bodySamples,
         errors,
         timestamp: new Date().toISOString(),
     });
