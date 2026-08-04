@@ -334,15 +334,19 @@ export function getFeaturedFaqs(isThai: boolean): FaqItem[] {
 }
 
 /**
- * schema.org FAQPage structured data, always built from the English catalog so
- * the markup search engines and AI answer engines index is stable regardless of
- * the visitor's UI language.
+ * schema.org FAQPage structured data for one locale.
+ *
+ * The catalog must match the URL variant being served, not the visitor's UI
+ * language: answer engines quote structured data verbatim, so the Thai
+ * canonical page has to expose the Thai answers or every citable sentence
+ * about CardStreet ends up in English on a Thai-targeted URL.
  */
-export function buildFaqJsonLd(): Record<string, unknown> {
+export function buildFaqJsonLd(isThai = false): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    mainEntity: FAQ_EN.flatMap((category) =>
+    inLanguage: isThai ? 'th-TH' : 'en-TH',
+    mainEntity: (isThai ? FAQ_TH : FAQ_EN).flatMap((category) =>
       category.items.map((item) => ({
         '@type': 'Question',
         name: item.q,
