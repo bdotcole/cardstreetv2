@@ -15,6 +15,8 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['ch
   { path: '/riftbound', changeFrequency: 'weekly', priority: 0.9 },
   // Set index — the crawl entry point to all ~1k set pages.
   { path: '/sets', changeFrequency: 'weekly', priority: 0.8 },
+  // Price-check landing — targets เช็คราคาการ์ดโปเกม่อน, the best-ranking query.
+  { path: '/prices', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/faq', changeFrequency: 'monthly', priority: 0.8 },
   // /help is deliberately absent: it duplicates the /faq accordion and
   // canonicalizes there (app/help/page.tsx) — sitemaps list canonicals only.

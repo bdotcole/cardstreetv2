@@ -316,5 +316,6 @@ export const config = {
         '/terms',
         '/privacy',
         '/contact',
+        '/prices',
     ],
 }
