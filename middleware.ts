@@ -317,5 +317,6 @@ export const config = {
         '/privacy',
         '/contact',
         '/prices',
+        '/graded',
     ],
 }

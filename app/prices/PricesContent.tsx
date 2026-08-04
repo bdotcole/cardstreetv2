@@ -26,6 +26,7 @@ interface Strings {
   ctaSets: string;
   browseTitle: string;
   games: { href: string; label: string }[];
+  gradedLink: string;
   faqLink: string;
 }
 
@@ -71,6 +72,7 @@ const EN: Strings = {
     { href: '/en/lorcana', label: 'Disney Lorcana' },
     { href: '/en/riftbound', label: 'Riftbound' },
   ],
+  gradedLink: 'Graded card prices',
   faqLink: 'Frequently asked questions',
 };
 
@@ -116,6 +118,7 @@ const TH: Strings = {
     { href: '/lorcana', label: 'การ์ด Disney Lorcana' },
     { href: '/riftbound', label: 'การ์ด Riftbound' },
   ],
+  gradedLink: 'ราคาการ์ดเกรด',
   faqLink: 'คำถามที่พบบ่อย',
 };
 
@@ -191,9 +194,14 @@ export default function PricesContent() {
             </Link>
           ))}
         </div>
-        <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
-          {t.faqLink}
-        </Link>
+        <div className="flex flex-wrap gap-4">
+          <Link href={`${prefix}/graded`} className="text-sm text-brand-cyan font-bold hover:underline">
+            {t.gradedLink}
+          </Link>
+          <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
+            {t.faqLink}
+          </Link>
+        </div>
       </div>
     </div>
   );
