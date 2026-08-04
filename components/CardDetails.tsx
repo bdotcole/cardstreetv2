@@ -248,12 +248,9 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                             </div>
                           </div>
                           <div className="text-right flex items-center gap-4">
-                            <div>
-                              <p className="text-white text-base font-black italic">
-                                {currencySymbol} {Math.round(listing.price * exchangeRate).toLocaleString()}
-                              </p>
-                              <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">+ Free Ship</p>
-                            </div>
+                            <p className="text-white text-base font-black italic">
+                              {currencySymbol} {Math.round(listing.price * exchangeRate).toLocaleString()}
+                            </p>
                             <button
                               onClick={() => onAddToCart && onAddToCart({
                                 id: listing.id,
