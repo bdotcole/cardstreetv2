@@ -18,6 +18,7 @@ import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
 import { syncPremiumFromSubscription } from '@/lib/premiumEntitlement';
 import { publishDraftListings } from '@/lib/draftListings';
+import { notifyWishlistersOfSellerActivation } from '@/lib/wishlistAlerts';
 import {
     getStripeForRegion,
     getAllWebhookSecretsForRegion,
@@ -255,6 +256,20 @@ export async function handleStripeWebhook(
 
                     const status = deriveConnectStatus(account);
 
+                    // Chargeable state BEFORE this sync. The wishlist replay
+                    // below must fire only on the false -> true edge, and the
+                    // update overwrites the column, so it has to be read first.
+                    const { data: priorRows } = await supabase
+                        .from('profiles')
+                        .select('id, stripe_charges_enabled')
+                        .eq('stripe_account_id', account.id)
+                        .eq('stripe_region', region);
+                    const wasChargeable = new Set(
+                        (priorRows ?? [])
+                            .filter((r: { stripe_charges_enabled: boolean | null }) => r.stripe_charges_enabled === true)
+                            .map((r: { id: string }) => r.id)
+                    );
+
                     const { error: updErr, data: updRows } = await supabase
                         .from('profiles')
                         .update({
@@ -280,6 +295,28 @@ export async function handleStripeWebhook(
                             `${logPrefix} Synced Connect account ${account.id} → status=${status}, ` +
                             `charges=${account.charges_enabled}, payouts=${account.payouts_enabled}`
                         );
+                        // Wishlist alerts suppressed while this seller could not
+                        // be paid are replayed now, on the false -> true edge.
+                        //
+                        // ORDER MATTERS: this runs BEFORE publishDraftListings.
+                        // The replay only looks at already-active listings, so
+                        // running it first keeps it disjoint from the drafts
+                        // published below (which fire their own alerts). Doing
+                        // it the other way round would let both paths alert the
+                        // same freshly-published listing concurrently, and the
+                        // user+card dedupe cannot settle a race that tight.
+                        if (account.charges_enabled) {
+                            const activated = updRows
+                                .map((r: { id: string }) => r.id)
+                                .filter((id: string) => !wasChargeable.has(id));
+                            if (activated.length > 0) {
+                                try {
+                                    await notifyWishlistersOfSellerActivation(activated, logPrefix);
+                                } catch (replayErr) {
+                                    console.error(`${logPrefix} Wishlist replay failed:`, replayErr);
+                                }
+                            }
+                        }
                         // Draft-first listings: onboarding just completed, so
                         // publish anything this seller drafted while
                         // unverified. Async backstop for the status-route
