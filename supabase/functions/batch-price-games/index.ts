@@ -13,13 +13,23 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 // automatically — no config table to maintain.
 //
 // Writes one canonical Near-Mint row per card (condition 'Raw_NM', currency USD;
-// cardMapper converts to THB). Stays well under the 1K/day JustTCG quota.
+// cardMapper converts to THB). Call volume is bounded by MAX_API_CALLS below;
+// see that comment for how the per-run cap relates to the JustTCG plan quota.
 // =====================================================================
 
 const JUSTTCG_API_KEY = (Deno.env.get('JUSTTCG_API_KEY') ?? '').trim();
 const JUSTTCG_BASE = 'https://api.justtcg.com/v1';
 const DELAY_MS = 1300;        // safe under 50 req/min
-const MAX_API_CALLS = 700;    // safety cap; leaves headroom under 1K/day shared quota
+// Per-invocation safety cap. SIX game jobs run this function nightly (mtg,
+// onepiece, yugioh, pokemon-jp, riftbound, lorcana), so the daily ceiling is
+// 6x this number, against a Professional-plan quota of 5K/day and 50K/month.
+// At the old 700 the monthly ceiling was ~126K — 2.5x the quota — and only the
+// pre-2326d50 wall-clock timeout kept real usage below it. 250 puts the
+// monthly ceiling at ~45K while still leaving roughly 4x headroom over
+// observed usage: the busiest night on record (2026-08-03, the backlog burn
+// right after the concurrency fix) priced 41,559 rows across all seven jobs,
+// which is only ~416 calls at PAGE=100, or ~60-70 per game job.
+const MAX_API_CALLS = 250;
 const PAGE = 100;
 
 // Set-rotation knobs (see the ordering block in run()). These bound only Postgres
@@ -125,7 +135,7 @@ Deno.serve(async (req) => {
       //
       // A plain created_at DESC ordering starves games with more sets than the
       // MAX_API_CALLS budget can cover. Yu-Gi-Oh has ~636 set rows against a
-      // 700-call cap, so the same leading sets won every night and the rest sat
+      // 250-call cap, so the same leading sets won every night and the rest sat
       // frozen for over a month while the cron still reported success (measured
       // 2026-08-02: 1 of the 40 newest YGO sets refreshed, the other 39 stuck at
       // 2026-06-29). Ordering the tail stalest-first is self-balancing: pricing a
