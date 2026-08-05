@@ -81,13 +81,19 @@ const SEALED_CONCURRENCY = 3;   // sealed items may also run a sales lookup
 const TIME_BUDGET_MS = 250_000;
 const SEALED_RESERVE_MS = 120_000;  // tail of the budget the graded pass may not touch
 const GRADED_DEADLINE_MS = TIME_BUDGET_MS - SEALED_RESERVE_MS;
-// The measured token bucket admits ~1.08-1.20 req/s. Pace just under the low end so
-// every call is expected to succeed: a run that lands 0 rejections also tells us the
-// quota exactly, which is worth more than the ~10% extra items a tighter interval
-// might scrape before it starts colliding again. Budget / interval is the run's whole
-// yield now — 250s at 1/s is ~250 items, split ~130 graded / ~120 sealed by the
-// deadline below.
-const REQUEST_INTERVAL_MS = 1_000;
+// Budget / interval IS the run's whole yield now, so this constant alone sets
+// throughput. Calibrated in two steps against the measured token bucket, which
+// admitted 1.08-1.20 req/s while being raced:
+//   1000ms -> 249 attempts, 243 x 200, 3 x 429 (97.6% clean) but only 243 items,
+//             about 18% below the 295 that racing the quota had extracted.
+//    850ms -> ~296 slots per run, restoring that yield while keeping the request
+//             volume ~94% below the racing approach.
+// 850 is a deliberate step toward the ceiling, not a safe floor: it sits inside the
+// observed admit band rather than under it, so a few 429s are expected and fine. Push
+// further only on evidence — if `statusCounts` shows 429s climbing past a few percent,
+// the bucket is refusing the extra rate and the slots are being wasted again, so go
+// back to 1000ms. Watch statusCounts, never guess.
+const REQUEST_INTERVAL_MS = 850;
 // THE BUDGETS ABOVE WERE UNENFORCEABLE WITHOUT THIS. `pool()` can only check stop()
 // between items, so an in-flight fetch is not preemptible: a connection that hangs
 // parks its worker lane forever, neither deadline can bound it, and Promise.all over
