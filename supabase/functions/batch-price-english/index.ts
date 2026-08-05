@@ -86,7 +86,18 @@ Deno.serve(async (req) => {
 
             let totalPriced = 0;
             let apiCalls = 0;
-            const MAX_API_CALLS = 950;
+            // Per-invocation safety cap, matching batch-price-games. One job
+            // runs this nightly, so this is also the daily ceiling, against a
+            // Professional-plan quota of 5K/day and 50K/month.
+            //
+            // 950 sat ~14x above real usage: the busiest night on record
+            // (2026-08-04) priced 6,733 EN rows, which is ~68 calls at limit=100.
+            // 250 keeps ~3.7x headroom over that peak.
+            //
+            // This cap is NOT what limits EN set coverage. Sets missing a
+            // justtcg_slug take the `[skip] No JustTCG mapping` path below, which
+            // costs zero API calls -- that mapping gap is the real constraint.
+            const MAX_API_CALLS = 250;
 
             for (const dbSetId of dbSetIds) {
                 if (apiCalls >= MAX_API_CALLS) { console.log('[limit] API call limit reached'); break; }
