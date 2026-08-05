@@ -32,17 +32,28 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 // grown to 71,809 rows (the Japanese Yu-Gi-Oh ingest added 15,557), so a full graded
 // cycle still took ~1.4 YEARS and sealed ~89 days.
 //
-// The bottleneck is PriceCharting's own latency, not our rate limiting: a sequential
-// product fetch measured 819ms, while 16 issued concurrently completed in 2,242ms
-// total — 140ms each, a 5.9x speedup with 16/16 succeeding. So each pass now runs a
-// bounded worker pool instead of a for-loop. Per item that turns ~1,160ms of
-// wall clock into ~90ms, and the CAPS become the binding constraint again, so they
-// are raised to match. Expected yield: ~1,000 graded cards + ~600 sealed per run,
-// i.e. a ~72-day graded cycle and a ~8-day sealed cycle.
+// THAT DIAGNOSIS WAS WRONG, AND SO WAS EVERY "RAISE THE CAPS" INSTINCT BEFORE IT.
+// The 16-concurrent latency test that justified the worker pool was run from a
+// laptop, which PriceCharting does not throttle. Instrumenting the real run on
+// 2026-08-04 showed 4,146 of 4,424 requests (93.7%) coming back 429 wrapped in a
+// Cloudflare "Just a moment..." interstitial, admitting only 273.
 //
-// Concurrency is deliberately below the measured-safe 16 to leave headroom, and
-// fetchProduct retries 429/5xx with backoff so a rate limit degrades into slower
-// progress rather than a burned budget.
+// It is our API TOKEN being throttled, not our egress. Moving the route to iad1
+// changed nothing (93.5% challenged; reverted in 0034345) — an identical rejection
+// rate from two continents rules out IP/ASN scoring. What both runs share is the
+// ADMITTED rate: 1.08/s from sin1, 1.20/s from iad1, against ~18/s attempted. That is
+// a token bucket of roughly 1 request per second.
+//
+// So concurrency cannot buy anything here: 12 lanes yield exactly what 1 lane would,
+// while firing ~4,200 rejected requests per run at a vendor we pay. Instead a single
+// global gate paces every call to REQUEST_INTERVAL_MS, the pools shrink to just
+// enough lanes to keep the Supabase writes off the critical path, and retries are
+// gone — under a token bucket a retry spends a slot a fresh item could have used, and
+// stalest-first ordering brings any dropped item back on a later run.
+//
+// This does not speed the cycle up. It stops wasting the vendor's capacity and makes
+// the yield predictable. Raising the real ceiling needs PriceCharting to lift the
+// token's quota, or a switch to the bulk price-guide CSV (one request per category).
 //
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 // Needs PRICECHARTING_TOKEN in the Vercel env.
@@ -56,8 +67,12 @@ export const maxDuration = 300;
 // duplicate or skip rows, so it is not worth it for the extra ~24 days of cycle.
 const GRADED_CAP = 1000;  // mapped cards refreshed per run
 const SEALED_CAP = 600;   // sealed products refreshed per run
-const GRADED_CONCURRENCY = 12;
-const SEALED_CONCURRENCY = 8;   // gentler: each sealed item may also run a sales lookup
+// Concurrency no longer sets the request rate — the global gate below does. These
+// only need enough lanes that a lane's Supabase writes (~100ms for the two round
+// trips) overlap the next lane's wait for its slot, so the gate stays saturated. Any
+// higher just queues callers against the same 1/s cadence.
+const GRADED_CONCURRENCY = 3;
+const SEALED_CONCURRENCY = 3;   // sealed items may also run a sales lookup
 // 280s left almost no headroom under maxDuration: a manual run on 2026-08-04 was
 // killed with FUNCTION_INVOCATION_TIMEOUT at exactly 300s and returned no body at
 // all, so the diagnostics never surfaced. The gap must cover the slowest in-flight
@@ -66,21 +81,44 @@ const SEALED_CONCURRENCY = 8;   // gentler: each sealed item may also run a sale
 const TIME_BUDGET_MS = 250_000;
 const SEALED_RESERVE_MS = 120_000;  // tail of the budget the graded pass may not touch
 const GRADED_DEADLINE_MS = TIME_BUDGET_MS - SEALED_RESERVE_MS;
-const FETCH_RETRIES = 2;
+// The measured token bucket admits ~1.08-1.20 req/s. Pace just under the low end so
+// every call is expected to succeed: a run that lands 0 rejections also tells us the
+// quota exactly, which is worth more than the ~10% extra items a tighter interval
+// might scrape before it starts colliding again. Budget / interval is the run's whole
+// yield now — 250s at 1/s is ~250 items, split ~130 graded / ~120 sealed by the
+// deadline below.
+const REQUEST_INTERVAL_MS = 1_000;
 // THE BUDGETS ABOVE WERE UNENFORCEABLE WITHOUT THIS. `pool()` can only check stop()
 // between items, so an in-flight fetch is not preemptible: a connection that hangs
 // parks its worker lane forever, neither deadline can bound it, and Promise.all over
 // the lanes never resolves — which is exactly the 300s kill above. Measured latency
 // to this host is avg 245ms / P99 3.62s, so 10s is ~3x the tail: generous for a slow
 // response, fatal to a hung one.
-// A timed-out request is NOT retried: the throw escapes the retry loop, which only
-// retries non-ok statuses. That is deliberate — retrying would let one hung host
-// consume 3 x FETCH_TIMEOUT_MS of a lane, and the item is not lost, since
-// stalest-first ordering brings it back on a later run.
+// Nothing is retried now, so this also caps what a single bad item can cost.
 const FETCH_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Serializes every outbound PriceCharting call onto a shared `interval`-spaced
+ * schedule, across both passes — the quota is per token, so a per-pass or per-lane
+ * limiter would not bound the account-wide rate that actually matters.
+ *
+ * Callers reserve their slot synchronously before awaiting, so two lanes arriving in
+ * the same tick take consecutive slots rather than the same one. That is only safe
+ * because JS runs the reservation to completion without interleaving; do not add an
+ * await between reading and writing `next`.
+ */
+function rateLimiter(interval: number) {
+    let next = 0;
+    return async function acquire() {
+        const now = Date.now();
+        const slot = Math.max(now, next);
+        next = slot + interval;
+        if (slot > now) await sleep(slot - now);
+    };
+}
 
 /**
  * Run `worker` over `items` with at most `concurrency` in flight, stopping early
@@ -147,37 +185,36 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // Retries 429/5xx with backoff. With a worker pool the throttle is the
-    // concurrency cap rather than a fixed inter-request sleep, so a rate limit has
-    // to be absorbed here or it would just burn budget on failures.
+    // One attempt per item, gated on the shared 1/s schedule. No retry loop: under a
+    // token bucket every retry spends a slot that a fresh item could have used, so
+    // retrying trades new work for repeated work at exactly 1:1. A dropped item is not
+    // lost — stalest-first ordering floats it back up on a later run.
+    const acquireSlot = rateLimiter(REQUEST_INTERVAL_MS);
     async function fetchProduct(id: string) {
-        for (let attempt = 0; ; attempt++) {
-            fetchAttempts++;
-            let res: Response;
-            inFlight++;
-            try {
-                res = await fetch(buildProductByIdUrl(token!, id), {
-                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                });
-            } catch (e: any) {
-                // A transport-level failure never reaches the status tally otherwise,
-                // and would be indistinguishable from a slow success in the totals.
-                // AbortSignal.timeout surfaces as TimeoutError, so a hang is counted
-                // under its own key rather than blurred into generic network errors.
-                noteStatus(`network:${e?.name || 'error'}`);
-                throw e;
-            } finally {
-                inFlight--;
-            }
-            // Only drain the body while samples are still wanted. This is a wall-clock
-            // investigation, so the failure path must not get slower to run it.
-            const wantSample = !res.ok && bodySamples.length < 2;
-            noteStatus(String(res.status), wantSample ? await res.clone().text() : undefined);
-            if (res.ok) return res.json();
-            const retryable = res.status === 429 || res.status >= 500;
-            if (!retryable || attempt >= FETCH_RETRIES) throw new Error(`PriceCharting ${res.status}`);
-            await sleep(500 * (attempt + 1));
+        await acquireSlot();
+        fetchAttempts++;
+        let res: Response;
+        inFlight++;
+        try {
+            res = await fetch(buildProductByIdUrl(token!, id), {
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
+        } catch (e: any) {
+            // A transport-level failure never reaches the status tally otherwise, and
+            // would be indistinguishable from a slow success in the totals.
+            // AbortSignal.timeout surfaces as TimeoutError, so a hang is counted under
+            // its own key rather than blurred into generic network errors.
+            noteStatus(`network:${e?.name || 'error'}`);
+            throw e;
+        } finally {
+            inFlight--;
         }
+        // Only drain the body while samples are still wanted. A 429 here now means the
+        // pacing is still too fast for the quota, so statusCounts is the dial to watch.
+        const wantSample = !res.ok && bodySamples.length < 2;
+        noteStatus(String(res.status), wantSample ? await res.clone().text() : undefined);
+        if (res.ok) return res.json();
+        throw new Error(`PriceCharting ${res.status}`);
     }
 
     let gradedCards = 0, gradedRows = 0, sealedUpdated = 0;
@@ -353,10 +390,9 @@ export async function GET(request: NextRequest) {
         sealedElapsedMs: elapsed() - gradedElapsedMs,
         gradedHitDeadline: gradedCards > 0 && gradedElapsedMs >= GRADED_DEADLINE_MS,
         elapsedMs: elapsed(),
-        // fetchAttempts / (gradedCards + sealedUpdated) is the retry amplification:
-        // ~1.0 means the caps bind, ~3.0 means nearly every item exhausts its
-        // retries and the backoff sleeps are eating the budget. statusCounts says
-        // which status is driving it.
+        // With one attempt per item, fetchAttempts is now simply how many slots the
+        // run consumed, and elapsedMs / fetchAttempts should sit at REQUEST_INTERVAL_MS.
+        // Drifting above it means the pools are too narrow to keep the gate saturated.
         fetchAttempts,
         // inFlight should be 0 here. Anything else means a lane outlived its pass.
         inFlight,
