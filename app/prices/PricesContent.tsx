@@ -27,6 +27,7 @@ interface Strings {
   browseTitle: string;
   games: { href: string; label: string }[];
   gradedLink: string;
+  sellLink: string;
   faqLink: string;
 }
 
@@ -59,8 +60,12 @@ const EN: Strings = {
   source:
     'The figure shown is the market price — a midpoint drawn from recent real sales, not an inflated asking price. English and Japanese cards reference international market data converted to baht; Thai cards use pricing that reflects the domestic market. Graded cards (PSA, BGS, CGC, TAG) are priced separately from raw copies, since a high-grade slab is often worth several times the raw card.',
   sellTitle: 'Check a price, then sell it',
+  // Do NOT reintroduce "paid once the buyer has received the card". On the live
+  // TH path (direct charges) the sale lands in the seller's Stripe balance at
+  // charge time and pays out on Stripe's automatic schedule — nothing is
+  // delivery-gated. See supabase/functions/release-funds/index.ts.
   sell:
-    'If you check a price and decide to sell, you can list the card from the same page. Sellers pay a fee only when a card actually sells — there are no listing fees. Buyers pay by card or PromptPay, orders ship nationwide with Flash Express, and the seller is paid once the buyer has received the card.',
+    'If you check a price and decide to sell, you can list the card from the same page. Sellers pay a fee only when a card actually sells — there are no listing fees. Buyers pay by card or PromptPay, orders ship nationwide with Flash Express, and your sale is paid into your Stripe account, which pays out on its normal schedule.',
   ctaSearch: 'Search or scan a card',
   ctaSets: 'Browse all sets',
   browseTitle: 'Browse prices by game',
@@ -73,6 +78,7 @@ const EN: Strings = {
     { href: '/en/riftbound', label: 'Riftbound' },
   ],
   gradedLink: 'Graded card prices',
+  sellLink: 'Sell your cards',
   faqLink: 'Frequently asked questions',
 };
 
@@ -106,7 +112,7 @@ const TH: Strings = {
     'ราคาที่แสดงคือราคาตลาด — ค่ากลางจากการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาตั้งขายที่สูงเกินจริง สำหรับการ์ดภาษาอังกฤษและญี่ปุ่น ราคาอ้างอิงจากตลาดสากลแล้วแปลงเป็นเงินบาท ส่วนการ์ดไทยใช้ราคาที่สะท้อนตลาดในประเทศ การ์ดที่มีสภาพต่างกันหรือผ่านการเกรด (PSA, BGS, CGC, TAG) จะมีราคาแยกต่างหาก เพราะการ์ดเกรดสูงมักมีมูลค่าสูงกว่าการ์ดดิบหลายเท่า',
   sellTitle: 'เช็คราคาแล้วขายต่อได้เลย',
   sell:
-    'ถ้าเช็คราคาแล้วอยากขาย ลงประกาศขายบน CardStreet ได้จากหน้าการ์ดเดียวกัน ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ไม่มีค่าลงประกาศ ผู้ซื้อชำระผ่านบัตรหรือพร้อมเพย์ และจัดส่งทั่วประเทศผ่าน Flash Express โดยเงินจะโอนเข้าบัญชีผู้ขายหลังผู้ซื้อได้รับการ์ดแล้ว',
+    'ถ้าเช็คราคาแล้วอยากขาย ลงประกาศขายบน CardStreet ได้จากหน้าการ์ดเดียวกัน ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ไม่มีค่าลงประกาศ ผู้ซื้อชำระผ่านบัตรหรือพร้อมเพย์ จัดส่งทั่วประเทศผ่าน Flash Express และยอดขายจะเข้าบัญชี Stripe ของผู้ขาย แล้วโอนออกตามรอบการจ่ายเงินปกติของบัญชีนั้น',
   ctaSearch: 'ค้นหาหรือสแกนการ์ด',
   ctaSets: 'ดูชุดการ์ดทั้งหมด',
   browseTitle: 'ดูราคาแยกตามเกม',
@@ -119,6 +125,7 @@ const TH: Strings = {
     { href: '/riftbound', label: 'การ์ด Riftbound' },
   ],
   gradedLink: 'ราคาการ์ดเกรด',
+  sellLink: 'ขายการ์ดของคุณ',
   faqLink: 'คำถามที่พบบ่อย',
 };
 
@@ -197,6 +204,9 @@ export default function PricesContent() {
         <div className="flex flex-wrap gap-4">
           <Link href={`${prefix}/graded`} className="text-sm text-brand-cyan font-bold hover:underline">
             {t.gradedLink}
+          </Link>
+          <Link href={`${prefix}/sell-cards`} className="text-sm text-brand-cyan font-bold hover:underline">
+            {t.sellLink}
           </Link>
           <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
             {t.faqLink}

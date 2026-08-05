@@ -177,9 +177,9 @@ export default function GradedContent() {
           </p>
         ))}
 
-        {/* The sell CTA points at the app shell, not /sell: /sell is auth-gated
-            and noindex, and an indexable page should not link into a noindex
-            one. A crawlable sell landing would be the right target. */}
+        {/* The sell CTA points at /sell-cards, the public seller landing — not
+            at /sell, which is auth-gated and noindex. /sell-cards is where the
+            link into the gated form belongs. */}
         <div className="flex flex-col sm:flex-row gap-3 mt-8 mb-12">
           <Link
             href={`${prefix}/prices`}
@@ -188,7 +188,7 @@ export default function GradedContent() {
             {t.ctaPrices}
           </Link>
           <Link
-            href={prefix || '/'}
+            href={`${prefix}/sell-cards`}
             className="flex-1 text-center glass border border-white/10 font-black uppercase tracking-wider px-6 py-3 rounded-xl active:scale-[0.98] transition-all"
           >
             {t.ctaSell}

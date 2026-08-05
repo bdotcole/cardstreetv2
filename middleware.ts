@@ -318,5 +318,6 @@ export const config = {
         '/contact',
         '/prices',
         '/graded',
+        '/sell-cards',
     ],
 }
