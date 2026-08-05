@@ -71,7 +71,14 @@ export async function fulfillOrdersByTransferGroup(
             // parcel weight when the order contains sealed products.
             .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group, listing:listings(card_data)')
             .eq('transfer_group', transferGroup)
-            .eq('status', 'pending_payment');
+            .eq('status', 'pending_payment')
+            // Defense in depth: live-break spot orders carry break_spot_id and
+            // must NEVER get a per-order Flash waybill here (their parcels are
+            // consolidated at stream settle). The webhook already branches on
+            // the transfer_group prefix; this guard makes a mis-routed call
+            // harmless. Ordinary marketplace orders have break_spot_id NULL,
+            // so this filter is a no-op for them.
+            .is('break_spot_id', null);
 
         if (fetchError) {
             result.errors.push(`DB fetch error: ${fetchError.message}`);

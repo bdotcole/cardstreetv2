@@ -92,6 +92,6 @@ export async function POST(
         });
     } catch (err: any) {
         console.error('[Live/GoLive] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to go live' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to go live' }, { status: 500 });
     }
 }

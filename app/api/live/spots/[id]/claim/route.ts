@@ -87,6 +87,6 @@ export async function POST(
         return NextResponse.json(result, { status: 409 });
     } catch (err: any) {
         console.error('[Live/Claim] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to claim spot' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to claim spot' }, { status: 500 });
     }
 }

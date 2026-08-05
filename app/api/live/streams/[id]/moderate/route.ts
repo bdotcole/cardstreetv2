@@ -75,12 +75,16 @@ export async function POST(
                     return NextResponse.json({ error: 'messageId is required' }, { status: 400 });
                 }
                 // Scoped to this stream so a broadcaster can't delete messages
-                // in someone else's room by id.
+                // in someone else's room by id. is_system rows are refused:
+                // they are the money/fairness record (spot sales, randomizer
+                // seeds) and a broadcaster erasing them would gut the dispute
+                // trail the chat log exists to preserve.
                 const { data: deleted, error } = await admin
                     .from('stream_chat_messages')
                     .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
                     .eq('id', messageId)
                     .eq('stream_id', stream.id)
+                    .eq('is_system', false)
                     .is('deleted_at', null)
                     .select('id');
                 if (error) {
@@ -114,6 +118,6 @@ export async function POST(
         }
     } catch (err: any) {
         console.error('[Live/Moderate] error:', err);
-        return NextResponse.json({ error: err.message || 'Moderation failed' }, { status: 500 });
+        return NextResponse.json({ error: 'Moderation failed' }, { status: 500 });
     }
 }

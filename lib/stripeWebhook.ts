@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import * as Sentry from '@sentry/nextjs';
 import { fulfillOrdersByTransferGroup } from '@/lib/fulfillOrder';
+import { finalizeLiveSpotOrders, finalizeLiveShippingFeeOrder } from '@/lib/liveSpotFulfillment';
 import { syncPremiumFromSubscription } from '@/lib/premiumEntitlement';
 import { publishDraftListings } from '@/lib/draftListings';
 import { notifyWishlistersOfSellerActivation } from '@/lib/wishlistAlerts';
@@ -155,6 +156,31 @@ export async function handleStripeWebhook(
                 // Correct the seeded payment_method with what Stripe actually
                 // processed (card vs. promptpay) before/alongside fulfillment.
                 await stampOrderPaymentMethod(stripe, transferGroup, paymentId, connectedAccount, logPrefix);
+
+                // Live-breaks isolation: `live_*` groups are spot orders and
+                // `liveship_*` groups are consolidated shipping-fee orders.
+                // NEITHER may enter fulfillOrdersByTransferGroup — it mints a
+                // per-order Flash waybill + pickup, but live parcels are
+                // consolidated per buyer at stream settle and labeled from the
+                // seller console. Prefix-branching here keeps the marketplace
+                // path untouched for every other transfer_group.
+                if (transferGroup.startsWith('liveship_') || transferGroup.startsWith('live_')) {
+                    const liveResult = transferGroup.startsWith('liveship_')
+                        ? await finalizeLiveShippingFeeOrder(transferGroup, paymentId)
+                        : await finalizeLiveSpotOrders(transferGroup, paymentId);
+                    if (!liveResult.success) {
+                        console.error(`${logPrefix} Live-breaks finalization had errors:`, liveResult.errors);
+                        Sentry.captureMessage('Stripe webhook live-breaks finalization errors', {
+                            level: 'error',
+                            tags: { handler: 'stripe-webhook', event: 'payment_intent.succeeded', region },
+                            extra: { transferGroup, paymentId, errors: liveResult.errors },
+                        });
+                        // Still return 200 to prevent Stripe retries — errors are logged
+                    } else {
+                        console.log(`${logPrefix} Live-breaks finalization complete: ${liveResult.ordersPaid} orders paid`);
+                    }
+                    break;
+                }
 
                 // Trigger fulfillment (idempotent — safe to call multiple times)
                 const result = await fulfillOrdersByTransferGroup(transferGroup, paymentId);

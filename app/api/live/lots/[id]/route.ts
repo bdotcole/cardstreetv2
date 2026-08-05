@@ -75,6 +75,36 @@ export async function PATCH(
                     { status: 409 },
                 );
             }
+            // Cancelling is the PATCH twin of DELETE — it takes the lot off
+            // the record just the same, so it must enforce the same guards:
+            // a sold spot means a buyer's money is attached, and an unexpired
+            // hold is a buyer mid-checkout whose payment would be stranded.
+            // (sold/unsold closes keep the spots, so they need no guard.)
+            if (nextStatus === 'cancelled') {
+                const { count: soldCount } = await admin
+                    .from('break_spots')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('stream_item_id', lot.id)
+                    .eq('status', 'sold');
+                if ((soldCount ?? 0) > 0) {
+                    return NextResponse.json(
+                        { error: 'Cannot cancel a lot with sold spots' },
+                        { status: 409 },
+                    );
+                }
+                const { count: heldCount } = await admin
+                    .from('break_spots')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('stream_item_id', lot.id)
+                    .eq('status', 'held')
+                    .gt('hold_expires_at', new Date().toISOString());
+                if ((heldCount ?? 0) > 0) {
+                    return NextResponse.json(
+                        { error: 'A buyer is checking out a spot on this lot — try again shortly' },
+                        { status: 409 },
+                    );
+                }
+            }
             updates.status = nextStatus;
         }
 
@@ -116,7 +146,7 @@ export async function PATCH(
         return NextResponse.json({ success: true, lot: updated });
     } catch (err: any) {
         console.error('[Live/Lot] PATCH error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to update lot' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to update lot' }, { status: 500 });
     }
 }
 
@@ -183,6 +213,6 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[Live/Lot] DELETE error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to delete lot' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to delete lot' }, { status: 500 });
     }
 }

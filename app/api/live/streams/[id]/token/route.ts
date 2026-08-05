@@ -71,6 +71,6 @@ export async function POST(
         );
     } catch (err: any) {
         console.error('[Live/Token] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to mint token' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to mint token' }, { status: 500 });
     }
 }

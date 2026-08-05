@@ -73,6 +73,6 @@ export async function POST(
         return NextResponse.json({ success: true, vodExpiresAt });
     } catch (err: any) {
         console.error('[Live/End] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to end stream' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to end stream' }, { status: 500 });
     }
 }

@@ -230,6 +230,25 @@ export async function POST(req: Request) {
             ? seller.stripe_region
             : 'us';
 
+        // ─── One payable group per spot ───
+        // A buyer who abandons the payment sheet and re-enters checkout would
+        // otherwise leave TWO pending_payment groups pointing at the same
+        // spots — and both PaymentIntents stay chargeable (a stale PromptPay
+        // QR especially), so paying both double-charges for one spot.
+        // CAS-cancel any prior pending orders by this buyer for these spots
+        // so exactly one payable group exists; paid orders are untouched.
+        const { error: staleCancelErr } = await admin
+            .from('orders')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('buyer_id', buyerId)
+            .in('break_spot_id', spotIds)
+            .eq('status', 'pending_payment');
+        if (staleCancelErr) {
+            // Proceeding would risk the double charge this guard exists for.
+            console.error('[Live/SpotsCheckout] stale-order cancel failed:', staleCancelErr.message);
+            return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
+        }
+
         const transferGroup = `live_${randomUUID()}`;
 
         // ─── One order per spot. Satang -> THB happens exactly here. ───
@@ -262,14 +281,38 @@ export async function POST(req: Request) {
         }
 
         // ─── Extend the holds for the payment window (see constant above) ───
-        await admin
+        const { data: extendedRows, error: extendErr } = await admin
             .from('break_spots')
             .update({
                 hold_expires_at: new Date(now + CHECKOUT_HOLD_SECONDS * 1000).toISOString(),
             })
             .in('id', spotIds)
             .eq('status', 'held')
-            .eq('held_by', buyerId);
+            .eq('held_by', buyerId)
+            .select('id');
+
+        if (extendErr || (extendedRows?.length ?? 0) !== spotIds.length) {
+            // A hold lapsed (or was stolen) between the held-by verification
+            // read above and this extend — the orders just minted would charge
+            // for spots the buyer no longer holds. Roll them back so no
+            // payable group survives, and make the client re-claim.
+            console.error(
+                '[Live/SpotsCheckout] hold extend covered',
+                extendedRows?.length ?? 0, 'of', spotIds.length, 'spots',
+                extendErr ? `(${extendErr.message})` : '',
+            );
+            await admin
+                .from('orders')
+                .delete()
+                .in('id', insertedOrders.map(o => o.id));
+            return NextResponse.json(
+                {
+                    error: 'Your hold on one or more spots has expired — claim them again',
+                    code: 'HOLD_EXPIRED',
+                },
+                { status: 409 },
+            );
+        }
 
         const totalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
 
@@ -289,6 +332,6 @@ export async function POST(req: Request) {
         });
     } catch (err: any) {
         console.error('[Live/SpotsCheckout] error:', err);
-        return NextResponse.json({ error: err.message || 'Checkout failed' }, { status: 500 });
+        return NextResponse.json({ error: 'Checkout failed' }, { status: 500 });
     }
 }

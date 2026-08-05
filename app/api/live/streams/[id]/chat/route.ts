@@ -89,7 +89,7 @@ export async function POST(
         return NextResponse.json({ success: true, message });
     } catch (err: any) {
         console.error('[Live/Chat] POST error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to send message' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
     }
 }
 
@@ -126,6 +126,6 @@ export async function GET(
         return NextResponse.json({ messages: (messages ?? []).reverse() });
     } catch (err: any) {
         console.error('[Live/Chat] GET error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to load chat' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to load chat' }, { status: 500 });
     }
 }

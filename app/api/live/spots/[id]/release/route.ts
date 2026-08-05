@@ -32,6 +32,6 @@ export async function POST(
         return NextResponse.json(data ?? { released: false });
     } catch (err: any) {
         console.error('[Live/Release] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to release spot' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to release spot' }, { status: 500 });
     }
 }

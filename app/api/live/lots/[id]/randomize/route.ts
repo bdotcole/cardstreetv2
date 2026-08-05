@@ -127,6 +127,17 @@ export async function POST(
                 assignments,
             });
             if (auditErr) {
+                // The partial unique index on (stream_item_id, purpose) WHERE
+                // purpose='spot_to_pack' closes the race the pre-check above
+                // can lose: two concurrent runs both read "no existing map"
+                // and both insert. The loser's 23505 means a binding map
+                // already exists — same outcome as the pre-check.
+                if (auditErr.code === '23505') {
+                    return NextResponse.json(
+                        { error: 'Pack map already randomized for this lot', code: 'ALREADY_RANDOMIZED' },
+                        { status: 409 },
+                    );
+                }
                 console.error('[Live/Randomize] audit insert failed:', auditErr.message);
                 return NextResponse.json({ error: 'Failed to record randomization' }, { status: 500 });
             }
@@ -175,6 +186,24 @@ export async function POST(
             );
         }
 
+        // One run per hit: re-rolling an already-assigned hit until it lands
+        // on a preferred spot is the hit-side twin of the pack-map re-roll.
+        // Matched on the exact hit string — a genuinely distinct second copy
+        // of the same card must be entered with a distinguishing suffix.
+        const { data: dupHit } = await admin
+            .from('break_randomizations')
+            .select('id')
+            .eq('stream_item_id', lot.id)
+            .eq('purpose', 'hit_assignment')
+            .eq('assignments->>hit', hit)
+            .limit(1);
+        if (dupHit && dupHit.length > 0) {
+            return NextResponse.json(
+                { error: 'This hit was already assigned for this lot', code: 'ALREADY_ASSIGNED' },
+                { status: 409 },
+            );
+        }
+
         const soldSpotNumbers = spots.filter(s => s.status === 'sold').map(s => s.spot_number);
         if (soldSpotNumbers.length === 0) {
             return NextResponse.json(
@@ -210,6 +239,6 @@ export async function POST(
         return NextResponse.json({ success: true, purpose, seed, assignments });
     } catch (err: any) {
         console.error('[Live/Randomize] error:', err);
-        return NextResponse.json({ error: err.message || 'Randomization failed' }, { status: 500 });
+        return NextResponse.json({ error: 'Randomization failed' }, { status: 500 });
     }
 }

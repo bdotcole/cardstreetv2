@@ -66,7 +66,7 @@ export async function GET() {
         return NextResponse.json({ streams });
     } catch (err: any) {
         console.error('[Live/Streams] GET error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to load streams' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to load streams' }, { status: 500 });
     }
 }
 
@@ -90,6 +90,14 @@ export async function POST(req: Request) {
             typeof body?.description === 'string' && body.description.trim().length > 0
                 ? body.description.trim()
                 : null;
+        // The column has no CHECK cap (unlike title) — enforce one here so an
+        // unbounded body can't park megabytes in every feed row.
+        if (description !== null && description.length > 2000) {
+            return NextResponse.json(
+                { error: 'Description must be at most 2000 characters' },
+                { status: 400 },
+            );
+        }
         const gameId =
             typeof body?.gameId === 'string' && body.gameId.length > 0
                 ? body.gameId
@@ -148,6 +156,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, stream });
     } catch (err: any) {
         console.error('[Live/Streams] POST error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to create stream' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to create stream' }, { status: 500 });
     }
 }

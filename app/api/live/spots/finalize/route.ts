@@ -3,9 +3,12 @@
  * PaymentModal rail succeeds, verify the PaymentIntent and flip the spots.
  *
  * Mirrors app/api/orders/finalize: verify the PI succeeded ON THE CORRECT
- * platform (TH direct charges live on the seller's connected account), CAS
+ * platform (TH direct charges live on the seller's connected account), then
+ * delegate to lib/liveSpotFulfillment.ts — the SAME implementation the Stripe
+ * webhook runs on payment_intent.succeeded, so this client fallback and the
+ * async-payment (PromptPay) path can never diverge (the lib does: CAS
  * the orders pending_payment -> paid, then finalize_break_spot per spot and
- * announce each sale in chat. NOT the general fulfillment path — spot orders
+ * announce each sale in chat). NOT the general fulfillment path — spot orders
  * must not get per-order Flash shipments; that happens consolidated at settle.
  *
  * Idempotent: the order CAS decides who announces; finalize_break_spot is
@@ -16,7 +19,7 @@ import { NextResponse } from 'next/server';
 import { requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getStripeForRegion, type StripeRegion } from '@/lib/stripe';
-import { postSystemChat } from '@/lib/liveBreaks';
+import { finalizeLiveSpotOrders } from '@/lib/liveSpotFulfillment';
 
 interface SpotOrderRow {
     id: string;
@@ -98,82 +101,22 @@ export async function POST(req: Request) {
             );
         }
 
-        // ─── CAS flip: only rows still pending become paid ───
-        const orderIds = orders.map(o => o.id);
-        const { data: newlyPaid, error: flipErr } = await admin
-            .from('orders')
-            .update({
-                status: 'paid',
-                payment_id: paymentIntentId,
-                updated_at: new Date().toISOString(),
-            })
-            .in('id', orderIds)
-            .eq('status', 'pending_payment')
-            .select('id, break_spot_id')
-            .returns<{ id: string; break_spot_id: string }[]>();
-
-        if (flipErr) {
-            console.error('[Live/SpotsFinalize] order flip failed:', flipErr.message);
-            return NextResponse.json({ error: 'Failed to finalize orders' }, { status: 500 });
-        }
-
-        // ─── held -> sold, for every order (the RPC is idempotent) ───
-        const finalizeErrors: string[] = [];
-        for (const order of orders) {
-            const { data, error } = await admin.rpc('finalize_break_spot', {
-                p_spot_id: order.break_spot_id,
-                p_buyer_id: user.id,
-                p_order_id: order.id,
-            });
-            if (error) {
-                finalizeErrors.push(`${order.break_spot_id}: ${error.message}`);
-            } else if ((data as { finalized?: boolean } | null)?.finalized !== true) {
-                // Hold lapsed and someone else took the spot — money is
-                // captured for a spot the buyer no longer holds. Surface loudly
-                // for ops; refund is a manual path for the beta.
-                finalizeErrors.push(`${order.break_spot_id}: not finalized (hold lost?)`);
-            }
-        }
-        if (finalizeErrors.length > 0) {
-            console.error('[Live/SpotsFinalize] finalize_break_spot issues:', finalizeErrors);
-        }
-
-        // ─── Announce newly sold spots (once, via the CAS winners) ───
-        const newlyPaidRows = newlyPaid ?? [];
-        if (newlyPaidRows.length > 0) {
-            const spotIds = newlyPaidRows.map(o => o.break_spot_id);
-            const [{ data: spots }, { data: buyerProfile }] = await Promise.all([
-                admin
-                    .from('break_spots')
-                    .select('id, stream_id, spot_number')
-                    .in('id', spotIds)
-                    .returns<{ id: string; stream_id: string; spot_number: number }[]>(),
-                admin
-                    .from('profiles')
-                    .select('display_name')
-                    .eq('id', user.id)
-                    .maybeSingle<{ display_name: string | null }>(),
-            ]);
-            const buyerName = buyerProfile?.display_name || 'buyer';
-            for (const spot of spots ?? []) {
-                await postSystemChat(
-                    spot.stream_id,
-                    orders[0].seller_id,
-                    `Spot ${spot.spot_number} -> @${buyerName}`,
-                );
-            }
+        // ─── Delegate to the shared implementation (also run by the webhook) ───
+        const result = await finalizeLiveSpotOrders(transferGroup, paymentIntentId);
+        if (result.errors.length > 0) {
+            console.error('[Live/SpotsFinalize] finalization issues:', result.errors);
         }
 
         return NextResponse.json({
-            success: finalizeErrors.length === 0,
-            ordersPaid: newlyPaidRows.length,
-            alreadyPaid: orders.length - newlyPaidRows.length,
-            errors: finalizeErrors,
+            success: result.success,
+            ordersPaid: result.ordersPaid,
+            alreadyPaid: result.alreadyPaid,
+            errors: result.errors,
         });
     } catch (err: any) {
         console.error('[Live/SpotsFinalize] error:', err);
         return NextResponse.json(
-            { error: err.message || 'Failed to finalize spots' },
+            { error: 'Failed to finalize spots' },
             { status: 500 },
         );
     }

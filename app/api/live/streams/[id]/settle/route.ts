@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcaster } from '@/lib/liveBreaks';
 import {
@@ -45,6 +46,66 @@ interface SpotOrderRow {
     shipment_id: string | null;
     break_spot_id: string;
     stripe_region: string | null;
+}
+
+/**
+ * Get-or-create the ONE shipping-fee order the buyer pays on-session later;
+ * its `liveship_<shipmentId>` transfer_group keys the existing checkout +
+ * finalize rail (no platform fee — pass-through freight). Idempotent by
+ * transfer_group lookup: a re-run, a concurrent settle, or the
+ * partial-failure backfill can never mint a second payable fee order — a
+ * duplicate in the same group would double what the webhook flips to paid.
+ * Throws with a describable message on insert failure; the caller records it.
+ */
+async function ensureShippingFeeOrder(
+    admin: SupabaseClient,
+    shipment: { id: string; buyer_id: string; shipping_fee: number },
+    sellerId: string,
+    sellerRegion: 'th' | 'us',
+): Promise<string> {
+    const transferGroup = `liveship_${shipment.id}`;
+
+    const { data: existing } = await admin
+        .from('orders')
+        .select('id')
+        .eq('transfer_group', transferGroup)
+        .neq('status', 'cancelled')
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+
+    let feeOrderId = existing?.id ?? null;
+    if (!feeOrderId) {
+        const { data: feeOrder, error: feeOrderErr } = await admin
+            .from('orders')
+            .insert({
+                listing_id: null,
+                buyer_id: shipment.buyer_id,
+                seller_id: sellerId,
+                status: 'pending_payment',
+                total_amount: shipment.shipping_fee,
+                platform_fee: 0,
+                shipping_fee: 0,
+                escrow_status: 'held',
+                payment_method: 'credit_card',
+                transfer_group: transferGroup,
+                stripe_region: sellerRegion,
+            })
+            .select('id')
+            .single<{ id: string }>();
+        if (feeOrderErr || !feeOrder) {
+            throw new Error(`fee order insert failed (${feeOrderErr?.message})`);
+        }
+        feeOrderId = feeOrder.id;
+    }
+
+    // CAS: only fill an empty link, never clobber one a concurrent run set.
+    await admin
+        .from('shipments')
+        .update({ shipping_fee_order_id: feeOrderId })
+        .eq('id', shipment.id)
+        .is('shipping_fee_order_id', null);
+
+    return feeOrderId;
 }
 
 export async function POST(
@@ -101,9 +162,14 @@ export async function POST(
         // shipment untouched.
         const { data: existingShipments } = await admin
             .from('shipments')
-            .select('id, buyer_id')
+            .select('id, buyer_id, shipping_fee, shipping_fee_order_id')
             .eq('stream_id', stream.id)
-            .returns<{ id: string; buyer_id: string }[]>();
+            .returns<{
+                id: string;
+                buyer_id: string;
+                shipping_fee: number;
+                shipping_fee_order_id: string | null;
+            }[]>();
         const settledBuyers = new Set((existingShipments ?? []).map(s => s.buyer_id));
 
         const byBuyer = new Map<string, SpotOrderRow[]>();
@@ -118,9 +184,48 @@ export async function POST(
             byBuyer.set(order.buyer_id, list);
         }
 
+        // Seller profile up front: both the quote legs and the fee-order
+        // backfill below need the platform region.
+        const { data: sellerProfile } = await admin
+            .from('profiles')
+            .select(`${SHIPPING_PROFILE_COLS}, stripe_region`)
+            .eq('id', stream.seller_id)
+            .maybeSingle<ShippingProfile & { stripe_region: string | null }>();
+        const sellerRegion =
+            sellerProfile?.stripe_region === 'th' || sellerProfile?.stripe_region === 'us'
+                ? sellerProfile.stripe_region
+                : 'us';
+
+        const errors: string[] = [];
+
+        // ─── Re-run repair: shipments whose fee order never landed ───
+        // A previous settle could insert the shipment then fail before the fee
+        // order (or before linking it) — the buyer would never be charged
+        // freight. Backfill from the stored shipment row; the helper dedupes
+        // by transfer_group, so an orphaned-but-unlinked fee order is relinked
+        // rather than duplicated. Must run BEFORE the no-new-buyers early
+        // return: on a re-run every order already has shipment_id, so this is
+        // the only code that still executes.
+        let feeOrdersBackfilled = 0;
+        for (const s of existingShipments ?? []) {
+            if (s.shipping_fee_order_id !== null) continue;
+            try {
+                await ensureShippingFeeOrder(admin, s, stream.seller_id, sellerRegion);
+                feeOrdersBackfilled++;
+            } catch (err: any) {
+                errors.push(`shipment ${s.id}: fee backfill failed (${err?.message ?? err})`);
+            }
+        }
+
         if (byBuyer.size === 0) {
             await admin.from('streams').update({ settled_at: new Date().toISOString() }).eq('id', stream.id);
-            return NextResponse.json({ success: true, shipments: [], skippedBuyers });
+            return NextResponse.json({
+                success: errors.length === 0,
+                shipments: [],
+                skippedBuyers,
+                feeOrdersBackfilled,
+                errors,
+            });
         }
 
         // ─── Lot snapshots for weights + profiles for the quote legs ───
@@ -139,23 +244,12 @@ export async function POST(
         const lotById = new Map((lots ?? []).map(l => [l.id, l]));
 
         const buyerIds = [...byBuyer.keys()];
-        const [{ data: buyerProfiles }, { data: sellerProfile }] = await Promise.all([
-            admin
-                .from('profiles')
-                .select(SHIPPING_PROFILE_COLS)
-                .in('id', buyerIds)
-                .returns<ShippingProfile[]>(),
-            admin
-                .from('profiles')
-                .select(`${SHIPPING_PROFILE_COLS}, stripe_region`)
-                .eq('id', stream.seller_id)
-                .maybeSingle<ShippingProfile & { stripe_region: string | null }>(),
-        ]);
+        const { data: buyerProfiles } = await admin
+            .from('profiles')
+            .select(SHIPPING_PROFILE_COLS)
+            .in('id', buyerIds)
+            .returns<ShippingProfile[]>();
         const buyerById = new Map((buyerProfiles ?? []).map(p => [p.id, p]));
-        const sellerRegion =
-            sellerProfile?.stripe_region === 'th' || sellerProfile?.stripe_region === 'us'
-                ? sellerProfile.stripe_region
-                : 'us';
 
         const createdShipments: {
             id: string;
@@ -164,7 +258,6 @@ export async function POST(
             shippingFee: number;
             shippingFeeOrderId: string | null;
         }[] = [];
-        const errors: string[] = [];
 
         for (const [buyerId, buyerOrders] of byBuyer) {
             try {
@@ -229,55 +322,62 @@ export async function POST(
                     .select('id')
                     .single<{ id: string }>();
 
+                let shipmentId: string;
+                let shipmentFeeThb = shippingSatang / 100;
                 if (shipmentErr || !shipment) {
-                    errors.push(`buyer ${buyerId}: shipment insert failed (${shipmentErr?.message})`);
-                    continue;
+                    // 23505 on the (stream_id, buyer_id) unique index: a
+                    // concurrent settle already created this buyer's shipment.
+                    // Adopt it — the shipment_id CAS and fee helper below are
+                    // both idempotent — instead of dropping the buyer.
+                    if (shipmentErr?.code !== '23505') {
+                        errors.push(`buyer ${buyerId}: shipment insert failed (${shipmentErr?.message})`);
+                        continue;
+                    }
+                    const { data: adopted } = await admin
+                        .from('shipments')
+                        .select('id, shipping_fee')
+                        .eq('stream_id', stream.id)
+                        .eq('buyer_id', buyerId)
+                        .maybeSingle<{ id: string; shipping_fee: number }>();
+                    if (!adopted) {
+                        errors.push(`buyer ${buyerId}: shipment conflict but refetch found none`);
+                        continue;
+                    }
+                    shipmentId = adopted.id;
+                    // The winner's stored quote is the binding one.
+                    shipmentFeeThb = adopted.shipping_fee;
+                } else {
+                    shipmentId = shipment.id;
                 }
 
                 // CAS on shipment_id IS NULL so a concurrent settle can't
                 // re-group an order into two parcels.
                 await admin
                     .from('orders')
-                    .update({ shipment_id: shipment.id })
+                    .update({ shipment_id: shipmentId })
                     .in('id', buyerOrders.map(o => o.id))
                     .is('shipment_id', null);
 
-                // The one shipping-fee order the buyer pays on-session later.
-                // Its own transfer_group keys the existing checkout + finalize
-                // rail; no platform fee on shipping (pass-through freight).
-                const { data: feeOrder, error: feeOrderErr } = await admin
-                    .from('orders')
-                    .insert({
-                        listing_id: null,
-                        buyer_id: buyerId,
-                        seller_id: stream.seller_id,
-                        status: 'pending_payment',
-                        total_amount: shippingSatang / 100,
-                        platform_fee: 0,
-                        shipping_fee: 0,
-                        escrow_status: 'held',
-                        payment_method: 'credit_card',
-                        transfer_group: `liveship_${shipment.id}`,
-                        stripe_region: sellerRegion,
-                    })
-                    .select('id')
-                    .single<{ id: string }>();
-
-                if (feeOrderErr || !feeOrder) {
-                    errors.push(`buyer ${buyerId}: fee order insert failed (${feeOrderErr?.message})`);
-                } else {
-                    await admin
-                        .from('shipments')
-                        .update({ shipping_fee_order_id: feeOrder.id })
-                        .eq('id', shipment.id);
+                // The one shipping-fee order the buyer pays on-session later
+                // (see ensureShippingFeeOrder for the idempotency contract).
+                let feeOrderId: string | null = null;
+                try {
+                    feeOrderId = await ensureShippingFeeOrder(
+                        admin,
+                        { id: shipmentId, buyer_id: buyerId, shipping_fee: shipmentFeeThb },
+                        stream.seller_id,
+                        sellerRegion,
+                    );
+                } catch (feeErr: any) {
+                    errors.push(`buyer ${buyerId}: ${feeErr?.message ?? feeErr}`);
                 }
 
                 createdShipments.push({
-                    id: shipment.id,
+                    id: shipmentId,
                     buyerId,
                     orders: buyerOrders.length,
-                    shippingFee: shippingSatang / 100,
-                    shippingFeeOrderId: feeOrder?.id ?? null,
+                    shippingFee: shipmentFeeThb,
+                    shippingFeeOrderId: feeOrderId,
                 });
             } catch (err: any) {
                 errors.push(`buyer ${buyerId}: ${err?.message ?? err}`);
@@ -294,10 +394,11 @@ export async function POST(
             success: errors.length === 0,
             shipments: createdShipments,
             skippedBuyers,
+            feeOrdersBackfilled,
             errors,
         });
     } catch (err: any) {
         console.error('[Live/Settle] error:', err);
-        return NextResponse.json({ error: err.message || 'Settle failed' }, { status: 500 });
+        return NextResponse.json({ error: 'Settle failed' }, { status: 500 });
     }
 }

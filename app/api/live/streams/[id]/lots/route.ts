@@ -207,6 +207,6 @@ export async function POST(
         return NextResponse.json({ success: true, lot, spotsCreated });
     } catch (err: any) {
         console.error('[Live/Lots] error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to create lot' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to create lot' }, { status: 500 });
     }
 }
