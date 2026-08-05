@@ -1594,6 +1594,20 @@ export default function HomePage() {
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
+                // Live-breaks App Link. Android intercepts ALL cardstreet.app
+                // URLs, so scanning the table-cam QR (or tapping a shared show
+                // link) opens the home shell and would drop the path. Navigate
+                // the WebView to the real /live/* page, KEEPING the fragment —
+                // the table-cam LiveKit token rides the #hash and must survive
+                // (it never leaves the device; fragments aren't sent to servers).
+                try {
+                    const appLink = new URL(data.url);
+                    if (appLink.protocol.startsWith('http') && appLink.pathname.startsWith('/live/')) {
+                        window.location.href = appLink.pathname + appLink.search + appLink.hash;
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Offer-email CTA App Link (cardstreet.app/?view=offers). Android
                 // intercepts all cardstreet.app URLs, so tapping the email button
                 // opens the app here. A deep-link open IS the user's tap, so

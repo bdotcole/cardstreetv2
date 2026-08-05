@@ -134,6 +134,36 @@ export default function BroadcastConsolePage() {
         void loadDetail();
     }, [streamId, loadDetail]);
 
+    // Tolerant re-sync used after a Realtime gap (backgrounded WebView,
+    // channel error). Unlike loadDetail it never flips pageState — a
+    // transient failure mid-show must not 404 the console.
+    const refetchDetail = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            setStream(data.stream);
+            setLots((data.items ?? []).sort((a: LiveLotRow, b: LiveLotRow) => a.position - b.position));
+            setSpots(data.spots ?? []);
+        } catch {
+            // Realtime (or the next visibility flip) will catch us up.
+        }
+    }, [streamId]);
+
+    // Capacitor WebView backgrounding kills sockets silently — the channel
+    // looks alive but rows were missed. Refetch on return to foreground.
+    useEffect(() => {
+        if (pageState !== 'ready') return;
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') void refetchDetail();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [pageState, refetchDetail]);
+
+    // Bumped to tear down + rebuild the Realtime channel after an error.
+    const [realtimeNonce, setRealtimeNonce] = useState(0);
+
     // ─── Chat: poll + realtime (see header comment) ───
     const loadChat = useCallback(async () => {
         try {
@@ -161,6 +191,7 @@ export default function BroadcastConsolePage() {
     useEffect(() => {
         if (pageState !== 'ready' || !streamId) return;
         const supabase = supabaseRef.current;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
         const channel = supabase
             .channel(`live-console-${streamId}`)
             .on(
@@ -196,11 +227,20 @@ export default function BroadcastConsolePage() {
                 { event: 'UPDATE', schema: 'public', table: 'streams', filter: `id=eq.${streamId}` },
                 (payload) => setStream((prev) => (prev ? { ...prev, ...(payload.new as LiveStreamRow) } : prev)),
             )
-            .subscribe();
+            .subscribe((status) => {
+                // A broken channel means silently missed rows: recover the
+                // gap with a refetch, then rebuild the channel via the nonce.
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    void refetchDetail();
+                    if (retryTimer) clearTimeout(retryTimer);
+                    retryTimer = setTimeout(() => setRealtimeNonce((n) => n + 1), 3000);
+                }
+            });
         return () => {
+            if (retryTimer) clearTimeout(retryTimer);
             supabase.removeChannel(channel);
         };
-    }, [pageState, streamId]);
+    }, [pageState, streamId, refetchDetail, realtimeNonce]);
 
     // ─── Go live (also the resume-camera path when already live) ───
     const goLive = useCallback(async () => {
@@ -230,6 +270,23 @@ export default function BroadcastConsolePage() {
             setGoingLive(false);
         }
     }, [goingLive, streamId, connect, publishCamera, showToast, t]);
+
+    // Camera-only retry for the live-but-not-publishing state (publishCamera
+    // failed after go-live, e.g. a denied permission the seller then granted).
+    // The Go live button is disabled once live + connected, so without this
+    // the seller would be stuck broadcasting a black screen.
+    const [retryingCamera, setRetryingCamera] = useState(false);
+    const retryCamera = useCallback(async () => {
+        if (retryingCamera) return;
+        setRetryingCamera(true);
+        try {
+            await publishCamera({ facingMode: 'user', audio: true });
+        } catch {
+            showToast(t('live.console.cameraError') || 'Could not access the camera', 'error');
+        } finally {
+            setRetryingCamera(false);
+        }
+    }, [retryingCamera, publishCamera, showToast, t]);
 
     // ─── Table-cam QR ───
     const openTableQr = useCallback(async () => {
@@ -508,7 +565,7 @@ export default function BroadcastConsolePage() {
                 <div className="flex flex-wrap items-center gap-3 mb-5">
                     <button
                         onClick={() => router.push('/live')}
-                        aria-label="Back"
+                        aria-label={t('live.common.back')}
                         className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center active:scale-90 transition-all"
                     >
                         <i className="fa-solid fa-chevron-left text-slate-400 text-sm"></i>
@@ -601,8 +658,21 @@ export default function BroadcastConsolePage() {
                                         <p className="text-xs text-slate-500">
                                             {isEnded
                                                 ? t('live.viewer.ended') || 'Show ended'
-                                                : t('live.console.notLiveYet') || 'Not live yet'}
+                                                : isLive
+                                                    ? t('live.console.noCamera')
+                                                    : t('live.console.notLiveYet') || 'Not live yet'}
                                         </p>
+                                        {isLive && connected && (
+                                            <button
+                                                onClick={() => void retryCamera()}
+                                                disabled={retryingCamera}
+                                                className={`${btnGhost} mt-3`}
+                                            >
+                                                {retryingCamera
+                                                    ? t('live.payment.processing') || 'Processing...'
+                                                    : t('live.console.retryCamera')}
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -623,7 +693,7 @@ export default function BroadcastConsolePage() {
                             </div>
                             <div className="flex items-center justify-between text-sm mt-2">
                                 <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                                    {t('live.console.spots') || 'Spots'}
+                                    {t('live.console.revenue')}
                                 </span>
                                 <span className="font-black text-brand-cyan">{formatSatang(revenueSatang)}</span>
                             </div>
@@ -683,7 +753,7 @@ export default function BroadcastConsolePage() {
                                             >
                                                 {PRODUCT_TYPES.map((pt) => (
                                                     <option key={pt} value={pt}>
-                                                        {pt}
+                                                        {t(`live.console.productTypes.${pt}`)}
                                                     </option>
                                                 ))}
                                             </select>
@@ -762,7 +832,7 @@ export default function BroadcastConsolePage() {
                                                     {lot.card_data?.name || '—'}
                                                 </p>
                                                 <span className="ml-auto shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                                                    {lot.status}
+                                                    {t(`live.console.lotStatus.${lot.status}`)}
                                                 </span>
                                             </div>
                                             <p className="text-[11px] text-slate-400 mt-0.5">
@@ -998,7 +1068,7 @@ export default function BroadcastConsolePage() {
                             <button
                                 onClick={() => void sendChat()}
                                 disabled={!chatInput.trim()}
-                                aria-label="Send"
+                                aria-label={t('live.common.send')}
                                 className="w-10 h-10 shrink-0 rounded-xl bg-brand-cyan text-brand-darker flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all"
                             >
                                 <i className="fa-solid fa-paper-plane text-sm"></i>

@@ -108,6 +108,15 @@ export function useLiveKitRoom() {
                 .on(RoomEvent.ParticipantDisconnected, syncFromRoom)
                 .on(RoomEvent.ParticipantMetadataChanged, syncFromRoom)
                 .on(RoomEvent.Disconnected, () => {
+                    // A dead Room must not linger in roomRef — connect()
+                    // early-returns while the ref is set, which would strand
+                    // the consumer on "Waiting for video" forever after one
+                    // network blip. Drop the listeners and the ref so the next
+                    // connect() builds a fresh Room; consumers reconnect off
+                    // `connected` flipping false.
+                    room.removeAllListeners();
+                    if (roomRef.current === room) roomRef.current = null;
+                    setLocalVideo(null);
                     setConnectionState(ConnectionState.Disconnected);
                     setRemoteFeeds({ video: {}, audio: [] });
                     setParticipantCount(0);

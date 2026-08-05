@@ -352,7 +352,7 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                             {spots.map((s) => (
                                 <div key={s.id} className="flex justify-between items-center text-sm">
                                     <span className="text-slate-400 font-bold">
-                                        {t('live.viewer.spotBoard') || 'Spot'} #{s.spotNumber}
+                                        {t('live.payment.spotLabel')} #{s.spotNumber}
                                     </span>
                                     <span className="text-slate-200 font-bold">{formatSatang(s.priceSatang)}</span>
                                 </div>

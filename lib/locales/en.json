@@ -961,7 +961,11 @@
             "release": "Release my spots",
             "released": "Holds released",
             "startError": "Could not start checkout",
-            "close": "Close"
+            "close": "Close",
+            "spotLabel": "Spot",
+            "redirectSucceeded": "Payment received — your spots will confirm shortly",
+            "redirectProcessing": "Payment is processing — your spots will confirm shortly",
+            "redirectFailed": "Payment failed — your spots were not confirmed"
         },
         "console": {
             "title": "Broadcast console",
@@ -1015,7 +1019,26 @@
             "loadError": "Could not load this show",
             "soldCount": "sold",
             "cancel": "Cancel",
-            "confirm": "Confirm"
+            "confirm": "Confirm",
+            "revenue": "Revenue",
+            "retryCamera": "Retry camera",
+            "noCamera": "Camera is not publishing",
+            "productTypes": {
+                "box": "Box",
+                "pack": "Pack",
+                "other": "Other"
+            },
+            "lotStatus": {
+                "queued": "Queued",
+                "active": "Active",
+                "sold": "Sold",
+                "unsold": "Unsold",
+                "cancelled": "Cancelled"
+            }
+        },
+        "common": {
+            "back": "Back",
+            "send": "Send"
         },
         "cam": {
             "live": "LIVE — table cam",

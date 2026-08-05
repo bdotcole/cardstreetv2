@@ -102,6 +102,10 @@ export default function LiveViewerPage() {
     const [flashSpots, setFlashSpots] = useState<Set<string>>(new Set());
     // 1s tick that drives the hold countdowns.
     const [now, setNow] = useState(() => Date.now());
+    // Bumped to tear down + rebuild the Realtime channel after an error.
+    const [realtimeNonce, setRealtimeNonce] = useState(0);
+    // LiveKit reconnect attempts since the last successful connection.
+    const [connectAttempt, setConnectAttempt] = useState(0);
 
     const supabaseRef = useRef(createClient());
     const { connect, connected, remoteFeeds, participantCount } = useLiveKitRoom();
@@ -148,12 +152,70 @@ export default function LiveViewerPage() {
         };
     }, [streamId]);
 
+    // Tolerant re-sync used after a Realtime gap (backgrounded WebView,
+    // channel error). Never flips pageState — a transient failure mid-show
+    // must not 404 the viewer; the next trigger catches us up.
+    const refetchDetail = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}`);
+            if (!res.ok) return;
+            const detail = await res.json();
+            setStream(detail.stream);
+            setLots(detail.items ?? []);
+            setSpots(detail.spots ?? []);
+        } catch {
+            // Realtime (or the next visibility flip) will catch us up.
+        }
+    }, [streamId]);
+
+    // Capacitor WebView backgrounding kills sockets silently — the channel
+    // looks alive but rows were missed. Refetch on return to foreground.
+    useEffect(() => {
+        if (pageState !== 'ready') return;
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') void refetchDetail();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [pageState, refetchDetail]);
+
+    // PromptPay (and other redirect-flow methods) bounce back to this page
+    // with ?payment_intent=...&redirect_status=... appended by Stripe. Surface
+    // the outcome, then strip the params — the webhook finalizes server-side
+    // and Realtime flips the board.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        const redirectStatus = params.get('redirect_status');
+        if (!redirectStatus) return;
+        if (redirectStatus === 'succeeded') {
+            showToast(t('live.payment.redirectSucceeded'), 'success');
+        } else if (redirectStatus === 'processing') {
+            showToast(t('live.payment.redirectProcessing'), 'success');
+        } else {
+            showToast(t('live.payment.redirectFailed'), 'error');
+        }
+        params.delete('redirect_status');
+        params.delete('payment_intent');
+        params.delete('payment_intent_client_secret');
+        const qs = params.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+        );
+        // Mount-only: the params exist only on the redirect landing.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // ─── Realtime: patch rows in place ───
     useEffect(() => {
         if (pageState !== 'ready' || !streamId) return;
         const supabase = supabaseRef.current;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
         const patchSpot = (row: LiveSpotRow) => {
+            if (!row?.id) return; // DELETE payloads carry an empty `new`
             // Randomizer result: assigned_packs appearing (or changing) is the
             // reveal moment — pulse the spot on the board. Compared against
             // CURRENT state, not payload.old — realtime only carries the PK in
@@ -222,17 +284,30 @@ export default function LiveViewerPage() {
                     setChat((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
                 },
             )
-            .subscribe();
+            .subscribe((status) => {
+                // A broken channel means silently missed rows: recover the
+                // gap with a refetch, then rebuild the channel via the nonce.
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    void refetchDetail();
+                    if (retryTimer) clearTimeout(retryTimer);
+                    retryTimer = setTimeout(() => setRealtimeNonce((n) => n + 1), 3000);
+                }
+            });
 
         return () => {
+            if (retryTimer) clearTimeout(retryTimer);
             supabase.removeChannel(channel);
         };
-    }, [pageState, streamId]);
+    }, [pageState, streamId, refetchDetail, realtimeNonce]);
 
-    // ─── LiveKit: join the room while the show is live ───
+    // ─── LiveKit: join the room while the show is live. Re-runs when
+    //     `connected` flips false (RoomEvent.Disconnected cleared the dead
+    //     room), so a network blip reconnects with a fresh token; outright
+    //     failures retry a few times with a short backoff. ───
     useEffect(() => {
         if (pageState !== 'ready' || stream?.status !== 'live' || connected) return;
         let cancelled = false;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
         (async () => {
             try {
                 const res = await fetch(`/api/live/streams/${streamId}/token`, {
@@ -246,12 +321,25 @@ export default function LiveViewerPage() {
                 await connect(data.url, data.token);
             } catch {
                 // Video is best-effort; chat + board still work without it.
+                // Retry a couple of times before settling for no video.
+                if (!cancelled && connectAttempt < 3) {
+                    retryTimer = setTimeout(
+                        () => setConnectAttempt((a) => a + 1),
+                        2000 * (connectAttempt + 1),
+                    );
+                }
             }
         })();
         return () => {
             cancelled = true;
+            if (retryTimer) clearTimeout(retryTimer);
         };
-    }, [pageState, stream?.status, streamId, connect, connected]);
+    }, [pageState, stream?.status, streamId, connect, connected, connectAttempt]);
+
+    // A successful connection re-arms the retry budget for the next blip.
+    useEffect(() => {
+        if (connected) setConnectAttempt(0);
+    }, [connected]);
 
     // ─── Public names for chat senders + sold-spot owners (fail-soft) ───
     const neededProfileIds = useMemo(() => {
@@ -277,7 +365,26 @@ export default function LiveViewerPage() {
         };
     }, [neededProfileIds]);
 
-    // ─── Hold countdown tick (only while something is held) ───
+    // ─── Derived: the lot on the block + its spots (the tick below needs
+    //     them, so they live above it) ───
+    const activeLot = useMemo(
+        () =>
+            lots.find((l) => l.id === stream?.current_item_id) ??
+            lots.find((l) => l.status === 'active') ??
+            null,
+        [lots, stream?.current_item_id],
+    );
+    const activeSpots = useMemo(
+        () =>
+            activeLot
+                ? spots
+                      .filter((s) => s.stream_item_id === activeLot.id)
+                      .sort((a, b) => a.spot_number - b.spot_number)
+                : [],
+        [spots, activeLot],
+    );
+
+    // ─── Hold countdown tick ───
     const myHeldSpots = useMemo(
         () =>
             spots.filter(
@@ -291,11 +398,20 @@ export default function LiveViewerPage() {
         [spots, myUserId, now],
     );
 
+    // Tick while ANY spot in the active lot is held — not only the current
+    // user's. Every viewer's board derives hold expiry from `now`, so a clock
+    // frozen at mount would leave an expired hold rendered as un-claimable
+    // amber forever for everyone who never held a spot themselves.
+    const anyHeldInActiveLot = useMemo(
+        () => activeSpots.some((s) => s.status === 'held'),
+        [activeSpots],
+    );
+
     useEffect(() => {
-        if (myHeldSpots.length === 0) return;
+        if (!anyHeldInActiveLot) return;
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
-    }, [myHeldSpots.length]);
+    }, [anyHeldInActiveLot]);
 
     // ─── Claim ───
     const claimSpot = useCallback(
@@ -401,22 +517,6 @@ export default function LiveViewerPage() {
     }, [chatInput, sending, streamId, showToast, t]);
 
     // ─── Derived ───
-    const activeLot = useMemo(
-        () =>
-            lots.find((l) => l.id === stream?.current_item_id) ??
-            lots.find((l) => l.status === 'active') ??
-            null,
-        [lots, stream?.current_item_id],
-    );
-    const activeSpots = useMemo(
-        () =>
-            activeLot
-                ? spots
-                      .filter((s) => s.stream_item_id === activeLot.id)
-                      .sort((a, b) => a.spot_number - b.spot_number)
-                : [],
-        [spots, activeLot],
-    );
     const openCount = activeSpots.filter((s) => s.status === 'open').length;
 
     const mainTrack = remoteFeeds.video.main ?? null;
@@ -508,7 +608,7 @@ export default function LiveViewerPage() {
             <button
                 onClick={() => void sendChat()}
                 disabled={sending || !chatInput.trim()}
-                aria-label="Send"
+                aria-label={t('live.common.send')}
                 className="w-11 h-11 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center disabled:opacity-40 active:scale-90 transition-all"
             >
                 <i className="fa-solid fa-paper-plane text-sm"></i>
@@ -699,7 +799,7 @@ export default function LiveViewerPage() {
         <div className="flex items-center gap-2.5">
             <button
                 onClick={() => router.push('/live')}
-                aria-label="Back"
+                aria-label={t('live.common.back')}
                 className="w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
             >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
