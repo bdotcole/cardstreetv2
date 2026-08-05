@@ -94,9 +94,16 @@ Deno.serve(async (req) => {
             // (2026-08-04) priced 6,733 EN rows, which is ~68 calls at limit=100.
             // 250 keeps ~3.7x headroom over that peak.
             //
-            // This cap is NOT what limits EN set coverage. Sets missing a
-            // justtcg_slug take the `[skip] No JustTCG mapping` path below, which
-            // costs zero API calls -- that mapping gap is the real constraint.
+            // This cap is NOT what limits EN set coverage, and neither are
+            // missing slugs (146 of 147 EN sets have a justtcg_slug; only `exu`
+            // lacks one, and it has no JustTCG counterpart). Coverage is bound by
+            // two other things: `dbSetIds` above is selected with NO .order(), so
+            // the same leading sets win every night, and the run is killed by wall
+            // clock (DELAY_MS between paginated calls) at roughly 60 of 147 sets
+            // before the EdgeRuntime.waitUntil task ends. The pre-2017 tail has
+            // therefore sat at its 2026-06-29 backfill stamp. The fix is the
+            // stalest-first ordering batch-price-games got in v11, not a bigger
+            // budget -- 60 sets is only ~180 calls, well under even this cap.
             const MAX_API_CALLS = 250;
 
             for (const dbSetId of dbSetIds) {
