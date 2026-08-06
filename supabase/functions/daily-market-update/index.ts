@@ -456,7 +456,14 @@ serve(async (req) => {
                                     if (enCard) {
                                         // Just pass the strict integer portion to JustTCG
                                         const cleanNum = enCard.number?.split('/')[0].replace(/[^0-9]/g, '');
-                                        const justTcgPriceEn = await fetchJustTCGPrice(enCard.name, 'en', undefined, cleanNum);
+                                        // Pin the English twin's SET. Without it JustTCG matches on
+                                        // name+number alone and returns whatever print shares the
+                                        // name -- usually a vintage one -- so a Thai common could
+                                        // inherit a Base Set holo's price (measured 100x-700x over,
+                                        // e.g. SV6-th Chandelure at 714x). fetchJustTCGPrice treats
+                                        // targetSet strictly: no set match returns null and the card
+                                        // falls through to the floor rather than a fabricated price.
+                                        const justTcgPriceEn = await fetchJustTCGPrice(enCard.name, 'en', enCard.set_id, cleanNum);
                                         
                                         if (justTcgPriceEn && justTcgPriceEn > 0) {
                                             calculatedPrice = justTcgPriceEn * 0.55 * 35.85; 
@@ -488,13 +495,14 @@ serve(async (req) => {
                                 } else {
                                     const { data: jpCard } = await supabase
                                         .from('pokemon_cards')
-                                        .select('name, number')
+                                        .select('name, set_id, number')
                                         .eq('id', mapping.card_id_jp)
                                         .single();
-    
+
                                     if (jpCard) {
                                         const cleanNum = jpCard.number?.split('/')[0].replace(/[^0-9]/g, '');
-                                        const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', undefined, cleanNum);
+                                        // Same set-pinning fix as the English branch above.
+                                        const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', jpCard.set_id, cleanNum);
                                         if (jpPrice) {
                                             calculatedPrice = Math.max(10, jpPrice * 0.8 * 0.23); 
                                             pricingMethod = 'jp_mapped_api';
