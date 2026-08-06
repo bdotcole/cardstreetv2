@@ -445,6 +445,7 @@
     "desktop": {
         "searchPlaceholder": "ค้นหาการ์ดด้วยชื่อ...",
         "navMarketplace": "ตลาด",
+        "navLive": "ไลฟ์",
         "navSets": "ชุดการ์ด",
         "navCollection": "คอลเลกชัน",
         "navSell": "ขาย",
@@ -913,7 +914,8 @@
             "creating": "กำลังสร้าง...",
             "createError": "สร้างรายการไม่สำเร็จ",
             "soon": "เร็วๆ นี้",
-            "refresh": "รีเฟรช"
+            "refresh": "รีเฟรช",
+            "myShows": "รายการของฉัน"
         },
         "myShows": {
             "menuTitle": "รายการไลฟ์",

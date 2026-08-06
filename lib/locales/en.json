@@ -445,6 +445,7 @@
     "desktop": {
         "searchPlaceholder": "Search cards by name...",
         "navMarketplace": "Marketplace",
+        "navLive": "Live",
         "navSets": "Sets",
         "navCollection": "Collection",
         "navSell": "Sell",
@@ -913,7 +914,8 @@
             "creating": "Scheduling...",
             "createError": "Could not create the show",
             "soon": "Upcoming",
-            "refresh": "Refresh"
+            "refresh": "Refresh",
+            "myShows": "My shows"
         },
         "myShows": {
             "menuTitle": "Live shows",

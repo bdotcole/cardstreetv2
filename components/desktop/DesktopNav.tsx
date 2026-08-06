@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
 import { sealedProductToCard } from '@/lib/sealedProduct';
@@ -19,6 +20,10 @@ export default function DesktopNav() {
     const router = useRouter();
     const pathname = usePathname();
     const { t, language } = useTranslation();
+    // Live Breaks beta: the nav item renders only with the 'live_streams'
+    // grant (fails closed — invisible to everyone else, matching the /live
+    // pages' no-hint posture).
+    const { hasBeta } = useBetaFeatures();
     const { updateLanguage } = useUserSettings();
     // Auth state comes from the cart provider — one shared subscription for
     // the whole desktop shell instead of one per component (multiple
@@ -208,6 +213,7 @@ export default function DesktopNav() {
                 <nav className="hidden lg:flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
                         ['/', t('desktop.navMarketplace')],
+                        ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
@@ -342,6 +348,7 @@ export default function DesktopNav() {
                     <nav className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-col text-sm font-bold">
                         {([
                             ['/', t('desktop.navMarketplace')],
+                            ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                             ['/sets', t('desktop.navSets')],
                             ['/sell', t('desktop.navSell')],
                             ['/orders', t('desktop.navOrders')],
