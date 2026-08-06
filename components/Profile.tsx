@@ -7,12 +7,13 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag
+  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio
 } from 'lucide-react';
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
+import MyLiveShows from './live/MyLiveShows';
 import StripeConnectSection from './StripeConnectSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import ThaiAddressFields from './ThaiAddressFields';
@@ -22,6 +23,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 
 interface ProfileProps {
@@ -146,7 +148,7 @@ interface Sale {
   };
 }
 
-type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers';
+type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
 
 const tierConfig = {
   bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
@@ -272,6 +274,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // App-level settings (theme); renamed to avoid clashing with the local
   // user_settings state below.
   const { settings: appSettings, updateTheme } = useUserSettings();
+  // Live-breaks beta (fails closed — no grant, no menu item, zero hint).
+  const { hasBeta } = useBetaFeatures();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const supabase = createClient();
@@ -904,6 +908,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         // nothing appears while the feature is dark.
         ...(process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1'
           ? [{ name: t('offer.menuTitle'), icon: Tag, panel: 'offers' as ActivePanel, color: 'text-brand-cyan' }]
+          : []),
+        // Live-breaks show manager. Beta-gated: renders only with the
+        // 'live_broadcast' grant (useBetaFeatures fails closed).
+        ...(hasBeta('live_broadcast')
+          ? [{ name: t('live.myShows.menuTitle'), icon: Radio, panel: 'liveShows' as ActivePanel, color: 'text-brand-red' }]
           : []),
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
         { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
@@ -1558,6 +1567,22 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 }}
               />
             </div>
+          </motion.div>
+        )}
+
+        {/* Live shows panel — the live-breaks show manager. Beta-gated twice:
+            the menu item above renders only with the 'live_broadcast' grant,
+            and MyLiveShows itself returns null without it. */}
+        {activePanel === 'liveShows' && (
+          <motion.div
+            key="liveShows"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+          >
+            <MyLiveShows onBack={() => setActivePanel('none')} />
           </motion.div>
         )}
 

@@ -2,14 +2,14 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
-import { createClient } from '@/lib/supabase/client';
+import { getGame, getGameLabel } from '@/lib/games';
 import type { LiveStreamRow } from '@/components/live/shared';
 
 /**
- * Live Breaks hub: live-now + upcoming grids from GET /api/live/streams.
+ * Live Breaks hub: a pure Whatnot-style joinable feed — live shows first,
+ * then upcoming. Every tile opens the VIEWER page; hosting and scheduling
+ * live in Profile > Live shows (components/live/MyLiveShows.tsx), not here.
  *
  * Access posture: the SERVER decides. A non-beta user's fetch 404s and this
  * page renders the same generic not-found block as app/not-found.tsx — no
@@ -44,47 +44,59 @@ function NotFoundBlock() {
     );
 }
 
-function StreamCard({
-    stream,
-    isOwn,
-}: {
-    stream: LiveStreamRow;
-    isOwn: boolean;
-}) {
-    const { t } = useTranslation();
-    const href = isOwn ? `/live/broadcast/${stream.id}` : `/live/${stream.id}`;
+function StreamTile({ stream }: { stream: LiveStreamRow }) {
+    const { t, isThai } = useTranslation();
     const isLive = stream.status === 'live';
+    // Cover fallback: the game's brand gradient + localized game name — every
+    // tile reads as SOMETHING even before sellers upload cover art.
+    const game = getGame(stream.game_id);
     return (
         <Link
-            href={href}
+            href={`/live/${stream.id}`}
             className="block glass rounded-2xl border-white/10 overflow-hidden active:scale-[0.98] transition-all"
         >
-            <div className="relative aspect-video bg-slate-800">
+            <div className="relative aspect-[3/4] bg-slate-800">
                 {stream.cover_image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                         src={stream.cover_image_url}
                         alt=""
+                        loading="lazy"
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <i className="fa-solid fa-tower-broadcast text-slate-600 text-3xl"></i>
+                    <div
+                        className={`w-full h-full bg-gradient-to-br ${game.gradient} flex items-center justify-center px-3`}
+                    >
+                        <span className="text-white/90 text-sm font-black uppercase tracking-widest text-center leading-snug drop-shadow">
+                            {stream.game_id
+                                ? getGameLabel(stream.game_id, isThai ? 'th' : 'en')
+                                : ''}
+                        </span>
+                        {!stream.game_id && (
+                            <i className="fa-solid fa-tower-broadcast text-white/60 text-3xl"></i>
+                        )}
                     </div>
                 )}
                 {isLive ? (
                     <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-brand-red text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
                         {t('live.viewer.live') || 'LIVE'}
+                        {stream.viewer_peak > 0 && (
+                            <span>
+                                <i className="fa-solid fa-eye mr-1 text-[8px]"></i>
+                                {stream.viewer_peak}
+                            </span>
+                        )}
                     </span>
                 ) : (
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-slate-200 text-[10px] font-black uppercase tracking-widest">
-                        {t('live.viewer.scheduled') || 'Scheduled'}
-                    </span>
-                )}
-                {isOwn && (
-                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-brand-cyan text-brand-darker text-[10px] font-black uppercase tracking-widest">
-                        {t('live.hub.manage') || 'Console'}
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-slate-100 text-[10px] font-black uppercase tracking-widest">
+                        {t('live.hub.soon') || 'Upcoming'}
+                        {stream.scheduled_at &&
+                            ` · ${new Date(stream.scheduled_at).toLocaleString(
+                                isThai ? 'th-TH' : undefined,
+                                { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                            )}`}
                     </span>
                 )}
             </div>
@@ -102,16 +114,6 @@ function StreamCard({
                         <i className="fa-solid fa-circle-user"></i>
                     )}
                     <span className="truncate">{stream.seller?.display_name || '—'}</span>
-                    {!isLive && stream.scheduled_at && (
-                        <span className="ml-auto shrink-0">
-                            {new Date(stream.scheduled_at).toLocaleString(undefined, {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                            })}
-                        </span>
-                    )}
                 </div>
             </div>
         </Link>
@@ -120,16 +122,8 @@ function StreamCard({
 
 export default function LiveHubPage() {
     const { t } = useTranslation();
-    const router = useRouter();
-    const { hasBeta } = useBetaFeatures();
     const [feed, setFeed] = useState<FeedState>({ name: 'loading' });
-    const [myUserId, setMyUserId] = useState<string | null>(null);
-
-    // Host-a-show mini form (broadcaster grant only).
-    const [showHostForm, setShowHostForm] = useState(false);
-    const [showTitle, setShowTitle] = useState('');
-    const [creating, setCreating] = useState(false);
-    const [createError, setCreateError] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -149,32 +143,17 @@ export default function LiveHubPage() {
 
     useEffect(() => {
         void load();
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => setMyUserId(data.user?.id ?? null));
     }, [load]);
 
-    const createShow = useCallback(async () => {
-        if (showTitle.trim().length < 3 || creating) return;
-        setCreating(true);
-        setCreateError(null);
+    const refresh = useCallback(async () => {
+        if (refreshing) return;
+        setRefreshing(true);
         try {
-            const res = await fetch('/api/live/streams', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: showTitle.trim() }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                setCreateError(data.error || t('live.hub.createError') || 'Could not create the show');
-                return;
-            }
-            router.push(`/live/broadcast/${data.stream.id}`);
-        } catch {
-            setCreateError(t('live.hub.createError') || 'Could not create the show');
+            await load();
         } finally {
-            setCreating(false);
+            setRefreshing(false);
         }
-    }, [showTitle, creating, router, t]);
+    }, [refreshing, load]);
 
     if (feed.name === 'denied') {
         return (
@@ -185,6 +164,8 @@ export default function LiveHubPage() {
     }
 
     const streams = feed.name === 'ready' ? feed.streams : [];
+    // The API already orders live-first; keep the two groups visually
+    // distinct anyway (LIVE section, then Upcoming).
     const liveNow = streams.filter((s) => s.status === 'live');
     const upcoming = streams.filter((s) => s.status === 'scheduled');
 
@@ -202,41 +183,17 @@ export default function LiveHubPage() {
                     <h1 className="text-2xl font-black tracking-tight uppercase italic skew-x-[-10deg]">
                         {t('live.hub.title') || 'Live Breaks'}
                     </h1>
-                    {hasBeta('live_broadcast') && (
-                        <button
-                            onClick={() => setShowHostForm((v) => !v)}
-                            className="ml-auto px-4 h-10 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
-                        >
-                            {t('live.hub.hostShow') || 'Host a show'}
-                        </button>
-                    )}
+                    <button
+                        onClick={() => void refresh()}
+                        disabled={refreshing || feed.name === 'loading'}
+                        aria-label={t('live.hub.refresh') || 'Refresh'}
+                        className="ml-auto inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center active:scale-90 transition-all disabled:opacity-50"
+                    >
+                        <i
+                            className={`fa-solid fa-rotate-right text-slate-300 text-sm ${refreshing ? 'animate-spin' : ''}`}
+                        ></i>
+                    </button>
                 </div>
-
-                {showHostForm && (
-                    <div className="glass rounded-2xl border-white/10 p-4 mb-6">
-                        <label className="block text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">
-                            {t('live.hub.showTitle') || 'Show title'}
-                        </label>
-                        <div className="flex gap-2">
-                            <input
-                                value={showTitle}
-                                onChange={(e) => setShowTitle(e.target.value)}
-                                maxLength={120}
-                                className="flex-1 h-11 rounded-xl bg-black/30 border border-white/10 px-3 text-sm text-white outline-none focus:border-brand-cyan/50"
-                            />
-                            <button
-                                onClick={createShow}
-                                disabled={creating || showTitle.trim().length < 3}
-                                className="px-4 h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest disabled:opacity-40 active:scale-95 transition-all"
-                            >
-                                {creating
-                                    ? t('live.hub.creating') || 'Scheduling...'
-                                    : t('live.hub.create') || 'Schedule'}
-                            </button>
-                        </div>
-                        {createError && <p className="text-xs text-brand-red mt-2">{createError}</p>}
-                    </div>
-                )}
 
                 {feed.name === 'loading' && (
                     <div className="min-h-[40vh] flex items-center justify-center">
@@ -278,9 +235,9 @@ export default function LiveHubPage() {
                                     <span className="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span>
                                     {t('live.hub.liveNow') || 'Live now'}
                                 </h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                     {liveNow.map((s) => (
-                                        <StreamCard key={s.id} stream={s} isOwn={s.seller_id === myUserId} />
+                                        <StreamTile key={s.id} stream={s} />
                                     ))}
                                 </div>
                             </section>
@@ -291,9 +248,9 @@ export default function LiveHubPage() {
                                 <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-3">
                                     {t('live.hub.upcoming') || 'Upcoming'}
                                 </h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                     {upcoming.map((s) => (
-                                        <StreamCard key={s.id} stream={s} isOwn={s.seller_id === myUserId} />
+                                        <StreamTile key={s.id} stream={s} />
                                     ))}
                                 </div>
                             </section>

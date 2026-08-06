@@ -911,7 +911,32 @@
             "showTitle": "Show title",
             "create": "Schedule",
             "creating": "Scheduling...",
-            "createError": "Could not create the show"
+            "createError": "Could not create the show",
+            "soon": "Upcoming",
+            "refresh": "Refresh"
+        },
+        "myShows": {
+            "menuTitle": "Live shows",
+            "title": "My live shows",
+            "schedule": "Schedule",
+            "game": "Game",
+            "when": "Start time",
+            "visibility": "Visibility",
+            "public": "Public",
+            "unlisted": "Unlisted (link only)",
+            "unlistedChip": "Unlisted",
+            "empty": "No shows yet — schedule your first one",
+            "loadError": "Could not load your shows",
+            "openConsole": "Open console",
+            "cancelShow": "Cancel",
+            "confirmCancel": "Tap again to confirm",
+            "cancelError": "Could not cancel the show",
+            "status": {
+                "scheduled": "Scheduled",
+                "live": "LIVE",
+                "ended": "Ended",
+                "cancelled": "Cancelled"
+            }
         },
         "viewer": {
             "live": "LIVE",
@@ -980,8 +1005,17 @@
             "settleDone": "Settlement complete",
             "shipmentsCreated": "shipments created",
             "cameraError": "Could not access the camera",
+            "cameraDenied": "Camera permission denied — allow camera access in your browser and retry",
+            "noCameraFound": "No camera found — connect a camera and retry",
+            "preview": "Preview",
+            "previewStarting": "Starting camera...",
+            "inAppTitle": "Broadcasting from the app isn't available yet",
+            "inAppDesc": "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual.",
+            "copyLink": "Copy console link",
+            "linkCopied": "Link copied",
+            "copyError": "Could not copy the link",
             "tableCam": "Table cam",
-            "tableCamHint": "Scan with your second phone to publish the overhead table camera. The link contains a private token — do not share it.",
+            "tableCamHint": "Scan with your second phone's camera — the table cam opens in your browser. The link contains a private token — do not share it.",
             "tableCamError": "Could not create the table-cam link",
             "lots": "Lot queue",
             "addLot": "Add lot",
@@ -1047,7 +1081,11 @@
             "stop": "Stop",
             "stopped": "Camera stopped",
             "cameraError": "Could not access the rear camera",
-            "connectError": "Could not connect to the stream"
+            "connectError": "Could not connect to the stream",
+            "inAppTitle": "Open this link in Chrome to use your phone as a camera",
+            "inAppDesc": "The app cannot access the camera for broadcasting yet — the browser can.",
+            "openInBrowser": "Open in browser",
+            "copyLink": "Copy link"
         },
         "types": {
             "personal_break": "Personal break",

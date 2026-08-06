@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { TrackVideo } from '@/components/live/TrackVideo';
+import { isNativeShell, openInSystemBrowser } from '@/components/live/shared';
 
 /**
  * The TABLE CAM: the broadcaster's second phone, launched by scanning the
@@ -17,18 +18,29 @@ import { TrackVideo } from '@/components/live/TrackVideo';
  * closes. The page deliberately fetches nothing.
  */
 
-type CamState = 'connecting' | 'live' | 'invalid' | 'error' | 'stopped';
+type CamState = 'connecting' | 'live' | 'invalid' | 'error' | 'stopped' | 'inapp';
 
 export default function TableCamPage() {
     const { t } = useTranslation();
     const [state, setState] = useState<CamState>('connecting');
     const [errorKey, setErrorKey] = useState<'connectError' | 'cameraError'>('connectError');
+    const [copyResult, setCopyResult] = useState<'copied' | 'failed' | null>(null);
     const { connect, disconnect, publishCamera, localVideo } = useLiveKitRoom();
     const startedRef = useRef(false);
 
     useEffect(() => {
         if (startedRef.current) return; // StrictMode double-invoke guard
         startedRef.current = true;
+
+        // The Capacitor WebView cannot grant getUserMedia (the binary carries
+        // no camera permission) — don't attempt it; hand off to a real
+        // browser. location.href keeps the FULL url including the #fragment,
+        // so the LiveKit token survives the copy/open handoff without ever
+        // leaving the device.
+        if (isNativeShell()) {
+            setState('inapp');
+            return;
+        }
 
         const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
         const params = new URLSearchParams(hash);
@@ -60,6 +72,15 @@ export default function TableCamPage() {
     const stop = async () => {
         await disconnect();
         setState('stopped');
+    };
+
+    const copyLink = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setCopyResult('copied');
+        } catch {
+            setCopyResult('failed');
+        }
     };
 
     return (
@@ -118,6 +139,45 @@ export default function TableCamPage() {
                         <>
                             <i className="fa-solid fa-video-slash text-slate-600 text-3xl mb-4"></i>
                             <p className="text-sm text-slate-300">{t('live.cam.stopped') || 'Camera stopped'}</p>
+                        </>
+                    )}
+                    {state === 'inapp' && (
+                        <>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-brand-cyan text-3xl mb-4"></i>
+                            <p className="text-sm font-bold text-white leading-relaxed">
+                                {t('live.cam.inAppTitle') ||
+                                    'Open this link in Chrome to use your phone as a camera'}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                                {t('live.cam.inAppDesc') ||
+                                    'The app cannot access the camera for broadcasting yet — the browser can.'}
+                            </p>
+                            <div className="mt-5 w-full max-w-[280px] space-y-2">
+                                <button
+                                    onClick={() => void openInSystemBrowser(window.location.href)}
+                                    className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    <i className="fa-solid fa-arrow-up-right-from-square mr-2"></i>
+                                    {t('live.cam.openInBrowser') || 'Open in browser'}
+                                </button>
+                                <button
+                                    onClick={() => void copyLink()}
+                                    className="w-full h-12 rounded-xl bg-white/10 text-slate-200 text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    <i className="fa-solid fa-copy mr-2"></i>
+                                    {t('live.cam.copyLink') || 'Copy link'}
+                                </button>
+                            </div>
+                            {copyResult === 'copied' && (
+                                <p className="text-[11px] text-brand-green mt-3">
+                                    {t('live.console.linkCopied') || 'Link copied'}
+                                </p>
+                            )}
+                            {copyResult === 'failed' && (
+                                <p className="text-[11px] text-brand-red mt-3">
+                                    {t('live.console.copyError') || 'Could not copy the link'}
+                                </p>
+                            )}
                         </>
                     )}
                 </div>

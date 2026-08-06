@@ -10,6 +10,7 @@ import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { TrackVideo } from '@/components/live/TrackVideo';
 import {
     formatSatang,
+    isNativeShell,
     type LiveChatMessage,
     type LiveLotRow,
     type LiveSpotRow,
@@ -41,6 +42,24 @@ const BREAK_TYPES = [
 type BreakType = (typeof BREAK_TYPES)[number];
 
 const PRODUCT_TYPES = ['box', 'pack', 'other'] as const;
+
+type CameraIssue = 'denied' | 'notfound' | 'other';
+
+/** Map a getUserMedia failure to a message the seller can act on. */
+function classifyCameraError(err: unknown): CameraIssue {
+    const name = (err as { name?: string } | null)?.name ?? '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+        return 'denied';
+    }
+    if (
+        name === 'NotFoundError' ||
+        name === 'DevicesNotFoundError' ||
+        name === 'OverconstrainedError'
+    ) {
+        return 'notfound';
+    }
+    return 'other';
+}
 
 interface ConfirmState {
     message: string;
@@ -111,8 +130,41 @@ export default function BroadcastConsolePage() {
     const [creatingLot, setCreatingLot] = useState(false);
 
     const supabaseRef = useRef(createClient());
-    const { connect, connected, publishCamera, localVideo, participantCount, disconnect } =
-        useLiveKitRoom();
+    const {
+        connect,
+        connected,
+        publishCamera,
+        startPreview,
+        stopPreview,
+        localVideo,
+        participantCount,
+        disconnect,
+    } = useLiveKitRoom();
+
+    // Native Capacitor shell: the binary carries no camera permission, so
+    // broadcasting is browser-only. Resolved in an effect so SSR and the
+    // first client paint agree (same pattern as PremiumHub).
+    const [isNativeApp, setIsNativeApp] = useState(false);
+    useEffect(() => { setIsNativeApp(isNativeShell()); }, []);
+
+    const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
+    const [previewStarting, setPreviewStarting] = useState(false);
+
+    const cameraIssueText = useCallback(
+        (issue: CameraIssue): string => {
+            if (issue === 'denied') {
+                return (
+                    t('live.console.cameraDenied') ||
+                    'Camera permission denied — allow camera access in your browser and retry'
+                );
+            }
+            if (issue === 'notfound') {
+                return t('live.console.noCameraFound') || 'No camera found — connect one and retry';
+            }
+            return t('live.console.cameraError') || 'Could not access the camera';
+        },
+        [t],
+    );
 
     // ─── Load ───
     const loadDetail = useCallback(async () => {
@@ -242,6 +294,51 @@ export default function BroadcastConsolePage() {
         };
     }, [pageState, streamId, refetchDetail, realtimeNonce]);
 
+    // ─── Camera preview (before go-live) ───
+    // The camera is requested the moment the console is usable so the seller
+    // sees themselves and resolves the permission prompt EARLY — not in the
+    // middle of pressing Go live. Skipped in the native app (no camera
+    // permission in the binary) and once the show has ended.
+    const beginPreview = useCallback(async () => {
+        if (previewStarting) return;
+        setPreviewStarting(true);
+        try {
+            await startPreview({ facingMode: 'user', audio: true });
+            setCameraIssue(null);
+        } catch (err) {
+            setCameraIssue(classifyCameraError(err));
+        } finally {
+            setPreviewStarting(false);
+        }
+    }, [previewStarting, startPreview]);
+
+    useEffect(() => {
+        if (pageState !== 'ready' || isNativeApp) return;
+        const status = stream?.status;
+        if (!status || status === 'ended' || status === 'cancelled') return;
+        void beginPreview();
+        // localVideo/connected are deliberately not deps: the hook no-ops when
+        // a preview or room already owns the camera, and a denied prompt must
+        // not re-fire on every render — retry is the seller's button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pageState, isNativeApp, stream?.status]);
+
+    // The show ending (locally or via realtime) releases the previewed camera.
+    useEffect(() => {
+        if (stream?.status === 'ended' || stream?.status === 'cancelled') stopPreview();
+    }, [stream?.status, stopPreview]);
+
+    // In-app broadcasters copy the console URL and reopen it in Chrome.
+    const copyConsoleLink = useCallback(async () => {
+        const link = `${window.location.origin}/live/broadcast/${streamId}`;
+        try {
+            await navigator.clipboard.writeText(link);
+            showToast(t('live.console.linkCopied') || 'Link copied', 'success');
+        } catch {
+            showToast(t('live.console.copyError') || 'Could not copy the link', 'error');
+        }
+    }, [streamId, showToast, t]);
+
     // ─── Go live (also the resume-camera path when already live) ───
     const goLive = useCallback(async () => {
         if (goingLive) return;
@@ -260,16 +357,20 @@ export default function BroadcastConsolePage() {
             setStream((prev) => (prev ? { ...prev, status: 'live' } : prev));
             await connect(data.url, data.token);
             try {
+                // Adopts the preview's tracks when they're up (no re-prompt).
                 await publishCamera({ facingMode: 'user', audio: true });
-            } catch {
-                showToast(t('live.console.cameraError') || 'Could not access the camera', 'error');
+                setCameraIssue(null);
+            } catch (err) {
+                const issue = classifyCameraError(err);
+                setCameraIssue(issue);
+                showToast(cameraIssueText(issue), 'error');
             }
         } catch {
             showToast(t('live.console.goLiveError') || 'Could not go live', 'error');
         } finally {
             setGoingLive(false);
         }
-    }, [goingLive, streamId, connect, publishCamera, showToast, t]);
+    }, [goingLive, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
 
     // Camera-only retry for the live-but-not-publishing state (publishCamera
     // failed after go-live, e.g. a denied permission the seller then granted).
@@ -281,12 +382,15 @@ export default function BroadcastConsolePage() {
         setRetryingCamera(true);
         try {
             await publishCamera({ facingMode: 'user', audio: true });
-        } catch {
-            showToast(t('live.console.cameraError') || 'Could not access the camera', 'error');
+            setCameraIssue(null);
+        } catch (err) {
+            const issue = classifyCameraError(err);
+            setCameraIssue(issue);
+            showToast(cameraIssueText(issue), 'error');
         } finally {
             setRetryingCamera(false);
         }
-    }, [retryingCamera, publishCamera, showToast, t]);
+    }, [retryingCamera, publishCamera, cameraIssueText, showToast]);
 
     // ─── Table-cam QR ───
     const openTableQr = useCallback(async () => {
@@ -646,29 +750,59 @@ export default function BroadcastConsolePage() {
                     <div className="space-y-4">
                         <div className={sectionCls}>
                             <div className="relative aspect-[9/12] bg-black rounded-xl overflow-hidden">
-                                {localVideo ? (
-                                    <TrackVideo
-                                        track={localVideo}
-                                        mirror
-                                        className="absolute inset-0 w-full h-full object-cover"
-                                    />
+                                {isNativeApp && !isEnded ? (
+                                    /* The binary has no camera permission — a dead
+                                       viewfinder here would read as a bug. Hand off
+                                       to a real browser instead. */
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-5">
+                                        <i className="fa-solid fa-arrow-up-right-from-square text-brand-cyan text-2xl mb-3"></i>
+                                        <p className="text-sm font-bold text-white leading-snug">
+                                            {t('live.console.inAppTitle') ||
+                                                "Broadcasting from the app isn't available yet"}
+                                        </p>
+                                        <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                                            {t('live.console.inAppDesc') ||
+                                                "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual."}
+                                        </p>
+                                        <button onClick={() => void copyConsoleLink()} className={`${btnGhost} mt-4`}>
+                                            <i className="fa-solid fa-copy mr-1.5"></i>
+                                            {t('live.console.copyLink') || 'Copy console link'}
+                                        </button>
+                                    </div>
+                                ) : localVideo ? (
+                                    <>
+                                        <TrackVideo
+                                            track={localVideo}
+                                            mirror
+                                            className="absolute inset-0 w-full h-full object-cover"
+                                        />
+                                        {!connected && !isEnded && (
+                                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-slate-200 text-[10px] font-black uppercase tracking-widest">
+                                                {t('live.console.preview') || 'Preview'}
+                                            </span>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
                                         <i className="fa-solid fa-video-slash text-slate-600 text-2xl mb-3"></i>
-                                        <p className="text-xs text-slate-500">
+                                        <p className="text-xs text-slate-500 leading-relaxed">
                                             {isEnded
                                                 ? t('live.viewer.ended') || 'Show ended'
-                                                : isLive
-                                                    ? t('live.console.noCamera')
-                                                    : t('live.console.notLiveYet') || 'Not live yet'}
+                                                : cameraIssue
+                                                    ? cameraIssueText(cameraIssue)
+                                                    : previewStarting
+                                                        ? t('live.console.previewStarting') || 'Starting camera...'
+                                                        : isLive
+                                                            ? t('live.console.noCamera')
+                                                            : t('live.console.notLiveYet') || 'Not live yet'}
                                         </p>
-                                        {isLive && connected && (
+                                        {!isEnded && (cameraIssue || (isLive && connected)) && (
                                             <button
-                                                onClick={() => void retryCamera()}
-                                                disabled={retryingCamera}
+                                                onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                                disabled={retryingCamera || previewStarting}
                                                 className={`${btnGhost} mt-3`}
                                             >
-                                                {retryingCamera
+                                                {retryingCamera || previewStarting
                                                     ? t('live.payment.processing') || 'Processing...'
                                                     : t('live.console.retryCamera')}
                                             </button>

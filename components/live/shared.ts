@@ -93,3 +93,35 @@ export function formatCountdown(msLeft: number): string {
     const m = Math.floor(s / 60);
     return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/**
+ * The Capacitor shells mark themselves two ways: the CardStreetApp UA marker
+ * (Android ships it; iOS from 1.0.4) and the injected Capacitor bridge (all
+ * shells, including the pre-marker iOS binary). Same belt-and-suspenders
+ * detection as components/PremiumHub.tsx. The broadcast console needs this
+ * because the native binaries carry no camera permission — broadcasting must
+ * hand off to a real browser, while viewing/buying in-app is unaffected.
+ */
+export function isNativeShell(): boolean {
+    if (typeof window === 'undefined') return false;
+    if (navigator.userAgent.includes('CardStreetApp')) return true;
+    const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !!cap && (typeof cap.isNativePlatform === 'function' ? cap.isNativePlatform() : true);
+}
+
+/**
+ * Open a URL in a real browser from inside the native shell — the same
+ * Capacitor Browser (Custom Tab) + window.open('_system') fallback convention
+ * as components/StripeConnectSection.tsx's openStripeUrl. Camera pages must
+ * go through this: getUserMedia works in a Custom Tab (it's Chrome), never in
+ * the app WebView. URL fragments survive the handoff, so the table-cam's
+ * #-carried LiveKit token stays intact and off the wire.
+ */
+export async function openInSystemBrowser(url: string): Promise<void> {
+    try {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url });
+    } catch {
+        window.open(url, '_system');
+    }
+}

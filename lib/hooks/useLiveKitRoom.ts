@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ConnectionState,
+    LocalTrack,
     LocalVideoTrack,
     Participant,
     RemoteTrack,
@@ -48,6 +49,14 @@ export function useLiveKitRoom() {
     const [remoteFeeds, setRemoteFeeds] = useState<RemoteFeeds>({ video: {}, audio: [] });
     const [participantCount, setParticipantCount] = useState(0);
     const [localVideo, setLocalVideo] = useState<LocalVideoTrack | null>(null);
+
+    // Pre-join camera preview: tracks opened BEFORE any room exists so the
+    // broadcaster sees themselves (and clears the permission prompt) ahead of
+    // go-live. publishCamera() adopts these instead of re-opening the device.
+    const previewTracksRef = useRef<LocalTrack[]>([]);
+    const previewFacingRef = useRef<'user' | 'environment' | null>(null);
+    const previewInFlightRef = useRef(false);
+    const disposedRef = useRef(false);
 
     // Recomputed wholesale on every track/participant event rather than
     // incrementally patched — the event stream has re-orderings (metadata can
@@ -135,19 +144,97 @@ export function useLiveKitRoom() {
     );
 
     /**
+     * Open the camera + mic WITHOUT joining any room, for the pre-go-live
+     * preview. Throws the raw getUserMedia error (NotAllowedError /
+     * NotFoundError / ...) so the caller can show a specific message.
+     * Idempotent: no-ops when a preview is already up or a room owns the
+     * camera.
+     */
+    const startPreview = useCallback(
+        async (opts: { facingMode: 'user' | 'environment'; audio: boolean }) => {
+            if (previewInFlightRef.current) return;
+            if (previewTracksRef.current.length > 0 || roomRef.current) return;
+            previewInFlightRef.current = true;
+            try {
+                const tracks = await createLocalTracks({
+                    audio: opts.audio,
+                    video: { facingMode: opts.facingMode },
+                });
+                // The page unmounted (or a room appeared) while getUserMedia
+                // was pending — don't leave an orphaned camera lock.
+                if (disposedRef.current || roomRef.current) {
+                    for (const track of tracks) track.stop();
+                    return;
+                }
+                previewTracksRef.current = tracks;
+                previewFacingRef.current = opts.facingMode;
+                const video =
+                    (tracks.find((t) => t.kind === Track.Kind.Video) as
+                        | LocalVideoTrack
+                        | undefined) ?? null;
+                setLocalVideo(video);
+            } finally {
+                previewInFlightRef.current = false;
+            }
+        },
+        [],
+    );
+
+    const stopPreview = useCallback(() => {
+        for (const track of previewTracksRef.current) {
+            try {
+                track.stop();
+            } catch {
+                // Already stopped.
+            }
+        }
+        previewTracksRef.current = [];
+        previewFacingRef.current = null;
+        // Only clear the on-screen video when it was the preview's — a
+        // published camera keeps rendering through room teardown paths.
+        if (!roomRef.current) setLocalVideo(null);
+    }, []);
+
+    /**
      * Publish this device's camera (and optionally mic) into the room. The
      * publisher token already fixes which slot this device fills — the hook
      * only chooses which physical camera to open (front for the face cam,
-     * rear for the table cam).
+     * rear for the table cam). A running preview's tracks are ADOPTED when
+     * they match the requested camera, so go-live doesn't re-prompt or
+     * re-open the device; otherwise the preview is stopped first.
      */
     const publishCamera = useCallback(
         async (opts: { facingMode: 'user' | 'environment'; audio: boolean }) => {
             const room = roomRef.current;
             if (!room) throw new Error('Room is not connected');
-            const tracks = await createLocalTracks({
-                audio: opts.audio,
-                video: { facingMode: opts.facingMode },
-            });
+            let tracks: LocalTrack[];
+            if (
+                previewTracksRef.current.length > 0 &&
+                previewFacingRef.current === opts.facingMode
+            ) {
+                tracks = previewTracksRef.current;
+                previewTracksRef.current = [];
+                previewFacingRef.current = null;
+                if (!opts.audio) {
+                    tracks = tracks.filter((t) => {
+                        if (t.kind === Track.Kind.Audio) {
+                            try {
+                                t.stop();
+                            } catch {
+                                // Already stopped.
+                            }
+                            return false;
+                        }
+                        return true;
+                    });
+                }
+            } else {
+                stopPreview();
+                tracks = await createLocalTracks({
+                    audio: opts.audio,
+                    video: { facingMode: opts.facingMode },
+                });
+            }
             for (const track of tracks) {
                 await room.localParticipant.publishTrack(track);
             }
@@ -157,13 +244,24 @@ export function useLiveKitRoom() {
             setLocalVideo(video);
             return video;
         },
-        [],
+        [stopPreview],
     );
 
-    // The room must not outlive the page — a background WebRTC session keeps
-    // camera/mic locked and burns mobile battery.
+    // Neither the room nor a preview may outlive the page — a background
+    // WebRTC session (or an unpublished preview track) keeps camera/mic
+    // locked and burns mobile battery.
     useEffect(() => {
+        disposedRef.current = false;
         return () => {
+            disposedRef.current = true;
+            for (const track of previewTracksRef.current) {
+                try {
+                    track.stop();
+                } catch {
+                    // Already stopped.
+                }
+            }
+            previewTracksRef.current = [];
             void disconnect();
         };
     }, [disconnect]);
@@ -172,6 +270,8 @@ export function useLiveKitRoom() {
         connect,
         disconnect,
         publishCamera,
+        startPreview,
+        stopPreview,
         connectionState,
         connected: connectionState === ConnectionState.Connected,
         remoteFeeds,

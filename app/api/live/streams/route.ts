@@ -28,21 +28,49 @@ interface FeedRow {
     viewer_peak: number;
     created_at: string;
     seller: { display_name: string | null; avatar_url: string | null } | null;
+    // ?mine=1 only — the show manager needs these; the public feed never
+    // returns them.
+    visibility?: string;
+    ended_at?: string | null;
 }
 
-export async function GET() {
+const FEED_COLS =
+    'id, seller_id, title, description, cover_image_url, game_id, status, ' +
+    'scheduled_at, started_at, viewer_peak, created_at, ' +
+    'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)';
+
+export async function GET(req: Request) {
     try {
+        // ?mine=1 — the seller's own show manager (Profile > Live shows):
+        // ALL of the caller's streams regardless of status/visibility, gated
+        // on the broadcaster grant instead of the viewer grant.
+        if (new URL(req.url).searchParams.get('mine') === '1') {
+            const gate = await requireBeta('live_broadcast');
+            if (gate instanceof NextResponse) return gate;
+
+            const admin = createAdminClient();
+            const { data, error } = await admin
+                .from('streams')
+                .select(`${FEED_COLS}, visibility, ended_at`)
+                .eq('seller_id', gate.user.id)
+                .order('created_at', { ascending: false })
+                .limit(100)
+                .returns<FeedRow[]>();
+
+            if (error) {
+                console.error('[Live/Streams] mine query failed:', error.message);
+                return NextResponse.json({ error: 'Failed to load streams' }, { status: 500 });
+            }
+            return NextResponse.json({ streams: data ?? [] });
+        }
+
         const gate = await requireBeta('live_streams');
         if (gate instanceof NextResponse) return gate;
 
         const admin = createAdminClient();
         const { data, error } = await admin
             .from('streams')
-            .select(
-                'id, seller_id, title, description, cover_image_url, game_id, status, ' +
-                'scheduled_at, started_at, viewer_peak, created_at, ' +
-                'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)',
-            )
+            .select(FEED_COLS)
             .eq('visibility', 'public')
             .in('status', ['live', 'scheduled'])
             .limit(100)

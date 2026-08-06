@@ -1603,6 +1603,20 @@ export default function HomePage() {
                 try {
                     const appLink = new URL(data.url);
                     if (appLink.protocol.startsWith('http') && appLink.pathname.startsWith('/live/')) {
+                        // EXCEPT the table cam: it needs getUserMedia, which the
+                        // app WebView can never grant (the binary has no camera
+                        // permission) — navigating it in-app dead-ends the QR
+                        // scan. Send the FULL url (fragment intact — the LiveKit
+                        // token rides the #hash) to a real browser instead.
+                        if (appLink.pathname.startsWith('/live/cam/')) {
+                            try {
+                                const { Browser } = await import('@capacitor/browser');
+                                await Browser.open({ url: data.url });
+                            } catch {
+                                window.open(data.url, '_system');
+                            }
+                            return;
+                        }
                         window.location.href = appLink.pathname + appLink.search + appLink.hash;
                         return;
                     }
