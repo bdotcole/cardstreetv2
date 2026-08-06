@@ -70,6 +70,44 @@ Deno.serve(async (req) => {
                     .eq('language', 'en');
                 if (error) throw new Error(`DB query failed: ${error.message}`);
                 dbSetIds = (data ?? []).map((r: any) => r.id);
+
+                // Stalest-first ordering (the same fix batch-price-games got in
+                // v11): never-priced sets lead, then sets ordered by their oldest
+                // Raw_NM last_updated. Without this the unordered pokemon_sets
+                // heap order let the same ~60 leading sets win every night while
+                // the pre-2017 tail stayed frozen at its 2026-06-29 stamp.
+                // Pricing a set stamps it fresh, so the queue self-rotates.
+                try {
+                    const firstSeen: string[] = [];
+                    const seen = new Set<string>();
+                    for (let page = 0; page < 10; page++) {
+                        const { data: probe, error: probeErr } = await supabase
+                            .from('market_values')
+                            .select('last_updated, pokemon_cards!inner(set_id)')
+                            .eq('game', 'pokemon')
+                            .eq('language', 'en')
+                            .eq('condition', 'Raw_NM')
+                            .order('last_updated', { ascending: true })
+                            .range(page * 1000, page * 1000 + 999);
+                        if (probeErr) throw new Error(probeErr.message);
+                        for (const r of (probe ?? []) as any[]) {
+                            const sid = r.pokemon_cards?.set_id;
+                            if (sid && !seen.has(sid)) { seen.add(sid); firstSeen.push(sid); }
+                        }
+                        if (!probe || probe.length < 1000) break;
+                    }
+                    const known = new Set(dbSetIds);
+                    const ordered = [
+                        ...dbSetIds.filter((id) => !seen.has(id)), // never priced → most urgent
+                        ...firstSeen.filter((id) => known.has(id)), // then stalest first
+                    ];
+                    // Sets whose every row sits beyond the probe window are the
+                    // freshest — keep them, at the back, rather than dropping them.
+                    const orderedSet = new Set(ordered);
+                    dbSetIds = [...ordered, ...dbSetIds.filter((id) => !orderedSet.has(id))];
+                } catch (e) {
+                    console.warn('stalest-first probe failed; using default order:', (e as Error).message);
+                }
             }
             console.log(`[${jobId}] ${dbSetIds.length} English sets to price`);
 
@@ -109,33 +147,43 @@ Deno.serve(async (req) => {
             for (const dbSetId of dbSetIds) {
                 if (apiCalls >= MAX_API_CALLS) { console.log('[limit] API call limit reached'); break; }
 
-                const jtcgId = targetJustTCGId ?? dbSetIdMap[dbSetId] ?? null;
-                if (!jtcgId) {
+                const slugValue = targetJustTCGId ?? dbSetIdMap[dbSetId] ?? null;
+                if (!slugValue) {
                     console.warn(`[skip] No JustTCG mapping for "${dbSetId}"`);
                     continue;
                 }
+                // A config may map one DB set to SEVERAL JustTCG sets
+                // (comma-separated): JustTCG splits gallery subsets (Shiny
+                // Vault, Trainer/Galarian Gallery, Radiant Collection) into
+                // standalone sets, while our catalog keeps them as the parent
+                // set's letter-numbered rows (SV###/GG##/TG##/RC#).
+                const jtcgIds = String(slugValue).split(',').map((s) => s.trim()).filter(Boolean);
 
                 if (apiCalls > 0) await new Promise(r => setTimeout(r, DELAY_MS));
 
                 try {
-                    console.log(`[${apiCalls + 1}] ${dbSetId} → ${jtcgId}`);
+                    console.log(`[${apiCalls + 1}] ${dbSetId} → ${jtcgIds.join(' + ')}`);
 
                     // Paginate through ALL JustTCG results to get every card
                     // (sealed products come first and have number='N/A', cards appear later)
                     let allJtcgCards: any[] = [];
-                    let offset = 0;
                     const limit = 100;
-                    while (true) {
-                        const resp = await jtcgFetch(
-                            `/cards?game=pokemon&set=${encodeURIComponent(jtcgId)}&conditions=NM&include_price_history=false&limit=${limit}&offset=${offset}`
-                        );
-                        apiCalls++;
-                        const page: any[] = resp.data ?? [];
-                        allJtcgCards = allJtcgCards.concat(page);
-                        if (!resp.meta?.hasMore || page.length < limit) break;
-                        offset += limit;
+                    for (const jtcgId of jtcgIds) {
+                        let offset = 0;
+                        while (true) {
+                            const resp = await jtcgFetch(
+                                `/cards?game=pokemon&set=${encodeURIComponent(jtcgId)}&conditions=NM&include_price_history=false&limit=${limit}&offset=${offset}`
+                            );
+                            apiCalls++;
+                            const page: any[] = resp.data ?? [];
+                            allJtcgCards = allJtcgCards.concat(page);
+                            if (!resp.meta?.hasMore || page.length < limit) break;
+                            offset += limit;
+                            if (apiCalls >= MAX_API_CALLS) break;
+                            await new Promise(r => setTimeout(r, DELAY_MS));
+                        }
                         if (apiCalls >= MAX_API_CALLS) break;
-                        await new Promise(r => setTimeout(r, DELAY_MS));
+                        if (jtcgIds.length > 1) await new Promise(r => setTimeout(r, DELAY_MS));
                     }
 
                     // Filter out sealed products (they have number='N/A' or null)
@@ -143,7 +191,7 @@ Deno.serve(async (req) => {
                         (c: any) => c.number && c.number !== 'N/A'
                     );
 
-                    if (!jtcgCards.length) { console.warn(`  [empty] No single cards found for ${jtcgId}`); continue; }
+                    if (!jtcgCards.length) { console.warn(`  [empty] No single cards found for ${jtcgIds.join(' + ')}`); continue; }
 
 
                     // Fetch our DB cards for this set (number + name for matching)
