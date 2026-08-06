@@ -15,6 +15,19 @@ function sanitizeGame(v: any): GameId | null {
   return typeof v === 'string' && (SCAN_GAME_IDS as string[]).includes(v) ? (v as GameId) : null;
 }
 
+// The catalog stores Japanese as `language='ja'`; the scan pipeline, the client's
+// `languageHint` and the rest of the UI all use `'jp'`. EVERY catalog query below must
+// go through this — an unmapped 'jp' matches zero rows (all ~24k Japanese cards are
+// 'ja'), which silently sank tiers 1/1b/1c and the language-filtered pHash tier for
+// every Japanese card and left the unfiltered sweep as the only survivor.
+//
+// Unlike lib/catalogFields.ts:dbLanguage, null/unknown is preserved as null rather than
+// defaulting to 'en': here a missing language means "don't filter", not "English".
+function catalogLanguage(lang: string | null | undefined): string | null {
+  if (!lang || lang === 'other') return null;
+  return lang === 'jp' ? 'ja' : lang;
+}
+
 // Lazy-init both clients. createAdminClient throws at construction time when
 // SUPABASE_URL is empty (which is true during `next build` page-data collection
 // in environments without env vars). Lazy init defers that to the first
@@ -352,7 +365,7 @@ export const scannerService = {
     // Runs in parallel with the learned photo-hash index (user-confirmed scans of real
     // photos), whose matches are merged into the candidate pool below — a photo of a
     // card matches previous photos of it far better than it matches catalog art.
-    const langFilter = ocr?.language ?? null;
+    const langFilter = catalogLanguage(ocr?.language);
 
     const runRpc = (lang: string | null, game: string | null) =>
       supabase.rpc('search_pokemon_by_phash', {
@@ -428,9 +441,12 @@ export const scannerService = {
     // distances are spread, and the user sees the language chip in the UI.
     const ranked = [...rows].sort((a: any, b: any) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      if (opts.userLocale && opts.userLocale !== 'other') {
-        const al = a.language === opts.userLocale ? 0 : 1;
-        const bl = b.language === opts.userLocale ? 0 : 1;
+      // Row language is the DB code ('ja'); userLocale is the UI code ('jp'). Normalize
+      // before comparing or the tiebreaker silently never fires for Japanese collectors.
+      const locale = catalogLanguage(opts.userLocale);
+      if (locale) {
+        const al = a.language === locale ? 0 : 1;
+        const bl = b.language === locale ? 0 : 1;
         if (al !== bl) return al - bl;
       }
       return 0;
@@ -482,7 +498,8 @@ export const scannerService = {
 
     for (const applySetMatcher of setMatchers) {
       let q = applySetMatcher(supabase.from('pokemon_cards').select(select)).or(numberOr);
-      if (language) q = q.eq('language', language);
+      const dbLang = catalogLanguage(language);
+      if (dbLang) q = q.eq('language', dbLang);
       if (game) q = q.eq('game', game);
       const { data, error } = await q.limit(5);
       if (error) {
@@ -513,7 +530,7 @@ export const scannerService = {
       .from('pokemon_cards')
       .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
-      .eq('language', language);
+      .eq('language', catalogLanguage(language) ?? language);
     if (game) q = q.eq('game', game);
 
     if (cardNumber) {
@@ -552,7 +569,7 @@ export const scannerService = {
     let q = supabase
       .from('pokemon_cards')
       .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
-      .eq('language', language)
+      .eq('language', catalogLanguage(language) ?? language)
       .or(
         `number.eq.${numerator},number.eq.${stripped},number.ilike.${numerator}/%,number.ilike.${stripped}/%`,
       );
