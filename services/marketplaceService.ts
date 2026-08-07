@@ -129,9 +129,13 @@ export const marketplaceService = {
                     `)
                     .eq('status', 'active');
 
-                // Server-side search: filter by card name inside JSONB
+                // Server-side search inside the JSONB snapshot. Match the
+                // secondary name too: a Japanese card snapshots its printed
+                // Japanese name, with the English one in thaiName, so an
+                // English query would otherwise miss every JA listing.
                 if (search && search.trim().length > 0) {
-                    query = query.ilike('card_data->>name', `%${search.trim()}%`);
+                    const term = search.trim();
+                    query = query.or(`card_data->>name.ilike.%${term}%,card_data->>thaiName.ilike.%${term}%`);
                 }
 
                 // Server-side language filter. Japanese singles snapshot as 'ja'

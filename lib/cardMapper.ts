@@ -189,15 +189,24 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
     rawData.set?.printedTotal ||
     '??';
 
-  // English-first app: show the English card name for JP cards when we have one.
-  const displayName = (isPokemon && supabaseCard.language === 'ja' && supabaseCard.english_name)
-    ? supabaseCard.english_name
-    : supabaseCard.name;
+  // Show the name actually printed on the card; the English name rides in the
+  // secondary slot (CardDetails renders name as <h1> and thaiName as <h2>).
+  //
+  // a689cea substituted english_name here for JP Pokemon because the JA catalog
+  // then held English text — or machine translations like 金星 for Venusaur — in
+  // `name`. Real Japanese names landed 2026-08, so that override now hides the
+  // card's actual name and leaves both slots showing the same English string.
+  const displayName = supabaseCard.name;
+  // Only when it differs, so EN rows don't render the same text twice.
+  const secondaryName =
+    supabaseCard.english_name && supabaseCard.english_name !== supabaseCard.name
+      ? supabaseCard.english_name
+      : '';
 
   return {
     id: supabaseCard.id,
     name: displayName,
-    thaiName: supabaseCard.english_name || supabaseCard.name,
+    thaiName: secondaryName,
     set: setName,
     game,
     language: supabaseCard.language || 'en',

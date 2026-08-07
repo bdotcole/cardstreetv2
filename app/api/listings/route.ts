@@ -52,8 +52,12 @@ export async function GET(request: NextRequest) {
         .eq('status', 'active')
 
     // Server-side filters
+    // Match the secondary name too: a Japanese card snapshots its printed
+    // Japanese name, with the English one in thaiName, so an English query
+    // would otherwise miss every JA listing.
     if (search.trim()) {
-        query = query.ilike('card_data->>name', `%${search.trim()}%`)
+        const term = search.trim()
+        query = query.or(`card_data->>name.ilike.%${term}%,card_data->>thaiName.ilike.%${term}%`)
     }
     if (language && language !== 'all') {
         query = query.eq('card_data->>language', language)
