@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getGame, getGameLabel } from '@/lib/games';
 import type { LiveStreamRow } from '@/components/live/shared';
 
@@ -123,7 +122,6 @@ function StreamTile({ stream }: { stream: LiveStreamRow }) {
 
 export default function LiveHubPage() {
     const { t } = useTranslation();
-    const { hasBeta } = useBetaFeatures();
     const [feed, setFeed] = useState<FeedState>({ name: 'loading' });
     const [refreshing, setRefreshing] = useState(false);
 
@@ -195,16 +193,6 @@ export default function LiveHubPage() {
                             className={`fa-solid fa-rotate-right text-slate-300 text-sm ${refreshing ? 'animate-spin' : ''}`}
                         ></i>
                     </button>
-                    {/* Broadcasters only — everyone else gets zero hint the studio exists. */}
-                    {hasBeta('live_broadcast') && (
-                        <Link
-                            href="/live/studio"
-                            className="inline-flex h-10 px-3 rounded-xl glass border-white/10 items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-200 active:scale-95 transition-all"
-                        >
-                            <i className="fa-solid fa-tower-broadcast text-brand-cyan text-xs"></i>
-                            {t('live.hub.myShows') || 'My shows'}
-                        </Link>
-                    )}
                 </div>
 
                 {feed.name === 'loading' && (

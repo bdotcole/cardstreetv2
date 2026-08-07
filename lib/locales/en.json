@@ -914,8 +914,7 @@
             "creating": "Scheduling...",
             "createError": "Could not create the show",
             "soon": "Upcoming",
-            "refresh": "Refresh",
-            "myShows": "My shows"
+            "refresh": "Refresh"
         },
         "myShows": {
             "menuTitle": "Live shows",

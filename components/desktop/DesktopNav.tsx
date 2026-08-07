@@ -21,7 +21,8 @@ export default function DesktopNav() {
     const pathname = usePathname();
     const { t, language } = useTranslation();
     // Live Breaks beta: the nav item renders only with the 'live_streams'
-    // grant (fails closed — invisible to everyone else, matching the /live
+    // grant, and the account menu's studio entry only with 'live_broadcast'
+    // (both fail closed — invisible to everyone else, matching the /live
     // pages' no-hint posture).
     const { hasBeta } = useBetaFeatures();
     const { updateLanguage } = useUserSettings();
@@ -290,6 +291,17 @@ export default function DesktopNav() {
                                         <i className="fa-solid fa-vault mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.navCollection')}
                                     </Link>
+                                    {/* Certified breakers only — the feed itself carries no broadcaster entry points. */}
+                                    {hasBeta('live_broadcast') && (
+                                        <Link
+                                            href="/live/studio"
+                                            onClick={() => setMenuOpen(false)}
+                                            className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                                        >
+                                            <i className="fa-solid fa-tower-broadcast mr-2.5 text-slate-500 w-4 text-center"></i>
+                                            {t('live.myShows.menuTitle')}
+                                        </Link>
+                                    )}
                                     <Link
                                         href="/settings?tab=profile"
                                         onClick={() => setMenuOpen(false)}
@@ -374,6 +386,15 @@ export default function DesktopNav() {
                                 className="py-2.5 text-white hover:text-brand-cyan transition-colors"
                             >
                                 {t('desktop.navCollection')}
+                            </Link>
+                        )}
+                        {user && hasBeta('live_broadcast') && (
+                            <Link
+                                href="/live/studio"
+                                onClick={() => setMobileNavOpen(false)}
+                                className="py-2.5 text-white hover:text-brand-cyan transition-colors"
+                            >
+                                {t('live.myShows.menuTitle')}
                             </Link>
                         )}
                         <div className="flex items-center gap-3 pt-3 mt-1 border-t border-white/5">
