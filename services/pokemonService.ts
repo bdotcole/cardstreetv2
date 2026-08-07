@@ -401,18 +401,18 @@ export const pokemonService = {
             // "Mewtwo 51" still scores the "Mewtwo" print as an exact-name match.
             const effectiveNameQuery = useNumber && parsed.name.length > 0 ? parsed.name : cleanQuery;
 
-            let dbQuery = newScopedQuery();
-            if (hasSet) dbQuery = dbQuery.in('set_id', matchedSetIds);
-
+            // Build the name/number constraint once so every fetch below applies
+            // the identical filter. Multiple .or() groups on one query are ANDed
+            // by PostgREST: (name) AND (number).
+            const orGroups: string[] = [];
             if (useNumber) {
-                // Two .or() groups are ANDed by PostgREST: (name) AND (number).
                 if (parsed.name.length > 0) {
-                    dbQuery = dbQuery.or(`name.ilike.%${parsed.name}%,english_name.ilike.%${parsed.name}%`);
+                    orGroups.push(`name.ilike.%${parsed.name}%,english_name.ilike.%${parsed.name}%`);
                 }
-                dbQuery = dbQuery.or(parsed.numberOr!);
+                orGroups.push(parsed.numberOr!);
             } else if (hasSet) {
                 if (queryWithoutSet.length > 0) {
-                    dbQuery = dbQuery.or(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
+                    orGroups.push(`name.ilike.%${queryWithoutSet}%,english_name.ilike.%${queryWithoutSet}%`);
                 }
             } else {
                 // Fallback: check if the query is a partial set name. Leading-
@@ -425,10 +425,35 @@ export const pokemonService = {
                 if (partialSetIds.length > 0) {
                     orStr += `,set_id.in.(${partialSetIds.join(',')})`;
                 }
-                dbQuery = dbQuery.or(orStr);
+                orGroups.push(orStr);
             }
 
-            let { data: cards, error } = await dbQuery.limit(100);
+            // Popular names match far more rows than one fetch returns, and an
+            // unordered LIMIT truncates arbitrarily — "pikachu" matches 233 rows
+            // across en/th/ja and the arbitrary first 100 carried exactly one
+            // Japanese row. When no language filter is active, run small th/ja
+            // side-fetches in parallel with the main one and merge, so every
+            // language's printings survive to the scoring pass.
+            const runFetches = async (groups: string[], withSet: boolean) => {
+                const build = (scope?: 'ja' | 'th') => {
+                    let q = newScopedQuery();
+                    if (withSet && hasSet) q = q.in('set_id', matchedSetIds);
+                    if (scope) q = q.eq('language', scope);
+                    for (const g of groups) q = q.or(g);
+                    return q.limit(scope ? 30 : 100);
+                };
+                const scopes: Array<'ja' | 'th' | undefined> = dbLang ? [undefined] : [undefined, 'ja', 'th'];
+                const results = await Promise.all(scopes.map(s => build(s)));
+                const seen = new Map<string, any>();
+                for (const r of results) {
+                    for (const row of r.data || []) if (!seen.has(row.id)) seen.set(row.id, row);
+                }
+                // Only surface an error when it cost us the whole result set —
+                // a failed side-fetch shouldn't blank a working search.
+                return { rows: Array.from(seen.values()), error: seen.size === 0 ? results[0].error : null };
+            };
+
+            let { rows: cards, error } = await runFetches(orGroups, true);
 
             // A narrowed pass can zero out on a false positive: a matched "set"
             // can be a common word doubling as a set name ("Dragon" is Pokemon
@@ -437,12 +462,10 @@ export const pokemonService = {
             // narrowed pass finds nothing — broadening to the name alone (drop
             // the number) rather than re-matching the raw "name + number" string,
             // which never hits a card name.
-            if (!error && (!cards || cards.length === 0) && (hasSet || useNumber)) {
+            if (!error && cards.length === 0 && (hasSet || useNumber)) {
                 const retryName = useNumber && parsed.name.length >= 2 ? parsed.name : cleanQuery;
-                const retry = await newScopedQuery()
-                    .or(`name.ilike.%${retryName}%,english_name.ilike.%${retryName}%`)
-                    .limit(100);
-                if (!retry.error) cards = retry.data;
+                const retry = await runFetches([`name.ilike.%${retryName}%,english_name.ilike.%${retryName}%`], false);
+                if (!retry.error) cards = retry.rows;
             }
 
             if (error) {
@@ -461,11 +484,11 @@ export const pokemonService = {
                 (popularityData || []).map(p => [p.card_id, p.search_count])
             );
 
-            // Score results with popularity boost
-            const scoredResults = (cards || []).map(card => {
+            // Score a card against a query string; shared by the main pass and
+            // the cross-language alias pass below.
+            const scoreCard = (card: any, queryLower: string) => {
                 const nameLower = card.name?.toLowerCase() || '';
                 const englishLower = card.english_name?.toLowerCase() || '';
-                const queryLower = effectiveNameQuery;
 
                 // Extract root name (before any suffix like V, VMAX, EX, GX, etc.)
                 const suffixes = [' v', ' vmax', ' vstar', ' ex', ' gx', ' tag team', ' break', ' prime', '-v', '-ex', '-gx'];
@@ -523,20 +546,75 @@ export const pokemonService = {
                     const popularPokemon = [
                         'charizard', 'pikachu', 'mewtwo', 'rayquaza', 'lucario',
                         'eevee', 'gengar', 'dragonite', 'gyarados', 'garchomp',
-                        'ลิซาร์ดอน', 'ปิกาจู', 'มิวทู' // Thai names for popular Pokemon
+                        'ลิซาร์ดอน', 'พิคาชู', 'มิวทู' // Thai names for popular Pokemon (TCG spellings)
                     ];
                     if (popularPokemon.some(p => nameLower.includes(p) || englishLower.includes(p))) {
                         score += 30;
                     }
                 }
 
-                return { card, score };
-            });
+                return score;
+            };
 
-            // Sort by score descending and take top 30
-            const topResults = scoredResults
+            const scoredResults = (cards || []).map(card => ({ card, score: scoreCard(card, effectiveNameQuery) }));
+
+            // Cross-language alias pass: a query typed in Thai or Japanese only
+            // matches that language's `name` column — the English and other-
+            // language printings of the same card carry the English name. Resolve
+            // the query to English via the best direct hit, fetch on that alias,
+            // and fold the results in slightly below direct matches.
+            if (/[฀-๿぀-ヿ一-鿿]/.test(effectiveNameQuery) && scoredResults.length > 0 && !dbLang) {
+                // Best-scored row that actually carries an english_name — the
+                // overall best hit is often a print without one, which would
+                // silently disable the expansion.
+                const best = scoredResults
+                    .filter(s => (s.card.english_name || '').trim())
+                    .reduce((a, b) => (b.score > a.score ? b : a), { card: {} as any, score: 0 });
+                const alias = (best.card.english_name || '').trim();
+                if (alias && best.score >= 50) {
+                    const aliasLower = alias.toLowerCase();
+                    const extra = await runFetches([`name.ilike.%${alias}%,english_name.ilike.%${alias}%`], false);
+                    const haveIds = new Set(scoredResults.map(s => s.card.id));
+                    for (const row of extra.rows) {
+                        if (haveIds.has(row.id)) continue;
+                        // 0.9x: matched via translation, not the literal query.
+                        scoredResults.push({ card: row, score: Math.round(scoreCard(row, aliasLower) * 0.9) });
+                    }
+                }
+            }
+
+            // Sort by score and keep the top 30 — but guarantee genuine matches
+            // from every language survive the cut. Without this, 30 English
+            // printings of a popular name push every th/ja row off the list even
+            // though they scored as exact matches.
+            const sorted = scoredResults.sort((a, b) => b.score - a.score);
+            const top = sorted.slice(0, 30);
+            if (!dbLang) {
+                const MIN_PER_LANG = 2;
+                const countOf = (lang: string) => top.filter(r => r.card.language === lang).length;
+                // 'en' is in the list for the reverse direction: a Thai query for
+                // a popular card matches 30+ Thai prints outright, and the alias-
+                // expanded English/Japanese rows score just below them.
+                for (const lang of ['th', 'ja', 'en']) {
+                    const present = countOf(lang);
+                    if (present >= MIN_PER_LANG) continue;
+                    const inTop = new Set(top);
+                    const candidates = sorted
+                        .filter(r => r.card.language === lang && r.score >= 50 && !inTop.has(r))
+                        .slice(0, MIN_PER_LANG - present);
+                    for (const c of candidates) {
+                        if (top.length < 30) { top.push(c); continue; }
+                        // Evict the lowest-scored row of an OVER-represented
+                        // language only — evicting any non-`lang` row would let a
+                        // later pass clobber the rows an earlier pass swapped in.
+                        for (let i = top.length - 1; i >= 0; i--) {
+                            if (countOf(top[i].card.language) > MIN_PER_LANG) { top[i] = c; break; }
+                        }
+                    }
+                }
+            }
+            const topResults = top
                 .sort((a, b) => b.score - a.score)
-                .slice(0, 30)
                 .map(r => this.mapSupabaseCardToInternal(r.card));
 
             // Track search popularity for the top few results (learning!). Only

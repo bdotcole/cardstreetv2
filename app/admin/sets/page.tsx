@@ -752,7 +752,7 @@ function GlobalSetInboxPage() {
         
         // Multi-term omni-search: Every term must match at least one column (name, set_id, or number)
         terms.forEach(term => {
-            query = query.or(`name.ilike.%${term}%,set_id.ilike.%${term}%,number.ilike.%${term}%`)
+            query = query.or(`name.ilike.%${term}%,english_name.ilike.%${term}%,set_id.ilike.%${term}%,number.ilike.%${term}%`)
         })
 
         const { data } = await query.limit(150).order('set_id', { ascending: false })
