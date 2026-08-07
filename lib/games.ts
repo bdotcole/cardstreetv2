@@ -86,7 +86,12 @@ export const GAMES: GameConfig[] = [
     name: 'Yu-Gi-Oh!',
     shortName: 'Yu-Gi-Oh!',
     localizedName: { en: 'Yu-Gi-Oh!', th: 'ยูกิโอ' },
-    languages: [LANG_EN],
+    // EN first so it stays the default. The OCG (ja) catalog — 180 sets / 15.5k
+    // cards — was ingested after this entry was first written, and declaring it
+    // here is what makes those sets reachable from the language picker and what
+    // puts yugioh in multiLanguageGameIds (without it, an all-games search
+    // filtered to one language lets every yugioh row bypass the filter).
+    languages: [LANG_EN, LANG_JP],
     logoUrl: '/games/yugioh.png',
     gradient: 'from-[#3a1c71] to-[#1b1035]',
     textColor: 'text-white',

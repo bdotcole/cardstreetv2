@@ -11,9 +11,11 @@ import { Card } from '../types';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { GAMES } from '@/lib/games';
 
-// Games whose catalog spans more than one language (currently just Pokemon).
-// In all-games search mode, single-language catalogs bypass the UI-language
-// filter — their rows only exist in the game's default language.
+// Games whose catalog spans more than one language (pokemon en/ja/th, yugioh
+// and onepiece en/ja). In all-games search mode, single-language catalogs bypass
+// the UI-language filter — their rows only exist in the game's default language.
+// A game missing a language it actually stocks would wrongly bypass that filter,
+// so lib/games.ts must declare every language present in pokemon_cards.
 const multiLanguageGameIds = GAMES.filter(g => g.languages.length > 1).map(g => g.id);
 
 // Client-side search cache
