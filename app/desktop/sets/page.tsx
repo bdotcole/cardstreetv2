@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getAllSets } from '@/lib/setPageData';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import DesktopSetsBrowser from '@/components/desktop/DesktopSetsBrowser';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -28,6 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function DesktopSetsIndexPage() {
     const lang = await resolveLang();
     const sets = await getAllSets();
+    // Links and structured-data URLs follow the URL variant being served, not
+    // the cookie language: /en/sets must link to /en/sets/<id>, or the English
+    // tree dead-ends at depth 1.
+    const pathLocale = await requestPathLocale();
+    const prefix = localePrefix(pathLocale);
 
     // schema.org CollectionPage listing the newest sets (capped — the full
     // catalog is ~1k sets and the links are all server-rendered below anyway).
@@ -35,7 +40,7 @@ export default async function DesktopSetsIndexPage() {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
         name: 'Trading Card Sets',
-        url: `${BASE_URL}/sets`,
+        url: localizedUrl('/sets', pathLocale),
         isPartOf: { '@id': `${BASE_URL}/#website` },
         mainEntity: {
             '@type': 'ItemList',
@@ -43,7 +48,7 @@ export default async function DesktopSetsIndexPage() {
                 '@type': 'ListItem',
                 position: i + 1,
                 name: s.name,
-                url: `${BASE_URL}/sets/${s.id}`,
+                url: localizedUrl(`/sets/${s.id}`, pathLocale),
             })),
         },
     };
@@ -58,7 +63,7 @@ export default async function DesktopSetsIndexPage() {
                     : 'ชุดการ์ดทั้งหมดของทุกเกม กรองตามเกมและภาษา แล้วเลือกชุดเพื่อดูการ์ด ราคา และรายการขาย'}
             </p>
 
-            <DesktopSetsBrowser sets={sets} />
+            <DesktopSetsBrowser sets={sets} pathPrefix={prefix} />
         </div>
     );
 }

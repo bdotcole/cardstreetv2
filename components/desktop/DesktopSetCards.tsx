@@ -14,7 +14,10 @@ function cardNumber(c: Card): number {
     return parseInt(c.number.split('/')[0].replace(/[^0-9]/g, ''), 10) || 999999;
 }
 
-export default function DesktopSetCards({ cards }: { cards: Card[] }) {
+// pathPrefix is '' on the Thai canonical and '/en' under the English prefix,
+// passed down from the server page as a plain string (lib/i18nRouting imports
+// next/headers, so a client component cannot resolve it itself).
+export default function DesktopSetCards({ cards, pathPrefix = '' }: { cards: Card[]; pathPrefix?: string }) {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState<SortKey>('number');
@@ -83,7 +86,7 @@ export default function DesktopSetCards({ cards }: { cards: Card[] }) {
                         return (
                             <Link
                                 key={card.id}
-                                href={`/card/${card.id}`}
+                                href={`${pathPrefix}/card/${card.id}`}
                                 className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
                             >
                                 <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">

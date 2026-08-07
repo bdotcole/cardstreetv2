@@ -54,6 +54,7 @@ export default function DesktopCardDetail({
     initialListings = [],
     setId = null,
     summary = null,
+    pathPrefix = '',
 }: {
     cardId: string;
     // Provided by the server component so the initial HTML is fully rendered
@@ -66,6 +67,11 @@ export default function DesktopCardDetail({
     // ships an indexable sentence about this specific card. A server-render
     // snapshot: the live market panel below is the source of truth for prices.
     summary?: string | null;
+    // '' on the Thai canonical, '/en' under the English prefix. Passed in as a
+    // plain string because lib/i18nRouting imports next/headers and so cannot be
+    // imported from a client component. Keeps breadcrumbs and seller links
+    // inside the locale the visitor is actually on.
+    pathPrefix?: string;
 }) {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
@@ -277,7 +283,7 @@ export default function DesktopCardDetail({
                 </div>
                 <h1 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.card.notFoundTitle')}</h1>
                 <p className="text-slate-500 text-sm mb-6">{t('desktop.card.notFoundDesc')}</p>
-                <Link href="/" className="text-brand-cyan text-sm font-bold hover:text-white transition-colors">
+                <Link href={pathPrefix || '/'} className="text-brand-cyan text-sm font-bold hover:text-white transition-colors">
                     {t('desktop.card.backToMarketplace')}
                 </Link>
             </div>
@@ -303,11 +309,11 @@ export default function DesktopCardDetail({
     return (
         <div>
             <nav className="text-sm text-slate-500">
-                <Link href="/" className="hover:text-slate-300 transition-colors">{t('desktop.navMarketplace')}</Link>
+                <Link href={pathPrefix || '/'} className="hover:text-slate-300 transition-colors">{t('desktop.navMarketplace')}</Link>
                 <span className="mx-2">›</span>
                 {setId && card.set && (
                     <>
-                        <Link href={`/sets/${setId}`} className="hover:text-slate-300 transition-colors">{card.set}</Link>
+                        <Link href={`${pathPrefix}/sets/${setId}`} className="hover:text-slate-300 transition-colors">{card.set}</Link>
                         <span className="mx-2">›</span>
                     </>
                 )}
@@ -545,7 +551,7 @@ export default function DesktopCardDetail({
                                                 <div className="min-w-0">
                                                     {listing.seller?.username ? (
                                                         <Link
-                                                            href={`/seller/${listing.seller.username}`}
+                                                            href={`${pathPrefix}/seller/${listing.seller.username}`}
                                                             className="block text-sm font-bold text-slate-200 hover:text-brand-cyan truncate transition-colors"
                                                         >
                                                             {listing.seller.display_name || listing.seller.username}

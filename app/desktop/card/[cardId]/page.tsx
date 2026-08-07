@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import DesktopCardDetail from '@/components/desktop/DesktopCardDetail';
 import { getCardPageData } from '@/lib/desktopCardData';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import type { Card } from '@/types';
@@ -177,7 +177,7 @@ const OFFER_RETURN_POLICY = {
 // the catalog market value. Returns null when there is no price signal at all:
 // a Product with no offers/review/aggregateRating is a critical GSC error, so
 // those pages ship no Product block rather than a broken one.
-function buildProductJsonLd(card: Card, listings: MarketplaceListing[]): Record<string, unknown> | null {
+function buildProductJsonLd(card: Card, listings: MarketplaceListing[], pathLocale: 'th' | 'en'): Record<string, unknown> | null {
     if (!listings.length && !(card.marketPrice > 0)) return null;
 
     const image = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
@@ -187,7 +187,9 @@ function buildProductJsonLd(card: Card, listings: MarketplaceListing[]): Record<
         '@type': 'Product',
         name: card.name,
         sku: card.id,
-        url: `${BASE_URL}/card/${card.id}`,
+        // Follows the URL variant being served so the /en page's Product node
+        // does not point at the Thai canonical.
+        url: localizedUrl(`/card/${card.id}`, pathLocale),
         description: `${card.name} trading card${line ? ` (${line})` : ''}. Buy and sell on CardStreet with live market prices, verified sellers, and nationwide delivery in Thailand.`,
         category: 'Trading Card',
         ...(image ? { image: [image] } : {}),
@@ -223,7 +225,8 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
     const { card, listings, setId } = await getCardPageData(cardId);
     if (!card) notFound();
 
-    const productJsonLd = buildProductJsonLd(card, listings);
+    const pathLocale = await requestPathLocale();
+    const productJsonLd = buildProductJsonLd(card, listings, pathLocale);
     const summary = buildCardSummary(card, listings, await resolveLang());
 
     return (
@@ -234,7 +237,14 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
                 />
             )}
-            <DesktopCardDetail cardId={cardId} initialCard={card} initialListings={listings} setId={setId} summary={summary} />
+            <DesktopCardDetail
+                cardId={cardId}
+                initialCard={card}
+                initialListings={listings}
+                setId={setId}
+                summary={summary}
+                pathPrefix={localePrefix(pathLocale)}
+            />
         </>
     );
 }

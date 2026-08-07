@@ -20,6 +20,21 @@ export function localizedUrl(path: string, locale: UiLocale): string {
 }
 
 /**
+ * Path prefix for internal links in a given UI locale: '' for Thai (the bare
+ * canonical path), '/en' for English.
+ *
+ * Every internal link inside the /en tree used to be written bare, so the
+ * English pages linked straight back into Thai and the /en tree had no crawl
+ * path of its own beyond depth 1. Server components resolve the locale with
+ * requestPathLocale() and pass the result of this down to client grids as a
+ * plain string — client components must NOT import from this module, which
+ * pulls in next/headers.
+ */
+export function localePrefix(locale: UiLocale): '' | '/en' {
+  return locale === 'en' ? '/en' : '';
+}
+
+/**
  * Canonical + hreflang alternates for a page, for use in a route's exported
  * `metadata`. Thai (bare URL) is the `x-default`, and the canonical is the
  * URL of the locale variant being served — every hreflang alternate must be

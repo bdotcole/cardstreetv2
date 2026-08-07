@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
 import { getGameLabel } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
@@ -60,11 +60,13 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
 // schema.org ItemList — declares the set's cards (and their URLs) so search and
 // AI answer engines see this as a structured collection. Capped to keep the
 // payload bounded; the full set is linked as crawlable HTML below regardless.
-function buildItemListJsonLd(set: SetRow, cards: Card[], lang: 'EN' | 'TH') {
+function buildItemListJsonLd(set: SetRow, cards: Card[], lang: 'EN' | 'TH', pathLocale: 'th' | 'en') {
     const items = cards.slice(0, 100).map((c, i) => ({
         '@type': 'ListItem',
         position: i + 1,
-        url: `${BASE_URL}/card/${c.id}`,
+        // Must follow the URL variant being served — the /en page previously
+        // listed 210 Thai card URLs in its structured data.
+        url: localizedUrl(`/card/${c.id}`, pathLocale),
         name: c.name,
     }));
     return {
@@ -88,18 +90,22 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
     const game = gameLabel(set.game, lang);
     const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
     const intro = getSetIntro(setId);
+    // Internal links follow the URL variant, not the cookie language: on
+    // /en/sets/<id> the breadcrumbs and the card grid must stay inside /en.
+    const pathLocale = await requestPathLocale();
+    const prefix = localePrefix(pathLocale);
 
     return (
         <div>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildItemListJsonLd(set, cards, lang)) }}
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildItemListJsonLd(set, cards, lang, pathLocale)) }}
             />
 
             <nav className="text-sm text-slate-500">
-                <Link href="/" className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Marketplace' : 'มาร์เก็ตเพลส'}</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Marketplace' : 'มาร์เก็ตเพลส'}</Link>
                 <span className="mx-2">›</span>
-                <Link href="/sets" className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Sets' : 'ชุดการ์ด'}</Link>
+                <Link href={`${prefix}/sets`} className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Sets' : 'ชุดการ์ด'}</Link>
                 <span className="mx-2">›</span>
                 <span className="text-slate-300">{set.name}</span>
             </nav>
@@ -130,7 +136,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
             {cards.length === 0 ? (
                 <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'No cards found for this set.' : 'ไม่พบการ์ดในชุดนี้'}</p>
             ) : (
-                <DesktopSetCards cards={cards} />
+                <DesktopSetCards cards={cards} pathPrefix={prefix} />
             )}
         </div>
     );

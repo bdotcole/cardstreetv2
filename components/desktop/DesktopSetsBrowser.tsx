@@ -30,7 +30,10 @@ function orderedGames(present: Set<string>): string[] {
     return [...known, ...extra];
 }
 
-export default function DesktopSetsBrowser({ sets }: { sets: SetRow[] }) {
+// pathPrefix is '' on the Thai canonical and '/en' under the English prefix. It
+// arrives as a plain string from the server page — lib/i18nRouting imports
+// next/headers, so a client component cannot call localePrefix() itself.
+export default function DesktopSetsBrowser({ sets, pathPrefix = '' }: { sets: SetRow[]; pathPrefix?: string }) {
     const { t, isThai } = useTranslation();
     const [game, setGame] = useState<string>('all');
     const [language, setLanguage] = useState<string>('all');
@@ -127,13 +130,13 @@ export default function DesktopSetsBrowser({ sets }: { sets: SetRow[] }) {
                             <h2 className="text-sm font-black text-white uppercase tracking-widest mb-4">
                                 {gameLabel(g, isThai)} <span className="text-slate-500">({list.length})</span>
                             </h2>
-                            <SetGrid sets={list} isThai={isThai} />
+                            <SetGrid sets={list} isThai={isThai} pathPrefix={pathPrefix} />
                         </section>
                     );
                 })
             ) : (
                 <div className="mt-8">
-                    <SetGrid sets={filtered} isThai={isThai} />
+                    <SetGrid sets={filtered} isThai={isThai} pathPrefix={pathPrefix} />
                 </div>
             )}
         </div>
@@ -165,7 +168,7 @@ function FilterChip({
     );
 }
 
-function SetGrid({ sets, isThai }: { sets: SetRow[]; isThai: boolean }) {
+function SetGrid({ sets, isThai, pathPrefix = '' }: { sets: SetRow[]; isThai: boolean; pathPrefix?: string }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {sets.map((s) => {
@@ -173,7 +176,7 @@ function SetGrid({ sets, isThai }: { sets: SetRow[]; isThai: boolean }) {
                 return (
                     <Link
                         key={`${s.id}-${s.language}`}
-                        href={`/sets/${s.id}`}
+                        href={`${pathPrefix}/sets/${s.id}`}
                         className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
                     >
                         <span className="w-16 h-10 shrink-0 flex items-center justify-center">

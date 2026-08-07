@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGame } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
 
 // Per-game landing pages (/pokemon, /one-piece, /yugioh, /mtg, /lorcana,
@@ -77,7 +77,7 @@ function buildJsonLd(
                         '@type': 'ListItem',
                         position: i + 1,
                         name: s.name,
-                        url: `${BASE_URL}/sets/${s.id}`,
+                        url: localizedUrl(`/sets/${s.id}`, pathLocale),
                     })),
                 },
             },
@@ -108,6 +108,9 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
     // Structured data is a search-engine artifact, so it follows the URL variant
     // like the metadata does, not the visitor's cookie.
     const pathLocale = await requestPathLocale();
+    // Internal links follow the URL variant too, so /en/<game> keeps the visitor
+    // (and the crawler) inside the English tree instead of bouncing them to Thai.
+    const prefix = localePrefix(pathLocale);
     const game = getGame(landing.gameId);
 
     const allSets = await getAllSets();
@@ -123,7 +126,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
             />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href="/" className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
                 <span className="mx-2">/</span>
                 <span className="text-slate-300">{game.name}</span>
             </nav>
@@ -151,7 +154,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                         <h2 className="text-xl font-black text-white">
                             {isThai ? 'ชุดการ์ดล่าสุด' : 'Latest sets'}
                         </h2>
-                        <Link href="/sets" className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
+                        <Link href={`${prefix}/sets`} className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
                             {isThai ? 'ดูทุกชุด →' : 'Browse all sets →'}
                         </Link>
                     </div>
@@ -161,7 +164,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                             return (
                                 <Link
                                     key={`${s.id}-${s.language}`}
-                                    href={`/sets/${s.id}`}
+                                    href={`${prefix}/sets/${s.id}`}
                                     className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3 hover:border-brand-cyan/40 transition-colors"
                                 >
                                     <span className="w-16 h-10 shrink-0 flex items-center justify-center">
@@ -211,7 +214,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                     {GAME_LANDINGS.filter((g) => g.slug !== landing.slug).map((g) => (
                         <Link
                             key={g.slug}
-                            href={`/${g.slug}`}
+                            href={`${prefix}/${g.slug}`}
                             className="px-4 py-1.5 rounded-full text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-colors"
                         >
                             {getGame(g.gameId).name}
