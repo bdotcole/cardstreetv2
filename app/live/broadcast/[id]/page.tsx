@@ -668,7 +668,7 @@ export default function BroadcastConsolePage() {
                 {/* ─── Header ─── */}
                 <div className="flex flex-wrap items-center gap-3 mb-5">
                     <button
-                        onClick={() => router.push('/live')}
+                        onClick={() => router.push('/live/studio')}
                         aria-label={t('live.common.back')}
                         className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center active:scale-90 transition-all"
                     >

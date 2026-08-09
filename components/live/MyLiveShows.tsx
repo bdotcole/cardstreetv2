@@ -189,7 +189,12 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
         >
             <div className="flex items-center gap-4 mb-6">
-                <button onClick={onBack} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                {/* With the schedule form open, back returns to the show list (the portal) —
+                    not the host surface's exit — so setup never dumps broadcasters to the feed. */}
+                <button
+                    onClick={() => (showForm ? setShowForm(false) : onBack())}
+                    className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors"
+                >
                     <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
                 <h2 className="text-lg font-black text-white uppercase tracking-wide">
