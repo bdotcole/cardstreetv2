@@ -5,6 +5,11 @@
  * The status flip is a CAS on 'scheduled' so a double-tap can't double-start
  * the recording. Recording itself is best-effort (see lib/livekit.ts) — a
  * missing egress config never blocks going live.
+ *
+ * A console that STAGED its cameras pre-live (token route, role 'main_cam')
+ * is already connected as ':main' when it calls this — it ignores the token
+ * in the response and just takes the status flip. The token return stays for
+ * the un-staged console and for device-swap/crash reconnects.
  */
 
 import { NextResponse } from 'next/server';

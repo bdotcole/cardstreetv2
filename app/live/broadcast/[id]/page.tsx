@@ -22,8 +22,15 @@ import {
 } from '@/components/live/shared';
 
 /**
- * The broadcaster CONSOLE (desktop-first, phone-usable): camera + go-live,
- * the table-cam QR handoff, the lot queue, the spot board, and moderated chat.
+ * The broadcaster CONSOLE (desktop-first, phone-usable): camera staging +
+ * go-live, the table-cam QR handoff, the lot queue, the spot board, and
+ * moderated chat.
+ *
+ * Pre-live staging: while the show is 'scheduled' the seller can connect to
+ * the room with a 'main_cam' token, scan the table-cam QR from the second
+ * phone, and frame both feeds in the Layout panel — all before anything is
+ * visible to viewers (viewer tokens and the viewer page are both gated on
+ * status='live'). Go live is then just the status flip + recording start.
  *
  * Table-cam token rides the URL FRAGMENT of the QR link (never the query
  * string) — fragments don't leave the browser, so the bearer token stays out
@@ -466,6 +473,48 @@ export default function BroadcastConsolePage() {
     // EVICTS whichever device currently holds the slot).
     const publishedHereRef = useRef(false);
 
+    // ─── Stage cameras (pre-live) ───
+    // Joins the room with a 'main_cam' token while the show is still
+    // 'scheduled', so the table-cam QR, the monitor tile and the Layout panel
+    // all work before go-live. Viewers can't see any of it — their tokens
+    // (and the viewer page's join) are gated on status='live'.
+    const [staging, setStaging] = useState(false);
+
+    const stageCameras = useCallback(async () => {
+        if (staging || connected) return;
+        setStaging(true);
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: 'main_cam' }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.token || !data.url) {
+                showToast(
+                    data.error || t('live.console.stageError') || 'Could not stage the cameras',
+                    'error',
+                );
+                return;
+            }
+            await connect(data.url, data.token);
+            try {
+                // Adopts the preview's tracks when they're up (no re-prompt).
+                await publishCamera({ facingMode: 'user', audio: true });
+                publishedHereRef.current = true;
+                setCameraIssue(null);
+            } catch (err) {
+                const issue = classifyCameraError(err);
+                setCameraIssue(issue);
+                showToast(cameraIssueText(issue), 'error');
+            }
+        } catch {
+            showToast(t('live.console.stageError') || 'Could not stage the cameras', 'error');
+        } finally {
+            setStaging(false);
+        }
+    }, [staging, connected, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
+
     const doGoLive = useCallback(async () => {
         if (goingLive) return;
         setGoingLive(true);
@@ -481,23 +530,31 @@ export default function BroadcastConsolePage() {
                 return;
             }
             setStream((prev) => (prev ? { ...prev, status: 'live' } : prev));
-            await connect(data.url, data.token);
-            try {
-                // Adopts the preview's tracks when they're up (no re-prompt).
-                await publishCamera({ facingMode: 'user', audio: true });
-                publishedHereRef.current = true;
-                setCameraIssue(null);
-            } catch (err) {
-                const issue = classifyCameraError(err);
-                setCameraIssue(issue);
-                showToast(cameraIssueText(issue), 'error');
+            // Idempotent when the cameras were staged pre-live: this device is
+            // already in the room publishing as ':main', so go-live was just
+            // the status flip + recording start — reconnecting here would tear
+            // down the very feed that was framed. The token-return path still
+            // serves the un-staged console and the crashed-device reconnect.
+            const alreadyPublishing = connected && publishedHereRef.current && !!localVideo;
+            if (!alreadyPublishing) {
+                if (!connected) await connect(data.url, data.token);
+                try {
+                    // Adopts the preview's tracks when they're up (no re-prompt).
+                    await publishCamera({ facingMode: 'user', audio: true });
+                    publishedHereRef.current = true;
+                    setCameraIssue(null);
+                } catch (err) {
+                    const issue = classifyCameraError(err);
+                    setCameraIssue(issue);
+                    showToast(cameraIssueText(issue), 'error');
+                }
             }
         } catch {
             showToast(t('live.console.goLiveError') || 'Could not go live', 'error');
         } finally {
             setGoingLive(false);
         }
-    }, [goingLive, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
+    }, [goingLive, streamId, connected, localVideo, connect, publishCamera, cameraIssueText, showToast, t]);
 
     const goLive = useCallback(() => {
         // Displacement guard: the show is live but not from this session —
@@ -836,6 +893,8 @@ export default function BroadcastConsolePage() {
 
     const isLive = stream.status === 'live';
     const isEnded = stream.status === 'ended';
+    // Pre-live staging: in the room as ':main' while still 'scheduled'.
+    const isStaged = connected && !isLive && !isEnded;
 
     const sectionCls = 'glass rounded-2xl border-white/10 p-4';
     const btnPrimary =
@@ -875,14 +934,34 @@ export default function BroadcastConsolePage() {
                                 )}
                             </span>
                         ) : (
-                            <span className="px-2.5 py-1 rounded-md bg-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest">
+                            <span
+                                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                                    isStaged
+                                        ? 'bg-brand-green/15 text-brand-green'
+                                        : 'bg-white/10 text-slate-300'
+                                }`}
+                            >
                                 {isEnded
                                     ? t('live.viewer.ended') || 'Show ended'
-                                    : t('live.console.notLiveYet') || 'Not live yet'}
+                                    : isStaged
+                                        ? t('live.console.camerasStaged') ||
+                                          'Cameras staged — ready to go live'
+                                        : t('live.console.notLiveYet') || 'Not live yet'}
                             </span>
                         )}
+                        {!isEnded && !isLive && !isNativeApp && !connected && (
+                            <button
+                                onClick={() => void stageCameras()}
+                                disabled={staging || goingLive}
+                                className="px-4 h-10 rounded-xl bg-white/10 text-slate-200 text-xs font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
+                            >
+                                {staging
+                                    ? t('live.console.stagingCameras') || 'Staging...'
+                                    : t('live.console.stageCameras') || 'Stage cameras'}
+                            </button>
+                        )}
                         {!isEnded && (
-                            <button onClick={goLive} disabled={goingLive || (isLive && connected)} className={btnPrimary}>
+                            <button onClick={goLive} disabled={goingLive || staging || (isLive && connected)} className={btnPrimary}>
                                 {goingLive
                                     ? t('live.console.goingLive') || 'Starting...'
                                     : isLive
@@ -1107,7 +1186,10 @@ export default function BroadcastConsolePage() {
                                         ))}
                                 </div>
                             )}
-                            {isLive && (
+                            {/* Available from the moment the console is in the
+                                room — staged OR live — so the second phone can
+                                be set up before the show starts. */}
+                            {(isLive || isStaged) && (
                                 <>
                                     <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3 w-full h-10`}>
                                         <i className="fa-solid fa-qrcode mr-2"></i>
