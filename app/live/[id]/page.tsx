@@ -12,6 +12,8 @@ import { useLiveKitRoom, type CameraSlot } from '@/lib/hooks/useLiveKitRoom';
 import { TrackAudio } from '@/components/live/TrackVideo';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import {
+    clampRatio,
+    DEFAULT_RATIO,
     formatCountdown,
     formatSatang,
     nameInitials,
@@ -529,6 +531,11 @@ export default function LiveViewerPage() {
     // The broadcaster's per-feed framing (streams.layout, live via Realtime).
     // CroppedTrackVideo treats null/invalid as the default uncropped fill.
     const cropFor = (slot: CameraSlot) => stream?.layout?.[slot] ?? null;
+    // Split ratio = the FACE cam's share of the stacked height. It follows
+    // the slot, not the screen position, so a tap-swap keeps each camera's
+    // share. Pre-ratio rows fall back to the default split.
+    const faceRatio = clampRatio(stream?.layout?.ratio) ?? DEFAULT_RATIO;
+    const shareFor = (slot: CameraSlot) => (slot === 'main' ? faceRatio : 1 - faceRatio);
 
     const payableSpots: PayableSpot[] = myHeldSpots.map((s) => ({
         id: s.id,
@@ -769,7 +776,7 @@ export default function LiveViewerPage() {
             ) : (
                 <div className="absolute inset-0 flex flex-col">
                     {/* Secondary feed (face cam by default) — tap swaps it into the primary slot. */}
-                    <div className="relative h-[40%]">
+                    <div className="relative" style={{ height: `${shareFor(secondarySlot) * 100}%` }}>
                         <CroppedTrackVideo
                             track={secondaryTrack}
                             crop={cropFor(secondarySlot)}
@@ -777,7 +784,10 @@ export default function LiveViewerPage() {
                             onClick={() => setPrimarySlot((s) => (s === 'table' ? 'main' : 'table'))}
                         />
                     </div>
-                    <div className="relative h-[60%] border-t border-white/10">
+                    <div
+                        className="relative border-t border-white/10"
+                        style={{ height: `${shareFor(primarySlot) * 100}%` }}
+                    >
                         <CroppedTrackVideo
                             track={primaryTrack}
                             crop={cropFor(primarySlot)}

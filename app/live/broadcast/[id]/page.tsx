@@ -10,7 +10,9 @@ import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import {
     clampCrop,
+    clampRatio,
     DEFAULT_CROP,
+    DEFAULT_RATIO,
     formatSatang,
     isNativeShell,
     type FeedCrop,
@@ -26,11 +28,13 @@ import {
  * go-live, the table-cam QR handoff, the lot queue, the spot board, and
  * moderated chat.
  *
- * Pre-live staging: while the show is 'scheduled' the seller can connect to
- * the room with a 'main_cam' token, scan the table-cam QR from the second
- * phone, and frame both feeds in the Layout panel — all before anything is
- * visible to viewers (viewer tokens and the viewer page are both gated on
- * status='live'). Go live is then just the status flip + recording start.
+ * Staging is AUTOMATIC: on load (outside the native shell, show not ended)
+ * the console requests the camera, mints a 'main_cam' token, connects +
+ * publishes, and fetches the table-cam QR — zero clicks before the second
+ * phone can scan. While the show is 'scheduled' none of it is visible to
+ * viewers (viewer tokens and the viewer page are both gated on
+ * status='live'), so Go live is just the status flip + recording start. On a
+ * live show the same auto-stage doubles as the crashed-console reconnect.
  *
  * Table-cam token rides the URL FRAGMENT of the QR link (never the query
  * string) — fragments don't leave the browser, so the bearer token stays out
@@ -125,9 +129,9 @@ export default function BroadcastConsolePage() {
     const [randomizeResult, setRandomizeResult] = useState<{ seed: string; summary: string } | null>(
         null,
     );
-    // Table-cam handoff modal. The QR is derived from `link` and NOTHING else —
-    // a failed token fetch leaves the modal in 'error' (visible retry), never a
-    // QR of some fallback URL.
+    // Table-cam handoff (inline block, auto-fetched once staged). The QR is
+    // derived from `link` and NOTHING else — a failed token fetch shows the
+    // 'error' state (visible retry), never a QR of some fallback URL.
     const [tableCam, setTableCam] = useState<
         | { phase: 'loading' }
         | { phase: 'error'; message: string }
@@ -152,6 +156,9 @@ export default function BroadcastConsolePage() {
         lastX: number;
         lastY: number;
     } | null>(null);
+    // Split-divider drag between the two stacked feeds.
+    const ratioDragRef = useRef<number | null>(null);
+    const stackRef = useRef<HTMLDivElement | null>(null);
 
     // Add-lot form.
     const [showAddLot, setShowAddLot] = useState(false);
@@ -221,8 +228,10 @@ export default function BroadcastConsolePage() {
             const seeded: StreamLayout = {};
             const mainCrop = clampCrop(stored?.main);
             const tableCrop = clampCrop(stored?.table);
+            const storedRatio = clampRatio(stored?.ratio);
             if (mainCrop) seeded.main = mainCrop;
             if (tableCrop) seeded.table = tableCrop;
+            if (storedRatio != null) seeded.ratio = storedRatio;
             layoutRef.current = seeded;
             setLayout(seeded);
         }
@@ -361,17 +370,6 @@ export default function BroadcastConsolePage() {
         }
     }, [previewStarting, startPreview]);
 
-    useEffect(() => {
-        if (pageState !== 'ready' || isNativeApp) return;
-        const status = stream?.status;
-        if (!status || status === 'ended' || status === 'cancelled') return;
-        void beginPreview();
-        // localVideo/connected are deliberately not deps: the hook no-ops when
-        // a preview or room already owns the camera, and a denied prompt must
-        // not re-fire on every render — retry is the seller's button.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pageState, isNativeApp, stream?.status]);
-
     // The show ending (locally or via realtime) releases the previewed camera.
     useEffect(() => {
         if (stream?.status === 'ended' || stream?.status === 'cancelled') stopPreview();
@@ -454,6 +452,43 @@ export default function BroadcastConsolePage() {
         feedDragRef.current = null;
     }, []);
 
+    // ─── Split-ratio divider (face cam's share of the stacked height) ───
+    // Same local-first + debounced-save flow as the crops; clampRatio bounds
+    // the drag to 0.2..0.8 so neither feed can be squeezed into a sliver.
+    const splitRatio = clampRatio(layout.ratio) ?? DEFAULT_RATIO;
+
+    const updateRatio = useCallback(
+        (value: number) => {
+            const next: StreamLayout = {
+                ...layoutRef.current,
+                ratio: clampRatio(value) ?? DEFAULT_RATIO,
+            };
+            layoutRef.current = next;
+            setLayout(next);
+            persistLayout(next);
+        },
+        [persistLayout],
+    );
+
+    const beginRatioDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        ratioDragRef.current = e.pointerId;
+    }, []);
+
+    const moveRatioDrag = useCallback(
+        (e: React.PointerEvent<HTMLDivElement>) => {
+            if (ratioDragRef.current !== e.pointerId) return;
+            const rect = stackRef.current?.getBoundingClientRect();
+            if (!rect || rect.height === 0) return;
+            updateRatio((e.clientY - rect.top) / rect.height);
+        },
+        [updateRatio],
+    );
+
+    const endRatioDrag = useCallback(() => {
+        ratioDragRef.current = null;
+    }, []);
+
     // In-app broadcasters copy the console URL and reopen it in Chrome.
     const copyConsoleLink = useCallback(async () => {
         const link = `${window.location.origin}/live/broadcast/${streamId}`;
@@ -473,11 +508,11 @@ export default function BroadcastConsolePage() {
     // EVICTS whichever device currently holds the slot).
     const publishedHereRef = useRef(false);
 
-    // ─── Stage cameras (pre-live) ───
-    // Joins the room with a 'main_cam' token while the show is still
-    // 'scheduled', so the table-cam QR, the monitor tile and the Layout panel
-    // all work before go-live. Viewers can't see any of it — their tokens
-    // (and the viewer page's join) are gated on status='live'.
+    // ─── Stage cameras (automatic on load) ───
+    // Joins the room with a 'main_cam' token, so the table-cam QR, the
+    // monitor tile and the Layout panel all work before go-live. On a
+    // 'scheduled' show viewers can't see any of it — their tokens (and the
+    // viewer page's join) are gated on status='live'.
     const [staging, setStaging] = useState(false);
 
     const stageCameras = useCallback(async () => {
@@ -514,6 +549,27 @@ export default function BroadcastConsolePage() {
             setStaging(false);
         }
     }, [staging, connected, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
+
+    // Auto-stage on load: request the camera (preview resolves the permission
+    // prompt first — publishCamera then adopts its tracks, no re-prompt), then
+    // join + publish, all with zero clicks. Runs for 'scheduled' AND 'live'
+    // (the live case is the crashed-console reconnect). Skipped in the native
+    // shell (no camera permission in the binary) and once the show has ended.
+    // A failed stage degrades gracefully: Go live also connects + publishes.
+    useEffect(() => {
+        if (pageState !== 'ready' || isNativeApp) return;
+        const status = stream?.status;
+        if (!status || status === 'ended' || status === 'cancelled') return;
+        void (async () => {
+            await beginPreview();
+            await stageCameras();
+        })();
+        // beginPreview/stageCameras/localVideo/connected are deliberately not
+        // deps: both callbacks no-op when their work is done or in flight, and
+        // a denied camera prompt must not re-fire on every render — retry is
+        // the seller's button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pageState, isNativeApp, stream?.status]);
 
     const doGoLive = useCallback(async () => {
         if (goingLive) return;
@@ -875,6 +931,21 @@ export default function BroadcastConsolePage() {
     const tableCamConnected = remoteIdentities.some((id) => id.endsWith(':table'));
     const tableCamTrack = remoteFeeds.video.table ?? null;
 
+    // The table-cam QR is fetched the moment the console is in the room
+    // without a table cam — the second phone is scannable with zero clicks.
+    // `!tableCam` stops the effect after one mint (the error state keeps its
+    // in-QR retry button); clearing on connect below re-arms it, so a table
+    // phone dropping mid-show gets a FRESH token, not a stale one.
+    useEffect(() => {
+        if (isNativeApp || !connected || tableCamConnected || tableCam) return;
+        if (stream?.status === 'ended' || stream?.status === 'cancelled') return;
+        void openTableQr();
+    }, [isNativeApp, connected, tableCamConnected, tableCam, stream?.status, openTableQr]);
+
+    useEffect(() => {
+        if (tableCamConnected) setTableCam(null);
+    }, [tableCamConnected]);
+
     if (pageState === 'denied') {
         return (
             <main className="min-h-screen bg-brand-darker text-white">
@@ -946,19 +1017,10 @@ export default function BroadcastConsolePage() {
                                     : isStaged
                                         ? t('live.console.camerasStaged') ||
                                           'Cameras staged — ready to go live'
-                                        : t('live.console.notLiveYet') || 'Not live yet'}
+                                        : staging
+                                            ? t('live.console.stagingCameras') || 'Staging...'
+                                            : t('live.console.notLiveYet') || 'Not live yet'}
                             </span>
-                        )}
-                        {!isEnded && !isLive && !isNativeApp && !connected && (
-                            <button
-                                onClick={() => void stageCameras()}
-                                disabled={staging || goingLive}
-                                className="px-4 h-10 rounded-xl bg-white/10 text-slate-200 text-xs font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
-                            >
-                                {staging
-                                    ? t('live.console.stagingCameras') || 'Staging...'
-                                    : t('live.console.stageCameras') || 'Stage cameras'}
-                            </button>
                         )}
                         {!isEnded && (
                             <button onClick={goLive} disabled={goingLive || staging || (isLive && connected)} className={btnPrimary}>
@@ -1017,10 +1079,11 @@ export default function BroadcastConsolePage() {
                                 {t('live.console.layout') || 'Layout'}
                             </h2>
                             {/* The panel mirrors the VIEWER's stacked arrangement (face
-                                cam 40% top, table cam 60% bottom) through the same
-                                CroppedTrackVideo the viewer page renders, so the seller
-                                frames exactly what viewers receive. Un-mirrored on
-                                purpose — WYSIWYG beats the selfie flip here. */}
+                                cam on top at `splitRatio` of the height, table cam
+                                below) through the same CroppedTrackVideo the viewer
+                                page renders, so the seller frames exactly what viewers
+                                receive. Un-mirrored on purpose — WYSIWYG beats the
+                                selfie flip here. */}
                             <div className="relative aspect-[9/12] bg-black rounded-xl overflow-hidden">
                                 {isNativeApp && !isEnded ? (
                                     /* The binary has no camera permission — a dead
@@ -1042,11 +1105,14 @@ export default function BroadcastConsolePage() {
                                         </button>
                                     </div>
                                 ) : localVideo || tableCamConnected ? (
-                                    <div className="absolute inset-0 flex flex-col">
+                                    <div ref={stackRef} className="absolute inset-0 flex flex-col">
                                         <div
-                                            className={`relative ${tableCamConnected ? 'h-[40%]' : 'h-full'} touch-none ${
+                                            className={`relative touch-none ${
                                                 localVideo && cropOf('main').zoom > 1 ? 'cursor-move' : ''
                                             }`}
+                                            style={{
+                                                height: tableCamConnected ? `${splitRatio * 100}%` : '100%',
+                                            }}
                                             onPointerDown={beginFeedDrag('main')}
                                             onPointerMove={moveFeedDrag}
                                             onPointerUp={endFeedDrag}
@@ -1089,9 +1155,10 @@ export default function BroadcastConsolePage() {
                                         </div>
                                         {tableCamConnected && (
                                             <div
-                                                className={`relative h-[60%] border-t border-white/10 touch-none ${
+                                                className={`relative border-t border-white/10 touch-none ${
                                                     cropOf('table').zoom > 1 ? 'cursor-move' : ''
                                                 }`}
+                                                style={{ height: `${(1 - splitRatio) * 100}%` }}
                                                 onPointerDown={beginFeedDrag('table')}
                                                 onPointerMove={moveFeedDrag}
                                                 onPointerUp={endFeedDrag}
@@ -1114,6 +1181,25 @@ export default function BroadcastConsolePage() {
                                                     <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
                                                     {t('live.console.tableCamConnected') || 'Table cam connected'}
                                                 </span>
+                                            </div>
+                                        )}
+                                        {/* Draggable split divider — absolute so it costs no
+                                            flex height; z-10 keeps its pointer events above
+                                            the feeds' pan handlers. */}
+                                        {tableCamConnected && (
+                                            <div
+                                                role="separator"
+                                                aria-label={
+                                                    t('live.console.splitDivider') || 'Drag to resize the split'
+                                                }
+                                                className="absolute left-0 right-0 z-10 h-6 -translate-y-1/2 flex items-center justify-center cursor-row-resize touch-none"
+                                                style={{ top: `${splitRatio * 100}%` }}
+                                                onPointerDown={beginRatioDrag}
+                                                onPointerMove={moveRatioDrag}
+                                                onPointerUp={endRatioDrag}
+                                                onPointerCancel={endRatioDrag}
+                                            >
+                                                <div className="w-14 h-1.5 rounded-full bg-white/70 shadow-[0_0_6px_rgba(0,0,0,0.6)]"></div>
                                             </div>
                                         )}
                                     </div>
@@ -1150,7 +1236,7 @@ export default function BroadcastConsolePage() {
                                 <div className="mt-3 space-y-2">
                                     <p className="text-[10px] text-slate-500 leading-relaxed">
                                         {t('live.console.layoutHint') ||
-                                            'Drag a feed to reposition, slide to zoom — viewers see exactly this framing.'}
+                                            'Drag the divider to resize the split, drag a feed to reposition, slide to zoom — viewers see exactly this framing.'}
                                     </p>
                                     {(
                                         [
@@ -1186,22 +1272,58 @@ export default function BroadcastConsolePage() {
                                         ))}
                                 </div>
                             )}
-                            {/* Available from the moment the console is in the
-                                room — staged OR live — so the second phone can
-                                be set up before the show starts. */}
-                            {(isLive || isStaged) && (
-                                <>
-                                    <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3 w-full h-10`}>
-                                        <i className="fa-solid fa-qrcode mr-2"></i>
+                            {/* Table-cam QR, INLINE and automatic: minted the moment
+                                the console is in the room (staged OR live) without a
+                                table cam, so the second phone scans with zero clicks.
+                                Collapses once the table cam connects; a drop re-mints
+                                a fresh token (see the auto-QR effect). */}
+                            {(isLive || isStaged) && !tableCamConnected && (
+                                <div className="mt-3 rounded-xl bg-black/20 border border-white/10 p-3 text-center">
+                                    <p className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                        <i className="fa-solid fa-qrcode"></i>
                                         {t('live.console.tableCam') || 'Table cam'}
-                                    </button>
-                                    {!tableCamConnected && (
-                                        <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                            {t('live.console.tableCamNotConnected') || 'Table cam not connected'}
-                                        </p>
+                                    </p>
+                                    {tableCam?.phase === 'ready' ? (
+                                        <>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={tableCam.qr}
+                                                alt="Table cam QR"
+                                                className="w-full max-w-[220px] mx-auto mt-2 rounded-xl"
+                                            />
+                                            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                                                {t('live.console.tableCamHint') ||
+                                                    'Scan with your second phone to publish the overhead table camera.'}
+                                            </p>
+                                            <button
+                                                onClick={() => void copyTableCamLink()}
+                                                className="mt-2 w-full flex items-center gap-2 rounded-lg bg-black/30 border border-white/10 px-2.5 py-2 text-left active:scale-[0.99] transition-transform"
+                                            >
+                                                <i className="fa-solid fa-copy text-slate-400 text-[10px] shrink-0"></i>
+                                                <span className="flex-1 text-[9px] text-slate-400 break-all leading-snug line-clamp-3">
+                                                    {tableCam.link}
+                                                </span>
+                                            </button>
+                                        </>
+                                    ) : tableCam?.phase === 'error' ? (
+                                        <div className="py-4">
+                                            <i className="fa-solid fa-triangle-exclamation text-brand-red text-xl"></i>
+                                            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                                                {tableCam.message}
+                                            </p>
+                                            <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3`}>
+                                                {t('live.console.retry') || 'Retry'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="py-6">
+                                            <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-xl"></i>
+                                            <p className="text-[10px] text-slate-400 mt-2">
+                                                {t('live.console.tableCamLoading') || 'Creating the table-cam link...'}
+                                            </p>
+                                        </div>
                                     )}
-                                </>
+                                </div>
                             )}
                         </div>
 
@@ -1669,55 +1791,6 @@ export default function BroadcastConsolePage() {
                 </div>
             )}
 
-            {/* ─── Table-cam QR ─── */}
-            {tableCam && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                    <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-white/10 p-5 text-center">
-                        <p className="text-sm font-black text-white uppercase tracking-wide mb-3">
-                            {t('live.console.tableCam') || 'Table cam'}
-                        </p>
-                        {tableCam.phase === 'loading' && (
-                            <div className="py-10">
-                                <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-2xl"></i>
-                                <p className="text-xs text-slate-400 mt-3">
-                                    {t('live.console.tableCamLoading') || 'Creating the table-cam link...'}
-                                </p>
-                            </div>
-                        )}
-                        {tableCam.phase === 'error' && (
-                            <div className="py-6">
-                                <i className="fa-solid fa-triangle-exclamation text-brand-red text-2xl"></i>
-                                <p className="text-sm text-slate-300 mt-3 leading-relaxed">{tableCam.message}</p>
-                                <button onClick={() => void openTableQr()} className={`${btnGhost} mt-4`}>
-                                    {t('live.console.retry') || 'Retry'}
-                                </button>
-                            </div>
-                        )}
-                        {tableCam.phase === 'ready' && (
-                            <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={tableCam.qr} alt="Table cam QR" className="w-full max-w-[280px] mx-auto rounded-xl" />
-                                <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
-                                    {t('live.console.tableCamHint') ||
-                                        'Scan with your second phone to publish the overhead table camera.'}
-                                </p>
-                                <button
-                                    onClick={() => void copyTableCamLink()}
-                                    className="mt-3 w-full flex items-center gap-2 rounded-lg bg-black/30 border border-white/10 px-2.5 py-2 text-left active:scale-[0.99] transition-transform"
-                                >
-                                    <i className="fa-solid fa-copy text-slate-400 text-[10px] shrink-0"></i>
-                                    <span className="flex-1 text-[9px] text-slate-400 break-all leading-snug line-clamp-3">
-                                        {tableCam.link}
-                                    </span>
-                                </button>
-                            </>
-                        )}
-                        <button onClick={() => setTableCam(null)} className={`${btnPrimary} w-full mt-4`}>
-                            {t('live.payment.close') || 'Close'}
-                        </button>
-                    </div>
-                </div>
-            )}
         </main>
     );
 }

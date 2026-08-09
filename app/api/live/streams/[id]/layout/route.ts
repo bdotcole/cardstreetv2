@@ -1,8 +1,10 @@
 /**
  * PATCH /api/live/streams/[id]/layout — the broadcaster's per-feed viewer
- * framing: { main?, table? } each { zoom 1..3, x 0..1, y 0..1 }, written to
- * streams.layout. The existing streams Realtime subscription delivers the row
- * update to viewers, which re-crop live.
+ * framing: { main?, table? } each { zoom 1..3, x 0..1, y 0..1 }, plus an
+ * optional `ratio` (0.2..0.8 — the face cam's share of the stacked dual-feed
+ * height), written to streams.layout. The existing streams Realtime
+ * subscription delivers the row update to viewers, which re-crop/re-split
+ * live. Stored rows without `ratio` render at the default split.
  *
  * streams.layout is additive (20260807_stream_layout.sql, run manually in the
  * SQL Editor): until the column exists, writes are ACCEPTED but not persisted
@@ -13,7 +15,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcaster } from '@/lib/liveBreaks';
-import { clampCrop, type StreamLayout } from '@/components/live/shared';
+import { clampCrop, clampRatio, type StreamLayout } from '@/components/live/shared';
 
 const SLOTS = ['main', 'table'] as const;
 
@@ -43,6 +45,18 @@ export async function PATCH(
                 );
             }
             layout[slot] = crop;
+        }
+
+        const rawRatio = (body as Record<string, unknown>).ratio;
+        if (rawRatio != null) {
+            const ratio = clampRatio(rawRatio);
+            if (ratio == null) {
+                return NextResponse.json(
+                    { error: 'Invalid ratio — expected a number' },
+                    { status: 400 },
+                );
+            }
+            layout.ratio = ratio;
         }
 
         const admin = createAdminClient();

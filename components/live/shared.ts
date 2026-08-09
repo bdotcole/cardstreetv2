@@ -45,9 +45,27 @@ export interface FeedCrop {
 export interface StreamLayout {
     main?: FeedCrop | null;
     table?: FeedCrop | null;
+    /**
+     * Face (main) cam's share of the stacked dual-feed height, 0.2..0.8.
+     * Follows the SLOT, not the screen position — a viewer swapping which
+     * feed is on top keeps each camera's share. Absent (pre-ratio rows) =
+     * DEFAULT_RATIO.
+     */
+    ratio?: number | null;
 }
 
 export const DEFAULT_CROP: FeedCrop = { zoom: 1, x: 0.5, y: 0.5 };
+export const DEFAULT_RATIO = 0.4;
+
+/**
+ * Validate + clamp an untrusted split ratio (API body, DB JSONB). Null for
+ * non-numbers — callers treat null as "use DEFAULT_RATIO". Clamped to
+ * 0.2..0.8 so neither feed can be dragged into a sliver, rounded like crops.
+ */
+export function clampRatio(value: unknown): number | null {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return Math.round(Math.min(0.8, Math.max(0.2, value)) * 10000) / 10000;
+}
 
 /**
  * Validate + clamp an untrusted crop (API body, DB JSONB). Returns null for
