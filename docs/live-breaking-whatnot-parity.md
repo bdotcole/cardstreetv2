@@ -231,9 +231,9 @@
 
 - **Video = LiveKit Cloud (WebRTC)**, view + broadcast inside the Capacitor Android
   WebView. Only `streams.livekit_*` hooks exist — token route, room lifecycle, egress→VOD unbuilt.
-- **Broadcasting needs native camera/mic perms** in `AndroidManifest.xml` + a signed
-  AAB release (next versionCode ≥ 18; never build AABs in the stale main tree). A hard
-  release dependency — schema readiness does not unblock it.
+- **Console broadcasting needs the MIC perm** + a signed AAB release (next versionCode ≥ 18;
+  never build AABs in the stale main tree). Camera is already shipped and the table cam
+  works today — see "Native app requirements" below.
 - **Off-session live charge** is the critical unproven leg (SetupIntent + PM clone
   validated; direct charge pending 2-min test onboarding + watcher E2E).
 - **Live bidding is card-only** (PromptPay can't off-session; stays for BIN/checkout).
@@ -247,6 +247,21 @@
   reused UNCHANGED. Do not fork it.
 - **Money units:** auction/win money = INTEGER SATANG (BIGINT); orders/shipping = THB
   NUMERIC. Convert at settlement; single source `lib/auctionRules.ts` + SQL mirror.
+
+## Native app requirements
+
+- **Camera is already shipped.** `android.permission.CAMERA` and iOS
+  `NSCameraUsageDescription` have been in the binaries all along (the in-app scanner uses
+  them), and `getUserMedia` works inside the Capacitor WebView. The **table cam is
+  video-only, so it works on the current binary** with no new permission.
+- **Mic needs a new binary.** `android.permission.RECORD_AUDIO` +
+  `NSMicrophoneUsageDescription` were added for the broadcaster console, which publishes
+  audio — until a build with them ships (**next versionCode ≥ 18**), the console's
+  `getUserMedia({video, audio})` is denied in-app and the whole capture fails.
+- **No code change is needed when that binary lands.** Both camera pages attempt the normal
+  permission-first sequence in every shell and only fall back to the "open in Chrome"
+  handoff *after* capture actually fails; the console names the mic case explicitly (a
+  video-only probe distinguishes it from a camera denial).
 
 ## Schema gaps (patches the drafted migration is missing for parity)
 

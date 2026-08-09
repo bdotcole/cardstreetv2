@@ -188,9 +188,10 @@ export function formatCountdown(msLeft: number): string {
  * The Capacitor shells mark themselves two ways: the CardStreetApp UA marker
  * (Android ships it; iOS from 1.0.4) and the injected Capacitor bridge (all
  * shells, including the pre-marker iOS binary). Same belt-and-suspenders
- * detection as components/PremiumHub.tsx. The broadcast console needs this
- * because the native binaries carry no camera permission — broadcasting must
- * hand off to a real browser, while viewing/buying in-app is unaffected.
+ * detection as components/PremiumHub.tsx. The camera pages use it only to
+ * decide whether a FAILED capture has somewhere to escape to (a real browser
+ * always can) — never to gate the attempt: the WebView does grant
+ * getUserMedia, so broadcasting starts in-app like anywhere else.
  */
 export function isNativeShell(): boolean {
     if (typeof window === 'undefined') return false;

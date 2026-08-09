@@ -24,6 +24,13 @@ import { isNativeShell, openInSystemBrowser } from '@/components/live/shared';
  * prompt was up made publishTrack never settle, and there was no timeout or
  * retry). Each phase now has its own state, the connect phase is bounded, and
  * every failure lands on a Retry that restarts the sequence from scratch.
+ *
+ * The Capacitor shell runs the SAME sequence: the binary carries
+ * android.permission.CAMERA and the WebView grants getUserMedia (the in-app
+ * scanner proves it), so an upfront native block would strand a device that
+ * works. The browser handoff is a recovery FALLBACK — reached only after a
+ * real capture failure — which also means no code change when a future binary
+ * widens permissions.
  */
 
 type CamState = 'permission' | 'connecting' | 'live' | 'invalid' | 'error' | 'stopped' | 'inapp';
@@ -45,18 +52,23 @@ export default function TableCamPage() {
     const attemptRef = useRef(0);
     const timeoutRef = useRef<number | null>(null);
 
-    const runSequence = useCallback(async () => {
-        const attempt = ++attemptRef.current;
-
-        // The Capacitor WebView cannot grant getUserMedia (the binary carries
-        // no camera permission) — don't attempt it; hand off to a real
-        // browser. location.href keeps the FULL url including the #fragment,
-        // so the LiveKit token survives the copy/open handoff without ever
-        // leaving the device.
+    // A capture failure inside the native shell is recoverable rather than
+    // fatal: the same URL opened in Chrome always can grant the camera, and
+    // the #fragment (the LiveKit token) survives the handoff without ever
+    // leaving the device. Outside the shell there is nowhere to escape to, so
+    // the normal error + Retry stands.
+    const failCamera = useCallback((err: unknown) => {
         if (isNativeShell()) {
             setState('inapp');
             return;
         }
+        const name = err instanceof Error ? err.name : '';
+        setErrorKey(name === 'NotAllowedError' ? 'cameraDenied' : 'cameraError');
+        setState('error');
+    }, []);
+
+    const runSequence = useCallback(async () => {
+        const attempt = ++attemptRef.current;
 
         const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
         const params = new URLSearchParams(hash);
@@ -76,9 +88,7 @@ export default function TableCamPage() {
             await startPreview({ facingMode: 'environment', audio: false });
         } catch (err) {
             if (attemptRef.current !== attempt) return;
-            const name = err instanceof Error ? err.name : '';
-            setErrorKey(name === 'NotAllowedError' ? 'cameraDenied' : 'cameraError');
-            setState('error');
+            failCamera(err);
             return;
         }
         if (attemptRef.current !== attempt) return;
@@ -106,12 +116,16 @@ export default function TableCamPage() {
             void disconnect();
             stopPreview();
             const name = err instanceof Error ? err.name : '';
-            setErrorKey(name === 'NotAllowedError' ? 'cameraDenied' : 'connectError');
+            if (name === 'NotAllowedError') {
+                failCamera(err);
+                return;
+            }
+            setErrorKey('connectError');
             setState('error');
         } finally {
             window.clearTimeout(timer);
         }
-    }, [connect, disconnect, publishCamera, startPreview, stopPreview]);
+    }, [connect, disconnect, publishCamera, startPreview, stopPreview, failCamera]);
 
     // Full clean-slate restart: tear down any stale room/preview first so
     // connect() builds a fresh Room instead of early-returning the dead one.
@@ -233,7 +247,7 @@ export default function TableCamPage() {
                             </p>
                             <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                                 {t('live.cam.inAppDesc') ||
-                                    'The app cannot access the camera for broadcasting yet — the browser can.'}
+                                    "The app couldn't start the camera on this device — the browser can."}
                             </p>
                             <div className="mt-5 w-full max-w-[280px] space-y-2">
                                 <button

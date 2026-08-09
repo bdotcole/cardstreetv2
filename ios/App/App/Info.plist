@@ -60,6 +60,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>CardStreet uses the camera to scan trading cards so you can identify them and add them to your collection or marketplace listings.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CardStreet uses your microphone so you can talk to buyers while broadcasting a live break.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>CardStreet accesses your photo library so you can choose existing card photos to scan or attach to listings.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

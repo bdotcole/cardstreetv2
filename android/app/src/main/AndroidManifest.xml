@@ -82,6 +82,10 @@
     <!-- Used by the Meta (Facebook) SDK for app-event delivery. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Mic for in-app live broadcasting: the console publishes audio, and
+         without this the WebView denies the audio leg of getUserMedia, which
+         fails the whole capture (camera included). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Required on Android 13+ (API 33+) for push notifications to be delivered. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

@@ -32,7 +32,7 @@ import {
  * go-live, the table-cam QR handoff, the lot queue, the spot board, and
  * moderated chat.
  *
- * Staging is AUTOMATIC: on load (outside the native shell, show not ended)
+ * Staging is AUTOMATIC: on load (any shell, show not ended)
  * the console requests the camera, mints a 'main_cam' token, connects +
  * publishes, and fetches the table-cam QR — zero clicks before the second
  * phone can scan. While the show is 'scheduled' none of it is visible to
@@ -188,14 +188,48 @@ export default function BroadcastConsolePage() {
         disconnect,
     } = useLiveKitRoom();
 
-    // Native Capacitor shell: the binary carries no camera permission, so
-    // broadcasting is browser-only. Resolved in an effect so SSR and the
-    // first client paint agree (same pattern as PremiumHub).
-    const [isNativeApp, setIsNativeApp] = useState(false);
-    useEffect(() => { setIsNativeApp(isNativeShell()); }, []);
-
     const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
     const [previewStarting, setPreviewStarting] = useState(false);
+
+    // Native-shell escape hatch, reached only AFTER capture actually fails.
+    // The binary carries android.permission.CAMERA and the WebView grants
+    // getUserMedia (the in-app scanner proves it), so the console runs the
+    // normal sequence everywhere — an upfront native block stranded devices
+    // that work. The console asks for the MIC too, and RECORD_AUDIO landed
+    // only after v17; on an older binary the audio leg denies and takes the
+    // whole capture down with it, which is worth saying plainly. A video-only
+    // probe tells that case apart from a genuine camera denial.
+    const [nativeFallback, setNativeFallback] = useState<'camera' | 'mic' | null>(null);
+
+    const noteNativeFallback = useCallback(async () => {
+        if (!isNativeShell()) return;
+        let kind: 'camera' | 'mic' = 'camera';
+        try {
+            const probe = await navigator.mediaDevices.getUserMedia({ video: true });
+            for (const track of probe.getTracks()) track.stop();
+            kind = 'mic'; // Camera alone is fine — the mic is what failed.
+        } catch {
+            // Camera is blocked too; the generic browser handoff applies.
+        }
+        setNativeFallback(kind);
+    }, []);
+
+    // Every camera-failure site funnels through here: classify for the
+    // in-panel message, then (native shell only) resolve the browser handoff.
+    const noteCameraFailure = useCallback(
+        (err: unknown): CameraIssue => {
+            const issue = classifyCameraError(err);
+            setCameraIssue(issue);
+            void noteNativeFallback();
+            return issue;
+        },
+        [noteNativeFallback],
+    );
+
+    const clearCameraIssue = useCallback(() => {
+        setCameraIssue(null);
+        setNativeFallback(null);
+    }, []);
 
     const cameraIssueText = useCallback(
         (issue: CameraIssue): string => {
@@ -359,20 +393,20 @@ export default function BroadcastConsolePage() {
     // ─── Camera preview (before go-live) ───
     // The camera is requested the moment the console is usable so the seller
     // sees themselves and resolves the permission prompt EARLY — not in the
-    // middle of pressing Go live. Skipped in the native app (no camera
-    // permission in the binary) and once the show has ended.
+    // middle of pressing Go live. Runs in the native shell too; only a real
+    // failure routes to the browser handoff. Skipped once the show has ended.
     const beginPreview = useCallback(async () => {
         if (previewStarting) return;
         setPreviewStarting(true);
         try {
             await startPreview({ facingMode: 'user', audio: true });
-            setCameraIssue(null);
+            clearCameraIssue();
         } catch (err) {
-            setCameraIssue(classifyCameraError(err));
+            noteCameraFailure(err);
         } finally {
             setPreviewStarting(false);
         }
-    }, [previewStarting, startPreview]);
+    }, [previewStarting, startPreview, clearCameraIssue, noteCameraFailure]);
 
     // The show ending (locally or via realtime) releases the previewed camera.
     useEffect(() => {
@@ -493,7 +527,8 @@ export default function BroadcastConsolePage() {
         ratioDragRef.current = null;
     }, []);
 
-    // In-app broadcasters copy the console URL and reopen it in Chrome.
+    // The escape hatch when in-app capture fails: copy the console URL and
+    // reopen it in Chrome, which can always reach camera + mic.
     const copyConsoleLink = useCallback(async () => {
         const link = `${window.location.origin}/live/broadcast/${streamId}`;
         try {
@@ -541,27 +576,25 @@ export default function BroadcastConsolePage() {
                 // Adopts the preview's tracks when they're up (no re-prompt).
                 await publishCamera({ facingMode: 'user', audio: true });
                 publishedHereRef.current = true;
-                setCameraIssue(null);
+                clearCameraIssue();
             } catch (err) {
-                const issue = classifyCameraError(err);
-                setCameraIssue(issue);
-                showToast(cameraIssueText(issue), 'error');
+                showToast(cameraIssueText(noteCameraFailure(err)), 'error');
             }
         } catch {
             showToast(t('live.console.stageError') || 'Could not stage the cameras', 'error');
         } finally {
             setStaging(false);
         }
-    }, [staging, connected, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
+    }, [staging, connected, streamId, connect, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
 
     // Auto-stage on load: request the camera (preview resolves the permission
     // prompt first — publishCamera then adopts its tracks, no re-prompt), then
     // join + publish, all with zero clicks. Runs for 'scheduled' AND 'live'
-    // (the live case is the crashed-console reconnect). Skipped in the native
-    // shell (no camera permission in the binary) and once the show has ended.
-    // A failed stage degrades gracefully: Go live also connects + publishes.
+    // (the live case is the crashed-console reconnect), in the native shell as
+    // well as the browser, and stops once the show has ended. A failed stage
+    // degrades gracefully: Go live also connects + publishes.
     useEffect(() => {
-        if (pageState !== 'ready' || isNativeApp) return;
+        if (pageState !== 'ready') return;
         const status = stream?.status;
         if (!status || status === 'ended' || status === 'cancelled') return;
         void (async () => {
@@ -573,7 +606,7 @@ export default function BroadcastConsolePage() {
         // a denied camera prompt must not re-fire on every render — retry is
         // the seller's button.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pageState, isNativeApp, stream?.status]);
+    }, [pageState, stream?.status]);
 
     const doGoLive = useCallback(async () => {
         if (goingLive) return;
@@ -602,11 +635,9 @@ export default function BroadcastConsolePage() {
                     // Adopts the preview's tracks when they're up (no re-prompt).
                     await publishCamera({ facingMode: 'user', audio: true });
                     publishedHereRef.current = true;
-                    setCameraIssue(null);
+                    clearCameraIssue();
                 } catch (err) {
-                    const issue = classifyCameraError(err);
-                    setCameraIssue(issue);
-                    showToast(cameraIssueText(issue), 'error');
+                    showToast(cameraIssueText(noteCameraFailure(err)), 'error');
                 }
             }
         } catch {
@@ -614,7 +645,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setGoingLive(false);
         }
-    }, [goingLive, streamId, connected, localVideo, connect, publishCamera, cameraIssueText, showToast, t]);
+    }, [goingLive, streamId, connected, localVideo, connect, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
 
     const goLive = useCallback(() => {
         // Displacement guard: the show is live but not from this session —
@@ -651,15 +682,13 @@ export default function BroadcastConsolePage() {
         try {
             await publishCamera({ facingMode: 'user', audio: true });
             publishedHereRef.current = true;
-            setCameraIssue(null);
+            clearCameraIssue();
         } catch (err) {
-            const issue = classifyCameraError(err);
-            setCameraIssue(issue);
-            showToast(cameraIssueText(issue), 'error');
+            showToast(cameraIssueText(noteCameraFailure(err)), 'error');
         } finally {
             setRetryingCamera(false);
         }
-    }, [retryingCamera, publishCamera, cameraIssueText, showToast]);
+    }, [retryingCamera, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast]);
 
     // ─── Table-cam QR ───
     // The modal opens immediately in a loading state and the token is fetched
@@ -941,10 +970,10 @@ export default function BroadcastConsolePage() {
     // in-QR retry button); clearing on connect below re-arms it, so a table
     // phone dropping mid-show gets a FRESH token, not a stale one.
     useEffect(() => {
-        if (isNativeApp || !connected || tableCamConnected || tableCam) return;
+        if (!connected || tableCamConnected || tableCam) return;
         if (stream?.status === 'ended' || stream?.status === 'cancelled') return;
         void openTableQr();
-    }, [isNativeApp, connected, tableCamConnected, tableCam, stream?.status, openTableQr]);
+    }, [connected, tableCamConnected, tableCam, stream?.status, openTableQr]);
 
     useEffect(() => {
         if (tableCamConnected) setTableCam(null);
@@ -1095,24 +1124,45 @@ export default function BroadcastConsolePage() {
                                 receive. Un-mirrored on purpose — WYSIWYG beats the
                                 selfie flip here. */}
                             <div className="relative aspect-[9/12] bg-black rounded-xl overflow-hidden">
-                                {isNativeApp && !isEnded ? (
-                                    /* The binary has no camera permission — a dead
-                                       viewfinder here would read as a bug. Hand off
-                                       to a real browser instead. */
+                                {nativeFallback && !isEnded ? (
+                                    /* Capture failed inside the app shell — a dead
+                                       viewfinder here would read as a bug. Name the
+                                       mic case explicitly (an older binary without
+                                       RECORD_AUDIO), and offer the browser escape. */
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-5">
                                         <i className="fa-solid fa-arrow-up-right-from-square text-brand-cyan text-2xl mb-3"></i>
                                         <p className="text-sm font-bold text-white leading-snug">
-                                            {t('live.console.inAppTitle') ||
-                                                "Broadcasting from the app isn't available yet"}
+                                            {nativeFallback === 'mic'
+                                                ? t('live.console.micTitle') ||
+                                                  'Microphone needs the latest app update'
+                                                : t('live.console.inAppTitle') ||
+                                                  "Couldn't start the camera in the app"}
                                         </p>
                                         <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                                            {t('live.console.inAppDesc') ||
-                                                "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual."}
+                                            {nativeFallback === 'mic'
+                                                ? t('live.console.micDesc') ||
+                                                  'Open this console in Chrome to broadcast now, or update the app and try again.'
+                                                : t('live.console.inAppDesc') ||
+                                                  "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual."}
                                         </p>
-                                        <button onClick={() => void copyConsoleLink()} className={`${btnGhost} mt-4`}>
-                                            <i className="fa-solid fa-copy mr-1.5"></i>
-                                            {t('live.console.copyLink') || 'Copy console link'}
-                                        </button>
+                                        {/* Retry stays in-app: the seller may have just
+                                            granted the OS prompt they first dismissed,
+                                            which needs no browser bounce at all. */}
+                                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                                disabled={retryingCamera || previewStarting}
+                                                className={btnGhost}
+                                            >
+                                                {retryingCamera || previewStarting
+                                                    ? t('live.payment.processing') || 'Processing...'
+                                                    : t('live.console.retryCamera')}
+                                            </button>
+                                            <button onClick={() => void copyConsoleLink()} className={btnGhost}>
+                                                <i className="fa-solid fa-copy mr-1.5"></i>
+                                                {t('live.console.copyLink') || 'Copy console link'}
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : localVideo || tableCamConnected ? (
                                     <div ref={stackRef} className="absolute inset-0 flex flex-col">
@@ -1254,7 +1304,7 @@ export default function BroadcastConsolePage() {
                                 )}
                             </div>
                             {/* Per-feed zoom + reset. Panning is drag-on-the-feed above. */}
-                            {!isNativeApp && !isEnded && (localVideo || tableCamConnected) && (
+                            {!nativeFallback && !isEnded && (localVideo || tableCamConnected) && (
                                 <div className="mt-3 space-y-2">
                                     <p className="text-[10px] text-slate-500 leading-relaxed">
                                         {t('live.console.layoutHint') ||
