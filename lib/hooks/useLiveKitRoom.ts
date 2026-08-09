@@ -244,8 +244,21 @@ export function useLiveKitRoom() {
                     video: { facingMode: opts.facingMode },
                 });
             }
-            for (const track of tracks) {
-                await room.localParticipant.publishTrack(track);
+            try {
+                for (const track of tracks) {
+                    await room.localParticipant.publishTrack(track);
+                }
+            } catch (err) {
+                // A failed publish must not leave orphaned tracks holding the
+                // camera lock — a retry needs to re-open the device cleanly.
+                for (const track of tracks) {
+                    try {
+                        track.stop();
+                    } catch {
+                        // Already stopped.
+                    }
+                }
+                throw err;
             }
             const video =
                 (tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined) ??

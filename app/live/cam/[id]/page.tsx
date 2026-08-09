@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { TrackVideo } from '@/components/live/TrackVideo';
@@ -16,21 +16,37 @@ import { isNativeShell, openInSystemBrowser } from '@/components/live/shared';
  * leave the browser (not sent in requests, absent from server logs), the token
  * is short-lived, publisher-scoped to this one room, and dies when the room
  * closes. The page deliberately fetches nothing.
+ *
+ * Sequencing: the camera is opened FIRST (the permission gate), and only a
+ * granted camera proceeds to connect + publish. On a first visit getUserMedia
+ * blocks on the browser's permission prompt — running it mid-connection used
+ * to strand the page on "Connecting..." forever (a room that died while the
+ * prompt was up made publishTrack never settle, and there was no timeout or
+ * retry). Each phase now has its own state, the connect phase is bounded, and
+ * every failure lands on a Retry that restarts the sequence from scratch.
  */
 
-type CamState = 'connecting' | 'live' | 'invalid' | 'error' | 'stopped' | 'inapp';
+type CamState = 'permission' | 'connecting' | 'live' | 'invalid' | 'error' | 'stopped' | 'inapp';
+type CamErrorKey = 'connectError' | 'cameraError' | 'cameraDenied';
+
+const CONNECT_TIMEOUT_MS = 12000;
 
 export default function TableCamPage() {
     const { t } = useTranslation();
-    const [state, setState] = useState<CamState>('connecting');
-    const [errorKey, setErrorKey] = useState<'connectError' | 'cameraError'>('connectError');
+    const [state, setState] = useState<CamState>('permission');
+    const [errorKey, setErrorKey] = useState<CamErrorKey>('connectError');
     const [copyResult, setCopyResult] = useState<'copied' | 'failed' | null>(null);
-    const { connect, disconnect, publishCamera, localVideo } = useLiveKitRoom();
+    const { connect, disconnect, publishCamera, startPreview, stopPreview, localVideo } =
+        useLiveKitRoom();
     const startedRef = useRef(false);
+    // Monotonic attempt counter: a retry (or the connect timeout) bumps it so
+    // an in-flight prior attempt can no longer touch state when its awaits
+    // finally settle.
+    const attemptRef = useRef(0);
+    const timeoutRef = useRef<number | null>(null);
 
-    useEffect(() => {
-        if (startedRef.current) return; // StrictMode double-invoke guard
-        startedRef.current = true;
+    const runSequence = useCallback(async () => {
+        const attempt = ++attemptRef.current;
 
         // The Capacitor WebView cannot grant getUserMedia (the binary carries
         // no camera permission) — don't attempt it; hand off to a real
@@ -51,23 +67,73 @@ export default function TableCamPage() {
             return;
         }
 
-        (async () => {
-            try {
-                await connect(url, token);
-            } catch {
-                setErrorKey('connectError');
-                setState('error');
-                return;
-            }
-            try {
-                await publishCamera({ facingMode: 'environment', audio: false });
-                setState('live');
-            } catch {
-                setErrorKey('cameraError');
-                setState('error');
-            }
-        })();
-    }, [connect, publishCamera]);
+        // Phase 1 — the permission gate. Open the camera BEFORE touching the
+        // room so a blocked/slow permission prompt can't strand a half-built
+        // connection; there is deliberately no timeout here (the user may sit
+        // on the prompt as long as they like).
+        setState('permission');
+        try {
+            await startPreview({ facingMode: 'environment', audio: false });
+        } catch (err) {
+            if (attemptRef.current !== attempt) return;
+            const name = err instanceof Error ? err.name : '';
+            setErrorKey(name === 'NotAllowedError' ? 'cameraDenied' : 'cameraError');
+            setState('error');
+            return;
+        }
+        if (attemptRef.current !== attempt) return;
+
+        // Phase 2 — connect + publish (adopts the preview tracks, so no
+        // re-prompt). Bounded: a hang surfaces Retry, not an eternal spinner.
+        setState('connecting');
+        const timer = window.setTimeout(() => {
+            if (attemptRef.current !== attempt) return;
+            attemptRef.current += 1; // orphan the hung attempt
+            void disconnect();
+            stopPreview();
+            setErrorKey('connectError');
+            setState('error');
+        }, CONNECT_TIMEOUT_MS);
+        timeoutRef.current = timer;
+        try {
+            await connect(url, token);
+            if (attemptRef.current !== attempt) return;
+            await publishCamera({ facingMode: 'environment', audio: false });
+            if (attemptRef.current !== attempt) return;
+            setState('live');
+        } catch (err) {
+            if (attemptRef.current !== attempt) return;
+            void disconnect();
+            stopPreview();
+            const name = err instanceof Error ? err.name : '';
+            setErrorKey(name === 'NotAllowedError' ? 'cameraDenied' : 'connectError');
+            setState('error');
+        } finally {
+            window.clearTimeout(timer);
+        }
+    }, [connect, disconnect, publishCamera, startPreview, stopPreview]);
+
+    // Full clean-slate restart: tear down any stale room/preview first so
+    // connect() builds a fresh Room instead of early-returning the dead one.
+    const retry = useCallback(async () => {
+        attemptRef.current += 1;
+        await disconnect();
+        stopPreview();
+        void runSequence();
+    }, [disconnect, stopPreview, runSequence]);
+
+    useEffect(() => {
+        if (startedRef.current) return; // StrictMode double-invoke guard
+        startedRef.current = true;
+        void runSequence();
+    }, [runSequence]);
+
+    useEffect(
+        () => () => {
+            if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+        },
+        [],
+    );
 
     const stop = async () => {
         await disconnect();
@@ -110,6 +176,14 @@ export default function TableCamPage() {
 
             {state !== 'live' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
+                    {state === 'permission' && (
+                        <>
+                            <i className="fa-solid fa-camera text-brand-cyan text-3xl mb-4"></i>
+                            <p className="text-sm text-slate-300 leading-relaxed">
+                                {t('live.cam.allowCamera') || 'Allow camera access to continue'}
+                            </p>
+                        </>
+                    )}
                     {state === 'connecting' && (
                         <>
                             <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-2xl mb-4"></i>
@@ -129,10 +203,19 @@ export default function TableCamPage() {
                         <>
                             <i className="fa-solid fa-triangle-exclamation text-brand-red text-3xl mb-4"></i>
                             <p className="text-sm text-slate-300 leading-relaxed">
-                                {errorKey === 'cameraError'
-                                    ? t('live.cam.cameraError') || 'Could not access the rear camera'
-                                    : t('live.cam.connectError') || 'Could not connect to the stream'}
+                                {errorKey === 'cameraDenied'
+                                    ? t('live.cam.cameraDenied') ||
+                                      'Camera access was blocked — allow the camera for this site in your browser settings, then retry'
+                                    : errorKey === 'cameraError'
+                                      ? t('live.cam.cameraError') || 'Could not access the rear camera'
+                                      : t('live.cam.connectError') || 'Could not connect to the stream'}
                             </p>
+                            <button
+                                onClick={() => void retry()}
+                                className="mt-6 px-8 h-12 rounded-full bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-[0.2em] active:scale-95 transition-all"
+                            >
+                                {t('live.cam.retry') || 'Retry'}
+                            </button>
                         </>
                     )}
                     {state === 'stopped' && (
