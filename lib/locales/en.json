@@ -1065,6 +1065,10 @@
             "revenue": "Revenue",
             "retryCamera": "Retry camera",
             "noCamera": "Camera is not publishing",
+            "layout": "Layout",
+            "layoutHint": "Drag a feed to reposition, slide to zoom — viewers see exactly this framing.",
+            "faceCam": "Face cam",
+            "layoutReset": "Reset",
             "productTypes": {
                 "box": "Box",
                 "pack": "Pack",

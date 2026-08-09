@@ -7,14 +7,18 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
-import { TrackVideo } from '@/components/live/TrackVideo';
+import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import {
+    clampCrop,
+    DEFAULT_CROP,
     formatSatang,
     isNativeShell,
+    type FeedCrop,
     type LiveChatMessage,
     type LiveLotRow,
     type LiveSpotRow,
     type LiveStreamRow,
+    type StreamLayout,
 } from '@/components/live/shared';
 
 /**
@@ -127,6 +131,21 @@ export default function BroadcastConsolePage() {
     const [chatInput, setChatInput] = useState('');
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
 
+    // ─── Viewer framing (streams.layout) ───
+    // Local-first: the panel edits this state and autosaves; the Realtime echo
+    // of our own PATCH merges into `stream` but never fights the panel.
+    const [layout, setLayout] = useState<StreamLayout>({});
+    // Source of truth during rapid drag updates (state lags pointermove).
+    const layoutRef = useRef<StreamLayout>({});
+    const layoutSeededRef = useRef(false);
+    const layoutSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const feedDragRef = useRef<{
+        slot: 'main' | 'table';
+        pointerId: number;
+        lastX: number;
+        lastY: number;
+    } | null>(null);
+
     // Add-lot form.
     const [showAddLot, setShowAddLot] = useState(false);
     const [lotName, setLotName] = useState('');
@@ -187,6 +206,19 @@ export default function BroadcastConsolePage() {
         setStream(data.stream);
         setLots((data.items ?? []).sort((a: LiveLotRow, b: LiveLotRow) => a.position - b.position));
         setSpots(data.spots ?? []);
+        // Seed the framing panel ONCE from the stored layout — later loadDetail
+        // calls (add-lot refresh) must not clobber in-progress edits.
+        if (!layoutSeededRef.current) {
+            layoutSeededRef.current = true;
+            const stored = (data.stream as LiveStreamRow)?.layout;
+            const seeded: StreamLayout = {};
+            const mainCrop = clampCrop(stored?.main);
+            const tableCrop = clampCrop(stored?.table);
+            if (mainCrop) seeded.main = mainCrop;
+            if (tableCrop) seeded.table = tableCrop;
+            layoutRef.current = seeded;
+            setLayout(seeded);
+        }
         setPageState('ready');
         return data.stream as LiveStreamRow;
     }, [streamId]);
@@ -337,6 +369,83 @@ export default function BroadcastConsolePage() {
     useEffect(() => {
         if (stream?.status === 'ended' || stream?.status === 'cancelled') stopPreview();
     }, [stream?.status, stopPreview]);
+
+    // ─── Layout panel: crop editing + debounced autosave ───
+    const persistLayout = useCallback(
+        (next: StreamLayout) => {
+            if (layoutSaveTimer.current) clearTimeout(layoutSaveTimer.current);
+            layoutSaveTimer.current = setTimeout(() => {
+                void fetch(`/api/live/streams/${streamId}/layout`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(next),
+                }).catch(() => {
+                    // Framing is cosmetic; the next adjustment retries.
+                });
+            }, 400);
+        },
+        [streamId],
+    );
+
+    useEffect(
+        () => () => {
+            if (layoutSaveTimer.current) clearTimeout(layoutSaveTimer.current);
+        },
+        [],
+    );
+
+    const cropOf = useCallback(
+        (slot: 'main' | 'table'): FeedCrop => clampCrop(layout[slot]) ?? DEFAULT_CROP,
+        [layout],
+    );
+
+    const updateCrop = useCallback(
+        (slot: 'main' | 'table', patch: Partial<FeedCrop>) => {
+            const cur = clampCrop(layoutRef.current[slot]) ?? DEFAULT_CROP;
+            const next: StreamLayout = {
+                ...layoutRef.current,
+                [slot]: clampCrop({ ...cur, ...patch }) ?? DEFAULT_CROP,
+            };
+            layoutRef.current = next;
+            setLayout(next);
+            persistLayout(next);
+        },
+        [persistLayout],
+    );
+
+    // Drag-to-reposition: dragging moves the CONTENT with the pointer, so the
+    // visible window (x/y) moves the opposite way. At zoom z the window spans
+    // 1/z of the feed, so a full x-sweep (0 -> 1) is rect.width * (z - 1)
+    // on-screen pixels — that's the divisor that makes the pan track 1:1.
+    const beginFeedDrag = useCallback(
+        (slot: 'main' | 'table') => (e: React.PointerEvent<HTMLDivElement>) => {
+            const zoom = (clampCrop(layoutRef.current[slot]) ?? DEFAULT_CROP).zoom;
+            if (zoom <= 1) return;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            feedDragRef.current = { slot, pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY };
+        },
+        [],
+    );
+
+    const moveFeedDrag = useCallback(
+        (e: React.PointerEvent<HTMLDivElement>) => {
+            const d = feedDragRef.current;
+            if (!d || e.pointerId !== d.pointerId) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const crop = clampCrop(layoutRef.current[d.slot]) ?? DEFAULT_CROP;
+            if (crop.zoom <= 1 || rect.width === 0 || rect.height === 0) return;
+            const dx = -(e.clientX - d.lastX) / (rect.width * (crop.zoom - 1));
+            const dy = -(e.clientY - d.lastY) / (rect.height * (crop.zoom - 1));
+            d.lastX = e.clientX;
+            d.lastY = e.clientY;
+            updateCrop(d.slot, { x: crop.x + dx, y: crop.y + dy });
+        },
+        [updateCrop],
+    );
+
+    const endFeedDrag = useCallback(() => {
+        feedDragRef.current = null;
+    }, []);
 
     // In-app broadcasters copy the console URL and reopen it in Chrome.
     const copyConsoleLink = useCallback(async () => {
@@ -825,6 +934,14 @@ export default function BroadcastConsolePage() {
                     {/* ─── Column 1: camera + table cam + stats ─── */}
                     <div className="space-y-4">
                         <div className={sectionCls}>
+                            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300 mb-3">
+                                {t('live.console.layout') || 'Layout'}
+                            </h2>
+                            {/* The panel mirrors the VIEWER's stacked arrangement (face
+                                cam 40% top, table cam 60% bottom) through the same
+                                CroppedTrackVideo the viewer page renders, so the seller
+                                frames exactly what viewers receive. Un-mirrored on
+                                purpose — WYSIWYG beats the selfie flip here. */}
                             <div className="relative aspect-[9/12] bg-black rounded-xl overflow-hidden">
                                 {isNativeApp && !isEnded ? (
                                     /* The binary has no camera permission — a dead
@@ -845,19 +962,82 @@ export default function BroadcastConsolePage() {
                                             {t('live.console.copyLink') || 'Copy console link'}
                                         </button>
                                     </div>
-                                ) : localVideo ? (
-                                    <>
-                                        <TrackVideo
-                                            track={localVideo}
-                                            mirror
-                                            className="absolute inset-0 w-full h-full object-cover"
-                                        />
-                                        {!connected && !isEnded && (
-                                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-slate-200 text-[10px] font-black uppercase tracking-widest">
-                                                {t('live.console.preview') || 'Preview'}
-                                            </span>
+                                ) : localVideo || tableCamConnected ? (
+                                    <div className="absolute inset-0 flex flex-col">
+                                        <div
+                                            className={`relative ${tableCamConnected ? 'h-[40%]' : 'h-full'} touch-none ${
+                                                localVideo && cropOf('main').zoom > 1 ? 'cursor-move' : ''
+                                            }`}
+                                            onPointerDown={beginFeedDrag('main')}
+                                            onPointerMove={moveFeedDrag}
+                                            onPointerUp={endFeedDrag}
+                                            onPointerCancel={endFeedDrag}
+                                        >
+                                            {localVideo ? (
+                                                <CroppedTrackVideo
+                                                    track={localVideo}
+                                                    crop={layout.main ?? null}
+                                                    className="absolute inset-0"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+                                                    <i className="fa-solid fa-video-slash text-slate-600 text-xl mb-2"></i>
+                                                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                                                        {cameraIssue
+                                                            ? cameraIssueText(cameraIssue)
+                                                            : previewStarting
+                                                                ? t('live.console.previewStarting') || 'Starting camera...'
+                                                                : t('live.console.noCamera')}
+                                                    </p>
+                                                    {!isEnded && (cameraIssue || (isLive && connected)) && (
+                                                        <button
+                                                            onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                                            disabled={retryingCamera || previewStarting}
+                                                            className={`${btnGhost} mt-2`}
+                                                        >
+                                                            {retryingCamera || previewStarting
+                                                                ? t('live.payment.processing') || 'Processing...'
+                                                                : t('live.console.retryCamera')}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {localVideo && !connected && !isEnded && (
+                                                <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-slate-200 text-[10px] font-black uppercase tracking-widest">
+                                                    {t('live.console.preview') || 'Preview'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {tableCamConnected && (
+                                            <div
+                                                className={`relative h-[60%] border-t border-white/10 touch-none ${
+                                                    cropOf('table').zoom > 1 ? 'cursor-move' : ''
+                                                }`}
+                                                onPointerDown={beginFeedDrag('table')}
+                                                onPointerMove={moveFeedDrag}
+                                                onPointerUp={endFeedDrag}
+                                                onPointerCancel={endFeedDrag}
+                                            >
+                                                {tableCamTrack ? (
+                                                    /* Muted: its audio playing here would
+                                                       feed back into the main mic. */
+                                                    <CroppedTrackVideo
+                                                        track={tableCamTrack}
+                                                        crop={layout.table ?? null}
+                                                        className="absolute inset-0"
+                                                    />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i>
+                                                    </div>
+                                                )}
+                                                <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-brand-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
+                                                    {t('live.console.tableCamConnected') || 'Table cam connected'}
+                                                </span>
+                                            </div>
                                         )}
-                                    </>
+                                    </div>
                                 ) : (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
                                         <i className="fa-solid fa-video-slash text-slate-600 text-2xl mb-3"></i>
@@ -886,34 +1066,54 @@ export default function BroadcastConsolePage() {
                                     </div>
                                 )}
                             </div>
+                            {/* Per-feed zoom + reset. Panning is drag-on-the-feed above. */}
+                            {!isNativeApp && !isEnded && (localVideo || tableCamConnected) && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                                        {t('live.console.layoutHint') ||
+                                            'Drag a feed to reposition, slide to zoom — viewers see exactly this framing.'}
+                                    </p>
+                                    {(
+                                        [
+                                            ['main', t('live.console.faceCam') || 'Face cam', !!localVideo],
+                                            ['table', t('live.console.tableCam') || 'Table cam', tableCamConnected],
+                                        ] as const
+                                    )
+                                        .filter(([, , show]) => show)
+                                        .map(([slot, label]) => (
+                                            <div key={slot} className="flex items-center gap-2">
+                                                <span className="w-16 shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                                    {label}
+                                                </span>
+                                                <input
+                                                    type="range"
+                                                    min={1}
+                                                    max={3}
+                                                    step={0.05}
+                                                    value={cropOf(slot).zoom}
+                                                    onChange={(e) =>
+                                                        updateCrop(slot, { zoom: parseFloat(e.target.value) })
+                                                    }
+                                                    aria-label={label}
+                                                    className="flex-1 accent-brand-cyan"
+                                                />
+                                                <button
+                                                    onClick={() => updateCrop(slot, { ...DEFAULT_CROP })}
+                                                    className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
+                                                >
+                                                    {t('live.console.layoutReset') || 'Reset'}
+                                                </button>
+                                            </div>
+                                        ))}
+                                </div>
+                            )}
                             {isLive && (
                                 <>
                                     <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3 w-full h-10`}>
                                         <i className="fa-solid fa-qrcode mr-2"></i>
                                         {t('live.console.tableCam') || 'Table cam'}
                                     </button>
-                                    {tableCamConnected ? (
-                                        /* Live monitor of the table feed. object-contain,
-                                           not cover — the point is confirming what the
-                                           second phone actually frames. Muted: its audio
-                                           playing here would feed back into the main mic. */
-                                        <div className="relative mt-3 aspect-video bg-black rounded-xl overflow-hidden">
-                                            {tableCamTrack ? (
-                                                <TrackVideo
-                                                    track={tableCamTrack}
-                                                    className="absolute inset-0 w-full h-full object-contain"
-                                                />
-                                            ) : (
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i>
-                                                </div>
-                                            )}
-                                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-brand-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
-                                                {t('live.console.tableCamConnected') || 'Table cam connected'}
-                                            </span>
-                                        </div>
-                                    ) : (
+                                    {!tableCamConnected && (
                                         <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
                                             <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
                                             {t('live.console.tableCamNotConnected') || 'Table cam not connected'}

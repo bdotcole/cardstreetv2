@@ -9,7 +9,8 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { useLiveKitRoom, type CameraSlot } from '@/lib/hooks/useLiveKitRoom';
-import { TrackVideo, TrackAudio } from '@/components/live/TrackVideo';
+import { TrackAudio } from '@/components/live/TrackVideo';
+import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import {
     formatCountdown,
     formatSatang,
@@ -524,6 +525,10 @@ export default function LiveViewerPage() {
     const feedCount = (mainTrack ? 1 : 0) + (tableTrack ? 1 : 0);
     const primaryTrack = primarySlot === 'table' ? tableTrack : mainTrack;
     const secondaryTrack = primarySlot === 'table' ? mainTrack : tableTrack;
+    const secondarySlot: CameraSlot = primarySlot === 'table' ? 'main' : 'table';
+    // The broadcaster's per-feed framing (streams.layout, live via Realtime).
+    // CroppedTrackVideo treats null/invalid as the default uncropped fill.
+    const cropFor = (slot: CameraSlot) => stream?.layout?.[slot] ?? null;
 
     const payableSpots: PayableSpot[] = myHeldSpots.map((s) => ({
         id: s.id,
@@ -756,24 +761,27 @@ export default function LiveViewerPage() {
                     </p>
                 </div>
             ) : feedCount === 1 ? (
-                <TrackVideo
-                    track={primaryTrack ?? secondaryTrack}
-                    className="absolute inset-0 w-full h-full object-cover"
+                <CroppedTrackVideo
+                    track={mainTrack ?? tableTrack}
+                    crop={cropFor(mainTrack ? 'main' : 'table')}
+                    className="absolute inset-0"
                 />
             ) : (
                 <div className="absolute inset-0 flex flex-col">
                     {/* Secondary feed (face cam by default) — tap swaps it into the primary slot. */}
                     <div className="relative h-[40%]">
-                        <TrackVideo
+                        <CroppedTrackVideo
                             track={secondaryTrack}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            crop={cropFor(secondarySlot)}
+                            className="absolute inset-0"
                             onClick={() => setPrimarySlot((s) => (s === 'table' ? 'main' : 'table'))}
                         />
                     </div>
                     <div className="relative h-[60%] border-t border-white/10">
-                        <TrackVideo
+                        <CroppedTrackVideo
                             track={primaryTrack}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            crop={cropFor(primarySlot)}
+                            className="absolute inset-0"
                         />
                     </div>
                 </div>

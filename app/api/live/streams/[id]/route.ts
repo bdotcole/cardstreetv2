@@ -45,14 +45,24 @@ export async function GET(
 
         const admin = createAdminClient();
 
-        const { data: stream, error: streamErr } = await admin
+        const baseCols = ctx.isSeller ? STREAM_SELLER_COLS : STREAM_VIEWER_COLS;
+        const sellerJoin = 'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)';
+        let { data: stream, error: streamErr } = await admin
             .from('streams')
-            .select(
-                `${ctx.isSeller ? STREAM_SELLER_COLS : STREAM_VIEWER_COLS}, ` +
-                'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)',
-            )
+            .select(`${baseCols}, layout, ${sellerJoin}`)
             .eq('id', id)
             .single();
+
+        // layout (20260807_stream_layout.sql) is additive and applied by hand
+        // — until it exists, serve the detail without framing data instead of
+        // 404ing every viewer on an undefined-column error.
+        if (streamErr && streamErr.code === '42703') {
+            ({ data: stream, error: streamErr } = await admin
+                .from('streams')
+                .select(`${baseCols}, ${sellerJoin}`)
+                .eq('id', id)
+                .single());
+        }
 
         if (streamErr || !stream) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -24,7 +24,48 @@ export interface LiveStreamRow {
     viewer_peak: number;
     settled_at: string | null;
     created_at: string;
+    /** Optional until 20260807_stream_layout.sql is applied — absent = default framing. */
+    layout?: StreamLayout | null;
     seller?: { display_name: string | null; avatar_url: string | null } | null;
+}
+
+/**
+ * Presentation-layer crop for one feed: the viewer sees a 1/zoom window of
+ * the video, positioned by x/y (0 = window at the left/top edge, 1 = at the
+ * right/bottom edge, 0.5 = centered). Applied as pure CSS in
+ * CroppedTrackVideo — no video processing anywhere.
+ */
+export interface FeedCrop {
+    zoom: number;
+    x: number;
+    y: number;
+}
+
+/** streams.layout — per-camera-slot framing the broadcaster set. */
+export interface StreamLayout {
+    main?: FeedCrop | null;
+    table?: FeedCrop | null;
+}
+
+export const DEFAULT_CROP: FeedCrop = { zoom: 1, x: 0.5, y: 0.5 };
+
+/**
+ * Validate + clamp an untrusted crop (API body, DB JSONB). Returns null for
+ * anything that isn't three finite numbers — callers treat null as "no crop".
+ * Values are clamped (zoom 1..3, x/y 0..1) and rounded so drag deltas don't
+ * persist as 15-decimal floats.
+ */
+export function clampCrop(value: unknown): FeedCrop | null {
+    if (!value || typeof value !== 'object') return null;
+    const { zoom, x, y } = value as Record<string, unknown>;
+    if (typeof zoom !== 'number' || typeof x !== 'number' || typeof y !== 'number') return null;
+    if (!Number.isFinite(zoom) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const round = (n: number) => Math.round(n * 10000) / 10000;
+    return {
+        zoom: round(Math.min(3, Math.max(1, zoom))),
+        x: round(Math.min(1, Math.max(0, x))),
+        y: round(Math.min(1, Math.max(0, y))),
+    };
 }
 
 export interface LiveLotRow {

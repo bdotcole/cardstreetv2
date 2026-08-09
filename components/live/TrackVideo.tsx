@@ -15,12 +15,16 @@ type AnyVideoTrack = RemoteTrack | LocalVideoTrack;
 export function TrackVideo({
     track,
     className,
+    style,
     muted = true,
     mirror = false,
     onClick,
 }: {
     track: AnyVideoTrack | null;
     className?: string;
+    /** Inline styles (CroppedTrackVideo's crop transform). A style.transform
+     *  overrides the mirror class's transform — don't combine the two. */
+    style?: React.CSSProperties;
     /** Video elements stay muted — audio rides separate TrackAudio elements. */
     muted?: boolean;
     /** Front cameras preview mirrored, matching what users expect of a selfie view. */
@@ -45,6 +49,7 @@ export function TrackVideo({
             playsInline
             muted={muted}
             onClick={onClick}
+            style={style}
             className={`${className ?? ''} ${mirror ? 'scale-x-[-1]' : ''}`}
         />
     );
