@@ -1,10 +1,12 @@
 /**
  * PATCH /api/live/streams/[id]/layout — the broadcaster's per-feed viewer
- * framing: { main?, table? } each { zoom 1..3, x 0..1, y 0..1 }, plus an
- * optional `ratio` (0.2..0.8 — the face cam's share of the stacked dual-feed
- * height), written to streams.layout. The existing streams Realtime
- * subscription delivers the row update to viewers, which re-crop/re-split
- * live. Stored rows without `ratio` render at the default split.
+ * framing: { main?, table? } each { zoom 1..3, x 0..1, y 0..1, fit? } (fit is
+ * 'cover'|'contain' — clampCrop drops anything else so the slot default in
+ * DEFAULT_FIT applies), plus an optional `ratio` (0.2..0.8 — the face cam's
+ * share of the stacked dual-feed height), written to streams.layout. The
+ * existing streams Realtime subscription delivers the row update to viewers,
+ * which re-crop/re-fit/re-split live. Stored rows without `ratio`/`fit`
+ * render at the defaults.
  *
  * streams.layout is additive (20260807_stream_layout.sql, run manually in the
  * SQL Editor): until the column exists, writes are ACCEPTED but not persisted

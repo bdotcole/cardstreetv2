@@ -17,7 +17,9 @@ import {
     DEFAULT_RATIO,
     formatSatang,
     isNativeShell,
+    resolveFit,
     type FeedCrop,
+    type FeedFit,
     type LiveChatMessage,
     type LiveLotRow,
     type LiveSpotRow,
@@ -998,6 +1000,7 @@ export default function BroadcastConsolePage() {
                     <div className="ml-auto flex items-center gap-2">
                         <ShareShowButton
                             title={stream.title}
+                            sellerName={stream.seller?.display_name}
                             path={`/live/${streamId}`}
                             className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center text-slate-300 active:scale-90 transition-all"
                         />
@@ -1129,6 +1132,7 @@ export default function BroadcastConsolePage() {
                                                 <CroppedTrackVideo
                                                     track={localVideo}
                                                     crop={layout.main ?? null}
+                                                    slot="main"
                                                     className="absolute inset-0"
                                                 />
                                             ) : (
@@ -1178,6 +1182,7 @@ export default function BroadcastConsolePage() {
                                                         <CroppedTrackVideo
                                                             track={tableCamTrack}
                                                             crop={layout.table ?? null}
+                                                            slot="table"
                                                             className="absolute inset-0"
                                                         />
                                                         {/* Broadcaster-only receive stats: what the
@@ -1262,31 +1267,53 @@ export default function BroadcastConsolePage() {
                                         ] as const
                                     )
                                         .filter(([, , show]) => show)
-                                        .map(([slot, label]) => (
-                                            <div key={slot} className="flex items-center gap-2">
-                                                <span className="w-16 shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                                    {label}
-                                                </span>
-                                                <input
-                                                    type="range"
-                                                    min={1}
-                                                    max={3}
-                                                    step={0.05}
-                                                    value={cropOf(slot).zoom}
-                                                    onChange={(e) =>
-                                                        updateCrop(slot, { zoom: parseFloat(e.target.value) })
-                                                    }
-                                                    aria-label={label}
-                                                    className="flex-1 accent-brand-cyan"
-                                                />
+                                        .map(([slot, label]) => {
+                                            const fit = resolveFit(slot, cropOf(slot));
+                                            const fitBtn = (value: FeedFit, text: string) => (
                                                 <button
-                                                    onClick={() => updateCrop(slot, { ...DEFAULT_CROP })}
-                                                    className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
+                                                    onClick={() => updateCrop(slot, { fit: value })}
+                                                    aria-pressed={fit === value}
+                                                    className={`px-2 h-6 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                                        fit === value
+                                                            ? 'bg-brand-cyan/20 text-brand-cyan'
+                                                            : 'text-slate-500 hover:text-slate-300'
+                                                    }`}
                                                 >
-                                                    {t('live.console.layoutReset') || 'Reset'}
+                                                    {text}
                                                 </button>
-                                            </div>
-                                        ))}
+                                            );
+                                            return (
+                                                <div key={slot} className="flex items-center gap-2">
+                                                    <span className="w-16 shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                                        {label}
+                                                    </span>
+                                                    <input
+                                                        type="range"
+                                                        min={1}
+                                                        max={3}
+                                                        step={0.05}
+                                                        value={cropOf(slot).zoom}
+                                                        onChange={(e) =>
+                                                            updateCrop(slot, { zoom: parseFloat(e.target.value) })
+                                                        }
+                                                        aria-label={label}
+                                                        className="flex-1 accent-brand-cyan"
+                                                    />
+                                                    {/* Fill = cover-crop the slot; Fit = full FOV,
+                                                        letterboxed over a blurred backdrop. */}
+                                                    <div className="shrink-0 flex rounded-md overflow-hidden border border-white/10">
+                                                        {fitBtn('cover', t('live.console.fitFill') || 'Fill')}
+                                                        {fitBtn('contain', t('live.console.fitContain') || 'Fit')}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => updateCrop(slot, { ...DEFAULT_CROP })}
+                                                        className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
+                                                    >
+                                                        {t('live.console.layoutReset') || 'Reset'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                             )}
                             {/* Table-cam QR, INLINE and automatic: minted the moment

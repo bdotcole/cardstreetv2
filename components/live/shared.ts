@@ -34,11 +34,20 @@ export interface LiveStreamRow {
  * the video, positioned by x/y (0 = window at the left/top edge, 1 = at the
  * right/bottom edge, 0.5 = centered). Applied as pure CSS in
  * CroppedTrackVideo — no video processing anywhere.
+ *
+ * `fit` decides how the feed meets its slot BEFORE zoom/pan apply: 'cover'
+ * center-crops to fill (the classic look), 'contain' shows the full frame
+ * letterboxed over a blurred backdrop — the fix for a portrait table cam
+ * whose FOV was being destroyed by the wide slot's center-crop. Absent =
+ * the slot's default (DEFAULT_FIT), so pre-fit stored layouts keep working.
  */
+export type FeedFit = 'cover' | 'contain';
+
 export interface FeedCrop {
     zoom: number;
     x: number;
     y: number;
+    fit?: FeedFit;
 }
 
 /** streams.layout — per-camera-slot framing the broadcaster set. */
@@ -58,6 +67,25 @@ export const DEFAULT_CROP: FeedCrop = { zoom: 1, x: 0.5, y: 0.5 };
 export const DEFAULT_RATIO = 0.4;
 
 /**
+ * Per-slot fit defaults: the face cam fills its slot (a cropped face is
+ * fine), the table cam shows its FULL field of view — table phones publish
+ * portrait 1080x1920 and cover-cropping that into the wide lower slot both
+ * zoomed it ~2.4x and threw away most of the table.
+ */
+export const DEFAULT_FIT: Record<'main' | 'table', FeedFit> = {
+    main: 'cover',
+    table: 'contain',
+};
+
+/** The slot's effective fit — the stored crop's valid `fit` or the slot default. */
+export function resolveFit(
+    slot: 'main' | 'table',
+    crop?: { fit?: FeedFit | null } | null,
+): FeedFit {
+    return crop?.fit === 'cover' || crop?.fit === 'contain' ? crop.fit : DEFAULT_FIT[slot];
+}
+
+/**
  * Validate + clamp an untrusted split ratio (API body, DB JSONB). Null for
  * non-numbers — callers treat null as "use DEFAULT_RATIO". Clamped to
  * 0.2..0.8 so neither feed can be dragged into a sliver, rounded like crops.
@@ -71,19 +99,22 @@ export function clampRatio(value: unknown): number | null {
  * Validate + clamp an untrusted crop (API body, DB JSONB). Returns null for
  * anything that isn't three finite numbers — callers treat null as "no crop".
  * Values are clamped (zoom 1..3, x/y 0..1) and rounded so drag deltas don't
- * persist as 15-decimal floats.
+ * persist as 15-decimal floats. A valid `fit` passes through; anything else
+ * is dropped so the slot default applies (resolveFit).
  */
 export function clampCrop(value: unknown): FeedCrop | null {
     if (!value || typeof value !== 'object') return null;
-    const { zoom, x, y } = value as Record<string, unknown>;
+    const { zoom, x, y, fit } = value as Record<string, unknown>;
     if (typeof zoom !== 'number' || typeof x !== 'number' || typeof y !== 'number') return null;
     if (!Number.isFinite(zoom) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
     const round = (n: number) => Math.round(n * 10000) / 10000;
-    return {
+    const clamped: FeedCrop = {
         zoom: round(Math.min(3, Math.max(1, zoom))),
         x: round(Math.min(1, Math.max(0, x))),
         y: round(Math.min(1, Math.max(0, y))),
     };
+    if (fit === 'cover' || fit === 'contain') clamped.fit = fit;
+    return clamped;
 }
 
 export interface LiveLotRow {

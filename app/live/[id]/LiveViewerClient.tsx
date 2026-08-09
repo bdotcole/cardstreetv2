@@ -782,6 +782,7 @@ export default function LiveViewerClient() {
                     <CroppedTrackVideo
                         track={mainTrack ?? tableTrack}
                         crop={cropFor(mainTrack ? 'main' : 'table')}
+                        slot={mainTrack ? 'main' : 'table'}
                         className="absolute inset-0"
                     />
                     {isAdmin && (
@@ -801,6 +802,7 @@ export default function LiveViewerClient() {
                         <CroppedTrackVideo
                             track={mainTrack}
                             crop={cropFor('main')}
+                            slot="main"
                             className="absolute inset-0"
                         />
                         {isAdmin && (
@@ -817,6 +819,7 @@ export default function LiveViewerClient() {
                         <CroppedTrackVideo
                             track={tableTrack}
                             crop={cropFor('table')}
+                            slot="table"
                             className="absolute inset-0"
                         />
                         {isAdmin && (
@@ -891,6 +894,7 @@ export default function LiveViewerClient() {
                 )}
                 <ShareShowButton
                     title={stream.title}
+                    sellerName={stream.seller?.display_name}
                     path={`/live/${streamId}`}
                     className="w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
                 />

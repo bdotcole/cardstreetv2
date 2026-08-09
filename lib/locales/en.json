@@ -948,6 +948,8 @@
             "sheetTitle": "Share this show",
             "copyLink": "Copy link",
             "copied": "Link copied",
+            "message": "LIVE now: {title} — watch {seller} breaking on CardStreet",
+            "messageNoSeller": "LIVE now: {title} — watch live breaks on CardStreet",
             "instagramNote": "Instagram does not support link prefill from the web — the link is copied, paste it into your story or bio."
         },
         "viewer": {
@@ -1082,6 +1084,8 @@
             "layoutHint": "Drag the divider to resize the split, drag a feed to reposition, slide to zoom — viewers see exactly this framing.",
             "splitDivider": "Drag to resize the split",
             "faceCam": "Face cam",
+            "fitFill": "Fill",
+            "fitContain": "Fit",
             "layoutReset": "Reset",
             "productTypes": {
                 "box": "Box",

@@ -9,7 +9,14 @@ import { useToast } from '@/lib/contexts/ToastContext';
  * navigator.share (the OS sheet) where available — most Thai phones — else a
  * small in-app sheet with Copy link + Facebook / X / LINE web-share intents.
  * LINE is the Thailand-critical channel. Instagram has NO web prefill API, so
- * its entry only copies the link (the tooltip/note says so).
+ * its entry only copies the message (the tooltip/note says so).
+ *
+ * Every channel carries a bilingual MESSAGE (show title + seller name,
+ * language from the current UI locale via useTranslation), not a bare URL:
+ * navigator.share gets {title, text, url}; X gets text+url; LINE's
+ * line.me/R/share carries text+url in one param; copy puts "text\nurl" on
+ * the clipboard. Facebook's sharer ignores prefilled text by policy — the
+ * quote= param rides along best-effort.
  *
  * The absolute URL is built at click time from window.location.origin — never
  * at render — so the component stays SSR-safe wherever it's dropped.
@@ -17,12 +24,15 @@ import { useToast } from '@/lib/contexts/ToastContext';
 
 export function ShareShowButton({
     title,
+    sellerName,
     path,
     className,
     label,
 }: {
-    /** Show title — rides along in navigator.share and the X intent text. */
+    /** Show title — the navigator.share sheet title and part of the message. */
     title: string;
+    /** Seller display name woven into the share message; omit to drop it. */
+    sellerName?: string | null;
     /** App-relative link to share, e.g. `/live/<id>`. */
     path: string;
     /** Full styling of the trigger button (icon is appended inside). */
@@ -36,19 +46,30 @@ export function ShareShowButton({
 
     const shareUrl = useCallback(() => `${window.location.origin}${path}`, [path]);
 
-    const copyLink = useCallback(async () => {
+    // t() has no interpolation — the locale strings carry {title}/{seller}
+    // placeholders replaced here, so word order can differ per language.
+    const shareText = useCallback(() => {
+        const template = sellerName
+            ? t('live.share.message') ||
+              'LIVE now: {title} — watch {seller} breaking on CardStreet'
+            : t('live.share.messageNoSeller') ||
+              'LIVE now: {title} — watch live breaks on CardStreet';
+        return template.replace('{title}', title).replace('{seller}', sellerName ?? '');
+    }, [t, title, sellerName]);
+
+    const copyShare = useCallback(async () => {
         try {
-            await navigator.clipboard.writeText(shareUrl());
+            await navigator.clipboard.writeText(`${shareText()}\n${shareUrl()}`);
             showToast(t('live.share.copied') || 'Link copied', 'success');
         } catch {
             showToast(t('live.console.copyError') || 'Could not copy the link', 'error');
         }
-    }, [shareUrl, showToast, t]);
+    }, [shareText, shareUrl, showToast, t]);
 
     const onShare = useCallback(async () => {
         if (typeof navigator.share === 'function') {
             try {
-                await navigator.share({ title, url: shareUrl() });
+                await navigator.share({ title, text: shareText(), url: shareUrl() });
                 return;
             } catch (err) {
                 // Abort = the user closed the OS sheet; anything else falls
@@ -57,14 +78,14 @@ export function ShareShowButton({
             }
         }
         setSheetOpen(true);
-    }, [title, shareUrl]);
+    }, [title, shareText, shareUrl]);
 
     const openIntent = useCallback(
-        (build: (url: string, title: string) => string) => {
-            window.open(build(shareUrl(), title), '_blank', 'noopener,noreferrer');
+        (build: (url: string, text: string) => string) => {
+            window.open(build(shareUrl(), shareText()), '_blank', 'noopener,noreferrer');
             setSheetOpen(false);
         },
-        [shareUrl, title],
+        [shareUrl, shareText],
     );
 
     const rowCls =
@@ -105,7 +126,7 @@ export function ShareShowButton({
                         </div>
                         <button
                             onClick={() => {
-                                void copyLink();
+                                void copyShare();
                                 setSheetOpen(false);
                             }}
                             className={rowCls}
@@ -115,8 +136,8 @@ export function ShareShowButton({
                         </button>
                         <button
                             onClick={() =>
-                                openIntent((url) =>
-                                    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+                                openIntent((url, text) =>
+                                    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`,
                                 )
                             }
                             className={rowCls}
@@ -137,8 +158,8 @@ export function ShareShowButton({
                         </button>
                         <button
                             onClick={() =>
-                                openIntent((url) =>
-                                    `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`,
+                                openIntent((url, text) =>
+                                    `https://line.me/R/share?text=${encodeURIComponent(`${text}\n${url}`)}`,
                                 )
                             }
                             className={rowCls}
@@ -148,7 +169,7 @@ export function ShareShowButton({
                         </button>
                         <button
                             onClick={() => {
-                                void copyLink();
+                                void copyShare();
                                 setSheetOpen(false);
                             }}
                             title={t('live.share.instagramNote') || ''}
