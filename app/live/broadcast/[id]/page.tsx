@@ -114,7 +114,15 @@ export default function BroadcastConsolePage() {
     const [randomizeResult, setRandomizeResult] = useState<{ seed: string; summary: string } | null>(
         null,
     );
-    const [tableQr, setTableQr] = useState<string | null>(null);
+    // Table-cam handoff modal. The QR is derived from `link` and NOTHING else —
+    // a failed token fetch leaves the modal in 'error' (visible retry), never a
+    // QR of some fallback URL.
+    const [tableCam, setTableCam] = useState<
+        | { phase: 'loading' }
+        | { phase: 'error'; message: string }
+        | { phase: 'ready'; qr: string; link: string }
+        | null
+    >(null);
     const [settleResult, setSettleResult] = useState<number | null>(null);
     const [chatInput, setChatInput] = useState('');
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
@@ -138,6 +146,7 @@ export default function BroadcastConsolePage() {
         stopPreview,
         localVideo,
         participantCount,
+        remoteIdentities,
         disconnect,
     } = useLiveKitRoom();
 
@@ -339,8 +348,15 @@ export default function BroadcastConsolePage() {
         }
     }, [streamId, showToast, t]);
 
-    // ─── Go live (also the resume-camera path when already live) ───
-    const goLive = useCallback(async () => {
+    // ─── Go live (also the reconnect path when already live) ───
+    // True while this device has successfully published the main camera in
+    // this page session — distinguishes a self-reconnect after a socket blip
+    // (no warning) from a fresh console taking over a show another device is
+    // broadcasting (must warn: LiveKit reuses the ':main' identity, so joining
+    // EVICTS whichever device currently holds the slot).
+    const publishedHereRef = useRef(false);
+
+    const doGoLive = useCallback(async () => {
         if (goingLive) return;
         setGoingLive(true);
         try {
@@ -359,6 +375,7 @@ export default function BroadcastConsolePage() {
             try {
                 // Adopts the preview's tracks when they're up (no re-prompt).
                 await publishCamera({ facingMode: 'user', audio: true });
+                publishedHereRef.current = true;
                 setCameraIssue(null);
             } catch (err) {
                 const issue = classifyCameraError(err);
@@ -372,6 +389,30 @@ export default function BroadcastConsolePage() {
         }
     }, [goingLive, streamId, connect, publishCamera, cameraIssueText, showToast, t]);
 
+    const goLive = useCallback(() => {
+        // Displacement guard: the show is live but not from this session —
+        // another device is (or was) publishing as ':main'. Remote identities
+        // catch a competing publisher while we're in the room; the
+        // status-vs-connection mismatch catches the fresh-console case, where
+        // the room can't be inspected before joining (a same-identity join
+        // evicts on connect, which is exactly the displacement to warn about).
+        const mainHeldElsewhere =
+            stream?.status === 'live' &&
+            !publishedHereRef.current &&
+            (remoteIdentities.some((id) => id.endsWith(':main')) || !connected);
+        if (mainHeldElsewhere) {
+            setConfirm({
+                message:
+                    t('live.console.takeoverWarning') ||
+                    'Another device is broadcasting as the main camera. Take over?',
+                confirmLabel: t('live.console.takeover') || 'Take over',
+                run: doGoLive,
+            });
+            return;
+        }
+        void doGoLive();
+    }, [stream?.status, remoteIdentities, connected, doGoLive, t]);
+
     // Camera-only retry for the live-but-not-publishing state (publishCamera
     // failed after go-live, e.g. a denied permission the seller then granted).
     // The Go live button is disabled once live + connected, so without this
@@ -382,6 +423,7 @@ export default function BroadcastConsolePage() {
         setRetryingCamera(true);
         try {
             await publishCamera({ facingMode: 'user', audio: true });
+            publishedHereRef.current = true;
             setCameraIssue(null);
         } catch (err) {
             const issue = classifyCameraError(err);
@@ -393,7 +435,13 @@ export default function BroadcastConsolePage() {
     }, [retryingCamera, publishCamera, cameraIssueText, showToast]);
 
     // ─── Table-cam QR ───
+    // The modal opens immediately in a loading state and the token is fetched
+    // then — a mid-show failure is shown IN the modal with a retry, not as a
+    // transient toast the seller misses (which is how sellers ended up
+    // improvising with the browser's own share-QR of the console URL and
+    // displacing their live feed from the second phone).
     const openTableQr = useCallback(async () => {
+        setTableCam({ phase: 'loading' });
         try {
             const res = await fetch(`/api/live/streams/${streamId}/token`, {
                 method: 'POST',
@@ -402,22 +450,40 @@ export default function BroadcastConsolePage() {
             });
             const data = await res.json();
             if (!res.ok || !data.token || !data.url) {
-                showToast(
-                    data.error || t('live.console.tableCamError') || 'Could not create the table-cam link',
-                    'error',
-                );
+                setTableCam({
+                    phase: 'error',
+                    message:
+                        data.error ||
+                        t('live.console.tableCamError') ||
+                        'Could not create the table-cam link',
+                });
                 return;
             }
             // Token + wss URL in the FRAGMENT — see the file header for why.
-            const link = `${window.location.origin}/live/cam/${streamId}#t=${encodeURIComponent(
-                data.token,
-            )}&u=${encodeURIComponent(data.url)}`;
-            const dataUrl = await QRCode.toDataURL(link, { width: 480, margin: 1 });
-            setTableQr(dataUrl);
+            // (The token is a base64url JWT, already fragment-safe verbatim;
+            // app/live/cam/[id] parses exactly this #t=...&u=... shape.)
+            const link = `${window.location.origin}/live/cam/${streamId}#t=${data.token}&u=${encodeURIComponent(data.url)}`;
+            const qr = await QRCode.toDataURL(link, { width: 480, margin: 1 });
+            setTableCam({ phase: 'ready', qr, link });
         } catch {
-            showToast(t('live.console.tableCamError') || 'Could not create the table-cam link', 'error');
+            setTableCam({
+                phase: 'error',
+                message: t('live.console.tableCamError') || 'Could not create the table-cam link',
+            });
         }
-    }, [streamId, showToast, t]);
+    }, [streamId, t]);
+
+    // Fallback for phones that can't scan (or whose OS routes the scan into
+    // the native app): the exact same cam link, copyable.
+    const copyTableCamLink = useCallback(async () => {
+        if (tableCam?.phase !== 'ready') return;
+        try {
+            await navigator.clipboard.writeText(tableCam.link);
+            showToast(t('live.console.linkCopied') || 'Link copied', 'success');
+        } catch {
+            showToast(t('live.console.copyError') || 'Could not copy the link', 'error');
+        }
+    }, [tableCam, showToast, t]);
 
     // ─── Lots ───
     const createLot = useCallback(async () => {
@@ -699,10 +765,12 @@ export default function BroadcastConsolePage() {
                             </span>
                         )}
                         {!isEnded && (
-                            <button onClick={() => void goLive()} disabled={goingLive || (isLive && connected)} className={btnPrimary}>
+                            <button onClick={goLive} disabled={goingLive || (isLive && connected)} className={btnPrimary}>
                                 {goingLive
                                     ? t('live.console.goingLive') || 'Starting...'
-                                    : t('live.console.goLive') || 'Go live'}
+                                    : isLive
+                                        ? t('live.console.reconnect') || 'Reconnect'
+                                        : t('live.console.goLive') || 'Go live'}
                             </button>
                         )}
                         {isLive && (
@@ -1283,19 +1351,49 @@ export default function BroadcastConsolePage() {
             )}
 
             {/* ─── Table-cam QR ─── */}
-            {tableQr && (
+            {tableCam && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                     <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-white/10 p-5 text-center">
                         <p className="text-sm font-black text-white uppercase tracking-wide mb-3">
                             {t('live.console.tableCam') || 'Table cam'}
                         </p>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={tableQr} alt="Table cam QR" className="w-full max-w-[280px] mx-auto rounded-xl" />
-                        <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
-                            {t('live.console.tableCamHint') ||
-                                'Scan with your second phone to publish the overhead table camera.'}
-                        </p>
-                        <button onClick={() => setTableQr(null)} className={`${btnPrimary} w-full mt-4`}>
+                        {tableCam.phase === 'loading' && (
+                            <div className="py-10">
+                                <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-2xl"></i>
+                                <p className="text-xs text-slate-400 mt-3">
+                                    {t('live.console.tableCamLoading') || 'Creating the table-cam link...'}
+                                </p>
+                            </div>
+                        )}
+                        {tableCam.phase === 'error' && (
+                            <div className="py-6">
+                                <i className="fa-solid fa-triangle-exclamation text-brand-red text-2xl"></i>
+                                <p className="text-sm text-slate-300 mt-3 leading-relaxed">{tableCam.message}</p>
+                                <button onClick={() => void openTableQr()} className={`${btnGhost} mt-4`}>
+                                    {t('live.console.retry') || 'Retry'}
+                                </button>
+                            </div>
+                        )}
+                        {tableCam.phase === 'ready' && (
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={tableCam.qr} alt="Table cam QR" className="w-full max-w-[280px] mx-auto rounded-xl" />
+                                <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+                                    {t('live.console.tableCamHint') ||
+                                        'Scan with your second phone to publish the overhead table camera.'}
+                                </p>
+                                <button
+                                    onClick={() => void copyTableCamLink()}
+                                    className="mt-3 w-full flex items-center gap-2 rounded-lg bg-black/30 border border-white/10 px-2.5 py-2 text-left active:scale-[0.99] transition-transform"
+                                >
+                                    <i className="fa-solid fa-copy text-slate-400 text-[10px] shrink-0"></i>
+                                    <span className="flex-1 text-[9px] text-slate-400 break-all leading-snug line-clamp-3">
+                                        {tableCam.link}
+                                    </span>
+                                </button>
+                            </>
+                        )}
+                        <button onClick={() => setTableCam(null)} className={`${btnPrimary} w-full mt-4`}>
                             {t('live.payment.close') || 'Close'}
                         </button>
                     </div>

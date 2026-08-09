@@ -48,6 +48,9 @@ export function useLiveKitRoom() {
     );
     const [remoteFeeds, setRemoteFeeds] = useState<RemoteFeeds>({ video: {}, audio: [] });
     const [participantCount, setParticipantCount] = useState(0);
+    // Raw remote identities (':main'/':table' suffixed for publishers) so the
+    // console can detect a competing main-camera device before displacing it.
+    const [remoteIdentities, setRemoteIdentities] = useState<string[]>([]);
     const [localVideo, setLocalVideo] = useState<LocalVideoTrack | null>(null);
 
     // Pre-join camera preview: tracks opened BEFORE any room exists so the
@@ -67,11 +70,14 @@ export function useLiveKitRoom() {
         if (!room) {
             setRemoteFeeds({ video: {}, audio: [] });
             setParticipantCount(0);
+            setRemoteIdentities([]);
             return;
         }
         const video: RemoteFeeds['video'] = {};
         const audio: RemoteTrack[] = [];
+        const identities: string[] = [];
         room.remoteParticipants.forEach((p) => {
+            identities.push(p.identity);
             const slot = slotOfParticipant(p);
             p.trackPublications.forEach((pub) => {
                 const track = pub.track as RemoteTrack | undefined;
@@ -82,6 +88,7 @@ export function useLiveKitRoom() {
         });
         setRemoteFeeds({ video, audio });
         setParticipantCount(room.remoteParticipants.size + 1);
+        setRemoteIdentities(identities);
     }, []);
 
     const disconnect = useCallback(async () => {
@@ -90,6 +97,7 @@ export function useLiveKitRoom() {
         setLocalVideo(null);
         setRemoteFeeds({ video: {}, audio: [] });
         setParticipantCount(0);
+        setRemoteIdentities([]);
         setConnectionState(ConnectionState.Disconnected);
         if (room) {
             try {
@@ -129,6 +137,7 @@ export function useLiveKitRoom() {
                     setConnectionState(ConnectionState.Disconnected);
                     setRemoteFeeds({ video: {}, audio: [] });
                     setParticipantCount(0);
+                    setRemoteIdentities([]);
                 });
 
             try {
@@ -276,6 +285,7 @@ export function useLiveKitRoom() {
         connected: connectionState === ConnectionState.Connected,
         remoteFeeds,
         participantCount,
+        remoteIdentities,
         localVideo,
     };
 }
