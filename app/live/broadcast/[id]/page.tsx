@@ -8,6 +8,8 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
+import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
+import { ShareShowButton } from '@/components/live/ShareShowButton';
 import {
     clampCrop,
     clampRatio,
@@ -994,6 +996,11 @@ export default function BroadcastConsolePage() {
                         </p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
+                        <ShareShowButton
+                            title={stream.title}
+                            path={`/live/${streamId}`}
+                            className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center text-slate-300 active:scale-90 transition-all"
+                        />
                         {isLive ? (
                             <span className="px-2.5 py-1 rounded-md bg-brand-red text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
@@ -1167,11 +1174,21 @@ export default function BroadcastConsolePage() {
                                                 {tableCamTrack ? (
                                                     /* Muted: its audio playing here would
                                                        feed back into the main mic. */
-                                                    <CroppedTrackVideo
-                                                        track={tableCamTrack}
-                                                        crop={layout.table ?? null}
-                                                        className="absolute inset-0"
-                                                    />
+                                                    <>
+                                                        <CroppedTrackVideo
+                                                            track={tableCamTrack}
+                                                            crop={layout.table ?? null}
+                                                            className="absolute inset-0"
+                                                        />
+                                                        {/* Broadcaster-only receive stats: what the
+                                                            table phone's publish actually delivers
+                                                            over the network (the console is itself a
+                                                            subscriber of that hop). */}
+                                                        <TrackStatsBadge
+                                                            track={tableCamTrack}
+                                                            className="absolute bottom-1.5 left-1.5"
+                                                        />
+                                                    </>
                                                 ) : (
                                                     <div className="absolute inset-0 flex items-center justify-center">
                                                         <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i>

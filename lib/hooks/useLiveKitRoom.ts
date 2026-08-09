@@ -11,6 +11,7 @@ import {
     RoomEvent,
     Track,
     VideoPresets,
+    VideoQuality,
     createLocalTracks,
     type AudioCaptureOptions,
     type TrackPublishOptions,
@@ -92,6 +93,16 @@ function publishOptionsFor(track: LocalTrack, isTableCam: boolean): TrackPublish
         // the encoder favor spatial quality over framerate.
         track.mediaStreamTrack.contentHint = 'detail';
     }
+    // One-shot field diagnostic (cam page + console): what ACTUALLY left the
+    // device — the capture ask is only `ideal`, so an older phone silently
+    // delivers less — and which encode ladder that size selected. Read this in
+    // the publisher's devtools when triaging fuzzy-viewer reports to rule the
+    // capture/publish hop in or out.
+    console.info(
+        `[LiveKit] publishing ${isTableCam ? 'table' : 'main'} cam: ` +
+            `${settings.width ?? '?'}x${settings.height ?? '?'}@${settings.frameRate ?? '?'}fps, ` +
+            `ladder=${is1080 ? 'h1080 top (6Mbps) + h720/h360' : 'native top (3.5Mbps) + h360/h180'}`,
+    );
     return {
         simulcast: true,
         videoEncoding: is1080
@@ -106,6 +117,15 @@ function publishOptionsFor(track: LocalTrack, isTableCam: boolean): TrackPublish
         degradationPreference: isTableCam ? 'maintain-resolution' : 'balanced',
     };
 }
+
+/**
+ * Viewer-side subscription policy. 'auto' (default) lets adaptiveStream size
+ * each subscription to its attached element; 'high' pins the TOP simulcast
+ * layer for every remote video track — the desktop viewer uses it, where the
+ * feeds fill most of the screen and adaptive element measurement was serving
+ * the middle layer (the fuzzy-viewer field report).
+ */
+export type SubscriptionQuality = 'auto' | 'high';
 
 export interface RemoteFeeds {
     video: Partial<Record<CameraSlot, RemoteTrack>>;
@@ -143,6 +163,9 @@ export function useLiveKitRoom() {
     const previewFacingRef = useRef<'user' | 'environment' | null>(null);
     const previewInFlightRef = useRef(false);
     const disposedRef = useRef(false);
+    // Subscription policy (see SubscriptionQuality). A ref, not state — it
+    // must be readable inside connect() at Room construction time.
+    const qualityRef = useRef<SubscriptionQuality>('auto');
 
     // Recomputed wholesale on every track/participant event rather than
     // incrementally patched — the event stream has re-orderings (metadata can
@@ -163,6 +186,13 @@ export function useLiveKitRoom() {
             identities.push(p.identity);
             const slot = slotOfParticipant(p);
             p.trackPublications.forEach((pub) => {
+                // Re-assert the HIGH pin on every track/participant event —
+                // a re-subscribe builds a fresh publication whose requested
+                // quality resets to the default. setVideoQuality no-ops when
+                // the quality is already requested, so this is idempotent.
+                if (qualityRef.current === 'high' && pub.kind === Track.Kind.Video) {
+                    pub.setVideoQuality(VideoQuality.HIGH);
+                }
                 const track = pub.track as RemoteTrack | undefined;
                 if (!track) return;
                 if (track.kind === Track.Kind.Video && slot) video[slot] = track;
@@ -173,6 +203,20 @@ export function useLiveKitRoom() {
         setParticipantCount(room.remoteParticipants.size + 1);
         setRemoteIdentities(identities);
     }, []);
+
+    /**
+     * Set the subscription policy. Call BEFORE connect() — the Room's
+     * adaptiveStream option is fixed at construction — though an already-open
+     * room still gets the HIGH pin applied to its current tracks. Re-asserted
+     * automatically as tracks (re)subscribe via syncFromRoom.
+     */
+    const setSubscriptionQuality = useCallback(
+        (mode: SubscriptionQuality) => {
+            qualityRef.current = mode;
+            if (mode === 'high') syncFromRoom();
+        },
+        [syncFromRoom],
+    );
 
     const disconnect = useCallback(async () => {
         const room = roomRef.current;
@@ -195,17 +239,23 @@ export function useLiveKitRoom() {
         async (url: string, token: string) => {
             if (roomRef.current) return roomRef.current;
             const room = new Room({
-                // adaptiveStream sizes each subscription to the element the
-                // track is attached to. The default pixelDensity (1) measures
-                // in CSS pixels — a stacked feed tile on a 3x phone display
-                // asked for a third of its physical size, so LiveKit served
-                // the LOW simulcast layer to every viewer. 'screen' multiplies
-                // by devicePixelRatio, and adaptiveStream re-measures on
-                // element resize, which covers the viewer's tap-swap and the
-                // console's split-ratio drags without manual setVideoQuality
-                // re-assertion (mixing manual quality calls with
-                // adaptiveStream is unsupported anyway).
-                adaptiveStream: { pixelDensity: 'screen' },
+                // 'auto': adaptiveStream sizes each subscription to the
+                // element the track is attached to. The default pixelDensity
+                // (1) measures in CSS pixels — a stacked feed tile on a 3x
+                // phone display asked for a third of its physical size, so
+                // LiveKit served the LOW simulcast layer to every viewer.
+                // 'screen' multiplies by devicePixelRatio, and adaptiveStream
+                // re-measures on element resize (the console's split-ratio
+                // drags).
+                //
+                // 'high': adaptiveStream must be fully OFF, not merely
+                // overridden — when it's on, the element-measured dimensions
+                // win the merge against a manual setVideoQuality whenever
+                // they're SMALLER than the pinned layer (the library sends the
+                // smaller request), which is exactly the desktop-viewer case
+                // the pin exists to fix.
+                adaptiveStream:
+                    qualityRef.current === 'high' ? false : { pixelDensity: 'screen' },
                 // dynacast pauses simulcast layers no viewer subscribes to, so
                 // the raised capture/bitrate ceiling only costs upload when
                 // someone actually receives the top layer.
@@ -401,6 +451,7 @@ export function useLiveKitRoom() {
         publishCamera,
         startPreview,
         stopPreview,
+        setSubscriptionQuality,
         connectionState,
         connected: connectionState === ConnectionState.Connected,
         remoteFeeds,

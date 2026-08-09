@@ -8,12 +8,14 @@ import {
     Loader2,
     Plus,
     Radio,
+    Trash2,
     XCircle,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { GAMES, getGameLabel } from '@/lib/games';
+import { ShareShowButton } from '@/components/live/ShareShowButton';
 import type { LiveStreamRow } from '@/components/live/shared';
 
 /**
@@ -66,6 +68,9 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
     // Two-tap cancel: first tap arms the row, second tap fires.
     const [armedCancelId, setArmedCancelId] = useState<string | null>(null);
     const [cancellingId, setCancellingId] = useState<string | null>(null);
+    // Two-tap delete for finished shows, same arming pattern.
+    const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const canBroadcast = hasBeta('live_broadcast');
 
@@ -154,6 +159,45 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
             }
         },
         [armedCancelId, showToast, t],
+    );
+
+    // Hard-delete a finished, money-free show. The server is the authority on
+    // "money-free" (sold spots / orders) — a refusal surfaces as a t()'d toast.
+    const deleteShow = useCallback(
+        async (id: string) => {
+            if (armedDeleteId !== id) {
+                setArmedDeleteId(id);
+                return;
+            }
+            setArmedDeleteId(null);
+            setDeletingId(id);
+            try {
+                const res = await fetch(`/api/live/streams/${id}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showToast(
+                        data.code === 'HAS_SALES'
+                            ? t('live.myShows.deleteBlocked') ||
+                                  'This show has sold spots or orders and cannot be deleted'
+                            : data.error ||
+                                  t('live.myShows.deleteError') ||
+                                  'Could not delete the show',
+                        'error',
+                    );
+                    return;
+                }
+                setFeed((prev) =>
+                    prev.name === 'ready'
+                        ? { name: 'ready', streams: prev.streams.filter((s) => s.id !== id) }
+                        : prev,
+                );
+            } catch {
+                showToast(t('live.myShows.deleteError') || 'Could not delete the show', 'error');
+            } finally {
+                setDeletingId(null);
+            }
+        },
+        [armedDeleteId, showToast, t],
     );
 
     // Fails closed: no grant (or grant still resolving) renders nothing.
@@ -337,8 +381,8 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
                                         </span>
                                     )}
                                 </div>
-                                {!finished && (
-                                    <div className="mt-3 flex items-center gap-2">
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    {!finished && (
                                         <Link
                                             href={`/live/broadcast/${s.id}`}
                                             className="px-3 h-9 rounded-lg bg-brand-cyan/15 text-brand-cyan text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all"
@@ -346,28 +390,54 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
                                             <Radio className="w-3.5 h-3.5" />
                                             {t('live.myShows.openConsole') || 'Open console'}
                                         </Link>
-                                        {s.status === 'scheduled' && (
-                                            <button
-                                                onClick={() => void cancelShow(s.id)}
-                                                disabled={cancellingId === s.id}
-                                                className={`px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-40 ${
-                                                    armedCancelId === s.id
-                                                        ? 'bg-brand-red text-white'
-                                                        : 'bg-white/10 text-slate-300'
-                                                }`}
-                                            >
-                                                {cancellingId === s.id ? (
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                ) : (
-                                                    <XCircle className="w-3.5 h-3.5" />
-                                                )}
-                                                {armedCancelId === s.id
-                                                    ? t('live.myShows.confirmCancel') || 'Tap again to confirm'
-                                                    : t('live.myShows.cancelShow') || 'Cancel'}
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                    )}
+                                    {s.status === 'scheduled' && (
+                                        <button
+                                            onClick={() => void cancelShow(s.id)}
+                                            disabled={cancellingId === s.id}
+                                            className={`px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-40 ${
+                                                armedCancelId === s.id
+                                                    ? 'bg-brand-red text-white'
+                                                    : 'bg-white/10 text-slate-300'
+                                            }`}
+                                        >
+                                            {cancellingId === s.id ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <XCircle className="w-3.5 h-3.5" />
+                                            )}
+                                            {armedCancelId === s.id
+                                                ? t('live.myShows.confirmCancel') || 'Tap again to confirm'
+                                                : t('live.myShows.cancelShow') || 'Cancel'}
+                                        </button>
+                                    )}
+                                    <ShareShowButton
+                                        title={s.title}
+                                        path={`/live/${s.id}`}
+                                        label={t('live.share.button') || 'Share'}
+                                        className="px-3 h-9 rounded-lg bg-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all"
+                                    />
+                                    {finished && (
+                                        <button
+                                            onClick={() => void deleteShow(s.id)}
+                                            disabled={deletingId === s.id}
+                                            className={`px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-40 ${
+                                                armedDeleteId === s.id
+                                                    ? 'bg-brand-red text-white'
+                                                    : 'bg-white/10 text-slate-300'
+                                            }`}
+                                        >
+                                            {deletingId === s.id ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            )}
+                                            {armedDeleteId === s.id
+                                                ? t('live.myShows.confirmDelete') || 'Tap again to delete'
+                                                : t('live.myShows.deleteShow') || 'Delete'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}

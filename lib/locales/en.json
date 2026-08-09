@@ -932,12 +932,23 @@
             "cancelShow": "Cancel",
             "confirmCancel": "Tap again to confirm",
             "cancelError": "Could not cancel the show",
+            "deleteShow": "Delete",
+            "confirmDelete": "Tap again to delete",
+            "deleteError": "Could not delete the show",
+            "deleteBlocked": "This show has sold spots or orders and cannot be deleted",
             "status": {
                 "scheduled": "Scheduled",
                 "live": "LIVE",
                 "ended": "Ended",
                 "cancelled": "Cancelled"
             }
+        },
+        "share": {
+            "button": "Share",
+            "sheetTitle": "Share this show",
+            "copyLink": "Copy link",
+            "copied": "Link copied",
+            "instagramNote": "Instagram does not support link prefill from the web — the link is copied, paste it into your story or bio."
         },
         "viewer": {
             "live": "LIVE",

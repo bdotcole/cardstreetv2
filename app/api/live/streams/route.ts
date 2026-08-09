@@ -48,11 +48,21 @@ export async function GET(req: Request) {
             const gate = await requireBeta('live_broadcast');
             if (gate instanceof NextResponse) return gate;
 
+            // Finished shows age out of the studio list after 30 days —
+            // matching VOD retention — while the DB rows stay forever for
+            // orders/disputes. Ended shows age on ended_at; cancelled shows
+            // never get an ended_at, so they age on created_at instead.
+            // Live/scheduled shows always appear.
+            const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
             const admin = createAdminClient();
             const { data, error } = await admin
                 .from('streams')
                 .select(`${FEED_COLS}, visibility, ended_at`)
                 .eq('seller_id', gate.user.id)
+                .or(
+                    `status.in.(live,scheduled),ended_at.gte.${cutoff},` +
+                        `and(ended_at.is.null,created_at.gte.${cutoff})`,
+                )
                 .order('created_at', { ascending: false })
                 .limit(100)
                 .returns<FeedRow[]>();

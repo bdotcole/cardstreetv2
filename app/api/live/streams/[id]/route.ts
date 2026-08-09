@@ -1,14 +1,15 @@
 /**
- * GET /api/live/streams/[id] — stream detail + lots + spots.
+ * GET    /api/live/streams/[id] — stream detail + lots + spots.
+ * DELETE /api/live/streams/[id] — hard-delete a finished, money-free show.
  *
- * Beta viewers and the stream's own seller (who may hold only the
+ * GET: beta viewers and the stream's own seller (who may hold only the
  * 'live_broadcast' grant) both pass. Unlisted streams resolve here — that IS
  * the link-only distribution model; only the public feed excludes them.
  */
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireViewerOrSeller } from '@/lib/liveBreaks';
+import { requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
 
 // Explicit projection instead of select('*'): livekit_egress_id is an
 // infrastructure handle and the VOD fields are the seller's dispute material
@@ -103,5 +104,110 @@ export async function GET(
     } catch (err: any) {
         console.error('[Live/Stream] GET error:', err);
         return NextResponse.json({ error: 'Failed to load stream' }, { status: 500 });
+    }
+}
+
+/**
+ * Hard-delete an ended/cancelled show from the studio list, ONLY when no
+ * money ever touched it: zero sold spots AND zero orders referencing its
+ * spots (checkout creates pending_payment orders with break_spot_id set
+ * before a spot ever flips sold — those rows are dispute material too, so
+ * they block deletion just like sales). FK cascades cover the children
+ * (stream_items, break_spots, chat, randomizations); orders/shipments only
+ * SET NULL, which is exactly why the money guard must refuse first.
+ */
+export async function DELETE(
+    _req: Request,
+    { params }: { params: Promise<{ id: string }> },
+) {
+    try {
+        const { id } = await params;
+        const ctx = await requireBroadcaster(id);
+        if (ctx instanceof NextResponse) return ctx;
+        const { stream } = ctx;
+
+        if (stream.status !== 'ended' && stream.status !== 'cancelled') {
+            return NextResponse.json(
+                { error: 'Only ended or cancelled shows can be deleted' },
+                { status: 409 },
+            );
+        }
+
+        const admin = createAdminClient();
+
+        const { data: spotRows, error: spotsErr } = await admin
+            .from('break_spots')
+            .select('id, status, order_id')
+            .eq('stream_id', stream.id)
+            .returns<{ id: string; status: string; order_id: string | null }[]>();
+        if (spotsErr) {
+            console.error('[Live/Stream] DELETE spot check failed:', spotsErr.message);
+            return NextResponse.json({ error: 'Failed to delete the show' }, { status: 500 });
+        }
+
+        let hasMoney = (spotRows ?? []).some(
+            (s) => s.status === 'sold' || s.order_id !== null,
+        );
+
+        // Orders reference spots one-way (orders.break_spot_id); chunk the id
+        // list so a big board can't overflow the PostgREST filter URL.
+        if (!hasMoney && spotRows && spotRows.length > 0) {
+            const ids = spotRows.map((s) => s.id);
+            for (let i = 0; i < ids.length && !hasMoney; i += 150) {
+                const { data: orderRows, error: ordersErr } = await admin
+                    .from('orders')
+                    .select('id')
+                    .in('break_spot_id', ids.slice(i, i + 150))
+                    .limit(1);
+                if (ordersErr) {
+                    console.error('[Live/Stream] DELETE order check failed:', ordersErr.message);
+                    return NextResponse.json(
+                        { error: 'Failed to delete the show' },
+                        { status: 500 },
+                    );
+                }
+                if ((orderRows ?? []).length > 0) hasMoney = true;
+            }
+        }
+
+        // Belt-and-suspenders for the reserved buy_now seam: a win row means
+        // an order existed even if the spot linkage was cleared.
+        if (!hasMoney) {
+            const { data: winRows, error: winsErr } = await admin
+                .from('stream_wins')
+                .select('id')
+                .eq('stream_id', stream.id)
+                .limit(1);
+            if (winsErr) {
+                console.error('[Live/Stream] DELETE wins check failed:', winsErr.message);
+                return NextResponse.json({ error: 'Failed to delete the show' }, { status: 500 });
+            }
+            if ((winRows ?? []).length > 0) hasMoney = true;
+        }
+
+        if (hasMoney) {
+            return NextResponse.json(
+                {
+                    error: 'This show has sold spots or orders and cannot be deleted',
+                    code: 'HAS_SALES',
+                },
+                { status: 409 },
+            );
+        }
+
+        const { error: delErr } = await admin
+            .from('streams')
+            .delete()
+            .eq('id', stream.id)
+            .eq('seller_id', ctx.user.id);
+        if (delErr) {
+            console.error('[Live/Stream] DELETE failed:', delErr.message);
+            return NextResponse.json({ error: 'Failed to delete the show' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (err: any) {
+        console.error('[Live/Stream] DELETE error:', err);
+        return NextResponse.json({ error: 'Failed to delete the show' }, { status: 500 });
     }
 }
