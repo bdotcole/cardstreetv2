@@ -10,7 +10,11 @@ import {
     Room,
     RoomEvent,
     Track,
+    VideoPresets,
     createLocalTracks,
+    type AudioCaptureOptions,
+    type TrackPublishOptions,
+    type VideoCaptureOptions,
 } from 'livekit-client';
 
 /**
@@ -23,6 +27,85 @@ import {
  */
 
 export type CameraSlot = 'main' | 'table';
+
+// ─── Quality settings ───
+// Field feedback: the dual-cam stream worked but looked bad. Three compounding
+// defaults were at fault — capture at the library default (720p even for the
+// table cam), publishTrack with no options (auto bitrate ~1.7Mbps, no content
+// hint), and adaptiveStream measuring attached elements in CSS pixels (so a
+// phone's 3x display was served the LOW simulcast layer). The settings below
+// raise the ceiling; simulcast keeps that safe — mobile-data viewers are
+// automatically served the lower layers, only capable connections get the top.
+
+/**
+ * Capture constraints per camera. LiveKit turns the preset into `ideal`
+ * getUserMedia constraints, so a device that can't reach the requested
+ * resolution silently delivers its best — the 1080p table-cam ask degrades to
+ * 720p and below on older phones with no manual fallback needed.
+ * - Face cam ('user'): h720@30 — a talking head doesn't need more.
+ * - Table cam ('environment'): h1080@30 — cards on the table must survive the
+ *   broadcaster's crop/zoom and still be readable in the viewer's stacked tile.
+ */
+function captureOptionsFor(facingMode: 'user' | 'environment'): VideoCaptureOptions {
+    return {
+        facingMode,
+        resolution:
+            facingMode === 'environment'
+                ? VideoPresets.h1080.resolution
+                : VideoPresets.h720.resolution,
+    };
+}
+
+/**
+ * Face-cam mic processing: the seller talks over an open room — echo/noise
+ * cleanup matters, music fidelity does not. (These match the library defaults;
+ * explicit so a livekit-client upgrade can't silently change them.)
+ */
+const AUDIO_CAPTURE: AudioCaptureOptions = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+};
+
+/**
+ * Publish options per track. The TOP simulcast layer is the captured track
+ * itself (bounded by videoEncoding); videoSimulcastLayers adds the lower
+ * rungs, giving 1080p/720p/360p on a 1080p table cam and 720p/360p/180p on the
+ * face cam. Bitrate ceilings are ~2x the library presets (1.7M @720p / 3M
+ * @1080p) because card fronts are high-frequency detail the encoder smears at
+ * the defaults. The ladder derives from the ACTUAL captured size, not the
+ * requested one, so a 1080p ask that fell back to 720p doesn't publish a
+ * duplicate top layer.
+ */
+function publishOptionsFor(track: LocalTrack, isTableCam: boolean): TrackPublishOptions {
+    if (track.kind !== Track.Kind.Video) {
+        // dtx (silence suppression) + red (redundant audio packets) are cheap
+        // robustness on mobile networks; explicit for the same reason as
+        // AUDIO_CAPTURE.
+        return { dtx: true, red: true };
+    }
+    const settings = track.mediaStreamTrack.getSettings();
+    // Portrait phones report swapped width/height — judge by the short side.
+    const is1080 = Math.min(settings.width ?? 0, settings.height ?? 0) >= 1080;
+    if (isTableCam) {
+        // Card readability beats motion smoothness: contentHint 'detail' makes
+        // the encoder favor spatial quality over framerate.
+        track.mediaStreamTrack.contentHint = 'detail';
+    }
+    return {
+        simulcast: true,
+        videoEncoding: is1080
+            ? { maxBitrate: 6_000_000, maxFramerate: 30 }
+            : { maxBitrate: 3_500_000, maxFramerate: 30 },
+        videoSimulcastLayers: is1080
+            ? [VideoPresets.h720, VideoPresets.h360]
+            : [VideoPresets.h360, VideoPresets.h180],
+        // Under congestion the table cam must drop framerate, never resolution
+        // — a choppy-but-sharp card beats a smooth blur. The face cam keeps
+        // the default balanced trade.
+        degradationPreference: isTableCam ? 'maintain-resolution' : 'balanced',
+    };
+}
 
 export interface RemoteFeeds {
     video: Partial<Record<CameraSlot, RemoteTrack>>;
@@ -111,7 +194,23 @@ export function useLiveKitRoom() {
     const connect = useCallback(
         async (url: string, token: string) => {
             if (roomRef.current) return roomRef.current;
-            const room = new Room({ adaptiveStream: true, dynacast: true });
+            const room = new Room({
+                // adaptiveStream sizes each subscription to the element the
+                // track is attached to. The default pixelDensity (1) measures
+                // in CSS pixels — a stacked feed tile on a 3x phone display
+                // asked for a third of its physical size, so LiveKit served
+                // the LOW simulcast layer to every viewer. 'screen' multiplies
+                // by devicePixelRatio, and adaptiveStream re-measures on
+                // element resize, which covers the viewer's tap-swap and the
+                // console's split-ratio drags without manual setVideoQuality
+                // re-assertion (mixing manual quality calls with
+                // adaptiveStream is unsupported anyway).
+                adaptiveStream: { pixelDensity: 'screen' },
+                // dynacast pauses simulcast layers no viewer subscribes to, so
+                // the raised capture/bitrate ceiling only costs upload when
+                // someone actually receives the top layer.
+                dynacast: true,
+            });
             roomRef.current = room;
 
             room
@@ -166,8 +265,10 @@ export function useLiveKitRoom() {
             previewInFlightRef.current = true;
             try {
                 const tracks = await createLocalTracks({
-                    audio: opts.audio,
-                    video: { facingMode: opts.facingMode },
+                    audio: opts.audio ? AUDIO_CAPTURE : false,
+                    // Preview at publish resolution: publishCamera() adopts
+                    // these tracks as-is, so the quality ask must happen here.
+                    video: captureOptionsFor(opts.facingMode),
                 });
                 // The page unmounted (or a room appeared) while getUserMedia
                 // was pending — don't leave an orphaned camera lock.
@@ -240,13 +341,19 @@ export function useLiveKitRoom() {
             } else {
                 stopPreview();
                 tracks = await createLocalTracks({
-                    audio: opts.audio,
-                    video: { facingMode: opts.facingMode },
+                    audio: opts.audio ? AUDIO_CAPTURE : false,
+                    video: captureOptionsFor(opts.facingMode),
                 });
             }
+            // The rear camera is the table cam by construction (see the hook
+            // doc above) — it carries the per-slot sharpness settings.
+            const isTableCam = opts.facingMode === 'environment';
             try {
                 for (const track of tracks) {
-                    await room.localParticipant.publishTrack(track);
+                    await room.localParticipant.publishTrack(
+                        track,
+                        publishOptionsFor(track, isTableCam),
+                    );
                 }
             } catch (err) {
                 // A failed publish must not leave orphaned tracks holding the
