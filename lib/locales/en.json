@@ -1019,6 +1019,8 @@
             "tableCamHint": "Scan with your second phone's camera — the table cam opens in your browser. The link contains a private token — do not share it.",
             "tableCamError": "Could not create the table-cam link",
             "tableCamLoading": "Creating the table-cam link...",
+            "tableCamConnected": "Table cam connected",
+            "tableCamNotConnected": "Table cam not connected",
             "retry": "Retry",
             "reconnect": "Reconnect",
             "takeoverWarning": "Another device is broadcasting as the main camera. Take over?",

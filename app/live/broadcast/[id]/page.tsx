@@ -147,6 +147,7 @@ export default function BroadcastConsolePage() {
         localVideo,
         participantCount,
         remoteIdentities,
+        remoteFeeds,
         disconnect,
     } = useLiveKitRoom();
 
@@ -701,6 +702,13 @@ export default function BroadcastConsolePage() {
     const soldSpots = spots.filter((s) => s.status === 'sold');
     const revenueSatang = soldSpots.reduce((sum, s) => sum + s.price, 0);
 
+    // Dual-cam confirmation: the stacked view lives on the viewer page only,
+    // so without this the seller has no signal that the QR handoff worked.
+    // Participant presence (identity suffix) flips the state; the subscribed
+    // track may trail it by a beat, so the tile shows a spinner until then.
+    const tableCamConnected = remoteIdentities.some((id) => id.endsWith(':table'));
+    const tableCamTrack = remoteFeeds.video.table ?? null;
+
     if (pageState === 'denied') {
         return (
             <main className="min-h-screen bg-brand-darker text-white">
@@ -879,10 +887,39 @@ export default function BroadcastConsolePage() {
                                 )}
                             </div>
                             {isLive && (
-                                <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3 w-full h-10`}>
-                                    <i className="fa-solid fa-qrcode mr-2"></i>
-                                    {t('live.console.tableCam') || 'Table cam'}
-                                </button>
+                                <>
+                                    <button onClick={() => void openTableQr()} className={`${btnGhost} mt-3 w-full h-10`}>
+                                        <i className="fa-solid fa-qrcode mr-2"></i>
+                                        {t('live.console.tableCam') || 'Table cam'}
+                                    </button>
+                                    {tableCamConnected ? (
+                                        /* Live monitor of the table feed. object-contain,
+                                           not cover — the point is confirming what the
+                                           second phone actually frames. Muted: its audio
+                                           playing here would feed back into the main mic. */
+                                        <div className="relative mt-3 aspect-video bg-black rounded-xl overflow-hidden">
+                                            {tableCamTrack ? (
+                                                <TrackVideo
+                                                    track={tableCamTrack}
+                                                    className="absolute inset-0 w-full h-full object-contain"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i>
+                                                </div>
+                                            )}
+                                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-brand-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
+                                                {t('live.console.tableCamConnected') || 'Table cam connected'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                            {t('live.console.tableCamNotConnected') || 'Table cam not connected'}
+                                        </p>
+                                    )}
+                                </>
                             )}
                         </div>
 
