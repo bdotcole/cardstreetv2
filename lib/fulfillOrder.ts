@@ -36,6 +36,97 @@ export interface FulfillmentResult {
 }
 
 /**
+ * Zombie-payment recovery: resurrect orders that were cancelled while their
+ * async payment (PromptPay) was still settling.
+ *
+ * The abandoned-checkout cleanup (/api/orders/cancel, reconcile cron) can only
+ * see our rows, and an in-flight PromptPay order looks identical to an
+ * abandoned one (`pending_payment`, `payment_id` NULL). A buyer who paid the QR
+ * and then closed the modal used to get their order cancelled seconds before
+ * the money landed — the webhook then found no `pending_payment` rows and
+ * silently no-opped, leaving a paid buyer with a cancelled order.
+ *
+ * Every caller of fulfillOrdersByTransferGroup has already verified the
+ * payment SUCCEEDED (webhook event / PI retrieve), so if the group's orders
+ * sit at `cancelled` with no payment stamped, the cancel lost the race and we
+ * undo it: re-reserve the listing (`active → sold`) and flip the order back to
+ * `pending_payment` so the normal fulfillment path picks it up.
+ *
+ * If the listing was re-sold to someone else in the gap, resurrection is
+ * impossible — that order needs a human (refund), so page Sentry loudly
+ * instead of staying silent.
+ *
+ * @returns true if at least one order was revived to pending_payment.
+ */
+async function resurrectCancelledOrders(
+    supabase: SupabaseClient,
+    transferGroup: string,
+    paymentId: string,
+): Promise<boolean> {
+    const { data: zombies } = await supabase
+        .from('orders')
+        .select('id, listing_id')
+        .eq('transfer_group', transferGroup)
+        .eq('status', 'cancelled')
+        .is('payment_id', null)
+        .is('break_spot_id', null);
+
+    if (!zombies || zombies.length === 0) return false;
+
+    let revived = 0;
+    for (const zombie of zombies) {
+        // Take the listing reservation back. CAS on 'active' so a listing that
+        // was legitimately re-sold (or delisted) in the meantime is never
+        // clobbered — that case is unrecoverable here and needs a refund.
+        if (zombie.listing_id) {
+            const { data: reserved, error: reserveErr } = await supabase
+                .from('listings')
+                .update({ status: 'sold' })
+                .eq('id', zombie.listing_id)
+                .eq('status', 'active')
+                .select('id');
+            if (reserveErr || !reserved || reserved.length === 0) {
+                console.error(
+                    `[Fulfillment] Paid-but-cancelled order ${zombie.id} cannot be resurrected — ` +
+                    `listing ${zombie.listing_id} is no longer available. Manual refund required.`
+                );
+                Sentry.captureMessage('Paid payment for cancelled order — listing gone, manual refund required', {
+                    level: 'error',
+                    tags: { handler: 'fulfill-order', kind: 'zombie_unrecoverable' },
+                    extra: { orderId: zombie.id, listingId: zombie.listing_id, transferGroup, paymentId },
+                });
+                continue;
+            }
+        }
+
+        const { data: flipped, error: flipErr } = await supabase
+            .from('orders')
+            .update({ status: 'pending_payment', updated_at: new Date().toISOString() })
+            .eq('id', zombie.id)
+            .eq('status', 'cancelled')
+            .is('payment_id', null)
+            .select('id');
+
+        if (flipErr || !flipped || flipped.length === 0) {
+            // Lost a race on the order row — release the reservation we just took.
+            if (zombie.listing_id) {
+                await supabase
+                    .from('listings')
+                    .update({ status: 'active' })
+                    .eq('id', zombie.listing_id)
+                    .eq('status', 'sold');
+            }
+            continue;
+        }
+
+        console.log(`[Fulfillment] Resurrected cancelled order ${zombie.id} for settled payment ${paymentId}`);
+        revived++;
+    }
+
+    return revived > 0;
+}
+
+/**
  * Fulfills all orders associated with a given transfer_group.
  * 
  * Steps:
@@ -65,7 +156,7 @@ export async function fulfillOrdersByTransferGroup(
 
     try {
         // ─── Step 1: Find pending orders ───
-        const { data: orders, error: fetchError } = await supabase
+        const pendingQuery = () => supabase
             .from('orders')
             // listing card_data rides along so the shipment declares the real
             // parcel weight when the order contains sealed products.
@@ -80,16 +171,31 @@ export async function fulfillOrdersByTransferGroup(
             // so this filter is a no-op for them.
             .is('break_spot_id', null);
 
+        let { data: orders, error: fetchError } = await pendingQuery();
+
         if (fetchError) {
             result.errors.push(`DB fetch error: ${fetchError.message}`);
             return result;
         }
 
         if (!orders || orders.length === 0) {
-            // Orders may already be fulfilled (idempotent)
-            console.log(`[Fulfillment] No pending_payment orders for transfer_group ${transferGroup} — likely already fulfilled.`);
-            result.success = true;
-            return result;
+            // No pending orders: usually already fulfilled (idempotent no-op),
+            // but a settled payment can also arrive AFTER the abandoned-checkout
+            // cleanup cancelled the group (PromptPay pay-then-close race). Try
+            // to resurrect those before giving up — see resurrectCancelledOrders.
+            const revived = await resurrectCancelledOrders(supabase, transferGroup, paymentId);
+            if (revived) {
+                ({ data: orders, error: fetchError } = await pendingQuery());
+                if (fetchError) {
+                    result.errors.push(`DB refetch error: ${fetchError.message}`);
+                    return result;
+                }
+            }
+            if (!orders || orders.length === 0) {
+                console.log(`[Fulfillment] No pending_payment orders for transfer_group ${transferGroup} — likely already fulfilled.`);
+                result.success = true;
+                return result;
+            }
         }
 
         console.log(`[Fulfillment] Found ${orders.length} orders to fulfill for transfer_group ${transferGroup}`);
