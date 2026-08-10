@@ -90,14 +90,21 @@ function StreamTile({ stream }: { stream: LiveStreamRow }) {
                         )}
                     </span>
                 ) : (
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-slate-100 text-[10px] font-black uppercase tracking-widest">
-                        {t('live.hub.soon') || 'Upcoming'}
-                        {stream.scheduled_at &&
-                            ` · ${new Date(stream.scheduled_at).toLocaleString(
-                                isThai ? 'th-TH' : undefined,
-                                { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
-                            )}`}
-                    </span>
+                    <>
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-slate-100 text-[10px] font-black uppercase tracking-widest">
+                            {t('live.hub.soon') || 'Upcoming'}
+                            {stream.scheduled_at &&
+                                ` · ${new Date(stream.scheduled_at).toLocaleString(
+                                    isThai ? 'th-TH' : undefined,
+                                    { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                                )}`}
+                        </span>
+                        {stream.presale_open && (
+                            <span className="absolute top-8 left-2 px-2 py-0.5 rounded-md bg-brand-cyan text-brand-darker text-[10px] font-black uppercase tracking-widest">
+                                {t('live.hub.presaleOpen') || 'Presale open'}
+                            </span>
+                        )}
+                    </>
                 )}
             </div>
             <div className="p-3">

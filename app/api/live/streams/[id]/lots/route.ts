@@ -66,6 +66,16 @@ export async function POST(
         let listingId: string | null = null;
         let cardData = body?.cardData ?? body?.card_data;
 
+        // Presales (20260810_presales.sql): the seller opts a break lot into
+        // pre-live spot sales at creation. Break types only — buy_now pins a
+        // marketplace listing that is already purchasable outside the show.
+        // Only meaningful while the show is still scheduled; a live show's
+        // lots are claimable regardless, so the flag is dropped there.
+        const presaleEnabled =
+            isBreakItemType(itemType) &&
+            stream.status === 'scheduled' &&
+            (body?.presaleEnabled === true || body?.presale_enabled === true);
+
         if (isBreakItemType(itemType)) {
             spotsTotal = asPositiveInt(body?.spotsTotal ?? body?.spots_total);
             spotPrice = asPositiveInt(body?.spotPrice ?? body?.spot_price);
@@ -161,22 +171,38 @@ export async function POST(
             position = (last?.position ?? -1) + 1;
         }
 
-        const { data: lot, error: lotErr } = await admin
+        const baseRow = {
+            stream_id: stream.id,
+            seller_id: user.id,
+            item_type: itemType,
+            position,
+            card_data: cardData,
+            listing_id: listingId,
+            spots_total: spotsTotal,
+            spot_price: spotPrice,
+            packs_per_spot: packsPerSpot,
+            price,
+        };
+
+        let { data: lot, error: lotErr } = await admin
             .from('stream_items')
-            .insert({
-                stream_id: stream.id,
-                seller_id: user.id,
-                item_type: itemType,
-                position,
-                card_data: cardData,
-                listing_id: listingId,
-                spots_total: spotsTotal,
-                spot_price: spotPrice,
-                packs_per_spot: packsPerSpot,
-                price,
-            })
+            .insert(presaleEnabled ? { ...baseRow, presale_enabled: true } : baseRow)
             .select()
             .single();
+
+        // Pre-migration tolerance: until 20260810_presales.sql runs the column
+        // doesn't exist (PostgREST schema-cache miss) — create the lot without
+        // presale rather than failing the console's add-lot flow.
+        if (lotErr && presaleEnabled && lotErr.code === 'PGRST204') {
+            console.warn(
+                '[Live/Lots] presale_enabled column missing (run 20260810_presales.sql) — creating lot without presale',
+            );
+            ({ data: lot, error: lotErr } = await admin
+                .from('stream_items')
+                .insert(baseRow)
+                .select()
+                .single());
+        }
 
         if (lotErr || !lot) {
             console.error('[Live/Lots] lot insert failed:', lotErr?.message);

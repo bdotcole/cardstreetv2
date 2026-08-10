@@ -914,7 +914,8 @@
             "creating": "กำลังสร้าง...",
             "createError": "สร้างรายการไม่สำเร็จ",
             "soon": "เร็วๆ นี้",
-            "refresh": "รีเฟรช"
+            "refresh": "รีเฟรช",
+            "presaleOpen": "เปิดพรีเซล"
         },
         "myShows": {
             "menuTitle": "รายการไลฟ์",
@@ -984,6 +985,19 @@
             "spotHeld": "ติดจอง",
             "spotOpen": "ว่าง",
             "yourSpot": "ของคุณ"
+        },
+        "scheduled": {
+            "startsIn": "ไลฟ์จะเริ่มในอีก",
+            "startsSoon": "ใกล้เริ่มแล้ว",
+            "tba": "จะประกาศเวลาเริ่มเร็วๆ นี้",
+            "presaleNow": "พรีเซลเปิดแล้ว — จองช่องได้เลย",
+            "availableWhenLive": "เปิดขายเมื่อไลฟ์เริ่ม",
+            "lots": "ล็อตในไลฟ์นี้",
+            "noLots": "ล็อตจะแสดงที่นี่เร็วๆ นี้",
+            "days": "วัน",
+            "hours": "ชม.",
+            "mins": "นาที",
+            "secs": "วิ"
         },
         "payment": {
             "title": "ชำระเงินค่าช่อง",
@@ -1089,6 +1103,9 @@
             "fitFill": "เต็มช่อง",
             "fitContain": "เต็มภาพ",
             "layoutReset": "รีเซ็ต",
+            "presaleToggle": "เปิดขายพรีเซล",
+            "presaleHint": "ให้ผู้ซื้อจองซื้อช่องของล็อตนี้ได้ก่อนไลฟ์เริ่ม",
+            "presaleChip": "พรีเซล",
             "productTypes": {
                 "box": "กล่อง",
                 "pack": "ซอง",

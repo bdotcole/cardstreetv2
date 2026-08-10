@@ -914,7 +914,8 @@
             "creating": "Scheduling...",
             "createError": "Could not create the show",
             "soon": "Upcoming",
-            "refresh": "Refresh"
+            "refresh": "Refresh",
+            "presaleOpen": "Presale open"
         },
         "myShows": {
             "menuTitle": "Live shows",
@@ -984,6 +985,19 @@
             "spotHeld": "Held",
             "spotOpen": "Open",
             "yourSpot": "Yours"
+        },
+        "scheduled": {
+            "startsIn": "Show starts in",
+            "startsSoon": "Starting soon",
+            "tba": "Start time coming soon",
+            "presaleNow": "Presale open — grab your spots now",
+            "availableWhenLive": "Available when the show goes live",
+            "lots": "Lots in this show",
+            "noLots": "Lots will appear here soon",
+            "days": "days",
+            "hours": "hrs",
+            "mins": "min",
+            "secs": "sec"
         },
         "payment": {
             "title": "Spot checkout",
@@ -1089,6 +1103,9 @@
             "fitFill": "Fill",
             "fitContain": "Fit",
             "layoutReset": "Reset",
+            "presaleToggle": "Open presales",
+            "presaleHint": "Buyers can buy spots on this lot before the show goes live.",
+            "presaleChip": "Presale",
             "productTypes": {
                 "box": "Box",
                 "pack": "Pack",

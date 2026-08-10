@@ -172,6 +172,8 @@ export default function BroadcastConsolePage() {
     const [lotPriceThb, setLotPriceThb] = useState('100');
     const [lotPacks, setLotPacks] = useState('1');
     const [lotProductType, setLotProductType] = useState<(typeof PRODUCT_TYPES)[number]>('box');
+    // Presales: sell this lot's spots while the show is still scheduled.
+    const [lotPresale, setLotPresale] = useState(false);
     const [creatingLot, setCreatingLot] = useState(false);
 
     const supabaseRef = useRef(createClient());
@@ -759,6 +761,8 @@ export default function BroadcastConsolePage() {
                     spotPrice: Math.round(priceThb * 100),
                     packsPerSpot: Number.isFinite(packs) && packs > 0 ? packs : 1,
                     cardData: { name: lotName.trim(), isSealed: true, productType: lotProductType },
+                    // The server drops the flag unless the show is scheduled.
+                    presaleEnabled: lotPresale && stream?.status === 'scheduled',
                 }),
             });
             const data = await res.json();
@@ -767,6 +771,7 @@ export default function BroadcastConsolePage() {
                 return;
             }
             setLotName('');
+            setLotPresale(false);
             setShowAddLot(false);
             await loadDetail();
         } catch {
@@ -774,7 +779,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setCreatingLot(false);
         }
-    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, streamId, loadDetail, showToast, t]);
+    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, stream?.status, streamId, loadDetail, showToast, t]);
 
     const patchLot = useCallback(
         async (lotId: string, body: Record<string, unknown>) => {
@@ -1535,6 +1540,27 @@ export default function BroadcastConsolePage() {
                                             />
                                         </label>
                                     </div>
+                                    {/* Presales: only offered while the show is still
+                                        scheduled — a live show's lots sell regardless. */}
+                                    {stream.status === 'scheduled' && (
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-xl bg-black/20 border border-white/10 p-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={lotPresale}
+                                                onChange={(e) => setLotPresale(e.target.checked)}
+                                                className="mt-0.5 w-4 h-4 shrink-0 accent-brand-cyan"
+                                            />
+                                            <span>
+                                                <span className="block text-xs font-bold text-white">
+                                                    {t('live.console.presaleToggle') || 'Open presales'}
+                                                </span>
+                                                <span className="block text-[10px] text-slate-500 leading-relaxed mt-0.5">
+                                                    {t('live.console.presaleHint') ||
+                                                        'Buyers can buy spots on this lot before the show goes live.'}
+                                                </span>
+                                            </span>
+                                        </label>
+                                    )}
                                     <button
                                         onClick={() => void createLot()}
                                         disabled={creatingLot || !lotName.trim()}
@@ -1568,6 +1594,11 @@ export default function BroadcastConsolePage() {
                                                 <p className="text-sm font-bold text-white truncate">
                                                     {lot.card_data?.name || '—'}
                                                 </p>
+                                                {lot.presale_enabled && stream.status === 'scheduled' && (
+                                                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[9px] font-black uppercase tracking-widest">
+                                                        {t('live.console.presaleChip') || 'Presale'}
+                                                    </span>
+                                                )}
                                                 <span className="ml-auto shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">
                                                     {t(`live.console.lotStatus.${lot.status}`)}
                                                 </span>

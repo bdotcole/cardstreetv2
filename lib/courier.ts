@@ -1447,6 +1447,65 @@ export async function sendWishlistListingAlert(
     }
 }
 
+/**
+ * Live-breaks presales: tells a buyer who bought presale spots that the show
+ * they reserved a seat in just went live. Mirrors sendWishlistListingAlert —
+ * inline bilingual content until a dashboard template exists (set
+ * COURIER_SHOW_LIVE_TEMPLATE_ID to switch), prefs default ON, never throws.
+ */
+export async function sendShowLiveNotification(
+    userId: string,
+    show: { streamId: string; title: string },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping show-live alert'); return false; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    // `!== false` so accounts without the show_live_* pref columns (or no
+    // prefs row) default to ON, like the other alerts.
+    const wantEmail = prefs.show_live_email !== false && !!email;
+    const wantPush = prefs.show_live_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
+    // Resolved before the routing below: which branch we take decides how the
+    // push channel must be addressed (see buildRouting).
+    const templateId = (process.env.COURIER_SHOW_LIVE_TEMPLATE_ID || '').trim();
+    const routing = buildRouting(wantEmail, wantPush, templateId ? 'template' : 'inline');
+    const showUrl = `${APP_URL}/live/${show.streamId}`;
+
+    const message: Record<string, unknown> = {
+        to: recipient,
+        routing,
+        data: {
+            title: show.title,
+            showUrl,
+            // Push deep-link payload (read by the mobile FCM handler).
+            streamId: show.streamId,
+            type: 'stream_live',
+        },
+    };
+    if (templateId) {
+        message.template = templateId;
+    } else {
+        message.content = {
+            title: `${show.title} is live now`,
+            body:
+                `The show you reserved a spot in is live now — watch it here: ${showUrl} ` +
+                `ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`,
+        };
+    }
+
+    try {
+        const sendResult = await courier.send.message({ message: message as any });
+        console.log(`[Courier] ✅ Show-live alert sent to ${userId} for stream ${show.streamId}. Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending show-live alert to ${userId}:`, error);
+        return false;
+    }
+}
+
 // ─── OBO Best-Offer notifications ────────────────────────────────────────────
 
 /**

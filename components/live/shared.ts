@@ -27,6 +27,8 @@ export interface LiveStreamRow {
     /** Optional until 20260807_stream_layout.sql is applied — absent = default framing. */
     layout?: StreamLayout | null;
     seller?: { display_name: string | null; avatar_url: string | null } | null;
+    /** Feed-only annotation: a scheduled show with at least one presale lot. */
+    presale_open?: boolean;
 }
 
 /**
@@ -132,6 +134,8 @@ export interface LiveLotRow {
     price: number | null; // satang
     break_opened_at: string | null;
     created_at: string;
+    /** Optional until 20260810_presales.sql is applied — absent = no presale. */
+    presale_enabled?: boolean;
 }
 
 export interface LiveSpotRow {

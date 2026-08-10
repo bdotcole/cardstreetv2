@@ -32,6 +32,8 @@ interface FeedRow {
     // returns them.
     visibility?: string;
     ended_at?: string | null;
+    // Public feed only: a scheduled show with at least one presale lot.
+    presale_open?: boolean;
 }
 
 const FEED_COLS =
@@ -100,6 +102,26 @@ export async function GET(req: Request) {
             }
             return (a.scheduled_at ?? '9999').localeCompare(b.scheduled_at ?? '9999');
         });
+
+        // "Presale open" chip: mark upcoming shows that have at least one
+        // presale-enabled lot. Fails soft pre-20260810_presales.sql (missing
+        // column) — the feed just carries no chips.
+        const scheduledIds = streams.filter(s => s.status === 'scheduled').map(s => s.id);
+        if (scheduledIds.length > 0) {
+            const { data: presaleLots, error: presaleErr } = await admin
+                .from('stream_items')
+                .select('stream_id')
+                .in('stream_id', scheduledIds)
+                .eq('presale_enabled', true);
+            if (presaleErr) {
+                if (presaleErr.code !== '42703') {
+                    console.warn('[Live/Streams] presale annotation skipped:', presaleErr.message);
+                }
+            } else if (presaleLots) {
+                const open = new Set(presaleLots.map(r => r.stream_id as string));
+                for (const s of streams) if (open.has(s.id)) s.presale_open = true;
+            }
+        }
 
         return NextResponse.json({ streams });
     } catch (err: any) {

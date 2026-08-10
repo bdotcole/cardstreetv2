@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { getGame } from '@/lib/games';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { useLiveKitRoom, type CameraSlot } from '@/lib/hooks/useLiveKitRoom';
@@ -416,20 +417,21 @@ export default function LiveViewerClient() {
         [spots, myUserId, now],
     );
 
-    // Tick while ANY spot in the active lot is held — not only the current
-    // user's. Every viewer's board derives hold expiry from `now`, so a clock
-    // frozen at mount would leave an expired hold rendered as un-claimable
-    // amber forever for everyone who never held a spot themselves.
-    const anyHeldInActiveLot = useMemo(
-        () => activeSpots.some((s) => s.status === 'held'),
-        [activeSpots],
-    );
+    // Tick while ANY spot is held — not only the current user's. Every
+    // viewer's board derives hold expiry from `now`, so a clock frozen at
+    // mount would leave an expired hold rendered as un-claimable amber
+    // forever for everyone who never held a spot themselves. All spots, not
+    // just the active lot's: presale boards on a scheduled show span every
+    // presale lot. A scheduled show also ticks unconditionally — the same
+    // clock drives the start countdown on the landing.
+    const anyHeldSpot = useMemo(() => spots.some((s) => s.status === 'held'), [spots]);
+    const tickNeeded = anyHeldSpot || stream?.status === 'scheduled';
 
     useEffect(() => {
-        if (!anyHeldInActiveLot) return;
+        if (!tickNeeded) return;
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
-    }, [anyHeldInActiveLot]);
+    }, [tickNeeded]);
 
     // ─── Claim ───
     const claimSpot = useCallback(
@@ -577,8 +579,69 @@ export default function LiveViewerClient() {
     }
 
     const isLive = stream.status === 'live';
+    const isScheduled = stream.status === 'scheduled';
+
+    // Presales: a scheduled show's presale-enabled lot is purchasable now;
+    // everything else needs the show live. Mirrors the claim RPC's guard —
+    // the server (claim_break_spot) stays authoritative either way.
+    const canBuyLot = (lot: LiveLotRow) =>
+        (lot.status === 'queued' || lot.status === 'active') &&
+        (isLive || (isScheduled && lot.presale_enabled === true));
 
     // ─── Shared blocks (mobile + desktop compose them differently) ───
+
+    // The claim grid for one lot — the live board renders it for the lot on
+    // the block; the scheduled landing renders one per presale lot.
+    const spotGrid = (lot: LiveLotRow, lotSpots: LiveSpotRow[]) => (
+        <div className="grid grid-cols-5 gap-2">
+            {lotSpots.map((spot) => {
+                const mine = spot.held_by === myUserId && spot.status === 'held';
+                const soldMine = spot.status === 'sold' && spot.buyer_id === myUserId;
+                const flashing = flashSpots.has(spot.id);
+                const expired =
+                    spot.status === 'held' &&
+                    !!spot.hold_expires_at &&
+                    Date.parse(spot.hold_expires_at) <= now;
+                const claimable =
+                    canBuyLot(lot) && (spot.status === 'open' || (expired && !mine));
+                return (
+                    <motion.button
+                        key={spot.id}
+                        animate={flashing ? { scale: [1, 1.15, 1] } : { scale: 1 }}
+                        transition={flashing ? { duration: 0.6, repeat: 2 } : undefined}
+                        onClick={() => claimable && void claimSpot(spot)}
+                        disabled={!claimable || claimingSpotId === spot.id}
+                        className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${spotStatusClasses(
+                            { status: expired ? 'open' : spot.status, mine: mine || soldMine, flashing },
+                        )}`}
+                    >
+                        <span className="text-sm font-black">{spot.spot_number}</span>
+                        {spot.status === 'sold' && (
+                            <span className="text-[9px] font-black uppercase">
+                                {soldMine
+                                    ? t('live.viewer.yourSpot') || 'Yours'
+                                    : nameInitials(
+                                          spot.buyer_id
+                                              ? profiles.get(spot.buyer_id)?.display_name
+                                              : null,
+                                      )}
+                            </span>
+                        )}
+                        {mine && !expired && (
+                            <span className="text-[9px] font-black">
+                                {formatCountdown(Date.parse(spot.hold_expires_at as string) - now)}
+                            </span>
+                        )}
+                        {spot.assigned_packs && spot.assigned_packs.length > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[8px] font-black flex items-center justify-center">
+                                {spot.assigned_packs.join(',')}
+                            </span>
+                        )}
+                    </motion.button>
+                );
+            })}
+        </div>
+    );
 
     const chatMessages = (limit?: number) => {
         const visible = limit ? chat.slice(-limit) : chat;
@@ -668,56 +731,7 @@ export default function LiveViewerClient() {
                             )}
                         </div>
                     </div>
-                    <div className="p-3 overflow-y-auto">
-                        <div className="grid grid-cols-5 gap-2">
-                            {activeSpots.map((spot) => {
-                                const mine = spot.held_by === myUserId && spot.status === 'held';
-                                const soldMine = spot.status === 'sold' && spot.buyer_id === myUserId;
-                                const flashing = flashSpots.has(spot.id);
-                                const expired =
-                                    spot.status === 'held' &&
-                                    !!spot.hold_expires_at &&
-                                    Date.parse(spot.hold_expires_at) <= now;
-                                const claimable =
-                                    isLive && (spot.status === 'open' || (expired && !mine));
-                                return (
-                                    <motion.button
-                                        key={spot.id}
-                                        animate={flashing ? { scale: [1, 1.15, 1] } : { scale: 1 }}
-                                        transition={flashing ? { duration: 0.6, repeat: 2 } : undefined}
-                                        onClick={() => claimable && void claimSpot(spot)}
-                                        disabled={!claimable || claimingSpotId === spot.id}
-                                        className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${spotStatusClasses(
-                                            { status: expired ? 'open' : spot.status, mine: mine || soldMine, flashing },
-                                        )}`}
-                                    >
-                                        <span className="text-sm font-black">{spot.spot_number}</span>
-                                        {spot.status === 'sold' && (
-                                            <span className="text-[9px] font-black uppercase">
-                                                {soldMine
-                                                    ? t('live.viewer.yourSpot') || 'Yours'
-                                                    : nameInitials(
-                                                          spot.buyer_id
-                                                              ? profiles.get(spot.buyer_id)?.display_name
-                                                              : null,
-                                                      )}
-                                            </span>
-                                        )}
-                                        {mine && !expired && (
-                                            <span className="text-[9px] font-black">
-                                                {formatCountdown(Date.parse(spot.hold_expires_at as string) - now)}
-                                            </span>
-                                        )}
-                                        {spot.assigned_packs && spot.assigned_packs.length > 0 && (
-                                            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[8px] font-black flex items-center justify-center">
-                                                {spot.assigned_packs.join(',')}
-                                            </span>
-                                        )}
-                                    </motion.button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <div className="p-3 overflow-y-auto">{spotGrid(activeLot, activeSpots)}</div>
                 </>
             ) : (
                 <p className="text-xs text-slate-400 text-center py-8 px-4">
@@ -901,6 +915,216 @@ export default function LiveViewerClient() {
             </div>
         </div>
     );
+
+    // ─── Scheduled: the pre-live landing. Cover + countdown + the lot list,
+    //     with working presale spot boards where the seller opted in (full
+    //     claim -> SpotPaymentSheet purchase, board updates via the same
+    //     Realtime channel). No LiveKit here — the join effect above is gated
+    //     on status='live', so flipping live via Realtime connects video and
+    //     swaps this landing for the live layout in place. ───
+    if (isScheduled) {
+        const game = getGame(stream.game_id);
+        const visibleLots = lots.filter((l) => l.status === 'queued' || l.status === 'active');
+        const hasPresale = visibleLots.some((l) => l.presale_enabled === true);
+        const msToStart = stream.scheduled_at ? Date.parse(stream.scheduled_at) - now : null;
+        const countdown =
+            msToStart != null && msToStart > 0
+                ? {
+                      d: Math.floor(msToStart / 86_400_000),
+                      h: Math.floor((msToStart % 86_400_000) / 3_600_000),
+                      m: Math.floor((msToStart % 3_600_000) / 60_000),
+                      s: Math.floor((msToStart % 60_000) / 1000),
+                  }
+                : null;
+        const countdownCells: Array<[number, string]> = countdown
+            ? [
+                  [countdown.d, t('live.scheduled.days') || 'days'],
+                  [countdown.h, t('live.scheduled.hours') || 'hrs'],
+                  [countdown.m, t('live.scheduled.mins') || 'min'],
+                  [countdown.s, t('live.scheduled.secs') || 'sec'],
+              ]
+            : [];
+
+        return (
+            <main className="min-h-screen bg-brand-darker text-white pb-36">
+                {/* ─── Cover ─── */}
+                <div className="relative h-64 sm:h-72">
+                    {stream.cover_image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={stream.cover_image_url}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className={`absolute inset-0 bg-gradient-to-br ${game.gradient}`} />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-brand-darker via-brand-darker/40 to-black/30" />
+                    <div className="absolute top-0 inset-x-0 pt-[calc(var(--sat)+0.75rem)] px-4 flex items-center gap-2">
+                        <button
+                            onClick={() => router.push('/live')}
+                            aria-label={t('live.common.back')}
+                            className="w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
+                        >
+                            <i className="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <ShareShowButton
+                            title={stream.title}
+                            sellerName={stream.seller?.display_name}
+                            path={`/live/${streamId}`}
+                            className="ml-auto w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
+                        />
+                    </div>
+                    <div className="absolute bottom-0 inset-x-0 px-5 pb-4 max-w-xl lg:max-w-2xl mx-auto w-full">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            {stream.seller?.avatar_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={stream.seller.avatar_url}
+                                    alt=""
+                                    className="w-7 h-7 rounded-full object-cover border border-white/20"
+                                />
+                            ) : (
+                                <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                                    <i className="fa-solid fa-circle-user text-slate-400 text-sm"></i>
+                                </div>
+                            )}
+                            <p className="text-xs font-bold text-slate-200 truncate">
+                                {stream.seller?.display_name || '—'}
+                            </p>
+                        </div>
+                        <h1 className="text-xl font-black tracking-tight leading-snug">{stream.title}</h1>
+                    </div>
+                </div>
+
+                {/* ─── Countdown ─── */}
+                <section className="px-5 mt-5 max-w-xl lg:max-w-2xl mx-auto w-full text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                        {countdown
+                            ? t('live.scheduled.startsIn') || 'Show starts in'
+                            : stream.scheduled_at
+                                ? t('live.scheduled.startsSoon') || 'Starting soon'
+                                : t('live.scheduled.tba') || 'Start time coming soon'}
+                    </p>
+                    {countdown && (
+                        <div className="mt-3 flex items-stretch justify-center gap-2">
+                            {countdownCells.map(([value, label]) => (
+                                <div
+                                    key={label}
+                                    className="w-16 rounded-xl glass border-white/10 py-2.5"
+                                >
+                                    <p className="text-xl font-black tabular-nums">
+                                        {String(value).padStart(2, '0')}
+                                    </p>
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                        {label}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {hasPresale && (
+                        <p className="mt-4 inline-block px-3 py-1.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-[11px] font-black uppercase tracking-widest">
+                            {t('live.scheduled.presaleNow') || 'Presale open — grab your spots now'}
+                        </p>
+                    )}
+                </section>
+
+                {/* ─── Lots ─── */}
+                <section className="px-4 mt-6 max-w-xl lg:max-w-2xl mx-auto w-full">
+                    <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">
+                        {t('live.scheduled.lots') || 'Lots in this show'}
+                    </h2>
+                    {visibleLots.length === 0 && (
+                        <p className="text-xs text-slate-500 text-center py-8">
+                            {t('live.scheduled.noLots') || 'Lots will appear here soon'}
+                        </p>
+                    )}
+                    <div className="space-y-3">
+                        {visibleLots.map((lot) => {
+                            const lotSpots = spots
+                                .filter((s) => s.stream_item_id === lot.id)
+                                .sort((a, b) => a.spot_number - b.spot_number);
+                            const open = lotSpots.filter((s) => s.status === 'open').length;
+                            const sold = lotSpots.filter((s) => s.status === 'sold').length;
+                            const presale = canBuyLot(lot);
+                            return (
+                                <div
+                                    key={lot.id}
+                                    className="glass rounded-2xl border-white/10 overflow-hidden"
+                                >
+                                    <div className="px-4 py-3 border-b border-white/5">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-black text-white leading-snug">
+                                                {lot.card_data?.name || '—'}
+                                            </p>
+                                            {lot.presale_enabled === true && (
+                                                <span className="shrink-0 px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[9px] font-black uppercase tracking-widest">
+                                                    {t('live.console.presaleChip') || 'Presale'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 font-bold">
+                                            <span className="text-brand-cyan uppercase tracking-wider">
+                                                {t(`live.types.${lot.item_type}`)}
+                                            </span>
+                                            {lot.spot_price != null && (
+                                                <span>{formatSatang(lot.spot_price)}</span>
+                                            )}
+                                            {lot.packs_per_spot > 1 && (
+                                                <span>
+                                                    {lot.packs_per_spot}{' '}
+                                                    {t('live.viewer.packsPerSpot') || 'packs/spot'}
+                                                </span>
+                                            )}
+                                            {presale && (
+                                                <span className="text-emerald-300">
+                                                    {open} {t('live.viewer.spotsLeft') || 'left'}
+                                                </span>
+                                            )}
+                                            {sold > 0 && (
+                                                <span>
+                                                    {sold} {t('live.console.soldCount') || 'sold'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {presale ? (
+                                        <div className="p-3">{spotGrid(lot, lotSpots)}</div>
+                                    ) : (
+                                        <p className="px-4 py-4 text-xs text-slate-500">
+                                            {t('live.scheduled.availableWhenLive') ||
+                                                'Available when the show goes live'}
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                {/* Held spots -> the same checkout rail as the live board. */}
+                {heldBar && (
+                    <div className="fixed bottom-0 inset-x-0 z-40 px-4 pb-[calc(var(--sab)+0.75rem)] pt-6 bg-gradient-to-t from-brand-darker via-brand-darker/90 to-transparent">
+                        <div className="max-w-xl lg:max-w-2xl mx-auto">{heldBar}</div>
+                    </div>
+                )}
+
+                <SpotPaymentSheet
+                    open={paymentOpen}
+                    spots={payableSpots}
+                    onClose={() => setPaymentOpen(false)}
+                    onSuccess={() => {
+                        // Board flips via Realtime when finalize lands.
+                    }}
+                    onReleased={() => {
+                        setPaymentOpen(false);
+                        void releaseMyHolds();
+                    }}
+                />
+            </main>
+        );
+    }
 
     return (
         <main className="h-[100dvh] bg-brand-darker text-white overflow-hidden">
