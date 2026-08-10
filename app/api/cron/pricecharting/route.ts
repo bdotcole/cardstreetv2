@@ -263,8 +263,15 @@ export async function GET(request: NextRequest) {
     // sits exactly on. A truncated lookup fails SILENTLY and badly: every missing card
     // falls back to 'en', writing English-language price rows onto Japanese and Thai
     // cards instead of updating the rows the ingest actually wrote.
+    // `game` must be written EXPLICITLY for the same reason `language` must. The column
+    // is NOT NULL DEFAULT 'pokemon', and an upsert only assigns the columns it supplies,
+    // so omitting it is silent on refreshes (the existing row keeps its game) and wrong
+    // on inserts (a brand-new row takes the default). That made the bug invisible until
+    // a non-Pokemon catalog first grew graded rows: the JA Yu-Gi-Oh ingest put 1,318
+    // `ygo-*` rows under game='pokemon' between 2026-08-04 and 2026-08-09.
     const cardIds = (maps || []).map((m) => m.card_id);
     const langByCard = new Map<string, string>();
+    const gameByCard = new Map<string, string>();
     const jpOnePiece = new Set<string>();
     for (let i = 0; i < cardIds.length; i += 500) {
         const { data: cards } = await supabase
@@ -273,6 +280,7 @@ export async function GET(request: NextRequest) {
             .in('id', cardIds.slice(i, i + 500));
         for (const c of cards || []) {
             langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
+            if (c.game) gameByCard.set(c.id, c.game);
             if (c.game === 'onepiece' && c.language === 'ja') jpOnePiece.add(c.id);
         }
     }
@@ -281,9 +289,11 @@ export async function GET(request: NextRequest) {
         try {
             const product = await fetchProduct(m.pricecharting_id);
             const lang = langByCard.get(m.card_id) || 'en';
+            const game = gameByCard.get(m.card_id) || 'pokemon';
             const rows = gradedRowsFromProduct(product).map((r) => ({
                 card_id: m.card_id,
                 language: lang,
+                game,
                 condition: r.condition,
                 printing: null,
                 market_avg: r.usd,
@@ -298,6 +308,7 @@ export async function GET(request: NextRequest) {
                     rows.push({
                         card_id: m.card_id,
                         language: lang,
+                        game,
                         condition: 'Raw_NM',
                         printing: null,
                         market_avg: loose,
