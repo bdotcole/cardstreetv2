@@ -77,10 +77,24 @@ Deno.serve(async (req) => {
                 // heap order let the same ~60 leading sets win every night while
                 // the pre-2017 tail stayed frozen at its 2026-06-29 stamp.
                 // Pricing a set stamps it fresh, so the queue self-rotates.
+                //
+                // THE PROBE MUST PAGE TO EXHAUSTION. `!seen.has(id)` only means "never
+                // priced" when `seen` covers EVERY priced set. If the probe stops early
+                // it means "no row in the window we happened to read" — which is the
+                // exact opposite, the FRESHEST sets. At the old 10-page cap against
+                // ~20k EN Raw_NM rows that inverted the queue: measured 2026-08-09, the
+                // leading bucket was the 74 sets already stamped that morning, so they
+                // took positions 0-73 every night and the genuinely stale tail began at
+                // 74 — past where MAX_API_CALLS and the wall clock end the run. 5,310
+                // rows across 50 pre-2017 sets sat at their 2026-03-04 stamp for five
+                // months as a result. 50 pages is ~2.5x the current row count; the
+                // `complete` guard below covers the day that stops being true.
                 try {
+                    const PROBE_PAGE_CAP = 50;
                     const firstSeen: string[] = [];
                     const seen = new Set<string>();
-                    for (let page = 0; page < 10; page++) {
+                    let complete = false;
+                    for (let page = 0; page < PROBE_PAGE_CAP; page++) {
                         const { data: probe, error: probeErr } = await supabase
                             .from('market_values')
                             .select('last_updated, pokemon_cards!inner(set_id)')
@@ -94,17 +108,21 @@ Deno.serve(async (req) => {
                             const sid = r.pokemon_cards?.set_id;
                             if (sid && !seen.has(sid)) { seen.add(sid); firstSeen.push(sid); }
                         }
-                        if (!probe || probe.length < 1000) break;
+                        if (!probe || probe.length < 1000) { complete = true; break; }
                     }
                     const known = new Set(dbSetIds);
-                    const ordered = [
-                        ...dbSetIds.filter((id) => !seen.has(id)), // never priced → most urgent
-                        ...firstSeen.filter((id) => known.has(id)), // then stalest first
-                    ];
-                    // Sets whose every row sits beyond the probe window are the
-                    // freshest — keep them, at the back, rather than dropping them.
+                    const unseen = dbSetIds.filter((id) => !seen.has(id));
+                    const stalest = firstSeen.filter((id) => known.has(id));
+                    // Trust `unseen` as "never priced, most urgent" only on a complete
+                    // probe. On a truncated one those sets are merely outside a partial
+                    // window, so they go to the BACK, where guessing wrong costs nothing.
+                    const ordered = complete ? [...unseen, ...stalest] : [...stalest, ...unseen];
+                    if (!complete) {
+                        console.warn(`probe hit its ${PROBE_PAGE_CAP}-page cap; ${unseen.length} unclassified sets sent to the back`);
+                    }
                     const orderedSet = new Set(ordered);
                     dbSetIds = [...ordered, ...dbSetIds.filter((id) => !orderedSet.has(id))];
+                    console.log(`[${jobId}] queue head: ${dbSetIds.slice(0, 8).join(', ')}`);
                 } catch (e) {
                     console.warn('stalest-first probe failed; using default order:', (e as Error).message);
                 }
@@ -134,14 +152,17 @@ Deno.serve(async (req) => {
             //
             // This cap is NOT what limits EN set coverage, and neither are
             // missing slugs (146 of 147 EN sets have a justtcg_slug; only `exu`
-            // lacks one, and it has no JustTCG counterpart). Coverage is bound by
-            // two other things: `dbSetIds` above is selected with NO .order(), so
-            // the same leading sets win every night, and the run is killed by wall
-            // clock (DELAY_MS between paginated calls) at roughly 60 of 147 sets
-            // before the EdgeRuntime.waitUntil task ends. The pre-2017 tail has
-            // therefore sat at its 2026-06-29 backfill stamp. The fix is the
-            // stalest-first ordering batch-price-games got in v11, not a bigger
-            // budget -- 60 sets is only ~180 calls, well under even this cap.
+            // lacks one, and it has no JustTCG counterpart). One run reaches only
+            // ~60 of 147 sets, and what ends it is WALL CLOCK -- DELAY_MS between
+            // paginated calls against the EdgeRuntime.waitUntil task lifetime --
+            // not this budget (60 sets is ~180 calls, under even this cap).
+            //
+            // So a single night was never going to cover the catalog; what matters
+            // is that the ~60 slots go to the sets that need them. That is the
+            // stalest-first ordering above, and pricing a set stamps it fresh and
+            // drops it to the back, so the queue rotates instead of starving.
+            // Raising this number does not buy coverage -- the clock still stops
+            // the run at the same place.
             const MAX_API_CALLS = 250;
 
             for (const dbSetId of dbSetIds) {
