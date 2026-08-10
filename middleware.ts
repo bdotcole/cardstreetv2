@@ -319,5 +319,6 @@ export const config = {
         '/prices',
         '/graded',
         '/sell-cards',
+        '/become-a-breaker',
     ],
 }

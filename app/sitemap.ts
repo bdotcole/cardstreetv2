@@ -22,6 +22,8 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['ch
   // Seller landing — targets ขายการ์ดโปเกมอน / รับซื้อการ์ด. Distinct from /sell,
   // which is the auth-gated listing form and deliberately stays noindex.
   { path: '/sell-cards', changeFrequency: 'monthly', priority: 0.7 },
+  // Breaker application landing — the intake funnel for Cardstreet Live hosts.
+  { path: '/become-a-breaker', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/faq', changeFrequency: 'monthly', priority: 0.8 },
   // /help is deliberately absent: it duplicates the /faq accordion and
   // canonicalizes there (app/help/page.tsx) — sitemaps list canonicals only.
