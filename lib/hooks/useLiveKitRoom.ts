@@ -420,6 +420,27 @@ export function useLiveKitRoom() {
             const video =
                 (tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined) ??
                 null;
+            // Verify degradationPreference actually reached the RTCRtpSender —
+            // livekit-client applies the publish option via setParameters, but a
+            // browser can silently ignore it. Re-assert once if it didn't stick,
+            // and log the outcome (one line per publish) for field triage.
+            if (isTableCam && video) {
+                try {
+                    const sender = video.sender;
+                    const params = sender?.getParameters();
+                    if (sender && params && params.degradationPreference !== 'maintain-resolution') {
+                        params.degradationPreference = 'maintain-resolution';
+                        await sender.setParameters(params);
+                    }
+                    console.info(
+                        `[LiveKit] table cam sender degradationPreference: ${
+                            sender?.getParameters().degradationPreference ?? 'unavailable'
+                        }`,
+                    );
+                } catch {
+                    // Diagnostic only — must never fail the publish.
+                }
+            }
             setLocalVideo(video);
             return video;
         },

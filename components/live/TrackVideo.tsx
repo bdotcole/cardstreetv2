@@ -19,6 +19,8 @@ export function TrackVideo({
     muted = true,
     mirror = false,
     onClick,
+    onAspect,
+    elementRef,
 }: {
     track: AnyVideoTrack | null;
     className?: string;
@@ -30,6 +32,18 @@ export function TrackVideo({
     /** Front cameras preview mirrored, matching what users expect of a selfie view. */
     mirror?: boolean;
     onClick?: () => void;
+    /**
+     * Reports videoWidth/videoHeight on loadedmetadata AND on the media
+     * 'resize' event — the latter fires when the intrinsic size changes
+     * mid-stream (a phone publisher rotating), which is how the aspect-hugging
+     * contain slots follow an orientation flip without a republish. Must be a
+     * stable callback: it's a dependency of the attach effect, and a re-attach
+     * flickers the feed.
+     */
+    onAspect?: (aspect: number) => void;
+    /** Escape hatch to the underlying <video> — CroppedTrackVideo's backdrop
+     *  snapshots frames from it instead of decoding the track a second time. */
+    elementRef?: React.MutableRefObject<HTMLVideoElement | null>;
 }) {
     const ref = useRef<HTMLVideoElement>(null);
 
@@ -37,14 +51,27 @@ export function TrackVideo({
         const el = ref.current;
         if (!el || !track) return;
         track.attach(el);
+        const report = () => {
+            if (onAspect && el.videoWidth > 0 && el.videoHeight > 0) {
+                onAspect(el.videoWidth / el.videoHeight);
+            }
+        };
+        report(); // metadata may already be loaded when the effect re-runs
+        el.addEventListener('loadedmetadata', report);
+        el.addEventListener('resize', report);
         return () => {
+            el.removeEventListener('loadedmetadata', report);
+            el.removeEventListener('resize', report);
             track.detach(el);
         };
-    }, [track]);
+    }, [track, onAspect]);
 
     return (
         <video
-            ref={ref}
+            ref={(el) => {
+                ref.current = el;
+                if (elementRef) elementRef.current = el;
+            }}
             autoPlay
             playsInline
             muted={muted}

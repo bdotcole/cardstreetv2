@@ -1137,7 +1137,8 @@
             "inAppTitle": "Open this link in Chrome to use your phone as a camera",
             "inAppDesc": "The app couldn't start the camera on this device — the browser can.",
             "openInBrowser": "Open in browser",
-            "copyLink": "Copy link"
+            "copyLink": "Copy link",
+            "rotateHint": "Rotate your phone sideways to fill the stream"
         },
         "types": {
             "personal_break": "Personal break",

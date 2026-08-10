@@ -1,9 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { LocalVideoTrack, RemoteTrack } from 'livekit-client';
 import { TrackVideo } from '@/components/live/TrackVideo';
 import { clampCrop, resolveFit, type FeedCrop } from '@/components/live/shared';
+
+/** Backdrop snapshot cadence — ambience only, so seconds-stale is fine. */
+const BACKDROP_REFRESH_MS = 2000;
+/** Snapshot buffer width in px. Tiny on purpose: it's blurred to a wash, and a
+ *  small drawImage keeps the 2s tick effectively free. */
+const BACKDROP_W = 64;
 
 /**
  * A TrackVideo inside an overflow-hidden window with the broadcaster's
@@ -14,13 +20,24 @@ import { clampCrop, resolveFit, type FeedCrop } from '@/components/live/shared';
  * {zoom, x, y} contract in streams.layout exactly.
  *
  * `slot` resolves the feed's fit (crop.fit, else the slot default): 'cover'
- * center-crops to fill the window; 'contain' letterboxes the FULL frame —
- * built for the portrait table cam, whose cover-crop into the wide lower
- * slot read as a massive accidental zoom. Contain renders a second, blurred
- * cover copy of the SAME track behind the letterboxed one so the bars look
- * intentional (two <video> elements on one track share the decoder output —
- * near-zero extra cost). Zoom/pan apply on top of either fit, so punch-in
- * still works in contain mode.
+ * center-crops to fill the window; 'contain' shows the FULL frame — built for
+ * the portrait table cam, whose cover-crop into the wide lower slot read as a
+ * massive accidental zoom. Contain mode hugs the video: the feed renders in a
+ * centered box at the video's measured aspect (full slot height, width =
+ * height*aspect, capped at the slot width), so a portrait feed in a wide slot
+ * is a tight column instead of a sliver between giant pillarbox bars. The
+ * aspect comes from the attached element (loadedmetadata + 'resize'), so a
+ * publisher rotating mid-stream re-hugs automatically. Never a crop and never
+ * an upscale — the box exactly contains the frame. Zoom/pan apply on top,
+ * clipped to the hugged box, so punch-in still works in contain mode.
+ *
+ * Residual bars are dressed by a backdrop that costs no second decode: a
+ * ~2s canvas snapshot of the SAME video element, blurred/dimmed by CSS.
+ * (The previous backdrop was a second live <video> on the track — two
+ * decode+render pipelines per feed, the prime lag suspect on low-end phones.
+ * Exactly ONE live video element per feed is the invariant now.) Until the
+ * first frame lands the canvas is transparent and the slot's black shows —
+ * the intended plain-dark fallback.
  *
  * The SAME component renders the console's layout panel and the viewer page,
  * so what the seller frames and what viewers receive cannot drift. A
@@ -46,6 +63,44 @@ export function CroppedTrackVideo({
 }) {
     const c = clampCrop(crop);
     const fit = resolveFit(slot, c);
+
+    // The attached video's intrinsic aspect (w/h). Null until measured — the
+    // hug box falls back to the plain full-slot contain until then.
+    const [aspect, setAspect] = useState<number | null>(null);
+    const onAspect = useCallback((next: number) => {
+        setAspect((prev) => (prev === next ? prev : next));
+    }, []);
+    // A swapped track's dimensions are unknown until its metadata loads — a
+    // stale hug box from the previous feed would mis-frame the new one.
+    useEffect(() => {
+        setAspect(null);
+    }, [track]);
+
+    const videoElRef = useRef<HTMLVideoElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    useEffect(() => {
+        if (fit !== 'contain' || !track) return;
+        const draw = () => {
+            const video = videoElRef.current;
+            const canvas = canvasRef.current;
+            if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
+            const h = Math.max(1, Math.round((BACKDROP_W * video.videoHeight) / video.videoWidth));
+            if (canvas.width !== BACKDROP_W || canvas.height !== h) {
+                canvas.width = BACKDROP_W;
+                canvas.height = h;
+            }
+            try {
+                canvas.getContext('2d')?.drawImage(video, 0, 0, BACKDROP_W, h);
+            } catch {
+                // Frame not decodable yet — the next tick catches up.
+            }
+        };
+        draw();
+        const timer = setInterval(draw, BACKDROP_REFRESH_MS);
+        return () => clearInterval(timer);
+    }, [fit, track]);
+
     const zoomStyle =
         c && c.zoom > 1
             ? {
@@ -53,26 +108,44 @@ export function CroppedTrackVideo({
                   transformOrigin: `${c.x * 100}% ${c.y * 100}%`,
               }
             : undefined;
+
+    const video = (
+        <TrackVideo
+            track={track}
+            muted={muted}
+            onAspect={onAspect}
+            elementRef={videoElRef}
+            className={`absolute inset-0 w-full h-full ${
+                fit === 'contain' ? 'object-contain' : 'object-cover'
+            }`}
+            style={zoomStyle}
+        />
+    );
+
     return (
         <div className={`overflow-hidden ${className ?? ''}`} onClick={onClick}>
             {fit === 'contain' && (
-                /* Decorative fill behind the letterbox — blurred, dimmed,
-                   over-scaled so the blur never shows a hard edge. No zoom
-                   transform: the backdrop is ambience, not content. */
-                <TrackVideo
-                    track={track}
-                    muted
+                <canvas
+                    ref={canvasRef}
+                    aria-hidden
                     className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl brightness-[0.4]"
                 />
             )}
-            <TrackVideo
-                track={track}
-                muted={muted}
-                className={`absolute inset-0 w-full h-full ${
-                    fit === 'contain' ? 'object-contain' : 'object-cover'
-                }`}
-                style={zoomStyle}
-            />
+            {fit === 'contain' && aspect !== null ? (
+                /* The hug box: full slot height at the video's aspect, centered,
+                   width capped at the slot (a wider-than-slot feed degrades to
+                   the plain letterbox — object-contain inside keeps the frame
+                   whole either way). overflow-hidden clips the zoom punch-in to
+                   the hugged window. */
+                <div
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full max-w-full overflow-hidden"
+                    style={{ aspectRatio: String(aspect) }}
+                >
+                    {video}
+                </div>
+            ) : (
+                video
+            )}
         </div>
     );
 }

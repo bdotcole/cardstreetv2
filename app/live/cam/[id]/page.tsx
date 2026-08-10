@@ -43,6 +43,18 @@ export default function TableCamPage() {
     const [state, setState] = useState<CamState>('permission');
     const [errorKey, setErrorKey] = useState<CamErrorKey>('connectError');
     const [copyResult, setCopyResult] = useState<'copied' | 'failed' | null>(null);
+    // Live aspect of the published camera (w/h). A portrait publish wastes the
+    // viewer's wide table slot, so we nudge toward landscape. The 'resize'
+    // media event keeps this current across mid-stream rotation — no republish
+    // needed: the sender keeps the same MediaStreamTrack, the new dimensions
+    // ride the existing RTP stream, and the viewer's aspect-hugging slots
+    // follow via their own 'resize' listeners.
+    const [camAspect, setCamAspect] = useState<number | null>(null);
+    const onCamAspect = useCallback(
+        (next: number) => setCamAspect((prev) => (prev === next ? prev : next)),
+        [],
+    );
+    const [rotateHintDismissed, setRotateHintDismissed] = useState(false);
     const { connect, disconnect, publishCamera, startPreview, stopPreview, localVideo } =
         useLiveKitRoom();
     const startedRef = useRef(false);
@@ -166,7 +178,11 @@ export default function TableCamPage() {
     return (
         <main className="h-[100dvh] bg-black text-white relative overflow-hidden">
             {state === 'live' && localVideo && (
-                <TrackVideo track={localVideo} className="absolute inset-0 w-full h-full object-cover" />
+                <TrackVideo
+                    track={localVideo}
+                    onAspect={onCamAspect}
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
             )}
 
             {state === 'live' && (
@@ -177,6 +193,24 @@ export default function TableCamPage() {
                             {t('live.cam.live') || 'LIVE — table cam'}
                         </span>
                     </div>
+                    {camAspect !== null && camAspect < 1 && !rotateHintDismissed && (
+                        <div className="absolute top-[calc(var(--sat)+3.75rem)] inset-x-0 px-6 flex justify-center">
+                            <div className="flex items-center gap-2.5 max-w-[320px] px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/15 backdrop-blur-sm">
+                                <i className="fa-solid fa-rotate text-brand-cyan text-sm shrink-0"></i>
+                                <p className="text-[11px] text-slate-200 leading-snug text-left">
+                                    {t('live.cam.rotateHint') ||
+                                        'Rotate your phone sideways to fill the stream'}
+                                </p>
+                                <button
+                                    onClick={() => setRotateHintDismissed(true)}
+                                    aria-label={t('live.payment.close') || 'Close'}
+                                    className="w-7 h-7 shrink-0 rounded-full bg-white/10 flex items-center justify-center text-slate-300 active:scale-90 transition-all"
+                                >
+                                    <i className="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="absolute bottom-0 inset-x-0 pb-[calc(var(--sab)+1.25rem)] flex justify-center">
                         <button
                             onClick={() => void stop()}
