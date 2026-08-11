@@ -100,20 +100,43 @@ function historyChangePoints(history) {
   return out;
 }
 
+// Returns the cards array, null (batch size dropped — caller re-chunks), or
+// 'skip' (chunk given up after persistent server errors — caller moves on).
 async function batchFetch(jtcgIds) {
+  let serverFails = 0;
   while (true) {
     await sleep(RATE_MS);
-    const res = await fetch(`${BASE}/cards`, {
-      method: 'POST',
-      headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify(jtcgIds.map((id) => ({ cardId: id, include_price_history: true, priceHistoryDuration: DURATION }))),
-    });
+    let res;
+    try {
+      res = await fetch(`${BASE}/cards`, {
+        method: 'POST',
+        headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(jtcgIds.map((id) => ({ cardId: id, include_price_history: true, priceHistoryDuration: DURATION }))),
+      });
+    } catch (e) {
+      // Network blip — same treatment as a server 5xx.
+      res = { status: 500, ok: false, text: async () => e.message };
+    }
     if (res.status === 429) { await sleep(5000); continue; }
     if ((res.status === 400 || res.status === 413) && jtcgIds.length > 10) {
       // Plan rejects this batch size — halve permanently and let the caller re-chunk.
       BATCH = Math.max(10, Math.floor(jtcgIds.length / 2));
       console.log(`  [batch] ${res.status} at size ${jtcgIds.length}, dropping to ${BATCH}`);
       return null;
+    }
+    if (res.status >= 500) {
+      // JustTCG throws occasional transient 500s on batch reads (observed
+      // 2026-08-11, ~1 in 55 calls). Back off and retry; if it persists, halve
+      // in case one id poisons the batch; at the floor, skip the chunk — the
+      // run is resumable and idempotent, so a rerun picks the stragglers up.
+      if (++serverFails <= 3) { await sleep(3000 * serverFails); continue; }
+      if (jtcgIds.length > 10) {
+        BATCH = Math.max(10, Math.floor(jtcgIds.length / 2));
+        console.log(`  [batch] persistent 5xx at size ${jtcgIds.length}, dropping to ${BATCH}`);
+        return null;
+      }
+      console.log(`  [skip] persistent 5xx on ${jtcgIds.length} ids (${jtcgIds[0]} ..)`);
+      return 'skip';
     }
     if (!res.ok) throw new Error(`JustTCG ${res.status}: ${await res.text()}`);
     return (await res.json()).data ?? [];
@@ -130,7 +153,7 @@ async function main() {
     console.log(`resuming after card_id ${cursor}`);
   }
   const windowStart = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const summary = { cards: 0, swept: 0, points: 0, skippedNoHistory: 0, missing: 0, apiCalls: 0 };
+  const summary = { cards: 0, swept: 0, points: 0, skippedNoHistory: 0, skippedChunks: 0, missing: 0, apiCalls: 0 };
 
   while (summary.cards < MAX_CARDS) {
     // Bridge rows: one Raw_NM row per JustTCG-priced card, id in source_links.
@@ -159,6 +182,18 @@ async function main() {
       let cards = await batchFetch([...byJtcgId.keys()]);
       summary.apiCalls++;
       if (cards === null) { i -= BATCH; continue; } // batch size dropped, redo chunk at new size
+      if (cards === 'skip') {
+        // Persistent server errors on this chunk — advance past it so the run
+        // finishes; a rerun (after deleting the cursor file) sweeps stragglers.
+        summary.skippedChunks++;
+        summary.cards += chunk.length;
+        cursor = chunk[chunk.length - 1].card_id;
+        if (COMMIT) {
+          fs.mkdirSync(path.dirname(CURSOR_FILE), { recursive: true });
+          fs.writeFileSync(CURSOR_FILE, JSON.stringify({ cursor, updated: new Date().toISOString() }));
+        }
+        continue;
+      }
 
       const rows = [];
       const sweptIds = [];
