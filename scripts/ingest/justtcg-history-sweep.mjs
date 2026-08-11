@@ -124,22 +124,37 @@ async function batchFetch(jtcgIds) {
       console.log(`  [batch] ${res.status} at size ${jtcgIds.length}, dropping to ${BATCH}`);
       return null;
     }
-    if (res.status >= 500) {
-      // JustTCG throws occasional transient 500s on batch reads (observed
-      // 2026-08-11, ~1 in 55 calls). Back off and retry; if it persists, halve
-      // in case one id poisons the batch; at the floor, skip the chunk — the
-      // run is resumable and idempotent, so a rerun picks the stragglers up.
-      if (++serverFails <= 3) { await sleep(3000 * serverFails); continue; }
+    // Transient-failure ladder: back off and retry; if it persists, halve the
+    // batch (isolates a poison id AND shrinks the response body); at the floor,
+    // skip the chunk — the run is resumable and idempotent, so a rerun picks
+    // the stragglers up. Returns 'retry' | null (halved) | 'skip'.
+    const transient = async (why) => {
+      if (++serverFails <= 3) { await sleep(3000 * serverFails); return 'retry'; }
       if (jtcgIds.length > 10) {
         BATCH = Math.max(10, Math.floor(jtcgIds.length / 2));
-        console.log(`  [batch] persistent 5xx at size ${jtcgIds.length}, dropping to ${BATCH}`);
+        console.log(`  [batch] persistent ${why} at size ${jtcgIds.length}, dropping to ${BATCH}`);
         return null;
       }
-      console.log(`  [skip] persistent 5xx on ${jtcgIds.length} ids (${jtcgIds[0]} ..)`);
+      console.log(`  [skip] persistent ${why} on ${jtcgIds.length} ids (${jtcgIds[0]} ..)`);
       return 'skip';
+    };
+    if (res.status >= 500) {
+      // JustTCG throws occasional transient 500s on batch reads (observed
+      // 2026-08-11, ~1 in 55 calls).
+      const r = await transient('5xx');
+      if (r === 'retry') continue;
+      return r;
     }
     if (!res.ok) throw new Error(`JustTCG ${res.status}: ${await res.text()}`);
-    return (await res.json()).data ?? [];
+    try {
+      return (await res.json()).data ?? [];
+    } catch (_e) {
+      // Truncated/corrupt body on a 200 — seen on a 3.3MB YGO batch response
+      // (2026-08-11). Same ladder; halving shrinks the body below the flaky zone.
+      const r = await transient('truncated body');
+      if (r === 'retry') continue;
+      return r;
+    }
   }
 }
 
