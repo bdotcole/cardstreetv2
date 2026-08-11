@@ -11,6 +11,15 @@
  */
 
 import { NextResponse } from 'next/server';
+
+// Settlement makes one Flash rate call per buyer, so wall clock scales with
+// the size of the break — a 40-buyer show blows straight past the default
+// function timeout. 300s matches the other long-running routes (/api/scan,
+// /api/cron/pricecharting). The idempotency contract above still covers a
+// break big enough to exhaust even this: the broadcaster re-runs settle and
+// only the missed buyers are picked up.
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcaster } from '@/lib/liveBreaks';

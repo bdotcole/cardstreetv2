@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts'
 import { submitCardIdsToIndexNow } from '@/lib/indexNow'
 import { attachSellers } from '@/lib/publicProfiles'
+import { sanitizeOrFilterTerm } from '@/lib/utils/postgrestFilter'
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -55,9 +56,9 @@ export async function GET(request: NextRequest) {
     // Match the secondary name too: a Japanese card snapshots its printed
     // Japanese name, with the English one in thaiName, so an English query
     // would otherwise miss every JA listing.
-    if (search.trim()) {
-        const term = search.trim()
-        query = query.or(`card_data->>name.ilike.%${term}%,card_data->>thaiName.ilike.%${term}%`)
+    const searchTerm = sanitizeOrFilterTerm(search)
+    if (searchTerm) {
+        query = query.or(`card_data->>name.ilike.%${searchTerm}%,card_data->>thaiName.ilike.%${searchTerm}%`)
     }
     if (language && language !== 'all') {
         query = query.eq('card_data->>language', language)

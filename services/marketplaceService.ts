@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
+import { sanitizeOrFilterTerm } from '@/lib/utils/postgrestFilter';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -133,9 +134,9 @@ export const marketplaceService = {
                 // secondary name too: a Japanese card snapshots its printed
                 // Japanese name, with the English one in thaiName, so an
                 // English query would otherwise miss every JA listing.
-                if (search && search.trim().length > 0) {
-                    const term = search.trim();
-                    query = query.or(`card_data->>name.ilike.%${term}%,card_data->>thaiName.ilike.%${term}%`);
+                const searchTerm = sanitizeOrFilterTerm(search ?? '');
+                if (searchTerm) {
+                    query = query.or(`card_data->>name.ilike.%${searchTerm}%,card_data->>thaiName.ilike.%${searchTerm}%`);
                 }
 
                 // Server-side language filter. Japanese singles snapshot as 'ja'
