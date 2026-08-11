@@ -21,11 +21,21 @@ import {
     formatCountdown,
     formatSatang,
     nameInitials,
+    pollTotalVotes,
     type LiveChatMessage,
     type LiveLotRow,
+    type LivePollRow,
     type LiveSpotRow,
     type LiveStreamRow,
 } from '@/components/live/shared';
+import { PollOptionBars } from '@/components/live/StreamPoll';
+import {
+    FloatingStickerLayer,
+    StickerTray,
+    useFloatingStickers,
+    useStickerBroadcast,
+} from '@/components/live/StickerReactions';
+import type { StickerKey } from '@/components/live/stickers';
 import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
 
 // Stripe Elements only loads when a checkout actually opens.
@@ -105,6 +115,16 @@ export default function LiveViewerClient() {
     const [sending, setSending] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [claimingSpotId, setClaimingSpotId] = useState<string | null>(null);
+    // The current poll (open, or just-closed while its result lingers).
+    const [poll, setPoll] = useState<LivePollRow | null>(null);
+    const [myVote, setMyVote] = useState<string | null>(null);
+    const [voting, setVoting] = useState(false);
+    // Realtime handlers compare against the CURRENT poll without re-binding
+    // the channel on every tally tick.
+    const pollRef = useRef<LivePollRow | null>(null);
+    useEffect(() => {
+        pollRef.current = poll;
+    }, [poll]);
     // Spots the randomizer just touched — pulse-highlighted for a few seconds.
     const [flashSpots, setFlashSpots] = useState<Set<string>>(new Set());
     // 1s tick that drives the hold countdowns.
@@ -142,9 +162,10 @@ export default function LiveViewerClient() {
         let cancelled = false;
         (async () => {
             try {
-                const [detailRes, chatRes, userRes] = await Promise.all([
+                const [detailRes, chatRes, pollRes, userRes] = await Promise.all([
                     fetch(`/api/live/streams/${streamId}`),
                     fetch(`/api/live/streams/${streamId}/chat`),
+                    fetch(`/api/live/streams/${streamId}/polls`),
                     supabaseRef.current.auth.getUser(),
                 ]);
                 if (cancelled) return;
@@ -159,6 +180,15 @@ export default function LiveViewerClient() {
                 if (chatRes.ok) {
                     const chatData = await chatRes.json();
                     setChat(chatData.messages ?? []);
+                }
+                if (pollRes.ok) {
+                    // Only a live open poll matters at join time; a poll that
+                    // closed before we arrived stays hidden.
+                    const pollData = await pollRes.json();
+                    if (pollData.poll?.status === 'open') {
+                        setPoll(pollData.poll);
+                        setMyVote(pollData.myVote ?? null);
+                    }
                 }
                 setMyUserId(userRes.data.user?.id ?? null);
                 setPageState('ready');
@@ -176,12 +206,30 @@ export default function LiveViewerClient() {
     // must not 404 the viewer; the next trigger catches us up.
     const refetchDetail = useCallback(async () => {
         try {
-            const res = await fetch(`/api/live/streams/${streamId}`);
-            if (!res.ok) return;
-            const detail = await res.json();
-            setStream(detail.stream);
-            setLots(detail.items ?? []);
-            setSpots(detail.spots ?? []);
+            const [res, pollRes] = await Promise.all([
+                fetch(`/api/live/streams/${streamId}`),
+                fetch(`/api/live/streams/${streamId}/polls`),
+            ]);
+            if (res.ok) {
+                const detail = await res.json();
+                setStream(detail.stream);
+                setLots(detail.items ?? []);
+                setSpots(detail.spots ?? []);
+            }
+            if (pollRes.ok) {
+                // Recover a poll INSERT/close the dead channel missed. Only an
+                // open poll is (re)adopted — closed ones linger via the
+                // Realtime path's grace timer, not here.
+                const pollData = await pollRes.json();
+                if (pollData.poll?.status === 'open') {
+                    setPoll(pollData.poll);
+                    setMyVote(pollData.myVote ?? null);
+                } else if (pollData.poll) {
+                    setPoll((prev) =>
+                        prev && prev.id === pollData.poll.id ? pollData.poll : prev,
+                    );
+                }
+            }
         } catch {
             // Realtime (or the next visibility flip) will catch us up.
         }
@@ -301,6 +349,23 @@ export default function LiveViewerClient() {
                 (payload) => {
                     const msg = payload.new as LiveChatMessage;
                     setChat((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+                },
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'stream_polls', filter: `stream_id=eq.${streamId}` },
+                (payload) => {
+                    const row = payload.new as LivePollRow;
+                    if (!row?.id) return;
+                    if (pollRef.current?.id === row.id) {
+                        setPoll((prev) => (prev && prev.id === row.id ? { ...prev, ...row } : prev));
+                    } else if (row.status === 'open') {
+                        // A fresh poll replaces whatever card was up; the
+                        // ballot highlight resets with it. (A close/update of
+                        // a poll we never showed is ignored.)
+                        setMyVote(null);
+                        setPoll(row);
+                    }
                 },
             )
             .subscribe((status) => {
@@ -536,6 +601,80 @@ export default function LiveViewerClient() {
         }
     }, [chatInput, sending, streamId, showToast, t]);
 
+    // ─── Poll: vote + closed-result lingering ───
+    const votePoll = useCallback(
+        async (optionKey: string) => {
+            const target = pollRef.current;
+            if (!target || voting || target.status !== 'open') return;
+            const previousVote = myVote;
+            setMyVote(optionKey); // optimistic highlight; tallies wait for the server
+            setVoting(true);
+            try {
+                const res = await fetch(`/api/live/polls/${target.id}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ option: optionKey }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    setMyVote(previousVote);
+                    showToast(
+                        data.code === 'RATE_LIMITED'
+                            ? t('live.viewer.rateLimited') || 'Slow down a moment'
+                            : t('live.poll.voteError') || 'Could not record your vote',
+                        'error',
+                    );
+                    return;
+                }
+                if (data.tallies) {
+                    setPoll((prev) =>
+                        prev && prev.id === target.id ? { ...prev, tallies: data.tallies } : prev,
+                    );
+                }
+            } catch {
+                setMyVote(previousVote);
+                showToast(t('live.poll.voteError') || 'Could not record your vote', 'error');
+            } finally {
+                setVoting(false);
+            }
+        },
+        [voting, myVote, showToast, t],
+    );
+
+    // A closed poll collapses to its result for a beat, then leaves the stage.
+    useEffect(() => {
+        if (poll?.status !== 'closed') return;
+        const pollId = poll.id;
+        const timer = setTimeout(() => {
+            setPoll((prev) => (prev && prev.id === pollId ? null : prev));
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [poll?.status, poll?.id]);
+
+    // ─── Sticker reactions (ephemeral broadcast; nothing persists) ───
+    const { floats: stickerFloats, spawn: spawnSticker, remove: removeSticker } = useFloatingStickers();
+    useStickerBroadcast(streamId, pageState === 'ready' && stream?.status === 'live', spawnSticker);
+
+    const sendSticker = useCallback(
+        (sticker: StickerKey) => {
+            spawnSticker(sticker); // optimistic — the broadcast never echoes back
+            void fetch(`/api/live/streams/${streamId}/react`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sticker }),
+            })
+                .then((res) => {
+                    if (res.status === 429) {
+                        showToast(t('live.viewer.rateLimited') || 'Slow down a moment', 'error');
+                    }
+                })
+                .catch(() => {
+                    // Ephemeral by design — a lost reaction is not worth a toast.
+                });
+        },
+        [streamId, spawnSticker, showToast, t],
+    );
+
     // ─── Derived ───
     const openCount = activeSpots.filter((s) => s.status === 'open').length;
 
@@ -747,6 +886,45 @@ export default function LiveViewerClient() {
         </div>
     );
 
+    // The audience poll card — open polls take votes, a just-closed poll
+    // lingers as its result for a few seconds (the effect above clears it).
+    const pollCard = isLive && poll && (
+        <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl bg-black/60 border border-white/15 backdrop-blur-sm p-3"
+        >
+            <div className="flex items-center gap-2 mb-1.5">
+                <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                        poll.status === 'open'
+                            ? 'bg-brand-cyan/15 text-brand-cyan'
+                            : 'bg-white/10 text-slate-300'
+                    }`}
+                >
+                    {poll.status === 'open'
+                        ? t('live.poll.open') || 'Live poll'
+                        : t('live.poll.closed') || 'Poll closed'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold ml-auto tabular-nums">
+                    {pollTotalVotes(poll)} {t('live.poll.votes') || 'votes'}
+                </span>
+            </div>
+            <p className="text-xs font-black text-white leading-snug mb-2 break-words">{poll.question}</p>
+            <PollOptionBars
+                poll={poll}
+                myVote={myVote}
+                onVote={poll.status === 'open' ? (key) => void votePoll(key) : undefined}
+                disabled={voting}
+            />
+            {poll.status === 'open' && !myVote && (
+                <p className="mt-1.5 text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                    {t('live.poll.tapToVote') || 'Tap an option to vote'}
+                </p>
+            )}
+        </motion.div>
+    );
+
     const heldBar = myHeldSpots.length > 0 && (
         <div className="flex items-center gap-2 bg-brand-cyan/10 border border-brand-cyan/30 rounded-2xl px-3 py-2 backdrop-blur-sm">
             <div className="flex-1 min-w-0">
@@ -865,6 +1043,11 @@ export default function LiveViewerClient() {
                     {t('live.viewer.unmute') || 'Tap for sound'}
                 </button>
             )}
+
+            {/* Sticker floats. videoArea renders twice (mobile + desktop
+                trees), both layers share one float list — the hidden twin
+                never animates, and the hook's sweep reaps on its behalf. */}
+            <FloatingStickerLayer floats={stickerFloats} onDone={removeSticker} />
         </div>
     );
 
@@ -1149,10 +1332,16 @@ export default function LiveViewerClient() {
 
                 {/* Chat overlay + input + held bar over the lower feed */}
                 <div className="absolute bottom-0 inset-x-0 pb-[calc(var(--sab)+0.75rem)] px-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
+                    {pollCard && <div className="mb-2">{pollCard}</div>}
                     <div className="mb-2 max-h-[30vh] overflow-hidden flex flex-col justify-end">
                         {chatMessages(CHAT_OVERLAY_COUNT)}
                     </div>
                     {heldBar && <div className="mb-2">{heldBar}</div>}
+                    {isLive && (
+                        <div className="mb-2 flex justify-end">
+                            <StickerTray onSend={sendSticker} />
+                        </div>
+                    )}
                     <div className="flex items-center gap-2">
                         <div className="flex-1">{chatInputRow}</div>
                         <button
@@ -1221,12 +1410,20 @@ export default function LiveViewerClient() {
                 </div>
                 <div className="w-[400px] border-l border-white/10 bg-slate-950/60 flex flex-col">
                     <div className="border-b border-white/5 max-h-[45%] overflow-y-auto">{spotBoard}</div>
+                    {pollCard && <div className="px-3 pt-3">{pollCard}</div>}
                     {heldBar && <div className="px-3 pt-3">{heldBar}</div>}
                     <div className="flex-1 overflow-y-auto py-2 flex flex-col justify-end">
                         {chatMessages()}
                         <div ref={chatEndRef} />
                     </div>
-                    <div className="p-3 border-t border-white/5">{chatInputRow}</div>
+                    <div className="p-3 border-t border-white/5 space-y-2">
+                        {isLive && (
+                            <div className="flex justify-end">
+                                <StickerTray onSend={sendSticker} />
+                            </div>
+                        )}
+                        {chatInputRow}
+                    </div>
                 </div>
             </div>
 

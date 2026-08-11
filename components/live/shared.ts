@@ -152,6 +152,30 @@ export interface LiveSpotRow {
     assigned_packs: number[] | null;
 }
 
+export interface LivePollOption {
+    key: string;
+    label: string;
+}
+
+export interface LivePollRow {
+    id: string;
+    stream_id: string;
+    seller_id: string;
+    question: string;
+    options: LivePollOption[];
+    /** Full recount written server-side after every vote; missing key = 0. */
+    tallies: Record<string, number> | null;
+    status: 'open' | 'closed';
+    created_at: string;
+    closed_at: string | null;
+}
+
+/** Total votes across a poll's options (tolerates missing tally keys). */
+export function pollTotalVotes(poll: LivePollRow): number {
+    const tallies = poll.tallies ?? {};
+    return (poll.options ?? []).reduce((sum, o) => sum + (tallies[o.key] ?? 0), 0);
+}
+
 export interface LiveChatMessage {
     id: string;
     stream_id: string;

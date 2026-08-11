@@ -17,15 +17,23 @@ import {
     DEFAULT_RATIO,
     formatSatang,
     isNativeShell,
+    pollTotalVotes,
     resolveFit,
     type FeedCrop,
     type FeedFit,
     type LiveChatMessage,
     type LiveLotRow,
+    type LivePollRow,
     type LiveSpotRow,
     type LiveStreamRow,
     type StreamLayout,
 } from '@/components/live/shared';
+import { PollOptionBars } from '@/components/live/StreamPoll';
+import {
+    FloatingStickerLayer,
+    useFloatingStickers,
+    useStickerBroadcast,
+} from '@/components/live/StickerReactions';
 
 /**
  * The broadcaster CONSOLE (desktop-first, phone-usable): camera staging +
@@ -145,6 +153,20 @@ export default function BroadcastConsolePage() {
     const [settleResult, setSettleResult] = useState<number | null>(null);
     const [chatInput, setChatInput] = useState('');
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+
+    // ─── Audience poll (latest; the console also shows the closed result) ───
+    const [poll, setPoll] = useState<LivePollRow | null>(null);
+    // Realtime handlers compare against the CURRENT poll without re-binding
+    // the channel on every tally tick.
+    const pollRef = useRef<LivePollRow | null>(null);
+    useEffect(() => {
+        pollRef.current = poll;
+    }, [poll]);
+    const [showPollForm, setShowPollForm] = useState(false);
+    const [pollQuestion, setPollQuestion] = useState('');
+    const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+    const [creatingPoll, setCreatingPoll] = useState(false);
+    const [closingPoll, setClosingPoll] = useState(false);
 
     // ─── Viewer framing (streams.layout) ───
     // Local-first: the panel edits this state and autosaves; the Realtime echo
@@ -279,16 +301,30 @@ export default function BroadcastConsolePage() {
         return data.stream as LiveStreamRow;
     }, [streamId]);
 
+    // Latest poll (any status) — fails soft pre-migration ({poll: null}).
+    const loadPoll = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/polls`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.poll) setPoll(data.poll);
+        } catch {
+            // Realtime (or the next refetch) will catch us up.
+        }
+    }, [streamId]);
+
     useEffect(() => {
         if (!streamId) return;
         void loadDetail();
-    }, [streamId, loadDetail]);
+        void loadPoll();
+    }, [streamId, loadDetail, loadPoll]);
 
     // Tolerant re-sync used after a Realtime gap (backgrounded WebView,
     // channel error). Unlike loadDetail it never flips pageState — a
     // transient failure mid-show must not 404 the console.
     const refetchDetail = useCallback(async () => {
         try {
+            void loadPoll();
             const res = await fetch(`/api/live/streams/${streamId}`);
             if (!res.ok) return;
             const data = await res.json();
@@ -298,7 +334,7 @@ export default function BroadcastConsolePage() {
         } catch {
             // Realtime (or the next visibility flip) will catch us up.
         }
-    }, [streamId]);
+    }, [streamId, loadPoll]);
 
     // Capacitor WebView backgrounding kills sockets silently — the channel
     // looks alive but rows were missed. Refetch on return to foreground.
@@ -376,6 +412,19 @@ export default function BroadcastConsolePage() {
                 'postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'streams', filter: `id=eq.${streamId}` },
                 (payload) => setStream((prev) => (prev ? { ...prev, ...(payload.new as LiveStreamRow) } : prev)),
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'stream_polls', filter: `stream_id=eq.${streamId}` },
+                (payload) => {
+                    const row = payload.new as LivePollRow;
+                    if (!row?.id) return;
+                    if (pollRef.current?.id === row.id) {
+                        setPoll((prev) => (prev && prev.id === row.id ? { ...prev, ...row } : prev));
+                    } else if (!pollRef.current || row.created_at >= pollRef.current.created_at) {
+                        setPoll(row);
+                    }
+                },
             )
             .subscribe((status) => {
                 // A broken channel means silently missed rows: recover the
@@ -942,6 +991,69 @@ export default function BroadcastConsolePage() {
         [streamId, showToast, t],
     );
 
+    // ─── Audience poll ───
+    const createPoll = useCallback(async () => {
+        if (creatingPoll) return;
+        const question = pollQuestion.trim();
+        // Blank option rows are dropped; the route assigns keys a-d in order.
+        const labels = pollOptions.map((o) => o.trim()).filter(Boolean);
+        if (!question || labels.length < 2) return;
+        setCreatingPoll(true);
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/polls`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, options: labels }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.poll) {
+                showToast(
+                    data.code === 'POLL_ALREADY_OPEN'
+                        ? t('live.poll.alreadyOpen') || 'A poll is already open — close it first'
+                        : data.error || t('live.poll.createError') || 'Could not start the poll',
+                    'error',
+                );
+                return;
+            }
+            setPoll(data.poll);
+            setShowPollForm(false);
+            setPollQuestion('');
+            setPollOptions(['', '']);
+        } catch {
+            showToast(t('live.poll.createError') || 'Could not start the poll', 'error');
+        } finally {
+            setCreatingPoll(false);
+        }
+    }, [creatingPoll, pollQuestion, pollOptions, streamId, showToast, t]);
+
+    const closePoll = useCallback(async () => {
+        const target = pollRef.current;
+        if (!target || closingPoll || target.status !== 'open') return;
+        setClosingPoll(true);
+        try {
+            const res = await fetch(`/api/live/polls/${target.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'close' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.poll) {
+                showToast(data.error || t('live.poll.closeError') || 'Could not close the poll', 'error');
+                return;
+            }
+            setPoll(data.poll);
+        } catch {
+            showToast(t('live.poll.closeError') || 'Could not close the poll', 'error');
+        } finally {
+            setClosingPoll(false);
+        }
+    }, [closingPoll, showToast, t]);
+
+    // ─── Sticker reactions: the console floats the audience's taps over the
+    //     monitor tile so the breaker feels the room without watching chat. ───
+    const { floats: stickerFloats, spawn: spawnSticker, remove: removeSticker } = useFloatingStickers();
+    useStickerBroadcast(streamId, pageState === 'ready' && stream?.status === 'live', spawnSticker);
+
     // ─── Derived ───
     const focusedLot = useMemo(
         () =>
@@ -1314,6 +1426,9 @@ export default function BroadcastConsolePage() {
                                         )}
                                     </div>
                                 )}
+                                {/* Audience sticker reactions, floated over the
+                                    monitor so the breaker sees the room react. */}
+                                <FloatingStickerLayer floats={stickerFloats} onDone={removeSticker} />
                             </div>
                             {/* Per-feed zoom + reset. Panning is drag-on-the-feed above. */}
                             {!nativeFallback && !isEnded && (localVideo || tableCamConnected) && (
@@ -1776,8 +1891,131 @@ export default function BroadcastConsolePage() {
                         )}
                     </div>
 
-                    {/* ─── Column 3: chat + moderation ─── */}
-                    <div className={`${sectionCls} flex flex-col max-h-[80vh]`}>
+                    {/* ─── Column 3: poll + chat + moderation ─── */}
+                    <div className="space-y-4">
+                        <div className={sectionCls}>
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">
+                                    {t('live.poll.title') || 'Poll'}
+                                </h2>
+                                {!isEnded && (!poll || poll.status === 'closed') && (
+                                    <button onClick={() => setShowPollForm((v) => !v)} className={btnGhost}>
+                                        <i className="fa-solid fa-square-poll-vertical mr-1.5"></i>
+                                        {t('live.poll.ask') || 'Ask a poll'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {showPollForm && !isEnded && (!poll || poll.status === 'closed') && (
+                                <div className="mb-4 bg-black/20 rounded-xl p-3 space-y-2.5">
+                                    <input
+                                        value={pollQuestion}
+                                        onChange={(e) => setPollQuestion(e.target.value)}
+                                        maxLength={200}
+                                        placeholder={
+                                            t('live.poll.questionPlaceholder') ||
+                                            'What should we ask the room?'
+                                        }
+                                        className={inputCls}
+                                    />
+                                    {pollOptions.map((opt, i) => (
+                                        <div key={i} className="flex items-center gap-2">
+                                            <input
+                                                value={opt}
+                                                onChange={(e) =>
+                                                    setPollOptions((prev) =>
+                                                        prev.map((p, j) => (j === i ? e.target.value : p)),
+                                                    )
+                                                }
+                                                maxLength={80}
+                                                placeholder={`${t('live.poll.option') || 'Option'} ${i + 1}`}
+                                                className={inputCls}
+                                            />
+                                            {pollOptions.length > 2 && (
+                                                <button
+                                                    onClick={() =>
+                                                        setPollOptions((prev) => prev.filter((_, j) => j !== i))
+                                                    }
+                                                    aria-label={t('live.poll.removeOption') || 'Remove'}
+                                                    className="w-8 h-8 shrink-0 rounded-lg bg-white/10 text-slate-400 text-xs active:scale-95 transition-all"
+                                                >
+                                                    <i className="fa-solid fa-xmark"></i>
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="flex gap-2">
+                                        {pollOptions.length < 4 && (
+                                            <button
+                                                onClick={() => setPollOptions((prev) => [...prev, ''])}
+                                                className={btnGhost}
+                                            >
+                                                <i className="fa-solid fa-plus mr-1.5"></i>
+                                                {t('live.poll.addOption') || 'Add option'}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => void createPoll()}
+                                            disabled={
+                                                creatingPoll ||
+                                                !pollQuestion.trim() ||
+                                                pollOptions.filter((o) => o.trim()).length < 2
+                                            }
+                                            className={`${btnPrimary} flex-1`}
+                                        >
+                                            {creatingPoll
+                                                ? t('live.poll.starting') || 'Starting...'
+                                                : t('live.poll.start') || 'Start poll'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {poll ? (
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <span
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                                                poll.status === 'open'
+                                                    ? 'bg-brand-cyan/15 text-brand-cyan'
+                                                    : 'bg-white/10 text-slate-300'
+                                            }`}
+                                        >
+                                            {poll.status === 'open'
+                                                ? t('live.poll.open') || 'Live poll'
+                                                : t('live.poll.closedChip') || 'Closed'}
+                                        </span>
+                                        <span className="ml-auto text-[10px] text-slate-400 font-bold tabular-nums">
+                                            {pollTotalVotes(poll)} {t('live.poll.votes') || 'votes'}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm font-bold text-white leading-snug mb-2 break-words">
+                                        {poll.question}
+                                    </p>
+                                    <PollOptionBars poll={poll} />
+                                    {poll.status === 'open' && (
+                                        <button
+                                            onClick={() => void closePoll()}
+                                            disabled={closingPoll}
+                                            className={`${btnGhost} w-full mt-3 bg-amber-500/20 text-amber-300`}
+                                        >
+                                            {closingPoll
+                                                ? t('live.payment.processing') || 'Processing...'
+                                                : t('live.poll.close') || 'Close poll'}
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                !showPollForm && (
+                                    <p className="text-xs text-slate-500 leading-relaxed">
+                                        {t('live.poll.empty') ||
+                                            'Ask the room a question — results update live.'}
+                                    </p>
+                                )
+                            )}
+                        </div>
+
+                        <div className={`${sectionCls} flex flex-col max-h-[70vh]`}>
                         <div className="flex items-center justify-between mb-2">
                             <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">
                                 {t('live.console.chat') || 'Chat'}
@@ -1848,6 +2086,7 @@ export default function BroadcastConsolePage() {
                             >
                                 <i className="fa-solid fa-paper-plane text-sm"></i>
                             </button>
+                        </div>
                         </div>
                     </div>
                 </div>

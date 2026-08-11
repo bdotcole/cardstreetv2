@@ -169,6 +169,74 @@ export async function requireViewerOrSeller(
 // stream_chat_messages.body CHECK caps at 300 chars.
 export const CHAT_BODY_MAX = 300;
 
+// ─── Polls (20260811_stream_polls.sql) ───
+
+export const POLL_QUESTION_MAX = 200;
+export const POLL_OPTIONS_MIN = 2;
+export const POLL_OPTIONS_MAX = 4;
+export const POLL_OPTION_LABEL_MAX = 80;
+export const POLL_OPTION_KEY_MAX = 32;
+
+export interface PollOptionRow {
+    key: string;
+    label: string;
+}
+
+export interface PollRow {
+    id: string;
+    stream_id: string;
+    seller_id: string;
+    question: string;
+    options: PollOptionRow[];
+    tallies: Record<string, number> | null;
+    status: 'open' | 'closed';
+    created_at: string;
+    closed_at: string | null;
+}
+
+export const POLL_COLS =
+    'id, stream_id, seller_id, question, options, tallies, status, created_at, closed_at';
+
+/**
+ * Pre-migration tolerance: PostgREST reports a table missing from its schema
+ * cache as PGRST205 (older versions surface Postgres's 42P01). Poll routes
+ * fail soft on it instead of 500ing until 20260811_stream_polls.sql runs.
+ */
+export function isMissingTableError(error: { code?: string } | null): boolean {
+    return error?.code === 'PGRST205' || error?.code === '42P01';
+}
+
+/**
+ * Full recount of a poll's votes into {optionKey: count}. Exact HEAD counts
+ * per option (2-4 cheap queries) rather than paging vote rows, so the result
+ * is never clipped by PostgREST row limits. The caller writes the result to
+ * stream_polls.tallies — a concurrent vote's recount lands right after and
+ * self-corrects any interleaving.
+ */
+export async function recountPollTallies(
+    pollId: string,
+    optionKeys: string[],
+): Promise<Record<string, number>> {
+    const admin = createAdminClient();
+    const counts = await Promise.all(
+        optionKeys.map(async (key) => {
+            const { count, error } = await admin
+                .from('stream_poll_votes')
+                .select('*', { count: 'exact', head: true })
+                .eq('poll_id', pollId)
+                .eq('option_key', key);
+            if (error) {
+                console.error('[LiveBreaks] poll recount failed:', error.message);
+                return [key, 0] as const;
+            }
+            return [key, count ?? 0] as const;
+        }),
+    );
+    const tallies: Record<string, number> = {};
+    for (const [key, count] of counts) tallies[key] = count;
+    return tallies;
+}
+
 /**
  * Best-effort system chat row ('Spot 4 -> @somchai', randomizer results).
  * Never throws — an announcement failure must not fail the money path that

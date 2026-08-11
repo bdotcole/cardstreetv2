@@ -1128,6 +1128,36 @@
                 "cancelled": "Cancelled"
             }
         },
+        "poll": {
+            "title": "Poll",
+            "ask": "Ask a poll",
+            "open": "Live poll",
+            "closed": "Poll closed",
+            "closedChip": "Closed",
+            "empty": "Ask the room a question — results update live.",
+            "questionPlaceholder": "What should we ask the room?",
+            "option": "Option",
+            "addOption": "Add option",
+            "removeOption": "Remove",
+            "start": "Start poll",
+            "starting": "Starting...",
+            "close": "Close poll",
+            "votes": "votes",
+            "tapToVote": "Tap an option to vote",
+            "alreadyOpen": "A poll is already open — close it first",
+            "createError": "Could not start the poll",
+            "closeError": "Could not close the poll",
+            "voteError": "Could not record your vote"
+        },
+        "stickers": {
+            "send": "Send a reaction",
+            "fire": "Fire",
+            "heart": "Heart",
+            "lightning": "Lightning",
+            "star": "Star",
+            "moneybag": "Money bag",
+            "trophy": "Trophy"
+        },
         "common": {
             "back": "Back",
             "send": "Send"
