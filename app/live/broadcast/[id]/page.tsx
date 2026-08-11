@@ -1036,6 +1036,13 @@ export default function BroadcastConsolePage() {
                             title={stream.title}
                             sellerName={stream.seller?.display_name}
                             path={`/live/${streamId}`}
+                            status={stream.status}
+                            scheduledAt={stream.scheduled_at}
+                            presaleOpen={lots.some(
+                                (l) =>
+                                    (l.status === 'queued' || l.status === 'active') &&
+                                    l.presale_enabled === true,
+                            )}
                             className="inline-flex w-10 h-10 rounded-xl glass border-white/10 items-center justify-center text-slate-300 active:scale-90 transition-all"
                         />
                         {isLive ? (

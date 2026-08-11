@@ -588,6 +588,12 @@ export default function LiveViewerClient() {
         (lot.status === 'queued' || lot.status === 'active') &&
         (isLive || (isScheduled && lot.presale_enabled === true));
 
+    // Any still-purchasable presale lot — drives the landing chip and the
+    // share message's "reserve your spot" variant.
+    const presaleOpen = lots.some(
+        (l) => (l.status === 'queued' || l.status === 'active') && l.presale_enabled === true,
+    );
+
     // ─── Shared blocks (mobile + desktop compose them differently) ───
 
     // The claim grid for one lot — the live board renders it for the lot on
@@ -910,6 +916,9 @@ export default function LiveViewerClient() {
                     title={stream.title}
                     sellerName={stream.seller?.display_name}
                     path={`/live/${streamId}`}
+                    status={stream.status}
+                    scheduledAt={stream.scheduled_at}
+                    presaleOpen={presaleOpen}
                     className="w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
                 />
             </div>
@@ -925,7 +934,6 @@ export default function LiveViewerClient() {
     if (isScheduled) {
         const game = getGame(stream.game_id);
         const visibleLots = lots.filter((l) => l.status === 'queued' || l.status === 'active');
-        const hasPresale = visibleLots.some((l) => l.presale_enabled === true);
         const msToStart = stream.scheduled_at ? Date.parse(stream.scheduled_at) - now : null;
         const countdown =
             msToStart != null && msToStart > 0
@@ -972,6 +980,9 @@ export default function LiveViewerClient() {
                             title={stream.title}
                             sellerName={stream.seller?.display_name}
                             path={`/live/${streamId}`}
+                            status={stream.status}
+                            scheduledAt={stream.scheduled_at}
+                            presaleOpen={presaleOpen}
                             className="ml-auto w-9 h-9 rounded-full bg-black/50 border border-white/15 flex items-center justify-center text-slate-300 backdrop-blur-sm active:scale-90 transition-all"
                         />
                     </div>
@@ -1023,7 +1034,7 @@ export default function LiveViewerClient() {
                             ))}
                         </div>
                     )}
-                    {hasPresale && (
+                    {presaleOpen && (
                         <p className="mt-4 inline-block px-3 py-1.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-[11px] font-black uppercase tracking-widest">
                             {t('live.scheduled.presaleNow') || 'Presale open — grab your spots now'}
                         </p>

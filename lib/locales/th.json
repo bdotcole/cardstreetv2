@@ -951,6 +951,13 @@
             "copied": "คัดลอกลิงก์แล้ว",
             "message": "ไลฟ์สดอยู่ตอนนี้: {title} — มาดู {seller} เปิดกล่องสดกันบน CardStreet",
             "messageNoSeller": "ไลฟ์สดอยู่ตอนนี้: {title} — มาดูเปิดกล่องสดกันบน CardStreet",
+            "scheduled": "ไลฟ์เริ่ม {when}: {title} — พบกับ {seller} ได้บน CardStreet",
+            "scheduledNoSeller": "ไลฟ์เริ่ม {when}: {title} — ไลฟ์เปิดกล่องบน CardStreet",
+            "scheduledPresale": "ไลฟ์เริ่ม {when}: {title} — พรีเซลเปิดแล้ว จองช่องกับ {seller} ได้เลยบน CardStreet",
+            "scheduledPresaleNoSeller": "ไลฟ์เริ่ม {when}: {title} — พรีเซลเปิดแล้ว จองช่องได้เลยบน CardStreet",
+            "ended": "{seller} ไลฟ์เปิดกล่องบน CardStreet — ติดตามไลฟ์รอบหน้าได้เลย",
+            "endedNoSeller": "ไลฟ์เปิดกล่องบน CardStreet — ติดตามไลฟ์รอบหน้าได้เลย",
+            "soon": "เร็วๆ นี้",
             "instagramNote": "Instagram ไม่รองรับการแนบลิงก์จากเว็บ — ระบบคัดลอกลิงก์ให้แล้ว นำไปวางในสตอรี่หรือไบโอได้เลย"
         },
         "viewer": {

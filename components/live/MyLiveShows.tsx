@@ -411,10 +411,15 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
                                                 : t('live.myShows.cancelShow') || 'Cancel'}
                                         </button>
                                     )}
+                                    {/* No presaleOpen here: ?mine=1 carries no presale
+                                        annotation and rows have no lot data — the plain
+                                        scheduled message is still correct. */}
                                     <ShareShowButton
                                         title={s.title}
                                         sellerName={s.seller?.display_name}
                                         path={`/live/${s.id}`}
+                                        status={s.status}
+                                        scheduledAt={s.scheduled_at}
                                         label={t('live.share.button') || 'Share'}
                                         className="px-3 h-9 rounded-lg bg-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-all"
                                     />

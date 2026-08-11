@@ -951,6 +951,13 @@
             "copied": "Link copied",
             "message": "LIVE now: {title} — watch {seller} breaking on CardStreet",
             "messageNoSeller": "LIVE now: {title} — watch live breaks on CardStreet",
+            "scheduled": "Going live {when}: {title} — {seller} on CardStreet",
+            "scheduledNoSeller": "Going live {when}: {title} — live breaks on CardStreet",
+            "scheduledPresale": "Going live {when}: {title} — presale open, reserve your spot with {seller} on CardStreet",
+            "scheduledPresaleNoSeller": "Going live {when}: {title} — presale open, reserve your spot on CardStreet",
+            "ended": "{seller} streams live breaks on CardStreet — catch the next show",
+            "endedNoSeller": "Live breaks on CardStreet — catch the next show",
+            "soon": "soon",
             "instagramNote": "Instagram does not support link prefill from the web — the link is copied, paste it into your story or bio."
         },
         "viewer": {
