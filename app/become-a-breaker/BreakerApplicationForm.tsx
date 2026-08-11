@@ -917,14 +917,9 @@ export default function BreakerApplicationForm({
                     <>
                         {consentBox('consentAccurate', copy.consent.accurate)}
                         {consentBox('consentNoGuarantee', copy.consent.noGuarantee)}
-                        {/*
-                          TODO(breaker-terms): there is no published breaker-specific
-                          agreement to link to yet. This checkbox intentionally links
-                          ONLY to the two policies that actually exist (/privacy and
-                          /terms) rather than a placeholder URL. When the breaker
-                          application terms are published, add the link here and to
-                          `consent` in ./content.ts.
-                        */}
+                        {/* All three targets are real published pages. Never point a
+                            consent link at a URL that doesn't exist — an applicant
+                            can't agree to terms they can't read. */}
                         {consentBox(
                             'consentTerms',
                             <>
@@ -945,6 +940,15 @@ export default function BreakerApplicationForm({
                                     className="text-brand-cyan underline underline-offset-2 hover:text-cyan-300"
                                 >
                                     {copy.consent.termsLink}
+                                </Link>
+                                {copy.consent.termsMiddle2}
+                                <Link
+                                    href={`${prefix}/breaker-terms`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-brand-cyan underline underline-offset-2 hover:text-cyan-300"
+                                >
+                                    {copy.consent.breakerTermsLink}
                                 </Link>
                                 {copy.consent.termsAfter}
                             </>,

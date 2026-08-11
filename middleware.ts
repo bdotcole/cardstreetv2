@@ -320,5 +320,6 @@ export const config = {
         '/graded',
         '/sell-cards',
         '/become-a-breaker',
+        '/breaker-terms',
     ],
 }

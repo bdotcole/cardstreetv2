@@ -30,6 +30,8 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['ch
   { path: '/contact', changeFrequency: 'yearly', priority: 0.4 },
   { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
+  // Breaker program supplement to /terms — linked from the application's consent box.
+  { path: '/breaker-terms', changeFrequency: 'yearly', priority: 0.3 },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

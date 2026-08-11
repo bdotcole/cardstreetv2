@@ -132,10 +132,15 @@ export interface BreakerCopy {
     consent: {
         accurate: string;
         noGuarantee: string;
+        // Assembled as: before + [privacy] + middle + [terms] + middle2 +
+        // [breaker terms] + after. Split rather than interpolated so each
+        // language can order and punctuate the list its own way.
         termsBefore: string;
         privacyLink: string;
         termsMiddle: string;
         termsLink: string;
+        termsMiddle2: string;
+        breakerTermsLink: string;
         termsAfter: string;
     };
 
@@ -366,8 +371,10 @@ const EN: BreakerCopy = {
         noGuarantee: 'I understand that applying does not guarantee approval.',
         termsBefore: 'I agree to CardStreet’s ',
         privacyLink: 'Privacy Policy',
-        termsMiddle: ' and ',
+        termsMiddle: ', ',
         termsLink: 'Terms of Service',
+        termsMiddle2: ', and ',
+        breakerTermsLink: 'Breaker Program Terms',
         termsAfter: '.',
     },
 
@@ -595,9 +602,13 @@ const TH: BreakerCopy = {
         noGuarantee: 'ฉันเข้าใจว่าการสมัครไม่ได้รับประกันว่าจะได้รับการอนุมัติ',
         termsBefore: 'ฉันยอมรับ',
         privacyLink: 'นโยบายความเป็นส่วนตัว',
-        termsMiddle: 'และ',
+        termsMiddle: ' ',
         termsLink: 'ข้อกำหนดการใช้งาน',
-        termsAfter: 'ของ CardStreet',
+        termsMiddle2: ' และ',
+        breakerTermsLink: 'ข้อกำหนดโปรแกรม Breaker',
+        // Leading space: Thai runs words together, but this segment now follows
+        // the Latin "Breaker", and "Breakerของ" reads as one broken token.
+        termsAfter: ' ของ CardStreet',
     },
 
     submit: 'ส่งใบสมัคร',
