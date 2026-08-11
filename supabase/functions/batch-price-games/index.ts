@@ -89,7 +89,7 @@ async function jtcgFetch(path: string) {
   return r.json();
 }
 
-function bestNmPrice(jCard: any): number {
+function bestNmVariant(jCard: any): any | null {
   const variants: any[] = jCard.variants ?? [];
   const sorted = [...variants].sort((a, b) => {
     let sa = 0, sb = 0;
@@ -102,8 +102,41 @@ function bestNmPrice(jCard: any): number {
     if (sa === sb && a.avgPrice === 0 && b.avgPrice === 0) return (a.price || 99999) - (b.price || 99999);
     return sb - sa;
   });
-  const best = sorted[0] ?? variants[0];
-  return best?.avgPrice || best?.price || 0;
+  return sorted[0] ?? variants[0] ?? null;
+}
+
+// ── Price history capture ────────────────────────────────────────────────────
+// The /cards pages already carry each variant's daily priceHistory when asked
+// (include_price_history=true costs no extra API calls), so every set visit also
+// refreshes that card's real price series in price_snapshots. 90d covers the gap
+// between visits under the stalest-first rotation with room to spare, and each
+// visit re-upserts its whole window, so a missed night self-heals.
+const HISTORY_DURATION = '90d';
+// Mirrors constants.tsx EXCHANGE_RATES (THB base, USD: 0.028) — an edge function
+// cannot import from the Next.js tree, so change both together. price_snapshots
+// stores THB normalized at capture time, matching the price-snapshots cron.
+const THB_PER_USD = 1 / 0.028;
+
+// Variant priceHistory [{p: usd, t: unixSeconds}] -> per-UTC-day CHANGE points.
+// One point per day (latest wins), then days where the rounded THB value merely
+// held are dropped — /api/price-history forward-fills the flat stretches at read
+// time, so storing them would only bloat the table. First and last days always
+// survive (the last keeps the series' freshness visible).
+function historyChangePoints(history: any[]): { day: string; usd: number; thb: number }[] {
+  const byDay = new Map<string, number>();
+  for (const p of history ?? []) {
+    if (typeof p?.p !== 'number' || p.p <= 0 || typeof p?.t !== 'number') continue;
+    byDay.set(new Date(p.t * 1000).toISOString().slice(0, 10), p.p);
+  }
+  const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const out: { day: string; usd: number; thb: number }[] = [];
+  for (let i = 0; i < days.length; i++) {
+    const [day, usd] = days[i];
+    const thb = Math.max(1, Math.round(usd * THB_PER_USD));
+    if (i > 0 && i < days.length - 1 && thb === out[out.length - 1]?.thb) continue;
+    out.push({ day, usd, thb });
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -219,12 +252,15 @@ Deno.serve(async (req) => {
 
         // page JustTCG cards for the set
         const rowsByCard = new Map<string, any>();
+        // Keyed subject|day: two JustTCG cards matching the same DB card must not
+        // put the same conflict key twice into one upsert batch (Postgres errors).
+        const snapshotsByKey = new Map<string, any>();
         let offset = 0;
         while (apiCalls < MAX_API_CALLS) {
           await new Promise((r) => setTimeout(r, DELAY_MS));
           let page: any[] = [];
           try {
-            const resp = await jtcgFetch(`/cards?game=${grp.justtcgGame}&set=${encodeURIComponent(slug)}&limit=${PAGE}&offset=${offset}`);
+            const resp = await jtcgFetch(`/cards?game=${grp.justtcgGame}&set=${encodeURIComponent(slug)}&limit=${PAGE}&offset=${offset}&include_price_history=true&priceHistoryDuration=${HISTORY_DURATION}`);
             apiCalls++;
             page = resp.data ?? [];
           } catch (e) { console.error(`[${set.id}] /cards: ${(e as Error).message}`); break; }
@@ -233,8 +269,25 @@ Deno.serve(async (req) => {
             const n = numOf(jc.number);
             const our = (n != null && byNumber.get(String(n))) || byCardName.get(norm(jc.name));
             if (!our) continue;
-            const price = bestNmPrice(jc);
+            const variant = bestNmVariant(jc);
+            const price = variant?.avgPrice || variant?.price || 0;
             if (price <= 0) continue;
+            // Same variant the headline price comes from, so the series joins the
+            // live "Now" point without a seam. Keyed like the price-snapshots cron:
+            // (card id, CARD language — 'ja' not the 'jp' store code — 'Market').
+            for (const pt of historyChangePoints(variant?.priceHistory)) {
+              snapshotsByKey.set(`${our.id}|${pt.day}`, {
+                subject_id: our.id,
+                language: grp.cardLang,
+                condition: 'Market',
+                is_sealed: false,
+                market_thb: pt.thb,
+                market_native: pt.usd,
+                currency: 'USD',
+                source: 'justtcg',
+                captured_on: pt.day,
+              });
+            }
             rowsByCard.set(our.id, {
               card_id: our.id,
               language: grp.storeLang,
@@ -260,7 +313,18 @@ Deno.serve(async (req) => {
           if (upErr) { console.error(`[${set.id}] upsert: ${upErr.message}`); continue; }
           totalPriced += rows.length;
         }
-        console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced (api=${apiCalls})`);
+
+        // Real history -> price_snapshots. Same-day rows (incl. 20260710 estimates)
+        // are replaced via the daily conflict key. Fails soft: a snapshot error must
+        // never block the pricing pass.
+        const snapshotRows = [...snapshotsByKey.values()];
+        for (let i = 0; i < snapshotRows.length; i += 1000) {
+          const { error: snapErr } = await supabase
+            .from('price_snapshots')
+            .upsert(snapshotRows.slice(i, i + 1000), { onConflict: 'subject_id,language,condition,captured_on' });
+          if (snapErr) { console.error(`[${set.id}] snapshots: ${snapErr.message}`); break; }
+        }
+        console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced, ${snapshotRows.length} history pts (api=${apiCalls})`);
       }
     }
     console.log(`[${jobId}] DONE api_calls=${apiCalls} priced=${totalPriced}`);

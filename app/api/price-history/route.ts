@@ -4,11 +4,19 @@ import { requirePremium } from '@/lib/premiumAuth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Market-value-over-time for one subject, read from price_snapshots (grown daily by
-// the price-snapshots cron; the past was seeded once by the 20260710 estimated
-// backfill, flagged source='estimated' in the table). Returns THB-base points
-// ascending by day. The client folds in the current live price as the final point.
+// the price-snapshots cron and the nightly JustTCG history merge; the pre-cron past
+// was seeded once by the 20260710 estimated backfill, flagged source='estimated' in
+// the table). Returns THB-base points ascending by day. The client folds in the
+// current live price as the final point.
 //
 //   GET /api/price-history?id=<subject_id>&language=<lang>&condition=<Market|Sealed>&range=<7d|30d|90d|180d|1y>
+//
+// Stored rows are CHANGE POINTS, not guaranteed-daily samples (the JustTCG merge
+// drops days where the price held, and unlisted subjects may go weeks between
+// snapshots). The response forward-fills to one point per UTC day — a held price is
+// the subject's real market value on that day, and without the fill a range whose
+// window contains a single stored row renders as a 2-point wedge (or nothing).
+// Days before the series' first known value are never invented.
 //
 // subject_id is a pokemon_cards.id (condition defaults to 'Market') or a
 // sealed_products.id 'pc-<id>' (defaults to 'Sealed'). Prices are public catalog data
@@ -61,7 +69,37 @@ export async function GET(request: NextRequest) {
             .limit(400);
         if (error) throw error;
 
-        const history = (data || []).map((r) => ({ t: r.captured_on as string, v: Number(r.market_thb) }));
+        // Anchor: the newest stored point BEFORE the window, so the fill starts at the
+        // window's left edge instead of the first in-window row. Read with the service
+        // role — the free-window RLS policy hides rows older than ~91 days from the
+        // anon client, but this only sets the opening value of a range the caller is
+        // already allowed to see (the Pro gate for deep ranges ran above).
+        const { data: anchorRows } = await createAdminClient()
+            .from('price_snapshots')
+            .select('captured_on, market_thb')
+            .eq('subject_id', id)
+            .eq('language', language)
+            .eq('condition', condition)
+            .lt('captured_on', cutoff)
+            .order('captured_on', { ascending: false })
+            .limit(1);
+        const anchor = anchorRows?.[0] ? Number(anchorRows[0].market_thb) : null;
+
+        // Forward-fill to one point per UTC day, from the window start (or the first
+        // known value) through today. The client replaces today's value with the live
+        // price. Days before the series began emit nothing — no invented past.
+        const byDay = new Map<string, number>();
+        for (const r of data || []) byDay.set(r.captured_on as string, Number(r.market_thb));
+        const history: { t: string; v: number }[] = [];
+        const today = new Date().toISOString().slice(0, 10);
+        let held = anchor;
+        for (let ms = Date.parse(`${cutoff}T00:00:00Z`); ; ms += 86_400_000) {
+            const day = new Date(ms).toISOString().slice(0, 10);
+            if (day > today) break;
+            const stored = byDay.get(day);
+            if (typeof stored === 'number') held = stored;
+            if (held !== null) history.push({ t: day, v: held });
+        }
         return NextResponse.json(
             { history },
             {
