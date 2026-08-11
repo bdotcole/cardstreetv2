@@ -5,7 +5,7 @@ import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { mapSealedRowToProduct, sealedProductToCard, SealedProductRow } from '@/lib/sealedProduct';
 import { attachSellers } from '@/lib/publicProfiles';
-import type { Card } from '@/types';
+import type { Card, SiblingCard } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
 // Same columns marketplaceService.getListingsForCard selects, fetched with the
@@ -22,6 +22,86 @@ const LISTING_SELECT = `
 // DesktopCardDetail and marketplaceService's catalog fallback.
 const CATALOG_SELECT =
     'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)';
+
+/** Tiles rendered in the "more from this set" block. */
+const SIBLING_COUNT = 12;
+/**
+ * Fetched before ranking, since the ranking key can't be pushed into the query.
+ *
+ * Sized off the worst real set rather than the typical one. Most sets are one
+ * row per card, so 40 candidates would be plenty — but Yu-Gi-Oh "Rarity
+ * Collection" sets carry ~6 rarity rows per print, and `ygo-rc04-jp` yields
+ * only 7 distinct cards in its first 40 rows (14 in its first 80). At 40 the
+ * block rendered 7 tiles there instead of 12.
+ */
+const SIBLING_CANDIDATES = 80;
+
+/**
+ * Sibling cards from the same set, for the card page's "more from this set"
+ * block.
+ *
+ * This is the card page's only lateral link surface. Without it every /card/*
+ * page is a leaf with exactly one outlink (its breadcrumb) and ~430 characters
+ * of unique body text, which is what Google is reading as a soft 404 across
+ * 1,106 pages and climbing (GSC, 2026-08-11).
+ *
+ * Ranks by market price in JS rather than in the query: PostgREST cannot ORDER
+ * BY a column on an embedded relation (market_values), and ordering by `number`
+ * sorts as text — #1, #10, #100 — so a query-side sort would surface the same
+ * dull head of every set.
+ *
+ * KNOWN LIMITATION, accepted for now: the price ranking applies to the first
+ * SIBLING_CANDIDATES rows by id, not to the whole set, so on a 256-card set
+ * this is "the best of a stable 40-card window", not the set's true top 12.
+ * Every card in a set therefore shows the same 12 siblings, which concentrates
+ * inlinks on those 12 rather than spreading them across the set. Fixing that
+ * properly means a per-card neighbourhood window (the N cards either side by
+ * collector number), which needs a numeric sort key the catalog does not have.
+ * The current shape already does the job it shipped for: every card page gains
+ * twelve outlinks and a few hundred characters of card-specific text.
+ */
+export const getSetSiblings = cache(
+    async (setId: string | null, excludeId: string): Promise<SiblingCard[]> => {
+        if (!setId) return [];
+
+        const supabase = await createClient();
+        const { data } = await supabase
+            .from('pokemon_cards')
+            // Explicit columns (never select('*') — raw_data is tens of KB per
+            // row) and .eq, not .ilike, so the b-tree index on set_id is used.
+            .select(CATALOG_SELECT)
+            .eq('set_id', setId)
+            .neq('id', excludeId)
+            // Explicit order so the window is deterministic — without it the
+            // block can differ between two renders of the same page.
+            .order('id', { ascending: true })
+            .limit(SIBLING_CANDIDATES);
+
+        const seen = new Set<string>();
+        return (data || [])
+            .map((row) => mapSupabaseCardToInternal(row))
+            .filter((card) => {
+                // Sets carry one row per rarity of the same print, so a naive
+                // slice can render the same card name three times in a row.
+                const key = `${card.name}|${card.number ?? ''}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            })
+            .sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0))
+            .slice(0, SIBLING_COUNT)
+            .map((card) => ({
+                id: card.id,
+                name: card.name,
+                number: card.number ?? null,
+                rarity: card.rarity ?? null,
+                // Thumbnails always use image_small; image_large in a grid was
+                // the single biggest cause of slow set loads (see CLAUDE.md).
+                imageSmall: card.images?.small ?? null,
+                marketPrice: card.marketPrice || null,
+            }));
+    }
+);
 
 // React cache() dedupes the query across generateMetadata + the page body
 // within a single request (both call this for the same cardId).

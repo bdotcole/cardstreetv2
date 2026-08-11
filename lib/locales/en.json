@@ -717,7 +717,9 @@
             "newSeller": "New seller",
             "activeListings": "Active listings",
             "noListings": "No active listings for this card right now.",
-            "addToCart": "Add to cart"
+            "addToCart": "Add to cart",
+            "moreFromSet": "More from this set",
+            "viewWholeSet": "View the whole set"
         },
         "cart": {
             "title": "Cart",

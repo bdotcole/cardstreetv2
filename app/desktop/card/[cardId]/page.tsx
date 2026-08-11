@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import DesktopCardDetail from '@/components/desktop/DesktopCardDetail';
-import { getCardPageData } from '@/lib/desktopCardData';
+import { getCardPageData, getSetSiblings } from '@/lib/desktopCardData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
@@ -228,6 +228,9 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
     const pathLocale = await requestPathLocale();
     const productJsonLd = buildProductJsonLd(card, listings, pathLocale);
     const summary = buildCardSummary(card, listings, await resolveLang());
+    // Server-rendered so the sibling links are in the initial HTML and crawlable.
+    // Sealed products have no set_id and get an empty list, which renders nothing.
+    const siblings = await getSetSiblings(setId, cardId);
 
     return (
         <>
@@ -243,6 +246,7 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
                 initialListings={listings}
                 setId={setId}
                 summary={summary}
+                siblings={siblings}
                 pathPrefix={localePrefix(pathLocale)}
             />
         </>

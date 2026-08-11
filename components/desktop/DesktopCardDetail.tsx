@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
 import { getOptimizedImageUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
-import { Card } from '@/types';
+import { Card, SiblingCard } from '@/types';
 import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarketplace';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -54,6 +54,7 @@ export default function DesktopCardDetail({
     initialListings = [],
     setId = null,
     summary = null,
+    siblings = [],
     pathPrefix = '',
 }: {
     cardId: string;
@@ -67,6 +68,9 @@ export default function DesktopCardDetail({
     // ships an indexable sentence about this specific card. A server-render
     // snapshot: the live market panel below is the source of truth for prices.
     summary?: string | null;
+    // Other cards from the same set, resolved server-side (getSetSiblings) and
+    // ranked by market price. Empty for sealed products, which have no set_id.
+    siblings?: SiblingCard[];
     // '' on the Thai canonical, '/en' under the English prefix. Passed in as a
     // plain string because lib/i18nRouting imports next/headers and so cannot be
     // imported from a client component. Keeps breadcrumbs and seller links
@@ -632,6 +636,64 @@ export default function DesktopCardDetail({
                     )}
                 </div>
             </div>
+
+            {/* More from this set. Server-rendered from props, never fetched on the
+                client: its whole purpose is to be in the initial HTML, where it
+                takes the page from one outlink (the breadcrumb) to thirteen and
+                adds a few hundred characters of card-specific text. */}
+            {siblings.length >= 2 && (
+                <section className="mt-12 border-t border-white/10 pt-8">
+                    <div className="flex items-baseline justify-between gap-4">
+                        <h2 className="text-lg font-black text-white">{t('desktop.card.moreFromSet')}</h2>
+                        {setId && card.set && (
+                            <Link
+                                href={`${pathPrefix}/sets/${setId}`}
+                                className="text-sm font-bold text-brand-cyan hover:text-white transition-colors shrink-0"
+                            >
+                                {t('desktop.card.viewWholeSet')}
+                            </Link>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mt-4">
+                        {siblings.map((sibling) => (
+                            <Link
+                                // pathPrefix, not a bare '/', or the /en tree starts
+                                // linking back into Thai again (see e5aaddc).
+                                key={sibling.id}
+                                href={`${pathPrefix}/card/${sibling.id}`}
+                                className="group block rounded-xl border border-white/10 bg-white/[0.03] hover:border-brand-cyan/40 hover:bg-white/[0.06] transition-colors overflow-hidden"
+                            >
+                                <div className="relative aspect-[3/4] bg-brand-darker">
+                                    {sibling.imageSmall && (
+                                        <Image
+                                            src={sibling.imageSmall}
+                                            alt={sibling.name}
+                                            fill
+                                            sizes="(max-width: 640px) 50vw, 180px"
+                                            unoptimized={shouldSkipNextOptimization(sibling.imageSmall)}
+                                            className="object-cover"
+                                        />
+                                    )}
+                                </div>
+                                <div className="p-2">
+                                    <p className="text-xs font-bold text-slate-200 leading-snug line-clamp-2 group-hover:text-white transition-colors">
+                                        {sibling.name}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-bold mt-1 truncate">
+                                        {sibling.number ? `#${sibling.number}` : ''}
+                                        {sibling.number && sibling.rarity ? ' · ' : ''}
+                                        {sibling.rarity || ''}
+                                    </p>
+                                    {sibling.marketPrice ? (
+                                        <p className="text-xs font-black text-brand-cyan mt-1">{formatTHB(sibling.marketPrice)}</p>
+                                    ) : null}
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
 

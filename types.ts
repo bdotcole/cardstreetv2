@@ -203,3 +203,20 @@ export interface Report {
   };
 }
 
+
+/**
+ * One tile in the card page's "more from this set" block.
+ *
+ * Lives here rather than next to getSetSiblings in lib/desktopCardData.ts:
+ * that module is `import 'server-only'`, and DesktopCardDetail is a client
+ * component that needs this shape for its props.
+ */
+export interface SiblingCard {
+  id: string;
+  name: string;
+  number: string | null;
+  rarity: string | null;
+  imageSmall: string | null;
+  /** THB, or null when the catalog has no market value for the card. */
+  marketPrice: number | null;
+}
