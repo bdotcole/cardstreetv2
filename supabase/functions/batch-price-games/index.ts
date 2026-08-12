@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
+import { buildMatcher } from '../_shared/cardMatch.ts'
 
 // =====================================================================
 // batch-price-games Edge Function (JustTCG)
@@ -72,14 +73,10 @@ const NAME_SLUG_OVERRIDES: Record<string, string> = {
   'lorcana-8': 'reign-of-jafar-disney-lorcana',
 };
 
+// Set-name key for resolving JustTCG set slugs. Card-level matching lives in
+// _shared/cardMatch.ts — the old numOf() that reduced "319z"/"R05b"/"OP01-078" to a
+// bare integer is gone; collapsing those suffixes is what mispriced parallels.
 const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-// Card number from various formats: "OP01-003" -> 3 (strip set-code prefix),
-// "175/159" -> 175, "174/086" -> 174, "001" -> 1.
-const numOf = (s: unknown) => {
-  const t = String(s ?? '').replace(/^[A-Za-z]+\d*-/, '').split('/')[0];
-  const m = t.match(/\d+/);
-  return m ? parseInt(m[0], 10) : null;
-};
 
 async function jtcgFetch(path: string) {
   const r = await fetch(`${JUSTTCG_BASE}${path}`, {
@@ -239,22 +236,11 @@ Deno.serve(async (req) => {
           .eq('set_id', set.id)
           .eq('language', grp.cardLang);
         if (!ourCards?.length) continue;
-        const byNumber = new Map<string, any>();
-        const byCardName = new Map<string, any>();
-        for (const c of ourCards) {
-          const n = numOf(c.number);
-          if (n != null) byNumber.set(String(n), c);
-          byCardName.set(norm(c.name), c);
-          // JustTCG names JP cards in English; our vintage `name` is Japanese,
-          // so index english_name too (the bridge for no-number neo*/PMCG* sets).
-          if (c.english_name) byCardName.set(norm(c.english_name), c);
-        }
 
-        // page JustTCG cards for the set
-        const rowsByCard = new Map<string, any>();
-        // Keyed subject|day: two JustTCG cards matching the same DB card must not
-        // put the same conflict key twice into one upsert batch (Postgres errors).
-        const snapshotsByKey = new Map<string, any>();
+        // Page the WHOLE set before matching. The matcher needs every upstream card
+        // at once to tell which collector numbers carry more than one printing —
+        // exactly the case a number-only match must refuse.
+        const jtcgCards: any[] = [];
         let offset = 0;
         while (apiCalls < MAX_API_CALLS) {
           await new Promise((r) => setTimeout(r, DELAY_MS));
@@ -265,10 +251,26 @@ Deno.serve(async (req) => {
             page = resp.data ?? [];
           } catch (e) { console.error(`[${set.id}] /cards: ${(e as Error).message}`); break; }
           if (!page.length) break;
-          for (const jc of page) {
-            const n = numOf(jc.number);
-            const our = (n != null && byNumber.get(String(n))) || byCardName.get(norm(jc.name));
-            if (!our) continue;
+          jtcgCards.push(...page);
+          if (page.length < PAGE) break;
+          offset += page.length;
+        }
+        // Sealed products page in alongside singles and carry number 'N/A'.
+        const jtcgSingles = jtcgCards.filter((c) => c.number && c.number !== 'N/A');
+
+        const rowsByCard = new Map<string, any>();
+        // Keyed subject|day: two JustTCG cards matching the same DB card must not
+        // put the same conflict key twice into one upsert batch (Postgres errors).
+        const snapshotsByKey = new Map<string, any>();
+        let unmatched = 0;
+        {
+          const matchCard = buildMatcher(ourCards, jtcgSingles);
+          for (const jc of jtcgSingles) {
+            // Variant-aware: a base-printing quote can no longer land on a parallel
+            // row (or vice versa), and anything ambiguous is skipped outright.
+            const hit = matchCard(jc);
+            if (!hit) { unmatched++; continue; }
+            const our = hit.card;
             const variant = bestNmVariant(jc);
             const price = variant?.avgPrice || variant?.price || 0;
             if (price <= 0) continue;
@@ -301,8 +303,6 @@ Deno.serve(async (req) => {
               last_priced_at: new Date().toISOString(),
             });
           }
-          if (page.length < PAGE) break;
-          offset += page.length;
         }
 
         const rows = [...rowsByCard.values()];
@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
             .upsert(snapshotRows.slice(i, i + 1000), { onConflict: 'subject_id,language,condition,captured_on' });
           if (snapErr) { console.error(`[${set.id}] snapshots: ${snapErr.message}`); break; }
         }
-        console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced, ${snapshotRows.length} history pts (api=${apiCalls})`);
+        console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced, ${snapshotRows.length} history pts, ${unmatched}/${jtcgSingles.length} upstream cards unmatched (api=${apiCalls})`);
       }
     }
     console.log(`[${jobId}] DONE api_calls=${apiCalls} priced=${totalPriced}`);

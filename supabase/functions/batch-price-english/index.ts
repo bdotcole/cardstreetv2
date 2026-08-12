@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
+import { buildMatcher } from '../_shared/cardMatch.ts'
 
 // =====================================================================
 // batch-price-english Edge Function (JustTCG)
@@ -252,12 +253,15 @@ Deno.serve(async (req) => {
                     // Fetch our DB cards for this set (number + name for matching)
                     const { data: dbCards } = await supabase
                         .from('pokemon_cards')
-                        .select('id, name, number')
+                        .select('id, name, number, english_name')
                         .eq('set_id', dbSetId)
                         .eq('language', 'en');
 
-                    const byNumber = new Map((dbCards ?? []).map((c: any) => [String(c.number), c]));
-                    const byName = new Map((dbCards ?? []).map((c: any) => [norm(c.name), c]));
+                    // Variant-aware matching (shared with batch-price-games). Sees
+                    // the whole set so it can refuse numbers that carry more than
+                    // one printing upstream.
+                    const matchCard = buildMatcher(dbCards ?? [], jtcgCards);
+                    let unmatched = 0;
 
                     const rows: any[] = [];
                     // Keyed subject|day: two JustTCG cards matching the same DB card
@@ -265,16 +269,9 @@ Deno.serve(async (req) => {
                     // (Postgres errors).
                     const snapshotsByKey = new Map<string, any>();
                     for (const jCard of jtcgCards) {
-                        // JustTCG numbers include total (e.g. '188/159'), strip the '/xxx' part
-                        const rawNum = jCard.number?.toString() ?? '';
-                        const strippedNum = rawNum.includes('/') ? rawNum.split('/')[0] : rawNum;
-                        // Also try without leading zeros
-                        const strippedNumNoZeros = strippedNum.replace(/^0+/, '');
-
-                        const dbCard = byNumber.get(strippedNum)
-                            ?? byNumber.get(strippedNumNoZeros)
-                            ?? byName.get(norm(jCard.name ?? ''));
-                        if (!dbCard) continue;
+                        const hit = matchCard(jCard);
+                        if (!hit) { unmatched++; continue; }
+                        const dbCard = hit.card as any;
 
                         // Score variants to handle troll listings (e.g. $5000 fake 'Normal' NM with 0 sales)
                         const enVariants = (jCard.variants ?? []).filter((v: any) => v.language === 'English' || !v.language);
@@ -366,7 +363,7 @@ Deno.serve(async (req) => {
                     }
 
                     totalPriced += rows.length;
-                    console.log(`  ✓ ${dbSetId}: ${rows.length}/${jtcgCards.length} priced (from ${allJtcgCards.length} total results)`);
+                    console.log(`  ✓ ${dbSetId}: ${rows.length}/${jtcgCards.length} priced, ${unmatched} unmatched (from ${allJtcgCards.length} total results)`);
 
 
                 } catch (err: any) {
