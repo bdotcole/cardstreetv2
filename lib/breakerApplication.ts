@@ -256,3 +256,77 @@ export const SECTION_ORDER = Object.keys(SECTION_FIELDS) as SectionId[];
 
 /** UTM/attribution params worth keeping with the lead. */
 export const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref'] as const;
+
+// ── Admin-facing labels ────────────────────────────────────────────────────
+/**
+ * English labels for the option ids, for the review console (/admin/breakers).
+ *
+ * Deliberately NOT reusing app/become-a-breaker/content.ts: that module is the
+ * public page's bilingual copy, and importing it into admin would pull the
+ * whole Thai translation payload into a console that is English-only. Keeping
+ * these beside the vocabularies they label also means a new option and its
+ * admin label are added in one place.
+ */
+export const ADMIN_LABELS: {
+    applicantType: Record<ApplicantType, string>;
+    game: Record<BreakerGame, string>;
+    experience: Record<ExperienceLevel, string>;
+    equipment: Record<EquipmentOption, string>;
+    setupStatus: Record<SetupStatus, string>;
+    preferredLanguage: Record<PreferredLanguage, string>;
+    status: Record<ApplicationStatus, string>;
+} = {
+    applicantType: {
+        breaker: 'Breaker',
+        card_shop: 'Card shop',
+        marketplace_seller: 'Marketplace seller',
+        content_creator: 'Content creator',
+        collector: 'Collector',
+        other: 'Other',
+    },
+    game: {
+        pokemon: 'Pokémon',
+        one_piece: 'One Piece',
+        mtg: 'Magic',
+        yugioh: 'Yu-Gi-Oh!',
+        lorcana: 'Lorcana',
+        riftbound: 'Riftbound',
+        other: 'Other',
+    },
+    experience: {
+        none: 'No experience',
+        under_1y: 'Under 1 year',
+        '1_to_3y': '1–3 years',
+        over_3y: '3+ years',
+    },
+    equipment: {
+        smartphone: 'Smartphone',
+        camera: 'Camera',
+        microphone: 'Microphone',
+        lighting: 'Lighting',
+        tripod_or_mount: 'Tripod / mount',
+        computer: 'Computer',
+        other: 'Other',
+    },
+    setupStatus: {
+        ready: 'Ready now',
+        minor_improvements: 'Needs minor work',
+        building: 'Still building',
+    },
+    preferredLanguage: { th: 'Thai', en: 'English', bilingual: 'Bilingual' },
+    status: {
+        new: 'New',
+        reviewing: 'Reviewing',
+        test_stream: 'Test stream',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        withdrawn: 'Withdrawn',
+    },
+};
+
+/** Statuses that still need a decision, for the review queue's default view. */
+export const OPEN_APPLICATION_STATUSES: readonly ApplicationStatus[] = [
+    'new',
+    'reviewing',
+    'test_stream',
+];
