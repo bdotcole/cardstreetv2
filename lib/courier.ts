@@ -1,5 +1,6 @@
 import CourierClient from "@trycourier/courier";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ADMIN_LABELS } from "./breakerApplication";
 
 // Lazy-initialized Courier client. We can't construct at module load because
 // any importing route would crash during `next build` page-data collection if
@@ -1698,4 +1699,110 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
             cta: 'Browse · เลือกซื้อ',
         }),
     });
+}
+
+// ─── Internal ops alert: new breaker application ─────────────────────────────
+
+/**
+ * Notifies the CardStreet team when someone applies at /become-a-breaker.
+ *
+ * Internal ops alert, so it follows sendPartnerActivatedNotification rather
+ * than the customer-facing sends above: a single inbox
+ * (BREAKER_APPLICATION_NOTIFY_EMAIL, default the founder's address) and inline
+ * `content` instead of a Courier template. The "template, never content" rule
+ * at the top of this file is about customer mail, where the dashboard owns the
+ * copy and the Thai subject needs the Postmark override — neither applies to a
+ * plain English alert to ourselves, and a template would be one more thing to
+ * author and keep in sync.
+ *
+ * Body is a triage summary, not the whole application: enough to decide
+ * whether to open the review console, with a deep link to it. The long written
+ * answers stay in /admin/breakers.
+ *
+ * Best-effort and never throws — a Courier hiccup must not fail an application
+ * that has already been written to the database. The caller fires it via
+ * `after()` so the applicant's response isn't waiting on an email.
+ */
+export async function sendBreakerApplicationAlert(application: {
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+    city: string;
+    province: string;
+    businessName?: string | null;
+    applicantTypes: string[];
+    games: string[];
+    breakingExperience: string;
+    setupStatus: string;
+    availability: string;
+    whyApply: string;
+    locale: string;
+    hasAccount: boolean;
+    utm?: Record<string, string> | null;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping breaker-application alert'); return; }
+
+    const to = (process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+
+    const submittedAt = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
+    });
+    const campaign = application.utm && Object.keys(application.utm).length
+        ? Object.entries(application.utm).map(([k, v]) => `${k}=${v}`).join(', ')
+        : 'direct';
+    // One line of their own words is the best single signal of whether this is
+    // a serious applicant; the rest is in the console.
+    const why = application.whyApply.length > 280
+        ? `${application.whyApply.slice(0, 280).trimEnd()}…`
+        : application.whyApply;
+
+    // Reuse the console's English labels rather than printing raw option ids —
+    // "Card shop / 1–3 years / Needs minor work" instead of
+    // "card_shop / 1_to_3y / minor_improvements".
+    const labelled = (map: Record<string, string>, ids: string[]) =>
+        ids.map((id) => map[id] ?? id).join(', ') || '—';
+
+    const lines = [
+        `Name: ${application.fullName}`,
+        application.businessName ? `Shop/channel: ${application.businessName}` : null,
+        `Email: ${application.email}`,
+        `Phone: ${application.phone}`,
+        `Location: ${application.city}, ${application.province}`,
+        `Applicant type: ${labelled(ADMIN_LABELS.applicantType, application.applicantTypes)}`,
+        `Games: ${labelled(ADMIN_LABELS.game, application.games)}`,
+        `Breaking experience: ${ADMIN_LABELS.experience[application.breakingExperience as keyof typeof ADMIN_LABELS.experience] ?? application.breakingExperience}`,
+        `Setup: ${ADMIN_LABELS.setupStatus[application.setupStatus as keyof typeof ADMIN_LABELS.setupStatus] ?? application.setupStatus}`,
+        `Availability: ${application.availability}`,
+        `Applied in: ${application.locale === 'th' ? 'Thai' : 'English'}`,
+        `CardStreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
+        `Campaign: ${campaign}`,
+        `Submitted: ${submittedAt} (Bangkok)`,
+        '',
+        `Why they applied: ${why}`,
+        '',
+        `Review: ${appBaseUrl()}/admin/breakers`,
+    ].filter((l) => l !== null) as string[];
+
+    try {
+        const sendResult = await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `New breaker application: ${application.fullName}`,
+                    body: `Someone applied to host on Cardstreet Live.\n\n${lines.join('\n')}`,
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'breaker_application', applicationId: application.id },
+            },
+        });
+        console.log(
+            `[Courier] ✅ 'Breaker Application' alert sent for ${application.email} → ${to}. ` +
+            `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+        );
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Breaker Application' alert for ${application.email}:`, error);
+    }
 }

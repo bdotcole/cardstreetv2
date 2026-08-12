@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit, requestIp } from '@/lib/rateLimit'
+import { sendBreakerApplicationAlert } from '@/lib/courier'
 import { BreakerApplicationSchema } from '@/lib/breakerApplication'
 
 /**
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
     // three were ticked in this submission — one timestamp for the lot.
     const consentedAt = new Date().toISOString()
 
-    const { error } = await admin.from('breaker_applications').insert({
+    const { data: inserted, error } = await admin.from('breaker_applications').insert({
         user_id: userId,
         status: 'new',
         locale: input.locale,
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest) {
         utm: input.utm,
         referrer: input.referrer || null,
     })
+        .select('id')
+        .single()
 
     if (error) {
         // The migration not being applied yet is the one failure mode worth
@@ -169,6 +172,30 @@ export async function POST(request: NextRequest) {
             { status: 500 },
         )
     }
+
+    // Tell the team, after the response is sent. The application is already
+    // committed, so a Courier outage costs us a notification, not a lead —
+    // and the applicant never waits on an email round trip.
+    after(() =>
+        sendBreakerApplicationAlert({
+            id: inserted.id,
+            fullName: input.fullName,
+            email,
+            phone: input.phone,
+            city: input.city,
+            province: input.province,
+            businessName: input.businessName || null,
+            applicantTypes: input.applicantTypes,
+            games: input.games,
+            breakingExperience: input.breakingExperience,
+            setupStatus: input.setupStatus,
+            availability: input.availability,
+            whyApply: input.whyApply,
+            locale: input.locale,
+            hasAccount: Boolean(userId),
+            utm: input.utm,
+        }).catch((e) => console.error('[BreakerApplication] alert failed:', e)),
+    )
 
     // Deliberately no id in the response: the form only needs to know it landed,
     // and an unauthenticated caller has no use for a row id.
