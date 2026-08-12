@@ -50,7 +50,12 @@ export function listingToCartItem(listing: MarketplaceListing): CartItem {
     };
 }
 
-export default function DesktopMarketplace() {
+export default function DesktopMarketplace({ pathPrefix = '' }: {
+    // '' on the Thai canonical, '/en' under the English prefix. Resolved by the
+    // server page and passed down as a plain string, because lib/i18nRouting
+    // imports next/headers.
+    pathPrefix?: string;
+}) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { t } = useTranslation();
@@ -69,9 +74,9 @@ export default function DesktopMarketplace() {
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_ENABLE_OFFERS !== '1') return;
         if (searchParams?.get('view') === 'offers') {
-            router.replace('/orders?tab=offers');
+            router.replace(`${pathPrefix}/orders?tab=offers`);
         }
-    }, [searchParams, router]);
+    }, [searchParams, router, pathPrefix]);
 
     const [game, setGame] = useState('all');
     const [language, setLanguage] = useState('all');
@@ -219,7 +224,7 @@ export default function DesktopMarketplace() {
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
                         {listings.map((listing, idx) => (
-                            <ListingTile key={listing.id} listing={listing} eager={idx < 6} onMakeOffer={setOfferListing} />
+                            <ListingTile key={listing.id} listing={listing} eager={idx < 6} onMakeOffer={setOfferListing} pathPrefix={pathPrefix} />
                         ))}
                     </div>
 
@@ -239,7 +244,7 @@ export default function DesktopMarketplace() {
 
             {/* Homepage only: the FAQ teaser is a marketing/SEO surface, not a
                 search result. Hidden once the visitor is actively searching. */}
-            {!q && <DesktopFaqTeaser />}
+            {!q && <DesktopFaqTeaser pathPrefix={pathPrefix} />}
 
             {OFFERS_ENABLED && offerListing && (
                 <OfferModal
@@ -280,7 +285,7 @@ function FilterChip({
     );
 }
 
-function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceListing; eager: boolean; onMakeOffer: (listing: MarketplaceListing) => void }) {
+function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing: MarketplaceListing; eager: boolean; onMakeOffer: (listing: MarketplaceListing) => void; pathPrefix?: string }) {
     const { buyNow, user } = useDesktopCart();
     const { t } = useTranslation();
     // Catalog art is the default; if its host is unreachable (TCGdex outages
@@ -302,7 +307,7 @@ function ListingTile({ listing, eager, onMakeOffer }: { listing: MarketplaceList
         OFFERS_ENABLED && listing.accepts_offers === true && !!user && user.id !== listing.seller_id;
     return (
         <Link
-            href={`/card/${listing.card_id}`}
+            href={`${pathPrefix}/card/${listing.card_id}`}
             className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
         >
             {/* Extra wrapper lets the snipe badge hang past the image's

@@ -7,7 +7,12 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 // Homepage FAQ teaser for the desktop site. Shows the most common questions as
 // expandable answers and links through to the full /faq page (which carries the
 // FAQPage JSON-LD). Bilingual: it follows the visitor's UI language.
-export default function DesktopFaqTeaser() {
+export default function DesktopFaqTeaser({ pathPrefix = '' }: {
+  // '' on the Thai canonical, '/en' under the English prefix. Threaded from the
+  // server page through DesktopMarketplace, because lib/i18nRouting imports
+  // next/headers and so cannot be imported by a client component.
+  pathPrefix?: string;
+}) {
   const { t, isThai } = useTranslation();
   const faqs = getFeaturedFaqs(isThai);
 
@@ -21,7 +26,7 @@ export default function DesktopFaqTeaser() {
           <p className="text-sm text-slate-400 mt-1">{t('desktop.faqSubtext')}</p>
         </div>
         <Link
-          href="/faq"
+          href={`${pathPrefix}/faq`}
           className="shrink-0 inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
         >
           {t('desktop.faqViewAll')}
