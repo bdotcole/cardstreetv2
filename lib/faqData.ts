@@ -59,6 +59,43 @@ const FAQ_EN: FaqCategory[] = [
     ],
   },
   {
+    // Price-check is the intent that actually converts here — every non-brand
+    // query the site ranks for is some form of เช็คราคา — and it had no FAQ
+    // coverage at all. Answers deliberately use the literal "how do I…" framing,
+    // because the Thai SERPs for this intent are won by how-to articles rather
+    // than by marketplaces. Claims here must stay in step with /prices.
+    id: 'prices',
+    title: 'Card prices',
+    icon: 'fa-solid fa-tag',
+    items: [
+      {
+        q: 'How do I check a Pokémon card price on CardStreet?',
+        a: 'Search the card name or its collector number and open the card page. You will see the latest market price in Thai baht, a price history chart, and any live listings for that exact card. If you have the card in hand, scan it with your phone camera to jump straight to its price. No account and no payment required.',
+        featured: true,
+      },
+      {
+        q: 'Where do CardStreet card prices come from?',
+        a: 'CardStreet market prices are midpoint averages of recent real transactions, not the prices sellers are asking. English and Japanese cards reference global markets and are converted to Thai baht; Thai-language cards are priced from the domestic Thai market, because they trade separately. Prices refresh daily.',
+      },
+      {
+        q: "Can I see a card's price history?",
+        a: 'Yes. Every card page carries a price history chart over 7, 30, and 90 days, so you can see whether a card is climbing or falling before you buy or sell. It is recorded price data, not an estimate.',
+      },
+      {
+        q: 'Which trading card games can I check prices for?',
+        a: 'Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana, and Riftbound — all in one place. The Pokémon catalog covers Thai, English, and Japanese printings, priced separately by language, because the same card is worth different amounts in each market.',
+      },
+      {
+        q: 'How much more is a PSA graded card worth?',
+        a: 'A graded card usually sells for more than the same card raw, and the gap widens at higher grades. CardStreet card pages show prices broken out by grading company and grade — PSA, BGS, CGC, and TAG — next to the raw price, so you can compare them on one screen.',
+      },
+      {
+        q: 'Is the market price what a card actually sells for?',
+        a: 'The market price is a reference midpoint based on completed sales. Use it as a starting point for pricing or negotiating; what a card actually fetches depends on its condition, its language, and demand at that moment. If you want to sell at market, you can list the card on CardStreet — listing is free, and you pay a fee only when it sells.',
+      },
+    ],
+  },
+  {
     id: 'buying',
     title: 'Buying',
     icon: 'fa-solid fa-cart-shopping',
@@ -202,6 +239,43 @@ const FAQ_TH: FaqCategory[] = [
       {
         q: 'CardStreet มีแอปบนมือถือไหม?',
         a: 'มี CardStreet ใช้งานได้ผ่านเว็บเบราว์เซอร์ และมีแอปสำหรับ iPhone (บน App Store) และ Android ให้คุณสแกน ซื้อ และขายได้จากมือถือ ข้อมูลบัญชีและคอลเลกชันของคุณซิงค์กันทั้งบนเว็บและมือถือ',
+      },
+    ],
+  },
+  {
+    // Mirrors the EN `prices` category — same id, same six questions, same
+    // order. The id is the anchor slug on /faq, so the two must not drift.
+    // The colloquial spelling โปเกม่อน appears alongside โปเกมอน on purpose:
+    // it is the spelling in the site's best-performing query and appeared
+    // nowhere in the FAQ before.
+    id: 'prices',
+    title: 'ราคาการ์ด',
+    icon: 'fa-solid fa-tag',
+    items: [
+      {
+        q: 'วิธีเช็คราคาการ์ดโปเกม่อนบน CardStreet ทำอย่างไร?',
+        a: 'ค้นหาชื่อการ์ดหรือเลขการ์ดในช่องค้นหา แล้วเปิดหน้าการ์ดใบนั้น คุณจะเห็นราคาตลาดล่าสุดเป็นเงินบาท พร้อมกราฟราคาย้อนหลังและรายการขายจริงที่มีอยู่ตอนนี้ ถ้ามีการ์ดอยู่ในมือ กดสแกนด้วยกล้องมือถือก็ข้ามไปหน้าราคาของใบนั้นได้ทันที ไม่ต้องสมัครสมาชิกและไม่มีค่าใช้จ่าย',
+        featured: true,
+      },
+      {
+        q: 'ราคาการ์ดบน CardStreet มาจากไหน?',
+        a: 'ราคาตลาดบน CardStreet คำนวณจากค่ากลางของการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาที่ผู้ขายตั้งไว้ การ์ดภาษาอังกฤษและภาษาญี่ปุ่นอ้างอิงตลาดต่างประเทศแล้วแปลงเป็นเงินบาท ส่วนการ์ดภาษาไทยใช้ราคาจากตลาดในประเทศ เพราะซื้อขายกันคนละตลาด ราคาทั้งหมดอัปเดตทุกวัน',
+      },
+      {
+        q: 'เช็คราคาการ์ดย้อนหลังได้ไหม?',
+        a: 'ได้ หน้าการ์ดแต่ละใบมีกราฟราคาย้อนหลัง 7 วัน 30 วัน และ 90 วัน ให้ดูว่าราคาขึ้นหรือลงก่อนตัดสินใจซื้อหรือขาย เป็นข้อมูลราคาจริงที่บันทึกไว้ ไม่ใช่ราคาประเมิน',
+      },
+      {
+        q: 'เช็คราคาการ์ดเกมอื่นนอกจากโปเกม่อนได้ไหม?',
+        a: 'ได้ CardStreet เช็คราคาได้ทั้ง Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana และ Riftbound ในเว็บเดียว การ์ดโปเกม่อนครอบคลุมทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น โดยแยกราคาตามภาษา เพราะการ์ดคนละภาษามีมูลค่าต่างกัน',
+      },
+      {
+        q: 'การ์ดเกรด PSA ราคาต่างจากการ์ดธรรมดาอย่างไร?',
+        a: 'การ์ดที่ผ่านการเกรดแล้วมักมีราคาสูงกว่าการ์ดใบเดียวกันแบบไม่เกรด และยิ่งเกรดสูงยิ่งต่างมาก หน้าการ์ดบน CardStreet จึงแสดงราคาแยกตามบริษัทและระดับเกรด ทั้ง PSA, BGS, CGC และ TAG ควบคู่กับราคาการ์ดแบบไม่เกรด ให้เทียบได้ในหน้าเดียว',
+      },
+      {
+        q: 'ราคาที่เห็นบน CardStreet คือราคาที่ขายได้จริงหรือไม่?',
+        a: 'ราคาตลาดคือค่ากลางอ้างอิงจากการซื้อขายจริงที่ผ่านมา ใช้เป็นจุดตั้งต้นในการตั้งราคาหรือต่อรอง แต่ราคาที่ขายได้จริงขึ้นอยู่กับสภาพการ์ด ภาษา และความต้องการในตอนนั้น ถ้าอยากขายตามราคาตลาด ลงประกาศขายบน CardStreet ได้เลย ฟรีไม่มีค่าลงประกาศ จ่ายค่าธรรมเนียมเฉพาะตอนขายได้',
       },
     ],
   },
