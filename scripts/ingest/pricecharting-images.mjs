@@ -1,14 +1,25 @@
 // Backfill sealed_products.image_url with sealed-product photos.
 //
 // PriceCharting carries no image in its CSV or JSON product API, but:
-//   Tier 1 (preferred): the bulk CSV carries a `tcg-id` (TCGplayer product id) and
-//     TCGplayer hosts clean product photos at a derivable, already-whitelisted CDN URL
-//     (next.config: product-images.tcgplayer.com). One CSV download per game maps
-//     pricecharting_id -> tcg-id -> image URL. ~60% of rows.
-//   Tier 2 (fallback): rows with no tcg-id are scraped from the PriceCharting product
-//     page, which references the cover at storage.googleapis.com/images.pricecharting.com/
-//     <hash>/1600.jpg. Concurrent. Genuinely image-less vintage rows stay null (UI shows
-//     a placeholder).
+//   Tier 1: the bulk CSV carries a `tcg-id` (TCGplayer product id) and TCGplayer hosts
+//     product photos at a derivable, already-whitelisted CDN URL (next.config:
+//     product-images.tcgplayer.com). One CSV download per game maps
+//     pricecharting_id -> tcg-id -> image URL.
+//   Tier 2: scrape the PriceCharting product page, which references the cover at
+//     storage.googleapis.com/images.pricecharting.com/<hash>/1600.jpg. Concurrent.
+//     Genuinely image-less vintage rows stay null (UI shows a placeholder).
+//
+// EVERY CANDIDATE IS HEAD-CHECKED, AND A LIVE EXISTING IMAGE ALWAYS WINS. Until
+// 2026-08-11 tier 1 was applied unconditionally whenever the CSV had a tcg-id, without
+// looking at what the row already held. TCGplayer has since retired most of the product
+// ids this table was built from — 24 of 40 sampled tcgplayer URLs 404 — so that
+// precedence actively DOWNGRADED rows that already carried a working PriceCharting
+// cover. Measured on the full table that run wanted 3,811 writes against ~1,400 genuine
+// blanks: ~2,400 of them were rewrites of already-imaged rows. With the checks below the
+// same table needs 1,016 writes (995 blanks filled, 21 dead URLs healed, 2,977 live
+// images left untouched), and of those only 6 come from tier 1 vs 1,010 from tier 2 —
+// tcgplayer is effectively a dead source now, so it is tried first only because it is
+// free (no scrape) when it does resolve.
 //
 //   node scripts/ingest/pricecharting-images.mjs                  # DRY: coverage report
 //   node scripts/ingest/pricecharting-images.mjs --commit         # write image_url
@@ -106,6 +117,18 @@ async function scrapePcImage(pcId) {
   } catch { return null; }
 }
 
+// Does this URL still serve? Both candidate hosts fail by returning 404/500 rather than
+// by erroring, so a HEAD is the only way to tell a good image from a dead one. Treated as
+// dead on any transport failure or timeout — writing a URL we could not confirm is the
+// exact mistake this guard exists to prevent.
+async function imageResolves(url) {
+  if (!url) return false;
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(12_000) });
+    return res.ok;
+  } catch { return false; }
+}
+
 // Bounded-concurrency map.
 async function pool(items, concurrency, fn) {
   const out = new Array(items.length);
@@ -155,39 +178,46 @@ async function main() {
   console.log(`[pc:img] ${sealed.length} sealed rows across: ${[...byGame.keys()].join(', ')}${commit ? '' : '  [DRY]'}${noScrape ? '  [tier1 only]' : ''}`);
 
   const updates = [];
-  let tcgTotal = 0, scrapeTotal = 0, blankTotal = 0;
+  let keptTotal = 0, tcgTotal = 0, scrapeTotal = 0, healedTotal = 0, blankTotal = 0;
   for (const [game, rows] of byGame) {
     const category = PC_CATEGORY[game];
     if (!category) { console.log(`[pc:img] ${game}: no PriceCharting category — skip`); continue; }
     const tcgMap = await loadTcgIdMap(category);
 
-    // Tier 1: TCGplayer from tcg-id.
-    const needScrape = [];
-    let tcg = 0;
-    for (const r of rows) {
-      const t = r.pricecharting_id ? tcgMap.get(String(r.pricecharting_id)) : null;
-      if (t) { tcg++; const url = tcgImageUrl(t); if (r.image_url !== url) updates.push({ id: r.id, image_url: url }); }
-      else needScrape.push(r);
-    }
+    // Pass 1: a row whose current image still resolves is finished — no candidate may
+    // replace it. This is what keeps a retired tcgplayer id from clobbering a good cover,
+    // and it also makes re-runs cheap, since most rows exit here.
+    const stillGood = await pool(rows, 12, (r) => imageResolves(r.image_url));
+    const needsImage = rows.filter((_, i) => !stillGood[i]);
+    keptTotal += rows.length - needsImage.length;
 
-    // Tier 2: scrape PriceCharting page for the remainder.
-    let scraped = 0, blank = 0;
-    if (!noScrape && needScrape.length) {
-      const results = await pool(needScrape, 8, (r) => scrapePcImage(r.pricecharting_id));
-      needScrape.forEach((r, i) => {
-        const url = results[i];
-        if (url) { scraped++; if (r.image_url !== url) updates.push({ id: r.id, image_url: url }); }
-        else blank++;
-      });
-    } else {
-      blank = needScrape.length;
-    }
-    tcgTotal += tcg; scrapeTotal += scraped; blankTotal += blank;
-    console.log(`[pc:img] ${game.padEnd(9)} rows=${rows.length}  tcgplayer=${tcg}  pricecharting=${scraped}  no-image=${blank}`);
+    // Pass 2: only for blank or broken rows. Tier 1 first because it costs no scrape,
+    // but it has to resolve to be used; otherwise fall through to the tier-2 cover.
+    const resolved = await pool(needsImage, 8, async (r) => {
+      const t = r.pricecharting_id ? tcgMap.get(String(r.pricecharting_id)) : null;
+      if (t) {
+        const url = tcgImageUrl(t);
+        if (await imageResolves(url)) return { url, tier: 1 };
+      }
+      if (noScrape) return null;
+      const scraped = await scrapePcImage(r.pricecharting_id);
+      if (scraped && (await imageResolves(scraped))) return { url: scraped, tier: 2 };
+      return null;
+    });
+
+    let tcg = 0, scraped = 0, healed = 0, blank = 0;
+    needsImage.forEach((r, i) => {
+      const got = resolved[i];
+      if (!got) { blank++; return; }
+      if (got.tier === 1) tcg++; else scraped++;
+      if (r.image_url) healed++;
+      if (r.image_url !== got.url) updates.push({ id: r.id, image_url: got.url });
+    });
+    tcgTotal += tcg; scrapeTotal += scraped; healedTotal += healed; blankTotal += blank;
+    console.log(`[pc:img] ${game.padEnd(9)} rows=${rows.length}  alreadyLive=${rows.length - needsImage.length}  tcgplayer=${tcg}  pricecharting=${scraped}  healed=${healed}  no-image=${blank}`);
   }
 
-  const covered = tcgTotal + scrapeTotal;
-  console.log(`[pc:img] TOTAL covered=${covered}/${sealed.length} (tcgplayer=${tcgTotal} + pricecharting=${scrapeTotal})  no-image=${blankTotal}  to-write=${updates.length}`);
+  console.log(`[pc:img] TOTAL live=${keptTotal + tcgTotal + scrapeTotal}/${sealed.length} (untouched=${keptTotal} + tcgplayer=${tcgTotal} + pricecharting=${scrapeTotal}; ${healedTotal} of those replaced a dead URL)  no-image=${blankTotal}  to-write=${updates.length}`);
   if (!commit) { console.log('[pc:img] DRY — nothing written. Re-run with --commit.'); return; }
 
   // Per-row UPDATE (not upsert): every row already exists, and a partial-column
