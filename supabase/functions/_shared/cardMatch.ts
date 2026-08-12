@@ -144,6 +144,25 @@ function markersAgree(a: string[], b: string[]): boolean {
   return a.every((v, i) => v === b[i]);
 }
 
+/** Words long enough to be distinctive, Latin-script only (JP names yield none). */
+function significantWords(s: string): string[] {
+  return s.split(' ').filter((w) => w.length >= 4 && /^[a-z0-9]+$/.test(w));
+}
+
+/**
+ * True when both names offer comparable words and share NOT ONE of them — i.e. the
+ * two sides plainly describe different cards. Used to veto number-only matches.
+ * Deliberately permissive: if either side yields no comparable words (Japanese
+ * catalog name vs English upstream label) it returns false and the match proceeds.
+ */
+function namesContradict(ourNames: string[], jName: string): boolean {
+  const theirs = significantWords(jName);
+  if (!theirs.length) return false;
+  const ours = ourNames.flatMap(significantWords);
+  if (!ours.length) return false;
+  return !ours.some((w) => theirs.some((t) => t.includes(w) || w.includes(t)));
+}
+
 export interface MatchResult {
   card: CatalogCard;
   /** How it resolved — logged so a bad rule shows up in cron output. */
@@ -197,6 +216,8 @@ export function buildMatcher(ourCards: CatalogCard[], allJustTcgCards: JustTcgCa
     const fromName = variantMarkers(c.name, c.number);
     return fromName.length ? fromName : variantMarkers(c.english_name, c.number);
   };
+  const contradicts = (c: CatalogCard, jName: string) =>
+    namesContradict([baseName(c.name), c.english_name ? baseName(c.english_name) : ''].filter(Boolean), jName);
 
 
   return function match(jc: JustTcgCard): MatchResult | null {
@@ -226,14 +247,28 @@ export function buildMatcher(ourCards: CatalogCard[], allJustTcgCards: JustTcgCa
     //    Base/parallel leakage cannot ride in this way: that only happens when one
     //    number carries several printings, which collapses uniqueness on one side
     //    or the other and sends the card to rule 3 instead.
+    //    Guarded by a name-contradiction check, because a collector number is only
+    //    as good as the catalog storing it. Our MTG rows number cards by ALPHABETICAL
+    //    position, not collector number ("Against All Odds" #1, "Elesh Norn" #10,
+    //    "Necrosquito" #100), so an unguarded number match walked straight onto
+    //    whatever token or minigame card happened to hold that number upstream —
+    //    48 rows, e.g. "Annex Sentry" priced from ".../magic-minigame-...". When both
+    //    names offer comparable Latin words and share none, the number is lying.
+    //    Names that cannot be compared (ours Japanese, upstream English) skip the
+    //    check and still match on number, which is what JP Pokemon depends on.
     const ourAtNum = byNumber.get(jNum) ?? [];
-    if (ourAtNum.length === 1 && (jNumCounts.get(jNum) ?? 0) === 1) {
+    if (ourAtNum.length === 1 && (jNumCounts.get(jNum) ?? 0) === 1 && !contradicts(ourAtNum[0], jName)) {
       return { card: ourAtNum[0], via: 'number-unique' };
     }
 
     // 3. The number is contested on at least one side — base and parallel are both
-    //    in play, so variant identity must break the tie or nothing is written.
-    const sameMarkers = ourAtNum.filter((c) => markersAgree(markersOf(c), jMarkers));
+    //    in play, so variant identity must break the tie. Same contradiction guard
+    //    as rule 2: without it a set's token/minigame cards, which run their own
+    //    1..N numbering alongside the real cards, matched real rows here and
+    //    overwrote the correct rule-1 match made moments earlier (mtg-one alone had
+    //    "Samurai Token" and "Magic Minigame: Winchester Draft" both landing on
+    //    "Annex Sentry").
+    const sameMarkers = ourAtNum.filter((c) => markersAgree(markersOf(c), jMarkers) && !contradicts(c, jName));
     if (sameMarkers.length === 1) return { card: sameMarkers[0], via: 'number+variant' };
     return null;
   };
