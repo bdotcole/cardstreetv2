@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import ContactContent from './ContactContent';
 
 // Server wrapper so the shared /contact route emits canonical + hreflang in
@@ -28,6 +28,10 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function ContactPage() {
-  return <ContactContent />;
+export default async function ContactPage() {
+  // Links follow the URL prefix (never the cs_lang cookie) so the /en variant
+  // keeps crawlers inside the /en tree; the body language is still resolved
+  // client-side from the visitor's UI setting.
+  const pathLocale = await requestPathLocale();
+  return <ContactContent prefix={localePrefix(pathLocale)} />;
 }

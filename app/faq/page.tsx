@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import FaqPageContent from '@/components/FaqPageContent';
 import { buildFaqJsonLd } from '@/lib/faqData';
-import { buildAlternates, localizedUrl, requestPathLocale } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale } from '@/lib/i18nRouting';
 
 // Dedicated, crawlable FAQ landing page. This is a top-level shared route (like
 // /help, /terms, /privacy) so both the mobile SPA and the desktop site link to
@@ -43,7 +43,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function FaqPage() {
-  const jsonLd = buildFaqJsonLd((await requestPathLocale()) === 'th');
+  const pathLocale = await requestPathLocale();
+  const jsonLd = buildFaqJsonLd(pathLocale === 'th');
 
   return (
     <>
@@ -53,7 +54,10 @@ export default async function FaqPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <FaqPageContent />
+      {/* Links follow the URL prefix so the /en variant does not hand crawlers
+          back into the Thai tree. The body's LANGUAGE still follows the
+          visitor's UI setting, client-side — two separate axes. */}
+      <FaqPageContent prefix={localePrefix(pathLocale)} />
     </>
   );
 }

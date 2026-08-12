@@ -34,7 +34,7 @@ const TH: PageStrings = {
   emailSupport: 'อีเมลหาฝ่ายซัพพอร์ต',
 };
 
-export default function FaqPageContent() {
+export default function FaqPageContent({ prefix }: { prefix: '' | '/en' }) {
   const { isThai } = useTranslation();
   const t = isThai ? TH : EN;
 
@@ -43,7 +43,7 @@ export default function FaqPageContent() {
       <div className="max-w-2xl mx-auto pt-8">
         <div className="flex items-center gap-4 mb-10">
           <Link
-            href="/"
+            href={prefix || '/'}
             className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all"
             aria-label="Back"
           >
@@ -54,7 +54,7 @@ export default function FaqPageContent() {
 
         <p className="text-sm text-slate-300 leading-relaxed mb-10">
           {t.introBefore}
-          <Link href="/contact" className="text-brand-cyan font-bold hover:underline">
+          <Link href={`${prefix}/contact`} className="text-brand-cyan font-bold hover:underline">
             {t.introLink}
           </Link>
           {t.introAfter}

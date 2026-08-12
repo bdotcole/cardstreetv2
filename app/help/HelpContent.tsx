@@ -32,7 +32,7 @@ const TH: HelpStrings = {
   emailSupport: 'อีเมลหาฝ่ายซัพพอร์ต',
 };
 
-export default function HelpContent() {
+export default function HelpContent({ prefix }: { prefix: '' | '/en' }) {
   const { isThai } = useTranslation();
   const content = isThai ? TH : EN;
 
@@ -40,7 +40,7 @@ export default function HelpContent() {
     <div className="min-h-screen bg-brand-darker text-white p-6 pb-24 overflow-y-auto">
       <div className="max-w-2xl mx-auto pt-8">
         <div className="flex items-center gap-4 mb-10">
-          <Link href="/" className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
+          <Link href={prefix || '/'} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{content.pageTitle}</h1>
@@ -48,7 +48,7 @@ export default function HelpContent() {
 
         <p className="text-sm text-slate-300 leading-relaxed mb-10">
           {content.introBefore}
-          <Link href="/contact" className="text-brand-cyan font-bold hover:underline">
+          <Link href={`${prefix}/contact`} className="text-brand-cyan font-bold hover:underline">
             {content.introLink}
           </Link>
           {content.introAfter}

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import HelpContent from './HelpContent';
 
 // The in-app Help Center renders the same FaqList accordion as /faq, so the two
@@ -31,6 +31,11 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function HelpPage() {
-  return <HelpContent />;
+export default async function HelpPage() {
+  // Links follow the URL prefix (never the cs_lang cookie) so the /en variant
+  // keeps crawlers inside the /en tree; the body language is still resolved
+  // client-side from the visitor's UI setting. /help canonicalizes to /faq, so
+  // this only affects visitors, not the indexed URL set.
+  const pathLocale = await requestPathLocale();
+  return <HelpContent prefix={localePrefix(pathLocale)} />;
 }
