@@ -1806,3 +1806,110 @@ export async function sendBreakerApplicationAlert(application: {
         console.error(`[Courier] ❌ Error sending 'Breaker Application' alert for ${application.email}:`, error);
     }
 }
+
+// ─── Applicant receipt: breaker application confirmation ─────────────────────
+
+/**
+ * Confirms to the applicant that their /become-a-breaker application arrived.
+ *
+ * Customer-facing, so unlike sendBreakerApplicationAlert above this is written
+ * to be read by the applicant — bilingual, and with the Thai-first subject
+ * forced through Postmark because Courier truncates non-ASCII subjects at the
+ * 48-byte encoded-word cliff (see SUBJECTS). It uses inline `content` rather
+ * than a dashboard template for the same reason sendWishlistListingAlert and
+ * the Stripe nudge do: no template exists yet, and the funnel shouldn't wait on
+ * dashboard work. Set COURIER_BREAKER_CONFIRMATION_TEMPLATE_ID to switch — the
+ * `data` block below already carries the merge fields a template would read.
+ *
+ * Most applicants have no CardStreet account, so this addresses a raw email
+ * rather than a userId: no notification_preferences row to consult and no push
+ * channel. That also means there is no unsubscribe state to honour — which is
+ * fine for a transactional receipt of an action they just took, and is the
+ * reason this must never become a marketing send.
+ *
+ * Language order follows what they told us: `preferredLanguage` ('th' | 'en')
+ * when they picked one, otherwise the locale they filled the form in. Both
+ * languages are always included, so a mis-set preference never leaves someone
+ * with an email they cannot read.
+ *
+ * Says nothing about when they will hear back — the landing page, the Breaker
+ * Program Terms, and the success screen all decline to promise a review
+ * timeline, and a receipt that invents one would contradict them.
+ *
+ * Best-effort, never throws: the application is already committed when this
+ * runs, so a Courier failure costs a courtesy email, not the lead.
+ */
+export async function sendBreakerApplicationConfirmation(applicant: {
+    email: string;
+    fullName: string;
+    preferredLanguage: string;
+    locale: string;
+}): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping breaker confirmation'); return false; }
+
+    const to = applicant.email.trim();
+    if (!to) return false;
+
+    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+    // First name only: "Somchai Tanaka" -> "Somchai". Falls back to no greeting
+    // name rather than printing an empty string.
+    const firstName = applicant.fullName.trim().split(/\s+/)[0] || '';
+    const thaiFirst = applicant.preferredLanguage === 'th'
+        || (applicant.preferredLanguage !== 'en' && applicant.locale === 'th');
+
+    const th = [
+        firstName ? `สวัสดีคุณ ${firstName}` : 'สวัสดีครับ',
+        '',
+        'เราได้รับใบสมัคร Cardstreet Breaker ของคุณเรียบร้อยแล้ว ขอบคุณที่สนใจมาเป็นส่วนหนึ่งของ Cardstreet Live',
+        'ทีมงานจะตรวจสอบข้อมูลของคุณ และจะติดต่อกลับหากคุณได้รับเลือกให้เข้าสู่ขั้นตอนถัดไป',
+        'การสมัครไม่ได้รับประกันว่าจะได้รับการอนุมัติ และคุณไม่ต้องดำเนินการใด ๆ เพิ่มเติมในตอนนี้',
+        '',
+        `หากต้องการแก้ไขข้อมูลหรือมีคำถาม ตอบกลับอีเมลนี้ หรือติดต่อ ${supportEmail}`,
+        `ข้อกำหนดโปรแกรม Breaker: ${appBaseUrl()}/breaker-terms`,
+    ].join('\n');
+
+    const en = [
+        firstName ? `Hi ${firstName},` : 'Hi,',
+        '',
+        'We have received your Cardstreet Breaker application. Thank you for your interest in Cardstreet Live.',
+        'Our team will review your information and contact you if you are selected for the next step.',
+        'Applying does not guarantee approval, and there is nothing further you need to do right now.',
+        '',
+        `If you need to correct anything or have a question, reply to this email or contact ${supportEmail}.`,
+        `Breaker Program Terms: ${appBaseUrl()}/breaker-terms`,
+    ].join('\n');
+
+    // Thai first in the subject regardless of preference, matching the house
+    // style in SUBJECTS — the body order is what follows the applicant.
+    const title = 'ได้รับใบสมัครแล้ว — Application received';
+    const body = thaiFirst ? `${th}\n\n———\n\n${en}` : `${en}\n\n———\n\n${th}`;
+
+    const templateId = (process.env.COURIER_BREAKER_CONFIRMATION_TEMPLATE_ID || '').trim();
+    const message: Record<string, unknown> = {
+        to: { email: to },
+        routing: { method: 'all', channels: ['email'] },
+        data: {
+            type: 'breaker_application_confirmation',
+            firstName,
+            supportEmail,
+            termsUrl: `${appBaseUrl()}/breaker-terms`,
+            preferredLanguage: applicant.preferredLanguage,
+        },
+        providers: postmarkOverride(title),
+    };
+    if (templateId) message.template = templateId;
+    else message.content = { title, body };
+
+    try {
+        const sendResult = await courier.send.message({ message: message as any });
+        console.log(
+            `[Courier] ✅ Breaker application confirmation sent to ${to}. ` +
+            `Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`,
+        );
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending breaker confirmation to ${to}:`, error);
+        return false;
+    }
+}

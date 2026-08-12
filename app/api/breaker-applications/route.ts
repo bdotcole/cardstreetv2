@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit, requestIp } from '@/lib/rateLimit'
-import { sendBreakerApplicationAlert } from '@/lib/courier'
+import { sendBreakerApplicationAlert, sendBreakerApplicationConfirmation } from '@/lib/courier'
 import { BreakerApplicationSchema } from '@/lib/breakerApplication'
 
 /**
@@ -173,29 +173,46 @@ export async function POST(request: NextRequest) {
         )
     }
 
-    // Tell the team, after the response is sent. The application is already
-    // committed, so a Courier outage costs us a notification, not a lead —
-    // and the applicant never waits on an email round trip.
-    after(() =>
-        sendBreakerApplicationAlert({
-            id: inserted.id,
-            fullName: input.fullName,
-            email,
-            phone: input.phone,
-            city: input.city,
-            province: input.province,
-            businessName: input.businessName || null,
-            applicantTypes: input.applicantTypes,
-            games: input.games,
-            breakingExperience: input.breakingExperience,
-            setupStatus: input.setupStatus,
-            availability: input.availability,
-            whyApply: input.whyApply,
-            locale: input.locale,
-            hasAccount: Boolean(userId),
-            utm: input.utm,
-        }).catch((e) => console.error('[BreakerApplication] alert failed:', e)),
-    )
+    // Both emails go out after the response is sent. The application is already
+    // committed, so a Courier outage costs us a notification, not a lead — and
+    // the applicant never waits on an email round trip.
+    //
+    // allSettled, not Promise.all: the team alert and the applicant's receipt
+    // are independent, and one failing must not suppress the other.
+    after(async () => {
+        const [alert, confirmation] = await Promise.allSettled([
+            sendBreakerApplicationAlert({
+                id: inserted.id,
+                fullName: input.fullName,
+                email,
+                phone: input.phone,
+                city: input.city,
+                province: input.province,
+                businessName: input.businessName || null,
+                applicantTypes: input.applicantTypes,
+                games: input.games,
+                breakingExperience: input.breakingExperience,
+                setupStatus: input.setupStatus,
+                availability: input.availability,
+                whyApply: input.whyApply,
+                locale: input.locale,
+                hasAccount: Boolean(userId),
+                utm: input.utm,
+            }),
+            sendBreakerApplicationConfirmation({
+                email,
+                fullName: input.fullName,
+                preferredLanguage: input.preferredLanguage,
+                locale: input.locale,
+            }),
+        ])
+        if (alert.status === 'rejected') {
+            console.error('[BreakerApplication] team alert failed:', alert.reason)
+        }
+        if (confirmation.status === 'rejected') {
+            console.error('[BreakerApplication] applicant confirmation failed:', confirmation.reason)
+        }
+    })
 
     // Deliberately no id in the response: the form only needs to know it landed,
     // and an unauthenticated caller has no use for a row id.
