@@ -16,7 +16,25 @@ import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import { Card } from '@/types';
 
-export default function DesktopNav() {
+/**
+ * The nav's own path, stripped back to the bare route so it can be compared
+ * against the unprefixed hrefs in the link table.
+ *
+ * Rendered paths live under /desktop/* via middleware rewrite, but client-side
+ * navigation keeps the clean URL in usePathname, and the English variant keeps
+ * its /en prefix in the browser — so all three shapes have to normalize to the
+ * same thing or the active-link highlight silently dies on /en.
+ */
+function normalizePath(pathname: string | null): string {
+    return (pathname ?? '/').replace(/^\/desktop/, '').replace(/^\/en(?=\/|$)/, '') || '/';
+}
+
+export default function DesktopNav({ pathPrefix = '' }: {
+    // '' on the Thai canonical, '/en' under the English prefix. Resolved by the
+    // desktop layout (a server component) and passed down as a plain string,
+    // because lib/i18nRouting imports next/headers.
+    pathPrefix?: string;
+}) {
     const router = useRouter();
     const pathname = usePathname();
     const { t, language } = useTranslation();
@@ -91,7 +109,7 @@ export default function DesktopNav() {
         setSearchOpen(false);
         setQuery('');
         setResults([]);
-        router.push(`/card/${id}`);
+        router.push(`${pathPrefix}/card/${id}`);
     };
 
     // Marketplace listings search (the /?q= mode) — dropdown rows deep-link to
@@ -102,7 +120,7 @@ export default function DesktopNav() {
         setSearchOpen(false);
         setQuery('');
         setResults([]);
-        router.push(`/?q=${encodeURIComponent(q)}`);
+        router.push(`${pathPrefix}/?q=${encodeURIComponent(q)}`);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -134,7 +152,7 @@ export default function DesktopNav() {
     return (
         <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur">
             <div className="max-w-screen-2xl mx-auto px-4 md:px-8 h-16 flex items-center gap-3 md:gap-8">
-                <Link href="/" className="flex items-center gap-3 shrink-0">
+                <Link href={pathPrefix || '/'} className="flex items-center gap-3 shrink-0">
                     <Image src="/logo.png" alt="CardStreet" width={40} height={40} priority className="object-contain" />
                     <span className="hidden sm:block text-lg font-black text-white tracking-tight">CardStreet</span>
                 </Link>
@@ -220,15 +238,12 @@ export default function DesktopNav() {
                         ['/orders', t('desktop.navOrders')],
                         ['/premium', t('desktop.navPro')],
                     ] as [string, string][]).map(([href, label]) => {
-                        // Rendered paths live under /desktop/* via middleware
-                        // rewrite, but client-side navigation keeps the clean
-                        // URL in usePathname — normalize both.
-                        const current = (pathname ?? '/').replace(/^\/desktop/, '') || '/';
+                        const current = normalizePath(pathname);
                         const active = current === href;
                         return (
                             <Link
                                 key={href}
-                                href={href}
+                                href={`${pathPrefix}${href}`}
                                 className={`transition-colors ${active ? 'text-brand-cyan' : 'text-white hover:text-brand-cyan'}`}
                             >
                                 {label}
@@ -284,7 +299,7 @@ export default function DesktopNav() {
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)}></div>
                                 <div className="absolute right-0 top-full mt-2 w-56 bg-brand-dark border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50">
                                     <Link
-                                        href="/collection"
+                                        href={`${pathPrefix}/collection`}
                                         onClick={() => setMenuOpen(false)}
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                     >
@@ -294,7 +309,7 @@ export default function DesktopNav() {
                                     {/* Certified breakers only — the feed itself carries no broadcaster entry points. */}
                                     {hasBeta('live_broadcast') && (
                                         <Link
-                                            href="/live/studio"
+                                            href={`${pathPrefix}/live/studio`}
                                             onClick={() => setMenuOpen(false)}
                                             className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                         >
@@ -303,7 +318,7 @@ export default function DesktopNav() {
                                         </Link>
                                     )}
                                     <Link
-                                        href="/settings?tab=profile"
+                                        href={`${pathPrefix}/settings?tab=profile`}
                                         onClick={() => setMenuOpen(false)}
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                     >
@@ -311,13 +326,17 @@ export default function DesktopNav() {
                                         {t('desktop.editProfile')}
                                     </Link>
                                     <Link
-                                        href="/settings?tab=preferences"
+                                        href={`${pathPrefix}/settings?tab=preferences`}
                                         onClick={() => setMenuOpen(false)}
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                                     >
                                         <i className="fa-solid fa-gear mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.settings.title')}
                                     </Link>
+                                    {/* Not locale-prefixed, and a plain anchor: this leaves the
+                                        desktop experience entirely and needs a full request so
+                                        middleware can set the cs_view cookie. Same call as the
+                                        footer's copy of this link. */}
                                     <a
                                         href="/?view=mobile"
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors border-t border-white/5"
@@ -366,12 +385,12 @@ export default function DesktopNav() {
                             ['/orders', t('desktop.navOrders')],
                             ['/premium', t('desktop.navPro')],
                         ] as [string, string][]).map(([href, label]) => {
-                            const current = (pathname ?? '/').replace(/^\/desktop/, '') || '/';
+                            const current = normalizePath(pathname);
                             const active = current === href;
                             return (
                                 <Link
                                     key={href}
-                                    href={href}
+                                    href={`${pathPrefix}${href}`}
                                     onClick={() => setMobileNavOpen(false)}
                                     className={`py-2.5 transition-colors ${active ? 'text-brand-cyan' : 'text-white hover:text-brand-cyan'}`}
                                 >
@@ -381,7 +400,7 @@ export default function DesktopNav() {
                         })}
                         {user && (
                             <Link
-                                href="/collection"
+                                href={`${pathPrefix}/collection`}
                                 onClick={() => setMobileNavOpen(false)}
                                 className="py-2.5 text-white hover:text-brand-cyan transition-colors"
                             >
@@ -390,7 +409,7 @@ export default function DesktopNav() {
                         )}
                         {user && hasBeta('live_broadcast') && (
                             <Link
-                                href="/live/studio"
+                                href={`${pathPrefix}/live/studio`}
                                 onClick={() => setMobileNavOpen(false)}
                                 className="py-2.5 text-white hover:text-brand-cyan transition-colors"
                             >
