@@ -1,15 +1,16 @@
 /**
- * POST /api/live/streams/[id]/go-live — flip scheduled -> live and hand the
- * console device its main-cam publisher token.
+ * POST /api/live/streams/[id]/go-live — flip scheduled -> live (+ start the
+ * recording). NO camera slot is required to go live: a solo table cam, a solo
+ * face cam or a manage-only console with QR-invited devices are all valid.
  *
  * The status flip is a CAS on 'scheduled' so a double-tap can't double-start
  * the recording. Recording itself is best-effort (see lib/livekit.ts) — a
  * missing egress config never blocks going live.
  *
- * A console that STAGED its cameras pre-live (token route, role 'main_cam')
- * is already connected as ':main' when it calls this — it ignores the token
- * in the response and just takes the status flip. The token return stays for
- * the un-staged console and for device-swap/crash reconnects.
+ * The main-cam token in the response is a backward-compat leftover: the
+ * console stages via the token route per its CAMERA MODE (table/main/monitor)
+ * before or right after calling this, and ignores the token here — a console
+ * in table or manage-only mode must never be handed the ':main' identity.
  */
 
 import { NextResponse } from 'next/server';

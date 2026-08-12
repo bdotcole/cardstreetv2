@@ -20,11 +20,13 @@ import {
 
 /**
  * One LiveKit room, three consumers: the viewer (subscribe-only), the console
- * (publishes the 'main' face cam) and the table-cam page (publishes 'table').
- * This hook owns the Room lifecycle and exposes remote tracks KEYED BY CAMERA
- * SLOT, read from participant metadata — the seller's two devices join with
- * ':main'/':table' identity suffixes and a {cameraSlot} metadata blob (see
- * lib/livekit.ts), which is the only thing that distinguishes the feeds.
+ * (publishes 'main' OR 'table' per its camera mode, or nothing when
+ * manage-only) and the QR-launched companion-cam page (publishes whichever
+ * slot the console's invite named). This hook owns the Room lifecycle and
+ * exposes remote tracks KEYED BY CAMERA SLOT, read from participant metadata
+ * — publisher devices join with ':main'/':table' identity suffixes and a
+ * {cameraSlot} metadata blob (see lib/livekit.ts), which is the only thing
+ * that distinguishes the feeds.
  */
 
 export type CameraSlot = 'main' | 'table';

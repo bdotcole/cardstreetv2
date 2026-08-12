@@ -7,10 +7,14 @@ import { TrackVideo } from '@/components/live/TrackVideo';
 import { isNativeShell, openInSystemBrowser } from '@/components/live/shared';
 
 /**
- * The TABLE CAM: the broadcaster's second phone, launched by scanning the
- * console's QR code. Publishes the rear camera into the stream's room as the
- * 'table' slot. Video only — the face-cam device carries the mic; a second
- * open mic on the same table would just feed back.
+ * The COMPANION CAM: the broadcaster's second device, launched by scanning
+ * the console's QR code. The URL fragment says which slot it fills:
+ * `s=table` (default — old links carry no `s`) publishes the REAR camera as
+ * the table cam; `s=main` publishes the FRONT camera as the face cam (the
+ * console kept the table slot for itself, or is manage-only). Video only by
+ * default — the console device carries the mic; `a=1` (set only when a
+ * manage-only console invites the face cam, i.e. no other device has a mic)
+ * adds this device's microphone.
  *
  * No login: the LiveKit token in the URL FRAGMENT is the auth. Fragments never
  * leave the browser (not sent in requests, absent from server logs), the token
@@ -35,12 +39,17 @@ import { isNativeShell, openInSystemBrowser } from '@/components/live/shared';
 
 type CamState = 'permission' | 'connecting' | 'live' | 'invalid' | 'error' | 'stopped' | 'inapp';
 type CamErrorKey = 'connectError' | 'cameraError' | 'cameraDenied';
+type CamSlot = 'main' | 'table';
 
 const CONNECT_TIMEOUT_MS = 12000;
 
-export default function TableCamPage() {
+export default function CompanionCamPage() {
     const { t } = useTranslation();
     const [state, setState] = useState<CamState>('permission');
+    // Which slot this device fills — parsed from the fragment in runSequence
+    // (client-only; the fragment doesn't exist during SSR). Drives the camera
+    // facing, the LIVE chip label and the rotate hint.
+    const [slot, setSlot] = useState<CamSlot>('table');
     const [errorKey, setErrorKey] = useState<CamErrorKey>('connectError');
     const [copyResult, setCopyResult] = useState<'copied' | 'failed' | null>(null);
     // Live aspect of the published camera (w/h). A portrait publish wastes the
@@ -90,6 +99,12 @@ export default function TableCamPage() {
             setState('invalid');
             return;
         }
+        // Slot + mic ride the same fragment as the token (see file header).
+        // Absent `s` = table, for links minted by pre-slot consoles.
+        const camSlot: CamSlot = params.get('s') === 'main' ? 'main' : 'table';
+        const facingMode = camSlot === 'main' ? 'user' : 'environment';
+        const audio = params.get('a') === '1';
+        setSlot(camSlot);
 
         // Phase 1 — the permission gate. Open the camera BEFORE touching the
         // room so a blocked/slow permission prompt can't strand a half-built
@@ -97,7 +112,7 @@ export default function TableCamPage() {
         // on the prompt as long as they like).
         setState('permission');
         try {
-            await startPreview({ facingMode: 'environment', audio: false });
+            await startPreview({ facingMode, audio });
         } catch (err) {
             if (attemptRef.current !== attempt) return;
             failCamera(err);
@@ -120,7 +135,7 @@ export default function TableCamPage() {
         try {
             await connect(url, token);
             if (attemptRef.current !== attempt) return;
-            await publishCamera({ facingMode: 'environment', audio: false });
+            await publishCamera({ facingMode, audio });
             if (attemptRef.current !== attempt) return;
             setState('live');
         } catch (err) {
@@ -190,10 +205,14 @@ export default function TableCamPage() {
                     <div className="absolute top-0 inset-x-0 pt-[calc(var(--sat)+0.75rem)] px-4 flex justify-center pointer-events-none">
                         <span className="px-3 py-1.5 rounded-full bg-brand-red text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                            {t('live.cam.live') || 'LIVE — table cam'}
+                            {slot === 'main'
+                                ? t('live.cam.liveMain') || 'LIVE — face cam'
+                                : t('live.cam.live') || 'LIVE — table cam'}
                         </span>
                     </div>
-                    {camAspect !== null && camAspect < 1 && !rotateHintDismissed && (
+                    {/* Landscape nudge is table-only: the face slot cover-crops,
+                        so a portrait face cam loses nothing. */}
+                    {slot === 'table' && camAspect !== null && camAspect < 1 && !rotateHintDismissed && (
                         <div className="absolute top-[calc(var(--sat)+3.75rem)] inset-x-0 px-6 flex justify-center">
                             <div className="flex items-center gap-2.5 max-w-[320px] px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/15 backdrop-blur-sm">
                                 <i className="fa-solid fa-rotate text-brand-cyan text-sm shrink-0"></i>
@@ -255,7 +274,10 @@ export default function TableCamPage() {
                                     ? t('live.cam.cameraDenied') ||
                                       'Camera access was blocked — allow the camera for this site in your browser settings, then retry'
                                     : errorKey === 'cameraError'
-                                      ? t('live.cam.cameraError') || 'Could not access the rear camera'
+                                      ? slot === 'main'
+                                          ? t('live.cam.cameraErrorFront') ||
+                                            'Could not access the front camera'
+                                          : t('live.cam.cameraError') || 'Could not access the rear camera'
                                       : t('live.cam.connectError') || 'Could not connect to the stream'}
                             </p>
                             <button
