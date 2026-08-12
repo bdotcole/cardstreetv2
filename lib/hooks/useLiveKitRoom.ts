@@ -71,6 +71,43 @@ const AUDIO_CAPTURE: AudioCaptureOptions = {
 };
 
 /**
+ * Capture the camera, plus the mic when asked.
+ *
+ * A mic-only failure must never cost the camera. createLocalTracks makes ONE
+ * getUserMedia ask covering both legs, so a denied mic throws before any video
+ * track exists and the console shows a dead monitor even though camera
+ * permission was granted. That is exactly the shape of an Android build
+ * predating the RECORD_AUDIO manifest entry (see AndroidManifest.xml): the
+ * WebView denies the audio leg outright and takes the whole capture with it,
+ * stranding breakers on a binary they cannot fix from their side.
+ *
+ * So an audio+video ask that throws retries VIDEO-ONLY. A video-only failure is
+ * a genuine camera fault and propagates untouched, keeping the caller's
+ * denied/notfound classification intact. `audioDropped` tells the caller it is
+ * broadcasting muted, so that can be said out loud rather than discovered by a
+ * viewer — a silent mute is worse than a blocked start.
+ */
+async function captureTracks(opts: {
+    facingMode: 'user' | 'environment';
+    audio: boolean;
+}): Promise<{ tracks: LocalTrack[]; audioDropped: boolean }> {
+    const video = captureOptionsFor(opts.facingMode);
+    if (!opts.audio) {
+        return { tracks: await createLocalTracks({ audio: false, video }), audioDropped: false };
+    }
+    try {
+        return {
+            tracks: await createLocalTracks({ audio: AUDIO_CAPTURE, video }),
+            audioDropped: false,
+        };
+    } catch (err) {
+        const tracks = await createLocalTracks({ audio: false, video });
+        console.warn('[LiveKit] mic capture failed — broadcasting video-only', err);
+        return { tracks, audioDropped: true };
+    }
+}
+
+/**
  * Publish options per track. The TOP simulcast layer is the captured track
  * itself (bounded by videoEncoding); videoSimulcastLayers adds the lower
  * rungs, giving 1080p/720p/360p on a 1080p table cam and 720p/360p/180p on the
@@ -163,6 +200,13 @@ export function useLiveKitRoom() {
     // go-live. publishCamera() adopts these instead of re-opening the device.
     const previewTracksRef = useRef<LocalTrack[]>([]);
     const previewFacingRef = useRef<'user' | 'environment' | null>(null);
+    /**
+     * The mic was asked for and refused, but the camera came up — this device
+     * is capturing video-only (see captureTracks). Latches until the next
+     * successful capture WITH audio, so the console can keep saying so for as
+     * long as it's true.
+     */
+    const [audioDropped, setAudioDropped] = useState(false);
     const previewInFlightRef = useRef(false);
     const disposedRef = useRef(false);
     // Subscription policy (see SubscriptionQuality). A ref, not state — it
@@ -316,12 +360,10 @@ export function useLiveKitRoom() {
             if (previewTracksRef.current.length > 0 || roomRef.current) return;
             previewInFlightRef.current = true;
             try {
-                const tracks = await createLocalTracks({
-                    audio: opts.audio ? AUDIO_CAPTURE : false,
-                    // Preview at publish resolution: publishCamera() adopts
-                    // these tracks as-is, so the quality ask must happen here.
-                    video: captureOptionsFor(opts.facingMode),
-                });
+                // Preview captures at publish resolution: publishCamera()
+                // adopts these tracks as-is, so the quality ask happens here.
+                const { tracks, audioDropped: micLost } = await captureTracks(opts);
+                setAudioDropped(micLost);
                 // The page unmounted (or a room appeared) while getUserMedia
                 // was pending — don't leave an orphaned camera lock.
                 if (disposedRef.current || roomRef.current) {
@@ -392,10 +434,9 @@ export function useLiveKitRoom() {
                 }
             } else {
                 stopPreview();
-                tracks = await createLocalTracks({
-                    audio: opts.audio ? AUDIO_CAPTURE : false,
-                    video: captureOptionsFor(opts.facingMode),
-                });
+                const captured = await captureTracks(opts);
+                tracks = captured.tracks;
+                setAudioDropped(captured.audioDropped);
             }
             // The rear camera is the table cam by construction (see the hook
             // doc above) — it carries the per-slot sharpness settings.
@@ -481,5 +522,6 @@ export function useLiveKitRoom() {
         participantCount,
         remoteIdentities,
         localVideo,
+        audioDropped,
     };
 }

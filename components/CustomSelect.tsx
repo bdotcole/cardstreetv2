@@ -72,7 +72,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                 onClick={() => setIsOpen(o => !o)}
                 className={`${triggerClassName ?? DEFAULT_TRIGGER} flex items-center justify-between text-left`}
             >
-                <span className={selected ? '' : 'text-slate-500'}>
+                {/* Truncate like a native select: long labels (e.g. "Magic:
+                    The Gathering" in a half-width grid cell) must not wrap and
+                    overflow the fixed-height trigger. The open list still
+                    renders labels in full. */}
+                <span className={`truncate ${selected ? '' : 'text-slate-500'}`}>
                     {selected ? selected.label : (placeholder ?? '')}
                 </span>
                 <i

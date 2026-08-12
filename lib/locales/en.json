@@ -898,7 +898,9 @@
             "liveBreaks": "Live Breaks",
             "liveBreaksDesc": "Watch live rip-and-ship shows and grab break spots",
             "marketplace": "Marketplace",
-            "marketplaceDesc": "Browse singles and sealed from verified sellers"
+            "marketplaceDesc": "Browse singles and sealed from verified sellers",
+            "liveNow": "live now",
+            "next": "Next"
         },
         "hub": {
             "title": "Live Breaks",
@@ -1050,6 +1052,8 @@
             "inAppDesc": "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual.",
             "micTitle": "Microphone needs the latest app update",
             "micDesc": "Open this console in Chrome to broadcast now, or update the app and try again.",
+            "micOffTitle": "Broadcasting without sound",
+            "micOffDesc": "Your microphone was blocked, so viewers see your video but hear nothing. Update the app, or open this console in Chrome for sound.",
             "copyLink": "Copy console link",
             "linkCopied": "Link copied",
             "copyError": "Could not copy the link",

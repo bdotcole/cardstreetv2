@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
+import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import {
     clampCrop,
@@ -262,6 +263,7 @@ export default function BroadcastConsolePage() {
         remoteIdentities,
         remoteFeeds,
         disconnect,
+        audioDropped,
     } = useLiveKitRoom();
 
     const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
@@ -1432,6 +1434,26 @@ export default function BroadcastConsolePage() {
                                     </button>
                                 )}
                             </div>
+                            {/* The camera came up but the mic was refused, so this
+                                device is publishing video-only (see captureTracks in
+                                useLiveKitRoom). Said out loud and kept on screen: a
+                                breaker who doesn't know is talking to nobody, and the
+                                first sign would otherwise be a viewer complaining. */}
+                            {audioDropped && !isEnded && (
+                                <div className="mb-3 rounded-xl bg-amber-400/10 border border-amber-400/30 px-3 py-2.5 flex items-start gap-2.5">
+                                    <i className="fa-solid fa-microphone-slash text-amber-300 text-sm mt-0.5"></i>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-amber-200 leading-snug">
+                                            {t('live.console.micOffTitle') ||
+                                                'Broadcasting without sound'}
+                                        </p>
+                                        <p className="text-[11px] text-amber-200/70 mt-0.5 leading-relaxed">
+                                            {t('live.console.micOffDesc') ||
+                                                'Your microphone was blocked, so viewers see your video but hear nothing. Update the app, or open this console in Chrome for sound.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             {/* The panel mirrors the VIEWER's arrangement (stacked at
                                 `splitRatio` when both feeds are up, a solo feed filling
                                 the frame otherwise) through the same CroppedTrackVideo
@@ -1802,40 +1824,38 @@ export default function BroadcastConsolePage() {
                                         className={inputCls}
                                     />
                                     <div className="grid grid-cols-2 gap-2.5">
-                                        <label className="block">
+                                        <div className="block">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
                                                 {t('live.console.itemType') || 'Format'}
                                             </span>
-                                            <select
+                                            <CustomSelect
                                                 value={lotType}
-                                                onChange={(e) => setLotType(e.target.value as BreakType)}
-                                                className={inputCls}
-                                            >
-                                                {BREAK_TYPES.map((bt) => (
-                                                    <option key={bt} value={bt}>
-                                                        {t(`live.types.${bt}`)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                        <label className="block">
+                                                onChange={(v) => setLotType(v as BreakType)}
+                                                ariaLabel={t('live.console.itemType') || 'Format'}
+                                                triggerClassName={inputCls}
+                                                options={BREAK_TYPES.map((bt) => ({
+                                                    value: bt,
+                                                    label: t(`live.types.${bt}`),
+                                                }))}
+                                            />
+                                        </div>
+                                        <div className="block">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
                                                 {t('live.console.productType') || 'Product type'}
                                             </span>
-                                            <select
+                                            <CustomSelect
                                                 value={lotProductType}
-                                                onChange={(e) =>
-                                                    setLotProductType(e.target.value as (typeof PRODUCT_TYPES)[number])
+                                                onChange={(v) =>
+                                                    setLotProductType(v as (typeof PRODUCT_TYPES)[number])
                                                 }
-                                                className={inputCls}
-                                            >
-                                                {PRODUCT_TYPES.map((pt) => (
-                                                    <option key={pt} value={pt}>
-                                                        {t(`live.console.productTypes.${pt}`)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
+                                                ariaLabel={t('live.console.productType') || 'Product type'}
+                                                triggerClassName={inputCls}
+                                                options={PRODUCT_TYPES.map((pt) => ({
+                                                    value: pt,
+                                                    label: t(`live.console.productTypes.${pt}`),
+                                                }))}
+                                            />
+                                        </div>
                                         <label className="block">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
                                                 {t('live.console.spotsTotal') || 'Spots'}

@@ -33,6 +33,18 @@
     font-family: var(--font-sans);
     overflow-x: hidden;
   }
+
+  /* Native <select> popup rows. An <option> does NOT inherit the control's
+     color, so a dark-themed select renders its list with the platform default
+     — black text, which the Android WebView then draws over a dark sheet
+     (unreadable). Both colors are set explicitly and follow the theme remap.
+     This lives in @layer base so a per-option utility class still wins.
+     iOS ignores option styling entirely and draws its own picker; selects that
+     must be readable on every platform use components/CustomSelect.tsx. */
+  option {
+    background-color: var(--color-brand-dark);
+    color: var(--color-slate-100);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -129,6 +141,57 @@ html.theme-light .theme-dark-locked .glass,
 html.theme-light .theme-dark-locked .glass-panel {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Holo-foil sheen — the rainbow shine a rare card throws under light, swept
+   slowly across a surface then resting between passes. Purely decorative:
+   pair with pointer-events-none and aria-hidden. */
+.holo-sheen {
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(6, 182, 212, 0.09) 50%,
+    rgba(244, 63, 94, 0.07) 55%,
+    transparent 62%
+  );
+  background-size: 300% 100%;
+  animation: holoSweep 7s ease-in-out infinite;
+}
+
+/* Light theme: the white glint would vanish on a white card — lean on the
+   darkened brand tints instead. */
+html.theme-light .holo-sheen {
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(15, 23, 42, 0.03) 45%,
+    rgba(8, 145, 178, 0.07) 50%,
+    rgba(225, 29, 72, 0.05) 55%,
+    transparent 62%
+  );
+  background-size: 300% 100%;
+}
+
+@keyframes holoSweep {
+  0% {
+    background-position: 130% 0;
+  }
+
+  60% {
+    background-position: -30% 0;
+  }
+
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-sheen {
+    animation: none;
+    background: none;
+  }
 }
 
 .skeleton {

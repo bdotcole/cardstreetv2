@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import type { LiveStreamRow } from '@/components/live/shared';
@@ -27,6 +28,13 @@ import type { LiveStreamRow } from '@/components/live/shared';
  *
  * The absolute URL is built at click time from window.location.origin — never
  * at render — so the component stays SSR-safe wherever it's dropped.
+ *
+ * The sheet is PORTALLED to document.body. It must be: several call sites sit
+ * inside a `.glass` card (backdrop-filter) or a framer-motion panel (transform),
+ * and either one makes its element the containing block for `position: fixed`
+ * descendants. Rendered in place, `fixed inset-0` then resolves to that card
+ * instead of the viewport, and `items-end` bottom-aligns the ~400px sheet inside
+ * a ~120px box — everything above the fold is clipped off the top, unscrollable.
  */
 
 // Mirrors lib/locales/{en,th}.json live.share.* — the || fallbacks keep the
@@ -165,13 +173,13 @@ export function ShareShowButton({
                 {label && <span>{label}</span>}
             </button>
 
-            {sheetOpen && (
+            {sheetOpen && typeof document !== 'undefined' && createPortal(
                 <div
-                    className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                    className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
                     onClick={() => setSheetOpen(false)}
                 >
                     <div
-                        className="w-full max-w-sm bg-slate-900 rounded-2xl border border-white/10 p-4 space-y-2"
+                        className="w-full max-w-sm max-h-[85dvh] overflow-y-auto bg-slate-900 rounded-2xl border border-white/10 p-4 space-y-2"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-1">
@@ -245,7 +253,8 @@ export function ShareShowButton({
                                 'Instagram does not support link prefill from the web — the link is copied, paste it into your story or bio.'}
                         </p>
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
         </>
     );

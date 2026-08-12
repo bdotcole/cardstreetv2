@@ -15,6 +15,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { GAMES, getGameLabel } from '@/lib/games';
+import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import type { LiveStreamRow } from '@/components/live/shared';
 
@@ -267,17 +268,16 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className={labelCls}>{t('live.myShows.game') || 'Game'}</label>
-                            <select
+                            <CustomSelect
                                 value={gameId}
-                                onChange={(e) => setGameId(e.target.value)}
-                                className={inputCls}
-                            >
-                                {GAMES.map((g) => (
-                                    <option key={g.id} value={g.id}>
-                                        {g.localizedName[isThai ? 'th' : 'en']}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={setGameId}
+                                ariaLabel={t('live.myShows.game') || 'Game'}
+                                triggerClassName={inputCls}
+                                options={GAMES.map((g) => ({
+                                    value: g.id,
+                                    label: g.localizedName[isThai ? 'th' : 'en'],
+                                }))}
+                            />
                         </div>
                         <div>
                             <label className={labelCls}>{t('live.myShows.when') || 'Start time'}</label>
@@ -291,16 +291,19 @@ export default function MyLiveShows({ onBack }: { onBack: () => void }) {
                     </div>
                     <div>
                         <label className={labelCls}>{t('live.myShows.visibility') || 'Visibility'}</label>
-                        <select
+                        <CustomSelect
                             value={visibility}
-                            onChange={(e) => setVisibility(e.target.value === 'unlisted' ? 'unlisted' : 'public')}
-                            className={inputCls}
-                        >
-                            <option value="public">{t('live.myShows.public') || 'Public'}</option>
-                            <option value="unlisted">
-                                {t('live.myShows.unlisted') || 'Unlisted (link only)'}
-                            </option>
-                        </select>
+                            onChange={(v) => setVisibility(v === 'unlisted' ? 'unlisted' : 'public')}
+                            ariaLabel={t('live.myShows.visibility') || 'Visibility'}
+                            triggerClassName={inputCls}
+                            options={[
+                                { value: 'public', label: t('live.myShows.public') || 'Public' },
+                                {
+                                    value: 'unlisted',
+                                    label: t('live.myShows.unlisted') || 'Unlisted (link only)',
+                                },
+                            ]}
+                        />
                     </div>
                     <button
                         onClick={() => void createShow()}
