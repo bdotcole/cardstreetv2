@@ -12,10 +12,12 @@ import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import {
+    bulkTiersOf,
     clampCrop,
     clampRatio,
     DEFAULT_CROP,
     DEFAULT_RATIO,
+    formatBulkTier,
     formatSatang,
     isNativeShell,
     pollTotalVotes,
@@ -81,8 +83,15 @@ const BREAK_TYPES = [
     'random_pack',
     'chase_break',
     'pack_wars',
+    'character_break',
 ] as const;
 type BreakType = (typeof BREAK_TYPES)[number];
+
+// character_break: one character/team per spot (lots POST enforces the match).
+const ENTITY_MIN = 2;
+const ENTITY_LABEL_MAX = 40;
+// Bulk discounts: up to 3 {qty, discountPct} tiers per lot.
+const BULK_TIERS_MAX = 3;
 
 const PRODUCT_TYPES = ['box', 'pack', 'other'] as const;
 
@@ -249,6 +258,10 @@ export default function BroadcastConsolePage() {
     const [lotProductType, setLotProductType] = useState<(typeof PRODUCT_TYPES)[number]>('box');
     // Presales: sell this lot's spots while the show is still scheduled.
     const [lotPresale, setLotPresale] = useState(false);
+    // character_break: the character/team list (one entry per spot).
+    const [lotEntities, setLotEntities] = useState<string[]>(['', '']);
+    // Bulk discounts: up to 3 {qty, pct} rows, kept as strings while editing.
+    const [lotTiers, setLotTiers] = useState<{ qty: string; pct: string }[]>([]);
     const [creatingLot, setCreatingLot] = useState(false);
 
     const supabaseRef = useRef(createClient());
@@ -941,10 +954,24 @@ export default function BroadcastConsolePage() {
     // ─── Lots ───
     const createLot = useCallback(async () => {
         if (creatingLot) return;
-        const spotsTotal = lotType === 'personal_break' ? 1 : parseInt(lotSpots, 10);
+        // character_break derives the spot count from the character list —
+        // one character per spot is the invariant the server enforces.
+        const entities = lotEntities.map((e) => e.trim()).filter(Boolean);
+        const spotsTotal =
+            lotType === 'personal_break'
+                ? 1
+                : lotType === 'character_break'
+                    ? entities.length
+                    : parseInt(lotSpots, 10);
         const priceThb = parseFloat(lotPriceThb);
         const packs = parseInt(lotPacks, 10);
         if (!lotName.trim() || !Number.isFinite(priceThb) || priceThb < 1) return;
+        if (lotType === 'character_break' && entities.length < ENTITY_MIN) return;
+        // Only fully-filled tier rows are sent; the server validates the rest
+        // (ascending qty 2..spots, pct 1..50) and errors surface as a toast.
+        const bulkTiers = lotTiers
+            .map((tier) => ({ qty: parseInt(tier.qty, 10), discountPct: parseInt(tier.pct, 10) }))
+            .filter((tier) => Number.isFinite(tier.qty) && Number.isFinite(tier.discountPct));
         setCreatingLot(true);
         try {
             const res = await fetch(`/api/live/streams/${streamId}/lots`, {
@@ -958,6 +985,11 @@ export default function BroadcastConsolePage() {
                     cardData: { name: lotName.trim(), isSealed: true, productType: lotProductType },
                     // The server drops the flag unless the show is scheduled.
                     presaleEnabled: lotPresale && stream?.status === 'scheduled',
+                    breakEntities:
+                        lotType === 'character_break'
+                            ? entities.map((label) => ({ label }))
+                            : undefined,
+                    bulkTiers: bulkTiers.length > 0 ? bulkTiers : undefined,
                 }),
             });
             const data = await res.json();
@@ -967,6 +999,8 @@ export default function BroadcastConsolePage() {
             }
             setLotName('');
             setLotPresale(false);
+            setLotEntities(['', '']);
+            setLotTiers([]);
             setShowAddLot(false);
             await loadDetail();
         } catch {
@@ -974,7 +1008,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setCreatingLot(false);
         }
-    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, stream?.status, streamId, loadDetail, showToast, t]);
+    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, stream?.status, streamId, loadDetail, showToast, t]);
 
     const patchLot = useCallback(
         async (lotId: string, body: Record<string, unknown>) => {
@@ -1038,7 +1072,11 @@ export default function BroadcastConsolePage() {
 
     // ─── Randomizer (always behind the confirm dialog) ───
     const runRandomizer = useCallback(
-        async (lot: LiveLotRow, purpose: 'spot_to_pack' | 'hit_assignment', hit?: string) => {
+        async (
+            lot: LiveLotRow,
+            purpose: 'spot_to_pack' | 'hit_assignment' | 'entity_assignment',
+            hit?: string,
+        ) => {
             const res = await fetch(`/api/live/lots/${lot.id}/randomize`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1052,9 +1090,13 @@ export default function BroadcastConsolePage() {
             const summary =
                 purpose === 'hit_assignment'
                     ? `${data.assignments?.hit ?? ''} -> #${data.assignments?.spot ?? '?'}`
-                    : (data.assignments ?? [])
-                          .map((a: { spot: number; packs: number[] }) => `#${a.spot}:${a.packs.join(',')}`)
-                          .join('  ');
+                    : purpose === 'entity_assignment'
+                        ? (data.assignments ?? [])
+                              .map((a: { spot: number; label: string }) => `#${a.spot}: ${a.label}`)
+                              .join('  ')
+                        : (data.assignments ?? [])
+                              .map((a: { spot: number; packs: number[] }) => `#${a.spot}:${a.packs.join(',')}`)
+                              .join('  ');
             setRandomizeResult({ seed: data.seed, summary });
         },
         [showToast, t],
@@ -1864,8 +1906,14 @@ export default function BroadcastConsolePage() {
                                                 type="number"
                                                 min={1}
                                                 max={200}
-                                                value={lotType === 'personal_break' ? '1' : lotSpots}
-                                                disabled={lotType === 'personal_break'}
+                                                value={
+                                                    lotType === 'personal_break'
+                                                        ? '1'
+                                                        : lotType === 'character_break'
+                                                            ? String(lotEntities.filter((e) => e.trim()).length)
+                                                            : lotSpots
+                                                }
+                                                disabled={lotType === 'personal_break' || lotType === 'character_break'}
                                                 onChange={(e) => setLotSpots(e.target.value)}
                                                 className={inputCls}
                                             />
@@ -1896,6 +1944,134 @@ export default function BroadcastConsolePage() {
                                             />
                                         </label>
                                     </div>
+                                    {/* character_break: the character/team list — the spot
+                                        count follows it, one character per spot. */}
+                                    {lotType === 'character_break' && (
+                                        <div className="rounded-xl bg-black/20 border border-white/10 p-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                    {t('live.console.characters') || 'Characters'} (
+                                                    {lotEntities.filter((e) => e.trim()).length})
+                                                </span>
+                                                {lotEntities.length < 200 && (
+                                                    <button
+                                                        onClick={() => setLotEntities((prev) => [...prev, ''])}
+                                                        className={btnGhost}
+                                                    >
+                                                        <i className="fa-solid fa-plus mr-1.5"></i>
+                                                        {t('live.console.addCharacter') || 'Add character'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {lotEntities.map((entity, i) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <input
+                                                        value={entity}
+                                                        onChange={(e) =>
+                                                            setLotEntities((prev) =>
+                                                                prev.map((p, j) => (j === i ? e.target.value : p)),
+                                                            )
+                                                        }
+                                                        maxLength={ENTITY_LABEL_MAX}
+                                                        placeholder={`${t('live.console.characterPlaceholder') || 'Character or team name'} ${i + 1}`}
+                                                        className={inputCls}
+                                                    />
+                                                    {lotEntities.length > ENTITY_MIN && (
+                                                        <button
+                                                            onClick={() =>
+                                                                setLotEntities((prev) => prev.filter((_, j) => j !== i))
+                                                            }
+                                                            aria-label={t('live.console.deleteLot') || 'Remove'}
+                                                            className="w-8 h-8 shrink-0 rounded-lg bg-white/10 text-slate-400 text-xs active:scale-95 transition-all"
+                                                        >
+                                                            <i className="fa-solid fa-xmark"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <p className="text-[10px] text-slate-500 leading-relaxed">
+                                                {t('live.console.charactersHint') ||
+                                                    'One character or team per spot — the spot count follows this list.'}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {/* Bulk discounts (any spot format): up to 3 tiers,
+                                        e.g. buy 3+ spots for 10% off each. */}
+                                    <div className="rounded-xl bg-black/20 border border-white/10 p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                {t('live.console.bulkTiers') || 'Bulk discounts'}
+                                            </span>
+                                            {lotTiers.length < BULK_TIERS_MAX && (
+                                                <button
+                                                    onClick={() =>
+                                                        setLotTiers((prev) => [...prev, { qty: '', pct: '' }])
+                                                    }
+                                                    className={btnGhost}
+                                                >
+                                                    <i className="fa-solid fa-plus mr-1.5"></i>
+                                                    {t('live.console.addTier') || 'Add tier'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {lotTiers.length === 0 && (
+                                            <p className="text-[10px] text-slate-500 leading-relaxed">
+                                                {t('live.console.bulkTiersHint') ||
+                                                    'Reward multi-spot buyers — up to 3 tiers, e.g. 3+ spots = -10%.'}
+                                            </p>
+                                        )}
+                                        {lotTiers.map((tier, i) => (
+                                            <div key={i} className="flex items-center gap-2">
+                                                <label className="flex-1">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.tierQty') || 'Min spots'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={2}
+                                                        max={200}
+                                                        value={tier.qty}
+                                                        onChange={(e) =>
+                                                            setLotTiers((prev) =>
+                                                                prev.map((p, j) =>
+                                                                    j === i ? { ...p, qty: e.target.value } : p,
+                                                                ),
+                                                            )
+                                                        }
+                                                        className={inputCls}
+                                                    />
+                                                </label>
+                                                <label className="flex-1">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.tierPct') || 'Discount %'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={50}
+                                                        value={tier.pct}
+                                                        onChange={(e) =>
+                                                            setLotTiers((prev) =>
+                                                                prev.map((p, j) =>
+                                                                    j === i ? { ...p, pct: e.target.value } : p,
+                                                                ),
+                                                            )
+                                                        }
+                                                        className={inputCls}
+                                                    />
+                                                </label>
+                                                <button
+                                                    onClick={() =>
+                                                        setLotTiers((prev) => prev.filter((_, j) => j !== i))
+                                                    }
+                                                    aria-label={t('live.console.deleteLot') || 'Remove'}
+                                                    className="w-8 h-8 mt-4 shrink-0 rounded-lg bg-white/10 text-slate-400 text-xs active:scale-95 transition-all"
+                                                >
+                                                    <i className="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
                                     {/* Presales: only offered while the show is still
                                         scheduled — a live show's lots sell regardless. */}
                                     {stream.status === 'scheduled' && (
@@ -1919,7 +2095,12 @@ export default function BroadcastConsolePage() {
                                     )}
                                     <button
                                         onClick={() => void createLot()}
-                                        disabled={creatingLot || !lotName.trim()}
+                                        disabled={
+                                            creatingLot ||
+                                            !lotName.trim() ||
+                                            (lotType === 'character_break' &&
+                                                lotEntities.filter((e) => e.trim()).length < ENTITY_MIN)
+                                        }
                                         className={`${btnPrimary} w-full`}
                                     >
                                         {creatingLot
@@ -1965,6 +2146,18 @@ export default function BroadcastConsolePage() {
                                                     ` · ${formatSatang(lot.spot_price)} × ${lot.spots_total}`}
                                                 {` · ${sold}/${lotSpotRows.length} ${t('live.console.soldCount') || 'sold'}`}
                                             </p>
+                                            {bulkTiersOf(lot.bulk_tiers).length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {bulkTiersOf(lot.bulk_tiers).map((tier) => (
+                                                        <span
+                                                            key={tier.qty}
+                                                            className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[9px] font-black tracking-widest"
+                                                        >
+                                                            {formatBulkTier(tier)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                             <div className="flex flex-wrap gap-1.5 mt-2">
                                                 {lot.status === 'queued' && (
                                                     <>
@@ -2037,6 +2230,25 @@ export default function BroadcastConsolePage() {
                                                                 className={`${btnGhost} bg-purple-500/20 text-purple-300`}
                                                             >
                                                                 {t('live.console.randomize') || 'Randomize packs'}
+                                                            </button>
+                                                        )}
+                                                        {lot.item_type === 'character_break' && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setConfirm({
+                                                                        message:
+                                                                            t('live.console.confirmRandomize') ||
+                                                                            'Run the server randomizer? The result is final.',
+                                                                        confirmLabel:
+                                                                            t('live.console.randomizeEntities') ||
+                                                                            'Randomize characters',
+                                                                        run: () => runRandomizer(lot, 'entity_assignment'),
+                                                                    });
+                                                                }}
+                                                                className={`${btnGhost} bg-purple-500/20 text-purple-300`}
+                                                            >
+                                                                {t('live.console.randomizeEntities') || 'Randomize characters'}
                                                             </button>
                                                         )}
                                                         {lot.item_type === 'chase_break' && (
@@ -2115,6 +2327,14 @@ export default function BroadcastConsolePage() {
                                                 {spot.assigned_packs && spot.assigned_packs.length > 0 && (
                                                     <span className="text-[8px] font-bold">
                                                         {spot.assigned_packs.join(',')}
+                                                    </span>
+                                                )}
+                                                {spot.assigned_entity && (
+                                                    <span
+                                                        title={spot.assigned_entity}
+                                                        className="max-w-full px-0.5 text-[7px] font-bold truncate"
+                                                    >
+                                                        {spot.assigned_entity}
                                                     </span>
                                                 )}
                                             </div>

@@ -53,18 +53,92 @@ export const LOT_GUARD_COLS =
     'id, stream_id, seller_id, item_type, status, position, spots_total, spot_price, packs_per_spot, price, break_opened_at, card_data';
 
 // The spot-based formats. 'buy_now' prices via `price`; 'auction' is a
-// reserved seam the breaks MVP does not serve.
+// reserved seam the breaks MVP does not serve. 'character_break' needs
+// 20260813_character_breaks_bulk.sql (item_type CHECK + break_entities).
 export const BREAK_ITEM_TYPES = [
     'personal_break',
     'pick_your_pack',
     'random_pack',
     'chase_break',
     'pack_wars',
+    'character_break',
 ] as const;
 export type BreakItemType = (typeof BREAK_ITEM_TYPES)[number];
 
 export function isBreakItemType(t: string): t is BreakItemType {
     return (BREAK_ITEM_TYPES as readonly string[]).includes(t);
+}
+
+// ─── Character breaks + bulk discounts (20260813_character_breaks_bulk.sql) ───
+
+export const ENTITY_LABEL_MAX = 40;
+export const ENTITY_MIN = 2;
+export const BULK_TIERS_MAX = 3;
+export const BULK_DISCOUNT_MIN = 1;
+export const BULK_DISCOUNT_MAX = 50;
+
+export interface BreakEntity {
+    key: string;
+    label: string;
+}
+
+/**
+ * Validate an untrusted character/team list (API body or stream_items
+ * JSONB). Accepts [{key?,label}] or plain strings; labels are trimmed and
+ * must be 1..40 chars. Keys are normalized to stable e1..eN in list order —
+ * stored keys are NOT trusted (a duplicate key would alias two spots in the
+ * randomizer's audit map). Returns null on any invalid entry; callers turn
+ * null into a 400 (POST) or a friendly 409 (randomizer).
+ */
+export function parseBreakEntities(value: unknown): BreakEntity[] | null {
+    if (!Array.isArray(value) || value.length === 0) return null;
+    const out: BreakEntity[] = [];
+    for (const raw of value) {
+        const label =
+            typeof raw === 'string'
+                ? raw.trim()
+                : raw && typeof raw === 'object' && typeof (raw as { label?: unknown }).label === 'string'
+                    ? ((raw as { label: string }).label).trim()
+                    : null;
+        if (!label || label.length > ENTITY_LABEL_MAX) return null;
+        out.push({ key: `e${out.length + 1}`, label });
+    }
+    return out;
+}
+
+export interface BulkTier {
+    qty: number;
+    discountPct: number;
+}
+
+/**
+ * Validate untrusted bulk-discount tiers (API body or stream_items JSONB):
+ * 1..3 tiers, integer qty strictly ascending starting at >= 2 (and <=
+ * spotsTotal when given), integer discountPct 1..50. Returns null when the
+ * shape is invalid — the lots POST turns null into a 400; checkout treats it
+ * as "no bulk discount" so a malformed row can never mis-price a spot.
+ */
+export function parseBulkTiers(value: unknown, spotsTotal?: number | null): BulkTier[] | null {
+    if (!Array.isArray(value) || value.length === 0 || value.length > BULK_TIERS_MAX) return null;
+    const tiers: BulkTier[] = [];
+    let lastQty = 1;
+    for (const raw of value) {
+        if (!raw || typeof raw !== 'object') return null;
+        const { qty, discountPct } = raw as Record<string, unknown>;
+        if (typeof qty !== 'number' || !Number.isInteger(qty) || qty <= lastQty) return null;
+        if (spotsTotal != null && qty > spotsTotal) return null;
+        if (
+            typeof discountPct !== 'number' ||
+            !Number.isInteger(discountPct) ||
+            discountPct < BULK_DISCOUNT_MIN ||
+            discountPct > BULK_DISCOUNT_MAX
+        ) {
+            return null;
+        }
+        tiers.push({ qty, discountPct });
+        lastQty = qty;
+    }
+    return tiers;
 }
 
 export interface BroadcasterContext {

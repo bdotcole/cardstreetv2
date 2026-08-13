@@ -33,7 +33,13 @@ interface SpotBoardRow {
     order_id: string | null;
     sold_at: string | null;
     assigned_packs: number[] | null;
+    /** Absent until 20260813_character_breaks_bulk.sql is applied. */
+    assigned_entity?: string | null;
 }
+
+const SPOT_BOARD_COLS =
+    'id, stream_item_id, spot_number, price, status, held_by, ' +
+    'hold_expires_at, buyer_id, order_id, sold_at, assigned_packs';
 
 export async function GET(
     _req: Request,
@@ -69,7 +75,7 @@ export async function GET(
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
 
-        const [{ data: items }, { data: spots }] = await Promise.all([
+        const [{ data: items }, spotsResult] = await Promise.all([
             admin
                 .from('stream_items')
                 .select('*')
@@ -78,14 +84,23 @@ export async function GET(
                 .order('created_at', { ascending: true }),
             admin
                 .from('break_spots')
-                .select(
-                    'id, stream_item_id, spot_number, price, status, held_by, ' +
-                    'hold_expires_at, buyer_id, order_id, sold_at, assigned_packs',
-                )
+                .select(`${SPOT_BOARD_COLS}, assigned_entity`)
                 .eq('stream_id', id)
                 .order('spot_number', { ascending: true })
                 .returns<SpotBoardRow[]>(),
         ]);
+
+        // assigned_entity (20260813_character_breaks_bulk.sql) is additive and
+        // applied by hand — until it exists, serve the board without it.
+        let spots = spotsResult.data;
+        if (spotsResult.error && spotsResult.error.code === '42703') {
+            ({ data: spots } = await admin
+                .from('break_spots')
+                .select(SPOT_BOARD_COLS)
+                .eq('stream_id', id)
+                .order('spot_number', { ascending: true })
+                .returns<SpotBoardRow[]>());
+        }
 
         // order_id is a payment linkage, not board state — only the spot's own
         // buyer and the seller get it. buyer_id stays: the spot board shows

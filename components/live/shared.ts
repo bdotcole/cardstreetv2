@@ -136,6 +136,10 @@ export interface LiveLotRow {
     created_at: string;
     /** Optional until 20260810_presales.sql is applied — absent = no presale. */
     presale_enabled?: boolean;
+    /** character_break's character/team list. Optional until 20260813_character_breaks_bulk.sql. */
+    break_entities?: { key: string; label: string }[] | null;
+    /** Bulk-discount tiers (read via bulkTiersOf). Optional until 20260813_character_breaks_bulk.sql. */
+    bulk_tiers?: unknown;
 }
 
 export interface LiveSpotRow {
@@ -150,6 +154,36 @@ export interface LiveSpotRow {
     order_id: string | null;
     sold_at: string | null;
     assigned_packs: number[] | null;
+    /** character_break randomizer result. Optional until 20260813_character_breaks_bulk.sql. */
+    assigned_entity?: string | null;
+}
+
+export interface LiveBulkTier {
+    qty: number;
+    discountPct: number;
+}
+
+/**
+ * Tolerant client-side read of a lot's bulk_tiers JSONB — [] for anything
+ * mis-shaped, so a bad row renders no badges instead of crashing the board.
+ * (The server re-validates independently at checkout; this never prices.)
+ */
+export function bulkTiersOf(raw: unknown): LiveBulkTier[] {
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 3) return [];
+    const tiers: LiveBulkTier[] = [];
+    for (const entry of raw) {
+        if (!entry || typeof entry !== 'object') return [];
+        const { qty, discountPct } = entry as Record<string, unknown>;
+        if (typeof qty !== 'number' || typeof discountPct !== 'number') return [];
+        if (!Number.isInteger(qty) || !Number.isInteger(discountPct)) return [];
+        tiers.push({ qty, discountPct });
+    }
+    return tiers;
+}
+
+/** "3+ = -10%" — the bulk-tier badge on spot boards and lot rows. */
+export function formatBulkTier(tier: LiveBulkTier): string {
+    return `${tier.qty}+ = -${tier.discountPct}%`;
 }
 
 export interface LivePollOption {

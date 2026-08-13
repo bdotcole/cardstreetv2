@@ -16,8 +16,10 @@ import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import {
+    bulkTiersOf,
     clampRatio,
     DEFAULT_RATIO,
+    formatBulkTier,
     formatCountdown,
     formatSatang,
     nameInitials,
@@ -294,23 +296,27 @@ export default function LiveViewerClient() {
 
         const patchSpot = (row: LiveSpotRow) => {
             if (!row?.id) return; // DELETE payloads carry an empty `new`
-            // Randomizer result: assigned_packs appearing (or changing) is the
-            // reveal moment — pulse the spot on the board. Compared against
-            // CURRENT state, not payload.old — realtime only carries the PK in
-            // `old` without REPLICA IDENTITY FULL.
-            let packsChanged = false;
+            // Randomizer result: assigned_packs (or a character break's
+            // assigned_entity) appearing or changing is the reveal moment —
+            // pulse the spot on the board. Compared against CURRENT state, not
+            // payload.old — realtime only carries the PK in `old` without
+            // REPLICA IDENTITY FULL.
+            let revealChanged = false;
             setSpots((prev) => {
                 const idx = prev.findIndex((s) => s.id === row.id);
-                const before = idx === -1 ? null : prev[idx].assigned_packs ?? null;
-                packsChanged =
-                    !!row.assigned_packs &&
-                    JSON.stringify(before) !== JSON.stringify(row.assigned_packs);
+                const before = idx === -1 ? null : prev[idx];
+                revealChanged =
+                    (!!row.assigned_packs &&
+                        JSON.stringify(before?.assigned_packs ?? null) !==
+                            JSON.stringify(row.assigned_packs)) ||
+                    (typeof row.assigned_entity === 'string' &&
+                        row.assigned_entity !== (before?.assigned_entity ?? null));
                 if (idx === -1) return [...prev, row];
                 const next = [...prev];
                 next[idx] = { ...next[idx], ...row };
                 return next;
             });
-            if (packsChanged) {
+            if (revealChanged) {
                 setFlashSpots((prev) => new Set(prev).add(row.id));
                 setTimeout(() => {
                     setFlashSpots((prev) => {
@@ -875,6 +881,14 @@ export default function LiveViewerClient() {
                                 {formatCountdown(Date.parse(spot.hold_expires_at as string) - now)}
                             </span>
                         )}
+                        {spot.assigned_entity && (
+                            <span
+                                title={spot.assigned_entity}
+                                className="max-w-full px-0.5 text-[8px] font-bold truncate"
+                            >
+                                {spot.assigned_entity}
+                            </span>
+                        )}
                         {spot.assigned_packs && spot.assigned_packs.length > 0 && (
                             <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[8px] font-black flex items-center justify-center">
                                 {spot.assigned_packs.join(',')}
@@ -964,6 +978,14 @@ export default function LiveViewerClient() {
                                     {activeLot.packs_per_spot} {t('live.viewer.packsPerSpot') || 'packs/spot'}
                                 </span>
                             )}
+                            {bulkTiersOf(activeLot.bulk_tiers).map((tier) => (
+                                <span
+                                    key={tier.qty}
+                                    className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[9px] font-black tracking-widest"
+                                >
+                                    {formatBulkTier(tier)}
+                                </span>
+                            ))}
                             <span className="text-emerald-300">
                                 {openCount} {t('live.viewer.spotsLeft') || 'left'}
                             </span>
@@ -1416,6 +1438,14 @@ export default function LiveViewerClient() {
                                                     {t('live.viewer.packsPerSpot') || 'packs/spot'}
                                                 </span>
                                             )}
+                                            {bulkTiersOf(lot.bulk_tiers).map((tier) => (
+                                                <span
+                                                    key={tier.qty}
+                                                    className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[9px] font-black tracking-widest"
+                                                >
+                                                    {formatBulkTier(tier)}
+                                                </span>
+                                            ))}
                                             {presale && (
                                                 <span className="text-emerald-300">
                                                     {open} {t('live.viewer.spotsLeft') || 'left'}

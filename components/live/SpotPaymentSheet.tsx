@@ -81,6 +81,11 @@ type Phase =
 interface CheckoutSession {
     transferGroup: string;
     totalSatang: number;
+    /** Pre-discount sum of the spots' prices; equals totalSatang when no
+     *  bulk-discount tier applied. */
+    originalTotalSatang: number;
+    /** originalTotalSatang - totalSatang (0 = no discount). */
+    discountSatang: number;
     sellerStripeAccount: string | null;
     clientSecret: string;
 }
@@ -229,6 +234,16 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 setSession({
                     transferGroup: checkoutData.transferGroup,
                     totalSatang: checkoutData.totalSatang,
+                    // Pre-20260813 servers omit the discount fields — fall
+                    // back to "no discount" rather than NaN line items.
+                    originalTotalSatang:
+                        typeof checkoutData.originalTotalSatang === 'number'
+                            ? checkoutData.originalTotalSatang
+                            : checkoutData.totalSatang,
+                    discountSatang:
+                        typeof checkoutData.discountSatang === 'number'
+                            ? checkoutData.discountSatang
+                            : 0,
                     sellerStripeAccount: account,
                     clientSecret: piData.client_secret,
                 });
@@ -310,6 +325,9 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
     if (!open) return null;
 
     const totalSatang = session?.totalSatang ?? spots.reduce((sum, s) => sum + s.priceSatang, 0);
+    // The per-spot rows show original prices, so a bulk discount gets its own
+    // original-subtotal + discount lines above the (discounted) total.
+    const discountSatang = session?.discountSatang ?? 0;
 
     return (
         <AnimatePresence>
@@ -357,6 +375,26 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                                     <span className="text-slate-200 font-bold">{formatSatang(s.priceSatang)}</span>
                                 </div>
                             ))}
+                            {discountSatang > 0 && session && (
+                                <>
+                                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10 text-sm">
+                                        <span className="text-slate-400 font-bold">
+                                            {t('live.payment.subtotal') || 'Subtotal'}
+                                        </span>
+                                        <span className="text-slate-400 font-bold line-through">
+                                            {formatSatang(session.originalTotalSatang)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-emerald-300 font-bold">
+                                            {t('live.payment.bulkDiscount') || 'Bulk discount'}
+                                        </span>
+                                        <span className="text-emerald-300 font-bold">
+                                            -{formatSatang(discountSatang)}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10">
                                 <span className="text-xs font-black uppercase tracking-widest text-slate-300">
                                     {t('live.payment.total') || 'Total'}

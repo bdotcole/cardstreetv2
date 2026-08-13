@@ -4,7 +4,9 @@
  * spot-shaped case:
  *
  *   - one order per spot; listing_id NULL, break_spot_id set
- *   - total_amount = the spot's DB price (satang -> THB exactly once, here)
+ *   - total_amount = the spot's DB price (satang -> THB exactly once, here),
+ *     less the lot's highest qualifying bulk-discount tier when the batch
+ *     meets one (server-side only — tiers come from stream_items.bulk_tiers)
  *   - shipping_fee 0 — shipping is consolidated per buyer at stream settle
  *   - platform_fee = the seller's tier fee (lib/partnerTiers.ts ladder)
  *   - one shared transfer_group `live_...` the client hands to the EXISTING
@@ -27,6 +29,7 @@ import {
     NON_PARTNER_FEE_FRACTION,
 } from '@/lib/partnerTiers';
 import { isPremium } from '@/lib/entitlements';
+import { parseBulkTiers } from '@/lib/liveBreaks';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -251,17 +254,64 @@ export async function POST(req: Request) {
 
         const transferGroup = `live_${randomUUID()}`;
 
+        // ─── Bulk discounts: tiers come from the LOT ROW, never the body ───
+        // A batch meeting a lot's tier qty gets the highest qualifying
+        // discountPct applied to that lot's spots, floored per spot in satang.
+        // Fails soft to full price when 20260813_character_breaks_bulk.sql
+        // hasn't run (42703: bulk_tiers column unknown) or a stored tier
+        // shape is invalid — mis-shaped config must never mis-price a spot.
+        const discountPctBySpotId = new Map<string, number>();
+        {
+            const lotIds = [...new Set(spots.map(s => s.stream_item_id))];
+            const { data: lotRows, error: lotErr } = await admin
+                .from('stream_items')
+                .select('id, bulk_tiers')
+                .in('id', lotIds)
+                .returns<{ id: string; bulk_tiers: unknown }[]>();
+            if (lotErr) {
+                if (lotErr.code !== '42703') {
+                    console.error('[Live/SpotsCheckout] bulk_tiers fetch failed:', lotErr.message);
+                }
+            } else {
+                const batchCountByLot = new Map<string, number>();
+                for (const s of spots) {
+                    batchCountByLot.set(s.stream_item_id, (batchCountByLot.get(s.stream_item_id) ?? 0) + 1);
+                }
+                for (const lotRow of lotRows ?? []) {
+                    const tiers = parseBulkTiers(lotRow.bulk_tiers);
+                    if (!tiers) continue;
+                    const batchCount = batchCountByLot.get(lotRow.id) ?? 0;
+                    const qualifying = tiers.filter(tier => tier.qty <= batchCount);
+                    if (qualifying.length === 0) continue;
+                    const pct = Math.max(...qualifying.map(tier => tier.discountPct));
+                    for (const s of spots) {
+                        if (s.stream_item_id === lotRow.id) discountPctBySpotId.set(s.id, pct);
+                    }
+                }
+            }
+        }
+        const chargedSatangBySpotId = new Map<string, number>(
+            spots.map(spot => {
+                const priceSatang = Math.round(Number(spot.price));
+                const pct = discountPctBySpotId.get(spot.id) ?? 0;
+                return [spot.id, pct > 0 ? Math.floor((priceSatang * (100 - pct)) / 100) : priceSatang];
+            }),
+        );
+
         // ─── One order per spot. Satang -> THB happens exactly here. ───
+        // The order stores the DISCOUNTED amount — /api/checkout charges the
+        // sum of order rows, and the platform fee rides the amount actually
+        // paid, exactly as with any price.
         const ordersToInsert = spots.map(spot => {
-            const priceSatang = Math.round(Number(spot.price));
+            const chargedSatang = chargedSatangBySpotId.get(spot.id)!;
             return {
                 listing_id: null,
                 break_spot_id: spot.id,
                 buyer_id: buyerId,
                 seller_id: sellerId,
                 status: 'pending_payment',
-                total_amount: priceSatang / 100,
-                platform_fee: Math.round(priceSatang * feePct) / 100,
+                total_amount: chargedSatang / 100,
+                platform_fee: Math.round(chargedSatang * feePct) / 100,
                 shipping_fee: 0,
                 escrow_status: 'held',
                 payment_method: paymentMethod,
@@ -314,7 +364,8 @@ export async function POST(req: Request) {
             );
         }
 
-        const totalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
+        const originalTotalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
+        const totalSatang = spots.reduce((sum, s) => sum + chargedSatangBySpotId.get(s.id)!, 0);
 
         return NextResponse.json({
             success: true,
@@ -323,6 +374,9 @@ export async function POST(req: Request) {
             // Single source of truth for the amount /api/checkout will charge.
             totalAmount: totalSatang / 100,
             totalSatang,
+            // Bulk discount, for the payment sheet's original-vs-discounted line.
+            originalTotalSatang,
+            discountSatang: originalTotalSatang - totalSatang,
             region: orderRegion,
             // TH direct charge: the client must load Stripe.js bound to the
             // seller's connected account BEFORE mounting Elements, or the card

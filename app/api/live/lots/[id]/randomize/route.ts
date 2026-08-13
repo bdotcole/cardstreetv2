@@ -6,21 +6,25 @@
  * seed + full assignment map to break_randomizations (immutable audit).
  * Anyone can re-run the shuffle from the published seed and verify the result.
  *
- * Two purposes:
- *   spot_to_pack   (random_pack) — shuffle pack numbers 1..(spots*packs_per_spot)
- *                  across ALL spots, sold or not. The map must be fixed before
- *                  the reveal so a buyer's purchase can never re-roll anyone's
- *                  packs, and unsold spots' packs stay visible (they belong to
- *                  the house, on the record). One run per lot, ever.
- *   hit_assignment (chase_break) — a pulled hit lands on one of the SOLD spots
- *                  only: hits belong to buyers, and an unsold spot winning a
- *                  hit would hand it back to the seller. One run per hit.
+ * Three purposes:
+ *   spot_to_pack      (random_pack) — shuffle pack numbers 1..(spots*packs_per_spot)
+ *                     across ALL spots, sold or not. The map must be fixed before
+ *                     the reveal so a buyer's purchase can never re-roll anyone's
+ *                     packs, and unsold spots' packs stay visible (they belong to
+ *                     the house, on the record). One run per lot, ever.
+ *   entity_assignment (character_break) — shuffle the lot's character/team list
+ *                     across ALL spots (same sold-or-not reasoning as
+ *                     spot_to_pack: unsold spots' characters belong to the
+ *                     house, on the record). One run per lot, ever.
+ *   hit_assignment    (chase_break) — a pulled hit lands on one of the SOLD spots
+ *                     only: hits belong to buyers, and an unsold spot winning a
+ *                     hit would hand it back to the seller. One run per hit.
  */
 
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { postSystemChat, requireLotBroadcaster } from '@/lib/liveBreaks';
+import { parseBreakEntities, postSystemChat, requireLotBroadcaster } from '@/lib/liveBreaks';
 
 /**
  * Deterministic Fisher-Yates: swap index j at step i comes from
@@ -56,9 +60,9 @@ export async function POST(
 
         const body = await req.json().catch(() => ({}));
         const purpose = body?.purpose;
-        if (purpose !== 'spot_to_pack' && purpose !== 'hit_assignment') {
+        if (purpose !== 'spot_to_pack' && purpose !== 'hit_assignment' && purpose !== 'entity_assignment') {
             return NextResponse.json(
-                { error: "purpose must be 'spot_to_pack' or 'hit_assignment'" },
+                { error: "purpose must be 'spot_to_pack', 'entity_assignment' or 'hit_assignment'" },
                 { status: 400 },
             );
         }
@@ -158,6 +162,111 @@ export async function POST(
                 stream.id,
                 user.id,
                 `Pack randomizer: ${spots.length} spots shuffled across ${packCount} packs. Seed ${seed}`,
+            );
+
+            return NextResponse.json({ success: true, purpose, seed, assignments });
+        }
+
+        if (purpose === 'entity_assignment') {
+            // Only character breaks carry an entity list to assign.
+            if (lot.item_type !== 'character_break') {
+                return NextResponse.json(
+                    { error: 'entity_assignment randomization only applies to character_break lots' },
+                    { status: 400 },
+                );
+            }
+
+            // LOT_GUARD_COLS predates break_entities, so the list is fetched
+            // here (a character_break lot can only exist post-migration, so no
+            // 42703 tolerance is needed on this read).
+            const { data: lotRow, error: entityErr } = await admin
+                .from('stream_items')
+                .select('break_entities')
+                .eq('id', lot.id)
+                .maybeSingle<{ break_entities: unknown }>();
+            if (entityErr) {
+                console.error('[Live/Randomize] entity fetch failed:', entityErr.message);
+                return NextResponse.json({ error: 'Failed to load the character list' }, { status: 500 });
+            }
+            const entities = parseBreakEntities(lotRow?.break_entities);
+            if (!entities) {
+                return NextResponse.json(
+                    { error: 'This lot has no character list' },
+                    { status: 409 },
+                );
+            }
+            // The lots POST enforces one entity per spot at creation; a
+            // mismatch here means the data was tampered with or the board was
+            // altered out-of-band — refusing beats assigning a partial map.
+            if (entities.length !== spots.length) {
+                return NextResponse.json(
+                    { error: 'Character list does not match the spot count' },
+                    { status: 409 },
+                );
+            }
+
+            // One map per lot, ever — same rationale (and same racing
+            // pre-check + partial-unique-index backstop) as spot_to_pack.
+            const { data: existing } = await admin
+                .from('break_randomizations')
+                .select('id')
+                .eq('stream_item_id', lot.id)
+                .eq('purpose', 'entity_assignment')
+                .limit(1);
+            if (existing && existing.length > 0) {
+                return NextResponse.json(
+                    { error: 'Characters already randomized for this lot', code: 'ALREADY_RANDOMIZED' },
+                    { status: 409 },
+                );
+            }
+
+            const shuffled = seededShuffle(entities, seed);
+            const assignments = spots.map((spot, i) => ({
+                spot: spot.spot_number,
+                entity: shuffled[i].key,
+                label: shuffled[i].label,
+            }));
+
+            // Audit row FIRST: if the spot updates below partially fail, the
+            // logged map is still the binding one and a retry can re-apply it.
+            const { error: auditErr } = await admin.from('break_randomizations').insert({
+                stream_item_id: lot.id,
+                stream_id: stream.id,
+                run_by: user.id,
+                purpose,
+                seed,
+                algorithm: 'fisher-yates-sha256',
+                assignments,
+            });
+            if (auditErr) {
+                // idx_randomizations_entity_assignment_once closes the race
+                // the pre-check above can lose (20260813 migration).
+                if (auditErr.code === '23505') {
+                    return NextResponse.json(
+                        { error: 'Characters already randomized for this lot', code: 'ALREADY_RANDOMIZED' },
+                        { status: 409 },
+                    );
+                }
+                console.error('[Live/Randomize] audit insert failed:', auditErr.message);
+                return NextResponse.json({ error: 'Failed to record randomization' }, { status: 500 });
+            }
+
+            const updateErrors: string[] = [];
+            for (let i = 0; i < spots.length; i++) {
+                const { error } = await admin
+                    .from('break_spots')
+                    .update({ assigned_entity: assignments[i].label })
+                    .eq('id', spots[i].id);
+                if (error) updateErrors.push(`${spots[i].spot_number}: ${error.message}`);
+            }
+            if (updateErrors.length > 0) {
+                console.error('[Live/Randomize] assigned_entity updates failed:', updateErrors);
+            }
+
+            await postSystemChat(
+                stream.id,
+                user.id,
+                `Spots randomized — check your character. Seed ${seed}`,
             );
 
             return NextResponse.json({ success: true, purpose, seed, assignments });
