@@ -17,9 +17,17 @@ interface Strings {
   intro1: string;
   intro2: string;
   howTitle: string;
+  // The numbered steps. These are ALSO the HowTo JSON-LD steps in
+  // app/prices/page.tsx and are kept in sync by hand — change one, change both.
   how: { t: string; d: string }[];
+  identifyTitle: string;
+  identify: { t: string; d: string }[];
+  differTitle: string;
+  differ: { t: string; d: string }[];
   sourceTitle: string;
   source: string;
+  mistakesTitle: string;
+  mistakes: { t: string; d: string }[];
   sellTitle: string;
   sell: string;
   ctaSearch: string;
@@ -40,6 +48,10 @@ const EN: Strings = {
   howTitle: 'How to check a card’s price',
   how: [
     {
+      t: 'Identify the exact card',
+      d: 'Start with the collector number in the bottom corner and the language on the card — the same card name can exist in several sets and several languages.',
+    },
+    {
       t: 'Search by name',
       d: 'Type the card name in Thai, English or Japanese. Search covers every game and every language at once.',
     },
@@ -52,13 +64,74 @@ const EN: Strings = {
       d: 'Point your camera at the card and CardStreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.',
     },
     {
+      t: 'Match the version before you trust the price',
+      d: 'Check that the language, set, and version all match the copy you are actually holding.',
+    },
+    {
       t: 'See price history',
       d: 'Every card page has a price chart covering the last 7, 30 and 90 days.',
+    },
+  ],
+  identifyTitle: 'Know exactly which card you are holding',
+  identify: [
+    {
+      t: 'The collector number',
+      d: 'Almost every game prints a number in a bottom corner — 087/198 means card 87 of a 198-card set. It is the most precise way to identify a card, because the same card name often appears in several sets.',
+    },
+    {
+      t: 'The set symbol and code',
+      d: 'Next to the number there is usually a short set code telling you which set the card came from. When two sets reuse a number, this is what separates them.',
+    },
+    {
+      t: 'The language',
+      d: 'Check whether the text is Thai, English, or Japanese. Cards in different languages are different cards to the market with their own prices — not one card translated.',
+    },
+    {
+      t: 'Rarity and special versions',
+      d: 'The rarity mark usually sits near the collector number, and some cards also exist as special-art or foil versions that are far scarcer than the regular one. If you are unsure, scan the card with the camera and it will identify the exact version.',
+    },
+  ],
+  differTitle: 'Why the same card sells for different amounts',
+  differ: [
+    {
+      t: 'Condition',
+      d: 'A card with sharp corners, clean edges, and an unmarked surface sells for noticeably more than a played copy. Market prices on CardStreet reference cards in good condition, so a card with flaws will realistically sell below them.',
+    },
+    {
+      t: 'Language',
+      d: 'Thai, English, and Japanese cards trade in separate markets at different prices, which is why CardStreet prices them separately. Do not apply a price from one language to another.',
+    },
+    {
+      t: 'Version and rarity',
+      d: 'The same card name can exist as a regular print, a special-art version, and a foil, pulled at very different rates. Those can be worth several times each other within the same set.',
+    },
+    {
+      t: 'Graded or raw',
+      d: 'A graded card carries its own price by company and grade. You can see graded prices next to the raw price on the same card page.',
     },
   ],
   sourceTitle: 'Where the prices come from',
   source:
     'The figure shown is the market price — a midpoint drawn from recent real sales, not an inflated asking price. English and Japanese cards reference international market data converted to baht; Thai cards use pricing that reflects the domestic market. Graded cards (PSA, BGS, CGC, TAG) are priced separately from raw copies, since a high-grade slab is often worth several times the raw card.',
+  mistakesTitle: 'Common mistakes when checking a price',
+  mistakes: [
+    {
+      t: 'Comparing across languages',
+      d: 'The most common one: pricing a Thai card from an English price for the same card. They are separate markets and the values differ substantially. Always match the language.',
+    },
+    {
+      t: 'Comparing a regular card to a special version',
+      d: 'The same name in a different version is a different price entirely. If a price looks surprisingly high, check whether you are looking at a special-art version.',
+    },
+    {
+      t: 'Reading asking prices as market value',
+      d: 'What a seller is asking is not the market price — anyone can ask anything. CardStreet market prices are built from transactions that actually happened, which makes them a firmer reference point.',
+    },
+    {
+      t: 'Forgetting the condition of your own card',
+      d: 'Market prices assume a card in good condition. If yours has edge wear or a bent corner, price it below market accordingly — it sells faster and avoids disputes when the buyer opens the package.',
+    },
+  ],
   sellTitle: 'Check a price, then sell it',
   // Do NOT reintroduce "paid once the buyer has received the card". On the live
   // TH path (direct charges) the sale lands in the seller's Stripe balance at
@@ -91,6 +164,10 @@ const TH: Strings = {
   howTitle: 'วิธีเช็คราคาการ์ด',
   how: [
     {
+      t: 'ดูให้แน่ว่าเป็นการ์ดใบไหน',
+      d: 'ดูเลขการ์ดที่มุมล่างและภาษาบนการ์ดก่อน เพราะการ์ดชื่อเดียวกันมีได้หลายใบหลายชุดหลายภาษา',
+    },
+    {
       t: 'ค้นหาด้วยชื่อการ์ด',
       d: 'พิมพ์ชื่อการ์ดเป็นภาษาไทย อังกฤษ หรือญี่ปุ่นก็ได้ ระบบค้นหาครอบคลุมทุกเกมและทุกภาษาพร้อมกัน',
     },
@@ -103,13 +180,74 @@ const TH: Strings = {
       d: 'เปิดกล้องแล้วส่องที่การ์ด ระบบจะระบุใบนั้นให้อัตโนมัติพร้อมแสดงราคา ใช้ได้กับการ์ดไทย อังกฤษ และญี่ปุ่น',
     },
     {
+      t: 'เทียบให้ตรงเวอร์ชัน',
+      d: 'ก่อนเชื่อราคาที่เห็น ให้เช็คว่าตรงทั้งภาษา ชุด และเวอร์ชันของการ์ดที่ถืออยู่จริง',
+    },
+    {
       t: 'ดูราคาย้อนหลัง',
       d: 'หน้าการ์ดแต่ละใบมีกราฟราคา ดูได้ว่าราคาขึ้นหรือลงในช่วง 7, 30 และ 90 วันที่ผ่านมา',
+    },
+  ],
+  identifyTitle: 'รู้ให้แน่ว่าถือการ์ดใบไหนอยู่',
+  identify: [
+    {
+      t: 'เลขการ์ดที่มุมล่าง',
+      d: 'การ์ดเกือบทุกเกมพิมพ์เลขประจำใบไว้ที่มุมล่าง เช่น 087/198 หมายถึงใบที่ 87 จากทั้งชุด 198 ใบ เลขนี้คือวิธีที่แม่นยำที่สุดในการระบุการ์ด เพราะการ์ดชื่อเดียวกันอาจมีหลายใบในหลายชุด',
+    },
+    {
+      t: 'สัญลักษณ์ชุดและรหัสชุด',
+      d: 'ข้าง ๆ เลขการ์ดมักมีรหัสชุดสั้น ๆ กำกับอยู่ เป็นตัวบอกว่าการ์ดมาจากชุดไหน ถ้าเลขซ้ำกันระหว่างชุด รหัสนี้คือสิ่งที่แยกออกจากกัน',
+    },
+    {
+      t: 'ภาษาของการ์ด',
+      d: 'ดูจากตัวหนังสือบนการ์ดว่าเป็นภาษาไทย อังกฤษ หรือญี่ปุ่น เพราะการ์ดคนละภาษาคือคนละใบในตลาดและมีราคาคนละตัว ไม่ใช่การ์ดใบเดียวกันที่แปลภาษา',
+    },
+    {
+      t: 'ระดับความหายากและเวอร์ชันพิเศษ',
+      d: 'สัญลักษณ์ความหายากมักอยู่ใกล้เลขการ์ด และการ์ดบางใบมีเวอร์ชันภาพพิเศษหรือแบบสะท้อนแสงที่หายากกว่าเวอร์ชันธรรมดามาก ถ้าไม่แน่ใจ ให้สแกนด้วยกล้องแล้วระบบจะระบุเวอร์ชันให้เอง',
+    },
+  ],
+  differTitle: 'ทำไมการ์ดใบเดียวกันถึงราคาไม่เท่ากัน',
+  differ: [
+    {
+      t: 'สภาพการ์ด',
+      d: 'การ์ดที่มุมคม ขอบไม่ขาว และผิวไม่มีรอย ขายได้ราคาสูงกว่าใบที่ผ่านการเล่นมาอย่างชัดเจน ราคาตลาดที่แสดงบน CardStreet อ้างอิงการ์ดสภาพดีเป็นหลัก ถ้าการ์ดของคุณมีตำหนิ ราคาที่ขายได้จริงจะต่ำกว่านั้น',
+    },
+    {
+      t: 'ภาษา',
+      d: 'การ์ดภาษาไทย อังกฤษ และญี่ปุ่น ซื้อขายกันคนละตลาดและมีราคาต่างกัน CardStreet จึงแยกราคาตามภาษาไว้ให้แล้ว อย่าเอาราคาของภาษาหนึ่งไปใช้กับอีกภาษาหนึ่ง',
+    },
+    {
+      t: 'เวอร์ชันและความหายาก',
+      d: 'การ์ดชื่อเดียวกันอาจมีทั้งเวอร์ชันธรรมดา เวอร์ชันภาพพิเศษ และแบบสะท้อนแสง ซึ่งออกมาในอัตราที่ต่างกันมาก ราคาจึงต่างกันได้หลายเท่าแม้เป็นการ์ดชื่อเดียวกันในชุดเดียวกัน',
+    },
+    {
+      t: 'ผ่านการเกรดหรือไม่',
+      d: 'การ์ดที่ส่งไปเกรดแล้วจะมีราคาแยกต่างหากตามบริษัทและระดับเกรด ดูราคาการ์ดเกรดควบคู่กับราคาการ์ดดิบได้ในหน้าการ์ดเดียวกัน',
     },
   ],
   sourceTitle: 'ราคาการ์ดมาจากไหน',
   source:
     'ราคาที่แสดงคือราคาตลาด — ค่ากลางจากการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาตั้งขายที่สูงเกินจริง สำหรับการ์ดภาษาอังกฤษและญี่ปุ่น ราคาอ้างอิงจากตลาดสากลแล้วแปลงเป็นเงินบาท ส่วนการ์ดไทยใช้ราคาที่สะท้อนตลาดในประเทศ การ์ดที่มีสภาพต่างกันหรือผ่านการเกรด (PSA, BGS, CGC, TAG) จะมีราคาแยกต่างหาก เพราะการ์ดเกรดสูงมักมีมูลค่าสูงกว่าการ์ดดิบหลายเท่า',
+  mistakesTitle: 'ข้อผิดพลาดที่เจอบ่อยตอนเช็คราคา',
+  mistakes: [
+    {
+      t: 'เทียบราคาข้ามภาษา',
+      d: 'เจอบ่อยที่สุด คือเอาราคาการ์ดภาษาอังกฤษมาตั้งราคาการ์ดภาษาไทยใบเดียวกัน ทั้งสองเป็นคนละตลาดและมูลค่าต่างกันมาก ต้องดูให้ตรงภาษาเสมอ',
+    },
+    {
+      t: 'เทียบเวอร์ชันธรรมดากับเวอร์ชันพิเศษ',
+      d: 'การ์ดชื่อเดียวกันแต่คนละเวอร์ชันมีราคาคนละเรื่อง ถ้าเห็นราคาสูงผิดปกติ ให้เช็คก่อนว่ากำลังดูเวอร์ชันภาพพิเศษอยู่หรือเปล่า',
+    },
+    {
+      t: 'ดูราคาที่ตั้งขาย ไม่ใช่ราคาที่ขายได้จริง',
+      d: 'ราคาที่ผู้ขายตั้งไว้ไม่ใช่ราคาตลาด ใครก็ตั้งราคาเท่าไหร่ก็ได้ ราคาตลาดบน CardStreet คำนวณจากการซื้อขายที่เกิดขึ้นจริง จึงใช้เป็นจุดอ้างอิงได้ตรงกว่า',
+    },
+    {
+      t: 'ลืมดูสภาพการ์ดของตัวเอง',
+      d: 'ราคาตลาดอ้างอิงการ์ดสภาพดี ถ้าการ์ดมีรอยขาวที่ขอบหรือมุมงอ ควรตั้งราคาต่ำกว่าราคาตลาดตามสภาพจริง จะขายได้เร็วกว่าและไม่มีปัญหาตอนผู้ซื้อได้รับของ',
+    },
+  ],
   sellTitle: 'เช็คราคาแล้วขายต่อได้เลย',
   sell:
     'ถ้าเช็คราคาแล้วอยากขาย ลงประกาศขายบน CardStreet ได้จากหน้าการ์ดเดียวกัน ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ไม่มีค่าลงประกาศ ผู้ซื้อชำระผ่านบัตรหรือพร้อมเพย์ จัดส่งทั่วประเทศผ่าน Flash Express และยอดขายจะเข้าบัญชี Stripe ของผู้ขาย แล้วโอนออกตามรอบการจ่ายเงินปกติของบัญชีนั้น',
@@ -181,8 +319,40 @@ export default function PricesContent() {
           ))}
         </ol>
 
+        {/* Identify-before-source is deliberate: a reader who cannot name the
+            card they are holding cannot use anything further down the page. */}
+        <h2 className="text-lg font-black uppercase tracking-tight mb-4">{t.identifyTitle}</h2>
+        <ul className="space-y-4 mb-12">
+          {t.identify.map((item) => (
+            <li key={item.t} className="glass rounded-2xl border border-white/10 p-5">
+              <p className="text-sm font-bold text-brand-cyan mb-1">{item.t}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{item.d}</p>
+            </li>
+          ))}
+        </ul>
+
+        <h2 className="text-lg font-black uppercase tracking-tight mb-4">{t.differTitle}</h2>
+        <ul className="space-y-4 mb-12">
+          {t.differ.map((item) => (
+            <li key={item.t} className="glass rounded-2xl border border-white/10 p-5">
+              <p className="text-sm font-bold text-brand-cyan mb-1">{item.t}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{item.d}</p>
+            </li>
+          ))}
+        </ul>
+
         <h2 className="text-lg font-black uppercase tracking-tight mb-4">{t.sourceTitle}</h2>
         <p className="text-sm text-slate-300 leading-relaxed mb-12">{t.source}</p>
+
+        <h2 className="text-lg font-black uppercase tracking-tight mb-4">{t.mistakesTitle}</h2>
+        <ul className="space-y-4 mb-12">
+          {t.mistakes.map((item) => (
+            <li key={item.t} className="glass rounded-2xl border border-white/10 p-5">
+              <p className="text-sm font-bold text-brand-cyan mb-1">{item.t}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{item.d}</p>
+            </li>
+          ))}
+        </ul>
 
         <h2 className="text-lg font-black uppercase tracking-tight mb-4">{t.sellTitle}</h2>
         <p className="text-sm text-slate-300 leading-relaxed mb-12">{t.sell}</p>

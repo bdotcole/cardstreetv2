@@ -58,15 +58,19 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
 
     const steps = isThai
         ? [
+              ['ดูให้แน่ว่าเป็นการ์ดใบไหน', 'ดูเลขการ์ดที่มุมล่างและภาษาบนการ์ดก่อน เพราะการ์ดชื่อเดียวกันมีได้หลายใบหลายชุดหลายภาษา'],
               ['ค้นหาด้วยชื่อการ์ด', 'พิมพ์ชื่อการ์ดเป็นภาษาไทย อังกฤษ หรือญี่ปุ่นก็ได้ ระบบค้นหาครอบคลุมทุกเกมและทุกภาษาพร้อมกัน'],
               ['ค้นหาด้วยเลขการ์ด', 'ถ้ารู้เลขในชุด เช่น 087/198 พิมพ์ชื่อการ์ดตามด้วยเลขได้เลย จะเจอใบที่ต้องการเร็วกว่า'],
               ['สแกนด้วยกล้อง', 'เปิดกล้องแล้วส่องที่การ์ด ระบบจะระบุใบนั้นให้อัตโนมัติพร้อมแสดงราคา ใช้ได้กับการ์ดไทย อังกฤษ และญี่ปุ่น'],
+              ['เทียบให้ตรงเวอร์ชัน', 'ก่อนเชื่อราคาที่เห็น ให้เช็คว่าตรงทั้งภาษา ชุด และเวอร์ชันของการ์ดที่ถืออยู่จริง'],
               ['ดูราคาย้อนหลัง', 'หน้าการ์ดแต่ละใบมีกราฟราคา ดูได้ว่าราคาขึ้นหรือลงในช่วง 7, 30 และ 90 วันที่ผ่านมา'],
           ]
         : [
+              ['Identify the exact card', 'Start with the collector number in the bottom corner and the language on the card — the same card name can exist in several sets and several languages.'],
               ['Search by name', 'Type the card name in Thai, English or Japanese. Search covers every game and every language at once.'],
               ['Search by number', 'If you know the collector number, e.g. 087/198, type the card name followed by the number to jump straight to it.'],
               ['Scan with your camera', 'Point your camera at the card and CardStreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.'],
+              ['Match the version before you trust the price', 'Check that the language, set, and version all match the copy you are actually holding.'],
               ['See price history', 'Every card page has a price chart covering the last 7, 30 and 90 days.'],
           ];
 
@@ -88,6 +92,18 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
                   'เช็คราคาการ์ดบน CardStreet เสียเงินไหม',
                   'ไม่เสีย การค้นหา การสแกน และการดูราคาตลาดใช้งานได้ฟรี ไม่ต้องสมัครสมาชิก ผู้ขายจะเสียค่าธรรมเนียมเฉพาะตอนที่ขายการ์ดได้จริงเท่านั้น',
               ],
+              [
+                  'รู้ได้ยังไงว่าการ์ดที่ถืออยู่คือใบไหน',
+                  'ดูเลขการ์ดที่มุมล่าง เช่น 087/198 พร้อมรหัสชุดที่อยู่ข้าง ๆ และภาษาบนตัวการ์ด สามอย่างนี้ระบุการ์ดได้แม่นยำที่สุด ถ้ายังไม่แน่ใจ ให้สแกนการ์ดด้วยกล้องในแอปแล้วระบบจะระบุใบและเวอร์ชันให้เอง',
+              ],
+              [
+                  'ราคาที่เห็นคือราคาการ์ดสภาพไหน',
+                  'ราคาตลาดอ้างอิงการ์ดสภาพดีเป็นหลัก ถ้าการ์ดของคุณมีขอบขาว มุมงอ หรือรอยบนผิว ราคาที่ขายได้จริงจะต่ำกว่าราคาตลาดตามสภาพ',
+              ],
+              [
+                  'ทำไมราคาการ์ดใบเดียวกันในเว็บอื่นไม่เท่ากัน',
+                  'ส่วนใหญ่เกิดจากการดูคนละภาษา คนละชุด หรือคนละเวอร์ชันของการ์ด และบางเว็บแสดงราคาที่ผู้ขายตั้งไว้ ไม่ใช่ราคาที่ซื้อขายกันจริง ก่อนเทียบราคาจึงควรเช็คให้ตรงทั้งสามอย่าง',
+              ],
           ]
         : [
               [
@@ -105,6 +121,18 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
               [
                   'Does it cost anything to check card prices on CardStreet?',
                   'No. Searching, scanning, and viewing market prices are free and need no account. Sellers pay a fee only when a card actually sells.',
+              ],
+              [
+                  'How do I tell exactly which card I have?',
+                  'Use the collector number in the bottom corner (for example 087/198), the set code next to it, and the language printed on the card — those three identify it precisely. If you are still unsure, scan the card with the camera in the app and it will identify the card and its version for you.',
+              ],
+              [
+                  'What condition do the prices assume?',
+                  'Market prices reference cards in good condition. If yours has whitened edges, a bent corner, or surface marks, expect it to sell below the market price in proportion to the wear.',
+              ],
+              [
+                  'Why does another site show a different price for the same card?',
+                  'Usually because it is a different language, set, or version of the card — and some sites display seller asking prices rather than completed transactions. Check all three before comparing.',
               ],
           ];
 
