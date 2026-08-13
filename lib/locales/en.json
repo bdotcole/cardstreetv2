@@ -995,7 +995,12 @@
             "spotSold": "Sold",
             "spotHeld": "Held",
             "spotOpen": "Open",
-            "yourSpot": "Yours"
+            "yourSpot": "Yours",
+            "houseReserve": "Reserve for house",
+            "houseRelease": "Release house spot",
+            "houseReserved": "Spot reserved for the house",
+            "houseReleased": "Spot released back to open",
+            "houseError": "Could not update that spot"
         },
         "scheduled": {
             "startsIn": "Show starts in",

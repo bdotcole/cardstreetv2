@@ -115,6 +115,17 @@ export default function LiveViewerClient() {
     const [sending, setSending] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [claimingSpotId, setClaimingSpotId] = useState<string | null>(null);
+    // ─── Admin house-reserve (quiet board filler; the routes re-verify the
+    //     admin role server-side, so this is UX only and fails closed) ───
+    const [houseAction, setHouseAction] = useState<{
+        spot: LiveSpotRow;
+        type: 'reserve' | 'release';
+    } | null>(null);
+    const [houseBusy, setHouseBusy] = useState(false);
+    // A long-press that opened the house sheet must not ALSO fire the spot
+    // button's click (which would claim the spot the admin meant to reserve).
+    const suppressSpotClickRef = useRef(false);
+    const housePressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // The current poll (open, or just-closed while its result lingers).
     const [poll, setPoll] = useState<LivePollRow | null>(null);
     const [myVote, setMyVote] = useState<string | null>(null);
@@ -548,6 +559,38 @@ export default function LiveViewerClient() {
         [claimingSpotId, myUserId, showToast, t],
     );
 
+    const runHouseAction = useCallback(async () => {
+        const action = houseAction;
+        if (!action || houseBusy) return;
+        setHouseBusy(true);
+        try {
+            const res = await fetch(
+                `/api/live/spots/${action.spot.id}/house-${action.type === 'reserve' ? 'reserve' : 'release'}`,
+                { method: 'POST' },
+            );
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.spot) {
+                // Realtime will confirm; patch now so the board flips instantly.
+                setSpots((prev) =>
+                    prev.map((s) => (s.id === action.spot.id ? { ...s, ...data.spot } : s)),
+                );
+                showToast(
+                    action.type === 'reserve'
+                        ? t('live.viewer.houseReserved') || 'Spot reserved for the house'
+                        : t('live.viewer.houseReleased') || 'Spot released back to open',
+                    'success',
+                );
+            } else {
+                showToast(t('live.viewer.houseError') || 'Could not update that spot', 'error');
+            }
+        } catch {
+            showToast(t('live.viewer.houseError') || 'Could not update that spot', 'error');
+        } finally {
+            setHouseBusy(false);
+            setHouseAction(null);
+        }
+    }, [houseAction, houseBusy, showToast, t]);
+
     const releaseMyHolds = useCallback(async () => {
         const held = myHeldSpots;
         await Promise.all(
@@ -735,6 +778,41 @@ export default function LiveViewerClient() {
 
     // ─── Shared blocks (mobile + desktop compose them differently) ───
 
+    // Admins get a quiet secondary action on the board: long-press (or
+    // right-click) an OPEN spot to reserve it for the house, or one of their
+    // own house-held spots to release it. House spots render exactly like any
+    // other sold spot (the admin account's real initials) — the only tell is
+    // this hidden gesture. Server-side the routes re-verify the admin role.
+    const houseActionFor = (spot: LiveSpotRow): 'reserve' | 'release' | null => {
+        if (!isAdmin) return null;
+        const holdLapsed =
+            spot.status === 'held' &&
+            !!spot.hold_expires_at &&
+            Date.parse(spot.hold_expires_at) <= now;
+        if (spot.status === 'open' || holdLapsed) return 'reserve';
+        // order_id survives the API's visibility filter only on the caller's
+        // own spots, so sold + no order + mine = my house reservation — never
+        // a real (paid) purchase of mine, which always carries its order id.
+        if (spot.status === 'sold' && spot.order_id === null && spot.buyer_id === myUserId) {
+            return 'release';
+        }
+        return null;
+    };
+    const startHousePress = (spot: LiveSpotRow, type: 'reserve' | 'release') => {
+        suppressSpotClickRef.current = false;
+        if (housePressTimerRef.current) clearTimeout(housePressTimerRef.current);
+        housePressTimerRef.current = setTimeout(() => {
+            suppressSpotClickRef.current = true;
+            setHouseAction({ spot, type });
+        }, 500);
+    };
+    const cancelHousePress = () => {
+        if (housePressTimerRef.current) {
+            clearTimeout(housePressTimerRef.current);
+            housePressTimerRef.current = null;
+        }
+    };
+
     // The claim grid for one lot — the live board renders it for the lot on
     // the block; the scheduled landing renders one per presale lot.
     const spotGrid = (lot: LiveLotRow, lotSpots: LiveSpotRow[]) => (
@@ -749,14 +827,34 @@ export default function LiveViewerClient() {
                     Date.parse(spot.hold_expires_at) <= now;
                 const claimable =
                     canBuyLot(lot) && (spot.status === 'open' || (expired && !mine));
+                const houseAct = houseActionFor(spot);
                 return (
                     <motion.button
                         key={spot.id}
                         animate={flashing ? { scale: [1, 1.15, 1] } : { scale: 1 }}
                         transition={flashing ? { duration: 0.6, repeat: 2 } : undefined}
-                        onClick={() => claimable && void claimSpot(spot)}
-                        disabled={!claimable || claimingSpotId === spot.id}
-                        className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${spotStatusClasses(
+                        onClick={() => {
+                            if (suppressSpotClickRef.current) {
+                                suppressSpotClickRef.current = false;
+                                return;
+                            }
+                            if (claimable) void claimSpot(spot);
+                        }}
+                        onPointerDown={houseAct ? () => startHousePress(spot, houseAct) : undefined}
+                        onPointerUp={houseAct ? cancelHousePress : undefined}
+                        onPointerLeave={houseAct ? cancelHousePress : undefined}
+                        onPointerCancel={houseAct ? cancelHousePress : undefined}
+                        onContextMenu={
+                            houseAct
+                                ? (e) => {
+                                      e.preventDefault();
+                                      cancelHousePress();
+                                      setHouseAction({ spot, type: houseAct });
+                                  }
+                                : undefined
+                        }
+                        disabled={(!claimable && !houseAct) || claimingSpotId === spot.id}
+                        className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center transition-all select-none ${spotStatusClasses(
                             { status: expired ? 'open' : spot.status, mine: mine || soldMine, flashing },
                         )}`}
                     >
@@ -949,6 +1047,53 @@ export default function LiveViewerClient() {
             >
                 {t('live.viewer.payNow') || 'Checkout'}
             </button>
+        </div>
+    );
+
+    // The house-action confirm sheet — a deliberate second tap so a stray
+    // long-press can never silently take a spot off (or put one back on) the
+    // board. Rendered by both the scheduled landing and the live layout.
+    const houseSheet = houseAction && (
+        <div
+            className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center"
+            onClick={() => !houseBusy && setHouseAction(null)}
+        >
+            <div className="absolute inset-0 bg-black/60" />
+            <div
+                className="relative w-full max-w-sm m-4 mb-[calc(var(--sab)+1rem)] lg:mb-4 rounded-2xl bg-slate-900 border border-white/10 p-4"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                    {t('live.viewer.spotBoard') || 'Spots'} · #{houseAction.spot.spot_number}
+                </p>
+                <p className="text-sm font-black text-white mt-1">
+                    {houseAction.type === 'reserve'
+                        ? t('live.viewer.houseReserve') || 'Reserve for house'
+                        : t('live.viewer.houseRelease') || 'Release house spot'}
+                </p>
+                <div className="mt-4 flex gap-2">
+                    <button
+                        onClick={() => setHouseAction(null)}
+                        disabled={houseBusy}
+                        className="flex-1 h-10 rounded-xl bg-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                    >
+                        {t('live.payment.close') || 'Close'}
+                    </button>
+                    <button
+                        onClick={() => void runHouseAction()}
+                        disabled={houseBusy}
+                        className="flex-1 h-10 rounded-xl bg-brand-cyan text-brand-darker text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                    >
+                        {houseBusy ? (
+                            <i className="fa-solid fa-circle-notch animate-spin"></i>
+                        ) : houseAction.type === 'reserve' ? (
+                            t('live.viewer.houseReserve') || 'Reserve for house'
+                        ) : (
+                            t('live.viewer.houseRelease') || 'Release house spot'
+                        )}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 
@@ -1316,6 +1461,8 @@ export default function LiveViewerClient() {
                         void releaseMyHolds();
                     }}
                 />
+
+                {houseSheet}
             </main>
         );
     }
@@ -1440,6 +1587,8 @@ export default function LiveViewerClient() {
                     void releaseMyHolds();
                 }}
             />
+
+            {houseSheet}
         </main>
     );
 }

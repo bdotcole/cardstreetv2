@@ -995,7 +995,12 @@
             "spotSold": "ขายแล้ว",
             "spotHeld": "ติดจอง",
             "spotOpen": "ว่าง",
-            "yourSpot": "ของคุณ"
+            "yourSpot": "ของคุณ",
+            "houseReserve": "จองช่องให้เฮาส์",
+            "houseRelease": "ปล่อยช่องของเฮาส์",
+            "houseReserved": "จองช่องให้เฮาส์แล้ว",
+            "houseReleased": "ปล่อยช่องกลับเป็นว่างแล้ว",
+            "houseError": "อัปเดตช่องไม่สำเร็จ"
         },
         "scheduled": {
             "startsIn": "ไลฟ์จะเริ่มในอีก",
