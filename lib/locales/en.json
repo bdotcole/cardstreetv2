@@ -730,6 +730,7 @@
             "back": "Back",
             "saving": "Saving...",
             "invalidPhone": "Please enter a valid Thai phone number (e.g. 081 234 5678).",
+            "addressIncomplete": "Please fill in every shipping field before continuing.",
             "saveContinue": "Save & continue",
             "subtotal": "Subtotal",
             "shippingAtCheckout": "Shipping is calculated at checkout.",

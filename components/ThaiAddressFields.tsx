@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CustomSelect, { type CustomSelectOption } from '@/components/CustomSelect';
 import { areaMatchKey, areaNamesMatch, isBangkokLike, BANGKOK_CANONICAL } from '@/lib/utils/thaiAddressNormalize';
 
 /**
@@ -212,17 +213,24 @@ const ThaiAddressFields: React.FC<ThaiAddressFieldsProps> = ({
 
     const optionLabel = (o: AreaOpt) => (isThai || !o.e ? o.t : `${o.e} (${o.t})`);
 
-    // The select needs an option for a stored value the dataset doesn't know
-    // (legacy free text, typos) — rendered disabled so the current value stays
-    // visible but the user must re-pick a real one.
-    const syntheticOption = (value: string, matched: AreaOpt | null) =>
-        value.trim() && !matched ? (
-            <option value={value} disabled>
-                {value}
-            </option>
-        ) : null;
-
     const selectValue = (value: string, matched: AreaOpt | null) => (matched ? matched.t : value);
+
+    /**
+     * Option list for one tier: the empty-value placeholder, then a synthetic
+     * DISABLED entry for a stored value the dataset doesn't know (legacy free
+     * text, typos) so the current value stays visible but must be re-picked,
+     * then the real rows.
+     */
+    const buildOptions = (
+        placeholder: string,
+        value: string,
+        matched: AreaOpt | null,
+        rows: AreaOpt[],
+    ): CustomSelectOption[] => [
+        { value: '', label: placeholder },
+        ...(value.trim() && !matched ? [{ value, label: value, disabled: true }] : []),
+        ...rows.map((o) => ({ value: o.t, label: optionLabel(o) })),
+    ];
 
     return (
         <div className="grid grid-cols-2 gap-2">
@@ -230,60 +238,63 @@ const ThaiAddressFields: React.FC<ThaiAddressFieldsProps> = ({
                 <label className={labelClassName}>
                     {t('addressFields.province')} {required && <span className="text-rose-400">*</span>}
                 </label>
-                <select
-                    required={required}
+                <CustomSelect
                     disabled={disabled}
+                    ariaLabel={t('addressFields.province')}
                     value={selectValue(values.province, matchedProvince)}
-                    onChange={(e) => onChange({ province: e.target.value, state: '', district: '', postcode: '' })}
-                    className={inputClassName}
-                >
-                    <option value="">{t('addressFields.selectProvince')}</option>
-                    {syntheticOption(values.province, matchedProvince)}
-                    {provinces.map(p => (
-                        <option key={p.t} value={p.t}>{optionLabel(p)}</option>
-                    ))}
-                </select>
+                    onChange={(v) => onChange({ province: v, state: '', district: '', postcode: '' })}
+                    triggerClassName={inputClassName}
+                    placeholder={t('addressFields.selectProvince')}
+                    options={buildOptions(
+                        t('addressFields.selectProvince'),
+                        values.province,
+                        matchedProvince,
+                        provinces,
+                    )}
+                />
             </div>
 
             <div className="space-y-1.5 min-w-0">
                 <label className={labelClassName}>
                     {t('addressFields.district')} {required && <span className="text-rose-400">*</span>}
                 </label>
-                <select
-                    required={required}
+                <CustomSelect
                     disabled={disabled || !matchedProvince}
+                    ariaLabel={t('addressFields.district')}
                     value={selectValue(values.state, matchedState)}
-                    onChange={(e) => onChange({ state: e.target.value, district: '', postcode: '' })}
-                    className={inputClassName}
-                >
-                    <option value="">{t('addressFields.selectDistrict')}</option>
-                    {syntheticOption(values.state, matchedState)}
-                    {districts.map(d => (
-                        <option key={d.t} value={d.t}>{optionLabel(d)}</option>
-                    ))}
-                </select>
+                    onChange={(v) => onChange({ state: v, district: '', postcode: '' })}
+                    triggerClassName={inputClassName}
+                    placeholder={t('addressFields.selectDistrict')}
+                    options={buildOptions(
+                        t('addressFields.selectDistrict'),
+                        values.state,
+                        matchedState,
+                        districts,
+                    )}
+                />
             </div>
 
             <div className="space-y-1.5 min-w-0">
                 <label className={labelClassName}>
                     {t('addressFields.subdistrict')} {required && <span className="text-rose-400">*</span>}
                 </label>
-                <select
-                    required={required}
+                <CustomSelect
                     disabled={disabled || !matchedState}
+                    ariaLabel={t('addressFields.subdistrict')}
                     value={selectValue(values.district, matchedDistrict)}
-                    onChange={(e) => {
-                        const sub = subdistricts.find(s => s.t === e.target.value);
-                        onChange({ district: e.target.value, ...(sub?.z ? { postcode: sub.z } : {}) });
+                    onChange={(v) => {
+                        const sub = subdistricts.find(s => s.t === v);
+                        onChange({ district: v, ...(sub?.z ? { postcode: sub.z } : {}) });
                     }}
-                    className={inputClassName}
-                >
-                    <option value="">{t('addressFields.selectSubdistrict')}</option>
-                    {syntheticOption(values.district, matchedDistrict)}
-                    {subdistricts.map(s => (
-                        <option key={s.t} value={s.t}>{optionLabel(s)}</option>
-                    ))}
-                </select>
+                    triggerClassName={inputClassName}
+                    placeholder={t('addressFields.selectSubdistrict')}
+                    options={buildOptions(
+                        t('addressFields.selectSubdistrict'),
+                        values.district,
+                        matchedDistrict,
+                        subdistricts,
+                    )}
+                />
             </div>
 
             <div className="space-y-1.5 min-w-0">

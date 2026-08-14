@@ -135,8 +135,17 @@ export default function DesktopCartDrawer() {
 
     const saveAddress = async (e: React.FormEvent) => {
         e.preventDefault();
-        // The <input required> only guarantees non-empty; enforce a dialable TH
-        // number here so the buyer fixes it before we mount the payment step.
+        // The province/district/subdistrict pickers are CustomSelect, not native
+        // <select> (their platform popup rendered unreadable in light mode), so
+        // browser constraint validation no longer covers them — check the
+        // required set here the way CheckoutAddressSheet does.
+        const missing = BUYER_REQUIRED_PROFILE_FIELDS.filter((f) => !addressForm[f]?.trim());
+        if (missing.length > 0) {
+            showToast(t('desktop.cart.addressIncomplete'), 'error');
+            return;
+        }
+        // Non-empty is not enough; enforce a dialable TH number here so the
+        // buyer fixes it before we mount the payment step.
         if (!isValidThaiPhone(addressForm.phone_number)) {
             showToast(t('desktop.cart.invalidPhone'), 'error');
             return;

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { pokemonService } from '@/services/pokemonService';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import CustomSelect from '@/components/CustomSelect';
 import { Card } from '@/types';
 import {
     GAMES,
@@ -181,8 +182,9 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
         }
     };
 
+    // CustomSelect draws its own chevron, so no pr-10 / appearance-none here.
     const selectClass =
-        'w-full h-12 bg-black/40 border border-white/10 rounded-xl pl-4 pr-10 text-sm text-white outline-none focus:border-brand-cyan appearance-none cursor-pointer';
+        'w-full h-12 bg-black/40 border border-white/10 rounded-xl px-4 text-sm text-white outline-none focus:border-brand-cyan cursor-pointer';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -214,21 +216,13 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                                 {t('cardRequest.game')}
                             </label>
-                            <div className="relative">
-                                <select
-                                    className={selectClass}
-                                    value={gameId}
-                                    onChange={(e) => handleGameChange(e.target.value as GameId)}
-                                    required
-                                >
-                                    {SELECTABLE_GAMES.map((g) => (
-                                        <option key={g.id} value={g.id} className="bg-brand-darker">
-                                            {g.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                <i className="fa-solid fa-chevron-down text-slate-500 text-xs absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                            </div>
+                            <CustomSelect
+                                value={gameId}
+                                onChange={(v) => handleGameChange(v as GameId)}
+                                ariaLabel={t('cardRequest.game')}
+                                triggerClassName={selectClass}
+                                options={SELECTABLE_GAMES.map((g) => ({ value: g.id, label: g.name }))}
+                            />
                         </div>
 
                         {needsLanguage && (
@@ -236,24 +230,14 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                                     {t('cardRequest.language')}
                                 </label>
-                                <div className="relative">
-                                    <select
-                                        className={selectClass}
-                                        value={cardLanguage}
-                                        onChange={(e) => setCardLanguage(e.target.value as GameLanguageCode)}
-                                        required
-                                    >
-                                        <option value="" disabled className="bg-brand-darker">
-                                            {t('cardRequest.languagePlaceholder')}
-                                        </option>
-                                        {gameLanguages.map((l) => (
-                                            <option key={l.code} value={l.code} className="bg-brand-darker">
-                                                {l.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down text-slate-500 text-xs absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                                </div>
+                                <CustomSelect
+                                    value={cardLanguage}
+                                    onChange={(v) => setCardLanguage(v as GameLanguageCode)}
+                                    ariaLabel={t('cardRequest.language')}
+                                    triggerClassName={selectClass}
+                                    placeholder={t('cardRequest.languagePlaceholder')}
+                                    options={gameLanguages.map((l) => ({ value: l.code, label: l.label }))}
+                                />
                             </div>
                         )}
 

@@ -194,6 +194,18 @@ html.theme-light .holo-sheen {
   }
 }
 
+/* Selected row in components/CustomSelect.tsx. brand-cyan darkens to #0891b2
+   in light mode, which measures 3.4:1 against the list background — under the
+   4.5:1 AA floor for body text. cyan-700 clears it at ~4.9:1. Dark mode keeps
+   brand-cyan, which is already far above the floor on #0f1419. */
+.custom-select-active {
+  color: var(--color-brand-cyan);
+}
+
+html.theme-light .custom-select-active {
+  color: #0e7490;
+}
+
 .skeleton {
   @apply relative overflow-hidden bg-white/5;
 }
