@@ -29,7 +29,8 @@ import {
     NON_PARTNER_FEE_FRACTION,
 } from '@/lib/partnerTiers';
 import { isPremium } from '@/lib/entitlements';
-import { parseBulkTiers } from '@/lib/liveBreaks';
+import { cancelPendingSpotOrders, parseBulkTiers } from '@/lib/liveBreaks';
+import { CHECKOUT_HOLD_SECONDS, MIN_CHARGE_SATANG } from '@/components/live/shared';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
@@ -41,12 +42,13 @@ import {
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
 const MAX_SPOTS_PER_CHECKOUT = 10;
-// PromptPay payments routinely take minutes; the 180s claim hold would lapse
-// mid-payment and let another buyer steal the spot out from under a paying
-// one. The order creation moment is the signal of real payment intent, so the
-// hold is extended here. finalize_break_spot's CAS still arbitrates if the
-// extended hold also lapses.
-const CHECKOUT_HOLD_SECONDS = 600;
+
+// The buyer meets Stripe's raw "Amount must be at least ฿10.00 THB" if a
+// sub-floor batch reaches PaymentIntent creation. Same shape as the
+// profileValidation toasts: English here, and the code the payment sheet
+// routes on to render the bilingual `live.payment.minCharge` string.
+const MIN_CHARGE_ERROR = 'Minimum purchase is ฿10 — add another spot';
+const MIN_CHARGE_ERROR_CODE = 'MIN_CHARGE';
 
 interface SpotRow {
     id: string;
@@ -233,27 +235,6 @@ export async function POST(req: Request) {
             ? seller.stripe_region
             : 'us';
 
-        // ─── One payable group per spot ───
-        // A buyer who abandons the payment sheet and re-enters checkout would
-        // otherwise leave TWO pending_payment groups pointing at the same
-        // spots — and both PaymentIntents stay chargeable (a stale PromptPay
-        // QR especially), so paying both double-charges for one spot.
-        // CAS-cancel any prior pending orders by this buyer for these spots
-        // so exactly one payable group exists; paid orders are untouched.
-        const { error: staleCancelErr } = await admin
-            .from('orders')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('buyer_id', buyerId)
-            .in('break_spot_id', spotIds)
-            .eq('status', 'pending_payment');
-        if (staleCancelErr) {
-            // Proceeding would risk the double charge this guard exists for.
-            console.error('[Live/SpotsCheckout] stale-order cancel failed:', staleCancelErr.message);
-            return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
-        }
-
-        const transferGroup = `live_${randomUUID()}`;
-
         // ─── Bulk discounts: tiers come from the LOT ROW, never the body ───
         // A batch meeting a lot's tier qty gets the highest qualifying
         // discountPct applied to that lot's spots, floored per spot in satang.
@@ -297,6 +278,61 @@ export async function POST(req: Request) {
                 return [spot.id, pct > 0 ? Math.floor((priceSatang * (100 - pct)) / 100) : priceSatang];
             }),
         );
+
+        // ─── Stripe's THB floor, applied to the batch total ───
+        // Two sub-floor cases, two different remedies:
+        //   - the DISCOUNT sank an otherwise-payable batch. Losing the sale
+        //     over the seller's own promotion would be perverse, so the
+        //     discount is clamped instead: satang go back onto the spots
+        //     until the total lands exactly on the floor. Capped per spot at
+        //     its own list price, so a clamp can never charge ABOVE what the
+        //     seller set — worst case the discount shrinks to zero.
+        //   - the batch is under the floor at FULL price. Nothing to shrink;
+        //     the buyer has to add a spot.
+        const originalTotalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
+        let totalSatang = spots.reduce((sum, s) => sum + chargedSatangBySpotId.get(s.id)!, 0);
+
+        if (totalSatang < MIN_CHARGE_SATANG && originalTotalSatang >= MIN_CHARGE_SATANG) {
+            let shortfall = MIN_CHARGE_SATANG - totalSatang;
+            for (const spot of spots) {
+                if (shortfall <= 0) break;
+                const listPrice = Math.round(Number(spot.price));
+                const charged = chargedSatangBySpotId.get(spot.id)!;
+                const giveBack = Math.min(shortfall, listPrice - charged);
+                if (giveBack <= 0) continue;
+                chargedSatangBySpotId.set(spot.id, charged + giveBack);
+                shortfall -= giveBack;
+            }
+            totalSatang = spots.reduce((sum, s) => sum + chargedSatangBySpotId.get(s.id)!, 0);
+        }
+
+        // Rejected BEFORE the stale-order cancel and the order insert below,
+        // so a sub-floor attempt leaves no side effects to roll back.
+        if (totalSatang < MIN_CHARGE_SATANG) {
+            return NextResponse.json(
+                {
+                    error: MIN_CHARGE_ERROR,
+                    code: MIN_CHARGE_ERROR_CODE,
+                    minChargeSatang: MIN_CHARGE_SATANG,
+                    totalSatang,
+                },
+                { status: 400 },
+            );
+        }
+
+        // ─── One payable group per spot ───
+        // A buyer who abandons the payment sheet and re-enters checkout would
+        // otherwise leave TWO pending_payment groups pointing at the same
+        // spots — and both PaymentIntents stay chargeable (a stale PromptPay
+        // QR especially), so paying both double-charges for one spot.
+        // CAS-cancel any prior pending orders by this buyer for these spots
+        // so exactly one payable group exists; paid orders are untouched.
+        if (!(await cancelPendingSpotOrders(buyerId, spotIds))) {
+            // Proceeding would risk the double charge this guard exists for.
+            return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
+        }
+
+        const transferGroup = `live_${randomUUID()}`;
 
         // ─── One order per spot. Satang -> THB happens exactly here. ───
         // The order stores the DISCOUNTED amount — /api/checkout charges the
@@ -363,9 +399,6 @@ export async function POST(req: Request) {
                 { status: 409 },
             );
         }
-
-        const originalTotalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
-        const totalSatang = spots.reduce((sum, s) => sum + chargedSatangBySpotId.get(s.id)!, 0);
 
         return NextResponse.json({
             success: true,

@@ -1042,7 +1042,10 @@
             "spotLabel": "Spot",
             "redirectSucceeded": "Payment received — your spots will confirm shortly",
             "redirectProcessing": "Payment is processing — your spots will confirm shortly",
-            "redirectFailed": "Payment failed — your spots were not confirmed"
+            "redirectFailed": "Payment failed — your spots were not confirmed",
+            "minCharge": "Minimum purchase is ฿10 — add another spot",
+            "holdsReleased": "Your spots have been released",
+            "dismiss": "Dismiss"
         },
         "console": {
             "title": "Broadcast console",
@@ -1106,6 +1109,7 @@
             "itemType": "Format",
             "spotsTotal": "Spots",
             "spotPrice": "Price per spot (THB)",
+            "minSpotPrice": "Minimum spot price is ฿10 — Stripe's minimum charge",
             "packsPerSpot": "Packs per spot",
             "productType": "Product type",
             "create": "Add to queue",

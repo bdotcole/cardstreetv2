@@ -20,6 +20,7 @@ import {
     formatBulkTier,
     formatSatang,
     isNativeShell,
+    MIN_CHARGE_SATANG,
     pollTotalVotes,
     resolveFit,
     type FeedCrop,
@@ -965,7 +966,16 @@ export default function BroadcastConsolePage() {
                     : parseInt(lotSpots, 10);
         const priceThb = parseFloat(lotPriceThb);
         const packs = parseInt(lotPacks, 10);
-        if (!lotName.trim() || !Number.isFinite(priceThb) || priceThb < 1) return;
+        if (!lotName.trim() || !Number.isFinite(priceThb)) return;
+        // Mirrors the server floor: a spot priced under Stripe's THB minimum
+        // is unpayable, so say so here rather than mint a dead lot.
+        if (Math.round(priceThb * 100) < MIN_CHARGE_SATANG) {
+            showToast(
+                t('live.console.minSpotPrice') || "Minimum spot price is ฿10 — Stripe's minimum charge",
+                'error',
+            );
+            return;
+        }
         if (lotType === 'character_break' && entities.length < ENTITY_MIN) return;
         // Only fully-filled tier rows are sent; the server validates the rest
         // (ascending qty 2..spots, pct 1..50) and errors surface as a toast.
@@ -1924,11 +1934,15 @@ export default function BroadcastConsolePage() {
                                             </span>
                                             <input
                                                 type="number"
-                                                min={1}
+                                                min={MIN_CHARGE_SATANG / 100}
                                                 value={lotPriceThb}
                                                 onChange={(e) => setLotPriceThb(e.target.value)}
                                                 className={inputCls}
                                             />
+                                            <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                {t('live.console.minSpotPrice') ||
+                                                    "Minimum spot price is ฿10 — Stripe's minimum charge"}
+                                            </span>
                                         </label>
                                         <label className="block">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">

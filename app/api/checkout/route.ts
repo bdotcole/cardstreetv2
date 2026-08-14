@@ -300,7 +300,11 @@ export async function POST(req: Request) {
     } catch (error: any) {
         console.error('[Checkout] Stripe PaymentIntent Error:', error);
         return NextResponse.json(
-            { error: error.message || 'Payment processing failed' },
+            // Stripe's own error code rides along (e.g. 'amount_too_small')
+            // so callers can tell a permanent rejection from a retryable one
+            // instead of pattern-matching Stripe's raw English message.
+            // Additive — existing consumers read `error` and are unaffected.
+            { error: error.message || 'Payment processing failed', code: error.code },
             { status: 500 }
         );
     }

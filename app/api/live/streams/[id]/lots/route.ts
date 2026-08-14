@@ -23,10 +23,16 @@ import {
     type BreakEntity,
     type BulkTier,
 } from '@/lib/liveBreaks';
+import { MIN_CHARGE_SATANG } from '@/components/live/shared';
 
 const MAX_SPOTS = 200;
-const MIN_PRICE_SATANG = 100;
 const MAX_PACKS_PER_SPOT = 50;
+
+// A lot priced below Stripe's THB floor mints spots nobody can ever pay for
+// (see MIN_CHARGE_SATANG) — catch it at creation, where the seller can still
+// fix it, rather than at the buyer's payment sheet.
+const MIN_PRICE_ERROR =
+    "Minimum spot price is ฿10 — Stripe's minimum charge";
 
 function asPositiveInt(value: unknown): number | null {
     return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
@@ -107,9 +113,9 @@ export async function POST(
                     { status: 400 },
                 );
             }
-            if (!spotPrice || spotPrice < MIN_PRICE_SATANG) {
+            if (!spotPrice || spotPrice < MIN_CHARGE_SATANG) {
                 return NextResponse.json(
-                    { error: 'spotPrice must be at least 100 satang (1 THB)' },
+                    { error: MIN_PRICE_ERROR, code: 'MIN_CHARGE' },
                     { status: 400 },
                 );
             }
@@ -167,9 +173,9 @@ export async function POST(
             price = asPositiveInt(body?.price);
             listingId = typeof body?.listingId === 'string' ? body.listingId
                 : typeof body?.listing_id === 'string' ? body.listing_id : null;
-            if (!price || price < MIN_PRICE_SATANG) {
+            if (!price || price < MIN_CHARGE_SATANG) {
                 return NextResponse.json(
-                    { error: 'price must be at least 100 satang (1 THB)' },
+                    { error: MIN_PRICE_ERROR, code: 'MIN_CHARGE' },
                     { status: 400 },
                 );
             }

@@ -272,6 +272,41 @@ export const POLL_COLS =
     'id, stream_id, seller_id, question, options, tallies, status, created_at, closed_at';
 
 /**
+ * CAS-cancel the caller's own unpaid orders for a set of spots.
+ *
+ * Two callers need exactly this write, which is why it lives here rather than
+ * inline in either of them:
+ *   - spots/checkout, as a duplicate guard — a buyer who abandons the sheet
+ *     and re-enters would otherwise leave TWO payable groups on one spot, and
+ *     both PaymentIntents stay chargeable (a stale PromptPay QR especially).
+ *   - spots/abandon, when the buyer closes the sheet without paying — the
+ *     pending group must die with the hold it was minted against.
+ *
+ * The CAS (buyer + spot + status='pending_payment') is the whole safety
+ * story: someone else's orders and any already-paid order are untouchable,
+ * so this can never cancel money that was actually collected. Returns false
+ * on a write error; callers decide whether that is fatal.
+ */
+export async function cancelPendingSpotOrders(
+    buyerId: string,
+    spotIds: string[],
+): Promise<boolean> {
+    if (spotIds.length === 0) return true;
+    const admin = createAdminClient();
+    const { error } = await admin
+        .from('orders')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('buyer_id', buyerId)
+        .in('break_spot_id', spotIds)
+        .eq('status', 'pending_payment');
+    if (error) {
+        console.error('[LiveBreaks] pending spot-order cancel failed:', error.message);
+        return false;
+    }
+    return true;
+}
+
+/**
  * Pre-migration tolerance: PostgREST reports a table missing from its schema
  * cache as PGRST205 (older versions surface Postgres's 42P01). Poll routes
  * fail soft on it instead of 500ing until 20260811_stream_polls.sql runs.

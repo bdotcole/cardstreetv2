@@ -54,6 +54,29 @@ function getStripePromise(stripeAccount?: string | null): ReturnType<typeof load
     return promise;
 }
 
+/**
+ * Failures that Try Again cannot fix, because re-confirming re-submits the
+ * same unchargeable amount: our own pre-flight floor check (MIN_CHARGE) and
+ * Stripe's rejection if a sub-floor batch ever slips past it
+ * (amount_too_small). Both mean the same thing to the buyer — the batch is
+ * under ฿10 — so they share one message, and the sheet releases the holds
+ * instead of leaving the board reserved behind a dead-end error.
+ */
+const HARD_FAILURE_CODES = new Set(['MIN_CHARGE', 'amount_too_small']);
+
+function isHardFailure(code: unknown): boolean {
+    return typeof code === 'string' && HARD_FAILURE_CODES.has(code);
+}
+
+/** Carries the server/Stripe error code through the init's throw path. */
+class CheckoutError extends Error {
+    code?: string;
+    constructor(message: string, code?: unknown) {
+        super(message);
+        this.code = typeof code === 'string' ? code : undefined;
+    }
+}
+
 export interface PayableSpot {
     id: string;
     spotNumber: number;
@@ -76,7 +99,9 @@ type Phase =
     | { name: 'ready' }
     | { name: 'paying' }
     | { name: 'success'; processingAsync: boolean }
-    | { name: 'error'; message: string };
+    /** `hard` = unretryable; the holds are already released and the only
+     *  action offered is Dismiss. */
+    | { name: 'error'; message: string; hard: boolean };
 
 interface CheckoutSession {
     transferGroup: string;
@@ -123,8 +148,17 @@ const PayForm: React.FC<{
 
 // confirmPayment needs useStripe/useElements, which must live under
 // <Elements> — this bridge lifts the confirm handler out to the sheet.
+interface ConfirmResult {
+    error?: string;
+    /** Stripe's error code — 'card_declined' (retryable) vs
+     *  'amount_too_small' (not). */
+    code?: string;
+    paymentIntentId?: string;
+    status?: string;
+}
+
 const ConfirmBridge: React.FC<{
-    register: (fn: () => Promise<{ error?: string; paymentIntentId?: string; status?: string }>) => void;
+    register: (fn: () => Promise<ConfirmResult>) => void;
 }> = ({ register }) => {
     const stripe = useStripe();
     const elements = useElements();
@@ -141,7 +175,7 @@ const ConfirmBridge: React.FC<{
                 confirmParams: { return_url: returnUrl },
                 redirect: 'if_required',
             });
-            if (error) return { error: error.message || 'Payment failed' };
+            if (error) return { error: error.message || 'Payment failed', code: error.code };
             return { paymentIntentId: paymentIntent?.id, status: paymentIntent?.status };
         });
     }, [stripe, elements, register]);
@@ -164,23 +198,105 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
     // Bumped to re-run the init effect when a PREPARING-phase failure is
     // retried (no session to fall back to, so the whole setup must re-run).
     const [attempt, setAttempt] = useState(0);
-    const confirmRef = useRef<
-        (() => Promise<{ error?: string; paymentIntentId?: string; status?: string }>) | null
-    >(null);
-    const registerConfirm = useCallback(
-        (fn: () => Promise<{ error?: string; paymentIntentId?: string; status?: string }>) => {
-            confirmRef.current = fn;
-        },
-        [],
-    );
+    const confirmRef = useRef<(() => Promise<ConfirmResult>) | null>(null);
+    const registerConfirm = useCallback((fn: () => Promise<ConfirmResult>) => {
+        confirmRef.current = fn;
+    }, []);
 
     const spotIdsKey = spots.map((s) => s.id).join(',');
+    // Teardown must work from the unmount cleanup, which cannot depend on the
+    // changing `spots` prop without re-running (and re-arming) every render.
+    const spotIdsRef = useRef<string[]>([]);
+    spotIdsRef.current = spots.map((s) => s.id);
+    // Payment settled (incl. PromptPay still 'processing') — the group is the
+    // buyer's; closing must never tear it down.
+    const settledRef = useRef(false);
+    const abandonedRef = useRef(false);
+    // A confirm is in flight. Tearing the group down mid-confirm could cancel
+    // the orders for a payment Stripe is about to accept, so teardown waits.
+    const confirmInFlightRef = useRef(false);
+    // The in-flight init, so a dismiss during 'preparing' abandons the orders
+    // that request is still creating instead of racing past them.
+    const initPromiseRef = useRef<Promise<void> | null>(null);
     // Guards the init against re-runs that would mint DUPLICATE pending orders:
     // React StrictMode's double effect invoke, and the sheet being closed and
     // reopened on the same spots (the component stays mounted; the existing
     // session's PaymentIntent is still confirmable). A new spot set or an
     // explicit retry bump gets a fresh key and re-inits.
     const initKeyRef = useRef<string | null>(null);
+
+    /**
+     * Tear the payable group down: CAS-cancel the pending_payment orders this
+     * sheet minted and release the holds behind them. Used on unretryable
+     * failures and on dismissing an unpaid sheet — both used to leave the
+     * board showing the spots as reserved until the hold lapsed.
+     *
+     * Waits on any in-flight init first, so dismissing mid-'preparing'
+     * abandons the orders that request is still creating rather than racing
+     * past them. `keepalive` lets the request outlive an unmount that comes
+     * with a navigation. Best-effort by design — the server side is
+     * CAS-guarded and idempotent, and the hold expires on its own regardless.
+     */
+    const abandonNow = useCallback(async () => {
+        // No init has run for this spot set, so there is no payable group and
+        // no extended hold to undo — the buyer's plain claim-holds are the
+        // board's business, not the sheet's. Also what keeps StrictMode's
+        // simulated mount/unmount from tearing down a group at mount time.
+        if (initKeyRef.current === null) return;
+        if (abandonedRef.current || settledRef.current || confirmInFlightRef.current) return;
+        abandonedRef.current = true;
+        // A later checkout on the same spots must re-init rather than restore
+        // the session that just died with these orders.
+        initKeyRef.current = null;
+        const spotIds = spotIdsRef.current;
+        if (spotIds.length === 0) return;
+        try {
+            await fetch('/api/live/spots/abandon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ spotIds }),
+                keepalive: true,
+            });
+        } catch {
+            // Nothing useful to do — the hold's own expiry is the backstop.
+        }
+    }, []);
+
+    // Callers outside the init wait for it first. The init's own failure path
+    // calls abandonNow directly — awaiting its own promise would deadlock.
+    const abandonGroup = useCallback(async () => {
+        if (abandonedRef.current || settledRef.current) return;
+        try {
+            await initPromiseRef.current;
+        } catch {
+            // An init that threw may still have created orders — abandon anyway.
+        }
+        await abandonNow();
+    }, [abandonNow]);
+
+    // Closing the sheet without paying is an abandon, not a pause: the orders
+    // are cancelled and the spots go back on the board. Only a settled group
+    // closes untouched.
+    const dismiss = useCallback(() => {
+        if (settledRef.current) {
+            onClose();
+            return;
+        }
+        // Either the group was already torn down (hard failure) or it is now —
+        // both end with the spots back on the board, so the parent needs
+        // onReleased, which closes the sheet AND syncs its board state. A bare
+        // onClose would leave the board showing holds that no longer exist.
+        void abandonGroup();
+        onReleased();
+    }, [abandonGroup, onClose, onReleased]);
+
+    // Unmount (route change, viewer teardown) is the same abandon.
+    useEffect(
+        () => () => {
+            void abandonGroup();
+        },
+        [abandonGroup],
+    );
 
     // ─── Open: create orders + PaymentIntent, then load Stripe.js bound to
     //     the seller's connected account. Re-runs if the spot set changes. ───
@@ -194,11 +310,14 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
             return;
         }
         initKeyRef.current = initKey;
+        // A fresh group: nothing settled, nothing abandoned yet.
+        settledRef.current = false;
+        abandonedRef.current = false;
         setPhase({ name: 'preparing' });
         setSession(null);
         setStripeInstance(null);
 
-        (async () => {
+        initPromiseRef.current = (async () => {
             try {
                 const checkoutRes = await fetch('/api/live/spots/checkout', {
                     method: 'POST',
@@ -207,8 +326,9 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 });
                 const checkoutData = await checkoutRes.json();
                 if (!checkoutRes.ok || !checkoutData.success) {
-                    throw new Error(
+                    throw new CheckoutError(
                         checkoutData.error || t('live.payment.startError') || 'Could not start checkout',
+                        checkoutData.code,
                     );
                 }
 
@@ -221,8 +341,9 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 });
                 const piData = await piRes.json();
                 if (!piRes.ok || !piData.client_secret) {
-                    throw new Error(
+                    throw new CheckoutError(
                         piData.error || t('live.payment.startError') || 'Could not start checkout',
+                        piData.code,
                     );
                 }
 
@@ -250,9 +371,19 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 setStripeInstance(stripe);
                 setPhase({ name: 'ready' });
             } catch (err: any) {
+                const hard = isHardFailure(err?.code);
+                if (hard) {
+                    // Try Again cannot fix this — hand the spots straight back
+                    // rather than leave the board reserved behind a dead end.
+                    void abandonNow();
+                }
                 setPhase({
                     name: 'error',
-                    message: err?.message || t('live.payment.startError') || 'Could not start checkout',
+                    message: hard
+                        ? t('live.payment.minCharge') ||
+                          'Minimum purchase is ฿10 — add another spot'
+                        : err?.message || t('live.payment.startError') || 'Could not start checkout',
+                    hard,
                 });
             }
         })();
@@ -268,9 +399,22 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
         const current = session;
         if (!confirm || !current) return;
         setPhase({ name: 'paying' });
+        confirmInFlightRef.current = true;
         const result = await confirm();
+        confirmInFlightRef.current = false;
         if (result.error) {
-            setPhase({ name: 'error', message: result.error });
+            // A decline or a PromptPay timeout leaves the PI re-confirmable,
+            // so the hold and Try Again both stay. Only a hard failure tears
+            // the group down.
+            const hard = isHardFailure(result.code);
+            if (hard) void abandonGroup();
+            setPhase({
+                name: 'error',
+                message: hard
+                    ? t('live.payment.minCharge') || 'Minimum purchase is ฿10 — add another spot'
+                    : result.error,
+                hard,
+            });
             return;
         }
 
@@ -280,9 +424,13 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
             setPhase({
                 name: 'error',
                 message: `${t('live.payment.failed') || 'Payment failed'} (${result.status || 'unknown'})`,
+                hard: false,
             });
             return;
         }
+        // From here the money is the buyer's problem no longer — never let a
+        // close or unmount cancel the group behind a settled payment.
+        settledRef.current = true;
 
         // Finalize flips orders -> paid and spots -> sold. For async methods
         // (PromptPay) the PI is still 'processing', so finalize is expected to
@@ -304,23 +452,21 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
         }
         setPhase({ name: 'success', processingAsync });
         onSuccess();
-    }, [session, onSuccess, t]);
+    }, [session, onSuccess, abandonGroup, t]);
 
     // Failure path: give the buyer their spots back so the board unblocks for
-    // everyone else instead of pinning the hold until it expires.
+    // everyone else instead of pinning the hold until it expires. Goes through
+    // the same abandon teardown as a dismiss, so the pending orders behind the
+    // holds die with them rather than lingering as a chargeable group.
     const handleRelease = useCallback(async () => {
         setReleasing(true);
         try {
-            await Promise.all(
-                spots.map((s) =>
-                    fetch(`/api/live/spots/${s.id}/release`, { method: 'POST' }).catch(() => null),
-                ),
-            );
+            await abandonGroup();
         } finally {
             setReleasing(false);
             onReleased();
         }
-    }, [spots, onReleased]);
+    }, [abandonGroup, onReleased]);
 
     if (!open) return null;
 
@@ -356,7 +502,7 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                             </p>
                         </div>
                         <button
-                            onClick={onClose}
+                            onClick={dismiss}
                             aria-label={t('live.payment.close') || 'Close'}
                             className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-slate-400"
                         >
@@ -468,29 +614,46 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                                 <p className="text-xs text-slate-400 mt-2 leading-relaxed break-words">
                                     {phase.message}
                                 </p>
-                                <div className="mt-5 flex gap-3 justify-center">
-                                    <button
-                                        // A declined PI drops back to requires_payment_method and
-                                        // stays re-confirmable — with a session, retry just remounts
-                                        // Elements on the SAME client_secret. Without one, the whole
-                                        // setup re-runs via the attempt bump.
-                                        onClick={() =>
-                                            session ? setPhase({ name: 'ready' }) : setAttempt((a) => a + 1)
-                                        }
-                                        className="px-5 h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest hover:bg-white transition-all"
-                                    >
-                                        {t('live.payment.retry') || 'Try again'}
-                                    </button>
-                                    <button
-                                        onClick={handleRelease}
-                                        disabled={releasing}
-                                        className="px-5 h-11 rounded-xl bg-white/10 text-slate-300 text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-all disabled:opacity-50"
-                                    >
-                                        {releasing
-                                            ? t('live.payment.processing') || 'Processing...'
-                                            : t('live.payment.release') || 'Release my spots'}
-                                    </button>
-                                </div>
+                                {phase.hard ? (
+                                    // Unretryable: the holds are already released, so
+                                    // Try Again and Release would both be lies.
+                                    <>
+                                        <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">
+                                            {t('live.payment.holdsReleased') ||
+                                                'Your spots have been released'}
+                                        </p>
+                                        <button
+                                            onClick={dismiss}
+                                            className="mt-5 px-6 h-11 rounded-xl bg-white/10 text-white text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-all"
+                                        >
+                                            {t('live.payment.dismiss') || 'Dismiss'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="mt-5 flex gap-3 justify-center">
+                                        <button
+                                            // A declined PI drops back to requires_payment_method and
+                                            // stays re-confirmable — with a session, retry just remounts
+                                            // Elements on the SAME client_secret. Without one, the whole
+                                            // setup re-runs via the attempt bump.
+                                            onClick={() =>
+                                                session ? setPhase({ name: 'ready' }) : setAttempt((a) => a + 1)
+                                            }
+                                            className="px-5 h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest hover:bg-white transition-all"
+                                        >
+                                            {t('live.payment.retry') || 'Try again'}
+                                        </button>
+                                        <button
+                                            onClick={handleRelease}
+                                            disabled={releasing}
+                                            className="px-5 h-11 rounded-xl bg-white/10 text-slate-300 text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-all disabled:opacity-50"
+                                        >
+                                            {releasing
+                                                ? t('live.payment.processing') || 'Processing...'
+                                                : t('live.payment.release') || 'Release my spots'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

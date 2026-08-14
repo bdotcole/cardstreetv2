@@ -158,6 +158,32 @@ export interface LiveSpotRow {
     assigned_entity?: string | null;
 }
 
+/**
+ * Stripe's minimum chargeable amount in THB is ฿10.00 (1000 satang); a
+ * PaymentIntent below it is rejected outright with `amount_too_small`. Spot
+ * batches carry no shipping fee to lift a cheap lot over the line the way a
+ * marketplace order does, so a single ฿1 spot is unchargeable — the floor has
+ * to be enforced by us, at lot creation and again at checkout, or the buyer
+ * meets Stripe's raw error at the payment sheet.
+ *
+ * The break_spots CHECK constraint stays at >= 100 satang deliberately: this
+ * is a route-level floor, so raising it later needs no migration.
+ */
+export const MIN_CHARGE_SATANG = 1000;
+
+/**
+ * How long a hold is extended for once the buyer commits to paying (order
+ * creation). The 180s claim hold is sized for browsing the board; PromptPay
+ * approval routinely outruns it, so the payment window gets its own budget.
+ * Five minutes is the product call: long enough for a QR approval, short
+ * enough that an abandoned sheet doesn't strand a spot for the whole break.
+ *
+ * The client never re-derives this — countdowns render from the server's
+ * `hold_expires_at`, so this constant has exactly one consumer and the UI
+ * cannot drift out of sync with it.
+ */
+export const CHECKOUT_HOLD_SECONDS = 300;
+
 export interface LiveBulkTier {
     qty: number;
     discountPct: number;
