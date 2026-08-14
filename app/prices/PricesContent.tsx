@@ -267,10 +267,13 @@ const TH: Strings = {
   faqLink: 'คำถามที่พบบ่อย',
 };
 
-export default function PricesContent() {
+// `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
+// — never from the cs_lang cookie. isThai still selects the copy, but a visitor
+// on the bare Thai URL with an English UI must not be handed /en links on a
+// Thai-canonical page. Links follow the URL; that rule was set in 8f6a342.
+export default function PricesContent({ prefix }: { prefix: string }) {
   const { isThai } = useTranslation();
   const t = isThai ? TH : EN;
-  const prefix = isThai ? '' : '/en';
 
   return (
     <div className="min-h-screen bg-brand-darker text-white p-6 pb-24 overflow-y-auto">

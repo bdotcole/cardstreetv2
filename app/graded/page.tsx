@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import GradedContent from './GradedContent';
+import { GRADED_HOWTO } from './howToSteps';
 
 // Graded-cards landing page.
 //
@@ -25,16 +26,16 @@ export async function generateMetadata(): Promise<Metadata> {
             ? 'ราคาการ์ดเกรด PSA BGS CGC — เช็คราคาการ์ดโปเกม่อนเกรด | CardStreet'
             : 'Graded Card Prices — PSA, BGS, CGC & SGC in Thailand | CardStreet',
         description: isThai
-            ? 'เช็คราคาการ์ดเกรด PSA, BGS, CGC และ SGC กว่า 200,000 รายการ อัปเดตทุกวัน แสดงเป็นเงินบาท พร้อมเครื่องมือประเมินเกรดด้วย AI จากรูปถ่าย สำหรับนักสะสมการ์ดโปเกม่อนและการ์ดสะสมอื่นในไทย'
-            : 'Check graded card prices for PSA, BGS, CGC and SGC — over 200,000 graded prices, updated daily and shown in Thai baht, plus an AI tool that estimates a card’s grade from a photo.',
+            ? 'เช็คราคาการ์ดเกรด PSA, BGS, CGC และ SGC กว่า 230,000 รายการ อัปเดตทุกวัน แสดงเป็นเงินบาท พร้อมเครื่องมือประเมินเกรดด้วย AI จากรูปถ่าย สำหรับนักสะสมการ์ดโปเกม่อนและการ์ดสะสมอื่นในไทย'
+            : 'Check graded card prices for PSA, BGS, CGC and SGC — over 230,000 graded prices, updated daily and shown in Thai baht, plus an AI tool that estimates a card’s grade from a photo.',
         alternates: buildAlternates('/graded', pathLocale),
         openGraph: {
             title: isThai
                 ? 'ราคาการ์ดเกรด PSA, BGS, CGC และ SGC | CardStreet'
                 : 'Graded Card Prices — PSA, BGS, CGC and SGC | CardStreet',
             description: isThai
-                ? 'ราคาการ์ดเกรดกว่า 200,000 รายการ อัปเดตทุกวัน แสดงเป็นเงินบาท พร้อมเครื่องมือประเมินเกรดด้วย AI'
-                : 'Over 200,000 graded card prices, updated daily and shown in Thai baht, plus an AI grade estimator.',
+                ? 'ราคาการ์ดเกรดกว่า 230,000 รายการ อัปเดตทุกวัน แสดงเป็นเงินบาท พร้อมเครื่องมือประเมินเกรดด้วย AI'
+                : 'Over 230,000 graded card prices, updated daily and shown in Thai baht, plus an AI grade estimator.',
             type: 'website',
             siteName: 'CardStreet',
             url: localizedUrl('/graded', pathLocale),
@@ -112,16 +113,48 @@ function buildFaqJsonLd(isThai: boolean): Record<string, unknown> {
     };
 }
 
+/**
+ * HowTo structured data for the ส่งเกรด / graded-price intent.
+ *
+ * Scoped to CHECKING a graded price, never to submitting one — CardStreet has
+ * no grading submission service, and a HowTo named "how to submit" would imply
+ * one to an answer engine quoting it.
+ *
+ * Steps are imported from GradedContent, not retyped, so the structured data
+ * cannot drift from the visible copy.
+ */
+function buildHowToJsonLd(isThai: boolean): Record<string, unknown> {
+    const { title, steps } = isThai ? GRADED_HOWTO.th : GRADED_HOWTO.en;
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'HowTo',
+        inLanguage: isThai ? 'th-TH' : 'en-TH',
+        name: title,
+        url: localizedUrl('/graded', isThai ? 'th' : 'en'),
+        step: steps.map((s, i) => ({
+            '@type': 'HowToStep',
+            position: i + 1,
+            name: s.t,
+            text: s.d,
+        })),
+    };
+}
+
 export default async function GradedPage() {
-    const isThai = (await requestPathLocale()) === 'th';
+    const pathLocale = await requestPathLocale();
+    const isThai = pathLocale === 'th';
 
     return (
         <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildFaqJsonLd(isThai)) }}
-            />
-            <GradedContent />
+            {[buildHowToJsonLd(isThai), buildFaqJsonLd(isThai)].map((block) => (
+                <script
+                    key={block['@type'] as string}
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
+                />
+            ))}
+            {/* Links follow the URL prefix, never the cs_lang cookie. */}
+            <GradedContent prefix={localePrefix(pathLocale)} />
         </>
     );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import PricesContent from './PricesContent';
 
 // Price-check landing page.
@@ -164,7 +164,8 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
 }
 
 export default async function PricesPage() {
-    const isThai = (await requestPathLocale()) === 'th';
+    const pathLocale = await requestPathLocale();
+    const isThai = pathLocale === 'th';
 
     return (
         <>
@@ -175,7 +176,8 @@ export default async function PricesPage() {
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
                 />
             ))}
-            <PricesContent />
+            {/* Links follow the URL prefix, never the cs_lang cookie. */}
+            <PricesContent prefix={localePrefix(pathLocale)} />
         </>
     );
 }

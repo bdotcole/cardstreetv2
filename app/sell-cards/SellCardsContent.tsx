@@ -3,6 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+// Single-sourced with the HowTo JSON-LD in page.tsx. See howToSteps.ts for why
+// it is a separate module and not an export from this one.
+import { SELL_HOWTO } from './howToSteps';
 
 // Public "sell your cards" landing. /sell is the auth-gated, noindex listing
 // form and stays that way — this is the crawlable page that makes the case.
@@ -33,7 +36,16 @@ interface Strings {
   paidTitle: string;
   paid: string[];
   startTitle: string;
+  /** Mirrored verbatim into HowTo JSON-LD by app/sell-cards/page.tsx. */
   steps: { t: string; d: string }[];
+  priceTitle: string;
+  price: string[];
+  condTitle: string;
+  condLead: string;
+  conds: { t: string; d: string }[];
+  condAfter: string;
+  mistakesTitle: string;
+  mistakes: { t: string; d: string }[];
   whatTitle: string;
   what: string;
   regionTitle: string;
@@ -68,20 +80,33 @@ const EN: Strings = {
     'When someone buys your card, the full amount — item price plus shipping — lands in your connected Stripe account, less the fees above. Stripe then pays it out to your bank on that account’s normal payout schedule.',
     'You can see every sale in your own Stripe dashboard.',
   ],
-  startTitle: 'How to start',
-  steps: [
-    {
-      t: 'Create an account and verify your identity',
-      d: 'CardStreet pays out through Stripe, so Stripe needs to verify you — a Thai ID and bank account. It is a one-time step that takes a few minutes, and it has to be finished before you can be paid.',
-    },
-    {
-      t: 'List a card',
-      d: 'Search for the card or scan it with your camera, pick its condition, add your own photos, and set a price using the market price shown as a reference.',
-    },
-    {
-      t: 'Pack and ship',
-      d: 'When it sells you get a Flash Express label. Pack the card in a small padded mailer and pay Flash when they collect it — covered by the shipping the buyer already paid you. Oversized boxes cost more, and the extra is on you.',
-    },
+  startTitle: SELL_HOWTO.en.title,
+  steps: SELL_HOWTO.en.steps,
+  priceTitle: 'How to price a card so it actually sells',
+  price: [
+    'The market price on CardStreet is a reference, not a rule. You can list above or below it — just know why you are. A card in better-than-usual condition, with clear photos of the actual card, or one that is genuinely hard to find in Thailand, will support a higher price. Listing high simply to make more usually ends with the card sitting there.',
+    'The thing new sellers miss most often: the market price you see is for a Near Mint copy. A card with whitened edges, soft corners or surface marks should be priced below it and described honestly. Overstating condition leads to disputes after the sale, and those cost both sides far more time than the extra baht was worth.',
+    'Before you set a price, open that card’s page and see how many copies are already listed and at what price. When several are listed, buyers sort by price almost every time. When none are, you have more freedom — but the market price is still the number to anchor to.',
+  ],
+  condTitle: 'Picking the right condition',
+  condLead: 'CardStreet uses the same condition scale as the international card market. Getting it right up front beats being challenged later:',
+  conds: [
+    { t: 'Mint (M)', d: 'As it came out of the pack — no flaw even under a light. Very few cards genuinely qualify.' },
+    { t: 'Near Mint (NM)', d: 'Looks new at a glance; maybe a tiny edge or corner flaw up close. This is the most traded condition, and the one the market price refers to.' },
+    { t: 'Lightly Played (LP)', d: 'Light wear is visible — slight edge whitening or a faint surface mark — but it still presents well.' },
+    { t: 'Moderately Played (MP)', d: 'Flaws are obvious without looking closely: whitened edges, soft corners, scratches.' },
+    { t: 'Heavily Played (HP)', d: 'Heavy wear — creases, bends, or damage across a large part of the surface.' },
+    { t: 'Damaged (D)', d: 'Tears, water damage, or damage severe enough that the card is not playable.' },
+  ],
+  condAfter:
+    'When you are torn between two grades, pick the lower one and post clear photos of the actual card. No buyer has ever complained about receiving a card in better condition than described.',
+  mistakesTitle: 'Common mistakes when selling',
+  mistakes: [
+    { t: 'Using a stock image instead of the actual card', d: 'Collectors look at photos to judge condition, not to find out what the card looks like. Real photos of the front and back answer more questions than a paragraph of description.' },
+    { t: 'Not finishing Stripe verification', d: 'You can list before it is done, but until it is finished the money cannot reach you. Getting it out of the way before anything sells is far less stressful.' },
+    { t: 'Packing in a plain envelope', d: 'A card should always go in a sleeve plus a rigid backer or a padded mailer. A few baht of packaging is cheaper than a card that arrives bent — every time.' },
+    { t: 'Forgetting there are two fees', d: 'What reaches your account is the item price less the CardStreet fee and less Stripe’s processing fee. Both are stated at the top of this page. Factor them in when you set the price.' },
+    { t: 'Setting a price once and leaving it', d: 'Market prices move daily. A card priced two months ago may now be well above or below the market. Come back and review your own listings periodically.' },
   ],
   whatTitle: 'What you can sell',
   what:
@@ -119,20 +144,33 @@ const TH: Strings = {
     'เมื่อมีคนซื้อการ์ดของคุณ ยอดเต็ม (ค่าการ์ดบวกค่าจัดส่ง) จะเข้าบัญชี Stripe ที่คุณเชื่อมไว้ทันที หักค่าธรรมเนียมข้างต้น จากนั้น Stripe จะโอนเข้าบัญชีธนาคารของคุณตามรอบการจ่ายเงินปกติของบัญชีนั้น',
     'คุณจะเห็นยอดขายทั้งหมดได้ในแดชบอร์ด Stripe ของคุณเอง',
   ],
-  startTitle: 'เริ่มขายยังไง',
-  steps: [
-    {
-      t: 'สมัครบัญชีและยืนยันตัวตน',
-      d: 'CardStreet จ่ายเงินผ่าน Stripe จึงต้องยืนยันตัวตนกับ Stripe ก่อน ใช้บัตรประชาชนและบัญชีธนาคารไทย ขั้นตอนนี้ทำครั้งเดียว ใช้เวลาไม่กี่นาที และต้องทำให้เสร็จก่อนจึงจะรับเงินได้',
-    },
-    {
-      t: 'ลงขายการ์ด',
-      d: 'ค้นหาการ์ดที่จะขายหรือสแกนด้วยกล้อง เลือกสภาพการ์ด ใส่รูปถ่ายจริง แล้วตั้งราคาโดยดูราคาตลาดที่ระบบแสดงไว้เป็นตัวอ้างอิง',
-    },
-    {
-      t: 'แพ็คและส่ง',
-      d: 'เมื่อขายได้ ระบบออกใบปะหน้า Flash Express ให้ แพ็คการ์ดใส่ซองกันกระแทก แล้วจ่ายค่าส่งให้ Flash ตอนเข้ารับพัสดุ ซึ่งเป็นเงินค่าจัดส่งที่ผู้ซื้อจ่ายมาแล้ว หากใช้กล่องขนาดใหญ่เกิน ค่าส่งส่วนต่างเป็นของผู้ขาย',
-    },
+  startTitle: SELL_HOWTO.th.title,
+  steps: SELL_HOWTO.th.steps,
+  priceTitle: 'ตั้งราคายังไงให้ขายได้',
+  price: [
+    'ราคาตลาดบน CardStreet เป็นตัวอ้างอิง ไม่ใช่ราคาบังคับ คุณตั้งสูงกว่าหรือต่ำกว่าก็ได้ แต่ควรรู้ว่ากำลังตั้งต่างจากตลาดเพราะอะไร การ์ดสภาพดีกว่าปกติ มีรูปถ่ายจริงชัดเจน หรือเป็นใบที่หายากในไทย เป็นเหตุผลที่ตั้งสูงกว่าได้จริง ส่วนการตั้งสูงกว่าเพราะอยากได้กำไรมากขึ้นเฉย ๆ มักจบลงที่การ์ดค้างอยู่นาน',
+    'สิ่งที่คนขายมือใหม่มองข้ามบ่อยที่สุดคือ ราคาตลาดที่เห็นเป็นราคาของการ์ดสภาพ Near Mint การ์ดที่มีขอบขาว มุมทู่ หรือรอยบนผิว ควรตั้งต่ำกว่านั้นและระบุสภาพตามจริง การระบุสภาพเกินจริงทำให้เกิดข้อโต้แย้งหลังขาย ซึ่งเสียเวลาทั้งสองฝ่ายมากกว่าส่วนต่างราคาที่ได้เพิ่ม',
+    'ก่อนตั้งราคา ลองเปิดหน้าการ์ดใบนั้นดูว่ามีคนลงขายอยู่กี่ใบและราคาเท่าไหร่ ถ้ามีหลายใบ ผู้ซื้อจะเรียงตามราคาเกือบทุกครั้ง ถ้ายังไม่มีใครลงขายเลย คุณมีอิสระในการตั้งราคามากกว่า แต่ก็ควรอิงราคาตลาดไว้เป็นหลักอยู่ดี',
+  ],
+  condTitle: 'เลือกสภาพการ์ดให้ตรง',
+  condLead: 'CardStreet ใช้มาตรฐานสภาพเดียวกับตลาดการ์ดสากล เลือกให้ตรงตั้งแต่แรกดีกว่าถูกทักทีหลัง:',
+  conds: [
+    { t: 'Mint (M)', d: 'สภาพเหมือนเพิ่งแกะจากซอง ไม่มีตำหนิใด ๆ แม้ส่องไฟ ใบที่เข้าข่ายจริงมีน้อยมาก' },
+    { t: 'Near Mint (NM)', d: 'ดูเผิน ๆ เหมือนใหม่ อาจมีตำหนิเล็กน้อยมากที่ขอบหรือมุมเมื่อส่องดูใกล้ ๆ เป็นสภาพที่ซื้อขายกันมากที่สุด และเป็นสภาพที่ราคาตลาดอ้างอิง' },
+    { t: 'Lightly Played (LP)', d: 'เห็นร่องรอยการใช้งานเบา ๆ ขอบเริ่มขาวเล็กน้อยหรือมีรอยบนผิวบาง ๆ แต่ยังดูดีอยู่' },
+    { t: 'Moderately Played (MP)', d: 'เห็นตำหนิชัดเจนโดยไม่ต้องส่อง ขอบขาว มุมทู่ หรือมีรอยขีดข่วน' },
+    { t: 'Heavily Played (HP)', d: 'ตำหนิหนัก มีรอยพับ รอยงอ หรือผิวเสียหายเป็นบริเวณกว้าง' },
+    { t: 'Damaged (D)', d: 'ฉีก ขาด มีน้ำเข้า หรือเสียหายจนไม่อยู่ในสภาพเล่นได้' },
+  ],
+  condAfter:
+    'ถ้าลังเลระหว่างสองระดับ ให้เลือกระดับที่ต่ำกว่าและใส่รูปถ่ายจริงให้ชัด ผู้ซื้อที่ได้การ์ดสภาพดีกว่าที่ระบุไว้ไม่เคยร้องเรียน',
+  mistakesTitle: 'ข้อผิดพลาดที่พบบ่อยตอนขายการ์ด',
+  mistakes: [
+    { t: 'ใช้รูปจากอินเทอร์เน็ตแทนรูปการ์ดจริง', d: 'ผู้ซื้อการ์ดสะสมดูรูปเพื่อตรวจสภาพ ไม่ใช่เพื่อดูว่าการ์ดหน้าตาเป็นยังไง ประกาศที่ใช้รูปจริงทั้งด้านหน้าและด้านหลังตอบคำถามได้มากกว่าคำบรรยายทั้งย่อหน้า' },
+    { t: 'ยังไม่ยืนยันตัวตนกับ Stripe ให้เสร็จ', d: 'ลงขายได้ก่อนก็จริง แต่ถ้ายังยืนยันไม่เสร็จ เงินจะยังไม่เข้าบัญชีคุณ ทำให้จบตั้งแต่ตอนที่ยังไม่มีคนซื้อจะสบายใจกว่ามาก' },
+    { t: 'แพ็คด้วยซองธรรมดา', d: 'การ์ดควรอยู่ในซองใสและกระดาษแข็งหรือซองกันกระแทกเสมอ ค่าซองไม่กี่บาทถูกกว่าการ์ดที่งอระหว่างทางเสมอ' },
+    { t: 'ลืมว่ามีค่าธรรมเนียมสองส่วน', d: 'ยอดที่เข้าบัญชีคือราคาการ์ดหักค่าธรรมเนียม CardStreet และหักค่าธรรมเนียมการชำระเงินของ Stripe ทั้งสองส่วนระบุไว้ด้านบนของหน้านี้แล้ว คิดเผื่อไว้ตั้งแต่ตอนตั้งราคา' },
+    { t: 'ตั้งราคาครั้งเดียวแล้วปล่อยทิ้งไว้', d: 'ราคาตลาดเปลี่ยนทุกวัน การ์ดที่ตั้งไว้เมื่อสองเดือนก่อนอาจแพงหรือถูกกว่าตลาดไปมากแล้ว กลับมาดูประกาศของตัวเองเป็นระยะ' },
   ],
   whatTitle: 'ขายอะไรได้บ้าง',
   what:
@@ -146,10 +184,13 @@ const TH: Strings = {
   faqLink: 'คำถามที่พบบ่อย',
 };
 
-export default function SellCardsContent() {
+// `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
+// — never from the cs_lang cookie. isThai still selects the copy, but a visitor
+// on the bare Thai URL with an English UI must not be handed /en links on a
+// Thai-canonical page. Links follow the URL; that rule was set in 8f6a342.
+export default function SellCardsContent({ prefix }: { prefix: string }) {
   const { isThai } = useTranslation();
   const t = isThai ? TH : EN;
-  const prefix = isThai ? '' : '/en';
 
   return (
     <div className="min-h-screen bg-brand-darker text-white p-6 pb-24 overflow-y-auto">
@@ -210,6 +251,9 @@ export default function SellCardsContent() {
           </p>
         ))}
 
+        {/* These steps are mirrored verbatim into HowTo JSON-LD via SELL_HOWTO
+            in app/sell-cards/page.tsx — they were already written as a how-to
+            and simply were not marked up. */}
         <h2 className="text-lg font-black uppercase tracking-tight mb-3 mt-12">{t.startTitle}</h2>
         <ol className="space-y-4 mb-12">
           {t.steps.map((s, i) => (
@@ -221,6 +265,35 @@ export default function SellCardsContent() {
             </li>
           ))}
         </ol>
+
+        <h2 className="text-lg font-black uppercase tracking-tight mb-3">{t.priceTitle}</h2>
+        {t.price.map((p) => (
+          <p key={p.slice(0, 24)} className="text-sm text-slate-300 leading-relaxed mb-3">
+            {p}
+          </p>
+        ))}
+
+        <h2 className="text-lg font-black uppercase tracking-tight mb-3 mt-12">{t.condTitle}</h2>
+        <p className="text-sm text-slate-300 leading-relaxed mb-4">{t.condLead}</p>
+        <ul className="space-y-4 mb-4">
+          {t.conds.map((c) => (
+            <li key={c.t} className="glass rounded-2xl border border-white/10 p-5">
+              <p className="text-sm font-bold text-brand-cyan mb-1">{c.t}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{c.d}</p>
+            </li>
+          ))}
+        </ul>
+        <p className="text-sm text-slate-300 leading-relaxed mb-12">{t.condAfter}</p>
+
+        <h2 className="text-lg font-black uppercase tracking-tight mb-3">{t.mistakesTitle}</h2>
+        <ul className="space-y-4 mb-12">
+          {t.mistakes.map((m) => (
+            <li key={m.t} className="glass rounded-2xl border border-white/10 p-5">
+              <p className="text-sm font-bold text-brand-cyan mb-1">{m.t}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{m.d}</p>
+            </li>
+          ))}
+        </ul>
 
         <h2 className="text-lg font-black uppercase tracking-tight mb-3">{t.whatTitle}</h2>
         <p className="text-sm text-slate-300 leading-relaxed mb-12">{t.what}</p>

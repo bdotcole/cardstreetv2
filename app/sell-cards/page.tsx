@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellCardsContent from './SellCardsContent';
+import { SELL_HOWTO } from './howToSteps';
 
 // Public "sell your cards" landing, targeting ขายการ์ดโปเกมอน / รับซื้อการ์ด /
 // ขายการ์ดที่ไหนดี. Nothing crawlable made the case for selling before this:
@@ -108,16 +109,46 @@ function buildFaqJsonLd(isThai: boolean): Record<string, unknown> {
     };
 }
 
+/**
+ * HowTo structured data for the ขายการ์ด intent.
+ *
+ * The visible "how to start" steps were already written as a how-to and simply
+ * were not marked up. Steps are imported from SellCardsContent rather than
+ * retyped, so the structured data cannot drift from the rendered copy.
+ */
+function buildHowToJsonLd(isThai: boolean): Record<string, unknown> {
+    const { title, steps } = isThai ? SELL_HOWTO.th : SELL_HOWTO.en;
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'HowTo',
+        inLanguage: isThai ? 'th-TH' : 'en-TH',
+        name: isThai ? 'วิธีขายการ์ดสะสมบน CardStreet' : 'How to sell trading cards on CardStreet',
+        description: title,
+        url: localizedUrl('/sell-cards', isThai ? 'th' : 'en'),
+        step: steps.map((s, i) => ({
+            '@type': 'HowToStep',
+            position: i + 1,
+            name: s.t,
+            text: s.d,
+        })),
+    };
+}
+
 export default async function SellCardsPage() {
-    const isThai = (await requestPathLocale()) === 'th';
+    const pathLocale = await requestPathLocale();
+    const isThai = pathLocale === 'th';
 
     return (
         <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(buildFaqJsonLd(isThai)) }}
-            />
-            <SellCardsContent />
+            {[buildHowToJsonLd(isThai), buildFaqJsonLd(isThai)].map((block) => (
+                <script
+                    key={block['@type'] as string}
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
+                />
+            ))}
+            {/* Links follow the URL prefix, never the cs_lang cookie. */}
+            <SellCardsContent prefix={localePrefix(pathLocale)} />
         </>
     );
 }
