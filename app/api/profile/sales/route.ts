@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
                 status,
                 created_at,
                 completed_at,
+                transfer_group,
                 listing:listings(
                     id,
                     card_data,

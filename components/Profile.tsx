@@ -25,6 +25,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { groupByTransferGroup } from '@/lib/orderGroups';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -116,6 +117,9 @@ interface Order {
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
+  // One row per listing; a multi-item checkout shares one transfer_group
+  // (one payment, one parcel). The panels render one card per group.
+  transfer_group?: string | null;
   listing: {
     card_data: any;
     condition: string;
@@ -137,6 +141,7 @@ interface Sale {
   id: string;
   total_amount: number;
   platform_fee: number;
+  transfer_group?: string | null;
   // Only set once an order is completed; null for paid/shipped/etc. Fall back
   // to created_at when rendering so a null never becomes `new Date(null)` = epoch.
   completed_at: string | null;
@@ -316,8 +321,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
 
-  // Modal states
-  const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
+  // Modal states. Confirm-delivery works on a whole transfer group (a
+  // multi-item purchase arrives as one parcel), so the modal holds every
+  // order id in the group; the review itself rides only the first.
+  const [reviewModalOrderIds, setReviewModalOrderIds] = useState<string[] | null>(null);
   // Seller-side delivery tracking. Holds the order id whose tracking timeline
   // is open in the full-screen tracking modal — reached from a pending
   // shipment card or from the "Track Order" affordance on the label-saved
@@ -459,7 +466,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const fetchOrders = async (): Promise<Order[]> => {
     setOrdersError(null);
     try {
-      const res = await fetch('/api/profile/orders?status=active', {
+      // limit=50 (was the 10-row default) so a multi-item purchase's rows
+      // can't be clipped at the page boundary and render as a partial group.
+      const res = await fetch('/api/profile/orders?status=active&limit=50', {
         // Capacitor mobile webview sometimes doesn't include cookies on
         // same-origin requests by default — force it so the session is
         // attached on iOS/Android builds.
@@ -519,7 +528,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   const fetchSales = async () => {
     try {
-      const res = await fetch('/api/profile/sales');
+      const res = await fetch('/api/profile/sales?limit=50');
       if (res.ok) {
         const data = await res.json();
         setSales(data.sales);
@@ -532,7 +541,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   const fetchShipments = async () => {
     try {
-      const res = await fetch('/api/profile/shipments');
+      const res = await fetch('/api/profile/shipments?limit=50');
       if (res.ok) {
         const data = await res.json();
         setShipments(data.shipments);
@@ -543,18 +552,22 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   };
 
   // Swipe-to-dismiss on a delivered/completed shipment card. Optimistic:
-  // the card animates out immediately; on failure the list is refetched so
-  // the card comes back rather than silently staying "cleared" locally only.
-  const clearShipment = async (orderId: string) => {
-    setShipments((prev) => prev.filter((s) => s.id !== orderId));
+  // the cards animate out immediately; on failure the list is refetched so
+  // they come back rather than silently staying "cleared" locally only.
+  // Takes the whole transfer group — one swipe dismisses the parcel, and the
+  // clear endpoint stamps seller_cleared_at per order row.
+  const clearShipments = async (orderIds: string[]) => {
+    setShipments((prev) => prev.filter((s) => !orderIds.includes(s.id)));
     try {
-      const res = await fetch('/api/profile/shipments/clear', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ orderId }),
-      });
-      if (!res.ok) throw new Error();
+      const results = await Promise.all(orderIds.map((orderId) =>
+        fetch('/api/profile/shipments/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ orderId }),
+        })
+      ));
+      if (results.some((res) => !res.ok)) throw new Error();
     } catch {
       showToast(t('profile.shipmentClearFailed'), 'error');
       fetchShipments();
@@ -709,32 +722,45 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     setLabelModal({ orderId: null, savedUri: null, savedFilename: null, loading: false, error: null });
   };
 
-  const handleCompleteOrder = (orderId: string) => {
-    setReviewModalOrderId(orderId);
+  const handleCompleteOrder = (orderIds: string[]) => {
+    setReviewModalOrderIds(orderIds);
     setReviewScore(5);
     setReviewComment('');
   };
 
   const executeCompleteOrder = async () => {
-    if (!reviewModalOrderId) return;
+    if (!reviewModalOrderIds || reviewModalOrderIds.length === 0) return;
     setIsProcessingAction(true);
     try {
-      const res = await fetch('/api/orders/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: reviewModalOrderId,
-          reviewScore: reviewScore || null,
-          reviewComment
-        })
-      });
+      // Complete every order in the transfer group (the buyer received one
+      // parcel). The review rides only the first order — one purchase, one
+      // review — so a five-item group doesn't mint five identical ratings.
+      let firstError: string | null = null;
+      let completedAny = false;
+      for (let i = 0; i < reviewModalOrderIds.length; i++) {
+        const res = await fetch('/api/orders/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: reviewModalOrderIds[i],
+            reviewScore: i === 0 ? (reviewScore || null) : null,
+            reviewComment: i === 0 ? reviewComment : ''
+          })
+        });
+        if (res.ok) {
+          completedAny = true;
+        } else if (!firstError) {
+          const data = await res.json().catch(() => ({}));
+          firstError = data.error || `Server returned ${res.status}`;
+        }
+      }
 
-      if (res.ok) {
-        setReviewModalOrderId(null);
+      if (completedAny) {
+        setReviewModalOrderIds(null);
         fetchOrders(); // Refresh
-      } else {
-        const data = await res.json();
-        showToast('Failed: ' + data.error, 'error');
+      }
+      if (firstError) {
+        showToast('Failed: ' + firstError, 'error');
       }
     } catch (error) {
       console.error('Error completing order:', error);
@@ -1490,43 +1516,61 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     )}
                   </div>
                 ) : (
-                  orders.map((order) => (
+                  // One card per checkout: a multi-item purchase is one payment
+                  // and one parcel (see lib/orderGroups), so its rows render as
+                  // item lines inside a single card with one shared timeline.
+                  groupByTransferGroup(orders).map((group) => {
+                    const order = group[0];
+                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                    return (
                     <div key={order.id} className="glass p-4 rounded-2xl border border-white/5 space-y-4">
-                      {/* Order Header */}
-                      <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                          {order.listing?.card_data?.images?.small && (
-                            <img
-                              src={getThumbnailUrl(order.listing.card_data.images.small)}
-                              alt="Card"
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-full object-cover"
-                            />
-                          )}
+                      {/* Order Header — one row per item in the parcel */}
+                      {group.map((item) => (
+                        <div key={item.id} className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                            {item.listing?.card_data?.images?.small && (
+                              <img
+                                src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                alt="Card"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm truncate">
+                              {item.listing?.card_data?.name || 'Card Order'}
+                            </p>
+                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                            <p className="text-brand-cyan font-bold text-sm mt-1">฿{item.total_amount?.toLocaleString()}</p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-semibold text-sm truncate">
-                            {order.listing?.card_data?.name || 'Card Order'}
-                          </p>
-                          <p className="text-slate-500 text-xs">{order.listing?.condition}</p>
-                          <p className="text-brand-cyan font-bold text-sm mt-1">฿{order.total_amount?.toLocaleString()}</p>
+                      ))}
+
+                      {group.length > 1 && (
+                        <div className="flex items-center justify-between border-t border-white/5 pt-3">
+                          <span className="text-slate-500 text-xs">
+                            {isThai ? `${group.length} รายการ · จัดส่งเป็นพัสดุเดียว` : `${group.length} items · ships as one parcel`}
+                          </span>
+                          <span className="text-brand-cyan font-bold text-sm">฿{groupTotal.toLocaleString()}</span>
                         </div>
-                      </div>
+                      )}
 
                       <OrderTrackingTimeline order={order} isThai={isThai} />
 
-                      {/* Buyer Action required */}
+                      {/* Buyer Action required — confirms the whole parcel */}
                       {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (
                         <button
-                          onClick={() => handleCompleteOrder(order.id)}
+                          onClick={() => handleCompleteOrder(group.map((o) => o.id))}
                           className="w-full h-10 mt-2 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors"
                         >
                           {isThai ? 'ยืนยันการรับพัสดุและรีวิว' : 'Confirm Delivery & Review'}
                         </button>
                       )}
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1620,7 +1664,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     <p className="text-slate-500 text-sm">{t('profile.noSalesYet')}</p>
                   </div>
                 ) : (
-                  sales.map((sale) => (
+                  // One card per checkout (transfer group) — a multi-item sale
+                  // lists its items with a combined net at the foot.
+                  groupByTransferGroup(sales).map((group) => {
+                    const sale = group[0];
+                    const netFor = (s: Sale) => s.total_amount - (s.platform_fee || 0);
+                    const saleDate = new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US');
+                    if (group.length === 1) {
+                      return (
                     <div key={sale.id} className="glass p-3 rounded-2xl border border-white/5 flex items-center gap-3">
                       <div className="w-14 h-14 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
                         {sale.listing?.card_data?.images?.small && (
@@ -1640,13 +1691,48 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                         <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-brand-green font-bold">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
-                        <p className="text-slate-600 text-[10px]">
-                          {new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}
-                        </p>
+                        <p className="text-brand-green font-bold">+฿{netFor(sale).toLocaleString()}</p>
+                        <p className="text-slate-600 text-[10px]">{saleDate}</p>
                       </div>
                     </div>
-                  ))
+                      );
+                    }
+                    return (
+                      <div key={sale.id} className="glass p-3 rounded-2xl border border-white/5 space-y-2">
+                        {group.map((item) => (
+                          <div key={item.id} className="flex items-center gap-3">
+                            <div className="w-14 h-14 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                              {item.listing?.card_data?.images?.small && (
+                                <img
+                                  src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                  alt="Card"
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-semibold text-sm truncate">
+                                {item.listing?.card_data?.name || t('profile.cardSale')}
+                              </p>
+                              <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                            </div>
+                            <p className="text-slate-400 text-xs font-bold">+฿{netFor(item).toLocaleString()}</p>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between border-t border-white/5 pt-2">
+                          <span className="text-slate-500 text-xs">
+                            {isThai ? `${group.length} รายการ · คำสั่งซื้อเดียว` : `${group.length} items · one order`}
+                          </span>
+                          <div className="text-right">
+                            <p className="text-brand-green font-bold">+฿{group.reduce((sum, s) => sum + netFor(s), 0).toLocaleString()}</p>
+                            <p className="text-slate-600 text-[10px]">{saleDate}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1680,11 +1766,26 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
-                  {shipments.map((shipment) => {
+                  {groupByTransferGroup(shipments).map((group) => {
+                    // One card per checkout: the group's rows ship as a single
+                    // Flash parcel under one waybill (see lib/fulfillOrder), so
+                    // it gets one status, one label, one swipe. `shipment` is
+                    // the primary order — the same row fulfillment keys the
+                    // label to — and its id drives the label/track actions.
+                    const shipment = group[0];
                     // Finished shipments stay in the panel as a delivery
                     // notice until the seller swipes them away (see
-                    // clearShipment). Active ones can't be dismissed.
+                    // clearShipments). Active ones can't be dismissed.
                     const isDeliveredCard = ['delivered', 'completed'].includes(shipment.status);
+                    const statusLine = (
+                      <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
+                        {/* 'completed' reads "Delivered" here — in a shipping
+                            panel the parcel state is what matters; the
+                            escrow-side "Completed" label lives in Sales
+                            History. */}
+                        {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${shipment.status === 'completed' ? 'delivered' : shipment.status.toLowerCase()}`) || shipment.status.replace('_', ' ')}</span>
+                      </p>
+                    );
                     return (
                     <motion.div
                       key={shipment.id}
@@ -1696,38 +1797,42 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       dragMomentum={false}
                       onDragEnd={(_, info) => {
                         if (isDeliveredCard && (Math.abs(info.offset.x) > 120 || Math.abs(info.velocity.x) > 600)) {
-                          clearShipment(shipment.id);
+                          clearShipments(group.map((s) => s.id));
                         }
                       }}
                       className="glass p-4 rounded-2xl border border-white/5 space-y-4"
                     >
-                      {/* Shipment Header */}
-                      <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                          {shipment.listing?.card_data?.images?.small && (
-                            <img
-                              src={getThumbnailUrl(shipment.listing.card_data.images.small)}
-                              alt="Card"
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-full object-cover"
-                            />
-                          )}
+                      {/* Shipment Header — one row per item in the parcel */}
+                      {group.map((item) => (
+                        <div key={item.id} className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                            {item.listing?.card_data?.images?.small && (
+                              <img
+                                src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                alt="Card"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm truncate">
+                              {item.listing?.card_data?.name || t('profile.cardOrder')}
+                            </p>
+                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                            {group.length === 1 && statusLine}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-semibold text-sm truncate">
-                            {shipment.listing?.card_data?.name || t('profile.cardOrder')}
-                          </p>
-                          <p className="text-slate-500 text-xs">{shipment.listing?.condition}</p>
-                          <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
-                            {/* 'completed' reads "Delivered" here — in a shipping
-                                panel the parcel state is what matters; the
-                                escrow-side "Completed" label lives in Sales
-                                History. */}
-                            {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${shipment.status === 'completed' ? 'delivered' : shipment.status.toLowerCase()}`) || shipment.status.replace('_', ' ')}</span>
-                          </p>
+                      ))}
+                      {group.length > 1 && (
+                        <div className="flex items-end justify-between gap-2">
+                          {statusLine}
+                          <span className="text-slate-500 text-[10px] uppercase tracking-wider pb-1">
+                            {isThai ? `${group.length} รายการ · พัสดุเดียว` : `${group.length} items · one parcel`}
+                          </span>
                         </div>
-                      </div>
+                      )}
 
                       {/* Delivery notice for sellers not opted into push or
                           email — the card lingers here until swiped away. */}
@@ -2040,7 +2145,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           );
         })()}
 
-        {reviewModalOrderId && (
+        {reviewModalOrderIds && (
           <motion.div
             key="review-modal"
             initial={{ opacity: 0 }}
@@ -2060,7 +2165,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   {t('profile.confirmDelivery')}
                 </h3>
                 <button
-                  onClick={() => setReviewModalOrderId(null)}
+                  onClick={() => setReviewModalOrderIds(null)}
                   className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
                 >
                   <i className="fa-solid fa-xmark text-slate-400"></i>

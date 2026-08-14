@@ -652,6 +652,8 @@
             "tabSales": "Sales history",
             "tabOffers": "Offers",
             "noPurchases": "No purchases yet.",
+            "itemsCount": "{count} items",
+            "onePackage": "Ships as one parcel",
             "track": "Track",
             "manual": "Manual handling — support will be in touch",
             "confirmDelivery": "Confirm delivery",

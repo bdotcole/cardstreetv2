@@ -9,6 +9,7 @@ import AuthModal from '@/components/AuthModal';
 import OffersInbox from '@/components/OffersInbox';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import { groupByTransferGroup } from '@/lib/orderGroups';
 
 // OBO best-offer is dark-launched behind this flag; the Offers tab is hidden
 // entirely when off.
@@ -21,6 +22,9 @@ interface OrderRow {
     status: string;
     created_at: string;
     total_amount: number;
+    // One row per listing; a multi-item checkout shares one transfer_group
+    // (one payment, one parcel). Tabs render one row per group.
+    transfer_group?: string | null;
     listing: { card_data: any; condition: string } | null;
     shipping_labels?: {
         tracking_number?: string | null;
@@ -35,6 +39,7 @@ interface SaleRow {
     total_amount: number;
     platform_fee: number;
     completed_at: string;
+    transfer_group?: string | null;
     listing: { card_data: any; condition: string; price: number } | null;
 }
 
@@ -117,8 +122,10 @@ export default function DesktopOrders() {
     const [sales, setSales] = useState<SaleRow[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Confirm-delivery review modal
-    const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
+    // Confirm-delivery review modal. Holds every order id in the purchase's
+    // transfer group (one parcel = one confirmation); the review rides only
+    // the first order so a multi-item group doesn't mint duplicate ratings.
+    const [reviewOrderIds, setReviewOrderIds] = useState<string[] | null>(null);
     const [reviewScore, setReviewScore] = useState(5);
     const [reviewComment, setReviewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
@@ -178,11 +185,11 @@ export default function DesktopOrders() {
                     }
                 }
             } else if (which === 'shipments') {
-                const res = await fetch('/api/profile/shipments');
+                const res = await fetch('/api/profile/shipments?limit=50');
                 const data = await res.json();
                 if (res.ok) setShipments(data.shipments || []);
             } else {
-                const res = await fetch('/api/profile/sales');
+                const res = await fetch('/api/profile/sales?limit=50');
                 const data = await res.json();
                 if (res.ok) setSales(data.sales || []);
             }
@@ -198,17 +205,20 @@ export default function DesktopOrders() {
     }, [user, tab, fetchTab]);
 
     // Dismiss a delivered/completed shipment from the "To ship" tab. Same
-    // semantics as the mobile swipe: stamps seller_cleared_at; the order
-    // stays in Sales History. Optimistic removal with refetch on failure.
-    const clearShipment = async (orderId: string) => {
-        setShipments((prev) => prev.filter((s) => s.id !== orderId));
+    // semantics as the mobile swipe: stamps seller_cleared_at; the orders
+    // stay in Sales History. Takes the whole transfer group (one parcel, one
+    // Clear). Optimistic removal with refetch on failure.
+    const clearShipments = async (orderIds: string[]) => {
+        setShipments((prev) => prev.filter((s) => !orderIds.includes(s.id)));
         try {
-            const res = await fetch('/api/profile/shipments/clear', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId }),
-            });
-            if (!res.ok) throw new Error();
+            const results = await Promise.all(orderIds.map((orderId) =>
+                fetch('/api/profile/shipments/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderId }),
+                })
+            ));
+            if (results.some((res) => !res.ok)) throw new Error();
         } catch {
             showToast(t('desktop.orders.toastClearFailed'), 'error');
             fetchTab('shipments');
@@ -227,21 +237,36 @@ export default function DesktopOrders() {
     };
 
     const submitCompleteOrder = async () => {
-        if (!reviewOrderId) return;
+        if (!reviewOrderIds || reviewOrderIds.length === 0) return;
         setSubmittingReview(true);
         try {
-            const res = await fetch('/api/orders/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId: reviewOrderId, reviewScore: reviewScore || null, reviewComment }),
-            });
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || t('desktop.orders.toastConfirmFailed'));
+            // Complete every order in the transfer group (the buyer received
+            // one parcel); the review rides only the first order.
+            let firstError: string | null = null;
+            let completedAny = false;
+            for (let i = 0; i < reviewOrderIds.length; i++) {
+                const res = await fetch('/api/orders/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: reviewOrderIds[i],
+                        reviewScore: i === 0 ? (reviewScore || null) : null,
+                        reviewComment: i === 0 ? reviewComment : '',
+                    }),
+                });
+                if (res.ok) {
+                    completedAny = true;
+                } else if (!firstError) {
+                    const data = await res.json().catch(() => ({}));
+                    firstError = data.error || t('desktop.orders.toastConfirmFailed');
+                }
             }
-            setReviewOrderId(null);
-            showToast(t('desktop.orders.toastCompleted'), 'success');
-            fetchTab('purchases');
+            if (completedAny) {
+                setReviewOrderIds(null);
+                showToast(t('desktop.orders.toastCompleted'), 'success');
+                fetchTab('purchases');
+            }
+            if (firstError) throw new Error(firstError);
         } catch (err: any) {
             showToast(err.message, 'error');
         } finally {
@@ -312,12 +337,27 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noPurchases')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {orders.map((order) => {
+                                {/* One row per checkout: a multi-item purchase is
+                                    one payment and one parcel (lib/orderGroups),
+                                    so its rows stack as item cells in one row
+                                    with a summed total and a single confirm. */}
+                                {groupByTransferGroup(orders).map((group) => {
+                                    const order = group[0];
                                     const label = order.shipping_labels?.[0];
                                     const canComplete = ['shipped', 'out_for_delivery', 'delivered'].includes(order.status);
+                                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                                     return (
                                         <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                            <CardCell cardData={order.listing?.card_data} condition={order.listing?.condition} />
+                                            <div className="space-y-2 min-w-0">
+                                                {group.map((o) => (
+                                                    <CardCell key={o.id} cardData={o.listing?.card_data} condition={o.listing?.condition} />
+                                                ))}
+                                                {group.length > 1 && (
+                                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
+                                                        {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
+                                                    </p>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-5 flex-wrap">
                                                 {label?.tracking_number && label.tracking_number !== 'MANUAL' && (
                                                     <span className="text-xs text-slate-400">
@@ -339,10 +379,10 @@ export default function DesktopOrders() {
                                                 )}
                                                 <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
                                                 <StatusChip status={order.status} />
-                                                <span className="text-lg font-black text-brand-cyan">{formatTHB(order.total_amount)}</span>
+                                                <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
                                                 {canComplete && (
                                                     <button
-                                                        onClick={() => { setReviewOrderId(order.id); setReviewScore(5); setReviewComment(''); }}
+                                                        onClick={() => { setReviewOrderIds(group.map((o) => o.id)); setReviewScore(5); setReviewComment(''); }}
                                                         className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
                                                     >
                                                         {t('desktop.orders.confirmDelivery')}
@@ -361,21 +401,37 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {shipments.map((order) => {
+                                {/* One row per checkout — the group ships as one
+                                    Flash parcel under one waybill, so it gets one
+                                    label button / one Clear. The primary order's
+                                    id drives both (fulfillment keys the label to
+                                    it); Clear stamps every row in the group. */}
+                                {groupByTransferGroup(shipments).map((group) => {
+                                    const order = group[0];
                                     // Delivered/completed rows linger as a delivery
                                     // notice until cleared — label printing no longer
                                     // applies to them.
                                     const isDelivered = ['delivered', 'completed'].includes(order.status);
+                                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                                     return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                        <CardCell cardData={order.listing?.card_data} condition={order.listing?.condition} />
+                                        <div className="space-y-2 min-w-0">
+                                            {group.map((o) => (
+                                                <CardCell key={o.id} cardData={o.listing?.card_data} condition={o.listing?.condition} />
+                                            ))}
+                                            {group.length > 1 && (
+                                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
+                                                    {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
                                             <StatusChip status={isDelivered ? 'delivered' : order.status} />
-                                            <span className="text-lg font-black text-brand-cyan">{formatTHB(order.total_amount)}</span>
+                                            <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
                                             {isDelivered ? (
                                                 <button
-                                                    onClick={() => clearShipment(order.id)}
+                                                    onClick={() => clearShipments(group.map((o) => o.id))}
                                                     className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
                                                 >
                                                     <i className="fa-solid fa-check mr-2 text-emerald-400"></i>
@@ -403,22 +459,38 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noSales')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {sales.map((sale) => (
+                                {/* One row per checkout — items stack, fee and net
+                                    are summed across the group. */}
+                                {groupByTransferGroup(sales).map((group) => {
+                                    const sale = group[0];
+                                    const feeTotal = group.reduce((sum, s) => sum + (s.platform_fee || 0), 0);
+                                    const netTotal = group.reduce((sum, s) => sum + (s.total_amount || 0) - (s.platform_fee || 0), 0);
+                                    return (
                                     <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                        <CardCell cardData={sale.listing?.card_data} condition={sale.listing?.condition} />
+                                        <div className="space-y-2 min-w-0">
+                                            {group.map((s) => (
+                                                <CardCell key={s.id} cardData={s.listing?.card_data} condition={s.listing?.condition} />
+                                            ))}
+                                            {group.length > 1 && (
+                                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
+                                                    {t('desktop.orders.itemsCount').replace('{count}', String(group.length))}
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">
                                                 {sale.completed_at ? new Date(sale.completed_at).toLocaleDateString() : ''}
                                             </span>
                                             <span className="text-xs text-slate-400">
-                                                {t('desktop.orders.fee')} <span className="text-slate-300 font-bold">{formatTHB(sale.platform_fee || 0)}</span>
+                                                {t('desktop.orders.fee')} <span className="text-slate-300 font-bold">{formatTHB(feeTotal)}</span>
                                             </span>
                                             <span className="text-lg font-black text-emerald-300">
-                                                {formatTHB((sale.total_amount || 0) - (sale.platform_fee || 0))}
+                                                {formatTHB(netTotal)}
                                             </span>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )
                     )}
@@ -441,9 +513,9 @@ export default function DesktopOrders() {
                 </div>
             )}
 
-            {reviewOrderId && (
+            {reviewOrderIds && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setReviewOrderId(null)}></div>
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setReviewOrderIds(null)}></div>
                     <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-6">
                         <h3 className="text-white font-black text-lg">{t('desktop.orders.confirmDelivery')}</h3>
                         <p className="text-slate-400 text-sm mt-1">{t('desktop.orders.rateSeller')}</p>
@@ -468,7 +540,7 @@ export default function DesktopOrders() {
                         />
                         <div className="flex gap-3 mt-5">
                             <button
-                                onClick={() => setReviewOrderId(null)}
+                                onClick={() => setReviewOrderIds(null)}
                                 className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-sm font-bold py-2.5 rounded-xl transition-colors"
                             >
                                 {t('desktop.orders.cancel')}
