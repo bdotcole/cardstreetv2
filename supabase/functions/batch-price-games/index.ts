@@ -38,6 +38,14 @@ const PAGE = 100;
 const NEW_SET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;  // "recently ingested" head
 const STALE_PROBE_PAGE = 1000;                        // PostgREST's max rows per request
 const STALE_PROBE_PAGES = 8;                          // 8k oldest rows is far more than one run can price
+// Pages for the zero-coverage sweep, which must see EVERY priced row to tell
+// "never priced" from "priced a while ago". Yu-Gi-Oh, the largest catalog, holds
+// ~29k Raw_NM rows, so 60 pages leaves room to grow; a sweep that hits the cap is
+// treated as inconclusive and the ordering falls back to stalest-first.
+const COVERAGE_SWEEP_PAGES = 60;
+// Share of the per-run call budget that zero-coverage sets may consume, so a large
+// backlog cannot starve the refresh of sets that already have prices.
+const ZERO_COVERAGE_BUDGET = Math.floor(MAX_API_CALLS * 0.7);
 
 // Our game -> JustTCG game slug + which language rows to price/store.
 // `key` selects the group via the POST body { "group": "<key>" }. One group per
@@ -195,20 +203,55 @@ Deno.serve(async (req) => {
         if (probe.length < STALE_PROBE_PAGE) break;
       }
 
-      // A set absent from the probe is fresher than the probe window, so it sorts
-      // last. The exception — a set with no priced rows at all — is covered by the
-      // recently-ingested head; an older set that is still unpriced is one with no
-      // resolvable JustTCG slug, which costs zero API calls when we reach it.
+      // ZERO-COVERAGE SWEEP — which sets hold no priced row at all?
+      //
+      // The staleness probe above can only rank sets that ALREADY have Raw_NM rows,
+      // so a set that has never been priced is invisible to it and sorted last,
+      // behind every set that does have prices. With MAX_API_CALLS that tail was
+      // never reached, and the old comment here assumed such a set must simply have
+      // no resolvable JustTCG slug (costing nothing). That assumption was wrong:
+      // measured 2026-08-13, 426 of Yu-Gi-Oh's 636 sets had NEVER been priced, and
+      // spot-checking them (ygo-angu, ygo-blar, ygo-blhr, ygo-bllr, ygo-blrr) showed
+      // they resolve upstream and match fine — they were simply starved forever.
+      // Those cards then fell back to the legacy, unmaintained 'Near Mint' tier.
+      //
+      // Sets with zero coverage now go FIRST: no price at all is worse than a stale
+      // one. A set leaves this bucket as soon as it is priced, so the backlog drains.
+      const pricedSetIds = new Set<string>();
+      let sweepComplete = false;
+      for (let p = 0; p < COVERAGE_SWEEP_PAGES; p++) {
+        const { data, error } = await supabase
+          .from('market_values')
+          .select('card_id, pokemon_cards!inner(set_id)')
+          .eq('game', grp.game)
+          .eq('language', grp.storeLang)
+          .eq('condition', 'Raw_NM')
+          .order('card_id', { ascending: true })
+          .range(p * STALE_PROBE_PAGE, (p + 1) * STALE_PROBE_PAGE - 1);
+        if (error) { console.error(`[${grp.game}] coverage sweep: ${error.message}`); break; }
+        for (const r of data ?? []) {
+          const sid = (r as any).pokemon_cards?.set_id;
+          if (sid) pricedSetIds.add(sid);
+        }
+        if (!data || data.length < STALE_PROBE_PAGE) { sweepComplete = true; break; }
+      }
+      // Only trust the classification when the sweep actually finished. A truncated
+      // sweep would brand well-covered sets as unpriced and let them hog the head.
+      const neverPriced = (s: any) => sweepComplete && !pricedSetIds.has(s.id);
+
       const createdMs = (s: any) => Date.parse(s.created_at ?? '') || 0;
       const isNew = (s: any) => Date.now() - createdMs(s) < NEW_SET_WINDOW_MS;
       const orderedSets = [...(ourSets ?? [])].sort((a, b) => {
+        if (neverPriced(a) !== neverPriced(b)) return neverPriced(a) ? -1 : 1;
+        if (neverPriced(a)) return createdMs(b) - createdMs(a);
         if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
         if (isNew(a)) return createdMs(b) - createdMs(a);
         const ra = staleRank.has(a.id) ? staleRank.get(a.id)! : Number.MAX_SAFE_INTEGER;
         const rb = staleRank.has(b.id) ? staleRank.get(b.id)! : Number.MAX_SAFE_INTEGER;
         return ra !== rb ? ra - rb : createdMs(b) - createdMs(a);
       });
-      console.log(`[${grp.game}] ${orderedSets.length} sets, ${staleRank.size} ranked stale, head=${orderedSets.slice(0, 5).map((s) => s.id).join(',')}`);
+      const zeroCoverage = orderedSets.filter(neverPriced).length;
+      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRank.size} ranked stale, head=${orderedSets.slice(0, 5).map((s) => s.id).join(',')}`);
 
       // JustTCG sets for this game (one call), build resolver
       let jtcgSets: any[] = [];
@@ -218,6 +261,11 @@ Deno.serve(async (req) => {
 
       for (const set of orderedSets) {
         if (apiCalls >= MAX_API_CALLS) break;
+        // Keep a slice of the budget for refreshing sets that ARE priced. Without
+        // this, a 426-set backlog (Yu-Gi-Oh's, 2026-08-13) would consume every run
+        // for days and let live prices go stale — and any set that resolves upstream
+        // but yields no usable price would sit at the head burning calls nightly.
+        if (neverPriced(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
 
         let slug: string | undefined;
         if (grp.matchById) {
