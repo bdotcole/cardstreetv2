@@ -54,6 +54,7 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
+import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import LiveShopChooser from '@/components/live/LiveShopChooser';
 
@@ -468,6 +469,11 @@ export default function HomePage() {
     // Warm the geo lookup on mount so the checkout gate is instant; the popup
     // below explains the restriction when a non-TH buyer tries to check out.
     usePurchaseRegion();
+    // Offers needing this user's action, for the profile-tab badge. Guests have
+    // no offers, so skip the fetch entirely for them.
+    const offerBadge = useOfferBadge(
+        process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
+    );
     const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
     // In-checkout shipping-details gate (see AddressGateResume above).
     const [addressGate, setAddressGate] = useState<{
@@ -1117,6 +1123,9 @@ export default function HomePage() {
 
         setIsPaymentModalOpen(false);
         setCart([]);
+        // An offer purchase clears that offer from the actionable count, so drop
+        // the badge cache instead of letting it sit stale for its TTL.
+        if (acceptedOfferId) notifyOffersChanged();
         setAcceptedOfferId(null);
 
         // Refresh local state aggressively to hide sold items and show new vault items
@@ -2047,7 +2056,17 @@ export default function HomePage() {
 
                     {/* 5. PROFILE */}
                     <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'profile' ? '-translate-y-2' : ''}`}>
-                        <i className={`fa-solid fa-user-astronaut text-xl transition-colors ${activeTab === 'profile' ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
+                        <span className="relative">
+                            <i className={`fa-solid fa-user-astronaut text-xl transition-colors ${activeTab === 'profile' ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
+                            {/* Offers needing action (mostly: accepted, awaiting your payment).
+                                The inbox is three taps deep, so this is the only thing a buyer
+                                who missed the email will ever see. */}
+                            {offerBadge.actionable > 0 && (
+                                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[9px] font-black flex items-center justify-center shadow-lg shadow-brand-cyan/30">
+                                    {offerBadge.actionable}
+                                </span>
+                            )}
+                        </span>
                         <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'profile' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.profile')}</span>
                     </button>
                 </nav>

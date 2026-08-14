@@ -10,6 +10,7 @@ import OffersInbox from '@/components/OffersInbox';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup } from '@/lib/orderGroups';
+import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 
 // OBO best-offer is dark-launched behind this flag; the Offers tab is hidden
 // entirely when off.
@@ -98,6 +99,9 @@ export default function DesktopOrders() {
     // for the whole desktop shell).
     const { user, authChecked, payOffer } = useDesktopCart();
     const [authOpen, setAuthOpen] = useState(false);
+    // Count on the Offers tab so an accepted-but-unpaid offer is visible
+    // without opening the tab.
+    const offerBadge = useOfferBadge(OFFERS_ENABLED && !!user);
 
     // The offer-email CTA lands here as /orders?tab=offers (forwarded from the
     // desktop home's /?view=offers). The active tab is mirrored into the URL so
@@ -320,6 +324,11 @@ export default function DesktopOrders() {
                         }`}
                     >
                         {label}
+                        {key === 'offers' && offerBadge.actionable > 0 && (
+                            <span className="ml-2 min-w-[18px] h-[18px] px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black inline-flex items-center justify-center align-middle">
+                                {offerBadge.actionable}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>

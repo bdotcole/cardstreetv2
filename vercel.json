@@ -43,6 +43,10 @@
             "schedule": "0 * * * *"
         },
         {
+            "path": "/api/cron/nudge-accepted-offers",
+            "schedule": "0 3 * * *"
+        },
+        {
             "path": "/api/cron/reconcile-pending-orders",
             "schedule": "*/15 * * * *"
         },

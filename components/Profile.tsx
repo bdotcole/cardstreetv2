@@ -26,6 +26,7 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { groupByTransferGroup } from '@/lib/orderGroups';
+import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -281,6 +282,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const { settings: appSettings, updateTheme } = useUserSettings();
   // Live-breaks beta (fails closed — no grant, no menu item, zero hint).
   const { hasBeta } = useBetaFeatures();
+  // Count for the "My Offers" row badge — offers accepted and awaiting the
+  // buyer's payment had no in-app surface at all before this.
+  const offerBadge = useOfferBadge(
+    process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
+  );
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
   const supabase = createClient();
@@ -933,7 +939,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         // OBO offers inbox (received as seller + made as buyer). Flag-gated so
         // nothing appears while the feature is dark.
         ...(process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1'
-          ? [{ name: t('offer.menuTitle'), icon: Tag, panel: 'offers' as ActivePanel, color: 'text-brand-cyan' }]
+          ? [{ name: t('offer.menuTitle'), icon: Tag, panel: 'offers' as ActivePanel, color: 'text-brand-cyan', badge: offerBadge.actionable }]
           : []),
         // Live-breaks show manager. Beta-gated: renders only with the
         // 'live_broadcast' grant (useBetaFeatures fails closed).
@@ -1098,7 +1104,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                             {item.name}
                           </span>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-slate-700 group-hover:translate-x-1 transition-transform" />
+                        <div className="flex items-center gap-2">
+                          {/* Heterogeneous menu-item shapes — only the offers row carries a badge. */}
+                          {!!(item as { badge?: number }).badge && (
+                            <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center">
+                              {(item as { badge?: number }).badge}
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-slate-700 group-hover:translate-x-1 transition-transform" />
+                        </div>
                       </button>
                     ))}
                   </div>

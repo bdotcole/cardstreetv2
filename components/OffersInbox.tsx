@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { Offer } from '@/types';
 
 interface OffersInboxProps {
@@ -90,6 +91,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       const res = await fetch(`/api/offers/${offerId}/${action}`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Action failed');
+      notifyOffersChanged();
       await load();
     } catch (e: any) {
       setError(e?.message || (isThai ? 'ดำเนินการไม่สำเร็จ' : 'Action failed.'));
@@ -116,6 +118,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       if (!res.ok) throw new Error(data?.error || 'Counter failed');
       setCounterFor(null);
       setCounterAmount('');
+      notifyOffersChanged();
       await load();
     } catch (e: any) {
       setError(e?.message || (isThai ? 'ต่อรองไม่สำเร็จ' : 'Counter failed.'));
@@ -131,20 +134,33 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     const busy = busyId === o.id;
 
     if (o.status === 'accepted') {
-      // Only the offer's buyer can pay; the seller side needs no action row —
-      // the status chip already says "accepted".
       if (o.viewerRole === 'buyer') {
+        // There is no reserve — the listing stays buyable until this is paid,
+        // so the button carries that urgency rather than reading as a receipt.
         return (
-          <button
-            disabled={busy}
-            onClick={() => onPayOffer?.({ offer: o })}
-            className="w-full sm:w-auto h-10 px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
-          >
-            {isThai ? `ชำระเงิน ฿${Number(o.amount).toLocaleString()}` : `Pay ฿${Number(o.amount).toLocaleString()}`}
-          </button>
+          <div className="space-y-1.5">
+            <button
+              disabled={busy}
+              onClick={() => onPayOffer?.({ offer: o })}
+              className="w-full sm:w-auto h-10 px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
+            >
+              {isThai ? `ชำระเงิน ฿${Number(o.amount).toLocaleString()}` : `Pay ฿${Number(o.amount).toLocaleString()}`}
+            </button>
+            <p className="text-[10px] text-amber-300/80 font-bold">
+              {isThai
+                ? 'ยังไม่ได้จองสินค้า — ผู้อื่นซื้อได้จนกว่าคุณจะชำระเงิน'
+                : 'Not reserved — someone else can still buy it until you pay.'}
+            </p>
+          </div>
         );
       }
-      return null;
+      // Seller side: an accepted offer is NOT a completed sale — the buyer
+      // still has to pay. Saying nothing here read as "sold" to sellers.
+      return (
+        <p className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wide">
+          {isThai ? 'รอผู้ซื้อชำระเงิน' : 'Waiting for buyer to pay'}
+        </p>
+      );
     }
 
     if (o.status !== 'pending') return null;

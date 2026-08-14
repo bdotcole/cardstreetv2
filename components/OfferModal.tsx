@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { OFFER_MIN_FLOOR_FRACTION, OFFER_EXPIRY_HOURS } from '@/lib/offerPolicy';
+import { notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
+import CheckoutAddressSheet, {
+  EMPTY_CHECKOUT_ADDRESS,
+  type CheckoutAddressValues,
+} from '@/components/CheckoutAddressSheet';
+import { BUYER_REQUIRED_PROFILE_FIELDS, checkBuyerProfileComplete } from '@/lib/profileValidation';
+import { isValidThaiPhone } from '@/lib/utils/phone';
 
 interface OfferModalProps {
   listingId: string;
@@ -15,6 +22,14 @@ interface OfferModalProps {
  * Buyer-side "Make an offer" modal. POSTs to /api/offers. Only mounted for OBO
  * listings behind the offers feature flag (the caller gates it). The min-floor
  * and 48h expiry are shown up front; the server is authoritative on both.
+ *
+ * Delivery details are collected HERE rather than at Pay. QC 2026-08-14 found
+ * 6 of the 8 buyers holding an accepted offer had no address/phone on file, so
+ * tapping "Pay ฿X" — hours or days later, arriving from an email — dropped them
+ * into an address form instead of the payment sheet, and none of them came
+ * back. Same total friction, moved to the moment intent is highest. This modal
+ * is shared by the mobile shell and both desktop entry points, so gating it
+ * here covers every surface at once.
  */
 const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardName, onClose, onSubmitted }) => {
   const { isThai } = useTranslation();
@@ -22,26 +37,43 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
   const [message, setMessage] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null = still loading / unknown. Unknown never blocks: the offer just goes
+  // through and the buyer meets the old gate at Pay, exactly as before.
+  const [needsAddress, setNeedsAddress] = useState<boolean | null>(null);
+  const [addressSheetOpen, setAddressSheetOpen] = useState(false);
+  const [addressInitial, setAddressInitial] = useState<CheckoutAddressValues>(EMPTY_CHECKOUT_ADDRESS);
+  // Set when the address sheet was opened mid-submit, so saving resumes it.
+  const resumeAfterAddress = useRef(false);
 
   const minOffer = Math.ceil(listingPrice * OFFER_MIN_FLOOR_FRACTION);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (submitting) return;
-    const value = parseFloat(amount);
-    if (!Number.isFinite(value) || value <= 0) {
-      setError(isThai ? 'กรุณาระบุจำนวนเงินที่ถูกต้อง' : 'Please enter a valid amount.');
-      return;
-    }
-    if (value < minOffer) {
-      setError(
-        isThai
-          ? `ข้อเสนอต้องไม่ต่ำกว่า ฿${minOffer.toLocaleString()}`
-          : `Offer must be at least ฿${minOffer.toLocaleString()}.`,
-      );
-      return;
-    }
+  // Read the buyer's shipping profile once on open so the form can warn before
+  // they commit, and so the sheet prefills whatever is already saved.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' });
+        if (!res.ok) { if (alive) setNeedsAddress(false); return; }
+        const { profile } = await res.json();
+        if (!alive) return;
+        const complete =
+          checkBuyerProfileComplete(profile).complete && isValidThaiPhone(profile?.phone_number);
+        setNeedsAddress(!complete);
+        setAddressInitial({
+          ...EMPTY_CHECKOUT_ADDRESS,
+          ...Object.fromEntries(
+            BUYER_REQUIRED_PROFILE_FIELDS.map((f) => [f, profile?.[f] ?? '']),
+          ),
+        } as CheckoutAddressValues);
+      } catch {
+        if (alive) setNeedsAddress(false); // fail open — never block on a hiccup
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
+  const postOffer = async (value: number) => {
     setSubmitting(true);
     setError(null);
     try {
@@ -70,12 +102,53 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
         setSubmitting(false);
         return;
       }
+      notifyOffersChanged();
       onSubmitted?.();
       onClose();
     } catch {
       setError(isThai ? 'ส่งข้อเสนอไม่สำเร็จ' : 'Failed to submit offer.');
       setSubmitting(false);
     }
+  };
+
+  const validAmount = (): number | null => {
+    const value = parseFloat(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setError(isThai ? 'กรุณาระบุจำนวนเงินที่ถูกต้อง' : 'Please enter a valid amount.');
+      return null;
+    }
+    if (value < minOffer) {
+      setError(
+        isThai
+          ? `ข้อเสนอต้องไม่ต่ำกว่า ฿${minOffer.toLocaleString()}`
+          : `Offer must be at least ฿${minOffer.toLocaleString()}.`,
+      );
+      return null;
+    }
+    return value;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    const value = validAmount();
+    if (value === null) return;
+    // Collect delivery details first so an accepted offer is one tap from paid.
+    if (needsAddress) {
+      resumeAfterAddress.current = true;
+      setAddressSheetOpen(true);
+      return;
+    }
+    void postOffer(value);
+  };
+
+  const handleAddressSaved = () => {
+    setAddressSheetOpen(false);
+    setNeedsAddress(false);
+    if (!resumeAfterAddress.current) return;
+    resumeAfterAddress.current = false;
+    const value = validAmount();
+    if (value !== null) void postOffer(value);
   };
 
   return (
@@ -131,6 +204,17 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
             />
           </div>
 
+          {needsAddress && (
+            <div className="p-3 bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl text-brand-cyan/90 text-[11px] font-bold flex items-start gap-2">
+              <i className="fa-solid fa-truck-fast mt-0.5"></i>
+              <span>
+                {isThai
+                  ? 'ขั้นตอนถัดไป: กรอกที่อยู่จัดส่ง เพื่อให้ชำระเงินได้ทันทีเมื่อผู้ขายตอบรับ'
+                  : "Next: your delivery address — so you can pay the moment it's accepted."}
+              </span>
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold flex items-center gap-2">
               <i className="fa-solid fa-circle-exclamation"></i>
@@ -154,6 +238,15 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
           </button>
         </form>
       </div>
+
+      {/* Renders at z-[70], above this modal's z-[60], so the offer form stays
+          visible behind it and the buyer keeps their place. */}
+      <CheckoutAddressSheet
+        isOpen={addressSheetOpen}
+        initialValues={addressInitial}
+        onClose={() => { resumeAfterAddress.current = false; setAddressSheetOpen(false); }}
+        onSaved={handleAddressSaved}
+      />
     </div>
   );
 };

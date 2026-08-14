@@ -64,6 +64,7 @@ const TEMPLATES = {
     offerRejected: (process.env.COURIER_OFFER_REJECTED_TEMPLATE_ID || '').trim(),
     offerCountered: (process.env.COURIER_OFFER_COUNTERED_TEMPLATE_ID || '').trim(),
     offerExpired: (process.env.COURIER_OFFER_EXPIRED_TEMPLATE_ID || '').trim(),
+    offerPaymentReminder: (process.env.COURIER_OFFER_PAYMENT_REMINDER_TEMPLATE_ID || '').trim(),
 } as const;
 
 /**
@@ -1697,6 +1698,34 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
             bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
             cta: 'Browse · เลือกซื้อ',
+        }),
+    });
+}
+
+/**
+ * The buyer: their accepted offer is still unpaid. Sent by the daily
+ * nudge-accepted-offers cron, never on the request path.
+ *
+ * Rides the `offer_accepted_*` prefs deliberately — a buyer who wants to hear
+ * that their offer was accepted wants to hear it's still waiting, and it saves
+ * a second pref pair (and a settings row) for the same event.
+ */
+export async function sendOfferPaymentReminderNotification(
+    buyerId: string,
+    details: OfferNotifDetails,
+): Promise<void> {
+    return sendOfferNotification(buyerId, 'accepted', details, {
+        emailPref: 'offer_accepted_email',
+        pushPref: 'offer_accepted_push',
+        template: TEMPLATES.offerPaymentReminder,
+        pushType: 'offer_accepted',
+        inline: (priceLabel, cardName) => ({
+            subject: `Still yours${priceLabel ? ` at ${priceLabel}` : ''} — ${cardName}`,
+            // The no-reserve model is the whole reason this reminder exists:
+            // the listing stayed buyable the entire time.
+            bodyEn: `Your accepted offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is still waiting for payment. It isn't reserved — another buyer can still take it until you pay.`,
+            bodyTh: `ข้อเสนอที่ได้รับการตอบรับของคุณยังรอการชำระเงิน สินค้ายังไม่ถูกจอง — ผู้อื่นซื้อได้จนกว่าคุณจะชำระเงิน`,
+            cta: 'Pay now · ชำระเงิน',
         }),
     });
 }
