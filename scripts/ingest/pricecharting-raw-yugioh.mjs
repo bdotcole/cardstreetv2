@@ -107,13 +107,17 @@ async function loadProducts() {
 
 // Region prefixes seen in the codes, by frequency across the 77k-row CSV:
 //   EN 47,625 · JP 14,713 · (none) 5,572 · E 1,232 · ENA 521 · ENB 455 · ENC 394 · ...
-// Only the two English schemes line up with our numbering: "EN" (modern,
-// "MP25-EN253") and bare (vintage NA, "LOB-027"). "JP" is a different catalog, "E"
-// is the European print which numbers the SAME card differently (Aqua Madoor is
-// LOB-027 in NA but LOB-E021 in Europe), and ENA/ENB/... are sub-series whose
-// letters our `number` column does not carry. Anything else is skipped rather than
-// guessed across schemes.
-const ACCEPTED_PREFIXES = new Set(['', 'EN']);
+// Three of them line up with our catalog, and our own card IDS say which is which:
+//   ygo-lob-027    -> bare  "LOB-027"    North American
+//   ygo-lob-en027  -> EN    "LOB-EN027"  English
+//   ygo-lob-e021   -> E     "LOB-E021"   European
+// 20 vintage Yu-Gi-Oh sets carry two or three of these schemes side by side (lob,
+// lon, mrd, mrl, dcr, lod, ...). They are NOT duplicate rows: they are separate
+// printings that trade at different prices — Aqua Madoor is $0.96 as LOB-027 and
+// $2.35 as LOB-E021 — so each row is matched to its OWN region.
+// "JP" is a different catalog and ENA/ENB/... are sub-series whose letters our
+// `number` column does not carry; both are skipped rather than guessed across.
+const ACCEPTED_PREFIXES = new Set(['', 'EN', 'E']);
 
 /** "Aqua Madoor [1st Edition] LOB-027" -> { num:'27', prefix:'', isVariant:true }. */
 function parseProduct(name) {
@@ -122,6 +126,15 @@ function parseProduct(name) {
   const prefix = (m[2] || '').toUpperCase();
   if (!ACCEPTED_PREFIXES.has(prefix)) return null;
   return { num: stripNum(m[3]), prefix, isVariant: /\[|\(/.test(name) };
+}
+
+/** Region implied by our own card id: ygo-lob-en027 -> 'EN', -e021 -> 'E', -027 -> ''. */
+function regionOfCardId(id, setId) {
+  const tail = String(id).startsWith(`${setId}-`) ? String(id).slice(setId.length + 1) : String(id);
+  if (/^en\d/i.test(tail)) return 'EN';
+  if (/^e\d/i.test(tail)) return 'E';
+  if (/^\d/.test(tail)) return '';
+  return null; // unknown shape — fall back to the set-wide preference
 }
 
 (async () => {
@@ -190,26 +203,31 @@ function parseProduct(name) {
       for (const m of existing ?? []) if (['admin', 'cardstreet'].includes(m.source)) pinned.add(m.card_id);
     }
 
-    // A set is either vintage-NA-numbered or EN-numbered on our side; when both
-    // schemes exist upstream for one number they are different prints at different
-    // prices, so follow whichever our own card ids use ("ygo-cori-en027" vs
-    // "ygo-lob-024") rather than letting insertion order decide.
-    const wantPrefix = ours.some((c) => /-en\d/i.test(c.id)) ? 'EN' : '';
-    const pcByNum = new Map();
+    // Index by REGION+number, not number alone. Matching on number alone made the
+    // European rows collide with North American ones — our ygo-lob-e021 (Aqua
+    // Madoor) was being paired against PriceCharting's LOB-021, a different card,
+    // which is what dragged the set's name agreement down to 72% and got it skipped.
+    const setPrefix = ours.some((c) => /-en\d/i.test(c.id)) ? 'EN' : '';
+    const pcByKey = new Map();
     for (const p of pcRows) {
       const parsed = parseProduct(p['product-name']);
       if (!parsed) continue;
-      const prev = pcByNum.get(parsed.num);
-      const better = !prev
-        || (prev.isVariant && !parsed.isVariant)
-        || (prev.isVariant === parsed.isVariant && prev.prefix !== wantPrefix && parsed.prefix === wantPrefix);
-      if (better) pcByNum.set(parsed.num, { p, ...parsed });
+      const key = `${parsed.prefix}|${parsed.num}`;
+      const prev = pcByKey.get(key);
+      if (!prev || (prev.isVariant && !parsed.isVariant)) pcByKey.set(key, { p, ...parsed });
     }
+    const lookup = (c) => {
+      const region = regionOfCardId(c.id, set.id) ?? setPrefix;
+      return pcByKey.get(`${region}|${stripNum(c.number)}`)
+        // A set with only one scheme upstream still resolves when our id shape says
+        // otherwise (most modern sets are EN-only).
+        ?? pcByKey.get(`${setPrefix}|${stripNum(c.number)}`);
+    };
 
     const candidates = [];
     let nameAgree = 0, matched = 0;
     for (const c of ours) {
-      const hit = pcByNum.get(stripNum(c.number));
+      const hit = lookup(c);
       if (!hit) continue;
       matched++;
       const pcName = norm(String(hit.p['product-name']).replace(/\b[A-Z0-9]{2,6}-[A-Za-z]*\d{1,4}\s*$/, '').replace(/\[[^\]]*\]/g, ''));
