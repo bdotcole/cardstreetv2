@@ -79,11 +79,30 @@ const GAME = (process.argv.find((a) => a.startsWith('--game=')) || '--game=yugio
 const GAME_CONFIG = {
   yugioh: { category: 'yugioh-cards', consolePrefix: /^yugioh\s*/i, consoleWord: 'yugioh', style: 'setcode' },
   mtg: { category: 'magic-cards', consolePrefix: /^magic\s*/i, consoleWord: 'magic', style: 'hash' },
+  // One Piece codes carry the card's ORIGINAL set ("Ain OP07-002"), and a booster
+  // reprints SP/alt-art cards from older sets, so one set holds several cards at the
+  // same number — our op-op-16-jp-op10-045 (Cavendish, from OP10) sits beside
+  // op-op-16-jp-op16-045 (Crocodile). Our card ids embed that origin code too, so
+  // matching on code+number instead of number alone separates them exactly.
+  onepiece: { category: 'one-piece-cards', consolePrefix: /^one piece\s*/i, consoleWord: 'one piece', style: 'setcode', matchByOriginCode: true },
+  'onepiece-jp': {
+    category: 'one-piece-cards', consolePrefix: /^one piece japanese\s*/i, consoleWord: 'one piece japanese',
+    style: 'setcode', matchByOriginCode: true, game: 'onepiece', cardLang: 'ja', storeLang: 'jp',
+    // Japanese consoles must be matched ONLY against Japanese consoles, or the
+    // English print of the same set silently supplies the price.
+    consoleFilter: /^one piece japanese /i,
+  },
   // Lorcana promos live in their own console with their own 1..N numbering, which
   // collides with every set's base numbering — see the --promos pass at the end.
   lorcana: { category: 'lorcana-cards', consolePrefix: /^(disney\s*)?lorcana\s*/i, consoleWord: 'lorcana', style: 'hash', promoConsole: 'Lorcana Promo', promoRarities: ['Special', 'Promo'] },
 };
 const CFG = GAME_CONFIG[GAME];
+// A --game key may address a language variant of a game (onepiece-jp), so the DB
+// game id, our card language and the market_values language are all configurable.
+// market_values stores Japanese under 'jp' while pokemon_cards uses 'ja'.
+const DB_GAME = CFG?.game ?? GAME;
+const CARD_LANG = CFG?.cardLang ?? 'en';
+const STORE_LANG = CFG?.storeLang ?? 'en';
 if (!CFG) { console.error(`--game must be one of ${Object.keys(GAME_CONFIG).join(', ')}`); process.exit(1); }
 // A set whose numbering disagrees with PriceCharting's is skipped wholesale rather
 // than paired at random — the documented vintage mis-pairing hazard.
@@ -159,7 +178,7 @@ function parseProduct(name) {
   if (!m) return null;
   const prefix = (m[2] || '').toUpperCase();
   if (!ACCEPTED_PREFIXES.has(prefix)) return null;
-  return { num: stripNum(m[3]), prefix, isVariant: /\[|\(/.test(name) };
+  return { code: (m[1] || '').toLowerCase(), num: stripNum(m[3]), prefix, isVariant: /\[|\(/.test(name) };
 }
 /** Strip the trailing code / "#123" so only the card name is compared. */
 function nameOfProduct(name) {
@@ -191,6 +210,13 @@ function regionOfCardId(id, setId) {
   }
   const consoleByNorm = new Map();
   for (const c of byConsole.keys()) {
+    // A language variant must see ONLY its own consoles. Japanese sets live in the
+    // same CSV as English ones ("One Piece Japanese 500 Years in the Future" beside
+    // "One Piece 500 Years in the Future"), and without this filter the English
+    // print silently supplies the price for every Japanese card.
+    if (CFG.consoleFilter && !CFG.consoleFilter.test(c)) continue;
+    // Conversely, a run WITHOUT a filter must not pick up the language consoles.
+    if (!CFG.consoleFilter && /\b(japanese|chinese|korean)\b/i.test(c)) continue;
     consoleByNorm.set(norm(c), c);
     // Consoles are prefixed with the game ("YuGiOh Metal Raiders", "Magic
     // Foundations", "Lorcana Azurite Sea") while our set names are bare, so index
@@ -199,7 +225,7 @@ function regionOfCardId(id, setId) {
   }
 
   const { data: allSets, error: setErr } = await supabase
-    .from('pokemon_sets').select('id, name').eq('game', GAME).eq('language', 'en');
+    .from('pokemon_sets').select('id, name').eq('game', DB_GAME).eq('language', CARD_LANG);
   if (setErr) throw new Error(`sets: ${setErr.message}`);
 
   let targets = allSets ?? [];
@@ -213,7 +239,7 @@ function regionOfCardId(id, setId) {
     for (let p = 0; ; p++) {
       const { data, error } = await supabase
         .from('market_values').select('card_id, pokemon_cards!inner(set_id)')
-        .eq('game', GAME).eq('language', 'en').eq('condition', 'Raw_NM')
+        .eq('game', DB_GAME).eq('language', STORE_LANG).eq('condition', 'Raw_NM')
         .order('card_id', { ascending: true }).range(p * 1000, p * 1000 + 999);
       if (error) throw new Error(`coverage: ${error.message}`);
       for (const r of data ?? []) if (r.pokemon_cards?.set_id) priced.add(r.pokemon_cards.set_id);
@@ -234,7 +260,7 @@ function regionOfCardId(id, setId) {
     const pcRows = byConsole.get(consoleName);
 
     const { data: ours, error } = await supabase
-      .from('pokemon_cards').select('id, number, name').eq('set_id', set.id).eq('language', 'en');
+      .from('pokemon_cards').select('id, number, name').eq('set_id', set.id).eq('language', CARD_LANG);
     if (error) throw new Error(`cards ${set.id}: ${error.message}`);
     if (!ours?.length) continue;
 
@@ -245,7 +271,7 @@ function regionOfCardId(id, setId) {
     for (let i = 0; i < ours.length; i += 200) {
       const { data: existing, error: exErr } = await supabase
         .from('market_values').select('card_id, source')
-        .eq('language', 'en').eq('condition', 'Raw_NM')
+        .eq('language', STORE_LANG).eq('condition', 'Raw_NM')
         .in('card_id', ours.slice(i, i + 200).map((c) => c.id));
       if (exErr) throw new Error(`existing ${set.id}: ${exErr.message}`);
       for (const m of existing ?? []) {
@@ -262,11 +288,17 @@ function regionOfCardId(id, setId) {
     for (const p of pcRows) {
       const parsed = parseProduct(p['product-name']);
       if (!parsed) continue;
-      const key = `${parsed.prefix}|${parsed.num}`;
+      const key = CFG.matchByOriginCode ? `${parsed.code}|${parsed.num}` : `${parsed.prefix}|${parsed.num}`;
       const prev = pcByKey.get(key);
       if (!prev || (prev.isVariant && !parsed.isVariant)) pcByKey.set(key, { p, ...parsed });
     }
     const lookup = (c) => {
+      if (CFG.matchByOriginCode) {
+        // Our id embeds the origin code: op-op-16-jp-op10-045 -> "op10|45".
+        const tail = c.id.startsWith(`${set.id}-`) ? c.id.slice(set.id.length + 1) : '';
+        const m = tail.match(/^([a-z0-9]+)-(\d{1,4})$/i);
+        return m ? pcByKey.get(`${m[1].toLowerCase()}|${stripNum(m[2])}`) : undefined;
+      }
       const region = CFG.style === 'setcode' ? (regionOfCardId(c.id, set.id) ?? setPrefix) : '';
       return pcByKey.get(`${region}|${stripNum(c.number)}`)
         // A set with only one scheme upstream still resolves when our id shape says
@@ -296,12 +328,12 @@ function regionOfCardId(id, setId) {
       if (pinned.has(c.id)) { protectedRows++; continue; }
       candidates.push({
         card_id: c.id,
-        language: 'en',
+        language: STORE_LANG,
         condition: 'Raw_NM',
         market_avg: price,
         // The column defaults to THB — without this every USD price renders ~36x low.
         currency: 'USD',
-        game: GAME,
+        game: DB_GAME,
         printing: null,
         source_links: [`${BASE}/game/${encodeURIComponent(consoleName.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
         source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: consoleName, method: 'pc_loose' },
@@ -346,8 +378,8 @@ function regionOfCardId(id, setId) {
         if (!price) continue;
         if (pinned.has(c.id)) { protectedRows++; continue; }
         rows.push({
-          card_id: c.id, language: 'en', condition: 'Raw_NM', market_avg: price,
-          currency: 'USD', game: GAME, printing: null,
+          card_id: c.id, language: STORE_LANG, condition: 'Raw_NM', market_avg: price,
+          currency: 'USD', game: DB_GAME, printing: null,
           source_links: [`${BASE}/game/${encodeURIComponent(consoleName.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
           source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: consoleName, method: 'pc_loose_byname' },
           last_updated: now, last_priced_at: now,
@@ -397,13 +429,13 @@ function regionOfCardId(id, setId) {
 
     const { data: promoCards, error: pcErr } = await supabase
       .from('pokemon_cards').select('id, name, number, set_id, rarity')
-      .eq('game', GAME).eq('language', 'en').in('rarity', CFG.promoRarities);
+      .eq('game', DB_GAME).eq('language', CARD_LANG).in('rarity', CFG.promoRarities);
     if (pcErr) throw new Error(`promo cards: ${pcErr.message}`);
 
     const already = new Set();
     for (let i = 0; i < (promoCards ?? []).length; i += 200) {
       const { data } = await supabase.from('market_values').select('card_id, source')
-        .eq('language', 'en').eq('condition', 'Raw_NM')
+        .eq('language', STORE_LANG).eq('condition', 'Raw_NM')
         .in('card_id', promoCards.slice(i, i + 200).map((c) => c.id));
       for (const m of data ?? []) if (ONLY_MISSING || ['admin', 'cardstreet'].includes(m.source)) already.add(m.card_id);
     }
@@ -422,8 +454,8 @@ function regionOfCardId(id, setId) {
       const price = usd(hit.p['loose-price']);
       if (!price) { promoMissing++; continue; }
       allRows.push({
-        card_id: c.id, language: 'en', condition: 'Raw_NM', market_avg: price,
-        currency: 'USD', game: GAME, printing: null,
+        card_id: c.id, language: STORE_LANG, condition: 'Raw_NM', market_avg: price,
+        currency: 'USD', game: DB_GAME, printing: null,
         source_links: [`${BASE}/game/${encodeURIComponent(CFG.promoConsole.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
         source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: CFG.promoConsole, method: 'pc_loose_promo' },
         last_updated: now, last_priced_at: now,
