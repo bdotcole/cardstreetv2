@@ -1,10 +1,17 @@
-// Raw (ungraded) prices for the Yu-Gi-Oh sets JustTCG cannot reach, from
-// PriceCharting's bulk price-guide CSV.
+// Raw (ungraded) prices for the cards JustTCG cannot reach, from PriceCharting's
+// bulk price-guide CSV. Yu-Gi-Oh by default; Magic and Lorcana via --game (the file
+// keeps its original name because Yu-Gi-Oh is the bulk of the work and the gap it
+// was written for).
 //
-//   node scripts/ingest/pricecharting-raw-yugioh.mjs            # dry run
+//   node scripts/ingest/pricecharting-raw-yugioh.mjs                    # dry run, yugioh
 //   node scripts/ingest/pricecharting-raw-yugioh.mjs --commit
 //   node scripts/ingest/pricecharting-raw-yugioh.mjs --sets=ygo-lob,ygo-mp25
-//   node scripts/ingest/pricecharting-raw-yugioh.mjs --all      # not just unpriced sets
+//   node scripts/ingest/pricecharting-raw-yugioh.mjs --all              # not just unpriced sets
+//   node scripts/ingest/pricecharting-raw-yugioh.mjs --game=mtg --all --only-missing
+//
+// --only-missing writes ONLY for cards that have no Raw_NM row yet. Use it whenever
+// the target sets are already partly priced, or the upsert will put PriceCharting's
+// weekly snapshot over fresher nightly JustTCG data.
 //
 // WHY
 // ---
@@ -55,8 +62,24 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE
 const BASE = 'https://www.pricecharting.com';
 const COMMIT = process.argv.includes('--commit');
 const ALL_SETS = process.argv.includes('--all');
+// Write only for cards that currently have NO Raw_NM row. Without this a run over a
+// set the nightly JustTCG cron already covers would upsert PriceCharting's weekly
+// snapshot over fresher data — use it whenever the target sets are partly priced.
+const ONLY_MISSING = process.argv.includes('--only-missing');
 const setsArg = (process.argv.find((a) => a.startsWith('--sets=')) || '').replace('--sets=', '');
 const CSV_CACHE = (process.argv.find((a) => a.startsWith('--csv=')) || '').replace('--csv=', '');
+const GAME = (process.argv.find((a) => a.startsWith('--game=')) || '--game=yugioh').replace('--game=', '');
+
+// Per-game CSV category + how PriceCharting writes the collector number in a product
+// name. Yu-Gi-Oh uses a trailing set code ("Aqua Madoor LOB-027"); Magic and Lorcana
+// use "#123" (the same split lib/pricecharting.ts documents for the graded ingest).
+const GAME_CONFIG = {
+  yugioh: { category: 'yugioh-cards', consolePrefix: /^yugioh\s*/i, consoleWord: 'yugioh', style: 'setcode' },
+  mtg: { category: 'magic-cards', consolePrefix: /^magic\s*/i, consoleWord: 'magic', style: 'hash' },
+  lorcana: { category: 'lorcana-cards', consolePrefix: /^(disney\s*)?lorcana\s*/i, consoleWord: 'lorcana', style: 'hash' },
+};
+const CFG = GAME_CONFIG[GAME];
+if (!CFG) { console.error(`--game must be one of ${Object.keys(GAME_CONFIG).join(', ')}`); process.exit(1); }
 // A set whose numbering disagrees with PriceCharting's is skipped wholesale rather
 // than paired at random — the documented vintage mis-pairing hazard.
 const NAME_AGREEMENT_MIN = 0.9;
@@ -94,14 +117,14 @@ async function loadProducts() {
     console.log(`reading cached CSV ${CSV_CACHE}`);
     return parseCsv(fs.readFileSync(CSV_CACHE, 'utf8'));
   }
-  const res = await fetch(`${BASE}/price-guide/download-custom?t=${encodeURIComponent(TOKEN)}&category=yugioh-cards`);
+  const res = await fetch(`${BASE}/price-guide/download-custom?t=${encodeURIComponent(TOKEN)}&category=${CFG.category}`);
   if (!res.ok) throw new Error(`CSV download ${res.status}`);
   const text = await res.text();
   if (CSV_CACHE) fs.writeFileSync(CSV_CACHE, text);
   const products = parseCsv(text);
   // An invalid category silently returns the 121k all-products video-game catalog
   // (first console "3DO"). Abort rather than ingest garbage.
-  if (products[0]?.['console-name'] === '3DO') throw new Error('got the all-products fallback, not yugioh-cards');
+  if (products[0]?.['console-name'] === '3DO') throw new Error(`got the all-products fallback, not ${CFG.category}`);
   return products;
 }
 
@@ -121,11 +144,24 @@ const ACCEPTED_PREFIXES = new Set(['', 'EN', 'E']);
 
 /** "Aqua Madoor [1st Edition] LOB-027" -> { num:'27', prefix:'', isVariant:true }. */
 function parseProduct(name) {
+  if (CFG.style === 'hash') {
+    // Magic / Lorcana: "Sire of Seven Deaths #1" — no region concept, so prefix ''.
+    const m = String(name).match(/#\s*([A-Za-z]{0,4}\d{1,4})\b/);
+    if (!m) return null;
+    return { num: stripNum(m[1]), prefix: '', isVariant: /\[|\(/.test(name) };
+  }
   const m = String(name).match(/\b([A-Z0-9]{2,6})-([A-Za-z]*)(\d{1,4})\s*$/);
   if (!m) return null;
   const prefix = (m[2] || '').toUpperCase();
   if (!ACCEPTED_PREFIXES.has(prefix)) return null;
   return { num: stripNum(m[3]), prefix, isVariant: /\[|\(/.test(name) };
+}
+/** Strip the trailing code / "#123" so only the card name is compared. */
+function nameOfProduct(name) {
+  const stripped = CFG.style === 'hash'
+    ? String(name).replace(/#.*$/, '')
+    : String(name).replace(/\b[A-Z0-9]{2,6}-[A-Za-z]*\d{1,4}\s*$/, '');
+  return norm(stripped.replace(/\[[^\]]*\]/g, ''));
 }
 
 /** Region implied by our own card id: ygo-lob-en027 -> 'EN', -e021 -> 'E', -027 -> ''. */
@@ -151,11 +187,14 @@ function regionOfCardId(id, setId) {
   const consoleByNorm = new Map();
   for (const c of byConsole.keys()) {
     consoleByNorm.set(norm(c), c);
-    consoleByNorm.set(norm(c.replace(/^yugioh\s*/i, '')), c); // consoles are prefixed "YuGiOh <set>"
+    // Consoles are prefixed with the game ("YuGiOh Metal Raiders", "Magic
+    // Foundations", "Lorcana Azurite Sea") while our set names are bare, so index
+    // both forms.
+    consoleByNorm.set(norm(c.replace(CFG.consolePrefix, '')), c);
   }
 
   const { data: allSets, error: setErr } = await supabase
-    .from('pokemon_sets').select('id, name').eq('game', 'yugioh').eq('language', 'en');
+    .from('pokemon_sets').select('id, name').eq('game', GAME).eq('language', 'en');
   if (setErr) throw new Error(`sets: ${setErr.message}`);
 
   let targets = allSets ?? [];
@@ -169,7 +208,7 @@ function regionOfCardId(id, setId) {
     for (let p = 0; ; p++) {
       const { data, error } = await supabase
         .from('market_values').select('card_id, pokemon_cards!inner(set_id)')
-        .eq('game', 'yugioh').eq('language', 'en').eq('condition', 'Raw_NM')
+        .eq('game', GAME).eq('language', 'en').eq('condition', 'Raw_NM')
         .order('card_id', { ascending: true }).range(p * 1000, p * 1000 + 999);
       if (error) throw new Error(`coverage: ${error.message}`);
       for (const r of data ?? []) if (r.pokemon_cards?.set_id) priced.add(r.pokemon_cards.set_id);
@@ -181,10 +220,11 @@ function regionOfCardId(id, setId) {
 
   const allRows = [];
   const now = new Date().toISOString();
-  let noConsole = 0, skippedSets = [], totalMatched = 0, totalCards = 0, protectedRows = 0;
+  let noConsole = 0, skippedSets = [], totalMatched = 0, totalCards = 0, protectedRows = 0, nameVetoed = 0;
 
   for (const set of targets) {
-    const consoleName = consoleByNorm.get(norm(set.name)) ?? consoleByNorm.get(norm(`yugioh ${set.name}`));
+    // `GAME` is our id ("mtg"), not PriceCharting's word ("Magic"), so use the word.
+    const consoleName = consoleByNorm.get(norm(set.name)) ?? consoleByNorm.get(norm(`${CFG.consoleWord} ${set.name}`));
     if (!consoleName) { noConsole++; continue; }
     const pcRows = byConsole.get(consoleName);
 
@@ -193,14 +233,19 @@ function regionOfCardId(id, setId) {
     if (error) throw new Error(`cards ${set.id}: ${error.message}`);
     if (!ours?.length) continue;
 
-    // Deliberate pins must never be overwritten.
+    // Deliberate pins must never be overwritten. Under --only-missing, ANY existing
+    // Raw_NM row makes the card off-limits — the nightly JustTCG data is fresher
+    // than PriceCharting's weekly snapshot, so this fills gaps without regressing.
     const pinned = new Set();
     for (let i = 0; i < ours.length; i += 200) {
-      const { data: existing } = await supabase
+      const { data: existing, error: exErr } = await supabase
         .from('market_values').select('card_id, source')
         .eq('language', 'en').eq('condition', 'Raw_NM')
         .in('card_id', ours.slice(i, i + 200).map((c) => c.id));
-      for (const m of existing ?? []) if (['admin', 'cardstreet'].includes(m.source)) pinned.add(m.card_id);
+      if (exErr) throw new Error(`existing ${set.id}: ${exErr.message}`);
+      for (const m of existing ?? []) {
+        if (ONLY_MISSING || ['admin', 'cardstreet'].includes(m.source)) pinned.add(m.card_id);
+      }
     }
 
     // Index by REGION+number, not number alone. Matching on number alone made the
@@ -217,7 +262,7 @@ function regionOfCardId(id, setId) {
       if (!prev || (prev.isVariant && !parsed.isVariant)) pcByKey.set(key, { p, ...parsed });
     }
     const lookup = (c) => {
-      const region = regionOfCardId(c.id, set.id) ?? setPrefix;
+      const region = CFG.style === 'setcode' ? (regionOfCardId(c.id, set.id) ?? setPrefix) : '';
       return pcByKey.get(`${region}|${stripNum(c.number)}`)
         // A set with only one scheme upstream still resolves when our id shape says
         // otherwise (most modern sets are EN-only).
@@ -230,9 +275,16 @@ function regionOfCardId(id, setId) {
       const hit = lookup(c);
       if (!hit) continue;
       matched++;
-      const pcName = norm(String(hit.p['product-name']).replace(/\b[A-Z0-9]{2,6}-[A-Za-z]*\d{1,4}\s*$/, '').replace(/\[[^\]]*\]/g, ''));
+      const pcName = nameOfProduct(hit.p['product-name']);
       const ourName = norm(c.name);
-      if (pcName === ourName || pcName.includes(ourName) || ourName.includes(pcName)) nameAgree++;
+      const agrees = pcName === ourName || pcName.includes(ourName) || ourName.includes(pcName);
+      if (agrees) nameAgree++;
+      // Per-card veto on top of the per-set gate. A set can sit at 99.8% agreement
+      // and still hold one poisoned pair: PriceCharting lists token products in the
+      // same console under their own 1..N numbering, and mtg-fdn #1 "Sire of Seven
+      // Deaths" matched exactly that ("Cat // Cat #1", $0.40). One bad row never
+      // moves the per-set ratio enough to trip the gate.
+      if (!agrees) { nameVetoed++; continue; }
 
       const price = usd(hit.p['loose-price']);
       if (!price) continue;
@@ -244,7 +296,7 @@ function regionOfCardId(id, setId) {
         market_avg: price,
         // The column defaults to THB — without this every USD price renders ~36x low.
         currency: 'USD',
-        game: 'yugioh',
+        game: GAME,
         printing: null,
         source_links: [`${BASE}/game/${encodeURIComponent(consoleName.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
         source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: consoleName, method: 'pc_loose' },
@@ -290,7 +342,7 @@ function regionOfCardId(id, setId) {
         if (pinned.has(c.id)) { protectedRows++; continue; }
         rows.push({
           card_id: c.id, language: 'en', condition: 'Raw_NM', market_avg: price,
-          currency: 'USD', game: 'yugioh', printing: null,
+          currency: 'USD', game: GAME, printing: null,
           source_links: [`${BASE}/game/${encodeURIComponent(consoleName.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
           source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: consoleName, method: 'pc_loose_byname' },
           last_updated: now, last_priced_at: now,
@@ -312,7 +364,8 @@ function regionOfCardId(id, setId) {
 
   console.log(`\nprepared ${allRows.length} Raw_NM rows (matched ${totalMatched}/${totalCards} cards in mapped sets)`);
   if (noConsole) console.log(`${noConsole} sets have no PriceCharting console — neither vendor carries them`);
-  if (protectedRows) console.log(`skipped ${protectedRows} rows pinned to admin/cardstreet`);
+  if (nameVetoed) console.log(`${nameVetoed} number matches vetoed because the names disagree (token/variant collisions)`);
+  if (protectedRows) console.log(`skipped ${protectedRows} cards that already have a Raw_NM row${ONLY_MISSING ? '' : ' pinned to admin/cardstreet'}`);
   if (skippedSets.length) console.log(`skipped on name disagreement: ${skippedSets.join(', ')}`);
   if (allRows.length) {
     const prices = allRows.map((r) => r.market_avg).sort((a, b) => a - b);
