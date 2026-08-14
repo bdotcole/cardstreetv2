@@ -86,6 +86,23 @@
          without this the WebView denies the audio leg of getUserMedia, which
          fails the whole capture (camera included). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- RECORD_AUDIO alone is NOT enough. Capacitor's BridgeWebChromeClient
+         answers a WebView AUDIO_CAPTURE request by requesting RECORD_AUDIO *and*
+         MODIFY_AUDIO_SETTINGS together, and its callback denies the whole
+         PermissionRequest unless every permission comes back granted. An
+         undeclared normal permission is denied without a prompt, so omitting
+         this line silently kills the audio+video getUserMedia — which is what
+         versionCode 18 shipped with. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Required on Android 13+ (API 33+) for push notifications to be delivered. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Feature requirements -->
+
+    <!-- RECORD_AUDIO implies android.hardware.microphone with required="true",
+         which makes Play hide the app from every mic-less device model. Only
+         breakers broadcasting need a mic; buyers, scanners and collectors don't.
+         Play flagged 8 devices dropped on the versionCode 18 upload for exactly
+         this. Declare it optional and keep asking at runtime instead. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>
