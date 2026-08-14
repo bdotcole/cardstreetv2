@@ -227,13 +227,27 @@ export default function LiveHubPage() {
 
                 {feed.name === 'ready' && (
                     <>
-                        {liveNow.length === 0 && upcoming.length === 0 && (
-                            <div className="min-h-[40vh] flex flex-col items-center justify-center text-center">
-                                <i className="fa-solid fa-tower-broadcast text-slate-600 text-3xl mb-4"></i>
-                                <p className="text-sm text-slate-400">
-                                    {t('live.hub.empty') || 'No shows right now — check back soon'}
-                                </p>
-                            </div>
+                        {/* Empty LIVE slot doubles as breaker recruitment — an empty
+                            feed is exactly when a would-be host is most persuadable. */}
+                        {liveNow.length === 0 && (
+                            <section className="mb-8">
+                                <div className="glass rounded-2xl border-white/10 px-6 py-10 text-center">
+                                    <i className="fa-solid fa-tower-broadcast text-slate-500 text-3xl mb-4"></i>
+                                    <h2 className="text-lg font-black tracking-tight mb-2">
+                                        {t('live.hub.noLiveTitle') || "No one's live right now"}
+                                    </h2>
+                                    <p className="text-sm text-slate-400 leading-relaxed max-w-sm mx-auto mb-6">
+                                        {t('live.hub.noLiveDesc') ||
+                                            'Want to be the show? Apply to become a CardStreet breaker.'}
+                                    </p>
+                                    <Link
+                                        href="/become-a-breaker"
+                                        className="inline-block px-5 py-2.5 rounded-xl bg-brand-cyan text-black text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                                    >
+                                        {t('live.hub.becomeBreaker') || 'Become a breaker'}
+                                    </Link>
+                                </div>
+                            </section>
                         )}
 
                         {liveNow.length > 0 && (
@@ -261,6 +275,19 @@ export default function LiveHubPage() {
                                     ))}
                                 </div>
                             </section>
+                        )}
+
+                        {/* Quiet recruitment path when shows are live; the empty-slot
+                            CTA above covers the no-live case. */}
+                        {liveNow.length > 0 && (
+                            <div className="mt-10 text-center">
+                                <Link
+                                    href="/become-a-breaker"
+                                    className="text-[11px] text-slate-500 hover:text-slate-300 underline underline-offset-4 transition-colors"
+                                >
+                                    {t('live.hub.becomeBreaker') || 'Become a breaker'}
+                                </Link>
+                            </div>
                         )}
                     </>
                 )}
