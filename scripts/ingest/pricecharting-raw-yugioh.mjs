@@ -92,6 +92,13 @@ const GAME_CONFIG = {
     // English print of the same set silently supplies the price.
     consoleFilter: /^one piece japanese /i,
   },
+  // English Pokemon. Japanese Pokemon is deliberately ABSENT: PriceCharting's
+  // "Pokemon Japanese <set>" products carry NO collector number at all ("Alto Mare's
+  // Latias [Holo]"), so they can only be matched by name — and 1,427 of our 1,485
+  // unpriced JA cards have english_name = null, while our JA set names are Japanese
+  // and do not match the English console names. Measured 2026-08-14: exactly 6 of
+  // the 1,485 are reachable. Fix english_name upstream before revisiting this.
+  pokemon: { category: 'pokemon-cards', consolePrefix: /^pokemon\s*/i, consoleWord: 'pokemon', style: 'hash' },
   // Lorcana promos live in their own console with their own 1..N numbering, which
   // collides with every set's base numbering — see the --promos pass at the end.
   lorcana: { category: 'lorcana-cards', consolePrefix: /^(disney\s*)?lorcana\s*/i, consoleWord: 'lorcana', style: 'hash', promoConsole: 'Lorcana Promo', promoRarities: ['Special', 'Promo'] },
