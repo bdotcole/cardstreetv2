@@ -66,6 +66,9 @@ const ALL_SETS = process.argv.includes('--all');
 // set the nightly JustTCG cron already covers would upsert PriceCharting's weekly
 // snapshot over fresher data — use it whenever the target sets are partly priced.
 const ONLY_MISSING = process.argv.includes('--only-missing');
+// Run the promo pass (see the bottom of the file). Off by default: it matches on
+// NAME rather than number, so it is a deliberately separate, narrower path.
+const PROMOS = process.argv.includes('--promos');
 const setsArg = (process.argv.find((a) => a.startsWith('--sets=')) || '').replace('--sets=', '');
 const CSV_CACHE = (process.argv.find((a) => a.startsWith('--csv=')) || '').replace('--csv=', '');
 const GAME = (process.argv.find((a) => a.startsWith('--game=')) || '--game=yugioh').replace('--game=', '');
@@ -76,7 +79,9 @@ const GAME = (process.argv.find((a) => a.startsWith('--game=')) || '--game=yugio
 const GAME_CONFIG = {
   yugioh: { category: 'yugioh-cards', consolePrefix: /^yugioh\s*/i, consoleWord: 'yugioh', style: 'setcode' },
   mtg: { category: 'magic-cards', consolePrefix: /^magic\s*/i, consoleWord: 'magic', style: 'hash' },
-  lorcana: { category: 'lorcana-cards', consolePrefix: /^(disney\s*)?lorcana\s*/i, consoleWord: 'lorcana', style: 'hash' },
+  // Lorcana promos live in their own console with their own 1..N numbering, which
+  // collides with every set's base numbering — see the --promos pass at the end.
+  lorcana: { category: 'lorcana-cards', consolePrefix: /^(disney\s*)?lorcana\s*/i, consoleWord: 'lorcana', style: 'hash', promoConsole: 'Lorcana Promo', promoRarities: ['Special', 'Promo'] },
 };
 const CFG = GAME_CONFIG[GAME];
 if (!CFG) { console.error(`--game must be one of ${Object.keys(GAME_CONFIG).join(', ')}`); process.exit(1); }
@@ -360,6 +365,73 @@ function regionOfCardId(id, setId) {
     if (!rows.length) continue;
     console.log(`  ${set.id.padEnd(14)} ${consoleName.slice(0, 44).padEnd(45)} matched ${String(matched).padStart(4)}/${String(ours.length).padEnd(4)} names ${String(Math.round(agree * 100)).padStart(3)}%  -> ${rows.length} priced (${method})`);
     allRows.push(...rows);
+  }
+
+  // ── Promo pass ────────────────────────────────────────────────────────────
+  // Lorcana prints promos with their OWN 1..N numbering in a separate console
+  // ("Lorcana Promo", 164 products), so a promo's number collides with an unrelated
+  // base card in its set — our lorcana-5 #2 is the promo "Kristoff - Reindeer
+  // Keeper" while the set's real #2 is someone else. The number path therefore
+  // cannot reach them and the per-card veto correctly refuses; they are matched on
+  // NAME instead, and only when the name resolves 1:1 on BOTH sides. Promo numbers
+  // do not agree with ours either (our Cinderella - Stouthearted is #3, PriceCharting
+  // has #2), so the number is deliberately ignored here rather than used as a check.
+  if (PROMOS && CFG.promoConsole) {
+    const promoRows = byConsole.get(CFG.promoConsole) ?? [];
+    const promoByName = new Map();
+    for (const p of promoRows) {
+      // Bracketed prints are REJECTED outright, not merely deprioritised. Our promo
+      // rows carry no variant marker, so only a plain print can stand in for them —
+      // and these variants are wildly more valuable: "Invited To The Ball
+      // [Challenge]" is $3,000 and "Elsa's Ice Palace [Challenge]" $6,250 against
+      // ordinary promos worth a few dollars. An earlier draft only demoted a variant
+      // when a plain print also existed, so names that exist ONLY as a variant took
+      // the variant's price — the parallel-underpricing bug inverted.
+      if (/\[|\(/.test(p['product-name'])) continue;
+      const key = nameOfProduct(p['product-name']);
+      if (!key) continue;
+      const prev = promoByName.get(key);
+      if (!prev) promoByName.set(key, { p, dupe: false });
+      else prev.dupe = true; // two plain prints of one name — ambiguous, dropped
+    }
+
+    const { data: promoCards, error: pcErr } = await supabase
+      .from('pokemon_cards').select('id, name, number, set_id, rarity')
+      .eq('game', GAME).eq('language', 'en').in('rarity', CFG.promoRarities);
+    if (pcErr) throw new Error(`promo cards: ${pcErr.message}`);
+
+    const already = new Set();
+    for (let i = 0; i < (promoCards ?? []).length; i += 200) {
+      const { data } = await supabase.from('market_values').select('card_id, source')
+        .eq('language', 'en').eq('condition', 'Raw_NM')
+        .in('card_id', promoCards.slice(i, i + 200).map((c) => c.id));
+      for (const m of data ?? []) if (ONLY_MISSING || ['admin', 'cardstreet'].includes(m.source)) already.add(m.card_id);
+    }
+
+    const ourNameCounts = new Map();
+    for (const c of promoCards ?? []) ourNameCounts.set(norm(c.name), (ourNameCounts.get(norm(c.name)) ?? 0) + 1);
+
+    let promoWrote = 0, promoAmbiguous = 0, promoMissing = 0;
+    for (const c of promoCards ?? []) {
+      if (already.has(c.id)) continue;
+      const key = norm(c.name);
+      if (ourNameCounts.get(key) !== 1) { promoAmbiguous++; continue; }
+      const hit = promoByName.get(key);
+      if (!hit) { promoMissing++; continue; }
+      if (hit.dupe) { promoAmbiguous++; continue; }
+      const price = usd(hit.p['loose-price']);
+      if (!price) { promoMissing++; continue; }
+      allRows.push({
+        card_id: c.id, language: 'en', condition: 'Raw_NM', market_avg: price,
+        currency: 'USD', game: GAME, printing: null,
+        source_links: [`${BASE}/game/${encodeURIComponent(CFG.promoConsole.toLowerCase().replace(/\s+/g, '-'))}/${String(hit.p.id)}`],
+        source_prices: { market_price: price, source: 'pricecharting', pricecharting_id: String(hit.p.id), console: CFG.promoConsole, method: 'pc_loose_promo' },
+        last_updated: now, last_priced_at: now,
+      });
+      promoWrote++;
+      console.log(`  promo  ${c.set_id.padEnd(12)} #${String(c.number).padEnd(5)} "${String(c.name).slice(0, 38).padEnd(39)}" -> "${String(hit.p['product-name']).slice(0, 40)}" $${price}`);
+    }
+    console.log(`promo pass: ${promoWrote} matched, ${promoAmbiguous} ambiguous (name not 1:1), ${promoMissing} absent upstream`);
   }
 
   console.log(`\nprepared ${allRows.length} Raw_NM rows (matched ${totalMatched}/${totalCards} cards in mapped sets)`);
