@@ -19,6 +19,7 @@ import {
     DEFAULT_RATIO,
     formatBulkTier,
     formatSatang,
+    isHoldLapsed,
     isNativeShell,
     MIN_CHARGE_SATANG,
     pollTotalVotes,
@@ -1272,6 +1273,18 @@ export default function BroadcastConsolePage() {
     const soldSpots = spots.filter((s) => s.status === 'sold');
     const revenueSatang = soldSpots.reduce((sum, s) => sum + s.price, 0);
 
+    // Hold expiry is a wall-clock event, not a Realtime one: nothing pushes a
+    // row when a hold lapses, so without a clock the console's amber tiles
+    // would stay amber until some unrelated state change re-rendered them.
+    // Ticks only while a hold is actually outstanding.
+    const [spotNow, setSpotNow] = useState(() => Date.now());
+    const anyHeldSpot = useMemo(() => spots.some((s) => s.status === 'held'), [spots]);
+    useEffect(() => {
+        if (!anyHeldSpot) return;
+        const timer = setInterval(() => setSpotNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [anyHeldSpot]);
+
     // ─── Slot presence: which camera slots are live, local or remote ───
     // The console's own publish fills its mode's slot; the complementary
     // slot(s) arrive as remote participants. Participant presence (identity
@@ -2322,10 +2335,12 @@ export default function BroadcastConsolePage() {
                                 </h2>
                                 <div className="grid grid-cols-6 gap-1.5">
                                     {focusedSpots.map((spot) => {
-                                        const held =
-                                            spot.status === 'held' &&
-                                            !!spot.hold_expires_at &&
-                                            Date.parse(spot.hold_expires_at) > Date.now();
+                                        // Amber = a LIVE hold only. A lapsed
+                                        // hold paints as open (emerald): the
+                                        // spot is claimable again, and the
+                                        // broadcaster reading the board as
+                                        // reserved would hold a lot back.
+                                        const held = spot.status === 'held' && !isHoldLapsed(spot, spotNow);
                                         const cls =
                                             spot.status === 'sold'
                                                 ? 'bg-brand-cyan/20 border-brand-cyan/40 text-brand-cyan'

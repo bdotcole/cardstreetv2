@@ -12,6 +12,7 @@ import { requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
+import { releaseExpiredHolds } from '@/lib/liveBreaks';
 
 const HOLD_SECONDS = 180;
 const CLAIM_WINDOW_SECONDS = 60;
@@ -58,6 +59,20 @@ export async function POST(
         }
 
         const admin = createAdminClient();
+
+        // Sweep this spot's stream before arbitrating. claim_break_spot can
+        // already steal THIS spot's lapsed hold on its own, so the sweep is
+        // for the room: the tap that lands here is also the freshest signal
+        // that someone is looking at this board, and it reopens every sibling
+        // spot whose buyer walked away. Both the lookup and the sweep are
+        // fail-soft — a claim must never 500 on housekeeping.
+        const { data: spotRow } = await admin
+            .from('break_spots')
+            .select('stream_id')
+            .eq('id', id)
+            .maybeSingle<{ stream_id: string }>();
+        if (spotRow?.stream_id) await releaseExpiredHolds(spotRow.stream_id);
+
         const { data, error } = await admin.rpc('claim_break_spot', {
             p_spot_id: id,
             p_buyer_id: user.id,

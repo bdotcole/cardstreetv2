@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
+import { releaseExpiredHolds, requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
 
 // Explicit projection instead of select('*'): livekit_egress_id is an
 // infrastructure handle and the VOD fields are the seller's dispute material
@@ -51,6 +51,12 @@ export async function GET(
         if (ctx instanceof NextResponse) return ctx;
 
         const admin = createAdminClient();
+
+        // Lazy hold sweep: no cron owns hold expiry, so the board load that
+        // would otherwise RENDER a lapsed hold as reserved is the thing that
+        // clears it. Scoped to this stream, awaited so the spots query below
+        // reads the swept state, and fail-soft (see releaseExpiredHolds).
+        await releaseExpiredHolds(id);
 
         const baseCols = ctx.isSeller ? STREAM_SELLER_COLS : STREAM_VIEWER_COLS;
         const sellerJoin = 'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)';

@@ -371,3 +371,37 @@ export async function postSystemChat(
         console.error('[LiveBreaks] system chat insert failed (non-fatal):', err);
     }
 }
+
+/**
+ * Flip lapsed holds on a stream's spots back to 'open' (release_expired_holds,
+ * 20260815_release_expired_holds.sql).
+ *
+ * Hold expiry has no cron: this is a LAZY sweep, called at the top of the
+ * reads that render or contend for a board, so a stream heals its own stale
+ * holds the moment anyone looks at it. Scoped to one stream so a busy show
+ * never sweeps the whole table; pass no id only from a deliberate global
+ * sweep.
+ *
+ * Awaited (not detached) because the caller's very next query is the board
+ * it must return — but never fatal: a sweep failure just leaves the board in
+ * today's un-swept state, and the client already treats a lapsed hold as
+ * claimable. Fails soft on 42883/PGRST202 (function absent pre-migration).
+ */
+export async function releaseExpiredHolds(streamId?: string): Promise<number> {
+    try {
+        const admin = createAdminClient();
+        const { data, error } = await admin.rpc('release_expired_holds', {
+            p_stream_id: streamId ?? null,
+        });
+        if (error) {
+            if (error.code !== '42883' && error.code !== 'PGRST202') {
+                console.error('[LiveBreaks] hold sweep failed (non-fatal):', error.message);
+            }
+            return 0;
+        }
+        return typeof data === 'number' ? data : 0;
+    } catch (err) {
+        console.error('[LiveBreaks] hold sweep failed (non-fatal):', err);
+        return 0;
+    }
+}

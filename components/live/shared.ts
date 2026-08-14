@@ -158,6 +158,32 @@ export interface LiveSpotRow {
     assigned_entity?: string | null;
 }
 
+/** The two fields every availability check reads — accepts any spot-shaped row. */
+type SpotHoldFields = Pick<LiveSpotRow, 'status' | 'hold_expires_at'>;
+
+/**
+ * A 'held' spot whose hold_expires_at has passed. Such a row is functionally
+ * OPEN — claim_break_spot steals it on the next tap — but the stored status
+ * still says 'held' until a sweep (release_expired_holds) runs, and that
+ * sweep is lazy, triggered by board loads and claims rather than a cron.
+ *
+ * So the DB status alone is NEVER the answer on the client: a board that
+ * reads it raw paints an abandoned spot as reserved to the whole room for as
+ * long as nobody happens to reload. Availability goes through isSpotOpenNow.
+ */
+export function isHoldLapsed(spot: SpotHoldFields, now: number): boolean {
+    return (
+        spot.status === 'held' &&
+        !!spot.hold_expires_at &&
+        Date.parse(spot.hold_expires_at) <= now
+    );
+}
+
+/** Should the board treat this spot as available? Open, or a lapsed hold. */
+export function isSpotOpenNow(spot: SpotHoldFields, now: number): boolean {
+    return spot.status === 'open' || isHoldLapsed(spot, now);
+}
+
 /**
  * Stripe's minimum chargeable amount in THB is ฿10.00 (1000 satang); a
  * PaymentIntent below it is rejected outright with `amount_too_small`. Spot

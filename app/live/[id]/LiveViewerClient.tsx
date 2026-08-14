@@ -22,6 +22,8 @@ import {
     formatBulkTier,
     formatCountdown,
     formatSatang,
+    isHoldLapsed,
+    isSpotOpenNow,
     nameInitials,
     pollTotalVotes,
     type LiveChatMessage,
@@ -725,7 +727,11 @@ export default function LiveViewerClient() {
     );
 
     // ─── Derived ───
-    const openCount = activeSpots.filter((s) => s.status === 'open').length;
+    // Counts what a buyer can actually tap, not what the DB status column
+    // says: a lapsed hold is claimable, so excluding it under-reported the
+    // "N left" badge — and a lot whose whole remainder was abandoned holds
+    // read as sold out with a claimable board underneath.
+    const openCount = activeSpots.filter((s) => isSpotOpenNow(s, now)).length;
 
     const mainTrack = remoteFeeds.video.main ?? null;
     const tableTrack = remoteFeeds.video.table ?? null;
@@ -791,11 +797,7 @@ export default function LiveViewerClient() {
     // this hidden gesture. Server-side the routes re-verify the admin role.
     const houseActionFor = (spot: LiveSpotRow): 'reserve' | 'release' | null => {
         if (!isAdmin) return null;
-        const holdLapsed =
-            spot.status === 'held' &&
-            !!spot.hold_expires_at &&
-            Date.parse(spot.hold_expires_at) <= now;
-        if (spot.status === 'open' || holdLapsed) return 'reserve';
+        if (isSpotOpenNow(spot, now)) return 'reserve';
         // order_id survives the API's visibility filter only on the caller's
         // own spots, so sold + no order + mine = my house reservation — never
         // a real (paid) purchase of mine, which always carries its order id.
@@ -827,12 +829,8 @@ export default function LiveViewerClient() {
                 const mine = spot.held_by === myUserId && spot.status === 'held';
                 const soldMine = spot.status === 'sold' && spot.buyer_id === myUserId;
                 const flashing = flashSpots.has(spot.id);
-                const expired =
-                    spot.status === 'held' &&
-                    !!spot.hold_expires_at &&
-                    Date.parse(spot.hold_expires_at) <= now;
-                const claimable =
-                    canBuyLot(lot) && (spot.status === 'open' || (expired && !mine));
+                const expired = isHoldLapsed(spot, now);
+                const claimable = canBuyLot(lot) && isSpotOpenNow(spot, now) && !mine;
                 const houseAct = houseActionFor(spot);
                 return (
                     <motion.button
@@ -1406,7 +1404,7 @@ export default function LiveViewerClient() {
                             const lotSpots = spots
                                 .filter((s) => s.stream_item_id === lot.id)
                                 .sort((a, b) => a.spot_number - b.spot_number);
-                            const open = lotSpots.filter((s) => s.status === 'open').length;
+                            const open = lotSpots.filter((s) => isSpotOpenNow(s, now)).length;
                             const sold = lotSpots.filter((s) => s.status === 'sold').length;
                             const presale = canBuyLot(lot);
                             return (
