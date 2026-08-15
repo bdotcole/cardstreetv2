@@ -1,9 +1,16 @@
 /**
  * POST /api/live/streams/[id]/settle — Smart-Bundling settlement after a
  * stream ends: group each buyer's PAID spot orders into ONE shipments row
- * (one Flash parcel, one fee), quote shipping by combined weight, and mint a
- * single shipping-fee order the buyer pays ON-SESSION later (spot orders
- * carried zero shipping by design).
+ * (one Flash parcel, one waybill).
+ *
+ * Settle charges NOTHING. Since 20260816_first_checkout_shipping the buyer's
+ * FIRST spot checkout in the stream carried the Flash-quoted base shipping
+ * fee (later checkouts ship free, plus any per-lot increment), so this route
+ * only records the SUM of shipping already collected on the grouped orders in
+ * shipments.shipping_fee — bookkeeping for the waybill — and shipments start
+ * at 'pending', ready for label mint. The old model's `liveship_` fee order
+ * is retired; the 'awaiting_shipping_fee' status stays in the enum for
+ * legacy rows (lib/liveSpotFulfillment still flips any in-flight ones).
  *
  * Idempotent: a buyer who already has a shipment for this stream is skipped,
  * and only orders with shipment_id still NULL are grouped — a re-run after a
@@ -12,23 +19,16 @@
 
 import { NextResponse } from 'next/server';
 
-// Settlement makes one Flash rate call per buyer, so wall clock scales with
-// the size of the break — a 40-buyer show blows straight past the default
-// function timeout. 300s matches the other long-running routes (/api/scan,
-// /api/cron/pricecharting). The idempotency contract above still covers a
-// break big enough to exhaust even this: the broadcaster re-runs settle and
-// only the missed buyers are picked up.
+// No external calls remain (shipping was quoted and charged at spot
+// checkout), but a big break is still one buyer-loop of sequential DB writes.
+// 300s keeps a 100-buyer show comfortably inside the budget; the idempotency
+// contract above covers anything that could still exhaust it.
 export const runtime = 'nodejs';
 export const maxDuration = 300;
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcaster } from '@/lib/liveBreaks';
 import {
-    estimateRateWithCityFallback,
-    isRegionError,
-    fallbackShippingSatang,
     estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
     type ParcelItemInfo,
 } from '@/lib/flashExpress';
 
@@ -54,67 +54,7 @@ interface SpotOrderRow {
     status: string;
     shipment_id: string | null;
     break_spot_id: string;
-    stripe_region: string | null;
-}
-
-/**
- * Get-or-create the ONE shipping-fee order the buyer pays on-session later;
- * its `liveship_<shipmentId>` transfer_group keys the existing checkout +
- * finalize rail (no platform fee — pass-through freight). Idempotent by
- * transfer_group lookup: a re-run, a concurrent settle, or the
- * partial-failure backfill can never mint a second payable fee order — a
- * duplicate in the same group would double what the webhook flips to paid.
- * Throws with a describable message on insert failure; the caller records it.
- */
-async function ensureShippingFeeOrder(
-    admin: SupabaseClient,
-    shipment: { id: string; buyer_id: string; shipping_fee: number },
-    sellerId: string,
-    sellerRegion: 'th' | 'us',
-): Promise<string> {
-    const transferGroup = `liveship_${shipment.id}`;
-
-    const { data: existing } = await admin
-        .from('orders')
-        .select('id')
-        .eq('transfer_group', transferGroup)
-        .neq('status', 'cancelled')
-        .limit(1)
-        .maybeSingle<{ id: string }>();
-
-    let feeOrderId = existing?.id ?? null;
-    if (!feeOrderId) {
-        const { data: feeOrder, error: feeOrderErr } = await admin
-            .from('orders')
-            .insert({
-                listing_id: null,
-                buyer_id: shipment.buyer_id,
-                seller_id: sellerId,
-                status: 'pending_payment',
-                total_amount: shipment.shipping_fee,
-                platform_fee: 0,
-                shipping_fee: 0,
-                escrow_status: 'held',
-                payment_method: 'credit_card',
-                transfer_group: transferGroup,
-                stripe_region: sellerRegion,
-            })
-            .select('id')
-            .single<{ id: string }>();
-        if (feeOrderErr || !feeOrder) {
-            throw new Error(`fee order insert failed (${feeOrderErr?.message})`);
-        }
-        feeOrderId = feeOrder.id;
-    }
-
-    // CAS: only fill an empty link, never clobber one a concurrent run set.
-    await admin
-        .from('shipments')
-        .update({ shipping_fee_order_id: feeOrderId })
-        .eq('id', shipment.id)
-        .is('shipping_fee_order_id', null);
-
-    return feeOrderId;
+    shipping_fee: number | null;
 }
 
 export async function POST(
@@ -157,10 +97,12 @@ export async function POST(
         // 'paid' is the terminal state a finalized spot order sits in — spot
         // orders never enter the per-order label pipeline, so later statuses
         // don't occur here. pending_payment (buyer never paid) and any
-        // cancelled/refunded rows are excluded.
+        // cancelled/refunded rows are excluded. shipping_fee rides along: the
+        // buyer's first batch carries the collected base fee (later batches 0
+        // or the lots' increments), and the shipment records the sum.
         const { data: orders } = await admin
             .from('orders')
-            .select('id, buyer_id, seller_id, status, shipment_id, break_spot_id, stripe_region')
+            .select('id, buyer_id, seller_id, status, shipment_id, break_spot_id, shipping_fee')
             .in('id', orderIds)
             .eq('status', 'paid')
             .returns<SpotOrderRow[]>();
@@ -171,14 +113,9 @@ export async function POST(
         // shipment untouched.
         const { data: existingShipments } = await admin
             .from('shipments')
-            .select('id, buyer_id, shipping_fee, shipping_fee_order_id')
+            .select('id, buyer_id')
             .eq('stream_id', stream.id)
-            .returns<{
-                id: string;
-                buyer_id: string;
-                shipping_fee: number;
-                shipping_fee_order_id: string | null;
-            }[]>();
+            .returns<{ id: string; buyer_id: string }[]>();
         const settledBuyers = new Set((existingShipments ?? []).map(s => s.buyer_id));
 
         const byBuyer = new Map<string, SpotOrderRow[]>();
@@ -193,51 +130,19 @@ export async function POST(
             byBuyer.set(order.buyer_id, list);
         }
 
-        // Seller profile up front: both the quote legs and the fee-order
-        // backfill below need the platform region.
-        const { data: sellerProfile } = await admin
-            .from('profiles')
-            .select(`${SHIPPING_PROFILE_COLS}, stripe_region`)
-            .eq('id', stream.seller_id)
-            .maybeSingle<ShippingProfile & { stripe_region: string | null }>();
-        const sellerRegion =
-            sellerProfile?.stripe_region === 'th' || sellerProfile?.stripe_region === 'us'
-                ? sellerProfile.stripe_region
-                : 'us';
-
         const errors: string[] = [];
-
-        // ─── Re-run repair: shipments whose fee order never landed ───
-        // A previous settle could insert the shipment then fail before the fee
-        // order (or before linking it) — the buyer would never be charged
-        // freight. Backfill from the stored shipment row; the helper dedupes
-        // by transfer_group, so an orphaned-but-unlinked fee order is relinked
-        // rather than duplicated. Must run BEFORE the no-new-buyers early
-        // return: on a re-run every order already has shipment_id, so this is
-        // the only code that still executes.
-        let feeOrdersBackfilled = 0;
-        for (const s of existingShipments ?? []) {
-            if (s.shipping_fee_order_id !== null) continue;
-            try {
-                await ensureShippingFeeOrder(admin, s, stream.seller_id, sellerRegion);
-                feeOrdersBackfilled++;
-            } catch (err: any) {
-                errors.push(`shipment ${s.id}: fee backfill failed (${err?.message ?? err})`);
-            }
-        }
 
         if (byBuyer.size === 0) {
             await admin.from('streams').update({ settled_at: new Date().toISOString() }).eq('id', stream.id);
             return NextResponse.json({
-                success: errors.length === 0,
+                success: true,
                 shipments: [],
                 skippedBuyers,
-                feeOrdersBackfilled,
                 errors,
             });
         }
 
-        // ─── Lot snapshots for weights + profiles for the quote legs ───
+        // ─── Lot snapshots for weights + buyer profiles for the address ───
         const lotIds = [
             ...new Set(
                 eligible
@@ -265,7 +170,6 @@ export async function POST(
             buyerId: string;
             orders: number;
             shippingFee: number;
-            shippingFeeOrderId: string | null;
         }[] = [];
 
         for (const [buyerId, buyerOrders] of byBuyer) {
@@ -284,27 +188,13 @@ export async function POST(
                 });
                 const weightGrams = estimateParcelWeightGramsForItems(items);
 
-                let shippingSatang: number;
-                try {
-                    const quote = await estimateRateWithCityFallback({
-                        srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
-                        srcCityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
-                        srcPostalCode: sellerProfile?.postcode || '10500',
-                        dstProvinceName: buyer?.province || 'กรุงเทพมหานคร',
-                        dstCityName: buyer?.state || buyer?.district || 'เขตบางรัก',
-                        dstPostalCode: buyer?.postcode || '10110',
-                        weight: weightGrams,
-                        ...estimateParcelDimsCmForItems(items),
-                    });
-                    shippingSatang = quote.estimatePrice + quote.upCountryAmount;
-                } catch (err) {
-                    shippingSatang = fallbackShippingSatang(sellerProfile?.province, buyer?.province);
-                    if (isRegionError(err)) {
-                        console.warn(`[Live/Settle] Flash region mismatch for buyer ${buyerId} — fallback`);
-                    } else {
-                        console.error(`[Live/Settle] Flash estimate error for buyer ${buyerId} — fallback:`, err);
-                    }
-                }
+                // What the buyer ALREADY paid in freight across their batches
+                // (first batch's base quote + any per-lot increments) — pure
+                // bookkeeping on the waybill record; nothing new is charged.
+                const collectedSatang = buyerOrders.reduce(
+                    (sum, o) => sum + Math.round(Number(o.shipping_fee || 0) * 100),
+                    0,
+                );
 
                 const { data: shipment, error: shipmentErr } = await admin
                     .from('shipments')
@@ -312,8 +202,10 @@ export async function POST(
                         buyer_id: buyerId,
                         seller_id: stream.seller_id,
                         stream_id: stream.id,
-                        status: 'awaiting_shipping_fee',
-                        shipping_fee: shippingSatang / 100,
+                        // Shipping is already collected — the parcel is ready
+                        // for label mint immediately.
+                        status: 'pending',
+                        shipping_fee: collectedSatang / 100,
                         address_snapshot: buyer
                             ? {
                                 display_name: buyer.display_name,
@@ -332,12 +224,12 @@ export async function POST(
                     .single<{ id: string }>();
 
                 let shipmentId: string;
-                let shipmentFeeThb = shippingSatang / 100;
+                let shipmentFeeThb = collectedSatang / 100;
                 if (shipmentErr || !shipment) {
                     // 23505 on the (stream_id, buyer_id) unique index: a
                     // concurrent settle already created this buyer's shipment.
-                    // Adopt it — the shipment_id CAS and fee helper below are
-                    // both idempotent — instead of dropping the buyer.
+                    // Adopt it — the shipment_id CAS below is idempotent —
+                    // instead of dropping the buyer.
                     if (shipmentErr?.code !== '23505') {
                         errors.push(`buyer ${buyerId}: shipment insert failed (${shipmentErr?.message})`);
                         continue;
@@ -353,7 +245,7 @@ export async function POST(
                         continue;
                     }
                     shipmentId = adopted.id;
-                    // The winner's stored quote is the binding one.
+                    // The winner's stored record is the binding one.
                     shipmentFeeThb = adopted.shipping_fee;
                 } else {
                     shipmentId = shipment.id;
@@ -367,26 +259,11 @@ export async function POST(
                     .in('id', buyerOrders.map(o => o.id))
                     .is('shipment_id', null);
 
-                // The one shipping-fee order the buyer pays on-session later
-                // (see ensureShippingFeeOrder for the idempotency contract).
-                let feeOrderId: string | null = null;
-                try {
-                    feeOrderId = await ensureShippingFeeOrder(
-                        admin,
-                        { id: shipmentId, buyer_id: buyerId, shipping_fee: shipmentFeeThb },
-                        stream.seller_id,
-                        sellerRegion,
-                    );
-                } catch (feeErr: any) {
-                    errors.push(`buyer ${buyerId}: ${feeErr?.message ?? feeErr}`);
-                }
-
                 createdShipments.push({
                     id: shipmentId,
                     buyerId,
                     orders: buyerOrders.length,
                     shippingFee: shipmentFeeThb,
-                    shippingFeeOrderId: feeOrderId,
                 });
             } catch (err: any) {
                 errors.push(`buyer ${buyerId}: ${err?.message ?? err}`);
@@ -403,7 +280,6 @@ export async function POST(
             success: errors.length === 0,
             shipments: createdShipments,
             skippedBuyers,
-            feeOrdersBackfilled,
             errors,
         });
     } catch (err: any) {

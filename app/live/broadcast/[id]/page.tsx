@@ -264,6 +264,10 @@ export default function BroadcastConsolePage() {
     const [lotEntities, setLotEntities] = useState<string[]>(['', '']);
     // Bulk discounts: up to 3 {qty, pct} rows, kept as strings while editing.
     const [lotTiers, setLotTiers] = useState<{ qty: string; pct: string }[]>([]);
+    // Extra shipping per spot (THB in the input, satang on the wire) applied
+    // to a buyer's second-and-later checkouts — their first batch pays the
+    // real Flash quote. Empty/0 = free after the first checkout.
+    const [lotShipThb, setLotShipThb] = useState('');
     const [creatingLot, setCreatingLot] = useState(false);
 
     const supabaseRef = useRef(createClient());
@@ -983,6 +987,11 @@ export default function BroadcastConsolePage() {
         const bulkTiers = lotTiers
             .map((tier) => ({ qty: parseInt(tier.qty, 10), discountPct: parseInt(tier.pct, 10) }))
             .filter((tier) => Number.isFinite(tier.qty) && Number.isFinite(tier.discountPct));
+        // THB -> satang; anything unparsable or negative degrades to 0 (free
+        // after the first checkout), matching the server's >= 0 validation.
+        const shipThb = parseFloat(lotShipThb);
+        const incrementalShipSatang =
+            Number.isFinite(shipThb) && shipThb > 0 ? Math.round(shipThb * 100) : 0;
         setCreatingLot(true);
         try {
             const res = await fetch(`/api/live/streams/${streamId}/lots`, {
@@ -1001,6 +1010,8 @@ export default function BroadcastConsolePage() {
                             ? entities.map((label) => ({ label }))
                             : undefined,
                     bulkTiers: bulkTiers.length > 0 ? bulkTiers : undefined,
+                    incrementalShipSatang:
+                        incrementalShipSatang > 0 ? incrementalShipSatang : undefined,
                 }),
             });
             const data = await res.json();
@@ -1012,6 +1023,7 @@ export default function BroadcastConsolePage() {
             setLotPresale(false);
             setLotEntities(['', '']);
             setLotTiers([]);
+            setLotShipThb('');
             setShowAddLot(false);
             await loadDetail();
         } catch {
@@ -1019,7 +1031,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setCreatingLot(false);
         }
-    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, stream?.status, streamId, loadDetail, showToast, t]);
+    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, lotShipThb, stream?.status, streamId, loadDetail, showToast, t]);
 
     const patchLot = useCallback(
         async (lotId: string, body: Record<string, unknown>) => {
@@ -1969,6 +1981,23 @@ export default function BroadcastConsolePage() {
                                                 onChange={(e) => setLotPacks(e.target.value)}
                                                 className={inputCls}
                                             />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                {t('live.console.extraShipPerSpot') || 'Extra shipping / spot (THB)'}
+                                            </span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={lotShipThb}
+                                                onChange={(e) => setLotShipThb(e.target.value)}
+                                                placeholder="0"
+                                                className={inputCls}
+                                            />
+                                            <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                {t('live.console.extraShipHint') ||
+                                                    "A buyer's first checkout pays real shipping; spots bought after add this each. 0 = free."}
+                                            </span>
                                         </label>
                                     </div>
                                     {/* character_break: the character/team list — the spot

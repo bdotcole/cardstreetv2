@@ -140,6 +140,9 @@ export interface LiveLotRow {
     break_entities?: { key: string; label: string }[] | null;
     /** Bulk-discount tiers (read via bulkTiersOf). Optional until 20260813_character_breaks_bulk.sql. */
     bulk_tiers?: unknown;
+    /** Per-spot shipping increment (satang) on a buyer's second-and-later
+     *  checkouts. Optional until 20260816_first_checkout_shipping.sql. */
+    incremental_ship_satang?: number;
 }
 
 export interface LiveSpotRow {
@@ -186,11 +189,12 @@ export function isSpotOpenNow(spot: SpotHoldFields, now: number): boolean {
 
 /**
  * Stripe's minimum chargeable amount in THB is ฿10.00 (1000 satang); a
- * PaymentIntent below it is rejected outright with `amount_too_small`. Spot
- * batches carry no shipping fee to lift a cheap lot over the line the way a
- * marketplace order does, so a single ฿1 spot is unchargeable — the floor has
- * to be enforced by us, at lot creation and again at checkout, or the buyer
- * meets Stripe's raw error at the payment sheet.
+ * PaymentIntent below it is rejected outright with `amount_too_small`. Only a
+ * buyer's FIRST spot batch in a stream carries a shipping fee to lift a cheap
+ * lot over the line the way a marketplace order does — later batches ship
+ * free (or a small per-lot increment), so a single ฿1 spot is unchargeable —
+ * the floor has to be enforced by us, at lot creation and again at checkout,
+ * or the buyer meets Stripe's raw error at the payment sheet.
  *
  * The break_spots CHECK constraint stays at >= 100 satang deliberately: this
  * is a route-level floor, so raising it later needs no migration.

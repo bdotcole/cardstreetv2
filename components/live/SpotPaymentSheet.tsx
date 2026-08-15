@@ -22,8 +22,10 @@ import { formatSatang } from '@/components/live/shared';
  *        -> orders flip paid, spots flip sold, the board updates via Realtime
  *
  * Both server calls happen up front (on open) so Elements can mount with the
- * PI's client_secret directly — unlike PaymentModal there is no shipping
- * estimate to wait for; the spot prices are already locked by the hold.
+ * PI's client_secret directly — unlike PaymentModal there is no separate
+ * shipping estimate to wait for: spots/checkout itself quotes shipping when
+ * this is the buyer's first batch in the stream (free after that, apart from
+ * a lot's optional per-spot increment) and returns it as shippingSatang.
  */
 
 // Mirrors components/PaymentModal.tsx: NEXT_PUBLIC_* must be read as static
@@ -109,8 +111,12 @@ interface CheckoutSession {
     /** Pre-discount sum of the spots' prices; equals totalSatang when no
      *  bulk-discount tier applied. */
     originalTotalSatang: number;
-    /** originalTotalSatang - totalSatang (0 = no discount). */
+    /** Pre-shipping items discount (0 = no discount). */
     discountSatang: number;
+    /** Shipping included in totalSatang: > 0 = the first-batch fee (or a
+     *  lot increment), 0 = free shipping, null = pre-20260816 server (no
+     *  shipping line rendered). */
+    shippingSatang: number | null;
     sellerStripeAccount: string | null;
     clientSecret: string;
 }
@@ -365,6 +371,10 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                         typeof checkoutData.discountSatang === 'number'
                             ? checkoutData.discountSatang
                             : 0,
+                    shippingSatang:
+                        typeof checkoutData.shippingSatang === 'number'
+                            ? checkoutData.shippingSatang
+                            : null,
                     sellerStripeAccount: account,
                     clientSecret: piData.client_secret,
                 });
@@ -540,6 +550,32 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                                         </span>
                                     </div>
                                 </>
+                            )}
+                            {/* Shipping (20260816 servers send shippingSatang): the
+                                buyer's first batch in the stream carries the fee;
+                                later batches show the free-shipping state. */}
+                            {session && session.shippingSatang !== null && (
+                                <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10 text-sm">
+                                    {session.shippingSatang > 0 ? (
+                                        <>
+                                            <span className="text-slate-400 font-bold">
+                                                {t('live.payment.shipping') || 'Shipping'}
+                                            </span>
+                                            <span className="text-slate-200 font-bold">
+                                                {formatSatang(session.shippingSatang)}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-emerald-300 font-bold">
+                                                {t('live.payment.freeShipping') || 'Free shipping'}
+                                            </span>
+                                            <span className="text-emerald-300 font-bold">
+                                                {formatSatang(0)}
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
                             )}
                             <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10">
                                 <span className="text-xs font-black uppercase tracking-widest text-slate-300">

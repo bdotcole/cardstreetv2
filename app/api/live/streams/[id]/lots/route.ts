@@ -82,6 +82,7 @@ export async function POST(
         let cardData = body?.cardData ?? body?.card_data;
         let breakEntities: BreakEntity[] | null = null;
         let bulkTiers: BulkTier[] | null = null;
+        let incrementalShipSatang = 0;
 
         // Presales (20260810_presales.sql): the seller opts a break lot into
         // pre-live spot sales at creation. Break types only — buy_now pins a
@@ -167,6 +168,26 @@ export async function POST(
                     );
                 }
             }
+
+            // ─── Extra shipping per spot (20260816_first_checkout_shipping) ───
+            // A buyer's SECOND-and-later checkouts in the stream ship free by
+            // default; this per-spot increment (satang) is the seller's opt-in
+            // surcharge on those. The first checkout always carries the real
+            // Flash quote instead — see app/api/live/spots/checkout.
+            const rawIncShip = body?.incrementalShipSatang ?? body?.incremental_ship_satang;
+            if (rawIncShip != null) {
+                if (
+                    typeof rawIncShip !== 'number' ||
+                    !Number.isInteger(rawIncShip) ||
+                    rawIncShip < 0
+                ) {
+                    return NextResponse.json(
+                        { error: 'incrementalShipSatang must be an integer >= 0 (satang)' },
+                        { status: 400 },
+                    );
+                }
+                incrementalShipSatang = rawIncShip;
+            }
         } else {
             // buy_now: a pinned marketplace listing. The lot must reference a
             // listing the seller actually owns and can still sell.
@@ -247,6 +268,7 @@ export async function POST(
             ...(presaleEnabled ? { presale_enabled: true } : null),
             ...(breakEntities ? { break_entities: breakEntities } : null),
             ...(bulkTiers ? { bulk_tiers: bulkTiers } : null),
+            ...(incrementalShipSatang > 0 ? { incremental_ship_satang: incrementalShipSatang } : null),
         };
 
         let { data: lot, error: lotErr } = await admin
@@ -254,6 +276,27 @@ export async function POST(
             .insert(fullRow)
             .select()
             .single();
+
+        // Degrade ladder, newest migration first: incremental_ship_satang
+        // (20260816) is dropped BEFORE the character_break refusal below, so a
+        // missing 20260816 column alone can't misread as "character breaks
+        // unavailable" — the retry keeps break_entities and the rest.
+        if (lotErr && lotErr.code === 'PGRST204' && incrementalShipSatang > 0) {
+            console.warn(
+                '[Live/Lots] incremental_ship_satang column missing (run 20260816_first_checkout_shipping.sql) — creating lot without extra shipping',
+            );
+            incrementalShipSatang = 0;
+            ({ data: lot, error: lotErr } = await admin
+                .from('stream_items')
+                .insert({
+                    ...baseRow,
+                    ...(presaleEnabled ? { presale_enabled: true } : null),
+                    ...(breakEntities ? { break_entities: breakEntities } : null),
+                    ...(bulkTiers ? { bulk_tiers: bulkTiers } : null),
+                })
+                .select()
+                .single());
+        }
 
         // Pre-migration tolerance. A character_break is unservable without its
         // schema (the widened item_type CHECK and break_entities from

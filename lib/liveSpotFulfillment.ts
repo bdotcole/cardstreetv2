@@ -188,6 +188,11 @@ export async function finalizeLiveSpotOrders(
  * Finalize a `liveship_*` (consolidated shipping-fee) order: CAS the fee
  * order paid and move its shipment awaiting_shipping_fee -> pending. Nothing
  * else — the Flash label is minted later from the seller console, never here.
+ *
+ * LEGACY: settle stopped minting liveship_ fee orders with
+ * 20260816_first_checkout_shipping (shipping is now collected at spot
+ * checkout). Kept so fee orders already issued under the old model still
+ * flip their shipment when the buyer pays.
  */
 export async function finalizeLiveShippingFeeOrder(
     transferGroup: string,
