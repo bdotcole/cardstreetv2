@@ -71,9 +71,10 @@
 - **Make an Offer (incl. Offers in Lives)** — `needs_build` · later.
   No offer subsystem exists; also needs off-session charge on accept.
 - **No cart; per-item charge + post-hoc bundling (Smart Bundling)** — `schema_done` · MVP.
-  Matches CardStreet's live design exactly: each win is its own charge; `shipments`
-  groups a buyer's wins into ONE Flash parcel at close. (Diverges from CardStreet's
-  own marketplace cart — live is cartless by design.)
+  Each win is its own charge; at close, `shipments` groups a buyer's paid spots into
+  one Flash parcel **per lot** (`shipments.stream_item_id`) — see Shipping & orders
+  for why this deliberately diverges from Whatnot's per-stream bundle. (Also diverges
+  from CardStreet's own marketplace cart — live is cartless by design.)
 - **Reserved-for-show vs anytime-shop** — `partial` · fast-follow.
   A pinned BIN references a marketplace listing that stays shop-purchasable; CAS
   prevents double-sell. Add a `live_reserved` flag only if hard exclusivity is wanted.
@@ -180,18 +181,28 @@
 
 ### Shipping & orders
 
-- **Smart Bundling — one buyer's wins → one shipment** — `schema_done` · MVP.
-  The `shipments` table is purpose-built: paid wins from one stream group into ONE
-  Flash parcel (one waybill, one fee) at close; `orders.shipment_id` links the
-  synthetic orders. Cleanest parity win — structurally matches Smart Bundling.
+- **Bundling — one buyer's paid spots → one shipment PER LOT** — `schema_done` · MVP.
+  **Deliberate divergence from Whatnot's Smart Bundling (one parcel per buyer per
+  stream), superseding the earlier per-stream parity here:** settle groups a buyer's
+  paid spot orders by lot (`break_spots.stream_item_id`) into one `shipments` row per
+  (buyer, lot), keyed by `shipments.stream_item_id` (unique per buyer via
+  `idx_shipments_one_per_lot_buyer`; `stream_id` kept for provenance). This matches
+  the per-lot fee model below — each break's collected shipping funds its own parcel,
+  weighed from that lot's snapshots only. `orders.shipment_id` links the spot orders.
+  (Migration `20260817_parcel_per_lot.sql`; legacy per-stream rows keep
+  `stream_item_id` NULL and settle falls back to per-stream grouping pre-migration.)
 - **Incremental / weight-tier shipping** — `partial` · MVP.
-  Bundle quoted ONCE by combined weight (Flash by weight/destination). **Divergence:
-  CardStreet charges shipping once per stream at close, not incrementally per win.** Document it.
+  **Divergence:** shipping is collected at spot CHECKOUT, per lot — the buyer's first
+  purchase from each lot carries that lot's Flash-quoted base fee; further spots from
+  the lot are free or add the seller's per-spot increment
+  (`stream_items.incremental_ship_satang`, `20260816_first_checkout_shipping.sql`).
+  Settle charges nothing; each lot's shipment records the sum already collected.
 - **Flash Express fulfillment** — `schema_done` · MVP.
   `shipments.courier='flash'`, `out_trade_no` UNIQUE (our idempotency key — Flash
   does NOT dedupe outTradeNo), reuses `lib/flashExpress.ts` + delivered webhook + release-funds.
 - **Who pays shipping; free-shipping option** — `partial` · fast-follow.
-  Buyer pays (own off-session charge at close). No live "seller offers free shipping" toggle.
+  Buyer pays (at spot checkout, per lot). A seller "free shipping" toggle would zero
+  the lot's base fee at checkout — not built.
 
 ### Post-show & trust
 
@@ -294,9 +305,10 @@ per-item video-receipt clips · **`lib/betaFeatures.ts` type extension (code, pa
   chat rows; win toasts. Real-payment E2E (hammer→paid, decline→retry, lapse→void).
 - **Phase 5 — Chat + moderation.** Send route (rate-limit + ban + freeze), moderate route
   (ban/delete/freeze), `StreamChat`. `stream_moderators` + muted-words as fast-follow.
-- **Phase 6 — Shipment consolidation + settlement on close.** `/api/streams/[id]/settle`:
-  group paid wins → one `shipments` row + synthetic orders; quote Flash ONCE; charge
-  shipping as its own off-session PI; waybill via `flashExpress.ts`. Reviews unchanged.
+- **Phase 6 — Shipment consolidation + settlement on close.** `/api/live/streams/[id]/settle`:
+  group paid spot orders → one `shipments` row per (buyer, LOT); shipping was already
+  quoted + charged per lot at spot checkout, so settle charges nothing and only records
+  the collected sum; waybill via `flashExpress.ts`. Reviews unchanged.
   Surface the escrow-gap flag (ops/legal).
 - **Phase 7 — Discovery & channel.** `follows` + `stream_reminders` + `streams.visibility`
   patches; live-now + following feeds; go-live push (FCM/Courier); `/stream/[id]` deep link;
