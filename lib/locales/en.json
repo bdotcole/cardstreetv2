@@ -1011,7 +1011,10 @@
             "houseRelease": "Release house spot",
             "houseReserved": "Spot reserved for the house",
             "houseReleased": "Spot released back to open",
-            "houseError": "Could not update that spot"
+            "houseError": "Could not update that spot",
+            "nowOpening": "Now opening",
+            "spotWord": "Spot",
+            "packsWord": "Packs"
         },
         "scheduled": {
             "startsIn": "Show starts in",
@@ -1175,6 +1178,23 @@
             "presaleToggle": "Open presales",
             "presaleHint": "Buyers can buy spots on this lot before the show goes live.",
             "presaleChip": "Presale",
+            "startAuction": "Start auction",
+            "restartAuction": "Run it again",
+            "hammer": "Sold — close now",
+            "confirmHammer": "Close the auction now and sell to the current high bidder?",
+            "auctionStartError": "Could not start the auction",
+            "auctionCloseError": "Could not close the auction",
+            "startingPrice": "Starting price (THB)",
+            "auctionDuration": "Timer",
+            "auctionDurationHint": "A bid in the final 10s extends the clock by 10s.",
+            "announceSpot": "Announce",
+            "announcedChip": "Announced",
+            "confirmAnnounce": "Announce to the room: now opening",
+            "announceError": "Could not announce the spot",
+            "announceHint": "Announce puts \"Now opening: Spot #N\" in chat and on every viewer's screen.",
+            "soldSpots": "Sold spots",
+            "noSoldSpots": "No spots sold yet",
+            "packsShort": "Packs",
             "productTypes": {
                 "box": "Box",
                 "pack": "Pack",
@@ -1216,7 +1236,30 @@
             "lightning": "Lightning",
             "star": "Star",
             "moneybag": "Money bag",
-            "trophy": "Trophy"
+            "trophy": "Trophy",
+            "you": "You",
+            "someone": "Someone"
+        },
+        "auction": {
+            "waiting": "The auction will start soon",
+            "currentBid": "Current bid",
+            "startingAt": "Starting at",
+            "bids": "bids",
+            "highBidder": "High bidder",
+            "youAreHigh": "You're the high bidder!",
+            "extended": "Extended",
+            "closing": "Closing...",
+            "bid": "Bid",
+            "customBid": "Custom bid",
+            "customBidMin": "Min",
+            "sold": "SOLD",
+            "soldTo": "Sold to",
+            "youWon": "You won! Check out now to lock it in.",
+            "payNow": "Pay now",
+            "unsold": "Ended with no bids",
+            "bidTooLow": "Bid too low",
+            "bidEnded": "The auction has ended",
+            "bidError": "Could not place your bid"
         },
         "common": {
             "back": "Back",
@@ -1248,7 +1291,8 @@
             "chase_break": "Chase break",
             "pack_wars": "Pack wars",
             "character_break": "Character break",
-            "buy_now": "Buy now"
+            "buy_now": "Buy now",
+            "auction": "Auction"
         },
         "notFound": {
             "title": "Page not found",

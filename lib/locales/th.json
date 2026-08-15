@@ -1011,7 +1011,10 @@
             "houseRelease": "ปล่อยช่องของเฮาส์",
             "houseReserved": "จองช่องให้เฮาส์แล้ว",
             "houseReleased": "ปล่อยช่องกลับเป็นว่างแล้ว",
-            "houseError": "อัปเดตช่องไม่สำเร็จ"
+            "houseError": "อัปเดตช่องไม่สำเร็จ",
+            "nowOpening": "กำลังเปิด",
+            "spotWord": "ช่อง",
+            "packsWord": "ซอง"
         },
         "scheduled": {
             "startsIn": "ไลฟ์จะเริ่มในอีก",
@@ -1175,6 +1178,23 @@
             "presaleToggle": "เปิดขายพรีเซล",
             "presaleHint": "ให้ผู้ซื้อจองซื้อช่องของล็อตนี้ได้ก่อนไลฟ์เริ่ม",
             "presaleChip": "พรีเซล",
+            "startAuction": "เริ่มประมูล",
+            "restartAuction": "ประมูลอีกครั้ง",
+            "hammer": "ขาย — ปิดประมูลเลย",
+            "confirmHammer": "ปิดประมูลตอนนี้และขายให้ผู้ให้ราคาสูงสุด?",
+            "auctionStartError": "เริ่มประมูลไม่สำเร็จ",
+            "auctionCloseError": "ปิดประมูลไม่สำเร็จ",
+            "startingPrice": "ราคาเริ่มต้น (บาท)",
+            "auctionDuration": "เวลาประมูล",
+            "auctionDurationHint": "บิดในช่วง 10 วินาทีสุดท้ายจะต่อเวลาอีก 10 วินาที",
+            "announceSpot": "ประกาศ",
+            "announcedChip": "ประกาศแล้ว",
+            "confirmAnnounce": "ประกาศให้ทั้งห้อง: กำลังเปิดช่อง",
+            "announceError": "ประกาศไม่สำเร็จ",
+            "announceHint": "ปุ่มประกาศจะแสดง \"กำลังเปิดช่อง #N\" ในแชทและบนหน้าจอผู้ชมทุกคน",
+            "soldSpots": "ช่องที่ขายแล้ว",
+            "noSoldSpots": "ยังไม่มีช่องที่ขายแล้ว",
+            "packsShort": "ซอง",
             "productTypes": {
                 "box": "กล่อง",
                 "pack": "ซอง",
@@ -1216,7 +1236,30 @@
             "lightning": "สายฟ้า",
             "star": "ดาว",
             "moneybag": "ถุงเงิน",
-            "trophy": "ถ้วยรางวัล"
+            "trophy": "ถ้วยรางวัล",
+            "you": "คุณ",
+            "someone": "ผู้ชม"
+        },
+        "auction": {
+            "waiting": "การประมูลจะเริ่มเร็วๆ นี้",
+            "currentBid": "ราคาประมูลล่าสุด",
+            "startingAt": "เริ่มต้นที่",
+            "bids": "บิด",
+            "highBidder": "ผู้ให้ราคาสูงสุด",
+            "youAreHigh": "คุณคือผู้ให้ราคาสูงสุด!",
+            "extended": "ต่อเวลา",
+            "closing": "กำลังปิด...",
+            "bid": "ประมูล",
+            "customBid": "กำหนดราคาเอง",
+            "customBidMin": "ขั้นต่ำ",
+            "sold": "ขายแล้ว",
+            "soldTo": "ขายให้",
+            "youWon": "คุณชนะประมูล! ชำระเงินตอนนี้เพื่อยืนยัน",
+            "payNow": "ชำระเงิน",
+            "unsold": "จบโดยไม่มีผู้ประมูล",
+            "bidTooLow": "ราคาต่ำเกินไป",
+            "bidEnded": "การประมูลจบแล้ว",
+            "bidError": "ประมูลไม่สำเร็จ"
         },
         "common": {
             "back": "ย้อนกลับ",
@@ -1248,7 +1291,8 @@
             "chase_break": "เชสเบรก",
             "pack_wars": "แพ็ควอร์",
             "character_break": "เบรกตัวละคร",
-            "buy_now": "ซื้อเลย"
+            "buy_now": "ซื้อเลย",
+            "auction": "ประมูล"
         },
         "notFound": {
             "title": "ไม่พบหน้านี้",

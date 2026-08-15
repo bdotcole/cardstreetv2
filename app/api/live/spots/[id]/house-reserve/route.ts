@@ -39,6 +39,20 @@ export async function POST(
         const admin = createAdminClient();
         const nowIso = new Date().toISOString();
 
+        // Auction spots settle only through the hammer — house-reserving one
+        // would sever the winner's payment vehicle mid-bidding.
+        const { data: lotCheck } = await admin
+            .from('break_spots')
+            .select('stream_items(item_type)')
+            .eq('id', id)
+            .maybeSingle<{ stream_items: { item_type: string } | null }>();
+        if (lotCheck?.stream_items?.item_type === 'auction') {
+            return NextResponse.json(
+                { error: 'Auction lots cannot be house-reserved', code: 'AUCTION_LOT' },
+                { status: 409 },
+            );
+        }
+
         // CAS: only an open spot — or a held one whose hold already lapsed
         // (same expired-hold stealing rule as the claim RPC) — can become a
         // house spot. A live hold, a real sale, or a cancelled spot all fail

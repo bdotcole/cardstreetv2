@@ -18,6 +18,8 @@ import type { User } from '@supabase/supabase-js';
 import { requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { minNextBidSatang } from '@/lib/auctionRules';
+import { CHECKOUT_HOLD_SECONDS, formatSatang } from '@/components/live/shared';
 
 export interface StreamRow {
     id: string;
@@ -47,10 +49,11 @@ export interface LotRow {
     price: number | null;
     break_opened_at: string | null;
     card_data: Record<string, unknown> | null;
+    auction_id: string | null;
 }
 
 export const LOT_GUARD_COLS =
-    'id, stream_id, seller_id, item_type, status, position, spots_total, spot_price, packs_per_spot, price, break_opened_at, card_data';
+    'id, stream_id, seller_id, item_type, status, position, spots_total, spot_price, packs_per_spot, price, break_opened_at, card_data, auction_id';
 
 // The spot-based formats. 'buy_now' prices via `price`; 'auction' is a
 // reserved seam the breaks MVP does not serve. 'character_break' needs
@@ -370,6 +373,253 @@ export async function postSystemChat(
     } catch (err) {
         console.error('[LiveBreaks] system chat insert failed (non-fatal):', err);
     }
+}
+
+/**
+ * Best-effort ephemeral broadcast onto the stream's room channel
+ * (`stream-react:{streamId}` — see components/live/streamEvents.ts for the
+ * event vocabulary). Same REST relay the sticker route uses. Never throws:
+ * every caller has a durable fallback (detail refetch, system chat), so a
+ * dropped push only delays the UI, never desyncs it.
+ */
+export async function broadcastStreamEvent(
+    streamId: string,
+    event: 'sticker' | 'auction' | 'spot_focus',
+    payload: Record<string, unknown>,
+): Promise<void> {
+    try {
+        const admin = createAdminClient();
+        await admin.channel(`stream-react:${streamId}`).httpSend(event, payload);
+    } catch (err) {
+        console.error(`[LiveBreaks] ${event} broadcast failed (non-fatal):`, err);
+    }
+}
+
+// ─── Live auctions (engine: 20260704_auction_house.sql, already in prod) ───
+
+/** Live-mode sudden death: a bid in the final 10s extends the clock +10s. */
+export const LIVE_SOFT_CLOSE_WINDOW_SECONDS = 10;
+export const LIVE_SOFT_CLOSE_EXTENSION_SECONDS = 10;
+/** Clock choices the console may set (seconds). */
+export const LIVE_AUCTION_MIN_SECONDS = 15;
+export const LIVE_AUCTION_MAX_SECONDS = 600;
+
+export interface AuctionEngineRow {
+    id: string;
+    seller_id: string;
+    status: 'live' | 'sold' | 'unsold' | 'cancelled';
+    starting_price: number;
+    current_price: number;
+    bid_count: number;
+    ends_at: string;
+    extension_count: number;
+    high_bidder_id: string | null;
+    winner_id: string | null;
+    winning_amount: number | null;
+}
+
+export const AUCTION_ENGINE_COLS =
+    'id, seller_id, status, starting_price, current_price, bid_count, ends_at, ' +
+    'extension_count, high_bidder_id, winner_id, winning_amount';
+
+/**
+ * The auction shape the live clients consume (LiveAuctionState in
+ * components/live/shared.ts): engine row + display names + the server-computed
+ * next-bid floor. Names resolve fail-soft — a missing profile renders as the
+ * anonymous label, never blocks a money path.
+ */
+export async function shapeAuctionState(
+    row: AuctionEngineRow,
+): Promise<Record<string, unknown>> {
+    const admin = createAdminClient();
+    const ids = [row.high_bidder_id, row.winner_id].filter((v): v is string => !!v);
+    const names = new Map<string, string | null>();
+    if (ids.length > 0) {
+        try {
+            const { data } = await admin
+                .from('profiles')
+                .select('id, display_name')
+                .in('id', ids)
+                .returns<{ id: string; display_name: string | null }[]>();
+            for (const p of data ?? []) names.set(p.id, p.display_name);
+        } catch {
+            // Names are decoration; the amounts are the payload.
+        }
+    }
+    return {
+        id: row.id,
+        status: row.status,
+        starting_price: row.starting_price,
+        current_price: row.current_price,
+        min_next_bid: minNextBidSatang(row.current_price, row.bid_count, row.starting_price),
+        bid_count: row.bid_count,
+        ends_at: row.ends_at,
+        extension_count: row.extension_count,
+        high_bidder_id: row.high_bidder_id,
+        high_bidder_name: row.high_bidder_id ? names.get(row.high_bidder_id) ?? null : null,
+        winner_id: row.winner_id,
+        winner_name: row.winner_id ? names.get(row.winner_id) ?? null : null,
+        winning_amount: row.winning_amount,
+    };
+}
+
+export interface CloseAuctionResult {
+    closed: boolean;
+    /** 'sold' | 'unsold' when closed (or already closed), 'live' when not due. */
+    status: string;
+    auction: AuctionEngineRow | null;
+    winnerHoldSet: boolean;
+}
+
+/**
+ * Targeted, migration-free hammer for ONE live-mode auction. CAS on
+ * (status='live', ends_at unchanged since read, high bidder unchanged) —
+ * place_bid rejects bids once NOW() >= ends_at, so a due auction's row is
+ * frozen and the optimistic loop converges in one or two passes; a soft-close
+ * extension between read and write simply fails the CAS and re-reads.
+ *
+ * With `force` (broadcaster's early hammer / "going twice... sold") the
+ * due-check is skipped but the CAS still guarantees exactly one closer wins.
+ *
+ * On a sold close, the lot's single break spot flips to a checkout hold for
+ * the winner at the winning amount — from there the EXISTING spot rail
+ * (SpotPaymentSheet -> /api/live/spots/checkout -> finalize) owns the money.
+ */
+export async function closeLiveAuction(
+    lot: LotRow,
+    opts: { force?: boolean } = {},
+): Promise<CloseAuctionResult | { error: string; status: number }> {
+    const admin = createAdminClient();
+    const auctionId = (lot as LotRow & { auction_id?: string | null }).auction_id;
+    if (!auctionId) return { error: 'No auction on this lot', status: 409 };
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const { data: a, error } = await admin
+            .from('auctions')
+            .select(AUCTION_ENGINE_COLS)
+            .eq('id', auctionId)
+            .maybeSingle<AuctionEngineRow>();
+        if (error || !a) return { error: 'Auction not found', status: 404 };
+
+        if (a.status !== 'live') {
+            // Someone else already hammered it — report the settled state.
+            return { closed: false, status: a.status, auction: a, winnerHoldSet: false };
+        }
+
+        const now = Date.now();
+        if (!opts.force && Date.parse(a.ends_at) > now) {
+            return { closed: false, status: 'live', auction: a, winnerHoldSet: false };
+        }
+
+        const won = a.high_bidder_id !== null;
+        const closePatch = won
+            ? {
+                  status: 'sold',
+                  winner_id: a.high_bidder_id,
+                  winning_amount: a.current_price,
+                  won_via: 'bid',
+                  closed_at: new Date(now).toISOString(),
+              }
+            : { status: 'unsold', closed_at: new Date(now).toISOString() };
+
+        // The CAS filters pin every field the outcome derives from; a bid
+        // landing between read and write (possible only under `force`, or in
+        // the soft-close window) zeroes the match and we re-read.
+        let cas = admin
+            .from('auctions')
+            .update(closePatch)
+            .eq('id', a.id)
+            .eq('status', 'live')
+            .eq('ends_at', a.ends_at)
+            .eq('bid_count', a.bid_count);
+        cas = a.high_bidder_id === null ? cas.is('high_bidder_id', null) : cas.eq('high_bidder_id', a.high_bidder_id);
+        const { data: updated, error: casErr } = await cas.select(AUCTION_ENGINE_COLS).maybeSingle<AuctionEngineRow>();
+        if (casErr) {
+            console.error('[LiveBreaks] auction close CAS failed:', casErr.message);
+            return { error: 'Failed to close auction', status: 500 };
+        }
+        if (!updated) continue; // lost the race — re-read
+
+        let winnerHoldSet = false;
+        if (won && updated.winner_id) {
+            // Hand the spot to the winner as a standard checkout hold. CAS on
+            // status='open': the auction spot is never claimable (the claim
+            // route refuses auction lots), so open is the only pre-hammer
+            // state. CHECKOUT_HOLD_SECONDS (5 min) is the pay window.
+            const { data: spotRow, error: spotErr } = await admin
+                .from('break_spots')
+                .update({
+                    price: updated.winning_amount ?? updated.current_price,
+                    status: 'held',
+                    held_by: updated.winner_id,
+                    hold_expires_at: new Date(now + CHECKOUT_HOLD_SECONDS * 1000).toISOString(),
+                })
+                .eq('stream_item_id', lot.id)
+                .eq('status', 'open')
+                .select('id')
+                .maybeSingle<{ id: string }>();
+            if (spotErr) {
+                console.error('[LiveBreaks] winner hold set failed:', spotErr.message);
+            }
+            winnerHoldSet = !!spotRow;
+            if (!spotRow) {
+                console.error(
+                    `[LiveBreaks] auction ${updated.id} closed sold but its spot was not open — manual follow-up needed`,
+                );
+            }
+        }
+
+        return { closed: true, status: updated.status, auction: updated, winnerHoldSet };
+    }
+
+    return { error: 'Auction is still receiving bids — try again', status: 409 };
+}
+
+/**
+ * Close announcement shared by every hammer path (console close, the bid
+ * route's lazy close on 'ended'): system chat line + an 'auction' broadcast
+ * carrying the settled state. Fail-soft throughout.
+ */
+export async function announceAuctionClose(
+    streamId: string,
+    lot: LotRow,
+    auction: AuctionEngineRow,
+    winnerHoldSet: boolean,
+): Promise<void> {
+    const admin = createAdminClient();
+    const cardName =
+        typeof (lot.card_data as { name?: unknown } | null)?.name === 'string'
+            ? (lot.card_data as { name: string }).name
+            : 'Auction lot';
+    if (auction.status === 'sold' && auction.winner_id) {
+        let winnerName: string | null = null;
+        try {
+            const { data: p } = await admin
+                .from('profiles')
+                .select('display_name')
+                .eq('id', auction.winner_id)
+                .maybeSingle<{ display_name: string | null }>();
+            winnerName = p?.display_name ?? null;
+        } catch {
+            // Name is decoration.
+        }
+        const amount = formatSatang(auction.winning_amount ?? auction.current_price);
+        await postSystemChat(
+            streamId,
+            lot.seller_id,
+            `SOLD: ${cardName} to ${winnerName ?? 'the high bidder'} for ${amount}${
+                winnerHoldSet ? ' — check out from your Spots bar to pay' : ''
+            }`,
+        );
+    } else {
+        await postSystemChat(streamId, lot.seller_id, `Auction ended with no bids: ${cardName}`);
+    }
+    const state = await shapeAuctionState(auction);
+    await broadcastStreamEvent(streamId, 'auction', {
+        lotId: lot.id,
+        auction: state,
+        at: Date.now(),
+    });
 }
 
 /**

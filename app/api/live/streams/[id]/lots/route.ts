@@ -16,6 +16,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
     ENTITY_LABEL_MAX,
     ENTITY_MIN,
+    LIVE_AUCTION_MAX_SECONDS,
+    LIVE_AUCTION_MIN_SECONDS,
     isBreakItemType,
     parseBreakEntities,
     parseBulkTiers,
@@ -58,16 +60,7 @@ export async function POST(
         const body = await req.json().catch(() => ({}));
         const itemType = typeof body?.itemType === 'string' ? body.itemType : body?.item_type;
 
-        if (itemType === 'auction') {
-            // The schema reserves the seam, but nothing serves auction lots yet
-            // (no auctions row, no bid route) — an inert lot would just confuse
-            // the console. Reject until the live-auction phase wires it.
-            return NextResponse.json(
-                { error: 'Auction lots are not available yet' },
-                { status: 400 },
-            );
-        }
-        if (typeof itemType !== 'string' || (!isBreakItemType(itemType) && itemType !== 'buy_now')) {
+        if (typeof itemType !== 'string' || (!isBreakItemType(itemType) && itemType !== 'buy_now' && itemType !== 'auction')) {
             return NextResponse.json({ error: 'Invalid itemType' }, { status: 400 });
         }
 
@@ -188,6 +181,39 @@ export async function POST(
                     );
                 }
                 incrementalShipSatang = rawIncShip;
+            }
+        } else if (itemType === 'auction') {
+            // Live auction: the winner's price comes from the bid engine, so
+            // creation only pins the floor and the clock. The auctions row is
+            // NOT minted here — the start route creates it when the breaker
+            // puts the lot on the block, so the timer never runs in the queue.
+            const startingPrice = asPositiveInt(body?.startingPrice ?? body?.starting_price);
+            if (!startingPrice || startingPrice < MIN_CHARGE_SATANG) {
+                return NextResponse.json(
+                    { error: MIN_PRICE_ERROR, code: 'MIN_CHARGE' },
+                    { status: 400 },
+                );
+            }
+            const rawDuration = body?.durationSeconds ?? body?.duration_seconds;
+            const durationSeconds = asPositiveInt(rawDuration) ?? 60;
+            if (
+                durationSeconds < LIVE_AUCTION_MIN_SECONDS ||
+                durationSeconds > LIVE_AUCTION_MAX_SECONDS
+            ) {
+                return NextResponse.json(
+                    {
+                        error: `durationSeconds must be between ${LIVE_AUCTION_MIN_SECONDS} and ${LIVE_AUCTION_MAX_SECONDS}`,
+                    },
+                    { status: 400 },
+                );
+            }
+            // The single spot carries the money; spots_total/spot_price double
+            // as display fields. The clock rides the card_data snapshot (no
+            // dedicated column; the start route reads it back).
+            spotsTotal = 1;
+            spotPrice = startingPrice;
+            if (cardData && typeof cardData === 'object' && !Array.isArray(cardData)) {
+                cardData = { ...cardData, auctionDurationSeconds: durationSeconds };
             }
         } else {
             // buy_now: a pinned marketplace listing. The lot must reference a
@@ -343,8 +369,11 @@ export async function POST(
         }
 
         // ─── Break spots: minted with the lot, priced at the snapshot ───
+        // Auction lots mint their single spot here too — it is the payment
+        // vehicle at hammer (winner's checkout hold rides it), inert until
+        // then (the claim route refuses auction lots outright).
         let spotsCreated = 0;
-        if (isBreakItemType(itemType) && spotsTotal && spotPrice) {
+        if ((isBreakItemType(itemType) || itemType === 'auction') && spotsTotal && spotPrice) {
             const spotRows = Array.from({ length: spotsTotal }, (_, i) => ({
                 stream_item_id: lot.id,
                 stream_id: stream.id,

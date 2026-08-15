@@ -26,6 +26,7 @@ import {
     isSpotOpenNow,
     nameInitials,
     pollTotalVotes,
+    type LiveAuctionState,
     type LiveChatMessage,
     type LiveLotRow,
     type LivePollRow,
@@ -35,10 +36,12 @@ import {
 import { PollOptionBars } from '@/components/live/StreamPoll';
 import {
     FloatingStickerLayer,
+    ReactionFeedLines,
     StickerTray,
     useFloatingStickers,
-    useStickerBroadcast,
+    useReactionFeed,
 } from '@/components/live/StickerReactions';
+import { useStreamEvents, type SpotFocusEvent } from '@/components/live/streamEvents';
 import type { StickerKey } from '@/components/live/stickers';
 import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
 
@@ -509,7 +512,9 @@ export default function LiveViewerClient() {
     // presale lot. A scheduled show also ticks unconditionally — the same
     // clock drives the start countdown on the landing.
     const anyHeldSpot = useMemo(() => spots.some((s) => s.status === 'held'), [spots]);
-    const tickNeeded = anyHeldSpot || stream?.status === 'scheduled';
+    // A running auction needs the clock for its countdown, same as holds do.
+    const anyLiveAuction = useMemo(() => lots.some((l) => l.auction?.status === 'live'), [lots]);
+    const tickNeeded = anyHeldSpot || anyLiveAuction || stream?.status === 'scheduled';
 
     useEffect(() => {
         if (!tickNeeded) return;
@@ -704,11 +709,59 @@ export default function LiveViewerClient() {
 
     // ─── Sticker reactions (ephemeral broadcast; nothing persists) ───
     const { floats: stickerFloats, spawn: spawnSticker, remove: removeSticker } = useFloatingStickers();
-    useStickerBroadcast(streamId, pageState === 'ready' && stream?.status === 'live', spawnSticker);
+    // Reactions also land IN CHAT with the sender's name (the floats alone
+    // proved too easy to miss in the field) — see useReactionFeed.
+    const { lines: reactionLines, push: pushReaction } = useReactionFeed();
+
+    // The breaker's "now opening" call-out — banner over the video until the
+    // next announcement (or a timeout) replaces it.
+    const [spotFocus, setSpotFocus] = useState<SpotFocusEvent | null>(null);
+    useEffect(() => {
+        if (!spotFocus) return;
+        const timer = setTimeout(() => setSpotFocus(null), 45000);
+        return () => clearTimeout(timer);
+    }, [spotFocus]);
+
+    // Auction state pushes patch the lot in place. Stale-push guard: a
+    // broadcast can arrive out of order, so an update only applies when it is
+    // at least as advanced as what we hold (bid_count monotonic per status).
+    const applyAuction = useCallback((lotId: string, auction: LiveAuctionState) => {
+        setLots((prev) =>
+            prev.map((l) => {
+                if (l.id !== lotId) return l;
+                if (
+                    l.auction &&
+                    l.auction.id === auction.id &&
+                    l.auction.status === auction.status &&
+                    auction.bid_count < l.auction.bid_count
+                ) {
+                    return l;
+                }
+                return { ...l, auction_id: auction.id, auction };
+            }),
+        );
+    }, []);
+
+    useStreamEvents(streamId, pageState === 'ready' && stream?.status === 'live', {
+        onSticker: (sticker, from) => {
+            spawnSticker(sticker);
+            pushReaction(sticker, from);
+        },
+        onAuction: (lotId, auction) => {
+            applyAuction(lotId, auction);
+            // The hammer hold rides Realtime too, but the winner's checkout
+            // bar is the product moment — refetch so it can't be late.
+            if (auction.status === 'sold' && auction.winner_id === myUserId) {
+                void refetchDetail();
+            }
+        },
+        onSpotFocus: (focus) => setSpotFocus(focus),
+    });
 
     const sendSticker = useCallback(
         (sticker: StickerKey) => {
             spawnSticker(sticker); // optimistic — the broadcast never echoes back
+            pushReaction(sticker, t('live.stickers.you') || 'You');
             void fetch(`/api/live/streams/${streamId}/react`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -723,15 +776,69 @@ export default function LiveViewerClient() {
                     // Ephemeral by design — a lost reaction is not worth a toast.
                 });
         },
-        [streamId, spawnSticker, showToast, t],
+        [streamId, spawnSticker, pushReaction, showToast, t],
+    );
+
+    // ─── Live-auction bidding ───
+    const [bidBusy, setBidBusy] = useState(false);
+    const [customBidThb, setCustomBidThb] = useState('');
+    const [showCustomBid, setShowCustomBid] = useState(false);
+
+    const placeBid = useCallback(
+        async (lot: LiveLotRow, amountSatang: number) => {
+            if (bidBusy) return;
+            setBidBusy(true);
+            try {
+                const res = await fetch(`/api/live/lots/${lot.id}/auction/bid`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amountSatang }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (data.auction) applyAuction(lot.id, data.auction as LiveAuctionState);
+                if (res.ok && data.accepted === true) {
+                    setShowCustomBid(false);
+                    setCustomBidThb('');
+                    return;
+                }
+                let message = t('live.auction.bidError') || 'Could not place your bid';
+                if (data.code === 'GEO_RESTRICTED') {
+                    message = t('live.viewer.claimGeo') || 'Buying is only available in Thailand for now';
+                } else if (data.code === 'RATE_LIMITED') {
+                    message = t('live.viewer.rateLimited') || 'Slow down a moment';
+                } else if (data.reason === 'below_min') {
+                    message = `${t('live.auction.bidTooLow') || 'Bid too low'}${
+                        typeof data.min_next_bid === 'number'
+                            ? ` — ${formatSatang(data.min_next_bid)}`
+                            : ''
+                    }`;
+                } else if (data.reason === 'ended') {
+                    message = t('live.auction.bidEnded') || 'The auction has ended';
+                } else if (data.reason === 'suspended') {
+                    message = t('live.viewer.claimSuspended') || 'Your account is suspended from buying';
+                } else if (data.reason === 'own_auction') {
+                    message = t('live.viewer.claimOwnItem') || "You can't bid on your own lot";
+                }
+                showToast(message, 'error');
+            } catch {
+                showToast(t('live.auction.bidError') || 'Could not place your bid', 'error');
+            } finally {
+                setBidBusy(false);
+            }
+        },
+        [bidBusy, applyAuction, showToast, t],
     );
 
     // ─── Derived ───
     // Counts what a buyer can actually tap, not what the DB status column
     // says: a lapsed hold is claimable, so excluding it under-reported the
     // "N left" badge — and a lot whose whole remainder was abandoned holds
-    // read as sold out with a claimable board underneath.
-    const openCount = activeSpots.filter((s) => isSpotOpenNow(s, now)).length;
+    // read as sold out with a claimable board underneath. An auction lot's
+    // single spot is the hammer's vehicle, never tappable — count it as 0.
+    const openCount =
+        activeLot?.item_type === 'auction'
+            ? 0
+            : activeSpots.filter((s) => isSpotOpenNow(s, now)).length;
 
     const mainTrack = remoteFeeds.video.main ?? null;
     const tableTrack = remoteFeeds.video.table ?? null;
@@ -898,16 +1005,19 @@ export default function LiveViewerClient() {
         </div>
     );
 
+    // Overlay messages get a text shadow — they sit on live video, where the
+    // old 12px unshadowed lines were the field test's "can't read the chat".
     const chatMessages = (limit?: number) => {
         const visible = limit ? chat.slice(-limit) : chat;
+        const shadow = limit ? ' [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]' : '';
         return visible.map((m, i) => {
-            const faded = limit ? Math.max(0.35, (i + 1) / visible.length) : 1;
+            const faded = limit ? Math.max(0.45, (i + 1) / visible.length) : 1;
             if (m.is_system) {
                 return (
                     <p
                         key={m.id}
                         style={limit ? { opacity: faded } : undefined}
-                        className="text-[11px] text-amber-300 font-bold text-center py-0.5 px-2 break-words"
+                        className={`text-[12px] text-amber-300 font-bold text-center py-0.5 px-2 break-words${shadow}`}
                     >
                         {m.body}
                     </p>
@@ -917,12 +1027,12 @@ export default function LiveViewerClient() {
                 <p
                     key={m.id}
                     style={limit ? { opacity: faded } : undefined}
-                    className="text-[12px] leading-snug py-0.5 px-2 break-words"
+                    className={`text-sm leading-snug py-1 px-2 break-words${shadow}`}
                 >
                     <span className="font-black text-brand-cyan mr-1.5">
                         {displayName(m.sender_id, m.sender)}
                     </span>
-                    <span className="text-white/90">{m.body}</span>
+                    <span className="text-white">{m.body}</span>
                 </p>
             );
         });
@@ -956,6 +1066,162 @@ export default function LiveViewerClient() {
         </div>
     );
 
+    // ─── Live auction panel (replaces the claim grid for auction lots) ───
+    const isSellerViewer = !!myUserId && stream.seller_id === myUserId;
+
+    const auctionPanel = (lot: LiveLotRow) => {
+        const a = lot.auction ?? null;
+        if (!a) {
+            return (
+                <p className="text-xs text-slate-400 text-center py-8 px-4">
+                    {t('live.auction.waiting') || 'The auction will start soon'}
+                </p>
+            );
+        }
+        const msLeft = Date.parse(a.ends_at) - now;
+        const running = a.status === 'live' && msLeft > 0;
+        const closing = a.status === 'live' && msLeft <= 0;
+        const iAmHigh = !!myUserId && a.high_bidder_id === myUserId;
+        const iWon = !!myUserId && a.status === 'sold' && a.winner_id === myUserId;
+        const urgent = running && msLeft <= 10_000;
+
+        return (
+            <div className="p-4 space-y-3">
+                <div className="flex items-end justify-between gap-3">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                            {a.bid_count > 0
+                                ? t('live.auction.currentBid') || 'Current bid'
+                                : t('live.auction.startingAt') || 'Starting at'}
+                        </p>
+                        <p className="text-2xl font-black text-white tabular-nums leading-tight">
+                            {formatSatang(a.current_price)}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-bold mt-0.5">
+                            {a.bid_count}{' '}
+                            {t('live.auction.bids') || 'bids'}
+                            {a.bid_count > 0 && a.high_bidder_name && !iAmHigh && (
+                                <span className="ml-2 text-slate-300">
+                                    {t('live.auction.highBidder') || 'High bidder'}:{' '}
+                                    {a.high_bidder_name}
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    {(running || closing) && (
+                        <div
+                            className={`px-2.5 py-1.5 rounded-xl border text-center ${
+                                urgent
+                                    ? 'bg-brand-red/15 border-brand-red/40 text-brand-red'
+                                    : 'bg-white/5 border-white/10 text-white'
+                            }`}
+                        >
+                            <p className="text-lg font-black tabular-nums leading-none">
+                                {closing
+                                    ? t('live.auction.closing') || 'Closing...'
+                                    : formatCountdown(msLeft)}
+                            </p>
+                            {a.extension_count > 0 && running && (
+                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-300 mt-1">
+                                    {t('live.auction.extended') || 'Extended'} x{a.extension_count}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {iAmHigh && running && (
+                    <p className="text-[11px] font-black uppercase tracking-widest text-emerald-300">
+                        {t('live.auction.youAreHigh') || "You're the high bidder!"}
+                    </p>
+                )}
+
+                {running && !isSellerViewer && (
+                    <div className="space-y-2">
+                        <button
+                            onClick={() => void placeBid(lot, a.min_next_bid)}
+                            disabled={bidBusy}
+                            className="w-full h-12 rounded-xl bg-brand-cyan text-brand-darker text-sm font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                        >
+                            {bidBusy ? (
+                                <i className="fa-solid fa-circle-notch animate-spin"></i>
+                            ) : (
+                                `${t('live.auction.bid') || 'Bid'} ${formatSatang(a.min_next_bid)}`
+                            )}
+                        </button>
+                        {showCustomBid ? (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={Math.ceil(a.min_next_bid / 100)}
+                                    value={customBidThb}
+                                    onChange={(e) => setCustomBidThb(e.target.value)}
+                                    placeholder={`${t('live.auction.customBidMin') || 'Min'} ${formatSatang(a.min_next_bid)}`}
+                                    className="flex-1 h-11 rounded-xl bg-black/40 border border-white/15 px-3 text-sm text-white outline-none focus:border-brand-cyan/60"
+                                />
+                                <button
+                                    onClick={() => {
+                                        const thb = parseFloat(customBidThb);
+                                        if (!Number.isFinite(thb)) return;
+                                        void placeBid(lot, Math.round(thb * 100));
+                                    }}
+                                    disabled={bidBusy || !customBidThb.trim()}
+                                    className="px-4 h-11 rounded-xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
+                                >
+                                    {t('live.auction.bid') || 'Bid'}
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setShowCustomBid(true)}
+                                className="w-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-200 transition-colors py-1"
+                            >
+                                {t('live.auction.customBid') || 'Custom bid'}
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                {a.status === 'sold' && (
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-emerald-300">
+                            {t('live.auction.sold') || 'SOLD'}
+                            {a.winning_amount != null && ` — ${formatSatang(a.winning_amount)}`}
+                        </p>
+                        {iWon ? (
+                            <>
+                                <p className="text-sm text-white font-bold mt-1 leading-snug">
+                                    {t('live.auction.youWon') ||
+                                        'You won! Check out now to lock it in.'}
+                                </p>
+                                {myHeldSpots.some((s) => s.stream_item_id === lot.id) && (
+                                    <button
+                                        onClick={() => setPaymentOpen(true)}
+                                        className="mt-2 w-full h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                                    >
+                                        {t('live.auction.payNow') || 'Pay now'}
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            a.winner_name && (
+                                <p className="text-xs text-slate-300 font-bold mt-1">
+                                    {t('live.auction.soldTo') || 'Sold to'} {a.winner_name}
+                                </p>
+                            )
+                        )}
+                    </div>
+                )}
+                {a.status === 'unsold' && (
+                    <p className="text-xs text-slate-400 font-bold">
+                        {t('live.auction.unsold') || 'Ended with no bids'}
+                    </p>
+                )}
+            </div>
+        );
+    };
+
     const spotBoard = (
         <div className="flex flex-col min-h-0">
             {activeLot ? (
@@ -984,9 +1250,11 @@ export default function LiveViewerClient() {
                                     {formatBulkTier(tier)}
                                 </span>
                             ))}
-                            <span className="text-emerald-300">
-                                {openCount} {t('live.viewer.spotsLeft') || 'left'}
-                            </span>
+                            {activeLot.item_type !== 'auction' && (
+                                <span className="text-emerald-300">
+                                    {openCount} {t('live.viewer.spotsLeft') || 'left'}
+                                </span>
+                            )}
                             {activeLot.break_opened_at && (
                                 <span className="text-amber-300 uppercase tracking-wider">
                                     {t('live.console.ripped') || 'Ripped'}
@@ -994,7 +1262,11 @@ export default function LiveViewerClient() {
                             )}
                         </div>
                     </div>
-                    <div className="p-3 overflow-y-auto">{spotGrid(activeLot, activeSpots)}</div>
+                    {activeLot.item_type === 'auction' ? (
+                        <div className="overflow-y-auto">{auctionPanel(activeLot)}</div>
+                    ) : (
+                        <div className="p-3 overflow-y-auto">{spotGrid(activeLot, activeSpots)}</div>
+                    )}
                 </>
             ) : (
                 <p className="text-xs text-slate-400 text-center py-8 px-4">
@@ -1208,6 +1480,37 @@ export default function LiveViewerClient() {
                     {t('live.viewer.unmute') || 'Tap for sound'}
                 </button>
             )}
+
+            {/* The breaker's "now opening" call-out — the on-video moment of
+                the announce-spot flow, so the buyer whose spot is up feels it
+                without reading chat. */}
+            <AnimatePresence>
+                {isLive && spotFocus && (
+                    <motion.div
+                        key={`${spotFocus.lotId}-${spotFocus.spotNumber}-${spotFocus.at}`}
+                        initial={{ opacity: 0, y: -12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        className="absolute top-[calc(var(--sat)+4.25rem)] inset-x-0 z-20 flex justify-center pointer-events-none px-4"
+                    >
+                        <div className="rounded-2xl bg-black/70 border border-brand-cyan/40 backdrop-blur-sm px-4 py-2.5 text-center max-w-full">
+                            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-brand-cyan">
+                                {t('live.viewer.nowOpening') || 'Now opening'}
+                            </p>
+                            <p className="text-base font-black text-white leading-snug truncate">
+                                {t('live.viewer.spotWord') || 'Spot'} #{spotFocus.spotNumber}
+                                {spotFocus.buyerName ? ` — ${spotFocus.buyerName}` : ''}
+                            </p>
+                            {(spotFocus.entity || (spotFocus.packs && spotFocus.packs.length > 0)) && (
+                                <p className="text-[11px] font-bold text-slate-300 truncate">
+                                    {spotFocus.entity ??
+                                        `${t('live.viewer.packsWord') || 'Packs'} ${spotFocus.packs!.join(', ')}`}
+                                </p>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Sticker floats. videoArea renders twice (mobile + desktop
                 trees), both layers share one float list — the hidden twin
@@ -1508,9 +1811,60 @@ export default function LiveViewerClient() {
                 {/* Chat overlay + input + held bar over the lower feed */}
                 <div className="absolute bottom-0 inset-x-0 pb-[calc(var(--sab)+0.75rem)] px-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
                     {pollCard && <div className="mb-2">{pollCard}</div>}
-                    <div className="mb-2 max-h-[30vh] overflow-hidden flex flex-col justify-end">
+                    <div className="mb-2 max-h-[30vh] overflow-hidden flex flex-col justify-end [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
                         {chatMessages(CHAT_OVERLAY_COUNT)}
+                        <ReactionFeedLines
+                            lines={reactionLines}
+                            anonymousLabel={t('live.stickers.someone') || 'Someone'}
+                        />
                     </div>
+                    {/* Live-auction quick bid — the primary interaction rides
+                        inline; sheets are too slow for a 30s clock. */}
+                    {isLive &&
+                        activeLot?.item_type === 'auction' &&
+                        activeLot.auction?.status === 'live' &&
+                        !isSellerViewer && (
+                            <div className="mb-2 flex items-center gap-2 rounded-2xl bg-black/60 border border-white/15 backdrop-blur-sm px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                        {activeLot.auction.bid_count > 0
+                                            ? t('live.auction.currentBid') || 'Current bid'
+                                            : t('live.auction.startingAt') || 'Starting at'}
+                                    </p>
+                                    <p className="text-base font-black text-white tabular-nums leading-tight">
+                                        {formatSatang(activeLot.auction.current_price)}
+                                        <span
+                                            className={`ml-2 text-sm ${
+                                                Date.parse(activeLot.auction.ends_at) - now <= 10_000
+                                                    ? 'text-brand-red'
+                                                    : 'text-slate-300'
+                                            }`}
+                                        >
+                                            {Date.parse(activeLot.auction.ends_at) - now > 0
+                                                ? formatCountdown(Date.parse(activeLot.auction.ends_at) - now)
+                                                : t('live.auction.closing') || 'Closing...'}
+                                        </span>
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => void placeBid(activeLot, activeLot.auction!.min_next_bid)}
+                                    disabled={bidBusy || Date.parse(activeLot.auction.ends_at) - now <= 0}
+                                    className="px-4 h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    {bidBusy ? (
+                                        <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                    ) : (
+                                        `${t('live.auction.bid') || 'Bid'} ${formatSatang(activeLot.auction.min_next_bid)}`
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                    {activeLot?.auction?.status === 'live' &&
+                        activeLot.auction.high_bidder_id === myUserId && (
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+                                {t('live.auction.youAreHigh') || "You're the high bidder!"}
+                            </p>
+                        )}
                     {heldBar && <div className="mb-2">{heldBar}</div>}
                     {isLive && (
                         <div className="mb-2 flex justify-end">
@@ -1589,6 +1943,10 @@ export default function LiveViewerClient() {
                     {heldBar && <div className="px-3 pt-3">{heldBar}</div>}
                     <div className="flex-1 overflow-y-auto py-2 flex flex-col justify-end">
                         {chatMessages()}
+                        <ReactionFeedLines
+                            lines={reactionLines}
+                            anonymousLabel={t('live.stickers.someone') || 'Someone'}
+                        />
                         <div ref={chatEndRef} />
                     </div>
                     <div className="p-3 border-t border-white/5 space-y-2">

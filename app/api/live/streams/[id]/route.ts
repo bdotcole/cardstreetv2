@@ -9,7 +9,14 @@
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { releaseExpiredHolds, requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
+import {
+    AUCTION_ENGINE_COLS,
+    releaseExpiredHolds,
+    requireBroadcaster,
+    requireViewerOrSeller,
+    shapeAuctionState,
+    type AuctionEngineRow,
+} from '@/lib/liveBreaks';
 
 // Explicit projection instead of select('*'): livekit_egress_id is an
 // infrastructure handle and the VOD fields are the seller's dispute material
@@ -117,9 +124,38 @@ export async function GET(
                 : { ...s, order_id: null },
         );
 
+        // Auction lots: viewers can't read the auctions table (its RLS belongs
+        // to the timed-auction beta), so live auction state is enriched onto
+        // the lot HERE — the room's broadcast pushes keep it fresh between
+        // loads. Fail-soft: an enrichment error serves the lot un-enriched.
+        let enrichedItems: Record<string, unknown>[] = (items ?? []) as Record<string, unknown>[];
+        const auctionIds = enrichedItems
+            .map((it) => (typeof it.auction_id === 'string' ? it.auction_id : null))
+            .filter((v): v is string => !!v);
+        if (auctionIds.length > 0) {
+            try {
+                const { data: auctionRows } = await admin
+                    .from('auctions')
+                    .select(AUCTION_ENGINE_COLS)
+                    .in('id', auctionIds)
+                    .returns<AuctionEngineRow[]>();
+                const shaped = new Map<string, Record<string, unknown>>();
+                for (const row of auctionRows ?? []) {
+                    shaped.set(row.id, await shapeAuctionState(row));
+                }
+                enrichedItems = enrichedItems.map((it) =>
+                    typeof it.auction_id === 'string' && shaped.has(it.auction_id)
+                        ? { ...it, auction: shaped.get(it.auction_id) }
+                        : it,
+                );
+            } catch (err) {
+                console.error('[Live/Stream] auction enrichment failed (non-fatal):', err);
+            }
+        }
+
         return NextResponse.json({
             stream,
-            items: items ?? [],
+            items: enrichedItems,
             spots: visibleSpots,
         });
     } catch (err: any) {

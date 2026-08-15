@@ -134,6 +134,10 @@ export interface LiveLotRow {
     price: number | null; // satang
     break_opened_at: string | null;
     created_at: string;
+    /** auction lots: FK into the (inert-until-live-auction) auctions engine. */
+    auction_id?: string | null;
+    /** Server-enriched auction state (GET detail); broadcast pushes update it. */
+    auction?: LiveAuctionState | null;
     /** Optional until 20260810_presales.sql is applied — absent = no presale. */
     presale_enabled?: boolean;
     /** character_break's character/team list. Optional until 20260813_character_breaks_bulk.sql. */
@@ -241,6 +245,33 @@ export function bulkTiersOf(raw: unknown): LiveBulkTier[] {
 export function formatBulkTier(tier: LiveBulkTier): string {
     return `${tier.qty}+ = -${tier.discountPct}%`;
 }
+
+// ─── Live auctions ───
+// The engine (auctions table + place_bid RPC, 20260704_auction_house.sql) is
+// already in prod, service-role-only. The live UI never reads the table
+// directly (its RLS wants the 'auctions' grant): state arrives through the
+// stream detail GET (server-enriched onto the lot) and through 'auction'
+// broadcast pushes after every accepted bid — see components/live/streamEvents.
+
+export interface LiveAuctionState {
+    id: string;
+    status: 'live' | 'sold' | 'unsold' | 'cancelled';
+    starting_price: number; // satang
+    current_price: number; // satang
+    min_next_bid: number; // satang — server-computed, never derived client-side
+    bid_count: number;
+    ends_at: string;
+    extension_count: number;
+    high_bidder_id: string | null;
+    high_bidder_name: string | null;
+    winner_id?: string | null;
+    winner_name?: string | null;
+    winning_amount?: number | null;
+}
+
+/** Console picker choices for a live lot's clock (seconds). */
+export const AUCTION_DURATION_CHOICES = [30, 60, 120, 300] as const;
+export const AUCTION_DURATION_DEFAULT = 60;
 
 export interface LivePollOption {
     key: string;

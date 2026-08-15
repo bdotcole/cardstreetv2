@@ -68,9 +68,19 @@ export async function POST(
         // fail-soft — a claim must never 500 on housekeeping.
         const { data: spotRow } = await admin
             .from('break_spots')
-            .select('stream_id')
+            .select('stream_id, stream_items(item_type)')
             .eq('id', id)
-            .maybeSingle<{ stream_id: string }>();
+            .maybeSingle<{ stream_id: string; stream_items: { item_type: string } | null }>();
+
+        // An auction lot's spot is the HAMMER's payment vehicle — it is never
+        // directly claimable; the winner receives it as a hold at close. The
+        // RPC doesn't know item types, so the gate lives here.
+        if (spotRow?.stream_items?.item_type === 'auction') {
+            return NextResponse.json(
+                { claimed: false, reason: 'auction', error: 'Bid on this lot instead of claiming it' },
+                { status: 409 },
+            );
+        }
         if (spotRow?.stream_id) await releaseExpiredHolds(spotRow.stream_id);
 
         const { data, error } = await admin.rpc('claim_break_spot', {

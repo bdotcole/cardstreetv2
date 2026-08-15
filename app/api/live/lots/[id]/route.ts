@@ -25,6 +25,22 @@ export async function PATCH(
         const body = await req.json().catch(() => ({}));
         const admin = createAdminClient();
 
+        // A running auction owns this lot's lifecycle: close (or force-hammer)
+        // it first — a status change under live bidding would strand bidders.
+        if (lot.auction_id && (body?.status != null || body?.position != null)) {
+            const { data: liveAuction } = await admin
+                .from('auctions')
+                .select('id, status')
+                .eq('id', lot.auction_id)
+                .maybeSingle<{ id: string; status: string }>();
+            if (liveAuction?.status === 'live') {
+                return NextResponse.json(
+                    { error: 'Close the running auction first', code: 'AUCTION_LIVE' },
+                    { status: 409 },
+                );
+            }
+        }
+
         const updates: Record<string, unknown> = {};
 
         // ─── Position (reordering the run-of-show) ───
@@ -161,6 +177,21 @@ export async function DELETE(
         const { lot, stream } = ctx;
 
         const admin = createAdminClient();
+
+        // Same live-auction guard as PATCH: hammer or cancel the run first.
+        if (lot.auction_id) {
+            const { data: liveAuction } = await admin
+                .from('auctions')
+                .select('id, status')
+                .eq('id', lot.auction_id)
+                .maybeSingle<{ id: string; status: string }>();
+            if (liveAuction?.status === 'live') {
+                return NextResponse.json(
+                    { error: 'Close the running auction first', code: 'AUCTION_LIVE' },
+                    { status: 409 },
+                );
+            }
+        }
 
         // A sold spot means a buyer's money is attached to this lot — the lot
         // is now a record, not a draft.

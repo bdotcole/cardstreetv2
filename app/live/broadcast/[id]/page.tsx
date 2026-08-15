@@ -12,20 +12,25 @@ import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import {
+    AUCTION_DURATION_CHOICES,
+    AUCTION_DURATION_DEFAULT,
     bulkTiersOf,
     clampCrop,
     clampRatio,
     DEFAULT_CROP,
     DEFAULT_RATIO,
     formatBulkTier,
+    formatCountdown,
     formatSatang,
     isHoldLapsed,
     isNativeShell,
     MIN_CHARGE_SATANG,
+    nameInitials,
     pollTotalVotes,
     resolveFit,
     type FeedCrop,
     type FeedFit,
+    type LiveAuctionState,
     type LiveChatMessage,
     type LiveLotRow,
     type LivePollRow,
@@ -36,9 +41,12 @@ import {
 import { PollOptionBars } from '@/components/live/StreamPoll';
 import {
     FloatingStickerLayer,
+    ReactionFeedLines,
     useFloatingStickers,
-    useStickerBroadcast,
+    useReactionFeed,
 } from '@/components/live/StickerReactions';
+import { useStreamEvents } from '@/components/live/streamEvents';
+import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 
 /**
  * The broadcaster CONSOLE (phone-first, desktop-capable): camera staging +
@@ -88,6 +96,10 @@ const BREAK_TYPES = [
     'character_break',
 ] as const;
 type BreakType = (typeof BREAK_TYPES)[number];
+
+// The add-lot form also offers live auctions (not a break format — the
+// bidding engine owns its lifecycle, so it gets its own branch everywhere).
+type LotFormType = BreakType | 'auction';
 
 // character_break: one character/team per spot (lots POST enforces the match).
 const ENTITY_MIN = 2;
@@ -296,7 +308,7 @@ export default function BroadcastConsolePage() {
     // Add-lot form.
     const [showAddLot, setShowAddLot] = useState(false);
     const [lotName, setLotName] = useState('');
-    const [lotType, setLotType] = useState<BreakType>('random_pack');
+    const [lotType, setLotType] = useState<LotFormType>('random_pack');
     const [lotSpots, setLotSpots] = useState('10');
     const [lotPriceThb, setLotPriceThb] = useState('100');
     const [lotPacks, setLotPacks] = useState('1');
@@ -311,7 +323,39 @@ export default function BroadcastConsolePage() {
     // to every spot after a buyer's first from THIS lot — that first spot
     // pays the lot's real Flash quote. Empty/0 = extra spots ship free.
     const [lotShipThb, setLotShipThb] = useState('');
+    // Auction lots: opening bid + clock length (seconds).
+    const [lotStartThb, setLotStartThb] = useState('100');
+    const [lotDuration, setLotDuration] = useState(String(AUCTION_DURATION_DEFAULT));
     const [creatingLot, setCreatingLot] = useState(false);
+
+    // Public names for sold-spot buyers — the board must answer "who has
+    // spot 4" at a glance while the breaker is on camera.
+    const [profiles, setProfiles] = useState<Map<string, PublicSeller>>(new Map());
+    const neededProfileIds = useMemo(() => {
+        const ids = new Set<string>();
+        for (const s of spots) if (s.status === 'sold' && s.buyer_id) ids.add(s.buyer_id);
+        return [...ids].filter((id) => !profiles.has(id));
+    }, [spots, profiles]);
+    useEffect(() => {
+        if (neededProfileIds.length === 0) return;
+        let cancelled = false;
+        fetchPublicSellers(supabaseRef.current, neededProfileIds).then((fetched) => {
+            if (cancelled || fetched.size === 0) return;
+            setProfiles((prev) => {
+                const next = new Map(prev);
+                fetched.forEach((v, k) => next.set(k, v));
+                return next;
+            });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [neededProfileIds]);
+    const buyerName = useCallback(
+        (buyerId: string | null): string | null =>
+            buyerId ? profiles.get(buyerId)?.display_name ?? null : null,
+        [profiles],
+    );
 
     const supabaseRef = useRef(createClient());
     const {
@@ -1012,7 +1056,8 @@ export default function BroadcastConsolePage() {
                 : lotType === 'character_break'
                     ? entities.length
                     : parseInt(lotSpots, 10);
-        const priceThb = parseFloat(lotPriceThb);
+        // Auction lots price via the opening bid; everything else via the spot.
+        const priceThb = parseFloat(lotType === 'auction' ? lotStartThb : lotPriceThb);
         const packs = parseInt(lotPacks, 10);
         if (!lotName.trim() || !Number.isFinite(priceThb)) return;
         // Mirrors the server floor: a spot priced under Stripe's THB minimum
@@ -1037,25 +1082,34 @@ export default function BroadcastConsolePage() {
             Number.isFinite(shipThb) && shipThb > 0 ? Math.round(shipThb * 100) : 0;
         setCreatingLot(true);
         try {
+            const body =
+                lotType === 'auction'
+                    ? {
+                          itemType: lotType,
+                          startingPrice: Math.round(priceThb * 100),
+                          durationSeconds: parseInt(lotDuration, 10) || AUCTION_DURATION_DEFAULT,
+                          cardData: { name: lotName.trim(), isSealed: true, productType: lotProductType },
+                      }
+                    : {
+                          itemType: lotType,
+                          spotsTotal,
+                          spotPrice: Math.round(priceThb * 100),
+                          packsPerSpot: Number.isFinite(packs) && packs > 0 ? packs : 1,
+                          cardData: { name: lotName.trim(), isSealed: true, productType: lotProductType },
+                          // The server drops the flag unless the show is scheduled.
+                          presaleEnabled: lotPresale && stream?.status === 'scheduled',
+                          breakEntities:
+                              lotType === 'character_break'
+                                  ? entities.map((label) => ({ label }))
+                                  : undefined,
+                          bulkTiers: bulkTiers.length > 0 ? bulkTiers : undefined,
+                          incrementalShipSatang:
+                              incrementalShipSatang > 0 ? incrementalShipSatang : undefined,
+                      };
             const res = await fetch(`/api/live/streams/${streamId}/lots`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    itemType: lotType,
-                    spotsTotal,
-                    spotPrice: Math.round(priceThb * 100),
-                    packsPerSpot: Number.isFinite(packs) && packs > 0 ? packs : 1,
-                    cardData: { name: lotName.trim(), isSealed: true, productType: lotProductType },
-                    // The server drops the flag unless the show is scheduled.
-                    presaleEnabled: lotPresale && stream?.status === 'scheduled',
-                    breakEntities:
-                        lotType === 'character_break'
-                            ? entities.map((label) => ({ label }))
-                            : undefined,
-                    bulkTiers: bulkTiers.length > 0 ? bulkTiers : undefined,
-                    incrementalShipSatang:
-                        incrementalShipSatang > 0 ? incrementalShipSatang : undefined,
-                }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok || !data.success) {
@@ -1074,7 +1128,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setCreatingLot(false);
         }
-    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, lotShipThb, stream?.status, streamId, loadDetail, showToast, t]);
+    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, lotShipThb, lotStartThb, lotDuration, stream?.status, streamId, loadDetail, showToast, t]);
 
     const patchLot = useCallback(
         async (lotId: string, body: Record<string, unknown>) => {
@@ -1304,9 +1358,145 @@ export default function BroadcastConsolePage() {
     }, [closingPoll, showToast, t]);
 
     // ─── Sticker reactions: the console floats the audience's taps over the
-    //     monitor tile so the breaker feels the room without watching chat. ───
+    //     monitor tile AND mirrors them into the chat column with names —
+    //     floats over a collapsed thumbnail were invisible in the field. ───
     const { floats: stickerFloats, spawn: spawnSticker, remove: removeSticker } = useFloatingStickers();
-    useStickerBroadcast(streamId, pageState === 'ready' && stream?.status === 'live', spawnSticker);
+    const { lines: reactionLines, push: pushReaction } = useReactionFeed();
+
+    // The last "now opening" call-out (own POST or another console's) — the
+    // matching tile gets the highlight ring.
+    const [lastAnnounced, setLastAnnounced] = useState<{
+        lotId: string;
+        spotNumber: number;
+    } | null>(null);
+
+    // Auction state pushes patch the lot in place (same stale guard as the
+    // viewer: bid_count is monotonic within a status).
+    const applyAuction = useCallback((lotId: string, auction: LiveAuctionState) => {
+        setLots((prev) =>
+            prev.map((l) => {
+                if (l.id !== lotId) return l;
+                if (
+                    l.auction &&
+                    l.auction.id === auction.id &&
+                    l.auction.status === auction.status &&
+                    auction.bid_count < l.auction.bid_count
+                ) {
+                    return l;
+                }
+                return { ...l, auction_id: auction.id, auction };
+            }),
+        );
+    }, []);
+
+    useStreamEvents(streamId, pageState === 'ready' && stream?.status === 'live', {
+        onSticker: (sticker, from) => {
+            spawnSticker(sticker);
+            pushReaction(sticker, from);
+        },
+        onAuction: (lotId, auction) => applyAuction(lotId, auction),
+        onSpotFocus: (focus) => setLastAnnounced({ lotId: focus.lotId, spotNumber: focus.spotNumber }),
+    });
+
+    // ─── Announce a spot ("now opening") ───
+    const announceSpot = useCallback(
+        async (lot: LiveLotRow, spot: LiveSpotRow) => {
+            const res = await fetch(`/api/live/lots/${lot.id}/announce-spot`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ spotId: spot.id }),
+            });
+            if (!res.ok) {
+                showToast(t('live.console.announceError') || 'Could not announce the spot', 'error');
+                return;
+            }
+            setLastAnnounced({ lotId: lot.id, spotNumber: spot.spot_number });
+        },
+        [showToast, t],
+    );
+
+    // ─── Live auction: start / hammer / auto-close ───
+    const startAuction = useCallback(
+        async (lot: LiveLotRow) => {
+            try {
+                const res = await fetch(`/api/live/lots/${lot.id}/auction/start`, { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showToast(
+                        data.error || t('live.console.auctionStartError') || 'Could not start the auction',
+                        'error',
+                    );
+                    return;
+                }
+                if (data.auction) applyAuction(lot.id, data.auction as LiveAuctionState);
+                setLots((prev) =>
+                    prev.map((l) => (l.id === lot.id ? { ...l, status: 'active' } : l)),
+                );
+                setStream((prev) => (prev ? { ...prev, current_item_id: lot.id } : prev));
+            } catch {
+                showToast(t('live.console.auctionStartError') || 'Could not start the auction', 'error');
+            }
+        },
+        [applyAuction, showToast, t],
+    );
+
+    const closeAuction = useCallback(
+        async (lot: LiveLotRow, force: boolean) => {
+            try {
+                const res = await fetch(`/api/live/lots/${lot.id}/auction/close`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (force) {
+                        showToast(
+                            data.error || t('live.console.auctionCloseError') || 'Could not close the auction',
+                            'error',
+                        );
+                    }
+                    return;
+                }
+                if (data.auction) applyAuction(lot.id, data.auction as LiveAuctionState);
+                // The winner's checkout hold rides Realtime; refetch anyway so
+                // the console's board shows it immediately.
+                if (data.closed) void refetchDetail();
+            } catch {
+                if (force) {
+                    showToast(t('live.console.auctionCloseError') || 'Could not close the auction', 'error');
+                }
+            }
+        },
+        [applyAuction, refetchDetail, showToast, t],
+    );
+
+    // The console owns the clock: a 500ms tick renders the countdown, and once
+    // the clock is >1.2s past due (grace for a last-second bid's soft-close
+    // extension to land) it hammers exactly once per ends_at value. The bid
+    // route ALSO lazy-closes on a late bid, and close is CAS-idempotent, so a
+    // dropped tick can't double-sell and a dead console can't wedge the room
+    // forever.
+    const runningAuctionLot = useMemo(
+        () => lots.find((l) => l.auction?.status === 'live') ?? null,
+        [lots],
+    );
+    const [auctionNow, setAuctionNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!runningAuctionLot) return;
+        const timer = setInterval(() => setAuctionNow(Date.now()), 500);
+        return () => clearInterval(timer);
+    }, [runningAuctionLot]);
+    const autoCloseKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+        const a = runningAuctionLot?.auction;
+        if (!runningAuctionLot || !a) return;
+        if (Date.parse(a.ends_at) - auctionNow > -1200) return;
+        const key = `${a.id}:${a.ends_at}`;
+        if (autoCloseKeyRef.current === key) return;
+        autoCloseKeyRef.current = key;
+        void closeAuction(runningAuctionLot, false);
+    }, [runningAuctionLot, auctionNow, closeAuction]);
 
     // ─── Derived ───
     const focusedLot = useMemo(
@@ -2081,10 +2271,10 @@ export default function BroadcastConsolePage() {
                                             </span>
                                             <CustomSelect
                                                 value={lotType}
-                                                onChange={(v) => setLotType(v as BreakType)}
+                                                onChange={(v) => setLotType(v as LotFormType)}
                                                 ariaLabel={t('live.console.itemType') || 'Format'}
                                                 triggerClassName={inputCls}
-                                                options={BREAK_TYPES.map((bt) => ({
+                                                options={[...BREAK_TYPES, 'auction' as const].map((bt) => ({
                                                     value: bt,
                                                     label: t(`live.types.${bt}`),
                                                 }))}
@@ -2107,72 +2297,118 @@ export default function BroadcastConsolePage() {
                                                 }))}
                                             />
                                         </div>
-                                        <label className="block">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                                {t('live.console.spotsTotal') || 'Spots'}
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={200}
-                                                value={
-                                                    lotType === 'personal_break'
-                                                        ? '1'
-                                                        : lotType === 'character_break'
-                                                            ? String(lotEntities.filter((e) => e.trim()).length)
-                                                            : lotSpots
-                                                }
-                                                disabled={lotType === 'personal_break' || lotType === 'character_break'}
-                                                onChange={(e) => setLotSpots(e.target.value)}
-                                                className={inputCls}
-                                            />
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                                {t('live.console.spotPrice') || 'Price per spot (THB)'}
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={MIN_CHARGE_SATANG / 100}
-                                                value={lotPriceThb}
-                                                onChange={(e) => setLotPriceThb(e.target.value)}
-                                                className={inputCls}
-                                            />
-                                            <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
-                                                {t('live.console.minSpotPrice') ||
-                                                    "Minimum spot price is ฿10 — Stripe's minimum charge"}
-                                            </span>
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                                {t('live.console.packsPerSpot') || 'Packs per spot'}
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={50}
-                                                value={lotPacks}
-                                                onChange={(e) => setLotPacks(e.target.value)}
-                                                className={inputCls}
-                                            />
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                                {t('live.console.extraShipPerSpot') || 'Extra shipping / spot (THB)'}
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={lotShipThb}
-                                                onChange={(e) => setLotShipThb(e.target.value)}
-                                                placeholder="0"
-                                                className={inputCls}
-                                            />
-                                            <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
-                                                {t('live.console.extraShipHint') ||
-                                                    "A buyer's first spot from this lot pays real shipping; extra spots add this each. 0 = free."}
-                                            </span>
-                                        </label>
+                                        {lotType !== 'auction' && (
+                                            <>
+                                                <label className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.spotsTotal') || 'Spots'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={200}
+                                                        value={
+                                                            lotType === 'personal_break'
+                                                                ? '1'
+                                                                : lotType === 'character_break'
+                                                                    ? String(lotEntities.filter((e) => e.trim()).length)
+                                                                    : lotSpots
+                                                        }
+                                                        disabled={lotType === 'personal_break' || lotType === 'character_break'}
+                                                        onChange={(e) => setLotSpots(e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                </label>
+                                                <label className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.spotPrice') || 'Price per spot (THB)'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={MIN_CHARGE_SATANG / 100}
+                                                        value={lotPriceThb}
+                                                        onChange={(e) => setLotPriceThb(e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                    <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                        {t('live.console.minSpotPrice') ||
+                                                            "Minimum spot price is ฿10 — Stripe's minimum charge"}
+                                                    </span>
+                                                </label>
+                                                <label className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.packsPerSpot') || 'Packs per spot'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={50}
+                                                        value={lotPacks}
+                                                        onChange={(e) => setLotPacks(e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                </label>
+                                                <label className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.extraShipPerSpot') || 'Extra shipping / spot (THB)'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={lotShipThb}
+                                                        onChange={(e) => setLotShipThb(e.target.value)}
+                                                        placeholder="0"
+                                                        className={inputCls}
+                                                    />
+                                                    <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                        {t('live.console.extraShipHint') ||
+                                                            "A buyer's first spot from this lot pays real shipping; extra spots add this each. 0 = free."}
+                                                    </span>
+                                                </label>
+                                            </>
+                                        )}
+                                        {lotType === 'auction' && (
+                                            <>
+                                                <label className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.startingPrice') || 'Starting price (THB)'}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={MIN_CHARGE_SATANG / 100}
+                                                        value={lotStartThb}
+                                                        onChange={(e) => setLotStartThb(e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                    <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                        {t('live.console.minSpotPrice') ||
+                                                            "Minimum spot price is ฿10 — Stripe's minimum charge"}
+                                                    </span>
+                                                </label>
+                                                <div className="block">
+                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                        {t('live.console.auctionDuration') || 'Timer'}
+                                                    </span>
+                                                    <CustomSelect
+                                                        value={lotDuration}
+                                                        onChange={(v) => setLotDuration(v)}
+                                                        ariaLabel={t('live.console.auctionDuration') || 'Timer'}
+                                                        triggerClassName={inputCls}
+                                                        options={AUCTION_DURATION_CHOICES.map((secs) => ({
+                                                            value: String(secs),
+                                                            label:
+                                                                secs < 60
+                                                                    ? `${secs}s`
+                                                                    : `${Math.floor(secs / 60)} min`,
+                                                        }))}
+                                                    />
+                                                    <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                        {t('live.console.auctionDurationHint') ||
+                                                            'A bid in the final 10s extends the clock by 10s.'}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                     {/* character_break: the character/team list — the spot
                                         count follows it, one character per spot. */}
@@ -2227,6 +2463,7 @@ export default function BroadcastConsolePage() {
                                     )}
                                     {/* Bulk discounts (any spot format): up to 3 tiers,
                                         e.g. buy 3+ spots for 10% off each. */}
+                                    {lotType !== 'auction' && (
                                     <div className="rounded-xl bg-black/20 border border-white/10 p-3 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
@@ -2302,9 +2539,10 @@ export default function BroadcastConsolePage() {
                                             </div>
                                         ))}
                                     </div>
+                                    )}
                                     {/* Presales: only offered while the show is still
                                         scheduled — a live show's lots sell regardless. */}
-                                    {stream.status === 'scheduled' && (
+                                    {lotType !== 'auction' && stream.status === 'scheduled' && (
                                         <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-xl bg-black/20 border border-white/10 p-3">
                                             <input
                                                 type="checkbox"
@@ -2372,10 +2610,86 @@ export default function BroadcastConsolePage() {
                                             </div>
                                             <p className="text-[11px] text-slate-400 mt-0.5">
                                                 {t(`live.types.${lot.item_type}`)}
-                                                {lot.spot_price != null &&
-                                                    ` · ${formatSatang(lot.spot_price)} × ${lot.spots_total}`}
-                                                {` · ${sold}/${lotSpotRows.length} ${t('live.console.soldCount') || 'sold'}`}
+                                                {lot.item_type === 'auction'
+                                                    ? lot.spot_price != null
+                                                        ? ` · ${t('live.auction.startingAt') || 'Starting at'} ${formatSatang(lot.spot_price)}`
+                                                        : ''
+                                                    : `${
+                                                          lot.spot_price != null
+                                                              ? ` · ${formatSatang(lot.spot_price)} × ${lot.spots_total}`
+                                                              : ''
+                                                      } · ${sold}/${lotSpotRows.length} ${t('live.console.soldCount') || 'sold'}`}
                                             </p>
+                                            {/* Live auction status card: the breaker's read of the
+                                                room — price, bids, clock — plus the hammer. */}
+                                            {lot.item_type === 'auction' && lot.auction && (
+                                                <div
+                                                    className={`mt-2 rounded-xl border p-2.5 ${
+                                                        lot.auction.status === 'live'
+                                                            ? 'border-brand-cyan/40 bg-brand-cyan/5'
+                                                            : lot.auction.status === 'sold'
+                                                                ? 'border-emerald-400/30 bg-emerald-500/5'
+                                                                : 'border-white/10 bg-black/20'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-base font-black text-white tabular-nums leading-tight">
+                                                                {formatSatang(
+                                                                    lot.auction.status === 'sold'
+                                                                        ? lot.auction.winning_amount ?? lot.auction.current_price
+                                                                        : lot.auction.current_price,
+                                                                )}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400 font-bold truncate">
+                                                                {lot.auction.bid_count}{' '}
+                                                                {t('live.auction.bids') || 'bids'}
+                                                                {lot.auction.status === 'live' &&
+                                                                    lot.auction.high_bidder_name &&
+                                                                    ` · ${lot.auction.high_bidder_name}`}
+                                                                {lot.auction.status === 'sold' &&
+                                                                    lot.auction.winner_name &&
+                                                                    ` · ${t('live.auction.soldTo') || 'Sold to'} ${lot.auction.winner_name}`}
+                                                                {lot.auction.status === 'unsold' &&
+                                                                    ` · ${t('live.auction.unsold') || 'Ended with no bids'}`}
+                                                            </p>
+                                                        </div>
+                                                        {lot.auction.status === 'live' && (
+                                                            <p
+                                                                className={`text-lg font-black tabular-nums ${
+                                                                    Date.parse(lot.auction.ends_at) - auctionNow <= 10_000
+                                                                        ? 'text-brand-red'
+                                                                        : 'text-white'
+                                                                }`}
+                                                            >
+                                                                {Date.parse(lot.auction.ends_at) - auctionNow > 0
+                                                                    ? formatCountdown(
+                                                                          Date.parse(lot.auction.ends_at) - auctionNow,
+                                                                      )
+                                                                    : t('live.auction.closing') || 'Closing...'}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    {lot.auction.status === 'live' && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setConfirm({
+                                                                    message:
+                                                                        t('live.console.confirmHammer') ||
+                                                                        'Close the auction now and sell to the current high bidder?',
+                                                                    confirmLabel:
+                                                                        t('live.console.hammer') || 'Sold — close now',
+                                                                    run: () => closeAuction(lot, true),
+                                                                });
+                                                            }}
+                                                            className={`${btnGhost} w-full mt-2 bg-amber-500/20 text-amber-300`}
+                                                        >
+                                                            {t('live.console.hammer') || 'Sold — close now'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                             {bulkTiersOf(lot.bulk_tiers).length > 0 && (
                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                     {bulkTiersOf(lot.bulk_tiers).map((tier) => (
@@ -2394,12 +2708,18 @@ export default function BroadcastConsolePage() {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                void patchLot(lot.id, { status: 'active' });
+                                                                if (lot.item_type === 'auction') {
+                                                                    void startAuction(lot);
+                                                                } else {
+                                                                    void patchLot(lot.id, { status: 'active' });
+                                                                }
                                                             }}
                                                             disabled={!isLive}
                                                             className={`${btnGhost} bg-brand-cyan/20 text-brand-cyan`}
                                                         >
-                                                            {t('live.console.startLot') || 'Start'}
+                                                            {lot.item_type === 'auction'
+                                                                ? t('live.console.startAuction') || 'Start auction'
+                                                                : t('live.console.startLot') || 'Start'}
                                                         </button>
                                                         <button
                                                             onClick={(e) => {
@@ -2434,6 +2754,20 @@ export default function BroadcastConsolePage() {
                                                 )}
                                                 {lot.status === 'active' && (
                                                     <>
+                                                        {/* Rerun after an unsold close (fresh engine row,
+                                                            same lot); a sold auction is final. */}
+                                                        {lot.item_type === 'auction' &&
+                                                            lot.auction?.status === 'unsold' && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        void startAuction(lot);
+                                                                    }}
+                                                                    className={`${btnGhost} bg-brand-cyan/20 text-brand-cyan`}
+                                                                >
+                                                                    {t('live.console.restartAuction') || 'Run it again'}
+                                                                </button>
+                                                            )}
                                                         {!lot.break_opened_at && (
                                                             <button
                                                                 onClick={(e) => {
@@ -2530,13 +2864,16 @@ export default function BroadcastConsolePage() {
                             </div>
                         </div>
 
-                        {/* Spot board for the focused lot */}
+                        {/* Spot board for the focused lot. Sold tiles carry the
+                            buyer's initials and TAP to announce "now opening"
+                            to the whole room — this is how the breaker runs
+                            the rip order. */}
                         {focusedLot && (
                             <div className={sectionCls}>
                                 <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300 mb-3">
                                     {t('live.console.spots') || 'Spots'} — {focusedLot.card_data?.name || ''}
                                 </h2>
-                                <div className="grid grid-cols-6 gap-1.5">
+                                <div className="grid grid-cols-5 gap-1.5">
                                     {focusedSpots.map((spot) => {
                                         // Amber = a LIVE hold only. A lapsed
                                         // hold paints as open (emerald): the
@@ -2544,18 +2881,42 @@ export default function BroadcastConsolePage() {
                                         // broadcaster reading the board as
                                         // reserved would hold a lot back.
                                         const held = spot.status === 'held' && !isHoldLapsed(spot, spotNow);
+                                        const announced =
+                                            lastAnnounced?.lotId === focusedLot.id &&
+                                            lastAnnounced.spotNumber === spot.spot_number;
                                         const cls =
                                             spot.status === 'sold'
                                                 ? 'bg-brand-cyan/20 border-brand-cyan/40 text-brand-cyan'
                                                 : held
                                                     ? 'bg-amber-500/10 border-amber-400/40 text-amber-300'
                                                     : 'bg-emerald-500/5 border-emerald-400/20 text-slate-300';
+                                        const announceable = spot.status === 'sold' && isLive;
                                         return (
-                                            <div
+                                            <button
                                                 key={spot.id}
-                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center ${cls}`}
+                                                disabled={!announceable}
+                                                onClick={() =>
+                                                    setConfirm({
+                                                        message: `${t('live.console.confirmAnnounce') || 'Announce to the room: now opening'} #${spot.spot_number}${
+                                                            buyerName(spot.buyer_id)
+                                                                ? ` — ${buyerName(spot.buyer_id)}`
+                                                                : ''
+                                                        }?`,
+                                                        confirmLabel:
+                                                            t('live.console.announceSpot') || 'Announce',
+                                                        run: () => announceSpot(focusedLot, spot),
+                                                    })
+                                                }
+                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center ${cls} ${
+                                                    announced ? 'ring-2 ring-brand-cyan' : ''
+                                                } ${announceable ? 'active:scale-95 transition-all' : ''}`}
                                             >
                                                 <span className="text-xs font-black">{spot.spot_number}</span>
+                                                {spot.status === 'sold' && (
+                                                    <span className="text-[8px] font-black uppercase">
+                                                        {nameInitials(buyerName(spot.buyer_id))}
+                                                    </span>
+                                                )}
                                                 {spot.assigned_packs && spot.assigned_packs.length > 0 && (
                                                     <span className="text-[8px] font-bold">
                                                         {spot.assigned_packs.join(',')}
@@ -2569,10 +2930,68 @@ export default function BroadcastConsolePage() {
                                                         {spot.assigned_entity}
                                                     </span>
                                                 )}
-                                            </div>
+                                            </button>
                                         );
                                     })}
                                 </div>
+                                {/* Roster: the readable who-has-what list. Tiles are
+                                    for tapping; this is for reading out loud. */}
+                                {focusedSpots.some((s) => s.status === 'sold') ? (
+                                    <div className="mt-3 space-y-1">
+                                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                                            {t('live.console.soldSpots') || 'Sold spots'}
+                                        </p>
+                                        {focusedSpots
+                                            .filter((s) => s.status === 'sold')
+                                            .map((spot) => {
+                                                const announced =
+                                                    lastAnnounced?.lotId === focusedLot.id &&
+                                                    lastAnnounced.spotNumber === spot.spot_number;
+                                                return (
+                                                    <div
+                                                        key={spot.id}
+                                                        className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
+                                                            announced ? 'bg-brand-cyan/10' : 'bg-black/20'
+                                                        }`}
+                                                    >
+                                                        <span className="w-7 shrink-0 text-xs font-black text-brand-cyan tabular-nums">
+                                                            #{spot.spot_number}
+                                                        </span>
+                                                        <span className="flex-1 min-w-0 text-xs font-bold text-white truncate">
+                                                            {buyerName(spot.buyer_id) || '...'}
+                                                        </span>
+                                                        {(spot.assigned_entity ||
+                                                            (spot.assigned_packs && spot.assigned_packs.length > 0)) && (
+                                                            <span className="shrink-0 text-[10px] font-bold text-slate-400 truncate max-w-[30%]">
+                                                                {spot.assigned_entity ??
+                                                                    `${t('live.console.packsShort') || 'Packs'} ${spot.assigned_packs!.join(',')}`}
+                                                            </span>
+                                                        )}
+                                                        {isLive && (
+                                                            <button
+                                                                onClick={() => void announceSpot(focusedLot, spot)}
+                                                                className="shrink-0 px-2 h-7 rounded-md bg-white/10 text-slate-200 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                            >
+                                                                {announced
+                                                                    ? t('live.console.announcedChip') || 'Announced'
+                                                                    : t('live.console.announceSpot') || 'Announce'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        {isLive && (
+                                            <p className="text-[9px] text-slate-500 leading-relaxed pt-1">
+                                                {t('live.console.announceHint') ||
+                                                    'Announce puts "Now opening: Spot #N" in chat and on every viewer\'s screen.'}
+                                            </p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="mt-3 text-[10px] text-slate-500">
+                                        {t('live.console.noSoldSpots') || 'No spots sold yet'}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>
@@ -2718,11 +3137,11 @@ export default function BroadcastConsolePage() {
                         <div className="flex-1 overflow-y-auto space-y-1 min-h-[200px]">
                             {chat.map((m) =>
                                 m.is_system ? (
-                                    <p key={m.id} className="text-[11px] text-amber-300 font-bold text-center py-0.5 break-words">
+                                    <p key={m.id} className="text-[12px] text-amber-300 font-bold text-center py-0.5 break-words">
                                         {m.body}
                                     </p>
                                 ) : (
-                                    <div key={m.id} className="group flex items-start gap-2 text-[12px] py-0.5">
+                                    <div key={m.id} className="group flex items-start gap-2 text-sm py-0.5">
                                         <p className="flex-1 leading-snug break-words">
                                             <span className="font-black text-brand-cyan mr-1.5">
                                                 {m.sender?.display_name || '...'}
@@ -2752,6 +3171,10 @@ export default function BroadcastConsolePage() {
                                     </div>
                                 ),
                             )}
+                            <ReactionFeedLines
+                                lines={reactionLines}
+                                anonymousLabel={t('live.stickers.someone') || 'Someone'}
+                            />
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                             <input

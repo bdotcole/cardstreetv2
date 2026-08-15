@@ -14,8 +14,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { createClient } from '@/lib/supabase/client';
-import { STICKER_KEYS, StickerIcon, isStickerKey, type StickerKey } from '@/components/live/stickers';
+import { STICKER_KEYS, StickerIcon, type StickerKey } from '@/components/live/stickers';
 
 const MAX_CONCURRENT_FLOATS = 20;
 const FLOAT_DURATION_MS = 2600;
@@ -137,31 +136,88 @@ export function StickerTray({
     );
 }
 
-/**
- * Subscribe to the stream's broadcast channel and float incoming stickers.
- * Server-relayed only: local sends float optimistically at the call site, and
- * the REST broadcast never echoes to its sender anyway.
- */
-export function useStickerBroadcast(
-    streamId: string,
-    active: boolean,
-    onSticker: (sticker: StickerKey) => void,
-): void {
-    const onStickerRef = useRef(onSticker);
-    onStickerRef.current = onSticker;
+// ─── Reaction feed: reactions surfaced IN CHAT, not only as floats ───
+// The field test showed floats alone under-deliver: the console renders them
+// over a (often collapsed) monitor thumbnail, and a float over busy video is
+// easy to miss entirely. These lines make every reaction legible where people
+// are already looking — the chat — with sender attribution (the broadcast
+// payload has carried `from` since day one; this is its first reader).
 
+const REACTION_LINE_TTL_MS = 8000;
+/** Same sender + same sticker inside this window merge into one "xN" line. */
+const REACTION_COALESCE_MS = 6000;
+const REACTION_LINES_MAX = 4;
+
+export interface ReactionLine {
+    id: number;
+    name: string | null;
+    sticker: StickerKey;
+    count: number;
+    at: number;
+}
+
+export interface ReactionFeed {
+    lines: ReactionLine[];
+    push: (sticker: StickerKey, name: string | null) => void;
+}
+
+export function useReactionFeed(): ReactionFeed {
+    const [lines, setLines] = useState<ReactionLine[]>([]);
+    const nextIdRef = useRef(0);
+
+    const push = useCallback((sticker: StickerKey, name: string | null) => {
+        const now = Date.now();
+        setLines((prev) => {
+            const last = prev[prev.length - 1];
+            if (
+                last &&
+                last.sticker === sticker &&
+                last.name === name &&
+                now - last.at < REACTION_COALESCE_MS
+            ) {
+                return [...prev.slice(0, -1), { ...last, count: last.count + 1, at: now }];
+            }
+            const next = [...prev, { id: nextIdRef.current++, name, sticker, count: 1, at: now }];
+            return next.slice(-REACTION_LINES_MAX);
+        });
+    }, []);
+
+    // Reap expired lines while any exist (1s granularity is plenty).
     useEffect(() => {
-        if (!active || !streamId) return;
-        const supabase = createClient();
-        const channel = supabase
-            .channel(`stream-react:${streamId}`)
-            .on('broadcast', { event: 'sticker' }, ({ payload }) => {
-                const sticker = (payload as { sticker?: unknown } | null)?.sticker;
-                if (isStickerKey(sticker)) onStickerRef.current(sticker);
-            })
-            .subscribe();
-        return () => {
-            void supabase.removeChannel(channel);
-        };
-    }, [streamId, active]);
+        if (lines.length === 0) return;
+        const timer = setInterval(() => {
+            const cutoff = Date.now() - REACTION_LINE_TTL_MS;
+            setLines((prev) => {
+                const kept = prev.filter((l) => l.at > cutoff);
+                return kept.length === prev.length ? prev : kept;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [lines.length]);
+
+    return { lines, push };
+}
+
+/** The chat-flow rendering of the reaction feed — sits under the newest
+ *  messages, above the input, in both the viewer and the console. */
+export function ReactionFeedLines({ lines, anonymousLabel }: { lines: ReactionLine[]; anonymousLabel: string }) {
+    if (lines.length === 0) return null;
+    return (
+        <>
+            {lines.map((l) => (
+                <p
+                    key={l.id}
+                    className="flex items-center gap-1.5 py-0.5 px-2 text-[13px] leading-snug"
+                >
+                    <span className="font-black text-brand-cyan">{l.name || anonymousLabel}</span>
+                    <StickerIcon sticker={l.sticker} className="w-4 h-4 shrink-0" />
+                    {l.count > 1 && (
+                        <span className="text-[11px] font-black text-white/70 tabular-nums">
+                            x{l.count}
+                        </span>
+                    )}
+                </p>
+            ))}
+        </>
+    );
 }
