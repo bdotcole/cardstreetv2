@@ -45,6 +45,7 @@ import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { sendScanFeedback } from '@/lib/scanFeedback';
+import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
@@ -1616,6 +1617,21 @@ export default function HomePage() {
                         // getUserMedia (the binary carries CAMERA), and the cam
                         // page itself falls back to a browser handoff if capture
                         // ever fails — so a scan stays in-app instead of bouncing.
+                        window.location.href = appLink.pathname + appLink.search + appLink.hash;
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
+                // Public web pages (the breaker landing, FAQ, policies, game
+                // landings, the trade QR target). Same problem as /live/ above:
+                // Android intercepts ALL cardstreet.app URLs, so a shared link
+                // opens the app, and with no branch here the path is dropped and
+                // the user silently lands on home. Navigate the WebView to the
+                // real page — the allowlist in lib/nativeWebPaths.ts is what
+                // keeps this from stranding anyone on a non-page.
+                try {
+                    const appLink = new URL(data.url);
+                    if (appLink.protocol.startsWith('http') && isNativeWebPath(appLink.pathname)) {
                         window.location.href = appLink.pathname + appLink.search + appLink.hash;
                         return;
                     }
