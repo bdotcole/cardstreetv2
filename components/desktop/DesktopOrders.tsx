@@ -26,6 +26,12 @@ interface OrderRow {
     // One row per listing; a multi-item checkout shares one transfer_group
     // (one payment, one parcel). Tabs render one row per group.
     transfer_group?: string | null;
+    // Live-break spot orders: no listing snapshot; the server resolves the
+    // stream/lot/spot display context instead (lib/breakOrderContext). Their
+    // parcel is consolidated at stream settle, so the label button is
+    // replaced by a passive notice for them.
+    break_spot_id?: string | null;
+    break_context?: { title: string; imageSmall: string | null } | null;
     listing: { card_data: any; condition: string } | null;
     shipping_labels?: {
         tracking_number?: string | null;
@@ -41,6 +47,8 @@ interface SaleRow {
     platform_fee: number;
     completed_at: string;
     transfer_group?: string | null;
+    break_spot_id?: string | null;
+    break_context?: { title: string; imageSmall: string | null } | null;
     listing: { card_data: any; condition: string; price: number } | null;
 }
 
@@ -75,18 +83,28 @@ function StatusChip({ status }: { status: string }) {
     );
 }
 
-function CardCell({ cardData, condition }: { cardData: any; condition?: string }) {
+// Row shape shared by orders/shipments/sales cells. Live-break spot orders
+// have no listing snapshot — the server-resolved break_context ("<stream> —
+// <lot> · Spot #N" + lot art) takes precedence, and a break row whose context
+// failed to resolve reads as a live-break spot, never "Card order".
+function CardCell({ row }: { row: { listing: { card_data: any; condition?: string } | null; break_spot_id?: string | null; break_context?: { title: string; imageSmall: string | null } | null } }) {
+    const { t } = useTranslation();
+    const cardData = row.listing?.card_data;
+    const image = row.break_context?.imageSmall || cardData?.images?.small || null;
+    const name = row.break_context?.title
+        || cardData?.name
+        || (row.break_spot_id ? t('desktop.orders.liveBreakSpot') : 'Card order');
     return (
         <div className="flex items-center gap-3 min-w-0">
             <span className="w-10 h-14 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
-                {cardData?.images?.small && (
+                {image && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={getThumbnailUrl(cardData.images.small)} alt="" loading="lazy" className={`w-full h-full ${cardData?.isSealed ? 'object-contain' : 'object-cover'}`} />
+                    <img src={getThumbnailUrl(image)} alt="" loading="lazy" className={`w-full h-full ${cardData?.isSealed ? 'object-contain' : 'object-cover'}`} />
                 )}
             </span>
             <div className="min-w-0">
-                <p className="text-sm font-bold text-white truncate">{cardData?.name || 'Card order'}</p>
-                {condition && <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide">{condition}</p>}
+                <p className="text-sm font-bold text-white truncate">{name}</p>
+                {row.listing?.condition && <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide">{row.listing.condition}</p>}
             </div>
         </div>
     );
@@ -359,7 +377,7 @@ export default function DesktopOrders() {
                                         <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                             <div className="space-y-2 min-w-0">
                                                 {group.map((o) => (
-                                                    <CardCell key={o.id} cardData={o.listing?.card_data} condition={o.listing?.condition} />
+                                                    <CardCell key={o.id} row={o} />
                                                 ))}
                                                 {group.length > 1 && (
                                                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
@@ -421,12 +439,16 @@ export default function DesktopOrders() {
                                     // notice until cleared — label printing no longer
                                     // applies to them.
                                     const isDelivered = ['delivered', 'completed'].includes(order.status);
+                                    // Live-break spot orders never get a per-order
+                                    // label (parcels consolidate at stream settle) —
+                                    // the label button becomes a passive notice.
+                                    const isBreakOrder = !!order.break_spot_id;
                                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                                     return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <div className="space-y-2 min-w-0">
                                             {group.map((o) => (
-                                                <CardCell key={o.id} cardData={o.listing?.card_data} condition={o.listing?.condition} />
+                                                <CardCell key={o.id} row={o} />
                                             ))}
                                             {group.length > 1 && (
                                                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
@@ -446,6 +468,11 @@ export default function DesktopOrders() {
                                                     <i className="fa-solid fa-check mr-2 text-emerald-400"></i>
                                                     {t('desktop.orders.clearShipment')}
                                                 </button>
+                                            ) : isBreakOrder ? (
+                                                <span className="text-[11px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg px-3 py-2">
+                                                    <i className="fa-solid fa-box-open mr-2"></i>
+                                                    {t('desktop.orders.liveBreakShipsWithParcel')}
+                                                </span>
                                             ) : (
                                                 <button
                                                     onClick={() => openLabel(order.id)}
@@ -478,7 +505,7 @@ export default function DesktopOrders() {
                                     <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <div className="space-y-2 min-w-0">
                                             {group.map((s) => (
-                                                <CardCell key={s.id} cardData={s.listing?.card_data} condition={s.listing?.condition} />
+                                                <CardCell key={s.id} row={s} />
                                             ))}
                                             {group.length > 1 && (
                                                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">

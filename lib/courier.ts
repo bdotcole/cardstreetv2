@@ -302,6 +302,18 @@ export async function sendLabelGeneratedNotification(
                     // route requires auth, so deep-link to the order page where the
                     // seller can pull the label (the PDF is also attached to this
                     // email via the Postmark override below).
+                    //
+                    // These keys are EXACTLY aligned with the template — verified
+                    // 2026-08-15 against the live Courier API (GET /notifications/
+                    // 000AHF66.../content + GET /messages/{id}/output): the push
+                    // block renders both values from this very payload. The email
+                    // block's ENGLISH sentence still shows raw {orderDetails.id} /
+                    // {labelUrl} because those two tokens were typed as PLAIN TEXT
+                    // there — not <variable>-wrapped like the Thai sentence and the
+                    // push block — and Courier only substitutes tokenized variables.
+                    // No data payload can fix that; the cure is a dashboard edit
+                    // (re-insert the two variables in the email block's English
+                    // line). Do not "fix" this payload again.
                     orderDetails: { id: orderDetails.id },
                     labelUrl: orderUrl,
                     // Push deep-link payload.

@@ -89,12 +89,26 @@ export async function GET(
 
         const { data: order, error: orderErr } = await admin
             .from('orders')
-            .select('id, seller_id, buyer_id, status, transfer_group, shipping_labels(tracking_number)')
+            .select('id, seller_id, buyer_id, status, transfer_group, break_spot_id, shipping_labels(tracking_number)')
             .eq('id', orderId)
             .single();
 
         if (orderErr || !order) {
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+        }
+
+        // Live-break spot orders never get a per-order Flash label — they ship
+        // as one consolidated parcel per buyer per lot at stream settle. Refuse
+        // both auth paths here (the signed-token path skips the /label/url
+        // guard) before the recovery path below can mint a stray waybill.
+        if (order.break_spot_id) {
+            return NextResponse.json(
+                {
+                    error: 'This is a live-break order — it ships as part of the break parcel after the show.',
+                    code: 'LIVE_BREAK_ORDER',
+                },
+                { status: 409 }
+            );
         }
 
         // To-one embed: PostgREST returns an object, not an array (see
@@ -132,6 +146,18 @@ export async function GET(
                 transfer_group: order.transfer_group,
             });
             if (!rec.ok) {
+                if (rec.reason === 'live_break_order') {
+                    // Unreachable in practice (the guard above already
+                    // refused), kept so the shared helper's defense reads back
+                    // as the same 409 if this route's select ever drifts.
+                    return NextResponse.json(
+                        {
+                            error: 'This is a live-break order — it ships as part of the break parcel after the show.',
+                            code: 'LIVE_BREAK_ORDER',
+                        },
+                        { status: 409 }
+                    );
+                }
                 if (rec.reason === 'profile_missing') {
                     return NextResponse.json(
                         { error: 'Seller or buyer profile missing — cannot recover label. Contact support.' },

@@ -13,6 +13,9 @@ export interface OrderDetailData {
     shippingFee: number;
     createdAt: string;
     completedAt: string | null;
+    // Live-break spot order: no per-order label exists (parcels consolidate at
+    // stream settle), and card.name may be empty when the break join failed.
+    isBreakOrder?: boolean;
     card: {
         name: string;
         set: string;
@@ -108,8 +111,8 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     };
 
     const L = isThai
-        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด' }
-        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded' };
+        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์' }
+        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show' };
 
     return (
         <div className={shellClass}>
@@ -135,7 +138,7 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         )}
                     </span>
                     <div className="min-w-0">
-                        <p className="font-bold text-white truncate">{order.card.name}</p>
+                        <p className="font-bold text-white truncate">{order.card.name || (order.isBreakOrder ? L.liveBreakSpot : '')}</p>
                         {order.card.set && <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">{order.card.set}</p>}
                         <div className="flex flex-wrap gap-1.5 mt-2">
                             {order.card.condition && (
@@ -201,7 +204,16 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
 
                 {/* Actions */}
                 <div className="space-y-3">
-                    {isSeller && SHIPPABLE.has(order.status) && (
+                    {/* Live-break spot orders have no per-order label — the
+                        parcel is consolidated at stream settle, so the print
+                        button is replaced by a passive notice. */}
+                    {order.isBreakOrder && (
+                        <div className="w-full text-center glass border border-brand-cyan/20 bg-brand-cyan/5 text-brand-cyan font-bold uppercase tracking-wider text-xs py-3 rounded-xl">
+                            <i className="fa-solid fa-box-open mr-2"></i>
+                            {L.breakParcel}
+                        </div>
+                    )}
+                    {isSeller && !order.isBreakOrder && SHIPPABLE.has(order.status) && (
                         <button
                             onClick={openLabel}
                             disabled={labelBusy}

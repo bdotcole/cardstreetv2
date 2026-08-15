@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { attachBreakContext } from '@/lib/breakOrderContext'
 
 // Order statuses that represent a real (paid) sale. Everything before `paid`
 // (`pending`, `pending_payment`) is a pre-payment reservation and must NOT
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest) {
                 created_at,
                 completed_at,
                 transfer_group,
+                break_spot_id,
                 listing:listings(
                     id,
                     card_data,
@@ -74,8 +77,13 @@ export async function GET(request: NextRequest) {
 
         const totalEarnings = totals?.reduce((sum, t) => sum + (t.total_amount - (t.platform_fee || 0)), 0) || 0
 
+        // Live-break spot sales have no listing snapshot — resolve their
+        // stream/lot/spot context so Sales History names them instead of a
+        // blank generic row. One batched query; fails soft.
+        const withBreakContext = await attachBreakContext(createAdminClient(), sales || [])
+
         return NextResponse.json({
-            sales: sales || [],
+            sales: withBreakContext,
             totalEarnings,
             pagination: {
                 page,

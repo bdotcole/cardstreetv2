@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { embedArray } from '@/lib/utils/embed'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { attachBreakContext } from '@/lib/breakOrderContext'
 
 // GET - List user's active sales/shipments
 export async function GET(request: NextRequest) {
@@ -49,8 +51,14 @@ export async function GET(request: NextRequest) {
             shipping_labels: embedArray(s.shipping_labels),
         }))
 
+        // Live-break spot orders have no listing snapshot — resolve their
+        // stream/lot/spot context (service-role: streams RLS is per-role and
+        // this join spans buyer-visible + seller-visible rows) so the panel
+        // names them and hides the per-order label actions.
+        const withBreakContext = await attachBreakContext(createAdminClient(), normalized)
+
         return NextResponse.json({
-            shipments: normalized,
+            shipments: withBreakContext,
             pagination: {
                 page,
                 limit,

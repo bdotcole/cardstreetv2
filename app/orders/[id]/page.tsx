@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { embedArray } from '@/lib/utils/embed';
+import { resolveBreakOrderContexts } from '@/lib/breakOrderContext';
 import OrderDetailContent, { type OrderDetailData } from './OrderDetailContent';
 
 // Addressable, auth-gated order page — the deep-link target for the seller
@@ -43,7 +44,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     const { data: order } = await admin
         .from('orders')
         .select(`
-            id, status, total_amount, platform_fee, shipping_fee, created_at, completed_at,
+            id, status, total_amount, platform_fee, shipping_fee, created_at, completed_at, break_spot_id,
             listing:listings(card_data, condition, is_graded, grading_company, grade, price),
             shipping_labels(tracking_number, carrier_name, courier_tracking_url, status)
         `)
@@ -58,6 +59,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         ? String(label.tracking_number)
         : null;
 
+    // Live-break spot orders have no listing snapshot — resolve stream/lot/
+    // spot context so this page (the email deep-link target) shows
+    // "<stream> — <lot> · Spot #N" + the lot's art instead of "Card order".
+    // A failed join leaves the name empty and the client renders its
+    // localized "Live break spot" fallback.
+    const isBreakOrder = !!order.break_spot_id;
+    const breakContext = isBreakOrder
+        ? (await resolveBreakOrderContexts(admin, [order.break_spot_id])).get(order.break_spot_id as string) ?? null
+        : null;
+
     const data: OrderDetailData = {
         id: order.id,
         status: order.status,
@@ -66,10 +77,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         shippingFee: Number(order.shipping_fee) || 0,
         createdAt: order.created_at,
         completedAt: order.completed_at ?? null,
+        isBreakOrder,
         card: {
-            name: card?.name || 'Card order',
+            name: isBreakOrder
+                ? (breakContext?.title || '')
+                : (card?.name || 'Card order'),
             set: card?.set || card?.setName || '',
-            imageSmall: card?.images?.small || card?.imageUrl || null,
+            imageSmall: isBreakOrder
+                ? (breakContext?.imageSmall ?? null)
+                : (card?.images?.small || card?.imageUrl || null),
             condition: listing?.condition ?? null,
             isGraded: !!listing?.is_graded,
             gradingCompany: listing?.grading_company ?? null,

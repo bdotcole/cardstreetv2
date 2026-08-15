@@ -45,7 +45,7 @@ export async function POST(
 
         const { data: order, error: orderErr } = await admin
             .from('orders')
-            .select('seller_id')
+            .select('seller_id, break_spot_id')
             .eq('id', orderId)
             .single();
 
@@ -54,6 +54,18 @@ export async function POST(
         }
         if (order.seller_id !== user.id) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        // Live-break spot orders have no per-order label (parcels consolidate
+        // at stream settle) — refuse before issuing a signed URL so clients
+        // get a clean 409 instead of a JSON error inside a download tab.
+        if (order.break_spot_id) {
+            return NextResponse.json(
+                {
+                    error: 'This is a live-break order — it ships as part of the break parcel after the show.',
+                    code: 'LIVE_BREAK_ORDER',
+                },
+                { status: 409 }
+            );
         }
 
         const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;

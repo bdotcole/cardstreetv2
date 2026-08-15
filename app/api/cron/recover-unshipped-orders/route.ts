@@ -61,6 +61,13 @@ export async function GET(request: NextRequest) {
         .from('orders')
         .select('id, seller_id, buyer_id, transfer_group, updated_at')
         .eq('status', 'paid')
+        // Live-break spot orders LIVE at 'paid' until stream settle — that is
+        // their normal resting state, not a stuck fulfillment. Sweeping them in
+        // here minted a stray per-order Flash waybill + "label ready" email
+        // (confirmed in prod); their parcels consolidate per buyer per lot at
+        // settle instead. Marketplace orders have break_spot_id NULL, so this
+        // filter is a no-op for the orders this cron exists to recover.
+        .is('break_spot_id', null)
         .lt('updated_at', olderThan)
         .gt('updated_at', newerThan)
         .order('updated_at', { ascending: true })
@@ -111,6 +118,12 @@ export async function GET(request: NextRequest) {
             } else {
                 const rec = await recoverShipmentForOrder(supabase, primary as RecoverableOrder);
                 if (!rec.ok) {
+                    if (rec.reason === 'live_break_order') {
+                        // Belt-and-braces: the query above filters these out,
+                        // and the shared helper re-checks. Not an error.
+                        summary.skipped++;
+                        continue;
+                    }
                     summary.errors++;
                     console.error(`[RecoverUnshipped] ${primary.id}: ${rec.reason} — ${rec.error}`);
                     continue;

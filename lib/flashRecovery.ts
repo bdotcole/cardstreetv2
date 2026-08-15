@@ -34,7 +34,7 @@ export interface RecoverableOrder {
 
 export type ShipmentRecoveryResult =
     | { ok: true; trackingNumber: string; created: boolean }
-    | { ok: false; reason: 'profile_missing' | 'flash_error'; error: string };
+    | { ok: false; reason: 'profile_missing' | 'flash_error' | 'live_break_order'; error: string };
 
 /**
  * Ensure `order` has a Flash waybill, creating one only if needed. Returns the
@@ -45,6 +45,26 @@ export async function recoverShipmentForOrder(
     admin: SupabaseClient,
     order: RecoverableOrder,
 ): Promise<ShipmentRecoveryResult> {
+    // Live-break spot orders must NEVER get a per-order waybill — their
+    // parcels are consolidated per buyer per lot at stream settle
+    // (app/api/live/streams/[id]/settle). This is the last line of defense:
+    // every caller filters break_spot_id upstream, but this helper is the one
+    // place that actually mints, so it re-checks the source of truth itself
+    // (a spot order that slipped through here shipped a stray waybill +
+    // "label ready" email in production).
+    const { data: orderRow } = await admin
+        .from('orders')
+        .select('break_spot_id')
+        .eq('id', order.id)
+        .maybeSingle();
+    if (orderRow?.break_spot_id) {
+        return {
+            ok: false,
+            reason: 'live_break_order',
+            error: 'Live-break spot orders ship as one consolidated parcel at stream settle — no per-order waybill',
+        };
+    }
+
     // Reuse an existing REAL waybill (a 'MANUAL' placeholder is a region-error
     // stand-in and is treated as "needs a real waybill", matching the prior
     // label-route behaviour).

@@ -121,10 +121,16 @@ interface Order {
   // One row per listing; a multi-item checkout shares one transfer_group
   // (one payment, one parcel). The panels render one card per group.
   transfer_group?: string | null;
+  // Live-break spot orders: no listing snapshot; the server resolves the
+  // stream/lot/spot display context instead (lib/breakOrderContext). Their
+  // parcel is consolidated at stream settle, so per-order label actions are
+  // hidden for them.
+  break_spot_id?: string | null;
+  break_context?: { title: string; imageSmall: string | null } | null;
   listing: {
     card_data: any;
     condition: string;
-  };
+  } | null;
   // Tracking lives on shipping_labels (one-to-one with orders). The pre-Flash
   // Order shape had top-level tracking_number/carrier columns; those never
   // existed in the DB, they were always meant to come from the join.
@@ -147,12 +153,28 @@ interface Sale {
   // to created_at when rendering so a null never becomes `new Date(null)` = epoch.
   completed_at: string | null;
   created_at: string;
+  break_spot_id?: string | null;
+  break_context?: { title: string; imageSmall: string | null } | null;
   listing: {
     card_data: any;
     condition: string;
     price: number;
-  };
+  } | null;
 }
+
+// Display name/thumbnail for an order/sale row. Live-break spot orders have no
+// listing snapshot — the server-resolved break_context ("<stream> — <lot> ·
+// Spot #N" + lot art) takes precedence, and a break row whose context failed
+// to resolve must read as a live-break spot, never a generic "Card Order".
+const rowDisplayName = (
+  row: { break_spot_id?: string | null; break_context?: { title: string } | null; listing?: { card_data: any } | null },
+  t: (key: string) => string,
+  fallbackKey: string,
+) => row.break_context?.title || row.listing?.card_data?.name || t(row.break_spot_id ? 'profile.liveBreakSpot' : fallbackKey);
+
+const rowDisplayImage = (
+  row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
+): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
 type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
 
@@ -603,7 +625,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           savedUri: null,
           savedFilename: null,
           loading: false,
-          error: data.error || `Server returned ${urlRes.status}`,
+          // Live-break spot orders have no per-order label (the button is
+          // hidden for them, but the 409 guard can still be reached via a
+          // stale list) — localize that refusal instead of echoing raw JSON.
+          error: data.code === 'LIVE_BREAK_ORDER'
+            ? t('profile.liveBreakLabelBlocked')
+            : data.error || `Server returned ${urlRes.status}`,
         });
         return;
       }
@@ -1539,12 +1566,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     return (
                     <div key={order.id} className="glass p-4 rounded-2xl border border-white/5 space-y-4">
                       {/* Order Header — one row per item in the parcel */}
-                      {group.map((item) => (
+                      {group.map((item) => {
+                        const itemImage = rowDisplayImage(item);
+                        return (
                         <div key={item.id} className="flex items-start gap-3">
                           <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                            {item.listing?.card_data?.images?.small && (
+                            {itemImage && (
                               <img
-                                src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                src={getThumbnailUrl(itemImage)}
                                 alt="Card"
                                 loading="lazy"
                                 decoding="async"
@@ -1554,13 +1583,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-white font-semibold text-sm truncate">
-                              {item.listing?.card_data?.name || 'Card Order'}
+                              {rowDisplayName(item, t, 'profile.cardOrder')}
                             </p>
                             <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
                             <p className="text-brand-cyan font-bold text-sm mt-1">฿{item.total_amount?.toLocaleString()}</p>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
 
                       {group.length > 1 && (
                         <div className="flex items-center justify-between border-t border-white/5 pt-3">
@@ -1684,13 +1714,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     const sale = group[0];
                     const netFor = (s: Sale) => s.total_amount - (s.platform_fee || 0);
                     const saleDate = new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US');
+                    const saleImage = rowDisplayImage(sale);
                     if (group.length === 1) {
                       return (
                     <div key={sale.id} className="glass p-3 rounded-2xl border border-white/5 flex items-center gap-3">
                       <div className="w-14 h-14 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                        {sale.listing?.card_data?.images?.small && (
+                        {saleImage && (
                           <img
-                            src={getThumbnailUrl(sale.listing.card_data.images.small)}
+                            src={getThumbnailUrl(saleImage)}
                             alt="Card"
                             loading="lazy"
                             decoding="async"
@@ -1700,7 +1731,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-semibold text-sm truncate">
-                          {sale.listing?.card_data?.name || t('profile.cardSale')}
+                          {rowDisplayName(sale, t, 'profile.cardSale')}
                         </p>
                         <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
                       </div>
@@ -1713,12 +1744,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     }
                     return (
                       <div key={sale.id} className="glass p-3 rounded-2xl border border-white/5 space-y-2">
-                        {group.map((item) => (
+                        {group.map((item) => {
+                          const itemImage = rowDisplayImage(item);
+                          return (
                           <div key={item.id} className="flex items-center gap-3">
                             <div className="w-14 h-14 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                              {item.listing?.card_data?.images?.small && (
+                              {itemImage && (
                                 <img
-                                  src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                  src={getThumbnailUrl(itemImage)}
                                   alt="Card"
                                   loading="lazy"
                                   decoding="async"
@@ -1728,13 +1761,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-white font-semibold text-sm truncate">
-                                {item.listing?.card_data?.name || t('profile.cardSale')}
+                                {rowDisplayName(item, t, 'profile.cardSale')}
                               </p>
                               <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
                             </div>
                             <p className="text-slate-400 text-xs font-bold">+฿{netFor(item).toLocaleString()}</p>
                           </div>
-                        ))}
+                          );
+                        })}
                         <div className="flex items-center justify-between border-t border-white/5 pt-2">
                           <span className="text-slate-500 text-xs">
                             {isThai ? `${group.length} รายการ · คำสั่งซื้อเดียว` : `${group.length} items · one order`}
@@ -1791,6 +1825,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     // notice until the seller swipes them away (see
                     // clearShipments). Active ones can't be dismissed.
                     const isDeliveredCard = ['delivered', 'completed'].includes(shipment.status);
+                    // Live-break spot orders never get a per-order label —
+                    // their parcel is consolidated at stream settle, so every
+                    // label affordance is replaced by a passive notice.
+                    const isBreakOrder = !!shipment.break_spot_id;
                     const statusLine = (
                       <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
                         {/* 'completed' reads "Delivered" here — in a shipping
@@ -1817,12 +1855,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       className="glass p-4 rounded-2xl border border-white/5 space-y-4"
                     >
                       {/* Shipment Header — one row per item in the parcel */}
-                      {group.map((item) => (
+                      {group.map((item) => {
+                        const itemImage = rowDisplayImage(item);
+                        return (
                         <div key={item.id} className="flex items-start gap-3">
                           <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                            {item.listing?.card_data?.images?.small && (
+                            {itemImage && (
                               <img
-                                src={getThumbnailUrl(item.listing.card_data.images.small)}
+                                src={getThumbnailUrl(itemImage)}
                                 alt="Card"
                                 loading="lazy"
                                 decoding="async"
@@ -1832,13 +1872,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-white font-semibold text-sm truncate">
-                              {item.listing?.card_data?.name || t('profile.cardOrder')}
+                              {rowDisplayName(item, t, 'profile.cardOrder')}
                             </p>
                             <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
                             {group.length === 1 && statusLine}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                       {group.length > 1 && (
                         <div className="flex items-end justify-between gap-2">
                           {statusLine}
@@ -1859,16 +1900,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           <span className="text-slate-500 text-[10px] flex-shrink-0">{t('profile.swipeToClear')}</span>
                         </div>
                       )}
+                      {/* Live-break spot order: no per-order label ever — the
+                          parcel is consolidated per buyer at stream settle, so
+                          the label affordances below are replaced by this
+                          passive notice. */}
+                      {isBreakOrder && !isDeliveredCard && (
+                        <div className="w-full h-10 bg-brand-cyan/5 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
+                          {t('profile.liveBreakShipsWithParcel')}
+                        </div>
+                      )}
                       {/* Status hint while Flash is preparing the label.
                           Labels are generated automatically after payment — no
                           seller action is needed. If the order sticks at 'paid'
                           for long, fulfillment hit an error and support is on it. */}
-                      {(shipment.status === 'paid' || shipment.status === 'pending') && (
+                      {!isBreakOrder && (shipment.status === 'paid' || shipment.status === 'pending') && (
                         <div className="w-full h-10 bg-slate-800 text-slate-400 border border-white/5 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center">
                           {t('profile.labelBeingPrepared')}
                         </div>
                       )}
-                      {shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
+                      {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
                         <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
                           {t('profile.manualLabelRequired')}
                         </div>
@@ -1880,8 +1930,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           again with the same outTradeNo to retrieve the
                           existing shipment). Hidden only when this is a
                           MANUAL placeholder, which the block above already
-                          handles with its own UI. */}
-                      {['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(shipment.status) &&
+                          handles with its own UI, or a live-break spot order
+                          (no per-order label exists to print). */}
+                      {!isBreakOrder &&
+                       ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(shipment.status) &&
                        shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' && (
                         <button
                           onClick={() => openLabel(shipment.id)}
@@ -2092,6 +2144,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         {trackingOrderId && (() => {
           const trackingOrder = shipments.find((s) => s.id === trackingOrderId);
           const tLabel = trackingOrder?.shipping_labels?.[0];
+          const trackingImage = trackingOrder ? rowDisplayImage(trackingOrder) : null;
           return (
             <motion.div
               key="tracking-modal"
@@ -2123,9 +2176,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     {/* Card context so the seller knows which parcel this is */}
                     <div className="flex items-start gap-3">
                       <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                        {trackingOrder.listing?.card_data?.images?.small && (
+                        {trackingImage && (
                           <img
-                            src={getThumbnailUrl(trackingOrder.listing.card_data.images.small)}
+                            src={getThumbnailUrl(trackingImage)}
                             alt="Card"
                             loading="lazy"
                             decoding="async"
@@ -2135,7 +2188,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-semibold text-sm truncate">
-                          {trackingOrder.listing?.card_data?.name || t('profile.cardOrder')}
+                          {rowDisplayName(trackingOrder, t, 'profile.cardOrder')}
                         </p>
                         <p className="text-slate-500 text-xs">{trackingOrder.listing?.condition}</p>
                         <p className="text-brand-orange font-bold text-sm mt-1">

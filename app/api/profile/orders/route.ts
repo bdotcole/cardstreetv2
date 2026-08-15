@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { embedArray } from '@/lib/utils/embed'
+import { attachBreakContext } from '@/lib/breakOrderContext'
 
 // GET - List user's orders with pagination
 export async function GET(request: NextRequest) {
@@ -70,8 +71,13 @@ export async function GET(request: NextRequest) {
             shipping_labels: embedArray(o.shipping_labels),
         }))
 
+        // Live-break spot orders have no listing snapshot — resolve their
+        // stream/lot/spot context so panels can name them instead of falling
+        // back to a blank "Card Order". One batched query; fails soft.
+        const withBreakContext = await attachBreakContext(supabaseAdmin, normalized)
+
         return NextResponse.json({
-            orders: normalized,
+            orders: withBreakContext,
             pagination: {
                 page,
                 limit,
