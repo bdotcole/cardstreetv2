@@ -1170,6 +1170,8 @@
             "fitFill": "Fill",
             "fitContain": "Fit",
             "layoutReset": "Reset",
+            "collapsePanel": "Minimize camera panel",
+            "expandPanel": "Expand camera panel",
             "presaleToggle": "Open presales",
             "presaleHint": "Buyers can buy spots on this lot before the show goes live.",
             "presaleChip": "Presale",

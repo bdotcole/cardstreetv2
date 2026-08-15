@@ -1170,6 +1170,8 @@
             "fitFill": "เต็มช่อง",
             "fitContain": "เต็มภาพ",
             "layoutReset": "รีเซ็ต",
+            "collapsePanel": "ย่อแผงกล้อง",
+            "expandPanel": "ขยายแผงกล้อง",
             "presaleToggle": "เปิดขายพรีเซล",
             "presaleHint": "ให้ผู้ซื้อจองซื้อช่องของล็อตนี้ได้ก่อนไลฟ์เริ่ม",
             "presaleChip": "พรีเซล",

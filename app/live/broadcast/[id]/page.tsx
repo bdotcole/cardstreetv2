@@ -108,6 +108,10 @@ function cameraModeStorageKey(streamId: string): string {
     return `cs_live_camera_mode:${streamId}`;
 }
 
+function panelCollapsedStorageKey(streamId: string): string {
+    return `cs_live_panel_collapsed:${streamId}`;
+}
+
 function facingForMode(mode: 'main' | 'table'): 'user' | 'environment' {
     return mode === 'main' ? 'user' : 'environment';
 }
@@ -214,6 +218,45 @@ export default function BroadcastConsolePage() {
     const modeInitRef = useRef(false);
     // Manage-only consoles offer BOTH invite QRs; table first.
     const [inviteSlotChoice, setInviteSlotChoice] = useState<InviteSlot>('table');
+    // ─── Layout-panel collapse (pure UI) ───
+    // Collapsed shrinks the monitor to a strip thumbnail so the queue, spots,
+    // chat and polls get the room — publishing/subscribing is untouched, and
+    // the video elements stay MOUNTED (only classNames change), so no track
+    // detach/teardown ever happens on toggle. Persisted per stream like the
+    // camera mode; the default follows the mode (manage-only has nothing to
+    // frame, so it starts collapsed) until the breaker chooses explicitly.
+    const [panelCollapsed, setPanelCollapsed] = useState(false);
+    const panelCollapsedTouchedRef = useRef(false);
+    useEffect(() => {
+        if (!cameraMode || panelCollapsedTouchedRef.current) return;
+        let stored: string | null = null;
+        try {
+            stored = sessionStorage.getItem(panelCollapsedStorageKey(streamId));
+        } catch {
+            // Storage unavailable — fall through to the mode default.
+        }
+        if (stored === '1' || stored === '0') {
+            panelCollapsedTouchedRef.current = true;
+            setPanelCollapsed(stored === '1');
+        } else {
+            // No explicit choice yet: keep tracking the mode default, so
+            // switching into manage-only mid-session collapses (and back).
+            setPanelCollapsed(cameraMode === 'none');
+        }
+    }, [cameraMode, streamId]);
+
+    const togglePanelCollapsed = useCallback(() => {
+        panelCollapsedTouchedRef.current = true;
+        setPanelCollapsed((prev) => {
+            const next = !prev;
+            try {
+                sessionStorage.setItem(panelCollapsedStorageKey(streamId), next ? '1' : '0');
+            } catch {
+                // Persistence is a convenience — the choice still applies now.
+            }
+            return next;
+        });
+    }, [streamId]);
     const [settleResult, setSettleResult] = useState<number | null>(null);
     const [chatInput, setChatInput] = useState('');
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
@@ -1496,27 +1539,72 @@ export default function BroadcastConsolePage() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* ─── Column 1: camera monitor + companion-cam QR + stats ─── */}
-                    <div className="space-y-4">
-                        <div className={sectionCls}>
-                            <div className="flex items-center justify-between mb-3">
+                {/* Collapsing the camera panel hands its desktop column width to
+                    the queue + chat columns. Mobile is a flex column, not a
+                    1-col grid, ON PURPOSE: a sticky GRID item is confined to its
+                    own grid area (row) and would never stick, while a sticky
+                    FLEX item's containing block is the whole container. */}
+                <div
+                    className={`flex flex-col gap-4 lg:grid ${
+                        panelCollapsed
+                            ? 'lg:grid-cols-[18rem_minmax(0,1fr)_minmax(0,1fr)]'
+                            : 'lg:grid-cols-3'
+                    }`}
+                >
+                    {/* ─── Column 1: camera monitor + companion-cam QR + stats ───
+                        max-lg:contents lifts the sections into the page flex
+                        column on mobile (spacing comes from the container gap),
+                        so the collapsed strip's `sticky` ranges over the whole
+                        stacked page — queue, spots and chat scroll under it —
+                        instead of just this wrapper's own height. */}
+                    <div className="max-lg:contents lg:space-y-4">
+                        <div
+                            className={`${sectionCls}${
+                                panelCollapsed
+                                    ? ' max-lg:sticky max-lg:top-[calc(var(--sat)+0.5rem)] max-lg:z-30'
+                                    : ''
+                            }`}
+                        >
+                            <div className="flex items-center justify-between gap-2 mb-3">
                                 <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">
                                     {t('live.console.layout') || 'Layout'}
                                 </h2>
-                                {!isEnded && (
-                                    <button onClick={() => setModeChooserOpen(true)} className={btnGhost}>
-                                        <i className="fa-solid fa-camera-rotate mr-1.5"></i>
-                                        {t('live.console.mode.change') || 'Camera mode'}
+                                <div className="flex items-center gap-1.5">
+                                    {!isEnded && (
+                                        <button onClick={() => setModeChooserOpen(true)} className={btnGhost}>
+                                            <i className="fa-solid fa-camera-rotate mr-1.5"></i>
+                                            {t('live.console.mode.change') || 'Camera mode'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={togglePanelCollapsed}
+                                        aria-expanded={!panelCollapsed}
+                                        aria-label={
+                                            panelCollapsed
+                                                ? t('live.console.expandPanel') || 'Expand camera panel'
+                                                : t('live.console.collapsePanel') || 'Minimize camera panel'
+                                        }
+                                        title={
+                                            panelCollapsed
+                                                ? t('live.console.expandPanel') || 'Expand camera panel'
+                                                : t('live.console.collapsePanel') || 'Minimize camera panel'
+                                        }
+                                        className="inline-flex w-9 h-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-slate-300 active:scale-95 transition-all"
+                                    >
+                                        <i
+                                            className={`fa-solid ${
+                                                panelCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'
+                                            } text-xs`}
+                                        ></i>
                                     </button>
-                                )}
+                                </div>
                             </div>
                             {/* The camera came up but the mic was refused, so this
                                 device is publishing video-only (see captureTracks in
                                 useLiveKitRoom). Said out loud and kept on screen: a
                                 breaker who doesn't know is talking to nobody, and the
                                 first sign would otherwise be a viewer complaining. */}
-                            {audioDropped && !isEnded && (
+                            {audioDropped && !isEnded && !panelCollapsed && (
                                 <div className="mb-3 rounded-xl bg-amber-400/10 border border-amber-400/30 px-3 py-2.5 flex items-start gap-2.5">
                                     <i className="fa-solid fa-microphone-slash text-amber-300 text-sm mt-0.5"></i>
                                     <div className="min-w-0">
@@ -1536,8 +1624,23 @@ export default function BroadcastConsolePage() {
                                 the frame otherwise) through the same CroppedTrackVideo
                                 the viewer page renders, so the seller frames exactly
                                 what viewers receive. Un-mirrored on purpose — WYSIWYG
-                                beats the selfie flip here. */}
-                            <div className="relative aspect-[9/12] bg-black rounded-xl overflow-hidden">
+                                beats the selfie flip here.
+
+                                The wrapper below ALWAYS exists (a plain block when
+                                expanded, a strip row when collapsed) so the monitor
+                                div — and every video element inside it — keeps its
+                                position in the tree across the toggle: React only
+                                swaps classNames, never remounts, so no track
+                                re-attach and no capture/publish interruption. */}
+                            <div className={panelCollapsed ? 'flex items-stretch gap-3' : ''}>
+                            <div
+                                onClick={panelCollapsed ? togglePanelCollapsed : undefined}
+                                className={`relative bg-black overflow-hidden ${
+                                    panelCollapsed
+                                        ? 'w-24 shrink-0 aspect-[9/12] rounded-lg cursor-pointer'
+                                        : 'aspect-[9/12] rounded-xl'
+                                }`}
+                            >
                                 {nativeFallback && !isEnded ? (
                                     /* Capture failed inside the app shell — a dead
                                        viewfinder here would read as a bug. Name the
@@ -1545,38 +1648,42 @@ export default function BroadcastConsolePage() {
                                        RECORD_AUDIO), and offer the browser escape. */
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-5">
                                         <i className="fa-solid fa-arrow-up-right-from-square text-brand-cyan text-2xl mb-3"></i>
-                                        <p className="text-sm font-bold text-white leading-snug">
-                                            {nativeFallback === 'mic'
-                                                ? t('live.console.micTitle') ||
-                                                  'Microphone needs the latest app update'
-                                                : t('live.console.inAppTitle') ||
-                                                  "Couldn't start the camera in the app"}
-                                        </p>
-                                        <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                                            {nativeFallback === 'mic'
-                                                ? t('live.console.micDesc') ||
-                                                  'Open this console in Chrome to broadcast now, or update the app and try again.'
-                                                : t('live.console.inAppDesc') ||
-                                                  "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual."}
-                                        </p>
-                                        {/* Retry stays in-app: the seller may have just
-                                            granted the OS prompt they first dismissed,
-                                            which needs no browser bounce at all. */}
-                                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                                            <button
-                                                onClick={() => void (connected ? retryCamera() : beginPreview())}
-                                                disabled={retryingCamera || previewStarting}
-                                                className={btnGhost}
-                                            >
-                                                {retryingCamera || previewStarting
-                                                    ? t('live.payment.processing') || 'Processing...'
-                                                    : t('live.console.retryCamera')}
-                                            </button>
-                                            <button onClick={() => void copyConsoleLink()} className={btnGhost}>
-                                                <i className="fa-solid fa-copy mr-1.5"></i>
-                                                {t('live.console.copyLink') || 'Copy console link'}
-                                            </button>
-                                        </div>
+                                        {!panelCollapsed && (
+                                            <>
+                                                <p className="text-sm font-bold text-white leading-snug">
+                                                    {nativeFallback === 'mic'
+                                                        ? t('live.console.micTitle') ||
+                                                          'Microphone needs the latest app update'
+                                                        : t('live.console.inAppTitle') ||
+                                                          "Couldn't start the camera in the app"}
+                                                </p>
+                                                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                                                    {nativeFallback === 'mic'
+                                                        ? t('live.console.micDesc') ||
+                                                          'Open this console in Chrome to broadcast now, or update the app and try again.'
+                                                        : t('live.console.inAppDesc') ||
+                                                          "Open this show's console in Chrome to broadcast. Viewing and buying in the app work as usual."}
+                                                </p>
+                                                {/* Retry stays in-app: the seller may have just
+                                                    granted the OS prompt they first dismissed,
+                                                    which needs no browser bounce at all. */}
+                                                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                                        disabled={retryingCamera || previewStarting}
+                                                        className={btnGhost}
+                                                    >
+                                                        {retryingCamera || previewStarting
+                                                            ? t('live.payment.processing') || 'Processing...'
+                                                            : t('live.console.retryCamera')}
+                                                    </button>
+                                                    <button onClick={() => void copyConsoleLink()} className={btnGhost}>
+                                                        <i className="fa-solid fa-copy mr-1.5"></i>
+                                                        {t('live.console.copyLink') || 'Copy console link'}
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 ) : mainTileShown || tableTileShown ? (
                                     <div ref={stackRef} className="absolute inset-0 flex flex-col">
@@ -1624,7 +1731,7 @@ export default function BroadcastConsolePage() {
                                                                     slot={slot}
                                                                     className="absolute inset-0"
                                                                 />
-                                                                {!isLocalSlot && (
+                                                                {!isLocalSlot && !panelCollapsed && (
                                                                     <TrackStatsBadge
                                                                         track={remoteTrack}
                                                                         className="absolute bottom-1.5 left-1.5"
@@ -1634,23 +1741,27 @@ export default function BroadcastConsolePage() {
                                                         ) : isLocalSlot ? (
                                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
                                                                 <i className="fa-solid fa-video-slash text-slate-600 text-xl mb-2"></i>
-                                                                <p className="text-[11px] text-slate-500 leading-relaxed">
-                                                                    {cameraIssue
-                                                                        ? cameraIssueText(cameraIssue)
-                                                                        : previewStarting
-                                                                            ? t('live.console.previewStarting') || 'Starting camera...'
-                                                                            : t('live.console.noCamera')}
-                                                                </p>
-                                                                {!isEnded && (cameraIssue || (isLive && connected)) && (
-                                                                    <button
-                                                                        onClick={() => void (connected ? retryCamera() : beginPreview())}
-                                                                        disabled={retryingCamera || previewStarting}
-                                                                        className={`${btnGhost} mt-2`}
-                                                                    >
-                                                                        {retryingCamera || previewStarting
-                                                                            ? t('live.payment.processing') || 'Processing...'
-                                                                            : t('live.console.retryCamera')}
-                                                                    </button>
+                                                                {!panelCollapsed && (
+                                                                    <>
+                                                                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                                                                            {cameraIssue
+                                                                                ? cameraIssueText(cameraIssue)
+                                                                                : previewStarting
+                                                                                    ? t('live.console.previewStarting') || 'Starting camera...'
+                                                                                    : t('live.console.noCamera')}
+                                                                        </p>
+                                                                        {!isEnded && (cameraIssue || (isLive && connected)) && (
+                                                                            <button
+                                                                                onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                                                                disabled={retryingCamera || previewStarting}
+                                                                                className={`${btnGhost} mt-2`}
+                                                                            >
+                                                                                {retryingCamera || previewStarting
+                                                                                    ? t('live.payment.processing') || 'Processing...'
+                                                                                    : t('live.console.retryCamera')}
+                                                                            </button>
+                                                                        )}
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         ) : (
@@ -1658,12 +1769,12 @@ export default function BroadcastConsolePage() {
                                                                 <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan"></i>
                                                             </div>
                                                         )}
-                                                        {isLocalSlot && localVideo && !connected && !isEnded && (
+                                                        {isLocalSlot && localVideo && !connected && !isEnded && !panelCollapsed && (
                                                             <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-slate-200 text-[10px] font-black uppercase tracking-widest">
                                                                 {t('live.console.preview') || 'Preview'}
                                                             </span>
                                                         )}
-                                                        {!isLocalSlot && (
+                                                        {!isLocalSlot && !panelCollapsed && (
                                                             <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-brand-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
                                                                 {slot === 'main'
@@ -1676,8 +1787,9 @@ export default function BroadcastConsolePage() {
                                             })}
                                         {/* Draggable split divider — absolute so it costs no
                                             flex height; z-10 keeps its pointer events above
-                                            the feeds' pan handlers. Dual-cam only. */}
-                                        {bothTilesShown && (
+                                            the feeds' pan handlers. Dual-cam only, and
+                                            hidden at thumbnail size. */}
+                                        {bothTilesShown && !panelCollapsed && (
                                             <div
                                                 role="separator"
                                                 aria-label={
@@ -1697,22 +1809,83 @@ export default function BroadcastConsolePage() {
                                 ) : (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
                                         <i className="fa-solid fa-video-slash text-slate-600 text-2xl mb-3"></i>
-                                        <p className="text-xs text-slate-500 leading-relaxed">
-                                            {isEnded
-                                                ? t('live.viewer.ended') || 'Show ended'
-                                                : cameraMode === 'none'
-                                                    ? t('live.console.manageWaiting') ||
-                                                      'No cameras connected yet — invite one with the QR code below'
-                                                    : t('live.console.notLiveYet') || 'Not live yet'}
-                                        </p>
+                                        {!panelCollapsed && (
+                                            <p className="text-xs text-slate-500 leading-relaxed">
+                                                {isEnded
+                                                    ? t('live.viewer.ended') || 'Show ended'
+                                                    : cameraMode === 'none'
+                                                        ? t('live.console.manageWaiting') ||
+                                                          'No cameras connected yet — invite one with the QR code below'
+                                                        : t('live.console.notLiveYet') || 'Not live yet'}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                                 {/* Audience sticker reactions, floated over the
-                                    monitor so the breaker sees the room react. */}
+                                    monitor so the breaker sees the room react.
+                                    Stays mounted while collapsed so the floats
+                                    queue keeps draining via onDone. */}
                                 <FloatingStickerLayer floats={stickerFloats} onDone={removeSticker} />
                             </div>
+                            {/* Collapsed strip: status pill + viewer count next to
+                                the live thumbnail; the retry affordance rides here
+                                (its in-tile home is hidden at thumbnail size). */}
+                            {panelCollapsed && (
+                                <div className="min-w-0 flex-1 flex flex-col items-start justify-center gap-1.5">
+                                    {isLive ? (
+                                        <span className="px-2 py-0.5 rounded-md bg-brand-red text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                            {t('live.console.live') || 'LIVE'}
+                                        </span>
+                                    ) : (
+                                        <span
+                                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest leading-snug ${
+                                                isStaged
+                                                    ? 'bg-brand-green/15 text-brand-green'
+                                                    : 'bg-white/10 text-slate-300'
+                                            }`}
+                                        >
+                                            {isEnded
+                                                ? t('live.viewer.ended') || 'Show ended'
+                                                : isStaged
+                                                    ? cameraMode === 'none'
+                                                        ? t('live.console.manageStaged') ||
+                                                          'Console connected — ready to go live'
+                                                        : t('live.console.camerasStaged') ||
+                                                          'Cameras staged — ready to go live'
+                                                    : staging
+                                                        ? t('live.console.stagingCameras') || 'Staging...'
+                                                        : t('live.console.notLiveYet') || 'Not live yet'}
+                                        </span>
+                                    )}
+                                    {isLive && connected && (
+                                        <span className="text-[11px] font-bold text-slate-300 tabular-nums">
+                                            <i className="fa-solid fa-eye mr-1.5 text-slate-500"></i>
+                                            {participantCount} {t('live.console.viewers') || 'watching'}
+                                        </span>
+                                    )}
+                                    {audioDropped && !isEnded && (
+                                        <span className="text-[10px] font-bold text-amber-300 leading-snug">
+                                            <i className="fa-solid fa-microphone-slash mr-1"></i>
+                                            {t('live.console.micOffTitle') || 'Broadcasting without sound'}
+                                        </span>
+                                    )}
+                                    {!isEnded && (cameraIssue || nativeFallback) && (
+                                        <button
+                                            onClick={() => void (connected ? retryCamera() : beginPreview())}
+                                            disabled={retryingCamera || previewStarting}
+                                            className={btnGhost}
+                                        >
+                                            {retryingCamera || previewStarting
+                                                ? t('live.payment.processing') || 'Processing...'
+                                                : t('live.console.retryCamera')}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            </div>
                             {/* Per-feed zoom + reset. Panning is drag-on-the-feed above. */}
-                            {!nativeFallback && !isEnded && (mainTileTrack || tableTileTrack) && (
+                            {!panelCollapsed && !nativeFallback && !isEnded && (mainTileTrack || tableTileTrack) && (
                                 <div className="mt-3 space-y-2">
                                     <p className="text-[10px] text-slate-500 leading-relaxed">
                                         {t('live.console.layoutHint') ||
@@ -1780,8 +1953,9 @@ export default function BroadcastConsolePage() {
                                 of what this console publishes; manage-only offers
                                 both slots (table first). Collapses once the invited
                                 cam connects; a drop re-mints a fresh token (see the
-                                auto-QR effect). */}
-                            {(isLive || isStaged) && desiredInviteSlot && (
+                                auto-QR effect). Hidden while collapsed (expand to
+                                scan) — minting/refresh continues regardless. */}
+                            {!panelCollapsed && (isLive || isStaged) && desiredInviteSlot && (
                                 <div className="mt-3 rounded-xl bg-black/20 border border-white/10 p-3 text-center">
                                     <p className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
                                         <i className="fa-solid fa-qrcode"></i>
