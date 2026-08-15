@@ -1775,9 +1775,7 @@ export async function sendBreakerApplicationAlert(application: {
     applicantTypes: string[];
     games: string[];
     breakingExperience: string;
-    setupStatus: string;
     availability: string;
-    whyApply: string;
     locale: string;
     hasAccount: boolean;
     utm?: Record<string, string> | null;
@@ -1794,11 +1792,6 @@ export async function sendBreakerApplicationAlert(application: {
     const campaign = application.utm && Object.keys(application.utm).length
         ? Object.entries(application.utm).map(([k, v]) => `${k}=${v}`).join(', ')
         : 'direct';
-    // One line of their own words is the best single signal of whether this is
-    // a serious applicant; the rest is in the console.
-    const why = application.whyApply.length > 280
-        ? `${application.whyApply.slice(0, 280).trimEnd()}…`
-        : application.whyApply;
 
     // Reuse the console's English labels rather than printing raw option ids —
     // "Card shop / 1–3 years / Needs minor work" instead of
@@ -1815,14 +1808,11 @@ export async function sendBreakerApplicationAlert(application: {
         `Applicant type: ${labelled(ADMIN_LABELS.applicantType, application.applicantTypes)}`,
         `Games: ${labelled(ADMIN_LABELS.game, application.games)}`,
         `Breaking experience: ${ADMIN_LABELS.experience[application.breakingExperience as keyof typeof ADMIN_LABELS.experience] ?? application.breakingExperience}`,
-        `Setup: ${ADMIN_LABELS.setupStatus[application.setupStatus as keyof typeof ADMIN_LABELS.setupStatus] ?? application.setupStatus}`,
         `Availability: ${application.availability}`,
         `Applied in: ${application.locale === 'th' ? 'Thai' : 'English'}`,
         `CardStreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
         `Campaign: ${campaign}`,
         `Submitted: ${submittedAt} (Bangkok)`,
-        '',
-        `Why they applied: ${why}`,
         '',
         `Review: ${appBaseUrl()}/admin/breakers`,
     ].filter((l) => l !== null) as string[];

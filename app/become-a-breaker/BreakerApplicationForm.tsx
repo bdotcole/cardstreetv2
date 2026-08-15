@@ -7,13 +7,11 @@ import {
     APPLICANT_TYPES,
     BREAKER_GAMES,
     BreakerApplicationSchema,
-    EQUIPMENT_OPTIONS,
     EXPERIENCE_LEVELS,
     LIMITS,
     PREFERRED_LANGUAGES,
     SECTION_FIELDS,
     SECTION_ORDER,
-    SETUP_STATUSES,
     UTM_KEYS,
     type CountedField,
     type SectionId,
@@ -29,7 +27,7 @@ import type { BreakerCopy } from './content';
  * the rules the server enforces. Issue codes are mapped to localized sentences
  * here rather than surfacing zod's English defaults.
  *
- * Progressive disclosure: six collapsible sections inside ONE <form>. Not a
+ * Progressive disclosure: five collapsible sections inside ONE <form>. Not a
  * wizard — every answer stays mounted, so browser autofill, "back" and a failed
  * submit all keep the user's work. A failed submit re-opens exactly the
  * sections that have errors and moves focus to the first bad field.
@@ -63,15 +61,9 @@ interface FormState {
     breakingExperience: string;
     experienceSummary: string;
     sampleVideoUrl: string;
-    equipment: string[];
-    equipmentOther: string;
-    setupStatus: string;
     availability: string;
     breakTypes: string;
     inventoryNotes: string;
-    whyApply: string;
-    trustAndEntertainment: string;
-    anythingElse: string;
     consentAccurate: boolean;
     consentNoGuarantee: boolean;
     consentTerms: boolean;
@@ -115,15 +107,9 @@ function initialState(prefill: BreakerFormPrefill, isThai: boolean): FormState {
         breakingExperience: '',
         experienceSummary: '',
         sampleVideoUrl: '',
-        equipment: [],
-        equipmentOther: '',
-        setupStatus: '',
         availability: '',
         breakTypes: '',
         inventoryNotes: '',
-        whyApply: '',
-        trustAndEntertainment: '',
-        anythingElse: '',
         consentAccurate: false,
         consentNoGuarantee: false,
         consentTerms: false,
@@ -221,7 +207,7 @@ export default function BreakerApplicationForm({
     );
 
     const toggleInArray = useCallback(
-        (name: 'applicantTypes' | 'games' | 'equipment', option: string) => {
+        (name: 'applicantTypes' | 'games', option: string) => {
             markStarted();
             setValues((prev) => {
                 const current = prev[name];
@@ -517,7 +503,7 @@ export default function BreakerApplicationForm({
     };
 
     const checkboxGroup = (
-        name: 'applicantTypes' | 'games' | 'equipment',
+        name: 'applicantTypes' | 'games',
         legend: string,
         options: readonly string[],
         labels: Record<string, string>,
@@ -669,7 +655,7 @@ export default function BreakerApplicationForm({
         );
     };
 
-    const wantsOther = (name: 'applicantTypes' | 'games' | 'equipment') => values[name].includes('other');
+    const wantsOther = (name: 'applicantTypes' | 'games') => values[name].includes('other');
 
     return (
         <div id="apply" className="scroll-mt-24">
@@ -879,11 +865,6 @@ export default function BreakerApplicationForm({
                     'streaming',
                     3,
                     <>
-                        {checkboxGroup('equipment', copy.fields.equipment, EQUIPMENT_OPTIONS, copy.options.equipment, {
-                            hint: copy.fields.equipmentHint,
-                        })}
-                        {wantsOther('equipment') && textInput('equipmentOther', copy.fields.equipmentOther)}
-                        {radioGroup('setupStatus', copy.fields.setupStatus, SETUP_STATUSES, copy.options.setupStatus)}
                         {textArea('availability', copy.fields.availability, {
                             required: true,
                             hint: copy.fields.availabilityHint,
@@ -899,21 +880,8 @@ export default function BreakerApplicationForm({
                 )}
 
                 {section(
-                    'written',
-                    4,
-                    <>
-                        {textArea('whyApply', copy.fields.whyApply, { required: true, rows: 5 })}
-                        {textArea('trustAndEntertainment', copy.fields.trustAndEntertainment, {
-                            required: true,
-                            rows: 5,
-                        })}
-                        {textArea('anythingElse', copy.fields.anythingElse, { rows: 4 })}
-                    </>,
-                )}
-
-                {section(
                     'consent',
-                    5,
+                    4,
                     <>
                         {consentBox('consentAccurate', copy.consent.accurate)}
                         {consentBox('consentNoGuarantee', copy.consent.noGuarantee)}

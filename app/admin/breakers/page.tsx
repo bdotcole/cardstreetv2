@@ -34,7 +34,9 @@ interface ApplicationRow {
     applicant_types: string[]
     games: string[]
     breaking_experience: string
-    setup_status: string
+    // Removed from the application form 2026-08-15 — null on newer rows, kept
+    // for the applications that answered it.
+    setup_status: string | null
     user_id: string | null
     locale: string
     submitted_at: string
@@ -56,8 +58,10 @@ interface ApplicationDetail extends ApplicationRow {
     availability: string
     break_types: string
     inventory_notes: string | null
-    why_apply: string
-    trust_and_entertainment: string
+    // Like setup_status/equipment, these questions were dropped 2026-08-15;
+    // null on newer rows.
+    why_apply: string | null
+    trust_and_entertainment: string | null
     anything_else: string | null
     consent_accurate_at: string
     consent_no_guarantee_at: string
@@ -355,7 +359,8 @@ export default function BreakerApplicationsPage() {
                                 </div>
                                 <p className="mt-2 text-[11px] text-slate-500">
                                     {label(ADMIN_LABELS.experience, row.breaking_experience)} ·{' '}
-                                    {label(ADMIN_LABELS.setupStatus, row.setup_status)} · {fmtDate(row.submitted_at)}
+                                    {row.setup_status && <>{label(ADMIN_LABELS.setupStatus, row.setup_status)} · </>}
+                                    {fmtDate(row.submitted_at)}
                                 </p>
                             </button>
                         ))}
@@ -553,22 +558,27 @@ export default function BreakerApplicationsPage() {
                                     </Field>
                                 </Section>
 
-                                {/* Streaming */}
+                                {/* Streaming. Equipment and setup status were dropped from the
+                                    form 2026-08-15 — shown only on the applications that answered
+                                    them. */}
                                 <Section title="Streaming readiness">
-                                    <Field label="Equipment"><Chips values={selected.equipment} map={ADMIN_LABELS.equipment} /></Field>
+                                    {selected.equipment?.length > 0 && <Field label="Equipment"><Chips values={selected.equipment} map={ADMIN_LABELS.equipment} /></Field>}
                                     {selected.equipment_other && <Field label="Equipment — other"><Text value={selected.equipment_other} /></Field>}
-                                    <Field label="Setup status">{label(ADMIN_LABELS.setupStatus, selected.setup_status)}</Field>
+                                    {selected.setup_status && <Field label="Setup status">{label(ADMIN_LABELS.setupStatus, selected.setup_status)}</Field>}
                                     <Field label="Availability"><Text value={selected.availability} /></Field>
                                     <Field label="Breaks they want to host"><Text value={selected.break_types} /></Field>
                                     <Field label="Inventory on hand"><Text value={selected.inventory_notes} /></Field>
                                 </Section>
 
-                                {/* Written */}
-                                <Section title="Written answers">
-                                    <Field label="Why become a Cardstreet Breaker?"><Text value={selected.why_apply} /></Field>
-                                    <Field label="Entertaining and trustworthy streams"><Text value={selected.trust_and_entertainment} /></Field>
-                                    <Field label="Anything else"><Text value={selected.anything_else} /></Field>
-                                </Section>
+                                {/* Written answers — questions dropped 2026-08-15, section kept
+                                    for the applications that have them. */}
+                                {(selected.why_apply || selected.trust_and_entertainment || selected.anything_else) && (
+                                    <Section title="Written answers">
+                                        {selected.why_apply && <Field label="Why become a Cardstreet Breaker?"><Text value={selected.why_apply} /></Field>}
+                                        {selected.trust_and_entertainment && <Field label="Entertaining and trustworthy streams"><Text value={selected.trust_and_entertainment} /></Field>}
+                                        {selected.anything_else && <Field label="Anything else"><Text value={selected.anything_else} /></Field>}
+                                    </Section>
+                                )}
 
                                 {/* Provenance */}
                                 <Section title="Consent & source">

@@ -45,6 +45,9 @@ export type BreakerGame = (typeof BREAKER_GAMES)[number];
 export const EXPERIENCE_LEVELS = ['none', 'under_1y', '1_to_3y', 'over_3y'] as const;
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 
+// The equipment and setup-status questions were removed from the form
+// (2026-08-15), but the vocabularies stay: applications submitted before then
+// carry these values, and the review console still labels them.
 export const EQUIPMENT_OPTIONS = [
     'smartphone',
     'camera',
@@ -90,16 +93,12 @@ export const LIMITS = {
     socialLinks: 5,
     cardstreetUsername: 64,
     gamesOther: 120,
-    equipmentOther: 120,
     applicantTypeOther: 120,
     experienceSummary: 1000,
     sampleVideoUrl: 300,
     availability: 300,
     breakTypes: 500,
     inventoryNotes: 500,
-    whyApply: 1000,
-    trustAndEntertainment: 1000,
-    anythingElse: 1000,
 } as const;
 
 /** Long-answer fields that render a character counter. */
@@ -108,9 +107,6 @@ export const COUNTED_FIELDS = [
     'availability',
     'breakTypes',
     'inventoryNotes',
-    'whyApply',
-    'trustAndEntertainment',
-    'anythingElse',
 ] as const;
 export type CountedField = (typeof COUNTED_FIELDS)[number];
 
@@ -207,17 +203,9 @@ export const BreakerApplicationSchema = z.object({
     sampleVideoUrl: urlField(LIMITS.sampleVideoUrl).optional().default(''),
 
     // Streaming readiness
-    equipment: z.array(z.enum(EQUIPMENT_OPTIONS)).max(EQUIPMENT_OPTIONS.length).optional().default([]),
-    equipmentOther: trimmed(LIMITS.equipmentOther).optional().default(''),
-    setupStatus: z.enum(SETUP_STATUSES),
     availability: requiredText(LIMITS.availability, 3),
     breakTypes: requiredText(LIMITS.breakTypes, 3),
     inventoryNotes: trimmed(LIMITS.inventoryNotes).optional().default(''),
-
-    // Written application
-    whyApply: requiredText(LIMITS.whyApply, 20),
-    trustAndEntertainment: requiredText(LIMITS.trustAndEntertainment, 20),
-    anythingElse: trimmed(LIMITS.anythingElse).optional().default(''),
 
     // Consent — each box is stored separately so a later change to the wording
     // of one doesn't invalidate the record of the others.
@@ -246,8 +234,7 @@ export const SECTION_FIELDS = {
     contact: ['fullName', 'email', 'phone', 'lineId', 'city', 'province', 'preferredLanguage', 'isAdult'],
     profile: ['applicantTypes', 'applicantTypeOther', 'businessName', 'socialLinks', 'cardstreetUsername'],
     experience: ['games', 'gamesOther', 'breakingExperience', 'experienceSummary', 'sampleVideoUrl'],
-    streaming: ['equipment', 'equipmentOther', 'setupStatus', 'availability', 'breakTypes', 'inventoryNotes'],
-    written: ['whyApply', 'trustAndEntertainment', 'anythingElse'],
+    streaming: ['availability', 'breakTypes', 'inventoryNotes'],
     consent: ['consentAccurate', 'consentNoGuarantee', 'consentTerms'],
 } as const;
 

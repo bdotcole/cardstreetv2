@@ -20,11 +20,9 @@
 import type {
     ApplicantType,
     BreakerGame,
-    EquipmentOption,
     ExperienceLevel,
     PreferredLanguage,
     SectionId,
-    SetupStatus,
 } from '@/lib/breakerApplication';
 
 export interface BreakerCopy {
@@ -105,19 +103,11 @@ export interface BreakerCopy {
         sampleVideoUrl: string;
         sampleVideoHint: string;
 
-        equipment: string;
-        equipmentHint: string;
-        equipmentOther: string;
-        setupStatus: string;
         availability: string;
         availabilityHint: string;
         breakTypes: string;
         breakTypesHint: string;
         inventoryNotes: string;
-
-        whyApply: string;
-        trustAndEntertainment: string;
-        anythingElse: string;
     };
 
     options: {
@@ -125,8 +115,6 @@ export interface BreakerCopy {
         applicantType: Record<ApplicantType, string>;
         game: Record<BreakerGame, string>;
         experience: Record<ExperienceLevel, string>;
-        equipment: Record<EquipmentOption, string>;
-        setupStatus: Record<SetupStatus, string>;
     };
 
     consent: {
@@ -245,7 +233,7 @@ const EN: BreakerCopy = {
     steps: [
         {
             title: 'Submit your application',
-            body: 'Tell us about your experience, favorite TCGs and livestream setup.',
+            body: 'Tell us about your experience, favorite TCGs and the breaks you want to host.',
         },
         {
             title: 'Application review',
@@ -263,13 +251,12 @@ const EN: BreakerCopy = {
 
     formTitle: 'Breaker application',
     formIntro:
-        'Six short sections. Open one at a time — your answers stay put as you move between them.',
+        'Five short sections. Open one at a time — your answers stay put as you move between them.',
     sections: {
         contact: { title: 'Contact information', hint: 'How we reach you' },
         profile: { title: 'Applicant profile', hint: 'Who you are and where you sell' },
         experience: { title: 'TCG experience', hint: 'The games you know best' },
-        streaming: { title: 'Streaming readiness', hint: 'Your setup and availability' },
-        written: { title: 'Written application', hint: 'In your own words' },
+        streaming: { title: 'Streaming readiness', hint: 'Your availability and break plans' },
         consent: { title: 'Consent', hint: 'Three confirmations' },
     },
     sectionComplete: 'Complete',
@@ -310,19 +297,11 @@ const EN: BreakerCopy = {
         sampleVideoUrl: 'Link to a sample livestream or introduction video',
         sampleVideoHint: 'A past stream, a clip, or a short self-introduction.',
 
-        equipment: 'Current equipment',
-        equipmentHint: 'Select everything you already have.',
-        equipmentOther: 'Anything else?',
-        setupStatus: 'Streaming setup status',
         availability: 'Typical availability',
         availabilityHint: 'Which days and times you could realistically stream.',
         breakTypes: 'Types of products or breaks you want to host',
         breakTypesHint: 'For example: booster box breaks, single-pack rips, sealed case breaks.',
         inventoryNotes: 'TCGs or products currently available to sell',
-
-        whyApply: 'Why do you want to become a Cardstreet Breaker?',
-        trustAndEntertainment: 'What would make your livestreams entertaining and trustworthy?',
-        anythingElse: 'Is there anything else you would like us to know?',
     },
 
     options: {
@@ -349,20 +328,6 @@ const EN: BreakerCopy = {
             under_1y: 'Less than one year',
             '1_to_3y': 'One to three years',
             over_3y: 'More than three years',
-        },
-        equipment: {
-            smartphone: 'Smartphone',
-            camera: 'Camera',
-            microphone: 'Microphone',
-            lighting: 'Lighting',
-            tripod_or_mount: 'Tripod or overhead mount',
-            computer: 'Computer',
-            other: 'Other',
-        },
-        setupStatus: {
-            ready: 'Ready now',
-            minor_improvements: 'Need minor improvements',
-            building: 'Still building my setup',
         },
     },
 
@@ -478,7 +443,7 @@ const TH: BreakerCopy = {
     steps: [
         {
             title: 'ส่งใบสมัคร',
-            body: 'เล่าให้เราฟังเรื่องประสบการณ์ของคุณ เกม TCG ที่ถนัด และอุปกรณ์ไลฟ์ที่มี',
+            body: 'เล่าให้เราฟังเรื่องประสบการณ์ของคุณ เกม TCG ที่ถนัด และ break ที่อยากจัด',
         },
         {
             title: 'ทีมงานพิจารณา',
@@ -495,13 +460,12 @@ const TH: BreakerCopy = {
     ],
 
     formTitle: 'ใบสมัคร Breaker',
-    formIntro: 'มีหกส่วนสั้น ๆ เปิดทีละส่วนได้ คำตอบของคุณจะยังอยู่ครบเมื่อสลับไปมา',
+    formIntro: 'มีห้าส่วนสั้น ๆ เปิดทีละส่วนได้ คำตอบของคุณจะยังอยู่ครบเมื่อสลับไปมา',
     sections: {
         contact: { title: 'ข้อมูลติดต่อ', hint: 'ช่องทางที่เราจะติดต่อกลับ' },
         profile: { title: 'ข้อมูลผู้สมัคร', hint: 'คุณคือใคร และขายอยู่ที่ไหน' },
         experience: { title: 'ประสบการณ์ TCG', hint: 'เกมที่คุณถนัดที่สุด' },
-        streaming: { title: 'ความพร้อมในการไลฟ์', hint: 'อุปกรณ์และเวลาที่สะดวก' },
-        written: { title: 'คำถามปลายเปิด', hint: 'เล่าด้วยคำพูดของคุณเอง' },
+        streaming: { title: 'ความพร้อมในการไลฟ์', hint: 'เวลาที่สะดวกและ break ที่อยากจัด' },
         consent: { title: 'การยืนยัน', hint: 'ยืนยันสามข้อ' },
     },
     sectionComplete: 'ครบแล้ว',
@@ -541,19 +505,11 @@ const TH: BreakerCopy = {
         sampleVideoUrl: 'ลิงก์ไลฟ์ตัวอย่างหรือวิดีโอแนะนำตัว',
         sampleVideoHint: 'ไลฟ์ที่เคยจัด คลิปสั้น ๆ หรือวิดีโอแนะนำตัวก็ได้',
 
-        equipment: 'อุปกรณ์ที่มีอยู่',
-        equipmentHint: 'เลือกทุกอย่างที่คุณมีอยู่แล้ว',
-        equipmentOther: 'มีอย่างอื่นอีกไหม',
-        setupStatus: 'ความพร้อมของอุปกรณ์ไลฟ์',
         availability: 'ช่วงเวลาที่สะดวก',
         availabilityHint: 'วันและเวลาที่คุณจัดไลฟ์ได้จริง',
         breakTypes: 'ประเภทสินค้าหรือ break ที่อยากจัด',
         breakTypesHint: 'เช่น เปิดกล่องบูสเตอร์ เปิดซองเดี่ยว หรือเปิดยกลัง',
         inventoryNotes: 'การ์ด TCG หรือสินค้าที่มีพร้อมขายตอนนี้',
-
-        whyApply: 'ทำไมคุณถึงอยากเป็น Cardstreet Breaker',
-        trustAndEntertainment: 'อะไรที่จะทำให้ไลฟ์ของคุณสนุกและน่าเชื่อถือ',
-        anythingElse: 'มีอะไรอยากบอกเราเพิ่มเติมไหม',
     },
 
     options: {
@@ -580,20 +536,6 @@ const TH: BreakerCopy = {
             under_1y: 'น้อยกว่า 1 ปี',
             '1_to_3y': '1–3 ปี',
             over_3y: 'มากกว่า 3 ปี',
-        },
-        equipment: {
-            smartphone: 'สมาร์ตโฟน',
-            camera: 'กล้อง',
-            microphone: 'ไมโครโฟน',
-            lighting: 'ไฟ',
-            tripod_or_mount: 'ขาตั้งกล้องหรือแขนจับกล้องมุมบน',
-            computer: 'คอมพิวเตอร์',
-            other: 'อื่น ๆ',
-        },
-        setupStatus: {
-            ready: 'พร้อมแล้วตอนนี้',
-            minor_improvements: 'ต้องปรับปรุงเล็กน้อย',
-            building: 'ยังจัดเตรียมอุปกรณ์อยู่',
         },
     },
 

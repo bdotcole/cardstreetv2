@@ -142,16 +142,9 @@ export async function POST(request: NextRequest) {
         experience_summary: input.experienceSummary,
         sample_video_url: input.sampleVideoUrl || null,
 
-        equipment: input.equipment,
-        equipment_other: input.equipmentOther || null,
-        setup_status: input.setupStatus,
         availability: input.availability,
         break_types: input.breakTypes,
         inventory_notes: input.inventoryNotes || null,
-
-        why_apply: input.whyApply,
-        trust_and_entertainment: input.trustAndEntertainment,
-        anything_else: input.anythingElse || null,
 
         consent_accurate_at: consentedAt,
         consent_no_guarantee_at: consentedAt,
@@ -192,9 +185,7 @@ export async function POST(request: NextRequest) {
                 applicantTypes: input.applicantTypes,
                 games: input.games,
                 breakingExperience: input.breakingExperience,
-                setupStatus: input.setupStatus,
                 availability: input.availability,
-                whyApply: input.whyApply,
                 locale: input.locale,
                 hasAccount: Boolean(userId),
                 utm: input.utm,
