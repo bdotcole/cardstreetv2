@@ -170,10 +170,11 @@ export async function POST(
             }
 
             // ─── Extra shipping per spot (20260816_first_checkout_shipping) ───
-            // A buyer's SECOND-and-later checkouts in the stream ship free by
-            // default; this per-spot increment (satang) is the seller's opt-in
-            // surcharge on those. The first checkout always carries the real
-            // Flash quote instead — see app/api/live/spots/checkout.
+            // Spots a buyer takes from THIS lot beyond their first ship free
+            // by default; this per-spot increment (satang) is the seller's
+            // opt-in surcharge on those. The buyer's first spot from the lot
+            // always carries the lot's real Flash-quoted base fee instead —
+            // see app/api/live/spots/checkout.
             const rawIncShip = body?.incrementalShipSatang ?? body?.incremental_ship_satang;
             if (rawIncShip != null) {
                 if (

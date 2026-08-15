@@ -265,8 +265,8 @@ export default function BroadcastConsolePage() {
     // Bulk discounts: up to 3 {qty, pct} rows, kept as strings while editing.
     const [lotTiers, setLotTiers] = useState<{ qty: string; pct: string }[]>([]);
     // Extra shipping per spot (THB in the input, satang on the wire) applied
-    // to a buyer's second-and-later checkouts — their first batch pays the
-    // real Flash quote. Empty/0 = free after the first checkout.
+    // to every spot after a buyer's first from THIS lot — that first spot
+    // pays the lot's real Flash quote. Empty/0 = extra spots ship free.
     const [lotShipThb, setLotShipThb] = useState('');
     const [creatingLot, setCreatingLot] = useState(false);
 
@@ -987,8 +987,8 @@ export default function BroadcastConsolePage() {
         const bulkTiers = lotTiers
             .map((tier) => ({ qty: parseInt(tier.qty, 10), discountPct: parseInt(tier.pct, 10) }))
             .filter((tier) => Number.isFinite(tier.qty) && Number.isFinite(tier.discountPct));
-        // THB -> satang; anything unparsable or negative degrades to 0 (free
-        // after the first checkout), matching the server's >= 0 validation.
+        // THB -> satang; anything unparsable or negative degrades to 0 (extra
+        // spots ship free), matching the server's >= 0 validation.
         const shipThb = parseFloat(lotShipThb);
         const incrementalShipSatang =
             Number.isFinite(shipThb) && shipThb > 0 ? Math.round(shipThb * 100) : 0;
@@ -1996,7 +1996,7 @@ export default function BroadcastConsolePage() {
                                             />
                                             <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
                                                 {t('live.console.extraShipHint') ||
-                                                    "A buyer's first checkout pays real shipping; spots bought after add this each. 0 = free."}
+                                                    "A buyer's first spot from this lot pays real shipping; extra spots add this each. 0 = free."}
                                             </span>
                                         </label>
                                     </div>

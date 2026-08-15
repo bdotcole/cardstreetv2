@@ -3,12 +3,13 @@
  * stream ends: group each buyer's PAID spot orders into ONE shipments row
  * (one Flash parcel, one waybill).
  *
- * Settle charges NOTHING. Since 20260816_first_checkout_shipping the buyer's
- * FIRST spot checkout in the stream carried the Flash-quoted base shipping
- * fee (later checkouts ship free, plus any per-lot increment), so this route
- * only records the SUM of shipping already collected on the grouped orders in
- * shipments.shipping_fee — bookkeeping for the waybill — and shipments start
- * at 'pending', ready for label mint. The old model's `liveship_` fee order
+ * Settle charges NOTHING. Since 20260816_first_checkout_shipping shipping is
+ * collected at spot checkout — a Flash-quoted base fee on the buyer's FIRST
+ * purchase from EACH lot (additional spots from a lot add only its optional
+ * per-spot increment) — so this route only records the SUM of shipping
+ * already collected on the grouped orders in shipments.shipping_fee —
+ * bookkeeping for the waybill — and shipments start at 'pending', ready for
+ * label mint. The old model's `liveship_` fee order
  * is retired; the 'awaiting_shipping_fee' status stays in the enum for
  * legacy rows (lib/liveSpotFulfillment still flips any in-flight ones).
  *
@@ -97,9 +98,9 @@ export async function POST(
         // 'paid' is the terminal state a finalized spot order sits in — spot
         // orders never enter the per-order label pipeline, so later statuses
         // don't occur here. pending_payment (buyer never paid) and any
-        // cancelled/refunded rows are excluded. shipping_fee rides along: the
-        // buyer's first batch carries the collected base fee (later batches 0
-        // or the lots' increments), and the shipment records the sum.
+        // cancelled/refunded rows are excluded. shipping_fee rides along:
+        // each lot's first-purchase row carries that lot's collected base fee
+        // (other rows 0 or increments), and the shipment records the sum.
         const { data: orders } = await admin
             .from('orders')
             .select('id, buyer_id, seller_id, status, shipment_id, break_spot_id, shipping_fee')
@@ -189,8 +190,10 @@ export async function POST(
                 const weightGrams = estimateParcelWeightGramsForItems(items);
 
                 // What the buyer ALREADY paid in freight across their batches
-                // (first batch's base quote + any per-lot increments) — pure
-                // bookkeeping on the waybill record; nothing new is charged.
+                // (a base quote per lot they bought from + any per-spot
+                // increments — possibly several base fees, one per break) —
+                // pure bookkeeping on the waybill record; nothing new is
+                // charged.
                 const collectedSatang = buyerOrders.reduce(
                     (sum, o) => sum + Math.round(Number(o.shipping_fee || 0) * 100),
                     0,

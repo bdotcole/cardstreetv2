@@ -7,10 +7,11 @@
  *   - total_amount = the spot's DB price (satang -> THB exactly once, here),
  *     less the lot's highest qualifying bulk-discount tier when the batch
  *     meets one (server-side only — tiers come from stream_items.bulk_tiers)
- *   - shipping: the buyer's FIRST batch in this stream carries the
- *     Flash-quoted base fee on its first order row; later batches ship free
- *     apart from the lots' optional incremental_ship_satang per spot. Stream
- *     settle only groups the paid orders into one parcel — it charges nothing
+ *   - shipping: the buyer's FIRST spot purchase from EACH lot carries that
+ *     lot's Flash-quoted base fee (several new lots in one batch stack their
+ *     base fees — intended: shipping is per break); additional spots from a
+ *     lot add only its optional incremental_ship_satang. Stream settle only
+ *     groups the paid orders into one parcel — it charges nothing
  *     (see app/api/live/streams/[id]/settle).
  *   - platform_fee = the seller's tier fee (lib/partnerTiers.ts ladder)
  *   - one shared transfer_group `live_...` the client hands to the EXISTING
@@ -118,8 +119,8 @@ export async function POST(req: Request) {
         const admin = createAdminClient();
 
         // ─── Buyer must be shippable (mirrors orders/checkout) ───
-        // The profile address is both the destination for the first batch's
-        // Flash shipping quote below and the address settle snapshots into the
+        // The profile address is both the destination for the per-lot Flash
+        // shipping quotes below and the address settle snapshots into the
         // ONE consolidated parcel — an unshippable buyer would strand the
         // seller with paid, undeliverable spots.
         const { data: buyerProfileGate, error: buyerProfileErr } = await admin
@@ -207,8 +208,8 @@ export async function POST(req: Request) {
         }
 
         // ─── Seller: fee tier + charge capability + platform region ───
-        // Address fields double as the source leg of the first batch's Flash
-        // shipping quote (same defaults as orders/checkout).
+        // Address fields double as the source leg of the per-lot Flash
+        // shipping quotes (same defaults as orders/checkout).
         const { data: seller } = await admin
             .from('profiles')
             .select('id, role, partner_level, total_downloads, partner_joined_at, premium_until, stripe_region, stripe_account_id, stripe_charges_enabled, province, state, district, postcode')
@@ -267,9 +268,9 @@ export async function POST(req: Request) {
             bulk_tiers?: unknown;
             incremental_ship_satang?: unknown;
         }
+        const lotIds = [...new Set(spots.map(s => s.stream_item_id))];
         let lotRows: LotShipRow[] = [];
         {
-            const lotIds = [...new Set(spots.map(s => s.stream_item_id))];
             const selects = [
                 'id, card_data, bulk_tiers, incremental_ship_satang',
                 'id, card_data, bulk_tiers',
@@ -298,12 +299,12 @@ export async function POST(req: Request) {
         // discountPct applied to that lot's spots, floored per spot in satang.
         // parseBulkTiers rejects mis-shaped config — an invalid stored tier
         // must never mis-price a spot, so it reads as "no discount".
+        const batchCountByLot = new Map<string, number>();
+        for (const s of spots) {
+            batchCountByLot.set(s.stream_item_id, (batchCountByLot.get(s.stream_item_id) ?? 0) + 1);
+        }
         const discountPctBySpotId = new Map<string, number>();
         {
-            const batchCountByLot = new Map<string, number>();
-            for (const s of spots) {
-                batchCountByLot.set(s.stream_item_id, (batchCountByLot.get(s.stream_item_id) ?? 0) + 1);
-            }
             for (const lotRow of lotRows) {
                 const tiers = parseBulkTiers(lotRow.bulk_tiers);
                 if (!tiers) continue;
@@ -324,23 +325,28 @@ export async function POST(req: Request) {
             }),
         );
 
-        // ─── Shipping: the buyer's FIRST batch in the stream carries it ───
-        // First paid-or-pending batch pays the Flash-quoted base fee for the
-        // whole stream's (settle-consolidated) parcel; every later batch ships
-        // free apart from the lots' optional per-spot increment. "Prior" =
-        // any non-cancelled spot order by this buyer in this stream — a
-        // pending batch counts, because its PaymentIntent is still chargeable.
+        // ─── Shipping: the buyer's FIRST purchase from EACH lot carries it ───
+        // Base shipping is per LOT (per break), not per stream: every distinct
+        // lot in the batch the buyer has never bought from adds its own
+        // Flash-quoted base fee, so a batch opening several new lots stacks
+        // their base fees — intended: shipping is per break. Additional spots
+        // from a lot (same batch or later) add only that lot's optional
+        // per-spot increment. "Prior" = any non-cancelled spot order by this
+        // buyer on that lot — a pending batch counts, because its
+        // PaymentIntent is still chargeable. Physical bundling is UNCHANGED:
+        // settle still groups every paid order into ONE parcel per buyer per
+        // stream and records the SUM of the fees collected here.
         //
-        // RACE (accepted beta posture): two concurrent first batches can both
-        // read "no prior orders" here and both charge base shipping — this
-        // check is best-effort (ordered by created_at, run right before the
-        // insert), not a serialized claim. The downstream path tolerates the
-        // duplicate: settle records the SUM of shipping collected across the
-        // grouped orders, so nothing breaks — the buyer just pays freight
-        // twice and support refunds one. A hard guarantee needs an advisory
-        // lock or a partial unique index; deferred until it bites.
-        const streamId = spots[0].stream_id;
-        let hasPriorOrders = false;
+        // RACE (accepted beta posture): two concurrent batches can both read
+        // "no prior order from this lot" here and both charge that lot's base
+        // fee — the check is best-effort per buyer+lot (run right before the
+        // insert), not a serialized claim, and it fails toward charging. The
+        // downstream path tolerates the duplicate: settle records the SUM of
+        // shipping collected across the grouped orders, so nothing breaks —
+        // the buyer just pays freight twice and support refunds one. A hard
+        // guarantee needs an advisory lock or a partial unique index;
+        // deferred until it bites.
+        const priorLotIds = new Set<string>();
         {
             // Orders on THESE spots are this buyer's own abandoned sheet for
             // the same batch — cancelPendingSpotOrders below is about to
@@ -349,66 +355,87 @@ export async function POST(req: Request) {
             // would be 'sold', not 'held' by this buyer).
             const { data: prior, error: priorErr } = await admin
                 .from('orders')
-                .select('id, created_at, break_spots!break_spot_id!inner(stream_id)')
+                .select('id, break_spots!break_spot_id!inner(stream_item_id)')
                 .eq('buyer_id', buyerId)
-                .eq('break_spots.stream_id', streamId)
+                .in('break_spots.stream_item_id', lotIds)
                 .neq('status', 'cancelled')
                 .not('break_spot_id', 'in', `(${spotIds.join(',')})`)
-                .order('created_at', { ascending: true })
-                .limit(1);
+                .returns<{ id: string; break_spots: unknown }[]>();
             if (priorErr) {
                 // Fail toward charging: treating unreadable history as "first
-                // batch" at worst repeats the old per-batch shipping charge
-                // (refundable), while failing toward free would silently
-                // strip the seller's freight on every real first batch.
+                // purchase from every lot" at worst repeats a refundable base
+                // fee, while failing toward free would silently strip the
+                // seller's freight on every real first purchase.
                 console.error('[Live/SpotsCheckout] prior-order check failed:', priorErr.message);
             } else {
-                hasPriorOrders = (prior?.length ?? 0) > 0;
+                for (const row of prior ?? []) {
+                    // break_spot_id is a to-one join, but tolerate the array
+                    // shape supabase-js uses when it can't tell.
+                    const joined = Array.isArray(row.break_spots) ? row.break_spots : [row.break_spots];
+                    for (const bs of joined) {
+                        const lotId = (bs as { stream_item_id?: unknown } | null)?.stream_item_id;
+                        if (typeof lotId === 'string') priorLotIds.add(lotId);
+                    }
+                }
             }
         }
 
-        let shippingSatang = 0;
-        if (!hasPriorOrders) {
-            // Same quote the marketplace charges (app/api/orders/checkout):
-            // live Flash rate over the batch's parcel snapshot, province-aware
-            // fallback (฿40 intra-Bangkok / ฿90 otherwise) when Flash can't
-            // price the route.
-            const items: ParcelItemInfo[] = spots.map(s => {
-                const cd = (lotById.get(s.stream_item_id)?.card_data ?? {}) as {
+        // Each newly-bought lot's base fee is the same quote the marketplace
+        // charges (app/api/orders/checkout): live Flash rate over THAT lot's
+        // parcel snapshot — one spot's worth of the lot's card_data flags, not
+        // the batch-wide parcel (extra spots are covered by the increment) —
+        // with the province-aware fallback (฿40 intra-Bangkok / ฿90 otherwise)
+        // when Flash can't price the route.
+        const baseFeeSatangByLot = new Map<string, number>();
+        await Promise.all(
+            lotIds.filter(lotId => !priorLotIds.has(lotId)).map(async lotId => {
+                const cd = (lotById.get(lotId)?.card_data ?? {}) as {
                     isSealed?: boolean;
                     productType?: string | null;
                 };
-                return { isSealed: cd.isSealed === true, productType: cd.productType ?? null };
-            });
-            try {
-                const quote = await estimateRateWithCityFallback({
-                    srcProvinceName: seller.province || 'กรุงเทพมหานคร',
-                    srcCityName: seller.state || seller.district || 'เขตบางรัก',
-                    srcPostalCode: seller.postcode || '10500',
-                    dstProvinceName: buyerProfileGate.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyerProfileGate.state || buyerProfileGate.district || 'เขตบางรัก',
-                    dstPostalCode: buyerProfileGate.postcode || '10110',
-                    weight: estimateParcelWeightGramsForItems(items),
-                    ...estimateParcelDimsCmForItems(items),
-                });
-                shippingSatang = quote.estimatePrice + quote.upCountryAmount;
-            } catch (err) {
-                shippingSatang = fallbackShippingSatang(seller.province, buyerProfileGate.province);
-                if (isRegionError(err)) {
-                    console.warn('[Live/SpotsCheckout] Flash region mismatch — fallback shipping used');
-                } else {
-                    console.error('[Live/SpotsCheckout] Flash estimate error — fallback shipping used:', err);
+                const items: ParcelItemInfo[] = [
+                    { isSealed: cd.isSealed === true, productType: cd.productType ?? null },
+                ];
+                try {
+                    const quote = await estimateRateWithCityFallback({
+                        srcProvinceName: seller.province || 'กรุงเทพมหานคร',
+                        srcCityName: seller.state || seller.district || 'เขตบางรัก',
+                        srcPostalCode: seller.postcode || '10500',
+                        dstProvinceName: buyerProfileGate.province || 'กรุงเทพมหานคร',
+                        dstCityName: buyerProfileGate.state || buyerProfileGate.district || 'เขตบางรัก',
+                        dstPostalCode: buyerProfileGate.postcode || '10110',
+                        weight: estimateParcelWeightGramsForItems(items),
+                        ...estimateParcelDimsCmForItems(items),
+                    });
+                    baseFeeSatangByLot.set(lotId, quote.estimatePrice + quote.upCountryAmount);
+                } catch (err) {
+                    baseFeeSatangByLot.set(
+                        lotId,
+                        fallbackShippingSatang(seller.province, buyerProfileGate.province),
+                    );
+                    if (isRegionError(err)) {
+                        console.warn('[Live/SpotsCheckout] Flash region mismatch — fallback shipping used');
+                    } else {
+                        console.error('[Live/SpotsCheckout] Flash estimate error — fallback shipping used:', err);
+                    }
                 }
-            }
-        } else {
-            // Later batches: free by default; each spot adds its lot's
-            // increment when the seller set one. Pre-20260816 the column is
-            // absent from the degraded lot fetch above and reads as 0.
-            for (const spot of spots) {
-                const inc = Number(lotById.get(spot.stream_item_id)?.incremental_ship_satang);
-                if (Number.isFinite(inc) && inc > 0) shippingSatang += Math.round(inc);
-            }
+            }),
+        );
+
+        // Per-lot fee: base (newly-bought lots only) + increment for every
+        // spot beyond the buyer's FIRST from that lot — so a repeat lot's
+        // whole batch is increments. Pre-20260816 the increment column is
+        // absent from the degraded lot fetch above and reads as 0.
+        const shippingSatangByLot = new Map<string, number>();
+        for (const lotId of lotIds) {
+            const batchCount = batchCountByLot.get(lotId) ?? 0;
+            const incRaw = Number(lotById.get(lotId)?.incremental_ship_satang);
+            const inc = Number.isFinite(incRaw) && incRaw > 0 ? Math.round(incRaw) : 0;
+            const base = baseFeeSatangByLot.get(lotId);
+            const incrementalSpots = base !== undefined ? Math.max(0, batchCount - 1) : batchCount;
+            shippingSatangByLot.set(lotId, (base ?? 0) + inc * incrementalSpots);
         }
+        const shippingSatang = [...shippingSatangByLot.values()].reduce((sum, fee) => sum + fee, 0);
 
         // ─── Stripe's THB floor, applied to the batch total (incl. shipping) ───
         // Two sub-floor cases, two different remedies:
@@ -421,7 +448,8 @@ export async function POST(req: Request) {
         //   - the batch is under the floor at FULL price. Nothing to shrink;
         //     the buyer has to add a spot.
         // Shipping counts toward the floor — like a marketplace order, a
-        // first batch's base fee usually lifts a cheap lot over the line.
+        // newly-bought lot's base fee usually lifts a cheap batch over the
+        // line.
         const originalTotalSatang = spots.reduce((sum, s) => sum + Math.round(Number(s.price)), 0);
         let itemsTotalSatang = spots.reduce((sum, s) => sum + chargedSatangBySpotId.get(s.id)!, 0);
 
@@ -475,13 +503,20 @@ export async function POST(req: Request) {
         // ─── One order per spot. Satang -> THB happens exactly here. ───
         // The order stores the DISCOUNTED amount — /api/checkout charges the
         // sum of order rows, and the platform fee rides the amount actually
-        // paid, exactly as with any price. The batch's whole shipping fee
-        // rides the FIRST row: /api/checkout sums total_amount + shipping_fee
-        // across the group, and settle later sums the same column into the
-        // consolidated shipment record. (Shipping stays out of platform_fee —
-        // it must remain in the seller's balance to fund what they pay Flash.)
-        const ordersToInsert = spots.map((spot, i) => {
+        // paid, exactly as with any price. Each lot's shipping fee rides that
+        // lot's FIRST row of the batch: /api/checkout sums total_amount +
+        // shipping_fee across the group, and settle later sums the same
+        // column into the consolidated shipment record. (Shipping stays out
+        // of platform_fee — it must remain in the seller's balance to fund
+        // what they pay Flash.)
+        const shippingCarriedForLot = new Set<string>();
+        const ordersToInsert = spots.map(spot => {
             const chargedSatang = chargedSatangBySpotId.get(spot.id)!;
+            let spotShippingSatang = 0;
+            if (!shippingCarriedForLot.has(spot.stream_item_id)) {
+                shippingCarriedForLot.add(spot.stream_item_id);
+                spotShippingSatang = shippingSatangByLot.get(spot.stream_item_id) ?? 0;
+            }
             return {
                 listing_id: null,
                 break_spot_id: spot.id,
@@ -490,7 +525,7 @@ export async function POST(req: Request) {
                 status: 'pending_payment',
                 total_amount: chargedSatang / 100,
                 platform_fee: Math.round(chargedSatang * feePct) / 100,
-                shipping_fee: i === 0 ? shippingSatang / 100 : 0,
+                shipping_fee: spotShippingSatang / 100,
                 escrow_status: 'held',
                 payment_method: paymentMethod,
                 transfer_group: transferGroup,
@@ -554,8 +589,9 @@ export async function POST(req: Request) {
             // line. Both fields are ITEMS-only; shipping has its own line.
             originalTotalSatang,
             discountSatang: originalTotalSatang - itemsTotalSatang,
-            // 0 = free shipping (a prior batch in this stream already paid the
-            // base fee and no lot increment applies).
+            // Summed across the batch's lots: each newly-bought lot's base
+            // fee plus any per-spot increments. 0 = free shipping (the buyer
+            // already bought from every lot here and no increment applies).
             shippingSatang,
             region: orderRegion,
             // TH direct charge: the client must load Stripe.js bound to the

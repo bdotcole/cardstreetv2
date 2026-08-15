@@ -1114,7 +1114,7 @@
             "minSpotPrice": "Minimum spot price is ฿10 — Stripe's minimum charge",
             "packsPerSpot": "Packs per spot",
             "extraShipPerSpot": "Extra shipping / spot (THB)",
-            "extraShipHint": "A buyer's first checkout pays real shipping; spots bought after add this each. 0 = free.",
+            "extraShipHint": "A buyer's first spot from this lot pays real shipping; extra spots add this each. 0 = free.",
             "productType": "Product type",
             "create": "Add to queue",
             "createLotError": "Could not create the lot",

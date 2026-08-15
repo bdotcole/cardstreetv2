@@ -140,8 +140,8 @@ export interface LiveLotRow {
     break_entities?: { key: string; label: string }[] | null;
     /** Bulk-discount tiers (read via bulkTiersOf). Optional until 20260813_character_breaks_bulk.sql. */
     bulk_tiers?: unknown;
-    /** Per-spot shipping increment (satang) on a buyer's second-and-later
-     *  checkouts. Optional until 20260816_first_checkout_shipping.sql. */
+    /** Per-spot shipping increment (satang) on every spot after a buyer's
+     *  first from this lot. Optional until 20260816_first_checkout_shipping.sql. */
     incremental_ship_satang?: number;
 }
 

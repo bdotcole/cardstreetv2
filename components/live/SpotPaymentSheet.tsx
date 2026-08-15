@@ -23,9 +23,10 @@ import { formatSatang } from '@/components/live/shared';
  *
  * Both server calls happen up front (on open) so Elements can mount with the
  * PI's client_secret directly — unlike PaymentModal there is no separate
- * shipping estimate to wait for: spots/checkout itself quotes shipping when
- * this is the buyer's first batch in the stream (free after that, apart from
- * a lot's optional per-spot increment) and returns it as shippingSatang.
+ * shipping estimate to wait for: spots/checkout itself quotes a base fee for
+ * each lot the buyer is buying from for the FIRST time (repeat lots are free
+ * apart from an optional per-spot increment) and returns the batch's summed
+ * total as shippingSatang.
  */
 
 // Mirrors components/PaymentModal.tsx: NEXT_PUBLIC_* must be read as static
@@ -113,9 +114,10 @@ interface CheckoutSession {
     originalTotalSatang: number;
     /** Pre-shipping items discount (0 = no discount). */
     discountSatang: number;
-    /** Shipping included in totalSatang: > 0 = the first-batch fee (or a
-     *  lot increment), 0 = free shipping, null = pre-20260816 server (no
-     *  shipping line rendered). */
+    /** Shipping included in totalSatang, summed across the batch's lots
+     *  (base fee per newly-bought lot + per-spot increments — one line, no
+     *  per-lot breakdown): > 0 = the summed fees, 0 = free shipping, null =
+     *  pre-20260816 server (no shipping line rendered). */
     shippingSatang: number | null;
     sellerStripeAccount: string | null;
     clientSecret: string;
@@ -551,9 +553,11 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                                     </div>
                                 </>
                             )}
-                            {/* Shipping (20260816 servers send shippingSatang): the
-                                buyer's first batch in the stream carries the fee;
-                                later batches show the free-shipping state. */}
+                            {/* Shipping (20260816 servers send shippingSatang): one
+                                summed line — a base fee for each lot bought from for
+                                the first time (fees stack when a batch opens several
+                                lots) plus any increments; 0 renders the free-shipping
+                                state. */}
                             {session && session.shippingSatang !== null && (
                                 <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10 text-sm">
                                     {session.shippingSatang > 0 ? (

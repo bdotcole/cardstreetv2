@@ -1,10 +1,10 @@
 -- Live breaks: first-checkout shipping model.
 --
--- A buyer's FIRST spot checkout in a stream carries the Flash-quoted base
--- shipping fee (on the batch's first order row); every later checkout in the
--- SAME stream ships free by default. This column lets a seller opt a lot into
--- a per-spot increment instead of free — each additional spot bought after the
--- first checkout adds this many satang to that batch's shipping.
+-- A buyer's FIRST spot purchase from EACH lot carries that lot's Flash-quoted
+-- base shipping fee (on the lot's first order row of the batch); additional
+-- spots from the same lot ship free by default. This column lets a seller opt
+-- a lot into a per-spot increment instead of free — each spot beyond the
+-- buyer's first from the lot adds this many satang to that batch's shipping.
 --
 -- Replaces the settle-time model where stream settlement minted a separate
 -- `liveship_` shipping-fee order the buyer paid after the show. The
