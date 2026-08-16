@@ -386,22 +386,22 @@ const TH: BreakerCopy = {
         'มาร์เก็ตเพลสสำหรับการ์ด TCG โดยเฉพาะ',
         'เปิดรับทั้งมือเก่าและคนที่ยังไม่เคยจัดไลฟ์',
     ],
-    mockupCaption: 'ตัวอย่างหน้าจอ — Cardstreet Live',
+    mockupCaption: 'ตัวอย่างหน้าจอใช้งาน — ไลฟ์สตรีม Cardstreet',
     mockup: {
         liveLabel: 'LIVE',
         viewersLabel: 'กำลังดู',
-        breakTitle: 'โปเกม่อนไทย — เปิดกล่องบูสเตอร์ MA3',
+        breakTitle: 'Pokemon ภาษาไทย — เบรคการ์ด ชุด MA3 booster box',
         chat: [
-            { user: 'nong_tcg', text: 'ขอช่อง 4 ครับ' },
-            { user: 'bkkcollector', text: 'ใบนี้สวยมาก' },
-            { user: 'preechaa', text: 'กล่องต่อไปเลยไหม' },
+            { user: 'nong_tcg', text: 'ขอสล็อต 4 ครับ' },
+            { user: 'bkkcollector', text: 'ใบนี้งานเนี๊ยบมาก' },
+            { user: 'preechaa', text: 'เปิดกล่องต่อไปเลยมั้ย' },
         ],
-        purchaseToast: { title: 'จองช่องแล้ว', detail: 'ช่อง 4 · ชำระเงินแล้ว' },
+        purchaseToast: { title: 'สล็อต 4 มีคนจองแล้ว', detail: 'สล็อต 4 ชำระเงินแล้ว' },
     },
 
-    whyTitle: 'ทำไมต้องจัดไลฟ์บน Cardstreet',
+    whyTitle: 'ทำไมต้องจัด Break บน Cardstreet?',
     whyIntro:
-        'Cardstreet เป็นมาร์เก็ตเพลสการ์ดสะสมมาก่อน และ Cardstreet Live ถูกสร้างต่อยอดขึ้นมาเพื่อคนที่รู้จักการ์ดเหล่านี้จริง ๆ',
+        'Cardstreet เป็นแพลตฟอร์มมาร์เกตเพลสสำหรับการ์ดสะสมเป็นหลัก และเราได้ต่อยอดพัฒนา Cardstreet Live เพิ่มเติมขึ้นมา เพื่อตอบโจทย์ผู้ที่อยู่ในวงการและมีความเข้าใจในการ์ดเหล่านี้อย่างแท้จริง',
     benefits: [
         {
             icon: 'fa-layer-group',
@@ -410,13 +410,13 @@ const TH: BreakerCopy = {
         },
         {
             icon: 'fa-tower-broadcast',
-            title: 'ระบบขายที่เชื่อมกันครบ',
+            title: 'ประสบการณ์ขายแบบครบวงจร',
             body: 'โชว์สินค้า พูดคุยกับผู้ชม และจัดการคำสั่งซื้อระหว่างไลฟ์ได้ในระบบเดียวของ Cardstreet',
         },
         {
             icon: 'fa-seedling',
             title: 'เป็นครีเอเตอร์รุ่นแรก',
-            body: 'เข้าร่วมตั้งแต่ช่วงเริ่มต้น และมีส่วนกำหนดว่า Cardstreet Live จะพัฒนาไปทางไหน',
+            body: 'เข้าร่วมตั้งแต่ช่วงเปิดตัวแรกเริ่ม และช่วยเสนอความคิดเห็นเพื่อพัฒนา Cardstreet Live ไปด้วยกัน',
         },
         {
             icon: 'fa-users',
