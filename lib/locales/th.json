@@ -1014,7 +1014,11 @@
             "houseError": "อัปเดตช่องไม่สำเร็จ",
             "nowOpening": "กำลังเปิด",
             "spotWord": "ช่อง",
-            "packsWord": "ซอง"
+            "packsWord": "ซอง",
+            "turnWord": "คิว",
+            "rippingNow": "กำลังเปิดอยู่",
+            "claimAuction": "ล็อตนี้ขายแบบประมูล — ร่วมประมูลแทน",
+            "claimNotNextTurn": "คิวขายทีละคิว — ยังไม่ถึงคิวนี้"
         },
         "scheduled": {
             "startsIn": "ไลฟ์จะเริ่มในอีก",
@@ -1195,6 +1199,15 @@
             "soldSpots": "ช่องที่ขายแล้ว",
             "noSoldSpots": "ยังไม่มีช่องที่ขายแล้ว",
             "packsShort": "ซอง",
+            "rtyhPricing": "การขายต่อคิว",
+            "rtyhFixed": "ราคาคงที่",
+            "rtyhAuction": "ประมูลทีละคิว",
+            "rtyhHint": "ขายทีละคิว เปิดซองจนกว่าจะได้ฮิต บันทึกฮิตแล้วคิวถัดไปจะเปิดขาย",
+            "markHit": "บันทึกฮิต",
+            "confirmHit": "บันทึกฮิตเพื่อจบคิวนี้",
+            "hitError": "บันทึกฮิตไม่สำเร็จ",
+            "auctionTurn": "ประมูลคิว",
+            "hitChip": "ฮิต",
             "productTypes": {
                 "box": "กล่อง",
                 "pack": "ซอง",
@@ -1292,7 +1305,8 @@
             "pack_wars": "แพ็ควอร์",
             "character_break": "เบรกตัวละคร",
             "buy_now": "ซื้อเลย",
-            "auction": "ประมูล"
+            "auction": "ประมูล",
+            "rip_till_hit": "เปิดจนกว่าจะฮิต"
         },
         "notFound": {
             "title": "ไม่พบหน้านี้",

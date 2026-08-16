@@ -15,6 +15,10 @@ import {
     AUCTION_DURATION_CHOICES,
     AUCTION_DURATION_DEFAULT,
     bulkTiersOf,
+    currentTurnSpot,
+    nextTurnSpot,
+    rtyhPricingOf,
+    type RtyhPricing,
     clampCrop,
     clampRatio,
     DEFAULT_CROP,
@@ -94,6 +98,7 @@ const BREAK_TYPES = [
     'chase_break',
     'pack_wars',
     'character_break',
+    'rip_till_hit',
 ] as const;
 type BreakType = (typeof BREAK_TYPES)[number];
 
@@ -164,8 +169,10 @@ interface ConfirmState {
     message: string;
     confirmLabel: string;
     run: () => Promise<void>;
-    /** chase_break hit input is collected inside the dialog. */
+    /** Renders the hit-text input; the dialog then calls runWithText with it
+     *  (chase_break's hit assignment, rip_till_hit's mark-hit). */
     withHitInput?: boolean;
+    runWithText?: (text: string) => Promise<void>;
 }
 
 function NotFoundBlock() {
@@ -207,9 +214,6 @@ export default function BroadcastConsolePage() {
     const [confirm, setConfirm] = useState<ConfirmState | null>(null);
     const [confirmBusy, setConfirmBusy] = useState(false);
     const [hitText, setHitText] = useState('');
-    // The lot a hit-assignment confirm targets (the dialog collects the hit
-    // text, so the run needs to know which lot it was opened for).
-    const confirmLotRef = useRef<LiveLotRow | null>(null);
     const [randomizeResult, setRandomizeResult] = useState<{ seed: string; summary: string } | null>(
         null,
     );
@@ -326,6 +330,8 @@ export default function BroadcastConsolePage() {
     // Auction lots: opening bid + clock length (seconds).
     const [lotStartThb, setLotStartThb] = useState('100');
     const [lotDuration, setLotDuration] = useState(String(AUCTION_DURATION_DEFAULT));
+    // rip_till_hit: how each turn sells (fixed claim price, or auctioned).
+    const [lotRtyhPricing, setLotRtyhPricing] = useState<RtyhPricing>('fixed');
     const [creatingLot, setCreatingLot] = useState(false);
 
     // Public names for sold-spot buyers — the board must answer "who has
@@ -1105,6 +1111,13 @@ export default function BroadcastConsolePage() {
                           bulkTiers: bulkTiers.length > 0 ? bulkTiers : undefined,
                           incrementalShipSatang:
                               incrementalShipSatang > 0 ? incrementalShipSatang : undefined,
+                          // rip_till_hit: per-turn pricing mode (+ clock for
+                          // auctioned turns) — rides card_data server-side.
+                          rtyhPricing: lotType === 'rip_till_hit' ? lotRtyhPricing : undefined,
+                          durationSeconds:
+                              lotType === 'rip_till_hit' && lotRtyhPricing === 'auction'
+                                  ? parseInt(lotDuration, 10) || AUCTION_DURATION_DEFAULT
+                                  : undefined,
                       };
             const res = await fetch(`/api/live/streams/${streamId}/lots`, {
                 method: 'POST',
@@ -1128,7 +1141,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setCreatingLot(false);
         }
-    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, lotShipThb, lotStartThb, lotDuration, stream?.status, streamId, loadDetail, showToast, t]);
+    }, [creatingLot, lotType, lotSpots, lotPriceThb, lotPacks, lotName, lotProductType, lotPresale, lotEntities, lotTiers, lotShipThb, lotStartThb, lotDuration, lotRtyhPricing, stream?.status, streamId, loadDetail, showToast, t]);
 
     const patchLot = useCallback(
         async (lotId: string, body: Record<string, unknown>) => {
@@ -1411,6 +1424,40 @@ export default function BroadcastConsolePage() {
                 return;
             }
             setLastAnnounced({ lotId: lot.id, spotNumber: spot.spot_number });
+        },
+        [showToast, t],
+    );
+
+    // ─── rip_till_hit: record the current turn's hit ───
+    // The write is what advances the show — hit_at completes the turn and the
+    // next one opens (claim gate / auction-turn button both key off it).
+    const markHit = useCallback(
+        async (lot: LiveLotRow, spot: LiveSpotRow, hit: string) => {
+            try {
+                const res = await fetch(`/api/live/lots/${lot.id}/hit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ spotId: spot.id, hit }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showToast(
+                        data.error || t('live.console.hitError') || 'Could not record the hit',
+                        'error',
+                    );
+                    return;
+                }
+                // Realtime confirms; patch now so the console advances instantly.
+                setSpots((prev) =>
+                    prev.map((s) =>
+                        s.id === spot.id
+                            ? { ...s, hit_note: hit, hit_at: new Date().toISOString() }
+                            : s,
+                    ),
+                );
+            } catch {
+                showToast(t('live.console.hitError') || 'Could not record the hit', 'error');
+            }
         },
         [showToast, t],
     );
@@ -2335,19 +2382,74 @@ export default function BroadcastConsolePage() {
                                                             "Minimum spot price is ฿10 — Stripe's minimum charge"}
                                                     </span>
                                                 </label>
-                                                <label className="block">
-                                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                                        {t('live.console.packsPerSpot') || 'Packs per spot'}
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        min={1}
-                                                        max={50}
-                                                        value={lotPacks}
-                                                        onChange={(e) => setLotPacks(e.target.value)}
-                                                        className={inputCls}
-                                                    />
-                                                </label>
+                                                {lotType !== 'rip_till_hit' && (
+                                                    <label className="block">
+                                                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                            {t('live.console.packsPerSpot') || 'Packs per spot'}
+                                                        </span>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={50}
+                                                            value={lotPacks}
+                                                            onChange={(e) => setLotPacks(e.target.value)}
+                                                            className={inputCls}
+                                                        />
+                                                    </label>
+                                                )}
+                                                {lotType === 'rip_till_hit' && (
+                                                    <div className="block">
+                                                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                            {t('live.console.rtyhPricing') || 'Turn pricing'}
+                                                        </span>
+                                                        <CustomSelect
+                                                            value={lotRtyhPricing}
+                                                            onChange={(v) => setLotRtyhPricing(v as RtyhPricing)}
+                                                            ariaLabel={t('live.console.rtyhPricing') || 'Turn pricing'}
+                                                            triggerClassName={inputCls}
+                                                            options={[
+                                                                {
+                                                                    value: 'fixed',
+                                                                    label: t('live.console.rtyhFixed') || 'Fixed price',
+                                                                },
+                                                                {
+                                                                    value: 'auction',
+                                                                    label:
+                                                                        t('live.console.rtyhAuction') ||
+                                                                        'Auction each turn',
+                                                                },
+                                                            ]}
+                                                        />
+                                                        <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                            {t('live.console.rtyhHint') ||
+                                                                'Turns sell one at a time; you rip until the hit, record it, and the next turn opens.'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {lotType === 'rip_till_hit' && lotRtyhPricing === 'auction' && (
+                                                    <div className="block">
+                                                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                                            {t('live.console.auctionDuration') || 'Timer'}
+                                                        </span>
+                                                        <CustomSelect
+                                                            value={lotDuration}
+                                                            onChange={(v) => setLotDuration(v)}
+                                                            ariaLabel={t('live.console.auctionDuration') || 'Timer'}
+                                                            triggerClassName={inputCls}
+                                                            options={AUCTION_DURATION_CHOICES.map((secs) => ({
+                                                                value: String(secs),
+                                                                label:
+                                                                    secs < 60
+                                                                        ? `${secs}s`
+                                                                        : `${Math.floor(secs / 60)} min`,
+                                                            }))}
+                                                        />
+                                                        <span className="block mt-1 text-[9px] text-slate-500 leading-snug">
+                                                            {t('live.console.auctionDurationHint') ||
+                                                                'A bid in the final 10s extends the clock by 10s.'}
+                                                        </span>
+                                                    </div>
+                                                )}
                                                 <label className="block">
                                                     <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
                                                         {t('live.console.extraShipPerSpot') || 'Extra shipping / spot (THB)'}
@@ -2461,9 +2563,10 @@ export default function BroadcastConsolePage() {
                                             </p>
                                         </div>
                                     )}
-                                    {/* Bulk discounts (any spot format): up to 3 tiers,
-                                        e.g. buy 3+ spots for 10% off each. */}
-                                    {lotType !== 'auction' && (
+                                    {/* Bulk discounts (batch spot formats): up to 3 tiers,
+                                        e.g. buy 3+ spots for 10% off each. Sequential
+                                        rip_till_hit turns never batch, so no tiers there. */}
+                                    {lotType !== 'auction' && lotType !== 'rip_till_hit' && (
                                     <div className="rounded-xl bg-black/20 border border-white/10 p-3 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
@@ -2621,8 +2724,9 @@ export default function BroadcastConsolePage() {
                                                       } · ${sold}/${lotSpotRows.length} ${t('live.console.soldCount') || 'sold'}`}
                                             </p>
                                             {/* Live auction status card: the breaker's read of the
-                                                room — price, bids, clock — plus the hammer. */}
-                                            {lot.item_type === 'auction' && lot.auction && (
+                                                room — price, bids, clock — plus the hammer. Shared
+                                                by whole-lot auctions and rip_till_hit turn auctions. */}
+                                            {(lot.item_type === 'auction' || lot.item_type === 'rip_till_hit') && lot.auction && (
                                                 <div
                                                     className={`mt-2 rounded-xl border p-2.5 ${
                                                         lot.auction.status === 'live'
@@ -2768,6 +2872,59 @@ export default function BroadcastConsolePage() {
                                                                     {t('live.console.restartAuction') || 'Run it again'}
                                                                 </button>
                                                             )}
+                                                        {/* rip_till_hit run controls: record the current
+                                                            turn's hit; in auction mode, put the next turn
+                                                            on the block. */}
+                                                        {lot.item_type === 'rip_till_hit' &&
+                                                            (() => {
+                                                                const lotSpotsSorted = spots.filter(
+                                                                    (s) => s.stream_item_id === lot.id,
+                                                                );
+                                                                const ripping = currentTurnSpot(lotSpotsSorted);
+                                                                const nextTurn = nextTurnSpot(lotSpotsSorted, spotNow);
+                                                                const auctionMode = rtyhPricingOf(lot) === 'auction';
+                                                                const auctionLive = lot.auction?.status === 'live';
+                                                                return (
+                                                                    <>
+                                                                        {ripping && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setHitText('');
+                                                                                    setConfirm({
+                                                                                        message: `${t('live.console.confirmHit') || 'Record the hit that ends this turn'} — #${ripping.spot_number}${
+                                                                                            buyerName(ripping.buyer_id)
+                                                                                                ? ` (${buyerName(ripping.buyer_id)})`
+                                                                                                : ''
+                                                                                        }`,
+                                                                                        confirmLabel:
+                                                                                            t('live.console.markHit') || 'Mark hit',
+                                                                                        withHitInput: true,
+                                                                                        run: async () => {},
+                                                                                        runWithText: (text) =>
+                                                                                            markHit(lot, ripping, text),
+                                                                                    });
+                                                                                }}
+                                                                                className={`${btnGhost} bg-amber-500/20 text-amber-300`}
+                                                                            >
+                                                                                {`${t('live.console.markHit') || 'Mark hit'} — #${ripping.spot_number}`}
+                                                                            </button>
+                                                                        )}
+                                                                        {auctionMode && !auctionLive && nextTurn && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    void startAuction(lot);
+                                                                                }}
+                                                                                disabled={!isLive}
+                                                                                className={`${btnGhost} bg-brand-cyan/20 text-brand-cyan`}
+                                                                            >
+                                                                                {`${t('live.console.auctionTurn') || 'Auction turn'} #${nextTurn.spot_number}`}
+                                                                            </button>
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         {!lot.break_opened_at && (
                                                             <button
                                                                 onClick={(e) => {
@@ -2826,11 +2983,10 @@ export default function BroadcastConsolePage() {
                                                                             'Run the server randomizer? The result is final.',
                                                                         confirmLabel: t('live.console.randomizeHit') || 'Assign hit',
                                                                         withHitInput: true,
-                                                                        // The real run happens in the dialog's confirm
-                                                                        // handler, which reads hitText + confirmLotRef.
                                                                         run: async () => {},
+                                                                        runWithText: (text) =>
+                                                                            runRandomizer(lot, 'hit_assignment', text),
                                                                     });
-                                                                    confirmLotRef.current = lot;
                                                                 }}
                                                                 className={`${btnGhost} bg-purple-500/20 text-purple-300`}
                                                             >
@@ -2930,6 +3086,14 @@ export default function BroadcastConsolePage() {
                                                         {spot.assigned_entity}
                                                     </span>
                                                 )}
+                                                {spot.hit_note && (
+                                                    <span
+                                                        title={spot.hit_note}
+                                                        className="max-w-full px-0.5 text-[7px] font-black text-amber-300 truncate"
+                                                    >
+                                                        {spot.hit_note}
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -2960,12 +3124,21 @@ export default function BroadcastConsolePage() {
                                                         <span className="flex-1 min-w-0 text-xs font-bold text-white truncate">
                                                             {buyerName(spot.buyer_id) || '...'}
                                                         </span>
-                                                        {(spot.assigned_entity ||
-                                                            (spot.assigned_packs && spot.assigned_packs.length > 0)) && (
-                                                            <span className="shrink-0 text-[10px] font-bold text-slate-400 truncate max-w-[30%]">
-                                                                {spot.assigned_entity ??
-                                                                    `${t('live.console.packsShort') || 'Packs'} ${spot.assigned_packs!.join(',')}`}
+                                                        {spot.hit_note ? (
+                                                            <span
+                                                                title={spot.hit_note}
+                                                                className="shrink-0 text-[10px] font-black text-amber-300 truncate max-w-[35%]"
+                                                            >
+                                                                {t('live.console.hitChip') || 'HIT'}: {spot.hit_note}
                                                             </span>
+                                                        ) : (
+                                                            (spot.assigned_entity ||
+                                                                (spot.assigned_packs && spot.assigned_packs.length > 0)) && (
+                                                                <span className="shrink-0 text-[10px] font-bold text-slate-400 truncate max-w-[30%]">
+                                                                    {spot.assigned_entity ??
+                                                                        `${t('live.console.packsShort') || 'Packs'} ${spot.assigned_packs!.join(',')}`}
+                                                                </span>
+                                                            )
                                                         )}
                                                         {isLive && (
                                                             <button
@@ -3322,8 +3495,8 @@ export default function BroadcastConsolePage() {
                                     if (confirm.withHitInput && !hitText.trim()) return;
                                     setConfirmBusy(true);
                                     try {
-                                        if (confirm.withHitInput && confirmLotRef.current) {
-                                            await runRandomizer(confirmLotRef.current, 'hit_assignment', hitText.trim());
+                                        if (confirm.withHitInput && confirm.runWithText) {
+                                            await confirm.runWithText(hitText.trim());
                                         } else {
                                             await confirm.run();
                                         }

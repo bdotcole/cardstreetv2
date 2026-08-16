@@ -1014,7 +1014,11 @@
             "houseError": "Could not update that spot",
             "nowOpening": "Now opening",
             "spotWord": "Spot",
-            "packsWord": "Packs"
+            "packsWord": "Packs",
+            "turnWord": "Turn",
+            "rippingNow": "Now ripping",
+            "claimAuction": "This lot is auctioned — place a bid instead",
+            "claimNotNextTurn": "Turns sell one at a time — this one is not up yet"
         },
         "scheduled": {
             "startsIn": "Show starts in",
@@ -1195,6 +1199,15 @@
             "soldSpots": "Sold spots",
             "noSoldSpots": "No spots sold yet",
             "packsShort": "Packs",
+            "rtyhPricing": "Turn pricing",
+            "rtyhFixed": "Fixed price",
+            "rtyhAuction": "Auction each turn",
+            "rtyhHint": "Turns sell one at a time; you rip until the hit, record it, and the next turn opens.",
+            "markHit": "Mark hit",
+            "confirmHit": "Record the hit that ends this turn",
+            "hitError": "Could not record the hit",
+            "auctionTurn": "Auction turn",
+            "hitChip": "HIT",
             "productTypes": {
                 "box": "Box",
                 "pack": "Pack",
@@ -1292,7 +1305,8 @@
             "pack_wars": "Pack wars",
             "character_break": "Character break",
             "buy_now": "Buy now",
-            "auction": "Auction"
+            "auction": "Auction",
+            "rip_till_hit": "Rip 'til you hit"
         },
         "notFound": {
             "title": "Page not found",

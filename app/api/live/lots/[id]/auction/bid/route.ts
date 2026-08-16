@@ -87,7 +87,13 @@ export async function POST(
             .select(LOT_GUARD_COLS)
             .eq('id', id)
             .maybeSingle<LotRow>();
-        if (!lot || lot.item_type !== 'auction' || !lot.auction_id) {
+        // Whole-lot auctions and rip_till_hit turn auctions both bid here —
+        // lot.auction_id always points at the CURRENT engine row.
+        if (
+            !lot ||
+            (lot.item_type !== 'auction' && lot.item_type !== 'rip_till_hit') ||
+            !lot.auction_id
+        ) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
 
@@ -125,7 +131,13 @@ export async function POST(
             if (result.reason === 'ended') {
                 const closed = await closeLiveAuction(lot);
                 if (!('error' in closed) && closed.closed && closed.auction) {
-                    await announceAuctionClose(stream.id, lot, closed.auction, closed.winnerHoldSet);
+                    await announceAuctionClose(
+                        stream.id,
+                        lot,
+                        closed.auction,
+                        closed.winnerHoldSet,
+                        closed.spotNumber,
+                    );
                 }
             }
             return NextResponse.json(result, { status: 409 });

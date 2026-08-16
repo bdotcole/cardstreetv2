@@ -55,9 +55,12 @@ export interface LotRow {
 export const LOT_GUARD_COLS =
     'id, stream_id, seller_id, item_type, status, position, spots_total, spot_price, packs_per_spot, price, break_opened_at, card_data, auction_id';
 
-// The spot-based formats. 'buy_now' prices via `price`; 'auction' is a
-// reserved seam the breaks MVP does not serve. 'character_break' needs
-// 20260813_character_breaks_bulk.sql (item_type CHECK + break_entities).
+// The spot-based formats. 'buy_now' prices via `price`; 'auction' sells its
+// single spot through the live bid engine. 'character_break' needs
+// 20260813_character_breaks_bulk.sql (item_type CHECK + break_entities);
+// 'rip_till_hit' needs 20260818_rip_till_hit.sql (item_type CHECK +
+// break_spots.hit_note/hit_at) — its spots are sequential TURNS, sold one at
+// a time (claim route gate), fixed-price or auctioned per card_data.rtyhPricing.
 export const BREAK_ITEM_TYPES = [
     'personal_break',
     'pick_your_pack',
@@ -65,6 +68,7 @@ export const BREAK_ITEM_TYPES = [
     'chase_break',
     'pack_wars',
     'character_break',
+    'rip_till_hit',
 ] as const;
 export type BreakItemType = (typeof BREAK_ITEM_TYPES)[number];
 
@@ -407,6 +411,9 @@ export const LIVE_AUCTION_MAX_SECONDS = 600;
 export interface AuctionEngineRow {
     id: string;
     seller_id: string;
+    /** 'stream-lot:<lotId>' (whole-lot auction) or 'stream-spot:<spotId>'
+     *  (a rip_till_hit TURN auction — the hammer targets that spot). */
+    card_id: string;
     status: 'live' | 'sold' | 'unsold' | 'cancelled';
     starting_price: number;
     current_price: number;
@@ -419,8 +426,15 @@ export interface AuctionEngineRow {
 }
 
 export const AUCTION_ENGINE_COLS =
-    'id, seller_id, status, starting_price, current_price, bid_count, ends_at, ' +
+    'id, seller_id, card_id, status, starting_price, current_price, bid_count, ends_at, ' +
     'extension_count, high_bidder_id, winner_id, winning_amount';
+
+/** The turn spot a 'stream-spot:*' auction sells; null for whole-lot auctions. */
+export function auctionTargetSpotId(auction: Pick<AuctionEngineRow, 'card_id'>): string | null {
+    return auction.card_id.startsWith('stream-spot:')
+        ? auction.card_id.slice('stream-spot:'.length)
+        : null;
+}
 
 /**
  * The auction shape the live clients consume (LiveAuctionState in
@@ -469,6 +483,8 @@ export interface CloseAuctionResult {
     status: string;
     auction: AuctionEngineRow | null;
     winnerHoldSet: boolean;
+    /** The turn number when this was a rip_till_hit turn auction. */
+    spotNumber: number | null;
 }
 
 /**
@@ -503,12 +519,12 @@ export async function closeLiveAuction(
 
         if (a.status !== 'live') {
             // Someone else already hammered it — report the settled state.
-            return { closed: false, status: a.status, auction: a, winnerHoldSet: false };
+            return { closed: false, status: a.status, auction: a, winnerHoldSet: false, spotNumber: null };
         }
 
         const now = Date.now();
         if (!opts.force && Date.parse(a.ends_at) > now) {
-            return { closed: false, status: 'live', auction: a, winnerHoldSet: false };
+            return { closed: false, status: 'live', auction: a, winnerHoldSet: false, spotNumber: null };
         }
 
         const won = a.high_bidder_id !== null;
@@ -541,12 +557,16 @@ export async function closeLiveAuction(
         if (!updated) continue; // lost the race — re-read
 
         let winnerHoldSet = false;
+        let spotNumber: number | null = null;
+        const targetSpotId = auctionTargetSpotId(updated);
         if (won && updated.winner_id) {
             // Hand the spot to the winner as a standard checkout hold. CAS on
-            // status='open': the auction spot is never claimable (the claim
-            // route refuses auction lots), so open is the only pre-hammer
-            // state. CHECKOUT_HOLD_SECONDS (5 min) is the pay window.
-            const { data: spotRow, error: spotErr } = await admin
+            // status='open': an auctioned spot is never claimable (the claim
+            // route refuses it), so open is the only pre-hammer state.
+            // CHECKOUT_HOLD_SECONDS (5 min) is the pay window. A turn auction
+            // (rip_till_hit) targets ITS spot by id; a whole-lot auction owns
+            // the lot's single spot.
+            let holdUpdate = admin
                 .from('break_spots')
                 .update({
                     price: updated.winning_amount ?? updated.current_price,
@@ -555,21 +575,31 @@ export async function closeLiveAuction(
                     hold_expires_at: new Date(now + CHECKOUT_HOLD_SECONDS * 1000).toISOString(),
                 })
                 .eq('stream_item_id', lot.id)
-                .eq('status', 'open')
-                .select('id')
-                .maybeSingle<{ id: string }>();
+                .eq('status', 'open');
+            holdUpdate = targetSpotId ? holdUpdate.eq('id', targetSpotId) : holdUpdate;
+            const { data: spotRow, error: spotErr } = await holdUpdate
+                .select('id, spot_number')
+                .maybeSingle<{ id: string; spot_number: number }>();
             if (spotErr) {
                 console.error('[LiveBreaks] winner hold set failed:', spotErr.message);
             }
             winnerHoldSet = !!spotRow;
+            spotNumber = spotRow?.spot_number ?? null;
             if (!spotRow) {
                 console.error(
                     `[LiveBreaks] auction ${updated.id} closed sold but its spot was not open — manual follow-up needed`,
                 );
             }
+        } else if (targetSpotId) {
+            const { data: unsoldSpot } = await admin
+                .from('break_spots')
+                .select('spot_number')
+                .eq('id', targetSpotId)
+                .maybeSingle<{ spot_number: number }>();
+            spotNumber = unsoldSpot?.spot_number ?? null;
         }
 
-        return { closed: true, status: updated.status, auction: updated, winnerHoldSet };
+        return { closed: true, status: updated.status, auction: updated, winnerHoldSet, spotNumber };
     }
 
     return { error: 'Auction is still receiving bids — try again', status: 409 };
@@ -585,12 +615,14 @@ export async function announceAuctionClose(
     lot: LotRow,
     auction: AuctionEngineRow,
     winnerHoldSet: boolean,
+    spotNumber?: number | null,
 ): Promise<void> {
     const admin = createAdminClient();
-    const cardName =
+    const baseName =
         typeof (lot.card_data as { name?: unknown } | null)?.name === 'string'
             ? (lot.card_data as { name: string }).name
             : 'Auction lot';
+    const cardName = spotNumber != null ? `${baseName} — Turn #${spotNumber}` : baseName;
     if (auction.status === 'sold' && auction.winner_id) {
         let winnerName: string | null = null;
         try {

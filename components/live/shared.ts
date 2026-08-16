@@ -163,6 +163,44 @@ export interface LiveSpotRow {
     assigned_packs: number[] | null;
     /** character_break randomizer result. Optional until 20260813_character_breaks_bulk.sql. */
     assigned_entity?: string | null;
+    /** rip_till_hit: the turn's recorded hit. Optional until 20260818_rip_till_hit.sql. */
+    hit_note?: string | null;
+    hit_at?: string | null;
+}
+
+// ─── Rip 'Til You Hit (rip_till_hit) ───
+// Spots are sequential TURNS: exactly one is purchasable at a time, the
+// breaker rips until a hit and records it, then the next turn opens. The
+// pricing mode rides the lot's card_data snapshot (no schema column).
+
+export type RtyhPricing = 'fixed' | 'auction';
+
+/** The lot's turn-pricing mode; anything unrecognized reads as 'fixed'. */
+export function rtyhPricingOf(lot: { card_data: unknown }): RtyhPricing {
+    const raw = (lot.card_data as { rtyhPricing?: unknown } | null)?.rtyhPricing;
+    return raw === 'auction' ? 'auction' : 'fixed';
+}
+
+/**
+ * The single purchasable turn RIGHT NOW: the lowest-numbered available spot
+ * (open, or a lapsed hold) with every lower-numbered spot already SOLD. A
+ * live hold on the next turn blocks everything behind it — the queue only
+ * advances on money, never past a buyer mid-checkout. Null when sold out or
+ * while the next turn is being held/paid.
+ */
+export function nextTurnSpot(lotSpots: LiveSpotRow[], now: number): LiveSpotRow | null {
+    const ordered = [...lotSpots].sort((a, b) => a.spot_number - b.spot_number);
+    for (const spot of ordered) {
+        if (spot.status === 'sold' || spot.status === 'cancelled') continue;
+        return isSpotOpenNow(spot, now) ? spot : null;
+    }
+    return null;
+}
+
+/** The turn being ripped: the lowest sold spot whose hit isn't recorded yet. */
+export function currentTurnSpot(lotSpots: LiveSpotRow[]): LiveSpotRow | null {
+    const ordered = [...lotSpots].sort((a, b) => a.spot_number - b.spot_number);
+    return ordered.find((s) => s.status === 'sold' && !s.hit_at && !s.hit_note) ?? null;
 }
 
 /** The two fields every availability check reads — accepts any spot-shaped row. */

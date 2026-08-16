@@ -28,7 +28,7 @@ export async function POST(
         if (ctx instanceof NextResponse) return ctx;
         const { lot, stream } = ctx;
 
-        if (lot.item_type !== 'auction' || !lot.auction_id) {
+        if ((lot.item_type !== 'auction' && lot.item_type !== 'rip_till_hit') || !lot.auction_id) {
             return NextResponse.json({ error: 'Not an auction lot' }, { status: 400 });
         }
 
@@ -41,7 +41,13 @@ export async function POST(
         }
 
         if (result.closed && result.auction) {
-            await announceAuctionClose(stream.id, lot, result.auction, result.winnerHoldSet);
+            await announceAuctionClose(
+                stream.id,
+                lot,
+                result.auction,
+                result.winnerHoldSet,
+                result.spotNumber,
+            );
         }
 
         return NextResponse.json({

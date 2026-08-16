@@ -25,7 +25,12 @@ import {
     shapeAuctionState,
     type AuctionEngineRow,
 } from '@/lib/liveBreaks';
-import { formatSatang } from '@/components/live/shared';
+import {
+    formatSatang,
+    nextTurnSpot,
+    rtyhPricingOf,
+    type LiveSpotRow,
+} from '@/components/live/shared';
 
 export async function POST(
     _req: Request,
@@ -37,7 +42,10 @@ export async function POST(
         if (ctx instanceof NextResponse) return ctx;
         const { user, lot, stream } = ctx;
 
-        if (lot.item_type !== 'auction') {
+        // Whole-lot auctions, or rip_till_hit lots in auction pricing mode
+        // (each TURN is its own engine run on the same lot).
+        const isTurnAuction = lot.item_type === 'rip_till_hit';
+        if (lot.item_type !== 'auction' && !(isTurnAuction && rtyhPricingOf(lot) === 'auction')) {
             return NextResponse.json({ error: 'Not an auction lot' }, { status: 400 });
         }
         if (stream.status !== 'live') {
@@ -52,8 +60,9 @@ export async function POST(
 
         const admin = createAdminClient();
 
-        // A previous run must be settled before another can start; only an
-        // unsold outcome is restartable (sold = money in flight or collected).
+        // A previous run must be settled before another can start. A SOLD
+        // outcome is final for a whole-lot auction, but for turn auctions it
+        // just means the last turn found its buyer — the next turn may run.
         if (lot.auction_id) {
             const { data: prev } = await admin
                 .from('auctions')
@@ -66,7 +75,7 @@ export async function POST(
                     { status: 409 },
                 );
             }
-            if (prev && prev.status === 'sold') {
+            if (!isTurnAuction && prev && prev.status === 'sold') {
                 return NextResponse.json(
                     { error: 'This lot already sold at auction', code: 'ALREADY_SOLD' },
                     { status: 409 },
@@ -74,15 +83,33 @@ export async function POST(
             }
         }
 
-        // The spot must still be open (a lingering hold from a voided winner
-        // has to lapse or be released before a rerun).
-        const { data: spot } = await admin
+        // Resolve the spot this run sells: the whole-lot auction's single
+        // spot, or the next eligible TURN (lowest available with every lower
+        // turn sold — the same sequencing the claim route enforces).
+        const { data: spotRows } = await admin
             .from('break_spots')
-            .select('id, status, hold_expires_at')
+            .select('id, stream_item_id, spot_number, price, status, held_by, hold_expires_at, buyer_id, order_id, sold_at, assigned_packs')
             .eq('stream_item_id', lot.id)
-            .maybeSingle<{ id: string; status: string; hold_expires_at: string | null }>();
+            .order('spot_number', { ascending: true })
+            .returns<LiveSpotRow[]>();
+        const now = Date.now();
+        const spot = isTurnAuction
+            ? nextTurnSpot(spotRows ?? [], now)
+            : (spotRows ?? [])[0] ?? null;
         if (!spot) {
-            return NextResponse.json({ error: 'Auction spot missing' }, { status: 500 });
+            if (!isTurnAuction) {
+                return NextResponse.json({ error: 'Auction spot missing' }, { status: 500 });
+            }
+            const anyLeft = (spotRows ?? []).some((s) => s.status !== 'sold' && s.status !== 'cancelled');
+            return NextResponse.json(
+                anyLeft
+                    ? {
+                          error: "A buyer's payment window is still open — wait for it to finish",
+                          code: 'WINNER_PAYING',
+                      }
+                    : { error: 'All turns are sold', code: 'ALREADY_SOLD' },
+                { status: 409 },
+            );
         }
         if (spot.status === 'sold') {
             return NextResponse.json(
@@ -93,7 +120,7 @@ export async function POST(
         if (
             spot.status === 'held' &&
             spot.hold_expires_at &&
-            Date.parse(spot.hold_expires_at) > Date.now()
+            Date.parse(spot.hold_expires_at) > now
         ) {
             return NextResponse.json(
                 { error: "The previous winner's payment window is still open", code: 'WINNER_PAYING' },
@@ -125,16 +152,19 @@ export async function POST(
 
         const nowMs = Date.now();
         const endsAt = new Date(nowMs + durationSeconds * 1000).toISOString();
-        const cardName =
+        const baseName =
             typeof (lot.card_data as { name?: unknown } | null)?.name === 'string'
                 ? ((lot.card_data as { name: string }).name)
                 : 'Auction lot';
+        const cardName = isTurnAuction ? `${baseName} — Turn #${spot.spot_number}` : baseName;
 
         const { data: auction, error: insErr } = await admin
             .from('auctions')
             .insert({
                 seller_id: user.id,
-                card_id: `stream-lot:${lot.id}`,
+                // Turn auctions pin THEIR spot so the hammer can't grab a
+                // sibling turn; whole-lot auctions own the lot's single spot.
+                card_id: isTurnAuction ? `stream-spot:${spot.id}` : `stream-lot:${lot.id}`,
                 card_data: lot.card_data ?? { name: cardName },
                 condition: 'Sealed',
                 starting_price: startingPrice,

@@ -42,6 +42,9 @@ interface SpotBoardRow {
     assigned_packs: number[] | null;
     /** Absent until 20260813_character_breaks_bulk.sql is applied. */
     assigned_entity?: string | null;
+    /** Absent until 20260818_rip_till_hit.sql is applied. */
+    hit_note?: string | null;
+    hit_at?: string | null;
 }
 
 const SPOT_BOARD_COLS =
@@ -97,22 +100,32 @@ export async function GET(
                 .order('created_at', { ascending: true }),
             admin
                 .from('break_spots')
-                .select(`${SPOT_BOARD_COLS}, assigned_entity`)
+                .select(`${SPOT_BOARD_COLS}, assigned_entity, hit_note, hit_at`)
                 .eq('stream_id', id)
                 .order('spot_number', { ascending: true })
                 .returns<SpotBoardRow[]>(),
         ]);
 
-        // assigned_entity (20260813_character_breaks_bulk.sql) is additive and
-        // applied by hand — until it exists, serve the board without it.
+        // Degrade ladder for hand-applied additive columns, newest first:
+        // hit_note/hit_at (20260818_rip_till_hit.sql), then assigned_entity
+        // (20260813_character_breaks_bulk.sql) — the board itself must always
+        // serve.
         let spots = spotsResult.data;
         if (spotsResult.error && spotsResult.error.code === '42703') {
             ({ data: spots } = await admin
                 .from('break_spots')
-                .select(SPOT_BOARD_COLS)
+                .select(`${SPOT_BOARD_COLS}, assigned_entity`)
                 .eq('stream_id', id)
                 .order('spot_number', { ascending: true })
                 .returns<SpotBoardRow[]>());
+            if (!spots) {
+                ({ data: spots } = await admin
+                    .from('break_spots')
+                    .select(SPOT_BOARD_COLS)
+                    .eq('stream_id', id)
+                    .order('spot_number', { ascending: true })
+                    .returns<SpotBoardRow[]>());
+            }
         }
 
         // order_id is a payment linkage, not board state — only the spot's own

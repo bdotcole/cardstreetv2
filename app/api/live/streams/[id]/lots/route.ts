@@ -162,6 +162,37 @@ export async function POST(
                 }
             }
 
+            // ─── rip_till_hit: per-turn pricing mode ───
+            // Spots are sequential turns. 'fixed' sells each turn at
+            // spot_price through the claim rail (one at a time — the claim
+            // route gates it); 'auction' runs each turn through the live bid
+            // engine with spot_price as the opening bid. Both ride the
+            // card_data snapshot — no schema column.
+            if (itemType === 'rip_till_hit') {
+                const pricing =
+                    (body?.rtyhPricing ?? body?.rtyh_pricing) === 'auction' ? 'auction' : 'fixed';
+                const extra: Record<string, unknown> = { rtyhPricing: pricing };
+                if (pricing === 'auction') {
+                    const rawDuration = body?.durationSeconds ?? body?.duration_seconds;
+                    const durationSeconds = asPositiveInt(rawDuration) ?? 60;
+                    if (
+                        durationSeconds < LIVE_AUCTION_MIN_SECONDS ||
+                        durationSeconds > LIVE_AUCTION_MAX_SECONDS
+                    ) {
+                        return NextResponse.json(
+                            {
+                                error: `durationSeconds must be between ${LIVE_AUCTION_MIN_SECONDS} and ${LIVE_AUCTION_MAX_SECONDS}`,
+                            },
+                            { status: 400 },
+                        );
+                    }
+                    extra.auctionDurationSeconds = durationSeconds;
+                }
+                if (cardData && typeof cardData === 'object' && !Array.isArray(cardData)) {
+                    cardData = { ...cardData, ...extra };
+                }
+            }
+
             // ─── Extra shipping per spot (20260816_first_checkout_shipping) ───
             // Spots a buyer takes from THIS lot beyond their first ship free
             // by default; this per-spot increment (satang) is the seller's
@@ -337,6 +368,15 @@ export async function POST(
             );
             return NextResponse.json(
                 { error: 'Character breaks are not available yet — try another format' },
+                { status: 503 },
+            );
+        }
+        // rip_till_hit pre-migration: the un-widened item_type CHECK rejects
+        // the insert (23514) — refuse plainly rather than degrade.
+        if (lotErr && itemType === 'rip_till_hit' && lotErr.code === '23514') {
+            console.warn('[Live/Lots] rip_till_hit schema missing (run 20260818_rip_till_hit.sql)');
+            return NextResponse.json(
+                { error: 'Rip-til-you-hit lots are not available yet — try another format' },
                 { status: 503 },
             );
         }

@@ -25,7 +25,10 @@ import {
     isHoldLapsed,
     isSpotOpenNow,
     nameInitials,
+    nextTurnSpot,
+    currentTurnSpot,
     pollTotalVotes,
+    rtyhPricingOf,
     type LiveAuctionState,
     type LiveChatMessage,
     type LiveLotRow,
@@ -315,7 +318,9 @@ export default function LiveViewerClient() {
                         JSON.stringify(before?.assigned_packs ?? null) !==
                             JSON.stringify(row.assigned_packs)) ||
                     (typeof row.assigned_entity === 'string' &&
-                        row.assigned_entity !== (before?.assigned_entity ?? null));
+                        row.assigned_entity !== (before?.assigned_entity ?? null)) ||
+                    (typeof row.hit_note === 'string' &&
+                        row.hit_note !== (before?.hit_note ?? null));
                 if (idx === -1) return [...prev, row];
                 const next = [...prev];
                 next[idx] = { ...next[idx], ...row };
@@ -553,6 +558,8 @@ export default function LiveViewerClient() {
                     stream_not_live: 'live.viewer.notStarted',
                     own_item: 'live.viewer.claimOwnItem',
                     suspended: 'live.viewer.claimSuspended',
+                    auction: 'live.viewer.claimAuction',
+                    not_next_turn: 'live.viewer.claimNotNextTurn',
                 };
                 let message = t('live.viewer.claimError') || 'Could not claim that spot';
                 if (data.code === 'GEO_RESTRICTED') {
@@ -930,14 +937,24 @@ export default function LiveViewerClient() {
 
     // The claim grid for one lot — the live board renders it for the lot on
     // the block; the scheduled landing renders one per presale lot.
-    const spotGrid = (lot: LiveLotRow, lotSpots: LiveSpotRow[]) => (
+    // rip_till_hit sells turns strictly in order: only the next eligible turn
+    // is tappable (none at all in auction pricing mode — turns are bid on).
+    const spotGrid = (lot: LiveLotRow, lotSpots: LiveSpotRow[]) => {
+        const isRtyh = lot.item_type === 'rip_till_hit';
+        const rtyhAuction = isRtyh && rtyhPricingOf(lot) === 'auction';
+        const eligibleTurnId = isRtyh && !rtyhAuction ? nextTurnSpot(lotSpots, now)?.id ?? null : null;
+        return (
         <div className="grid grid-cols-5 gap-2">
             {lotSpots.map((spot) => {
                 const mine = spot.held_by === myUserId && spot.status === 'held';
                 const soldMine = spot.status === 'sold' && spot.buyer_id === myUserId;
                 const flashing = flashSpots.has(spot.id);
                 const expired = isHoldLapsed(spot, now);
-                const claimable = canBuyLot(lot) && isSpotOpenNow(spot, now) && !mine;
+                const claimable =
+                    canBuyLot(lot) &&
+                    isSpotOpenNow(spot, now) &&
+                    !mine &&
+                    (!isRtyh || (!rtyhAuction && spot.id === eligibleTurnId));
                 const houseAct = houseActionFor(spot);
                 return (
                     <motion.button
@@ -994,6 +1011,14 @@ export default function LiveViewerClient() {
                                 {spot.assigned_entity}
                             </span>
                         )}
+                        {spot.hit_note && (
+                            <span
+                                title={spot.hit_note}
+                                className="max-w-full px-0.5 text-[8px] font-black text-amber-300 truncate"
+                            >
+                                {spot.hit_note}
+                            </span>
+                        )}
                         {spot.assigned_packs && spot.assigned_packs.length > 0 && (
                             <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[8px] font-black flex items-center justify-center">
                                 {spot.assigned_packs.join(',')}
@@ -1003,7 +1028,8 @@ export default function LiveViewerClient() {
                 );
             })}
         </div>
-    );
+        );
+    };
 
     // Overlay messages get a text shadow — they sit on live video, where the
     // old 12px unshadowed lines were the field test's "can't read the chat".
@@ -1265,7 +1291,33 @@ export default function LiveViewerClient() {
                     {activeLot.item_type === 'auction' ? (
                         <div className="overflow-y-auto">{auctionPanel(activeLot)}</div>
                     ) : (
-                        <div className="p-3 overflow-y-auto">{spotGrid(activeLot, activeSpots)}</div>
+                        <div className="p-3 overflow-y-auto">
+                            {/* rip_till_hit: whose turn is being ripped, and —
+                                in auction pricing mode — the live bid panel
+                                for the next turn, above the turn ladder. */}
+                            {activeLot.item_type === 'rip_till_hit' && (() => {
+                                const ripping = currentTurnSpot(activeSpots);
+                                return ripping ? (
+                                    <div className="mb-2 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-400/30 px-3 py-2">
+                                        <i className="fa-solid fa-fire text-amber-300 text-xs"></i>
+                                        <p className="text-xs font-black text-amber-200 truncate">
+                                            {t('live.viewer.rippingNow') || 'Now ripping'}:{' '}
+                                            {t('live.viewer.turnWord') || 'Turn'} #{ripping.spot_number}
+                                            {ripping.buyer_id &&
+                                                ` — ${displayName(ripping.buyer_id)}`}
+                                        </p>
+                                    </div>
+                                ) : null;
+                            })()}
+                            {activeLot.item_type === 'rip_till_hit' &&
+                                rtyhPricingOf(activeLot) === 'auction' &&
+                                activeLot.auction?.status === 'live' && (
+                                    <div className="mb-2 rounded-xl border border-brand-cyan/30 bg-brand-cyan/5">
+                                        {auctionPanel(activeLot)}
+                                    </div>
+                                )}
+                            {spotGrid(activeLot, activeSpots)}
+                        </div>
                     )}
                 </>
             ) : (
@@ -1819,9 +1871,12 @@ export default function LiveViewerClient() {
                         />
                     </div>
                     {/* Live-auction quick bid — the primary interaction rides
-                        inline; sheets are too slow for a 30s clock. */}
+                        inline; sheets are too slow for a 30s clock. Serves
+                        whole-lot auctions AND rip_till_hit auctioned turns. */}
                     {isLive &&
-                        activeLot?.item_type === 'auction' &&
+                        (activeLot?.item_type === 'auction' ||
+                            (activeLot?.item_type === 'rip_till_hit' &&
+                                rtyhPricingOf(activeLot) === 'auction')) &&
                         activeLot.auction?.status === 'live' &&
                         !isSellerViewer && (
                             <div className="mb-2 flex items-center gap-2 rounded-2xl bg-black/60 border border-white/15 backdrop-blur-sm px-3 py-2">

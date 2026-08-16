@@ -13,6 +13,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import { releaseExpiredHolds } from '@/lib/liveBreaks';
+import { nextTurnSpot, rtyhPricingOf, type LiveSpotRow } from '@/components/live/shared';
 
 const HOLD_SECONDS = 180;
 const CLAIM_WINDOW_SECONDS = 60;
@@ -68,19 +69,54 @@ export async function POST(
         // fail-soft — a claim must never 500 on housekeeping.
         const { data: spotRow } = await admin
             .from('break_spots')
-            .select('stream_id, stream_items(item_type)')
+            .select('stream_id, stream_item_id, stream_items(item_type, card_data)')
             .eq('id', id)
-            .maybeSingle<{ stream_id: string; stream_items: { item_type: string } | null }>();
+            .maybeSingle<{
+                stream_id: string;
+                stream_item_id: string;
+                stream_items: { item_type: string; card_data: Record<string, unknown> | null } | null;
+            }>();
 
         // An auction lot's spot is the HAMMER's payment vehicle — it is never
         // directly claimable; the winner receives it as a hold at close. The
-        // RPC doesn't know item types, so the gate lives here.
-        if (spotRow?.stream_items?.item_type === 'auction') {
+        // RPC doesn't know item types, so the gate lives here. rip_till_hit
+        // lots in auction pricing mode work the same way, per turn.
+        const lotType = spotRow?.stream_items?.item_type;
+        if (
+            lotType === 'auction' ||
+            (lotType === 'rip_till_hit' &&
+                rtyhPricingOf({ card_data: spotRow?.stream_items?.card_data ?? null }) === 'auction')
+        ) {
             return NextResponse.json(
                 { claimed: false, reason: 'auction', error: 'Bid on this lot instead of claiming it' },
                 { status: 409 },
             );
         }
+
+        // rip_till_hit sells turns strictly in order: only the next eligible
+        // turn (lowest available, every lower turn SOLD) is claimable. The
+        // read is advisory — the money side is still the hold/checkout CAS —
+        // but it keeps the queue honest against direct API calls.
+        if (lotType === 'rip_till_hit' && spotRow) {
+            const { data: siblings } = await admin
+                .from('break_spots')
+                .select('id, stream_item_id, spot_number, price, status, held_by, hold_expires_at, buyer_id, order_id, sold_at, assigned_packs')
+                .eq('stream_item_id', spotRow.stream_item_id)
+                .order('spot_number', { ascending: true })
+                .returns<LiveSpotRow[]>();
+            const eligible = nextTurnSpot(siblings ?? [], Date.now());
+            if (!eligible || eligible.id !== id) {
+                return NextResponse.json(
+                    {
+                        claimed: false,
+                        reason: 'not_next_turn',
+                        error: 'Turns sell one at a time — this one is not up yet',
+                    },
+                    { status: 409 },
+                );
+            }
+        }
+
         if (spotRow?.stream_id) await releaseExpiredHolds(spotRow.stream_id);
 
         const { data, error } = await admin.rpc('claim_break_spot', {
