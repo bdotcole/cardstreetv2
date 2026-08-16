@@ -169,7 +169,7 @@ const AddCardToBid: React.FC<AddCardToBidProps> = ({ onSaved, onCancel }) => {
                     onClick={onCancel}
                     className="text-sm text-slate-400 hover:text-slate-200"
                 >
-                    {t('common.cancel') || 'Cancel'}
+                    {t('live.console.cancel') || 'Cancel'}
                 </button>
             )}
         </div>

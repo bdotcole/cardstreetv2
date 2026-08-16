@@ -50,6 +50,7 @@ import {
     useReactionFeed,
 } from '@/components/live/StickerReactions';
 import { useStreamEvents } from '@/components/live/streamEvents';
+import { EventSplashLayer, useEventSplash } from '@/components/live/EventSplash';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 
 /**
@@ -1402,13 +1403,52 @@ export default function BroadcastConsolePage() {
         );
     }, []);
 
+    // The breaker gets the same big-moment splashes as the room — a sale
+    // popping on the console beats noticing a chat line mid-rip.
+    const { splash, showSplash } = useEventSplash();
+    const splashedAuctionRef = useRef<Set<string>>(new Set());
+
+    // Whatnot-style join lines (ephemeral, deduped per session by name).
+    const [joinLines, setJoinLines] = useState<{ id: number; name: string }[]>([]);
+    const seenJoinsRef = useRef<Set<string>>(new Set());
+    const joinIdRef = useRef(0);
+    useEffect(() => {
+        if (joinLines.length === 0) return;
+        const timer = setTimeout(() => setJoinLines((prev) => prev.slice(1)), 6000);
+        return () => clearTimeout(timer);
+    }, [joinLines]);
+
     useStreamEvents(streamId, pageState === 'ready' && stream?.status === 'live', {
         onSticker: (sticker, from) => {
             spawnSticker(sticker);
             pushReaction(sticker, from);
         },
-        onAuction: (lotId, auction) => applyAuction(lotId, auction),
+        onAuction: (lotId, auction) => {
+            applyAuction(lotId, auction);
+            if (auction.status === 'sold' && !splashedAuctionRef.current.has(auction.id)) {
+                splashedAuctionRef.current.add(auction.id);
+                showSplash(
+                    'auction_sold',
+                    `${t('live.auction.sold') || 'SOLD'} ${formatSatang(
+                        auction.winning_amount ?? auction.current_price,
+                    )}`,
+                    auction.winner_name ?? undefined,
+                );
+            }
+        },
         onSpotFocus: (focus) => setLastAnnounced({ lotId: focus.lotId, spotNumber: focus.spotNumber }),
+        onSpotSold: (sold) => {
+            showSplash(
+                'spot_sold',
+                `${t('live.viewer.spotWord') || 'Spot'} #${sold.spotNumber} ${t('live.viewer.soldWord') || 'sold'}`,
+                sold.buyerName ?? undefined,
+            );
+        },
+        onViewerJoined: (name) => {
+            if (seenJoinsRef.current.has(name)) return;
+            seenJoinsRef.current.add(name);
+            setJoinLines((prev) => [...prev.slice(-3), { id: joinIdRef.current++, name }]);
+        },
     });
 
     // ─── Announce a spot ("now opening") ───
@@ -2063,6 +2103,8 @@ export default function BroadcastConsolePage() {
                                     Stays mounted while collapsed so the floats
                                     queue keeps draining via onDone. */}
                                 <FloatingStickerLayer floats={stickerFloats} onDone={removeSticker} />
+                                {/* Sale/call-out splash — mirrors what viewers see. */}
+                                {!panelCollapsed && <EventSplashLayer splash={splash} />}
                             </div>
                             {/* Collapsed strip: status pill + viewer count next to
                                 the live thumbnail; the retry affordance rides here
@@ -3344,6 +3386,11 @@ export default function BroadcastConsolePage() {
                                     </div>
                                 ),
                             )}
+                            {joinLines.map((j) => (
+                                <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5">
+                                    {j.name} {t('live.viewer.joined') || 'joined'}
+                                </p>
+                            ))}
                             <ReactionFeedLines
                                 lines={reactionLines}
                                 anonymousLabel={t('live.stickers.someone') || 'Someone'}

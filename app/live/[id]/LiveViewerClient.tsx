@@ -13,8 +13,8 @@ import { useLiveKitRoom, type CameraSlot } from '@/lib/hooks/useLiveKitRoom';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { TrackAudio } from '@/components/live/TrackVideo';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
-import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
+import { EventSplashLayer, useEventSplash } from '@/components/live/EventSplash';
 import {
     bulkTiersOf,
     clampRatio,
@@ -50,6 +50,9 @@ import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
 
 // Stripe Elements only loads when a checkout actually opens.
 const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentSheet'), { ssr: false });
+// Save-a-card sheet for live bidding (platform-context Elements) — loaded on
+// the first NEEDS_CARD response, never before.
+const AddCardToBid = dynamic(() => import('@/components/live/AddCardToBid'), { ssr: false });
 
 /**
  * The VIEWER. Whatnot-style layout: two stacked feeds (face cam on top at the
@@ -65,7 +68,10 @@ const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentShee
 
 type PageState = 'loading' | 'denied' | 'ready';
 
-const CHAT_OVERLAY_COUNT = 6;
+// Chat is the room's event feed (purchases, lot starts, joins, hits ride it
+// as system lines) — it gets a bigger slice of the phone screen than a pure
+// social chat would.
+const CHAT_OVERLAY_COUNT = 10;
 
 function NotFoundBlock() {
     const { t } = useTranslation();
@@ -158,16 +164,19 @@ export default function LiveViewerClient() {
     const supabaseRef = useRef(createClient());
     const { connect, connected, remoteFeeds, participantCount, setSubscriptionQuality } =
         useLiveKitRoom();
-    // Admin-only receive-side stats overlay (field diagnostics). Fails closed.
+    // Admin role gates the quiet house-reserve gesture on the board. Fails closed.
     const { isAdmin } = usePremium();
 
-    // Desktop viewports pin the TOP simulcast layer instead of relying on
-    // adaptiveStream's element measurement, which served the middle layer to
-    // large screens (the fuzzy-viewer field report). Decided once at mount,
-    // BEFORE the connect effect can run (it waits on pageState/stream), so the
-    // Room is constructed with the right subscription mode.
+    // EVERY viewer pins the TOP simulcast layer (was desktop-only). Field
+    // report: phones intermittently received the 720p middle layer at
+    // ~940kbps — adaptiveStream's element measurement plus mobile BWE kept
+    // downgrading a room with a handful of viewers. Simulcast still protects
+    // genuinely weak connections (the SFU can temporarily serve lower under
+    // congestion); the pin makes top quality the resting state. Decided once
+    // at mount, BEFORE the connect effect can run, so the Room is constructed
+    // with adaptiveStream fully off.
     useEffect(() => {
-        if (window.innerWidth >= 1024) setSubscriptionQuality('high');
+        setSubscriptionQuality('high');
     }, [setSubscriptionQuality]);
 
     // Desktop chat column keeps the newest message in view. The mobile overlay
@@ -749,6 +758,23 @@ export default function LiveViewerClient() {
         );
     }, []);
 
+    // The big-moment splash over the video (SOLD, purchases, call-outs).
+    const { splash, showSplash } = useEventSplash();
+
+    // Whatnot-style join lines: ephemeral, deduped per session by name.
+    const [joinLines, setJoinLines] = useState<{ id: number; name: string }[]>([]);
+    const seenJoinsRef = useRef<Set<string>>(new Set());
+    const joinIdRef = useRef(0);
+    useEffect(() => {
+        if (joinLines.length === 0) return;
+        const timer = setTimeout(() => setJoinLines((prev) => prev.slice(1)), 6000);
+        return () => clearTimeout(timer);
+    }, [joinLines]);
+
+    // Track the auction each lot last reported so a state push can tell a
+    // FRESH hammer from a refetch of an old one (splash once per sale).
+    const splashedAuctionRef = useRef<Set<string>>(new Set());
+
     useStreamEvents(streamId, pageState === 'ready' && stream?.status === 'live', {
         onSticker: (sticker, from) => {
             spawnSticker(sticker);
@@ -756,13 +782,42 @@ export default function LiveViewerClient() {
         },
         onAuction: (lotId, auction) => {
             applyAuction(lotId, auction);
+            if (auction.status === 'sold' && !splashedAuctionRef.current.has(auction.id)) {
+                splashedAuctionRef.current.add(auction.id);
+                showSplash(
+                    'auction_sold',
+                    `${t('live.auction.sold') || 'SOLD'} ${formatSatang(
+                        auction.winning_amount ?? auction.current_price,
+                    )}`,
+                    auction.winner_name ?? undefined,
+                );
+            }
             // The hammer hold rides Realtime too, but the winner's checkout
             // bar is the product moment — refetch so it can't be late.
             if (auction.status === 'sold' && auction.winner_id === myUserId) {
                 void refetchDetail();
             }
         },
-        onSpotFocus: (focus) => setSpotFocus(focus),
+        onSpotFocus: (focus) => {
+            setSpotFocus(focus);
+            showSplash(
+                'now_opening',
+                `${t('live.viewer.nowOpening') || 'Now opening'} — ${t('live.viewer.spotWord') || 'Spot'} #${focus.spotNumber}`,
+                focus.buyerName ?? undefined,
+            );
+        },
+        onSpotSold: (sold) => {
+            showSplash(
+                'spot_sold',
+                `${t('live.viewer.spotWord') || 'Spot'} #${sold.spotNumber} ${t('live.viewer.soldWord') || 'sold'}`,
+                sold.buyerName ?? undefined,
+            );
+        },
+        onViewerJoined: (name) => {
+            if (seenJoinsRef.current.has(name)) return;
+            seenJoinsRef.current.add(name);
+            setJoinLines((prev) => [...prev.slice(-3), { id: joinIdRef.current++, name }]);
+        },
     });
 
     const sendSticker = useCallback(
@@ -790,6 +845,10 @@ export default function LiveViewerClient() {
     const [bidBusy, setBidBusy] = useState(false);
     const [customBidThb, setCustomBidThb] = useState('');
     const [showCustomBid, setShowCustomBid] = useState(false);
+    // NEEDS_CARD flow: the save-card sheet opens, and the bid that triggered
+    // it retries automatically once the card is on file.
+    const [cardSheetOpen, setCardSheetOpen] = useState(false);
+    const pendingBidRef = useRef<{ lotId: string; amountSatang: number } | null>(null);
 
     const placeBid = useCallback(
         async (lot: LiveLotRow, amountSatang: number) => {
@@ -806,6 +865,11 @@ export default function LiveViewerClient() {
                 if (res.ok && data.accepted === true) {
                     setShowCustomBid(false);
                     setCustomBidThb('');
+                    return;
+                }
+                if (data.code === 'NEEDS_CARD') {
+                    pendingBidRef.current = { lotId: lot.id, amountSatang };
+                    setCardSheetOpen(true);
                     return;
                 }
                 let message = t('live.auction.bidError') || 'Could not place your bid';
@@ -835,6 +899,18 @@ export default function LiveViewerClient() {
         },
         [bidBusy, applyAuction, showToast, t],
     );
+
+    // Card saved — retry the bid that hit NEEDS_CARD, topped up to the
+    // current minimum if the price moved while the sheet was open.
+    const onCardSaved = useCallback(() => {
+        setCardSheetOpen(false);
+        const pending = pendingBidRef.current;
+        pendingBidRef.current = null;
+        if (!pending) return;
+        const lot = lots.find((l) => l.id === pending.lotId);
+        if (!lot || lot.auction?.status !== 'live') return;
+        void placeBid(lot, Math.max(pending.amountSatang, lot.auction.min_next_bid));
+    }, [lots, placeBid]);
 
     // ─── Derived ───
     // Counts what a buyer can actually tap, not what the DB status column
@@ -1216,20 +1292,27 @@ export default function LiveViewerClient() {
                             {a.winning_amount != null && ` — ${formatSatang(a.winning_amount)}`}
                         </p>
                         {iWon ? (
-                            <>
-                                <p className="text-sm text-white font-bold mt-1 leading-snug">
-                                    {t('live.auction.youWon') ||
-                                        'You won! Check out now to lock it in.'}
-                                </p>
-                                {myHeldSpots.some((s) => s.stream_item_id === lot.id) && (
+                            myHeldSpots.some((s) => s.stream_item_id === lot.id) ? (
+                                // Auto-charge fell back to manual checkout —
+                                // the hold is the pay window.
+                                <>
+                                    <p className="text-sm text-white font-bold mt-1 leading-snug">
+                                        {t('live.auction.youWon') ||
+                                            'You won! Check out now to lock it in.'}
+                                    </p>
                                     <button
                                         onClick={() => setPaymentOpen(true)}
                                         className="mt-2 w-full h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
                                     >
                                         {t('live.auction.payNow') || 'Pay now'}
                                     </button>
-                                )}
-                            </>
+                                </>
+                            ) : (
+                                <p className="text-sm text-white font-bold mt-1 leading-snug">
+                                    {t('live.auction.youWonCharged') ||
+                                        'You won! Your saved card covers it — this one is yours.'}
+                                </p>
+                            )
                         ) : (
                             a.winner_name && (
                                 <p className="text-xs text-slate-300 font-bold mt-1">
@@ -1441,7 +1524,11 @@ export default function LiveViewerClient() {
         </div>
     );
 
-    const videoArea = (
+    // fullBleed = the mobile phone layout: a solo feed cover-crops to fill the
+    // whole screen (Whatnot-style) unless the broadcaster explicitly chose
+    // 'Fit'. Desktop keeps the slot defaults. No stats badges here — receive
+    // diagnostics are a console (breaker) surface, never a viewer one.
+    const videoArea = (fullBleed: boolean) => (
         <div className="relative w-full h-full bg-black overflow-hidden">
             {!isLive ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
@@ -1465,20 +1552,13 @@ export default function LiveViewerClient() {
                     </p>
                 </div>
             ) : feedCount === 1 ? (
-                <>
-                    <CroppedTrackVideo
-                        track={mainTrack ?? tableTrack}
-                        crop={cropFor(mainTrack ? 'main' : 'table')}
-                        slot={mainTrack ? 'main' : 'table'}
-                        className="absolute inset-0"
-                    />
-                    {isAdmin && (
-                        <TrackStatsBadge
-                            track={mainTrack ?? tableTrack}
-                            className="absolute top-16 left-3"
-                        />
-                    )}
-                </>
+                <CroppedTrackVideo
+                    track={mainTrack ?? tableTrack}
+                    crop={cropFor(mainTrack ? 'main' : 'table')}
+                    slot={mainTrack ? 'main' : 'table'}
+                    defaultFit={fullBleed ? 'cover' : undefined}
+                    className="absolute inset-0"
+                />
             ) : (
                 <div className="absolute inset-0 flex flex-col">
                     {/* Fixed arrangement — the seller's layout is authoritative:
@@ -1492,12 +1572,6 @@ export default function LiveViewerClient() {
                             slot="main"
                             className="absolute inset-0"
                         />
-                        {isAdmin && (
-                            <TrackStatsBadge
-                                track={mainTrack}
-                                className="absolute bottom-1.5 left-1.5"
-                            />
-                        )}
                     </div>
                     <div
                         className="relative border-t border-white/10"
@@ -1509,12 +1583,6 @@ export default function LiveViewerClient() {
                             slot="table"
                             className="absolute inset-0"
                         />
-                        {isAdmin && (
-                            <TrackStatsBadge
-                                track={tableTrack}
-                                className="absolute top-1.5 left-1.5"
-                            />
-                        )}
                     </div>
                 </div>
             )}
@@ -1568,6 +1636,9 @@ export default function LiveViewerClient() {
                 trees), both layers share one float list — the hidden twin
                 never animates, and the hook's sweep reaps on its behalf. */}
             <FloatingStickerLayer floats={stickerFloats} onDone={removeSticker} />
+
+            {/* Big-moment splash (SOLD / purchase / call-out). */}
+            <EventSplashLayer splash={splash} />
         </div>
     );
 
@@ -1854,7 +1925,7 @@ export default function LiveViewerClient() {
         <main className="h-[100dvh] bg-brand-darker text-white overflow-hidden">
             {/* ─── Mobile: full-bleed video with overlays ─── */}
             <div className="relative h-full lg:hidden">
-                {videoArea}
+                {videoArea(true)}
 
                 <div className="absolute top-0 inset-x-0 pt-[calc(var(--sat)+0.5rem)] px-3 bg-gradient-to-b from-black/70 to-transparent pb-6 pointer-events-none">
                     <div className="pointer-events-auto">{header}</div>
@@ -1863,8 +1934,13 @@ export default function LiveViewerClient() {
                 {/* Chat overlay + input + held bar over the lower feed */}
                 <div className="absolute bottom-0 inset-x-0 pb-[calc(var(--sab)+0.75rem)] px-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
                     {pollCard && <div className="mb-2">{pollCard}</div>}
-                    <div className="mb-2 max-h-[30vh] overflow-hidden flex flex-col justify-end [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+                    <div className="mb-2 max-h-[42vh] overflow-hidden flex flex-col justify-end [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
                         {chatMessages(CHAT_OVERLAY_COUNT)}
+                        {joinLines.map((j) => (
+                            <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5 px-2">
+                                {j.name} {t('live.viewer.joined') || 'joined'}
+                            </p>
+                        ))}
                         <ReactionFeedLines
                             lines={reactionLines}
                             anonymousLabel={t('live.stickers.someone') || 'Someone'}
@@ -1987,7 +2063,7 @@ export default function LiveViewerClient() {
             {/* ─── Desktop (lg:): video left, chat + board right ─── */}
             <div className="hidden lg:flex h-full">
                 <div className="flex-1 relative">
-                    {videoArea}
+                    {videoArea(false)}
                     <div className="absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/70 to-transparent pb-8">
                         {header}
                     </div>
@@ -1998,6 +2074,11 @@ export default function LiveViewerClient() {
                     {heldBar && <div className="px-3 pt-3">{heldBar}</div>}
                     <div className="flex-1 overflow-y-auto py-2 flex flex-col justify-end">
                         {chatMessages()}
+                        {joinLines.map((j) => (
+                            <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5 px-2">
+                                {j.name} {t('live.viewer.joined') || 'joined'}
+                            </p>
+                        ))}
                         <ReactionFeedLines
                             lines={reactionLines}
                             anonymousLabel={t('live.stickers.someone') || 'Someone'}
@@ -2028,6 +2109,28 @@ export default function LiveViewerClient() {
                     void releaseMyHolds();
                 }}
             />
+
+            {/* Save-a-card sheet (NEEDS_CARD) — the pending bid retries on save. */}
+            {cardSheetOpen && (
+                <div className="fixed inset-0 z-[70] flex items-end lg:items-center justify-center">
+                    <div
+                        className="absolute inset-0 bg-black/70"
+                        onClick={() => {
+                            pendingBidRef.current = null;
+                            setCardSheetOpen(false);
+                        }}
+                    />
+                    <div className="relative w-full max-w-md rounded-t-3xl lg:rounded-2xl bg-slate-900 border border-white/10 p-5 pb-[calc(var(--sab)+1.25rem)] lg:m-4 lg:pb-5">
+                        <AddCardToBid
+                            onSaved={onCardSaved}
+                            onCancel={() => {
+                                pendingBidRef.current = null;
+                                setCardSheetOpen(false);
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {houseSheet}
         </main>

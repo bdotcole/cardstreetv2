@@ -34,10 +34,21 @@ export interface SpotFocusEvent {
     at: number;
 }
 
+export interface SpotSoldEvent {
+    lotId: string;
+    spotNumber: number;
+    buyerName: string | null;
+    at: number;
+}
+
 export interface StreamEventHandlers {
     onSticker?: (sticker: StickerKey, from: string | null) => void;
     onAuction?: (lotId: string, auction: LiveAuctionState, at: number) => void;
     onSpotFocus?: (focus: SpotFocusEvent) => void;
+    /** A spot purchase finalized — the room's celebration moment. */
+    onSpotSold?: (sold: SpotSoldEvent) => void;
+    /** A viewer joined (ephemeral; token route relays it, client dedupes). */
+    onViewerJoined?: (name: string) => void;
 }
 
 function asAuctionState(value: unknown): LiveAuctionState | null {
@@ -95,6 +106,23 @@ export function useStreamEvents(
                     entity: typeof p.entity === 'string' && p.entity.trim() ? p.entity : null,
                     at: typeof p.at === 'number' ? p.at : Date.now(),
                 });
+            })
+            .on('broadcast', { event: 'spot_sold' }, ({ payload }) => {
+                const p = (payload ?? {}) as Partial<Record<keyof SpotSoldEvent, unknown>>;
+                if (typeof p.lotId !== 'string' || typeof p.spotNumber !== 'number') return;
+                handlersRef.current.onSpotSold?.({
+                    lotId: p.lotId,
+                    spotNumber: p.spotNumber,
+                    buyerName:
+                        typeof p.buyerName === 'string' && p.buyerName.trim() ? p.buyerName : null,
+                    at: typeof p.at === 'number' ? p.at : Date.now(),
+                });
+            })
+            .on('broadcast', { event: 'viewer_joined' }, ({ payload }) => {
+                const name = (payload as { name?: unknown } | null)?.name;
+                if (typeof name === 'string' && name.trim()) {
+                    handlersRef.current.onViewerJoined?.(name.trim());
+                }
             })
             .subscribe();
         return () => {

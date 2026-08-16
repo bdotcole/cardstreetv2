@@ -388,7 +388,7 @@ export async function postSystemChat(
  */
 export async function broadcastStreamEvent(
     streamId: string,
-    event: 'sticker' | 'auction' | 'spot_focus',
+    event: 'sticker' | 'auction' | 'spot_focus' | 'spot_sold' | 'viewer_joined',
     payload: Record<string, unknown>,
 ): Promise<void> {
     try {
@@ -483,6 +483,8 @@ export interface CloseAuctionResult {
     status: string;
     auction: AuctionEngineRow | null;
     winnerHoldSet: boolean;
+    /** The payment-vehicle spot the hammer put on hold (sold closes only). */
+    spotId: string | null;
     /** The turn number when this was a rip_till_hit turn auction. */
     spotNumber: number | null;
 }
@@ -519,12 +521,12 @@ export async function closeLiveAuction(
 
         if (a.status !== 'live') {
             // Someone else already hammered it — report the settled state.
-            return { closed: false, status: a.status, auction: a, winnerHoldSet: false, spotNumber: null };
+            return { closed: false, status: a.status, auction: a, winnerHoldSet: false, spotId: null, spotNumber: null };
         }
 
         const now = Date.now();
         if (!opts.force && Date.parse(a.ends_at) > now) {
-            return { closed: false, status: 'live', auction: a, winnerHoldSet: false, spotNumber: null };
+            return { closed: false, status: 'live', auction: a, winnerHoldSet: false, spotId: null, spotNumber: null };
         }
 
         const won = a.high_bidder_id !== null;
@@ -557,6 +559,7 @@ export async function closeLiveAuction(
         if (!updated) continue; // lost the race — re-read
 
         let winnerHoldSet = false;
+        let heldSpotId: string | null = null;
         let spotNumber: number | null = null;
         const targetSpotId = auctionTargetSpotId(updated);
         if (won && updated.winner_id) {
@@ -584,6 +587,7 @@ export async function closeLiveAuction(
                 console.error('[LiveBreaks] winner hold set failed:', spotErr.message);
             }
             winnerHoldSet = !!spotRow;
+            heldSpotId = spotRow?.id ?? null;
             spotNumber = spotRow?.spot_number ?? null;
             if (!spotRow) {
                 console.error(
@@ -599,7 +603,7 @@ export async function closeLiveAuction(
             spotNumber = unsoldSpot?.spot_number ?? null;
         }
 
-        return { closed: true, status: updated.status, auction: updated, winnerHoldSet, spotNumber };
+        return { closed: true, status: updated.status, auction: updated, winnerHoldSet, spotId: heldSpotId, spotNumber };
     }
 
     return { error: 'Auction is still receiving bids — try again', status: 409 };
@@ -616,6 +620,7 @@ export async function announceAuctionClose(
     auction: AuctionEngineRow,
     winnerHoldSet: boolean,
     spotNumber?: number | null,
+    autoCharged?: boolean,
 ): Promise<void> {
     const admin = createAdminClient();
     const baseName =
@@ -636,12 +641,15 @@ export async function announceAuctionClose(
             // Name is decoration.
         }
         const amount = formatSatang(auction.winning_amount ?? auction.current_price);
+        const payNote = autoCharged
+            ? '' // finalize already announced the purchase; SOLD stands alone.
+            : winnerHoldSet
+                ? ' — check out from your Spots bar to pay'
+                : '';
         await postSystemChat(
             streamId,
             lot.seller_id,
-            `SOLD: ${cardName} to ${winnerName ?? 'the high bidder'} for ${amount}${
-                winnerHoldSet ? ' — check out from your Spots bar to pay' : ''
-            }`,
+            `SOLD: ${cardName} to ${winnerName ?? 'the high bidder'} for ${amount}${payNote}`,
         );
     } else {
         await postSystemChat(streamId, lot.seller_id, `Auction ended with no bids: ${cardName}`);

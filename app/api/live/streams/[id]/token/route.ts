@@ -24,7 +24,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
+import { broadcastStreamEvent, requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { mintPublisherToken, mintViewerToken, roomNameForStream } from '@/lib/livekit';
 
 export async function POST(
@@ -93,6 +94,24 @@ export async function POST(
             }
             const room = stream.livekit_room || roomNameForStream(stream.id);
             const token = await mintViewerToken(room, user.id);
+
+            // Whatnot-style join line: relayed as an ephemeral broadcast (never
+            // persisted — reconnects would spam the chat table; clients dedupe
+            // by name). The seller's own monitor tokens don't announce.
+            if (user.id !== stream.seller_id) {
+                const admin = createAdminClient();
+                const { data: joiner } = await admin
+                    .from('profiles')
+                    .select('display_name')
+                    .eq('id', user.id)
+                    .maybeSingle<{ display_name: string | null }>();
+                if (joiner?.display_name) {
+                    await broadcastStreamEvent(stream.id, 'viewer_joined', {
+                        name: joiner.display_name,
+                    });
+                }
+            }
+
             return NextResponse.json({
                 room,
                 token,

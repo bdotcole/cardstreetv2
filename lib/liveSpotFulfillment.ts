@@ -21,7 +21,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { postSystemChat } from '@/lib/liveBreaks';
+import { broadcastStreamEvent, postSystemChat } from '@/lib/liveBreaks';
 
 interface LiveSpotOrderRow {
     id: string;
@@ -149,6 +149,9 @@ export async function finalizeLiveSpotOrders(
         }
 
         // ─── Announce newly sold spots (once, via the CAS winners) ───
+        // Two deliveries per sale: a persistent chat line (the room's event
+        // feed), and a 'spot_sold' broadcast the clients render as the big
+        // celebration splash — a chat line alone proved invisible mid-show.
         if (newlyPaidRows.length > 0) {
             const buyerId = spotOrders[0].buyer_id;
             const sellerId = spotOrders[0].seller_id;
@@ -156,9 +159,9 @@ export async function finalizeLiveSpotOrders(
             const [{ data: spots }, { data: buyerProfile }] = await Promise.all([
                 admin
                     .from('break_spots')
-                    .select('id, stream_id, spot_number')
+                    .select('id, stream_id, stream_item_id, spot_number')
                     .in('id', spotIds)
-                    .returns<{ id: string; stream_id: string; spot_number: number }[]>(),
+                    .returns<{ id: string; stream_id: string; stream_item_id: string; spot_number: number }[]>(),
                 admin
                     .from('profiles')
                     .select('display_name')
@@ -170,8 +173,14 @@ export async function finalizeLiveSpotOrders(
                 await postSystemChat(
                     spot.stream_id,
                     sellerId,
-                    `Spot ${spot.spot_number} -> @${buyerName}`,
+                    `${buyerName} bought Spot #${spot.spot_number}`,
                 );
+                await broadcastStreamEvent(spot.stream_id, 'spot_sold', {
+                    lotId: spot.stream_item_id,
+                    spotNumber: spot.spot_number,
+                    buyerName: buyerProfile?.display_name ?? null,
+                    at: Date.now(),
+                });
             }
         }
 

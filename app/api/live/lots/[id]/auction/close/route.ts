@@ -17,6 +17,7 @@ import {
     requireLotBroadcaster,
     shapeAuctionState,
 } from '@/lib/liveBreaks';
+import { autoChargeAuctionWin } from '@/lib/liveAuctionCharge';
 
 export async function POST(
     req: Request,
@@ -41,12 +42,22 @@ export async function POST(
         }
 
         if (result.closed && result.auction) {
+            // Whatnot model: the winner's saved card is charged at the hammer.
+            // Any failure keeps the checkout hold — the manual Spots-bar flow
+            // is the universal fallback, and the announcement says which.
+            let autoCharged = false;
+            if (result.auction.status === 'sold' && result.winnerHoldSet && result.spotId) {
+                autoCharged = (
+                    await autoChargeAuctionWin(lot, result.auction, result.spotId)
+                ).charged;
+            }
             await announceAuctionClose(
                 stream.id,
                 lot,
                 result.auction,
                 result.winnerHoldSet,
                 result.spotNumber,
+                autoCharged,
             );
         }
 

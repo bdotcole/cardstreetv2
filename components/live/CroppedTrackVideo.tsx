@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { LocalVideoTrack, RemoteTrack } from 'livekit-client';
 import { TrackVideo } from '@/components/live/TrackVideo';
-import { clampCrop, resolveFit, type FeedCrop } from '@/components/live/shared';
+import { clampCrop, resolveFit, type FeedCrop, type FeedFit } from '@/components/live/shared';
 
 /** Backdrop snapshot cadence — ambience only, so seconds-stale is fine. */
 const BACKDROP_REFRESH_MS = 2000;
@@ -48,6 +48,7 @@ export function CroppedTrackVideo({
     track,
     crop,
     slot = 'main',
+    defaultFit,
     className,
     muted = true,
     onClick,
@@ -56,13 +57,18 @@ export function CroppedTrackVideo({
     crop?: FeedCrop | null;
     /** Which layout slot this window renders — picks the default fit. */
     slot?: 'main' | 'table';
+    /** Replaces the SLOT default when the stored crop carries no explicit
+     *  fit — the mobile viewer's solo feed goes full-bleed ('cover',
+     *  Whatnot-style) without overriding a broadcaster who chose 'Fit'. */
+    defaultFit?: FeedFit;
     /** Positions the window (e.g. 'absolute inset-0'); overflow-hidden is added here. */
     className?: string;
     muted?: boolean;
     onClick?: () => void;
 }) {
     const c = clampCrop(crop);
-    const fit = resolveFit(slot, c);
+    const fit: FeedFit =
+        c?.fit === 'cover' || c?.fit === 'contain' ? c.fit : defaultFit ?? resolveFit(slot, c);
 
     // The attached video's intrinsic aspect (w/h). Null until measured — the
     // hug box falls back to the plain full-slot contain until then.

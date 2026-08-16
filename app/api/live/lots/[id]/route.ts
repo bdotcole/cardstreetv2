@@ -10,7 +10,8 @@
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireLotBroadcaster } from '@/lib/liveBreaks';
+import { postSystemChat, requireLotBroadcaster } from '@/lib/liveBreaks';
+import { formatSatang } from '@/components/live/shared';
 
 export async function PATCH(
     req: Request,
@@ -151,6 +152,17 @@ export async function PATCH(
                 .from('streams')
                 .update({ current_item_id: lot.id })
                 .eq('id', stream.id);
+            // The event feed's lot-start line (auction lots announce from
+            // their own start route with the opening bid instead).
+            if (lot.item_type !== 'auction') {
+                const lotName =
+                    typeof (lot.card_data as { name?: unknown } | null)?.name === 'string'
+                        ? (lot.card_data as { name: string }).name
+                        : 'Next lot';
+                const priceNote =
+                    lot.spot_price != null ? ` — ${formatSatang(lot.spot_price)}/spot` : '';
+                await postSystemChat(stream.id, lot.seller_id, `Now on the block: ${lotName}${priceNote}`);
+            }
         } else if (updates.status && stream.current_item_id === lot.id) {
             await admin
                 .from('streams')

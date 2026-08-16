@@ -35,6 +35,7 @@ import {
     type AuctionEngineRow,
     type LotRow,
 } from '@/lib/liveBreaks';
+import { autoChargeAuctionWin } from '@/lib/liveAuctionCharge';
 
 const BID_WINDOW_SECONDS = 10;
 const BID_MAX_PER_WINDOW = 15;
@@ -82,6 +83,27 @@ export async function POST(
         }
 
         const admin = createAdminClient();
+
+        // Card on file is the ticket to bid (Whatnot model): the hammer
+        // charges it off-session, so a cardless bid would be an empty
+        // commitment. 402 tells the client to open the save-card sheet.
+        const { data: bidderProfile } = await admin
+            .from('profiles')
+            .select('stripe_customer_id_th, live_default_payment_method')
+            .eq('id', user.id)
+            .maybeSingle<{
+                stripe_customer_id_th: string | null;
+                live_default_payment_method: string | null;
+            }>();
+        if (!bidderProfile?.stripe_customer_id_th || !bidderProfile.live_default_payment_method) {
+            return NextResponse.json(
+                {
+                    error: 'Add a card to bid — the winning bid is charged automatically',
+                    code: 'NEEDS_CARD',
+                },
+                { status: 402 },
+            );
+        }
         const { data: lot } = await admin
             .from('stream_items')
             .select(LOT_GUARD_COLS)
@@ -131,12 +153,19 @@ export async function POST(
             if (result.reason === 'ended') {
                 const closed = await closeLiveAuction(lot);
                 if (!('error' in closed) && closed.closed && closed.auction) {
+                    let autoCharged = false;
+                    if (closed.auction.status === 'sold' && closed.winnerHoldSet && closed.spotId) {
+                        autoCharged = (
+                            await autoChargeAuctionWin(lot, closed.auction, closed.spotId)
+                        ).charged;
+                    }
                     await announceAuctionClose(
                         stream.id,
                         lot,
                         closed.auction,
                         closed.winnerHoldSet,
                         closed.spotNumber,
+                        autoCharged,
                     );
                 }
             }
