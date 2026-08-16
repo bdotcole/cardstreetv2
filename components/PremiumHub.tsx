@@ -38,7 +38,9 @@ function isNativeShell(): boolean {
 export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
   const { loading, premium, status, refresh } = usePremium();
   const { t } = useTranslation();
-  const upgraded = useSearchParams()?.get('upgraded') === '1';
+  const searchParams = useSearchParams();
+  const upgraded = searchParams?.get('upgraded') === '1';
+  const sessionId = searchParams?.get('session_id') ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,14 +71,32 @@ export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' 
     { icon: 'fa-bell', title: t('pro.alertsTitle'), desc: t('pro.alertsDesc') },
   ];
 
-  // Back from Stripe Checkout: the webhook may land a beat after the redirect,
-  // so refresh the cached entitlement now and once more shortly after.
+  // Back from Stripe Checkout. Claim the entitlement from the session before
+  // reading status: the webhook may land a beat after the redirect, or -- if
+  // its destination is misconfigured -- never at all, which would strand a
+  // paying subscriber on the activating spinner. /api/premium/finalize is
+  // idempotent, so racing the webhook is harmless. The delayed second refresh
+  // stays for the case where the webhook wins.
   useEffect(() => {
     if (!upgraded) return;
-    refresh();
-    const timer = setTimeout(() => refresh(), 4000);
-    return () => clearTimeout(timer);
-  }, [upgraded, refresh]);
+    let active = true;
+    (async () => {
+      if (sessionId) {
+        try {
+          await fetch('/api/premium/finalize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          });
+        } catch {
+          // Fall through -- the refreshes below still pick up a webhook write.
+        }
+      }
+      if (active) refresh();
+    })();
+    const timer = setTimeout(() => { if (active) refresh(); }, 4000);
+    return () => { active = false; clearTimeout(timer); };
+  }, [upgraded, sessionId, refresh]);
 
   const startCheckout = async () => {
     setBusy(true);

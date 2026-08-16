@@ -61,7 +61,10 @@ export async function POST() {
       // Rides on the subscription object, which is what every lifecycle
       // webhook event carries — the entitlement writer keys off this.
       subscription_data: { metadata },
-      success_url: `${base}/premium?upgraded=1`,
+      // session_id lets the return trip claim the entitlement directly via
+      // /api/premium/finalize, so activation doesn't depend on the webhook
+      // being delivered. Stripe substitutes the placeholder on redirect.
+      success_url: `${base}/premium?upgraded=1&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/premium`,
     });
 
