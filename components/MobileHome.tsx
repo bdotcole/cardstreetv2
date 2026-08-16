@@ -2,7 +2,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review, Offer } from '@/types';
@@ -135,6 +135,39 @@ export default function HomePage() {
     const { hasBeta: hasLiveBeta } = useBetaFeatures();
     const [shopChooserDismissed, setShopChooserDismissed] = useState(false);
     const showShopChooser = hasLiveBeta('live_streams') && !shopChooserDismissed;
+
+    // Picking Marketplace pushes a history entry so the phone's BACK gesture
+    // (or button) returns to the chooser instead of leaving the Shop tab — the
+    // chooser is a real navigation step, and without this it was a one-way
+    // door. Deliberately no in-UI back button: the system gesture is the
+    // affordance. The ref proves OUR entry is the one on top, so the back
+    // handler never calls history.back() blind (which could walk the WebView
+    // off the app).
+    const shopHistoryRef = useRef(false);
+    const enterMarketplace = useCallback(() => {
+        setShopChooserDismissed(true);
+        try {
+            window.history.pushState({ csShop: 'marketplace' }, '');
+            shopHistoryRef.current = true;
+        } catch {
+            // History unavailable — the Capacitor layer's direct-restore
+            // fallback still covers the Android back button.
+            shopHistoryRef.current = false;
+        }
+    }, []);
+
+    // The single restore path: popstate fires for the browser/iOS swipe-back
+    // AND for the Android back button (whose handler delegates here), so the
+    // chooser comes back exactly once per press either way.
+    useEffect(() => {
+        const onPop = () => {
+            if (!shopHistoryRef.current) return;
+            shopHistoryRef.current = false;
+            setShopChooserDismissed(false);
+        };
+        window.addEventListener('popstate', onPop);
+        return () => window.removeEventListener('popstate', onPop);
+    }, []);
 
     // Deep-link handling for Stripe Connect onboarding redirects.
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
@@ -1484,7 +1517,10 @@ export default function HomePage() {
         selectedCard,
         selectedListing,
         buylistCard,
-        activeTab
+        activeTab,
+        // True while the Marketplace is showing BECAUSE the user picked it in
+        // the Shop chooser — the state the back button must step out of.
+        marketplaceFromChooser: hasLiveBeta('live_streams') && shopChooserDismissed,
     });
 
     // Update refs whenever state changes
@@ -1495,9 +1531,10 @@ export default function HomePage() {
             selectedCard,
             selectedListing,
             buylistCard,
-            activeTab
+            activeTab,
+            marketplaceFromChooser: hasLiveBeta('live_streams') && shopChooserDismissed,
         };
-    }, [isPaymentModalOpen, isCartOpen, selectedCard, selectedListing, buylistCard, activeTab]);
+    }, [isPaymentModalOpen, isCartOpen, selectedCard, selectedListing, buylistCard, activeTab, hasLiveBeta, shopChooserDismissed]);
 
     // Global Back Button Handling & Deep Links
     useEffect(() => {
@@ -1552,6 +1589,21 @@ export default function HomePage() {
                 if (state.activeTab === 'vault') {
                     const unconsumed = window.dispatchEvent(new CustomEvent('vault-back', { cancelable: true }));
                     if (!unconsumed) return;
+                }
+
+                // Layer 2.5: Shop chooser. The Marketplace opened from the
+                // Live-vs-Marketplace fork is one step deep, so back returns to
+                // that fork rather than dropping the user on Explore. Delegated
+                // to history (popstate owns the restore) so the entry pushed on
+                // the way in is consumed too — direct restore only when the
+                // push never happened.
+                if (state.activeTab === 'marketplace' && state.marketplaceFromChooser) {
+                    if (shopHistoryRef.current) {
+                        window.history.back();
+                    } else {
+                        setShopChooserDismissed(false);
+                    }
+                    return;
                 }
 
                 // Layer 3: Navigation History / Root
@@ -1925,7 +1977,7 @@ export default function HomePage() {
                             />
                         )}
                         {activeTab === 'marketplace' && showShopChooser && (
-                            <LiveShopChooser onMarketplace={() => setShopChooserDismissed(true)} />
+                            <LiveShopChooser onMarketplace={enterMarketplace} />
                         )}
                         {activeTab === 'marketplace' && !showShopChooser && (
                             <Marketplace
