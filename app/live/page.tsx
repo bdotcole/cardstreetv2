@@ -2,9 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getGame, getGameLabel } from '@/lib/games';
 import type { LiveStreamRow } from '@/components/live/shared';
+
+// Sign-in for logged-out arrivals (shared feed links) — loaded on 401 only.
+const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false });
 
 /**
  * Live Breaks hub: a pure Whatnot-style joinable feed — live shows first,
@@ -18,6 +22,8 @@ import type { LiveStreamRow } from '@/components/live/shared';
 
 type FeedState =
     | { name: 'loading' }
+    // 401: no session (a shared link opened logged-out) — ask for sign-in.
+    | { name: 'auth' }
     | { name: 'denied' }
     | { name: 'error' }
     | { name: 'ready'; streams: LiveStreamRow[] };
@@ -132,12 +138,21 @@ export default function LiveHubPage() {
     const [feed, setFeed] = useState<FeedState>({ name: 'loading' });
     const [refreshing, setRefreshing] = useState(false);
 
+    const [authModalOpen, setAuthModalOpen] = useState(false);
+
     const load = useCallback(async () => {
         try {
             const res = await fetch('/api/live/streams');
+            if (res.status === 401) {
+                // Live is GA for signed-in users now — a logged-out share-link
+                // arrival gets a sign-in prompt, never a fake 404.
+                setFeed({ name: 'auth' });
+                setAuthModalOpen(true);
+                return;
+            }
             if (!res.ok) {
-                // 401/403/404/503 all render the generic not-found block — the
-                // server's no-hint posture carried through to the client.
+                // 403/404/503 keep the generic not-found block — the server's
+                // no-hint posture carried through to the client.
                 setFeed(res.status >= 500 ? { name: 'error' } : { name: 'denied' });
                 return;
             }
@@ -161,6 +176,39 @@ export default function LiveHubPage() {
             setRefreshing(false);
         }
     }, [refreshing, load]);
+
+    if (feed.name === 'auth') {
+        return (
+            <main className="min-h-screen bg-brand-darker text-white">
+                <div className="min-h-[70vh] flex items-center justify-center px-6 text-center">
+                    <div className="max-w-md">
+                        <i className="fa-solid fa-tower-broadcast text-brand-cyan text-4xl mb-4"></i>
+                        <h1 className="text-xl font-bold mb-2">
+                            {t('live.viewer.signInToWatch') || 'Sign in to watch this live show'}
+                        </h1>
+                        <p className="opacity-70 mb-6 text-sm leading-relaxed">
+                            {t('live.viewer.signInToWatchDesc') ||
+                                'Create a free account or sign in — the show opens right after.'}
+                        </p>
+                        <button
+                            onClick={() => setAuthModalOpen(true)}
+                            className="inline-block px-6 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider bg-brand-cyan text-black hover:opacity-90 transition-opacity"
+                        >
+                            {t('live.viewer.signInCta') || 'Sign in'}
+                        </button>
+                    </div>
+                </div>
+                <AuthModal
+                    isOpen={authModalOpen}
+                    onClose={() => {
+                        setAuthModalOpen(false);
+                        setFeed({ name: 'loading' });
+                        void load();
+                    }}
+                />
+            </main>
+        );
+    }
 
     if (feed.name === 'denied') {
         return (

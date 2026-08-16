@@ -53,6 +53,8 @@ const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentShee
 // Save-a-card sheet for live bidding (platform-context Elements) — loaded on
 // the first NEEDS_CARD response, never before.
 const AddCardToBid = dynamic(() => import('@/components/live/AddCardToBid'), { ssr: false });
+// Sign-in for logged-out share-link arrivals — loaded only when a 401 lands.
+const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false });
 
 /**
  * The VIEWER. Whatnot-style layout: two stacked feeds (face cam on top at the
@@ -66,7 +68,10 @@ const AddCardToBid = dynamic(() => import('@/components/live/AddCardToBid'), { s
  * chat rows in place. LiveKit only carries the video.
  */
 
-type PageState = 'loading' | 'denied' | 'ready';
+// 'auth' = the request bounced 401: a share link opened without a session.
+// Rendering that as the 404 block was the field-reported "share link is
+// broken" — the fix is a sign-in screen that reloads the show on success.
+type PageState = 'loading' | 'auth' | 'denied' | 'ready';
 
 // Chat is the room's event feed (purchases, lot starts, joins, hits ride it
 // as system lines) — it gets a bigger slice of the phone screen than a pure
@@ -186,6 +191,10 @@ export default function LiveViewerClient() {
         chatEndRef.current?.scrollIntoView({ block: 'nearest' });
     }, [chat.length]);
 
+    // Bumped after a sign-in so the load below re-runs with the new session.
+    const [authNonce, setAuthNonce] = useState(0);
+    const [authModalOpen, setAuthModalOpen] = useState(false);
+
     // ─── Initial load ───
     useEffect(() => {
         if (!streamId) return;
@@ -199,6 +208,11 @@ export default function LiveViewerClient() {
                     supabaseRef.current.auth.getUser(),
                 ]);
                 if (cancelled) return;
+                if (detailRes.status === 401) {
+                    setPageState('auth');
+                    setAuthModalOpen(true);
+                    return;
+                }
                 if (!detailRes.ok) {
                     setPageState('denied');
                     return;
@@ -229,7 +243,7 @@ export default function LiveViewerClient() {
         return () => {
             cancelled = true;
         };
-    }, [streamId]);
+    }, [streamId, authNonce]);
 
     // Tolerant re-sync used after a Realtime gap (backgrounded WebView,
     // channel error). Never flips pageState — a transient failure mid-show
@@ -945,6 +959,43 @@ export default function LiveViewerClient() {
 
     const displayName = (userId: string, fallback?: { display_name: string | null } | null) =>
         fallback?.display_name || profiles.get(userId)?.display_name || '...';
+
+    // A share link opened without a session: ask for sign-in and reload the
+    // show once the modal closes (still signed out -> the CTA reopens it).
+    if (pageState === 'auth') {
+        return (
+            <main className="min-h-screen bg-brand-darker text-white">
+                <div className="min-h-[70vh] flex items-center justify-center px-6 text-center">
+                    <div className="max-w-md">
+                        <i className="fa-solid fa-tower-broadcast text-brand-cyan text-4xl mb-4"></i>
+                        <h1 className="text-xl font-bold mb-2">
+                            {t('live.viewer.signInToWatch') || 'Sign in to watch this live show'}
+                        </h1>
+                        <p className="opacity-70 mb-6 text-sm leading-relaxed">
+                            {t('live.viewer.signInToWatchDesc') ||
+                                'Create a free account or sign in — the show opens right after.'}
+                        </p>
+                        <button
+                            onClick={() => setAuthModalOpen(true)}
+                            className="inline-block px-6 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider bg-brand-cyan text-black hover:opacity-90 transition-opacity"
+                        >
+                            {t('live.viewer.signInCta') || 'Sign in'}
+                        </button>
+                    </div>
+                </div>
+                <AuthModal
+                    isOpen={authModalOpen}
+                    onClose={() => {
+                        setAuthModalOpen(false);
+                        // Re-run the load: signed in -> the show opens in
+                        // place; still signed out -> we land back here.
+                        setPageState('loading');
+                        setAuthNonce((n) => n + 1);
+                    }}
+                />
+            </main>
+        );
+    }
 
     if (pageState === 'denied') {
         return (

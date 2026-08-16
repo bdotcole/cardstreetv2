@@ -1520,6 +1520,100 @@ export async function sendShowLiveNotification(
     }
 }
 
+/**
+ * Go-live PUSH blast to every app install — the "we're live" announcement for
+ * users who did NOT reserve a presale spot (those get the richer email+push
+ * via sendShowLiveNotification; pass them in excludeUserIds along with the
+ * seller). Push-only by design: an email blast to every account on every
+ * go-live would read as spam and slam the Apple-relay bounce problem, while a
+ * push is exactly what "the shop you have installed just went live" should be.
+ *
+ * One paged query over notification_preferences (fcm_token holders only,
+ * PostgREST's 1000-row cap respected), show_live_push honored (default ON),
+ * sends fanned out in small chunks. Best-effort per recipient: one dead token
+ * must never stop the blast. Returns the dispatched count.
+ */
+export async function sendShowLivePushBlast(
+    show: { streamId: string; title: string },
+    excludeUserIds: string[],
+): Promise<number> {
+    const courier = getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping show-live blast');
+        return 0;
+    }
+    const supabaseAdmin = getSupabaseAdmin();
+    const excluded = new Set(excludeUserIds);
+    const showUrl = `${APP_URL}/live/${show.streamId}`;
+    const templateId = (process.env.COURIER_SHOW_LIVE_TEMPLATE_ID || '').trim();
+
+    // ─── Collect recipients (paged — .limit() alone silently caps at 1000) ───
+    interface PrefRow {
+        user_id: string;
+        fcm_token: string | null;
+        show_live_push?: boolean | null;
+    }
+    const recipients: { userId: string; fcmToken: string }[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabaseAdmin
+            .from('notification_preferences')
+            .select('*')
+            .not('fcm_token', 'is', null)
+            .order('user_id', { ascending: true })
+            .range(from, from + PAGE - 1)
+            .returns<PrefRow[]>();
+        if (error) {
+            console.error('[Courier] show-live blast recipient query failed:', error.message);
+            break;
+        }
+        for (const row of data ?? []) {
+            if (!row.fcm_token || excluded.has(row.user_id)) continue;
+            // Absent column / no explicit opt-out = ON, like every other alert.
+            if (row.show_live_push === false) continue;
+            recipients.push({ userId: row.user_id, fcmToken: row.fcm_token });
+        }
+        if (!data || data.length < PAGE) break;
+    }
+    if (recipients.length === 0) return 0;
+
+    // ─── Fan out in bounded chunks ───
+    let sent = 0;
+    const CHUNK = 10;
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+        const chunk = recipients.slice(i, i + CHUNK);
+        const results = await Promise.allSettled(
+            chunk.map(async ({ userId, fcmToken }) => {
+                const message: Record<string, unknown> = {
+                    to: buildRecipient(null, fcmToken),
+                    routing: buildRouting(false, true, templateId ? 'template' : 'inline'),
+                    data: {
+                        title: show.title,
+                        showUrl,
+                        streamId: show.streamId,
+                        type: 'stream_live',
+                    },
+                };
+                if (templateId) {
+                    message.template = templateId;
+                } else {
+                    message.content = {
+                        title: `${show.title} is live now`,
+                        body: `Watch the live break now — ดูไลฟ์ได้เลยตอนนี้: ${showUrl}`,
+                    };
+                }
+                await courier.send.message({ message: message as any });
+                return userId;
+            }),
+        );
+        sent += results.filter((r) => r.status === 'fulfilled').length;
+    }
+    console.log(
+        `[Courier] show-live blast for ${show.streamId}: ${sent}/${recipients.length} pushes dispatched`,
+    );
+    return sent;
+}
+
 // ─── OBO Best-Offer notifications ────────────────────────────────────────────
 
 /**

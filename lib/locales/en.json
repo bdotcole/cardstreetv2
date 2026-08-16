@@ -1019,6 +1019,9 @@
             "rippingNow": "Now ripping",
             "joined": "joined",
             "soldWord": "sold",
+            "signInToWatch": "Sign in to watch this live show",
+            "signInToWatchDesc": "Create a free account or sign in — the show opens right after.",
+            "signInCta": "Sign in",
             "claimAuction": "This lot is auctioned — place a bid instead",
             "claimNotNextTurn": "Turns sell one at a time — this one is not up yet"
         },
