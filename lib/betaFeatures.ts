@@ -25,6 +25,22 @@ export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast';
 // supabase/migrations/20260704_live_streams.sql.
 export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast'];
 
+/**
+ * Features GRADUATED to general availability (2026-08-16 founder call:
+ * "make the live section available for viewers"): every signed-in user
+ * passes the per-user grant check — no profiles.beta_features entry needed.
+ * Sign-in and the global kill switch STILL apply, so
+ * `UPDATE beta_feature_flags SET enabled=false WHERE feature='live_streams'`
+ * remains the one-statement off switch for everyone.
+ *
+ * Broadcasting ('live_broadcast') is deliberately NOT here — it stays
+ * invite-only behind the admin wall until breaker-application onboarding
+ * starts granting it. The RLS twin of this graduation is
+ * supabase/migrations/20260819_live_viewers_ga.sql (Realtime respects RLS,
+ * so without it a GA viewer's board/chat would never update live).
+ */
+export const GA_FEATURES: readonly BetaFeature[] = ['live_streams'];
+
 export function isBetaFeature(value: unknown): value is BetaFeature {
   return typeof value === 'string' && (BETA_FEATURES as readonly string[]).includes(value);
 }
@@ -32,8 +48,9 @@ export function isBetaFeature(value: unknown): value is BetaFeature {
 /**
  * Does this user pass the beta gate for a feature, given their cached grants?
  * `betaFeatures` is profiles.beta_features (may be null on old rows); admins
- * pass unconditionally. The global kill switch is enforced separately on the
- * server -- a `true` here still yields no access while the switch is off.
+ * pass unconditionally, and GA features pass for everyone. The global kill
+ * switch is enforced separately on the server -- a `true` here still yields
+ * no access while the switch is off.
  */
 export function hasBeta(
   feature: BetaFeature,
@@ -41,5 +58,6 @@ export function hasBeta(
   isAdmin: boolean,
 ): boolean {
   if (isAdmin) return true;
+  if ((GA_FEATURES as readonly string[]).includes(feature)) return true;
   return Array.isArray(betaFeatures) && betaFeatures.includes(feature);
 }
