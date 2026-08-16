@@ -103,6 +103,14 @@ export default async function RootLayout({
     const theme: 'dark' | 'light' =
         (await cookies()).get('cs_theme')?.value === 'light' ? 'light' : 'dark'
 
+    // Trailing whitespace in the dashboard value lands verbatim in the GA
+    // <script> src. A raw newline there is an invalid CSS selector, so the
+    // querySelector next/script uses to dedupe the tag throws, the script never
+    // loads, and window.gtag stays undefined — analytics silently records
+    // nothing while every page load emits an uncaught SyntaxError. Trim so a
+    // stray newline in the env var can't take the tag down again.
+    const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()
+
     return (
         <html lang={lang === 'EN' ? 'en' : 'th'} className={theme === 'light' ? 'theme-light' : undefined}>
             <head>
@@ -146,9 +154,7 @@ export default async function RootLayout({
                         }),
                     }}
                 />
-                {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
-                    <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
-                )}
+                {gaId && <GoogleAnalytics gaId={gaId} />}
                 {/* Meta Pixel. Loads inside the iOS WebView and on web; conversion
                     events are sent via lib/metaEvents.ts (which also bridges to the
                     native FB SDK in the app). Inert until NEXT_PUBLIC_META_PIXEL_ID
