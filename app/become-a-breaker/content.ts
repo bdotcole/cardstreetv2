@@ -396,7 +396,7 @@ const TH: BreakerCopy = {
             { user: 'bkkcollector', text: 'ใบนี้งานเนี๊ยบมาก' },
             { user: 'preechaa', text: 'เปิดกล่องต่อไปเลยมั้ย' },
         ],
-        purchaseToast: { title: 'สล็อต 4 มีคนจองแล้ว', detail: 'สล็อต 4 ชำระเงินแล้ว' },
+        purchaseToast: { title: 'สล็อต 4 มีคนจองแล้ว', detail: 'ชำระเงินแล้ว' },
     },
 
     whyTitle: 'ทำไมต้องจัด Break บน Cardstreet?',
