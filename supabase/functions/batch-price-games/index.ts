@@ -77,8 +77,13 @@ const JP_SLUG_OVERRIDES: Record<string, string> = {
 };
 
 // Name-resolved sets whose JustTCG name differs from ours (keyed by our set id).
+// byName below is an exact normalized-name lookup, so any spelling gap between our
+// catalog source and JustTCG leaves the set permanently unpriced rather than fuzzy-
+// matched. mtg-hoc: Scryfall calls it "The Hobbit Eternal", JustTCG "The Hobbit:
+// Eternal-Legal" — normalizing to "the hobbit eternal" vs "the hobbit eternal legal".
 const NAME_SLUG_OVERRIDES: Record<string, string> = {
   'lorcana-8': 'reign-of-jafar-disney-lorcana',
+  'mtg-hoc': 'the-hobbit-eternal-legal-magic-the-gathering',
 };
 
 // Set-name key for resolving JustTCG set slugs. Card-level matching lives in
