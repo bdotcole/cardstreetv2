@@ -83,12 +83,21 @@ export function getWebhookSecretForRegion(region: StripeRegion): string {
  * platform (the original event destination's secret). To serve both
  * destinations on one endpoint, we try each secret in turn when verifying.
  *
- * Env layout:
- *   STRIPE_WEBHOOK_SECRET_TH         - platform-account events (account.updated, etc.)
- *   STRIPE_WEBHOOK_SECRET_TH_CONNECT - connected-account events (payment_intent.*)
+ * Env layout — BOTH slots are just "a signing secret to try". Neither name
+ * constrains which destination's secret it holds, because verification walks
+ * the whole list:
+ *   STRIPE_WEBHOOK_SECRET_TH         - primary (required)
+ *   STRIPE_WEBHOOK_SECRET_TH_CONNECT - companion (optional)
  *
- * The CONNECT variant is optional; if unset, only the primary secret is
- * tried (back-compat with the old single-destination setup).
+ * As deployed on TH the two are the REVERSE of what the names suggest:
+ * _TH holds the Connect-scoped destination's secret (marketplace
+ * payment_intent.* + account.updated, we_1U2RyD…), and _TH_CONNECT holds the
+ * platform-scoped one (CardStreet Pro billing: checkout.session.completed +
+ * customer.subscription.*, we_1U5MSc…). That arrangement is deliberate: the
+ * Connect secret was already live in _TH, and swapping the two to match the
+ * names would take marketplace payment verification down during the window
+ * between the env change and the redeploy. Don't "fix" the naming by
+ * overwriting _TH.
  */
 export function getAllWebhookSecretsForRegion(region: StripeRegion): string[] {
     const secrets: string[] = [];
