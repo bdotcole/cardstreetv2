@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { requireBeta } from '@/lib/betaAuth';
+import { isFeatureEnabled, requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
     SELLER_UNVERIFIED_TOAST,
@@ -76,8 +76,17 @@ export async function GET(req: Request) {
             return NextResponse.json({ streams: data ?? [] });
         }
 
-        const gate = await requireBeta('live_streams');
-        if (gate instanceof NextResponse) return gate;
+        // The feed is public content — a logged-out visitor browsing shows is
+        // the top of the funnel, not an intruder. Only the kill switch gates
+        // it; hosting/scheduling (the other branches) still require the
+        // broadcaster grant. `visibility='public'` below keeps unlisted shows
+        // link-only, exactly as before.
+        if (!(await isFeatureEnabled('live_streams'))) {
+            return NextResponse.json(
+                { error: 'This feature is temporarily unavailable', code: 'FEATURE_DISABLED' },
+                { status: 503 },
+            );
+        }
 
         const admin = createAdminClient();
         const { data, error } = await admin

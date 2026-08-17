@@ -1526,6 +1526,62 @@ export async function sendShowLiveNotification(
 }
 
 /**
+ * "Starts in N minutes" heads-up to a Get-notified subscriber. Same delivery
+ * shape as the go-live alert (email + push, prefs default ON, never throws) —
+ * only the copy and the deep-link intent differ: this one is a calendar nudge,
+ * the go-live one is a watch-now alert, and a subscriber gets both.
+ */
+export async function sendShowStartingSoonNotification(
+    userId: string,
+    show: { streamId: string; title: string; minutes: number },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping starting-soon alert'); return false; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    // Shares the show_live_* prefs: someone who muted show alerts does not
+    // want the heads-up either.
+    const wantEmail = prefs.show_live_email !== false && !!email;
+    const wantPush = prefs.show_live_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
+    const templateId = (process.env.COURIER_SHOW_SOON_TEMPLATE_ID || '').trim();
+    const routing = buildRouting(wantEmail, wantPush, templateId ? 'template' : 'inline');
+    const showUrl = `${APP_URL}/live/${show.streamId}`;
+
+    const message: Record<string, unknown> = {
+        to: recipient,
+        routing,
+        data: {
+            title: show.title,
+            showUrl,
+            minutes: show.minutes,
+            streamId: show.streamId,
+            type: 'stream_starting_soon',
+        },
+    };
+    if (templateId) {
+        message.template = templateId;
+    } else {
+        message.content = {
+            title: `${show.title} starts in ${show.minutes} minutes`,
+            body:
+                `The show you asked to be reminded about starts soon: ${showUrl} ` +
+                `ไลฟ์ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่ม: ${showUrl}`,
+        };
+    }
+
+    try {
+        await courier.send.message({ message: message as any });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending starting-soon alert to ${userId}:`, error);
+        return false;
+    }
+}
+
+/**
  * Go-live PUSH blast to every app install — the "we're live" announcement for
  * users who did NOT reserve a presale spot (those get the richer email+push
  * via sendShowLiveNotification; pass them in excludeUserIds along with the

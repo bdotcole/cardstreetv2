@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import type { User } from '@supabase/supabase-js';
-import { requireBeta } from '@/lib/betaAuth';
+import { isFeatureEnabled, requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { minNextBidSatang } from '@/lib/auctionRules';
@@ -245,6 +245,62 @@ export async function requireViewerOrSeller(
     // Same 404 the gate produced — a prober learns nothing from the fallback.
     if (!user || !stream || stream.seller_id !== user.id) return gate;
     return { user, stream, isSeller: true };
+}
+
+export interface PublicViewerContext {
+    /** Null for a logged-out visitor — watching needs no account. */
+    user: User | null;
+    stream: StreamRow;
+    isSeller: boolean;
+}
+
+/**
+ * The WATCHING gate: anyone, signed in or not. A live show is public content
+ * (that is the point of a shared link), so this resolves the stream and
+ * whoever the caller happens to be, without ever refusing for lack of a
+ * session.
+ *
+ * Read paths only — detail, feed, chat history, polls, and the viewer's
+ * LiveKit token. Every path that SPENDS or SAYS something (claim, checkout,
+ * bid, chat send, react, vote, remind) keeps requireBeta/requireViewerOrSeller
+ * and still demands an account; the client prompts for sign-in at the moment
+ * of the action instead of at the door.
+ *
+ * The global kill switch still applies: with 'live_streams' disabled nobody
+ * watches, logged in or not.
+ */
+export async function resolvePublicViewer(
+    streamId: string,
+): Promise<PublicViewerContext | NextResponse> {
+    if (!(await isFeatureEnabled('live_streams'))) {
+        return NextResponse.json(
+            { error: 'This feature is temporarily unavailable', code: 'FEATURE_DISABLED' },
+            { status: 503 },
+        );
+    }
+
+    const admin = createAdminClient();
+    const { data: stream } = await admin
+        .from('streams')
+        .select(STREAM_GUARD_COLS)
+        .eq('id', streamId)
+        .maybeSingle<StreamRow>();
+    if (!stream) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    // Best-effort identity: a cookie session when there is one, anonymous
+    // otherwise. Never an error path — a stale/absent cookie just means guest.
+    let user: User | null = null;
+    try {
+        const cookieSupabase = await createServerClient();
+        const { data } = await cookieSupabase.auth.getUser();
+        user = data.user ?? null;
+    } catch {
+        // Guest.
+    }
+
+    return { user, stream, isSeller: !!user && stream.seller_id === user.id };
 }
 
 // stream_chat_messages.body CHECK caps at 300 chars.

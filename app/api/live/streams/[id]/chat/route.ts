@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { CHAT_BODY_MAX, requireViewerOrSeller } from '@/lib/liveBreaks';
+import { CHAT_BODY_MAX, requireViewerOrSeller, resolvePublicViewer } from '@/lib/liveBreaks';
 
 const CHAT_WINDOW_SECONDS = 30;
 const CHAT_MAX_PER_WINDOW = 10;
@@ -99,7 +99,9 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const ctx = await requireViewerOrSeller(id);
+        // Reading the room is public; SENDING (POST above) still needs an
+        // account, so a guest sees the conversation but can't join it.
+        const ctx = await resolvePublicViewer(id);
         if (ctx instanceof NextResponse) return ctx;
 
         const admin = createAdminClient();

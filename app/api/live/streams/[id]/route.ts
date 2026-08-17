@@ -14,7 +14,7 @@ import {
     isMissingTableError,
     releaseExpiredHolds,
     requireBroadcaster,
-    requireViewerOrSeller,
+    resolvePublicViewer,
     shapeAuctionState,
     type AuctionEngineRow,
 } from '@/lib/liveBreaks';
@@ -58,7 +58,9 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const ctx = await requireViewerOrSeller(id);
+        // Watching is public — a logged-out visitor gets the show, and the
+        // client prompts for sign-in only when they try to act.
+        const ctx = await resolvePublicViewer(id);
         if (ctx instanceof NextResponse) return ctx;
 
         const admin = createAdminClient();
@@ -133,7 +135,7 @@ export async function GET(
         // buyer and the seller get it. buyer_id stays: the spot board shows
         // owners by design.
         const visibleSpots = (spots ?? []).map(s =>
-            ctx.isSeller || (s.buyer_id !== null && s.buyer_id === ctx.user.id)
+            ctx.isSeller || (s.buyer_id !== null && s.buyer_id === ctx.user?.id)
                 ? s
                 : { ...s, order_id: null },
         );
@@ -174,7 +176,7 @@ export async function GET(
         // ctx.stream (typed StreamRow), not the projection above — that one's
         // select string is built at runtime, so supabase-js can't type it.
         let reminderSet = false;
-        if (ctx.stream.status === 'scheduled') {
+        if (ctx.stream.status === 'scheduled' && ctx.user) {
             const { data: reminder, error: reminderErr } = await admin
                 .from('stream_reminders')
                 .select('id')

@@ -11,7 +11,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { BETA_FEATURES, hasBeta, type BetaFeature } from '@/lib/betaFeatures';
+import { BETA_FEATURES, GA_FEATURES, hasBeta, type BetaFeature } from '@/lib/betaFeatures';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,11 +22,23 @@ export async function GET() {
   try {
     const cookieSupabase = await createServerClient();
     const { data: { user } } = await cookieSupabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ features: empty }, { headers: { 'Cache-Control': 'no-store' } });
-    }
 
     const admin = createAdminClient();
+
+    if (!user) {
+      // GA features are open to everyone, signed in or not — a logged-out
+      // visitor must still see the Live entry points, or public viewing has
+      // no door. Per-user grants stay false; the kill switch still applies.
+      const { data: anonFlags } = await admin
+        .from('beta_feature_flags')
+        .select('feature, enabled');
+      const anonEnabled = new Map<string, boolean>(
+        (anonFlags ?? []).map((f: { feature: string; enabled: boolean }) => [f.feature, f.enabled]),
+      );
+      const features: Record<string, boolean> = { ...empty };
+      for (const f of GA_FEATURES) features[f] = anonEnabled.get(f) === true;
+      return NextResponse.json({ features }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     const [{ data: profile }, { data: flags }] = await Promise.all([
       admin.from('profiles').select('beta_features, role').eq('id', user.id).single(),
       admin.from('beta_feature_flags').select('feature, enabled'),

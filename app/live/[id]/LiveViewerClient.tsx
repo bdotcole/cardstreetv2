@@ -194,6 +194,15 @@ export default function LiveViewerClient() {
     // Bumped after a sign-in so the load below re-runs with the new session.
     const [authNonce, setAuthNonce] = useState(0);
     const [authModalOpen, setAuthModalOpen] = useState(false);
+    const [authPrompt, setAuthPrompt] = useState<string | undefined>(undefined);
+
+    // Watching is public; ACTING is not. Every buy/bid/chat/react/vote path
+    // opens this instead of failing silently or bouncing off a server 401 —
+    // the guest is told what signing in would let them do.
+    const promptAuth = useCallback((reason: string) => {
+        setAuthPrompt(reason);
+        setAuthModalOpen(true);
+    }, []);
 
     // "Get notified" opt-in on a scheduled show (stream_reminders).
     const [reminderSet, setReminderSet] = useState(false);
@@ -201,6 +210,10 @@ export default function LiveViewerClient() {
 
     const toggleReminder = useCallback(async () => {
         if (reminderBusy) return;
+        if (!myUserId) {
+            promptAuth(t('live.viewer.signInToRemind') || 'Sign in to get notified');
+            return;
+        }
         const next = !reminderSet;
         setReminderBusy(true);
         setReminderSet(next); // optimistic — reverted below if the call fails
@@ -588,6 +601,10 @@ export default function LiveViewerClient() {
     const claimSpot = useCallback(
         async (spot: LiveSpotRow) => {
             if (claimingSpotId) return;
+            if (!myUserId) {
+                promptAuth(t('live.viewer.signInToBuy') || 'Sign in to grab a spot');
+                return;
+            }
             setClaimingSpotId(spot.id);
             try {
                 const res = await fetch(`/api/live/spots/${spot.id}/claim`, { method: 'POST' });
@@ -686,6 +703,10 @@ export default function LiveViewerClient() {
     const sendChat = useCallback(async () => {
         const body = chatInput.trim();
         if (!body || sending) return;
+        if (!myUserId) {
+            promptAuth(t('live.viewer.signInToChat') || 'Sign in to join the chat');
+            return;
+        }
         setSending(true);
         try {
             const res = await fetch(`/api/live/streams/${streamId}/chat`, {
@@ -726,6 +747,10 @@ export default function LiveViewerClient() {
         async (optionKey: string) => {
             const target = pollRef.current;
             if (!target || voting || target.status !== 'open') return;
+            if (!myUserId) {
+                promptAuth(t('live.viewer.signInToVote') || 'Sign in to vote');
+                return;
+            }
             const previousVote = myVote;
             setMyVote(optionKey); // optimistic highlight; tallies wait for the server
             setVoting(true);
@@ -870,6 +895,10 @@ export default function LiveViewerClient() {
 
     const sendSticker = useCallback(
         (sticker: StickerKey) => {
+            if (!myUserId) {
+                promptAuth(t('live.viewer.signInToReact') || 'Sign in to react');
+                return;
+            }
             spawnSticker(sticker); // optimistic — the broadcast never echoes back
             pushReaction(sticker, t('live.stickers.you') || 'You');
             void fetch(`/api/live/streams/${streamId}/react`, {
@@ -901,6 +930,10 @@ export default function LiveViewerClient() {
     const placeBid = useCallback(
         async (lot: LiveLotRow, amountSatang: number) => {
             if (bidBusy) return;
+            if (!myUserId) {
+                promptAuth(t('live.viewer.signInToBid') || 'Sign in to bid');
+                return;
+            }
             setBidBusy(true);
             try {
                 const res = await fetch(`/api/live/lots/${lot.id}/auction/bid`, {
@@ -1237,7 +1270,9 @@ export default function LiveViewerClient() {
                 placeholder={
                     stream.chat_disabled
                         ? t('live.viewer.chatFrozen') || 'Chat is frozen by the host'
-                        : t('live.viewer.chatPlaceholder') || 'Say something...'
+                        : !myUserId
+                            ? t('live.viewer.signInToChat') || 'Sign in to join the chat'
+                            : t('live.viewer.chatPlaceholder') || 'Say something...'
                 }
                 disabled={stream.chat_disabled || stream.status === 'ended'}
                 className="flex-1 h-11 rounded-full bg-black/50 border border-white/15 px-4 text-sm text-white outline-none focus:border-brand-cyan/60 placeholder:text-slate-500 disabled:opacity-50 backdrop-blur-sm"
@@ -1568,6 +1603,21 @@ export default function LiveViewerClient() {
     // The house-action confirm sheet — a deliberate second tap so a stray
     // long-press can never silently take a spot off (or put one back on) the
     // board. Rendered by both the scheduled landing and the live layout.
+    // Sign-in sheet for guests, shared by the scheduled landing and the live
+    // layout. On close the page reloads its data, so signing in swaps the
+    // guest view for the full one in place — nobody loses the show.
+    const authSheet = authModalOpen && (
+        <AuthModal
+            isOpen={authModalOpen}
+            contextMessage={authPrompt}
+            onClose={() => {
+                setAuthModalOpen(false);
+                setAuthPrompt(undefined);
+                setAuthNonce((n) => n + 1);
+            }}
+        />
+    );
+
     const houseSheet = houseAction && (
         <div
             className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center"
@@ -2040,6 +2090,7 @@ export default function LiveViewerClient() {
                 />
 
                 {houseSheet}
+                {authSheet}
             </main>
         );
     }
@@ -2232,6 +2283,8 @@ export default function LiveViewerClient() {
                     void releaseMyHolds();
                 }}
             />
+
+            {authSheet}
 
             {/* Save-a-card sheet (NEEDS_CARD) — the pending bid retries on save. */}
             {cardSheetOpen && (

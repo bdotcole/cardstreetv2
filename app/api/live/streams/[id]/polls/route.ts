@@ -24,6 +24,7 @@ import {
     postSystemChat,
     requireBroadcaster,
     requireViewerOrSeller,
+    resolvePublicViewer,
     type PollOptionRow,
     type PollRow,
 } from '@/lib/liveBreaks';
@@ -164,7 +165,9 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const ctx = await requireViewerOrSeller(id);
+        // Public read: a guest sees the poll and its live tallies, but has no
+        // ballot of their own (voting still requires an account).
+        const ctx = await resolvePublicViewer(id);
         if (ctx instanceof NextResponse) return ctx;
         const { user } = ctx;
 
@@ -185,8 +188,10 @@ export async function GET(
             return NextResponse.json({ error: 'Failed to load poll' }, { status: 500 });
         }
 
+        // A guest has no ballot — they see the question and the live tallies
+        // with nothing highlighted, and voting prompts sign-in.
         let myVote: string | null = null;
-        if (poll) {
+        if (poll && user) {
             const { data: vote } = await admin
                 .from('stream_poll_votes')
                 .select('option_key')

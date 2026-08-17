@@ -24,7 +24,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { broadcastStreamEvent, requireBroadcaster, requireViewerOrSeller } from '@/lib/liveBreaks';
+import { randomUUID } from 'crypto';
+import { broadcastStreamEvent, requireBroadcaster, resolvePublicViewer } from '@/lib/liveBreaks';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { mintPublisherToken, mintViewerToken, roomNameForStream } from '@/lib/livekit';
 
@@ -82,7 +83,12 @@ export async function POST(
         }
 
         if (role === 'viewer') {
-            const ctx = await requireViewerOrSeller(id);
+            // Watching is public: a guest gets a subscribe-only token under a
+            // throwaway identity. It MUST be unique per request — LiveKit
+            // evicts an existing participant when a second one joins with the
+            // same identity, so a shared 'guest' would have every anonymous
+            // viewer kicking the previous one out of the room.
+            const ctx = await resolvePublicViewer(id);
             if (ctx instanceof NextResponse) return ctx;
             const { user, stream } = ctx;
 
@@ -93,12 +99,14 @@ export async function POST(
                 );
             }
             const room = stream.livekit_room || roomNameForStream(stream.id);
-            const token = await mintViewerToken(room, user.id);
+            const identity = user ? user.id : `guest_${randomUUID()}`;
+            const token = await mintViewerToken(room, identity);
 
             // Whatnot-style join line: relayed as an ephemeral broadcast (never
             // persisted — reconnects would spam the chat table; clients dedupe
-            // by name). The seller's own monitor tokens don't announce.
-            if (user.id !== stream.seller_id) {
+            // by name). Guests join quietly — an anonymous "someone joined" is
+            // noise, and they have no display name to announce.
+            if (user && user.id !== stream.seller_id) {
                 const admin = createAdminClient();
                 const { data: joiner } = await admin
                     .from('profiles')
