@@ -99,8 +99,8 @@ export async function generateMetadata({
                 : phase === 'scheduled'
                   ? presaleOpen
                       ? sellerName
-                          ? `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองช่องกับ ${sellerName} ได้เลยบน CardStreet`
-                          : `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองช่องได้เลยบน CardStreet`
+                          ? `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตกับ ${sellerName} ได้เลยบน CardStreet`
+                          : `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตได้เลยบน CardStreet`
                       : sellerName
                         ? `ไลฟ์เริ่ม ${when} — พบกับ ${sellerName} ได้บน CardStreet`
                         : `ไลฟ์เริ่ม ${when} บน CardStreet`
