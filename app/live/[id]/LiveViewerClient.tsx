@@ -119,7 +119,7 @@ export default function LiveViewerClient() {
     const params = useParams<{ id: string }>();
     const streamId = params?.id ?? '';
     const router = useRouter();
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const { showToast } = useToast();
 
     const [pageState, setPageState] = useState<PageState>('loading');
@@ -1859,8 +1859,16 @@ export default function LiveViewerClient() {
                             ))}
                         </div>
                     )}
+                    {/* The Thai line is ~40px wider than the English; at
+                        tracking-widest it wraps the pill onto two lines on a
+                        360px phone. Thai gets no extra tracking — it also keeps
+                        tone marks visually attached to their base. */}
                     {presaleOpen && (
-                        <p className="mt-4 inline-block px-3 py-1.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-[11px] font-black uppercase tracking-widest">
+                        <p
+                            className={`mt-4 inline-block px-3 py-1.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-[11px] font-black uppercase ${
+                                isThai ? 'tracking-normal' : 'tracking-widest'
+                            }`}
+                        >
                             {t('live.scheduled.presaleNow') || 'Presale open — grab your spots now'}
                         </p>
                     )}
@@ -1923,12 +1931,16 @@ export default function LiveViewerClient() {
                                             ))}
                                             {presale && (
                                                 <span className="text-emerald-300">
-                                                    {open} {t('live.viewer.spotsLeft') || 'left'}
+                                                    {(
+                                                        t('live.scheduled.spotsLeftCount') || '{n} left'
+                                                    ).replace('{n}', String(open))}
                                                 </span>
                                             )}
                                             {sold > 0 && (
                                                 <span>
-                                                    {sold} {t('live.console.soldCount') || 'sold'}
+                                                    {(
+                                                        t('live.scheduled.soldCount') || '{n} sold'
+                                                    ).replace('{n}', String(sold))}
                                                 </span>
                                             )}
                                         </div>

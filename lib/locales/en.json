@@ -1033,6 +1033,8 @@
             "availableWhenLive": "Available when the show goes live",
             "lots": "Lots in this show",
             "noLots": "Lots will appear here soon",
+            "spotsLeftCount": "{n} left",
+            "soldCount": "{n} sold",
             "days": "days",
             "hours": "hrs",
             "mins": "min",
