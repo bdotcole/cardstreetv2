@@ -195,6 +195,39 @@ export default function LiveViewerClient() {
     const [authNonce, setAuthNonce] = useState(0);
     const [authModalOpen, setAuthModalOpen] = useState(false);
 
+    // "Get notified" opt-in on a scheduled show (stream_reminders).
+    const [reminderSet, setReminderSet] = useState(false);
+    const [reminderBusy, setReminderBusy] = useState(false);
+
+    const toggleReminder = useCallback(async () => {
+        if (reminderBusy) return;
+        const next = !reminderSet;
+        setReminderBusy(true);
+        setReminderSet(next); // optimistic — reverted below if the call fails
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/remind`, {
+                method: next ? 'POST' : 'DELETE',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setReminderSet(!next);
+                showToast(
+                    data.error || t('live.scheduled.remindError') || 'Could not update the reminder',
+                    'error',
+                );
+                return;
+            }
+            if (next) {
+                showToast(t('live.scheduled.remindOn') || "You'll be notified when this show starts", 'success');
+            }
+        } catch {
+            setReminderSet(!next);
+            showToast(t('live.scheduled.remindError') || 'Could not update the reminder', 'error');
+        } finally {
+            setReminderBusy(false);
+        }
+    }, [reminderBusy, reminderSet, streamId, showToast, t]);
+
     // ─── Initial load ───
     useEffect(() => {
         if (!streamId) return;
@@ -221,6 +254,7 @@ export default function LiveViewerClient() {
                 setStream(detail.stream);
                 setLots(detail.items ?? []);
                 setSpots(detail.spots ?? []);
+                setReminderSet(detail.reminderSet === true);
                 if (chatRes.ok) {
                     const chatData = await chatRes.json();
                     setChat(chatData.messages ?? []);
@@ -1862,6 +1896,29 @@ export default function LiveViewerClient() {
                             ))}
                         </div>
                     )}
+                    {/* Get notified: the one action for a visitor who isn't
+                        buying a presale spot. Alerts land at go-live as email
+                        AND push, so a web visitor with no app is reachable.
+                        Thai drops the tracking for the same reason as the
+                        presale pill below. */}
+                    <button
+                        onClick={() => void toggleReminder()}
+                        disabled={reminderBusy}
+                        aria-pressed={reminderSet}
+                        className={`mt-5 inline-flex items-center gap-2 px-5 h-11 rounded-xl text-xs font-black uppercase transition-all active:scale-95 disabled:opacity-60 ${
+                            isThai ? 'tracking-normal' : 'tracking-widest'
+                        } ${
+                            reminderSet
+                                ? 'bg-white/10 border border-brand-cyan/40 text-brand-cyan'
+                                : 'bg-brand-cyan text-brand-darker'
+                        }`}
+                    >
+                        <i className={`fa-solid ${reminderSet ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+                        {reminderSet
+                            ? t('live.scheduled.remindCancel') || "You'll be notified — tap to cancel"
+                            : t('live.scheduled.remindMe') || 'Get notified'}
+                    </button>
+
                     {/* The Thai line is ~40px wider than the English; at
                         tracking-widest it wraps the pill onto two lines on a
                         360px phone. Thai gets no extra tracking — it also keeps

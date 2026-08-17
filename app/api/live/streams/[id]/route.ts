@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
     AUCTION_ENGINE_COLS,
+    isMissingTableError,
     releaseExpiredHolds,
     requireBroadcaster,
     requireViewerOrSeller,
@@ -166,10 +167,31 @@ export async function GET(
             }
         }
 
+        // The Get-notified button's on/off state, resolved server-side so the
+        // landing needs no second round trip. Fails soft to false — absent
+        // before 20260820_stream_reminders.sql, and a reminder lookup must
+        // never cost the whole page.
+        // ctx.stream (typed StreamRow), not the projection above — that one's
+        // select string is built at runtime, so supabase-js can't type it.
+        let reminderSet = false;
+        if (ctx.stream.status === 'scheduled') {
+            const { data: reminder, error: reminderErr } = await admin
+                .from('stream_reminders')
+                .select('id')
+                .eq('stream_id', id)
+                .eq('user_id', ctx.user.id)
+                .maybeSingle<{ id: string }>();
+            if (reminderErr && !isMissingTableError(reminderErr)) {
+                console.error('[Live/Stream] reminder lookup failed:', reminderErr.message);
+            }
+            reminderSet = !!reminder;
+        }
+
         return NextResponse.json({
             stream,
             items: enrichedItems,
             spots: visibleSpots,
+            reminderSet,
         });
     } catch (err: any) {
         console.error('[Live/Stream] GET error:', err);

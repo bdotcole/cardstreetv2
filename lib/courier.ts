@@ -1469,7 +1469,7 @@ export async function sendWishlistListingAlert(
  */
 export async function sendShowLiveNotification(
     userId: string,
-    show: { streamId: string; title: string },
+    show: { streamId: string; title: string; reason?: 'presale' | 'reminder' },
 ): Promise<boolean> {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping show-live alert'); return false; }
@@ -1502,11 +1502,16 @@ export async function sendShowLiveNotification(
     if (templateId) {
         message.template = templateId;
     } else {
+        // A reminder subscriber never reserved anything — saying they did
+        // would read as a mistake and undercut the alert.
         message.content = {
             title: `${show.title} is live now`,
             body:
-                `The show you reserved a spot in is live now — watch it here: ${showUrl} ` +
-                `ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`,
+                show.reason === 'reminder'
+                    ? `The show you asked to be reminded about is live now — watch it here: ${showUrl} ` +
+                      `ไลฟ์ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`
+                    : `The show you reserved a spot in is live now — watch it here: ${showUrl} ` +
+                      `ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`,
         };
     }
 
