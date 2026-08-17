@@ -1412,7 +1412,10 @@ export default function LiveViewerClient() {
                             ))}
                             {activeLot.item_type !== 'auction' && (
                                 <span className="text-emerald-300">
-                                    {openCount} {t('live.viewer.spotsLeft') || 'left'}
+                                    {(t('live.viewer.spotsLeftCount') || '{n} left').replace(
+                                        '{n}',
+                                        String(openCount),
+                                    )}
                                 </span>
                             )}
                             {activeLot.break_opened_at && (
@@ -1932,7 +1935,7 @@ export default function LiveViewerClient() {
                                             {presale && (
                                                 <span className="text-emerald-300">
                                                     {(
-                                                        t('live.scheduled.spotsLeftCount') || '{n} left'
+                                                        t('live.viewer.spotsLeftCount') || '{n} left'
                                                     ).replace('{n}', String(open))}
                                                 </span>
                                             )}
