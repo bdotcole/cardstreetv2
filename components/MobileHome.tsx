@@ -169,6 +169,23 @@ export default function HomePage() {
         return () => window.removeEventListener('popstate', onPop);
     }, []);
 
+    // Shop tab press. Re-tapping the tab you're already on returns to that
+    // tab's root — here, the Live-vs-Marketplace chooser. Routed through
+    // history like the back button so the entry pushed on the way in is
+    // consumed rather than left stale. Tapping Shop from ANOTHER tab is
+    // unchanged: it restores the section the user last picked.
+    const handleShopTab = useCallback(() => {
+        if (activeTab === 'marketplace' && shopChooserDismissed && hasLiveBeta('live_streams')) {
+            if (shopHistoryRef.current) {
+                window.history.back();
+            } else {
+                setShopChooserDismissed(false);
+            }
+            return;
+        }
+        setActiveTab('marketplace');
+    }, [activeTab, shopChooserDismissed, hasLiveBeta]);
+
     // Deep-link handling for Stripe Connect onboarding redirects.
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
     // the Profile component handles the rest — but the user needs to actually
@@ -2090,7 +2107,7 @@ export default function HomePage() {
 
                 <nav className="absolute bottom-0 left-0 w-full bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 px-6 pt-2 flex justify-between items-end z-40 animate-slideUp" style={{ paddingBottom: 'calc(var(--nav-bar-height, 0px) + 8px)' }}>
                     {/* 1. SHOP (Marketplace) */}
-                    <button onClick={() => setActiveTab('marketplace')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'marketplace' ? '-translate-y-2' : ''}`}>
+                    <button onClick={handleShopTab} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'marketplace' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-shop text-xl transition-colors ${activeTab === 'marketplace' ? 'text-brand-purple drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
                         <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'marketplace' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.shop')}</span>
                     </button>
