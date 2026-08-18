@@ -74,11 +74,44 @@ function isHardFailure(code: unknown): boolean {
 /** Carries the server/Stripe error code through the init's throw path. */
 class CheckoutError extends Error {
     code?: string;
-    constructor(message: string, code?: unknown) {
+    /** BUYER_PROFILE_INCOMPLETE: which shipping fields are still blank. */
+    missing?: string[];
+    constructor(message: string, code?: unknown, missing?: unknown) {
         super(message);
         this.code = typeof code === 'string' ? code : undefined;
+        this.missing = Array.isArray(missing)
+            ? missing.filter((f): f is string => typeof f === 'string')
+            : undefined;
     }
 }
+
+/**
+ * The shipping fields checkout demands. Measured 2026-08-18: only 139 of 912
+ * accounts had them saved, so the old behavior — erroring out and telling the
+ * buyer to go fill in Profile — dropped 85% of would-be buyers mid-show. They
+ * are collected inline here instead, and checkout retries itself on save.
+ */
+const BUYER_FIELDS = ['address', 'district', 'state', 'province', 'postcode', 'phone_number'] as const;
+type BuyerField = (typeof BUYER_FIELDS)[number];
+
+function asBuyerFields(value: unknown): BuyerField[] {
+    const list = Array.isArray(value)
+        ? value.filter((f): f is BuyerField => (BUYER_FIELDS as readonly unknown[]).includes(f))
+        : [];
+    // An empty//unparseable `missing` means the server didn't say — ask for
+    // everything rather than render a form that can't satisfy it.
+    return list.length > 0 ? list : [...BUYER_FIELDS];
+}
+
+/** Placeholder copy per field, reusing Profile's own bilingual address strings. */
+const BUYER_FIELD_KEY: Record<BuyerField, string> = {
+    address: 'profile.streetPlaceholder',
+    district: 'profile.districtPlaceholder',
+    state: 'profile.statePlaceholder',
+    province: 'profile.provincePlaceholder',
+    postcode: 'profile.postalCodePlaceholder',
+    phone_number: 'profile.phonePlaceholder',
+};
 
 export interface PayableSpot {
     id: string;
@@ -104,7 +137,10 @@ type Phase =
     | { name: 'success'; processingAsync: boolean }
     /** `hard` = unretryable; the holds are already released and the only
      *  action offered is Dismiss. */
-    | { name: 'error'; message: string; hard: boolean };
+    | { name: 'error'; message: string; hard: boolean }
+    /** No saved shipping address — collected inline instead of bouncing the
+     *  buyer to Profile and out of the show. */
+    | { name: 'profile'; missing: BuyerField[] };
 
 interface CheckoutSession {
     transferGroup: string;
@@ -122,6 +158,111 @@ interface CheckoutSession {
     sellerStripeAccount: string | null;
     clientSecret: string;
 }
+
+/**
+ * The inline address step. Saves through the same PATCH /api/profile the
+ * Profile screen uses (which validates + normalizes the Thai phone), then
+ * hands control back so checkout re-runs.
+ *
+ * Holds are REFRESHED first: the initial claim window is 180s and filling six
+ * fields on a phone can outlast it, which would turn a saved address into a
+ * "your hold expired" dead end. Re-claiming is safe and idempotent for the
+ * spot's current holder — it only fails if someone else already took a lapsed
+ * spot, which checkout would report anyway.
+ */
+const ProfileGate: React.FC<{
+    missing: BuyerField[];
+    spotIds: string[];
+    onSaved: () => void;
+    onCancel: () => void;
+}> = ({ missing, spotIds, onSaved, onCancel }) => {
+    const { t } = useTranslation();
+    const [values, setValues] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const complete = missing.every((f) => (values[f] ?? '').trim().length > 0);
+
+    const save = async () => {
+        if (!complete || saving) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const body: Record<string, string> = {};
+            for (const f of missing) body[f] = (values[f] ?? '').trim();
+            const res = await fetch('/api/profile', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setError(data?.error || t('live.payment.profileSaveError') || 'Could not save your details');
+                return;
+            }
+            await Promise.allSettled(
+                spotIds.map((id) => fetch(`/api/live/spots/${id}/claim`, { method: 'POST' })),
+            );
+            onSaved();
+        } catch {
+            setError(t('live.payment.profileSaveError') || 'Could not save your details');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="text-left">
+            <p className="text-sm font-black text-white uppercase tracking-wide">
+                {t('live.payment.profileTitle') || 'Where should we ship?'}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t('live.payment.profileDesc') ||
+                    'Saved to your account — you only do this once.'}
+            </p>
+            <div className="mt-4 space-y-2">
+                {missing.map((field) => (
+                    <input
+                        key={field}
+                        value={values[field] ?? ''}
+                        onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                        placeholder={t(BUYER_FIELD_KEY[field])}
+                        inputMode={field === 'postcode' ? 'numeric' : field === 'phone_number' ? 'tel' : 'text'}
+                        autoComplete={
+                            field === 'address'
+                                ? 'address-line1'
+                                : field === 'postcode'
+                                    ? 'postal-code'
+                                    : field === 'phone_number'
+                                        ? 'tel'
+                                        : 'address-level2'
+                        }
+                        className="w-full h-11 rounded-xl bg-black/40 border border-white/15 px-3 text-sm text-white outline-none focus:border-brand-cyan/60 placeholder:text-slate-500"
+                    />
+                ))}
+            </div>
+            {error && <p className="mt-3 text-xs text-brand-red">{error}</p>}
+            <div className="mt-4 flex gap-3">
+                <button
+                    onClick={onCancel}
+                    disabled={saving}
+                    className="px-4 h-11 rounded-xl bg-white/10 text-slate-300 text-xs font-black uppercase tracking-widest disabled:opacity-50"
+                >
+                    {t('live.payment.close') || 'Close'}
+                </button>
+                <button
+                    onClick={() => void save()}
+                    disabled={!complete || saving}
+                    className="flex-1 h-11 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                    {saving
+                        ? t('live.payment.processing') || 'Processing...'
+                        : t('live.payment.profileSave') || 'Save & continue'}
+                </button>
+            </div>
+        </div>
+    );
+};
 
 const PayForm: React.FC<{
     totalSatang: number;
@@ -337,6 +478,7 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                     throw new CheckoutError(
                         checkoutData.error || t('live.payment.startError') || 'Could not start checkout',
                         checkoutData.code,
+                        checkoutData.missing,
                     );
                 }
 
@@ -383,6 +525,13 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 setStripeInstance(stripe);
                 setPhase({ name: 'ready' });
             } catch (err: any) {
+                // Not an error the buyer can act on by retrying — they simply
+                // haven't told us where to ship. Collect it in place; saving
+                // re-runs this whole init.
+                if (err?.code === 'BUYER_PROFILE_INCOMPLETE') {
+                    setPhase({ name: 'profile', missing: asBuyerFields(err?.missing) });
+                    return;
+                }
                 const hard = isHardFailure(err?.code);
                 if (hard) {
                     // Try Again cannot fix this — hand the spots straight back
@@ -596,6 +745,20 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                                     {t('live.payment.preparing') || 'Preparing checkout...'}
                                 </p>
                             </div>
+                        )}
+
+                        {phase.name === 'profile' && (
+                            <ProfileGate
+                                missing={phase.missing}
+                                spotIds={spots.map((s) => s.id)}
+                                onSaved={() => {
+                                    // Re-run the whole init: checkout will now
+                                    // pass the profile gate and mint the PI.
+                                    setPhase({ name: 'preparing' });
+                                    setAttempt((a) => a + 1);
+                                }}
+                                onCancel={dismiss}
+                            />
                         )}
 
                         {(phase.name === 'ready' || phase.name === 'paying') &&

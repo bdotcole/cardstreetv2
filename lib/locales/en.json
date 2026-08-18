@@ -1080,7 +1080,11 @@
             "redirectFailed": "Payment failed — your spots were not confirmed",
             "minCharge": "Minimum purchase is ฿10 — add another spot",
             "holdsReleased": "Your spots have been released",
-            "dismiss": "Dismiss"
+            "dismiss": "Dismiss",
+            "profileTitle": "Where should we ship?",
+            "profileDesc": "Saved to your account — you only do this once.",
+            "profileSave": "Save & continue",
+            "profileSaveError": "Could not save your details"
         },
         "console": {
             "title": "Broadcast console",
