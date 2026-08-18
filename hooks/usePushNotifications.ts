@@ -50,6 +50,7 @@ export const usePushNotifications = () => {
             // Android. Imported dynamically so the firebase JS dependency is code-split and
             // never loaded on web or Android.
             (async () => {
+              try {
                 const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
 
                 let perm = await FirebaseMessaging.checkPermissions();
@@ -58,6 +59,18 @@ export const usePushNotifications = () => {
                 }
                 if (perm.receive !== 'granted') {
                     console.warn('User denied push notification permissions');
+                    // Reported, not just logged: this path yields no token AND
+                    // no trace, which looks identical to the plugin failing.
+                    // 30 days after the getToken() instrumentation went live
+                    // there were ZERO area:push events despite ~1.6k iOS
+                    // installs (measured 2026-08-18) — every remaining
+                    // explanation for that silence exits through here or the
+                    // catch below, so both now report.
+                    Sentry.captureMessage('iOS push permission not granted', {
+                        level: 'warning',
+                        tags: { area: 'push', platform: 'ios' },
+                        extra: { receive: perm.receive },
+                    });
                     return;
                 }
 
@@ -109,6 +122,19 @@ export const usePushNotifications = () => {
                     notificationReceived.remove();
                     notificationActionPerformed.remove();
                 };
+              } catch (err) {
+                // Everything before getToken()'s own catch — above all the
+                // Capacitor bridge throwing '"FirebaseMessaging" plugin is not
+                // implemented on ios', which is what a binary built without the
+                // plugin looks like from JS. That previously escaped as an
+                // untagged unhandled rejection (the Android twin of exactly
+                // this error is already in Sentry), so it never showed up under
+                // area:push and the iOS path read as silent rather than broken.
+                Sentry.captureException(err, {
+                    tags: { area: 'push', platform: 'ios' },
+                    extra: { stage: 'ios push init' },
+                });
+              }
             })();
 
             return () => cleanup();
@@ -116,18 +142,35 @@ export const usePushNotifications = () => {
 
         // Android: @capacitor/push-notifications already returns an FCM token directly.
         const registerPushNotifications = async () => {
-            let permStatus = await PushNotifications.checkPermissions();
+            try {
+                let permStatus = await PushNotifications.checkPermissions();
 
-            if (permStatus.receive === 'prompt') {
-                permStatus = await PushNotifications.requestPermissions();
+                if (permStatus.receive === 'prompt') {
+                    permStatus = await PushNotifications.requestPermissions();
+                }
+
+                if (permStatus.receive !== 'granted') {
+                    console.warn('User denied push notification permissions');
+                    Sentry.captureMessage('Android push permission not granted', {
+                        level: 'warning',
+                        tags: { area: 'push', platform: 'android' },
+                        extra: { receive: permStatus.receive },
+                    });
+                    return;
+                }
+
+                await PushNotifications.register();
+            } catch (err) {
+                // Already observed in production as an UNTAGGED unhandled
+                // rejection ('"PushNotifications" plugin is not implemented on
+                // android', 5 events across 5 users) — devices running a shell
+                // built without the plugin. Tagging it puts those devices under
+                // the same area:push query as everything else.
+                Sentry.captureException(err, {
+                    tags: { area: 'push', platform: 'android' },
+                    extra: { stage: 'android push register' },
+                });
             }
-
-            if (permStatus.receive !== 'granted') {
-                console.warn('User denied push notification permissions');
-                return;
-            }
-
-            await PushNotifications.register();
         };
 
         PushNotifications.addListener('registration', async (token: Token) => {
