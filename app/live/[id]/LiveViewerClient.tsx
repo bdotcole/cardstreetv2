@@ -172,16 +172,19 @@ export default function LiveViewerClient() {
     // Admin role gates the quiet house-reserve gesture on the board. Fails closed.
     const { isAdmin } = usePremium();
 
-    // EVERY viewer pins the TOP simulcast layer (was desktop-only). Field
-    // report: phones intermittently received the 720p middle layer at
-    // ~940kbps — adaptiveStream's element measurement plus mobile BWE kept
-    // downgrading a room with a handful of viewers. Simulcast still protects
-    // genuinely weak connections (the SFU can temporarily serve lower under
-    // congestion); the pin makes top quality the resting state. Decided once
-    // at mount, BEFORE the connect effect can run, so the Room is constructed
-    // with adaptiveStream fully off.
+    // DESKTOP pins the TOP simulcast layer; phones stay ADAPTIVE.
+    //
+    // Pinning every viewer (tried 2026-08-18 to fix a fuzzy-on-desktop report)
+    // backfired live: the pin turns adaptiveStream fully OFF, so a phone is
+    // forced to pull the 1080p top layer over mobile data no matter what its
+    // connection can carry — which arrives as stutter, i.e. "laggy". Sharp but
+    // unwatchable is worse than adaptive. Desktop keeps the pin, where the
+    // feeds fill the screen and element measurement was under-requesting.
+    //
+    // Decided once at mount, BEFORE the connect effect runs, so the Room is
+    // constructed with the right mode.
     useEffect(() => {
-        setSubscriptionQuality('high');
+        if (window.innerWidth >= 1024) setSubscriptionQuality('high');
     }, [setSubscriptionQuality]);
 
     // Desktop chat column keeps the newest message in view. The mobile overlay

@@ -140,20 +140,33 @@ function publishOptionsFor(track: LocalTrack, isTableCam: boolean): TrackPublish
     console.info(
         `[LiveKit] publishing ${isTableCam ? 'table' : 'main'} cam: ` +
             `${settings.width ?? '?'}x${settings.height ?? '?'}@${settings.frameRate ?? '?'}fps, ` +
-            `ladder=${is1080 ? 'h1080 top (6Mbps) + h720/h360' : 'native top (3.5Mbps) + h360/h180'}`,
+            `ladder=${is1080 ? 'h1080 top (4Mbps) + h720/h360' : 'native top (3.5Mbps) + h360/h180'}`,
     );
     return {
         simulcast: true,
+        // Tuned for the SOLO-PHONE broadcaster, which is how breaks actually
+        // run. 6 Mbps @1080p was chosen on the theory that more bitrate = more
+        // card detail, but a phone rarely sustains it: the uplink caps out and
+        // the mobile encoder thermally throttles, so the stream spends its
+        // time in congestion instead of at the ceiling. 4 Mbps is above
+        // LiveKit's own h1080 preset (3 Mbps), sits inside what a phone on
+        // decent wifi actually holds, and therefore delivers MORE stable
+        // quality than the higher number did.
         videoEncoding: is1080
-            ? { maxBitrate: 6_000_000, maxFramerate: 30 }
+            ? { maxBitrate: 4_000_000, maxFramerate: 30 }
             : { maxBitrate: 3_500_000, maxFramerate: 30 },
         videoSimulcastLayers: is1080
             ? [VideoPresets.h720, VideoPresets.h360]
             : [VideoPresets.h360, VideoPresets.h180],
-        // Under congestion the table cam must drop framerate, never resolution
-        // — a choppy-but-sharp card beats a smooth blur. The face cam keeps
-        // the default balanced trade.
-        degradationPreference: isTableCam ? 'maintain-resolution' : 'balanced',
+        // 'balanced' on both cams now. The table cam used to force
+        // 'maintain-resolution' (drop framerate, never resolution) on the
+        // theory that a choppy-but-sharp card beats a smooth blur — true for a
+        // card held still, wrong for a break, which is mostly HANDS IN MOTION:
+        // ripping packs at a collapsing framerate is exactly what reads as
+        // "laggy". Balanced gives back smoothness and only softens transiently
+        // under congestion, while contentHint 'detail' still biases the
+        // encoder toward sharpness.
+        degradationPreference: 'balanced',
     };
 }
 
@@ -471,8 +484,8 @@ export function useLiveKitRoom() {
                 try {
                     const sender = video.sender;
                     const params = sender?.getParameters();
-                    if (sender && params && params.degradationPreference !== 'maintain-resolution') {
-                        params.degradationPreference = 'maintain-resolution';
+                    if (sender && params && params.degradationPreference !== 'balanced') {
+                        params.degradationPreference = 'balanced';
                         await sender.setParameters(params);
                     }
                     console.info(
