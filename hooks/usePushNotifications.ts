@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token, ActionPerformed, PushNotificationSchema } from '@capacitor/push-notifications';
 
@@ -72,14 +73,35 @@ export const usePushNotifications = () => {
                     routeNotificationTap(event.notification?.data);
                 });
 
+                // Measured 2026-08-18: of 363 registered devices, ZERO were
+                // iOS — no iPhone has ever reached saveToken. Every in-repo
+                // requirement checks out (FirebaseApp.configure, matching
+                // bundle id, aps-environment, swizzling on, getToken called
+                // explicitly), so the failure is environmental: most likely a
+                // missing APNs .p8 in Firebase, or a shipped binary predating
+                // this code. console.error on a user's phone told us none of
+                // that, which is why it went unnoticed for months — report it
+                // where we can actually see it.
                 try {
                     const { token } = await FirebaseMessaging.getToken();
                     if (token) {
                         setFcmToken(token);
                         saveToken(token);
+                    } else {
+                        Sentry.captureMessage('iOS FCM token empty', {
+                            level: 'warning',
+                            tags: { area: 'push', platform: 'ios' },
+                        });
                     }
                 } catch (err) {
                     console.error('Error fetching FCM token:', err);
+                    // The Firebase error text names the cause (e.g. "No APNS
+                    // token specified" / "APNS device token not set"), so the
+                    // Sentry issue itself is the diagnosis.
+                    Sentry.captureException(err, {
+                        tags: { area: 'push', platform: 'ios' },
+                        extra: { stage: 'FirebaseMessaging.getToken' },
+                    });
                 }
 
                 cleanup = () => {
@@ -118,6 +140,13 @@ export const usePushNotifications = () => {
 
         PushNotifications.addListener('registrationError', (error: any) => {
             console.error('Error on push registration:', error);
+            // Same blindness the iOS path suffered from: a device that never
+            // registers is indistinguishable from one that never opened the
+            // app unless the failure is reported somewhere we read.
+            Sentry.captureException(error, {
+                tags: { area: 'push', platform: 'android' },
+                extra: { stage: 'PushNotifications.register' },
+            });
         });
 
         PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
