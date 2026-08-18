@@ -82,8 +82,20 @@ export function TrackVideo({
     );
 }
 
-export function TrackAudio({ track, muted }: { track: RemoteTrack; muted: boolean }) {
+export function TrackAudio({
+    track,
+    muted,
+    onBlocked,
+}: {
+    track: RemoteTrack;
+    muted: boolean;
+    /** Unmuted playback was refused by the browser's autoplay policy — the
+     *  caller should fall back to muted and unmute on the next user gesture. */
+    onBlocked?: () => void;
+}) {
     const ref = useRef<HTMLAudioElement>(null);
+    const onBlockedRef = useRef(onBlocked);
+    onBlockedRef.current = onBlocked;
 
     useEffect(() => {
         const el = ref.current;
@@ -94,19 +106,22 @@ export function TrackAudio({ track, muted }: { track: RemoteTrack; muted: boolea
         };
     }, [track]);
 
-    // Unmuting can leave the element paused on some mobile browsers. The flip
-    // only ever happens inside a user gesture (a tap on the video), so play()
-    // is permitted here — without it a viewer could tap for sound and get
-    // silence anyway.
+    // Sound is ON by default — viewers expect a live show to make noise, and
+    // the phone's own volume keys are the right way to turn it down.
+    //
+    // Browsers may still refuse unmuted autoplay (Chrome/Safari require a
+    // prior user gesture on the origin). play() rejecting is exactly that
+    // refusal, so we report it and the viewer falls back to muted-with-
+    // tap-to-unmute rather than leaving a silently-paused element on screen.
+    // Where autoplay IS permitted — the Capacitor app shell, desktop, any
+    // origin the user has interacted with before — sound just works.
     useEffect(() => {
         const el = ref.current;
-        if (!el || muted) return;
+        if (!el || !track) return;
         void el.play().catch(() => {
-            // Blocked despite the gesture — nothing more to try.
+            if (!muted) onBlockedRef.current?.();
         });
-    }, [muted]);
+    }, [muted, track]);
 
-    // Muted by default: mobile browsers block unmuted autoplay, so the viewer
-    // page flips this on the first tap anywhere on the video.
     return <audio ref={ref} autoPlay muted={muted} />;
 }

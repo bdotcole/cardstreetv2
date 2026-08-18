@@ -51,9 +51,12 @@ export async function POST(
             );
         }
 
-        // TODO: vod_url is filled asynchronously when the egress completes —
-        // wire the LiveKit egress webhook (egress_ended -> file location) to
-        // stamp streams.vod_url, and a reaper to clear it after vod_expires_at.
+        // vod_url is filled asynchronously by app/api/webhooks/livekit
+        // (egress_ended -> file location), which fires minutes after this
+        // returns. Recording only happens at all when the LIVEKIT_EGRESS_S3_*
+        // env vars are set — without them startRoomRecording skips and there
+        // is no egress to complete. (Still open: a reaper to clear vod_url
+        // once vod_expires_at passes.)
 
         return NextResponse.json({ success: true, vodExpiresAt: result.vodExpiresAt });
     } catch (err: any) {

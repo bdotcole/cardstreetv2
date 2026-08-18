@@ -131,7 +131,10 @@ export default function LiveViewerClient() {
     const [myUserId, setMyUserId] = useState<string | null>(null);
 
     const [boardOpen, setBoardOpen] = useState(false);
-    const [audioMuted, setAudioMuted] = useState(true);
+    // Sound ON by default; flipped to muted only if the browser refuses
+    // unmuted autoplay (see TrackAudio onBlocked), after which the first tap
+    // anywhere turns it on.
+    const [audioMuted, setAudioMuted] = useState(false);
     const [chatInput, setChatInput] = useState('');
     const [sending, setSending] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
@@ -798,6 +801,16 @@ export default function LiveViewerClient() {
         }, 6000);
         return () => clearTimeout(timer);
     }, [poll?.status, poll?.id]);
+
+    // Autoplay refused → the very next interaction anywhere on the page
+    // (tapping chat, the spot board, a reaction) restores sound, not just a
+    // tap on the video. One-shot, and removed as soon as sound is on.
+    useEffect(() => {
+        if (!audioMuted) return;
+        const unmute = () => setAudioMuted(false);
+        document.addEventListener('pointerdown', unmute, { once: true });
+        return () => document.removeEventListener('pointerdown', unmute);
+    }, [audioMuted]);
 
     // ─── Sticker reactions (ephemeral broadcast; nothing persists) ───
     const { floats: stickerFloats, spawn: spawnSticker, remove: removeSticker } = useFloatingStickers();
@@ -1741,7 +1754,12 @@ export default function LiveViewerClient() {
                 onClick) rather than a floating "Tap for sound" pill, which
                 collided with the header and cluttered the frame. */}
             {remoteFeeds.audio.map((track, i) => (
-                <TrackAudio key={track.sid ?? i} track={track} muted={audioMuted} />
+                <TrackAudio
+                    key={track.sid ?? i}
+                    track={track}
+                    muted={audioMuted}
+                    onBlocked={() => setAudioMuted(true)}
+                />
             ))}
 
             {/* The breaker's "now opening" call-out — the on-video moment of
