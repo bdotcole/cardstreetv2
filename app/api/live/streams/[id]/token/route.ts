@@ -99,7 +99,20 @@ export async function POST(
                 );
             }
             const room = stream.livekit_room || roomNameForStream(stream.id);
-            const identity = user ? user.id : `guest_${randomUUID()}`;
+            // Unique per SESSION, never per account. LiveKit evicts the
+            // existing participant when a second one joins under the same
+            // identity — so a signed-in viewer watching on their phone AND
+            // desktop had the two devices kicking each other in a reconnect
+            // loop: each worked alone, both together produced "could not
+            // establish pc connection" and a stream that never rendered
+            // (field-diagnosed live, 2026-08-18). Guests were already given a
+            // random identity for exactly this reason; signed-in viewers kept
+            // the raw user id and hit the same trap.
+            //
+            // The user id stays as a readable prefix for debugging. The
+            // ':main' / ':table' / ':monitor' suffixes stay unambiguous — the
+            // separator is '#', and slot detection only ever reads those.
+            const identity = `${user ? user.id : 'guest'}#${randomUUID()}`;
             const token = await mintViewerToken(room, identity);
 
             // Whatnot-style join line: relayed as an ephemeral broadcast (never
