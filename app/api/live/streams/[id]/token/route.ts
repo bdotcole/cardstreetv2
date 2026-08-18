@@ -24,8 +24,9 @@
  */
 
 import { NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { randomUUID } from 'crypto';
-import { broadcastStreamEvent, requireBroadcaster, resolvePublicViewer } from '@/lib/liveBreaks';
+import { broadcastStreamEvent, recordViewerPeak, requireBroadcaster, resolvePublicViewer } from '@/lib/liveBreaks';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { mintPublisherToken, mintViewerToken, roomNameForStream } from '@/lib/livekit';
 
@@ -114,6 +115,12 @@ export async function POST(
             // separator is '#', and slot detection only ever reads those.
             const identity = `${user ? user.id : 'guest'}#${randomUUID()}`;
             const token = await mintViewerToken(room, identity);
+
+            // Every viewer join passes through here, so this is where the
+            // peak gets written even before the LiveKit webhook is configured.
+            // +1 = the requester, who hasn't connected yet. After the
+            // response — a LiveKit control-plane call must not delay the join.
+            after(() => recordViewerPeak(stream.id, room, 1));
 
             // Whatnot-style join line: relayed as an ephemeral broadcast (never
             // persisted — reconnects would spam the chat table; clients dedupe

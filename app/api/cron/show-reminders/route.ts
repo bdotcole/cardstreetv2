@@ -1,7 +1,15 @@
 /**
- * Pre-show reminder sweep — every 5 minutes.
+ * Pre-show reminder sweep — every 5 minutes. Two moments per show:
  *
- * Sends the "starts in ~15 minutes" heads-up to everyone who tapped Get
+ * 1. ANNOUNCE (~a day ahead, public shows only): email + push blast to the
+ *    whole base with a Get-notified CTA. Added after the 2026-08-18 retro —
+ *    the go-live blast was the FIRST touch most users got, so it landed cold
+ *    (one organic opt-in existed before the show). Shows scheduled less than
+ *    ANNOUNCE_MIN_LEAD_H ahead are never announced, which keeps same-day
+ *    test streams from blasting everyone. CAS-claimed on
+ *    streams.announce_sent_at (20260823_stream_announce.sql).
+ *
+ * 2. Sends the "starts in ~15 minutes" heads-up to everyone who tapped Get
  * notified on a scheduled show (stream_reminders). The go-live fan-out is a
  * different moment and still fires on top: this is the calendar nudge that
  * gets someone to the couch, that one is the watch-now alert.
@@ -23,22 +31,110 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { sendShowStartingSoonNotification } from '@/lib/courier';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+    sendShowEmailBlast,
+    sendShowLivePushBlast,
+    sendShowStartingSoonNotification,
+} from '@/lib/courier';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// The announce sweep sends ~1k Courier messages in chunks when a show enters
+// its window — well past the old 60s budget.
+export const maxDuration = 300;
 
 /** How far ahead a show must be to still earn the heads-up. */
 const REMINDER_WINDOW_MIN = 15;
 /** Per-run cap — bounds runtime; more shows are picked up next pass. */
 const SHOW_LIMIT = 10;
+/** Announce window: a show is announced once it is within this many hours of
+ *  starting… */
+const ANNOUNCE_MAX_LEAD_H = 27;
+/** …but never when it was scheduled closer than this — same-day rehearsals
+ *  and test streams must not blast the user base. */
+const ANNOUNCE_MIN_LEAD_H = 3;
 
 interface ShowRow {
     id: string;
     title: string;
     seller_id: string;
     scheduled_at: string;
+}
+
+/** "Tue 19 Aug, 18:00 (Bangkok time)" — readable in both languages' copy. */
+function startsAtLabel(scheduledAt: string): string {
+    try {
+        const label = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Bangkok',
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(new Date(scheduledAt));
+        return `${label} (Bangkok time)`;
+    } catch {
+        return 'soon';
+    }
+}
+
+/**
+ * Announce upcoming public shows to the whole base (email + push, Get-notified
+ * CTA). Fails soft when announce_sent_at is missing (run 20260823). Returns
+ * counts for the cron response.
+ */
+async function announceSweep(
+    supabase: SupabaseClient<any, 'public', any>,
+): Promise<{ announced: number; pushes: number; emails: number } | { skipped: string }> {
+    const minIso = new Date(Date.now() + ANNOUNCE_MIN_LEAD_H * 3_600_000).toISOString();
+    const maxIso = new Date(Date.now() + ANNOUNCE_MAX_LEAD_H * 3_600_000).toISOString();
+
+    const { data: shows, error } = await supabase
+        .from('streams')
+        .select('id, title, seller_id, scheduled_at')
+        .eq('status', 'scheduled')
+        .eq('visibility', 'public')
+        .is('announce_sent_at', null)
+        .gt('scheduled_at', minIso)
+        .lte('scheduled_at', maxIso)
+        .order('scheduled_at', { ascending: true })
+        .limit(SHOW_LIMIT)
+        .returns<ShowRow[]>();
+
+    if (error) {
+        if (error.code === '42703' || error.code === 'PGRST205') {
+            console.warn('[Cron/ShowReminders] announce schema missing — run 20260823_stream_announce.sql');
+            return { skipped: 'announce_schema_missing' };
+        }
+        console.error('[Cron/ShowReminders] announce query failed:', error.message);
+        return { skipped: 'announce_query_failed' };
+    }
+
+    let announced = 0;
+    let pushes = 0;
+    let emails = 0;
+    for (const show of shows ?? []) {
+        // CAS: only the run that flips NULL -> now owns this show's blast.
+        const { data: claimed, error: claimErr } = await supabase
+            .from('streams')
+            .update({ announce_sent_at: new Date().toISOString() })
+            .eq('id', show.id)
+            .is('announce_sent_at', null)
+            .select('id')
+            .maybeSingle<{ id: string }>();
+        if (claimErr || !claimed) continue;
+        announced += 1;
+
+        const payload = {
+            streamId: show.id,
+            title: show.title,
+            startsAtLabel: startsAtLabel(show.scheduled_at),
+        };
+        pushes += await sendShowLivePushBlast(payload, [show.seller_id], 'announce');
+        emails += await sendShowEmailBlast(payload, [show.seller_id], 'announce');
+        console.log(`[Cron/ShowReminders] announced ${show.id} (${payload.startsAtLabel})`);
+    }
+    return { announced, pushes, emails };
 }
 
 export async function GET(request: NextRequest) {
@@ -76,14 +172,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Query failed' }, { status: 500 });
     }
 
-    if (!shows || shows.length === 0) {
-        return NextResponse.json({ shows: 0, notified: 0 });
-    }
-
     let notified = 0;
     let claimedShows = 0;
 
-    for (const show of shows) {
+    for (const show of shows ?? []) {
         // CAS: only the run that flips NULL -> now owns this show's fan-out.
         const { data: claimed, error: claimErr } = await supabase
             .from('streams')
@@ -136,5 +228,9 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    return NextResponse.json({ shows: claimedShows, notified });
+    // AFTER the heads-ups: a 1k-message announce blast must not delay a
+    // time-critical "starts in 15 minutes" nudge.
+    const announce = await announceSweep(supabase);
+
+    return NextResponse.json({ shows: claimedShows, notified, announce });
 }

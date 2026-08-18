@@ -1462,6 +1462,22 @@ export async function sendWishlistListingAlert(
 }
 
 /**
+ * Show URL with GA attribution. Without these params every push/email arrival
+ * lands as Direct traffic and a show's reach can't be judged after the fact —
+ * the 2026-08-18 retro could not tell how many of 315 pushes were tapped.
+ * medium: 'push' / 'email' for the single-channel blasts; 'alert' for the
+ * targeted email+push sends (one Courier message covers both channels, so
+ * they can't carry different URLs).
+ */
+function showUrlWithUtm(
+    streamId: string,
+    medium: 'push' | 'email' | 'alert',
+    campaign: 'live_golive' | 'live_prestart' | 'live_announce',
+): string {
+    return `${APP_URL}/live/${streamId}?utm_source=courier&utm_medium=${medium}&utm_campaign=${campaign}`;
+}
+
+/**
  * Live-breaks presales: tells a buyer who bought presale spots that the show
  * they reserved a seat in just went live. Mirrors sendWishlistListingAlert —
  * inline bilingual content until a dashboard template exists (set
@@ -1486,7 +1502,7 @@ export async function sendShowLiveNotification(
     // push channel must be addressed (see buildRouting).
     const templateId = (process.env.COURIER_SHOW_LIVE_TEMPLATE_ID || '').trim();
     const routing = buildRouting(wantEmail, wantPush, templateId ? 'template' : 'inline');
-    const showUrl = `${APP_URL}/live/${show.streamId}`;
+    const showUrl = showUrlWithUtm(show.streamId, 'alert', 'live_golive');
 
     const message: Record<string, unknown> = {
         to: recipient,
@@ -1548,7 +1564,7 @@ export async function sendShowStartingSoonNotification(
     const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
     const templateId = (process.env.COURIER_SHOW_SOON_TEMPLATE_ID || '').trim();
     const routing = buildRouting(wantEmail, wantPush, templateId ? 'template' : 'inline');
-    const showUrl = `${APP_URL}/live/${show.streamId}`;
+    const showUrl = showUrlWithUtm(show.streamId, 'alert', 'live_prestart');
 
     const message: Record<string, unknown> = {
         to: recipient,
@@ -1582,12 +1598,11 @@ export async function sendShowStartingSoonNotification(
 }
 
 /**
- * Go-live PUSH blast to every app install — the "we're live" announcement for
- * users who did NOT reserve a presale spot (those get the richer email+push
- * via sendShowLiveNotification; pass them in excludeUserIds along with the
- * seller). Push-only by design: an email blast to every account on every
- * go-live would read as spam and slam the Apple-relay bounce problem, while a
- * push is exactly what "the shop you have installed just went live" should be.
+ * Show PUSH blast to every app install — the "we're live" announcement
+ * (kind 'golive', the default) or the day-ahead heads-up for a scheduled show
+ * (kind 'announce', sent by the show-reminders cron). Exclude the seller and
+ * anyone who already got the richer targeted alert (presale buyers, reminder
+ * subscribers) via excludeUserIds.
  *
  * One paged query over notification_preferences (fcm_token holders only,
  * PostgREST's 1000-row cap respected), show_live_push honored (default ON),
@@ -1595,8 +1610,9 @@ export async function sendShowStartingSoonNotification(
  * must never stop the blast. Returns the dispatched count.
  */
 export async function sendShowLivePushBlast(
-    show: { streamId: string; title: string },
+    show: { streamId: string; title: string; startsAtLabel?: string },
     excludeUserIds: string[],
+    kind: 'golive' | 'announce' = 'golive',
 ): Promise<number> {
     const courier = getCourier();
     if (!courier) {
@@ -1605,8 +1621,16 @@ export async function sendShowLivePushBlast(
     }
     const supabaseAdmin = getSupabaseAdmin();
     const excluded = new Set(excludeUserIds);
-    const showUrl = `${APP_URL}/live/${show.streamId}`;
-    const templateId = (process.env.COURIER_SHOW_LIVE_TEMPLATE_ID || '').trim();
+    const showUrl = showUrlWithUtm(
+        show.streamId,
+        'push',
+        kind === 'announce' ? 'live_announce' : 'live_golive',
+    );
+    const templateId = (
+        (kind === 'announce'
+            ? process.env.COURIER_SHOW_ANNOUNCE_TEMPLATE_ID
+            : process.env.COURIER_SHOW_LIVE_TEMPLATE_ID) || ''
+    ).trim();
 
     // ─── Collect recipients (paged — .limit() alone silently caps at 1000) ───
     interface PrefRow {
@@ -1646,17 +1670,30 @@ export async function sendShowLivePushBlast(
         const results = await Promise.allSettled(
             chunk.map(async ({ userId, fcmToken }) => {
                 const message: Record<string, unknown> = {
-                    to: buildRecipient(null, fcmToken),
+                    // user_id rides along so Courier's message log reports a
+                    // failed send against OUR user id — without it the log
+                    // shows an opaque anon_* profile and a dead token can
+                    // never be traced back for pruning (2026-08-18: 45/360
+                    // blast pushes hit dead tokens, none identifiable).
+                    // scripts/prune-dead-fcm-tokens.mjs reads that log.
+                    to: { ...buildRecipient(null, fcmToken), user_id: userId },
                     routing: buildRouting(false, true, templateId ? 'template' : 'inline'),
                     data: {
                         title: show.title,
                         showUrl,
                         streamId: show.streamId,
-                        type: 'stream_live',
+                        type: kind === 'announce' ? 'stream_announce' : 'stream_live',
                     },
                 };
                 if (templateId) {
                     message.template = templateId;
+                } else if (kind === 'announce') {
+                    message.content = {
+                        title: show.startsAtLabel
+                            ? `${show.title} — live ${show.startsAtLabel}`
+                            : `${show.title} — going live soon`,
+                        body: `Tap to see the show and get notified when it starts — กดดูรายละเอียดไลฟ์และรับแจ้งเตือนเมื่อเริ่ม: ${showUrl}`,
+                    };
                 } else {
                     message.content = {
                         title: `${show.title} is live now`,
@@ -1670,7 +1707,159 @@ export async function sendShowLivePushBlast(
         sent += results.filter((r) => r.status === 'fulfilled').length;
     }
     console.log(
-        `[Courier] show-live blast for ${show.streamId}: ${sent}/${recipients.length} pushes dispatched`,
+        `[Courier] show ${kind} blast for ${show.streamId}: ${sent}/${recipients.length} pushes dispatched`,
+    );
+    return sent;
+}
+
+/**
+ * Show EMAIL blast to every account with a usable address.
+ *
+ * The push blast was originally push-ONLY by design (email-on-every-go-live
+ * read as spam risk). At the 2026-08-18 show the founder hand-sent exactly
+ * this email to all users — 9 minutes after going live — and asked for it to
+ * be automated, so the decision is reversed for PUBLIC shows: kind 'golive'
+ * fires from the go-live route at flip time, kind 'announce' from the
+ * show-reminders cron a day ahead. Unlisted shows never blast.
+ *
+ * Recipient hygiene: synthetic `@partner.cardstreet.app` addresses are
+ * skipped (breaker placeholder accounts — 21 guaranteed bounces in the
+ * 08-18 manual blast), show_live_email is honored (default ON), and
+ * excludeUserIds covers the seller + anyone who already got the richer
+ * targeted email. Emails page from the auth admin API (the only place
+ * addresses live). Best-effort per recipient; returns the dispatched count.
+ */
+export async function sendShowEmailBlast(
+    show: { streamId: string; title: string; startsAtLabel?: string },
+    excludeUserIds: string[],
+    kind: 'golive' | 'announce' = 'golive',
+): Promise<number> {
+    const courier = getCourier();
+    if (!courier) {
+        console.warn('[Courier] Client not initialized — skipping show email blast');
+        return 0;
+    }
+    const supabaseAdmin = getSupabaseAdmin();
+    const excluded = new Set(excludeUserIds);
+    const showUrl = showUrlWithUtm(
+        show.streamId,
+        'email',
+        kind === 'announce' ? 'live_announce' : 'live_golive',
+    );
+    const templateId = (
+        (kind === 'announce'
+            ? process.env.COURIER_SHOW_ANNOUNCE_TEMPLATE_ID
+            : process.env.COURIER_SHOW_LIVE_TEMPLATE_ID) || ''
+    ).trim();
+
+    // ─── Email opt-outs (paged; column may predate its migration → default ON) ───
+    const optedOut = new Set<string>();
+    {
+        const PAGE = 1000;
+        for (let from = 0; ; from += PAGE) {
+            const { data, error } = await supabaseAdmin
+                .from('notification_preferences')
+                .select('*')
+                .order('user_id', { ascending: true })
+                .range(from, from + PAGE - 1)
+                .returns<{ user_id: string; show_live_email?: boolean | null }[]>();
+            if (error) {
+                console.warn('[Courier] show email blast prefs query failed:', error.message);
+                break;
+            }
+            for (const row of data ?? []) {
+                if (row.show_live_email === false) optedOut.add(row.user_id);
+            }
+            if (!data || data.length < PAGE) break;
+        }
+    }
+
+    // ─── Collect addresses from the auth admin API (paged) ───
+    const recipients: { userId: string; email: string }[] = [];
+    for (let page = 1; page <= 30; page++) {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage: 1000,
+        });
+        if (error) {
+            console.error('[Courier] show email blast user listing failed:', error.message);
+            break;
+        }
+        for (const u of data?.users ?? []) {
+            const email = u.email?.trim();
+            if (!email || excluded.has(u.id) || optedOut.has(u.id)) continue;
+            if (email.toLowerCase().endsWith('@partner.cardstreet.app')) continue;
+            recipients.push({ userId: u.id, email });
+        }
+        if (!data || data.users.length < 1000) break;
+    }
+    if (recipients.length === 0) return 0;
+
+    const subject =
+        kind === 'announce'
+            ? show.startsAtLabel
+                ? `${show.title} — live on CardStreet ${show.startsAtLabel}`
+                : `${show.title} — coming soon on CardStreet`
+            : `${show.title} is LIVE now on CardStreet`;
+    const content = {
+        version: '2022-01-01',
+        elements: [
+            { type: 'meta', title: subject },
+            {
+                type: 'text',
+                content:
+                    kind === 'announce'
+                        ? `${show.title} goes live on CardStreet ${show.startsAtLabel || 'soon'}. Open the show page and tap "Get notified" so you don't miss the start.`
+                        : `${show.title} is live on CardStreet right now — come watch the break and grab a spot.`,
+            },
+            {
+                type: 'text',
+                content:
+                    kind === 'announce'
+                        ? `ไลฟ์ ${show.title} กำลังจะเริ่ม${show.startsAtLabel ? ` ${show.startsAtLabel}` : 'เร็วๆ นี้'} — เปิดหน้าไลฟ์แล้วกด "รับการแจ้งเตือน" เพื่อไม่พลาดตอนเริ่ม`
+                        : `ไลฟ์ ${show.title} เริ่มแล้วตอนนี้ — เข้ามาดูและจองสปอตได้เลย`,
+                color: '#6b7280',
+            },
+            {
+                type: 'action',
+                content: kind === 'announce' ? 'See the show / ดูรายละเอียด' : 'Watch now / ดูไลฟ์เลย',
+                href: showUrl,
+                style: 'button',
+                align: 'center',
+                background_color: '#0891b2',
+            },
+        ],
+    };
+
+    let sent = 0;
+    const CHUNK = 10;
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+        const chunk = recipients.slice(i, i + CHUNK);
+        const results = await Promise.allSettled(
+            chunk.map(async ({ userId, email }) => {
+                const message: Record<string, unknown> = {
+                    // user_id for bounce traceability, same as the push blast.
+                    to: { ...buildRecipient(email, null), user_id: userId },
+                    routing: buildRouting(true, false, templateId ? 'template' : 'inline'),
+                    data: {
+                        title: show.title,
+                        showUrl,
+                        streamId: show.streamId,
+                        type: kind === 'announce' ? 'stream_announce' : 'stream_live',
+                    },
+                };
+                if (templateId) {
+                    message.template = templateId;
+                } else {
+                    message.content = content;
+                }
+                await courier.send.message({ message: message as any });
+            }),
+        );
+        sent += results.filter((r) => r.status === 'fulfilled').length;
+    }
+    console.log(
+        `[Courier] show ${kind} email blast for ${show.streamId}: ${sent}/${recipients.length} emails dispatched`,
     );
     return sent;
 }

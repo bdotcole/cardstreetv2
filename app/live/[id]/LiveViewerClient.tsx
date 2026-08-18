@@ -489,12 +489,23 @@ export default function LiveViewerClient() {
 
     // ─── LiveKit: join the room while the show is live. Re-runs when
     //     `connected` flips false (RoomEvent.Disconnected cleared the dead
-    //     room), so a network blip reconnects with a fresh token; outright
-    //     failures retry a few times with a short backoff. ───
+    //     room), so a network blip reconnects with a fresh token. Failures
+    //     retry FOREVER with a capped backoff — the old 3-attempt budget
+    //     stranded viewers on "Waiting for video" with no error and no way
+    //     back (field-diagnosed at the 2026-08-18 show); after 3 misses the
+    //     video area now says so and offers a manual retry on top of the
+    //     ongoing automatic one. ───
     useEffect(() => {
         if (pageState !== 'ready' || stream?.status !== 'live' || connected) return;
         let cancelled = false;
         let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleRetry = () => {
+            if (cancelled) return;
+            retryTimer = setTimeout(
+                () => setConnectAttempt((a) => a + 1),
+                Math.min(2000 * (connectAttempt + 1), 15000),
+            );
+        };
         (async () => {
             try {
                 const res = await fetch(`/api/live/streams/${streamId}/token`, {
@@ -503,18 +514,19 @@ export default function LiveViewerClient() {
                     body: JSON.stringify({ role: 'viewer' }),
                 });
                 const data = await res.json();
-                if (!res.ok || !data.token || !data.url) return; // 409 = just ended; realtime updates the state
+                if (!res.ok || !data.token || !data.url) {
+                    // 409 = the show just ended — Realtime flips the page
+                    // state, nothing to retry. Anything else (5xx, gateway
+                    // hiccup) deserves the same retry loop as a failed
+                    // connect.
+                    if (res.status !== 409) scheduleRetry();
+                    return;
+                }
                 if (cancelled) return;
                 await connect(data.url, data.token);
             } catch {
                 // Video is best-effort; chat + board still work without it.
-                // Retry a couple of times before settling for no video.
-                if (!cancelled && connectAttempt < 3) {
-                    retryTimer = setTimeout(
-                        () => setConnectAttempt((a) => a + 1),
-                        2000 * (connectAttempt + 1),
-                    );
-                }
+                scheduleRetry();
             }
         })();
         return () => {
@@ -1706,12 +1718,37 @@ export default function LiveViewerClient() {
                     )}
                 </div>
             ) : feedCount === 0 ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-xl mb-3"></i>
-                    <p className="text-xs text-slate-400">
-                        {t('live.viewer.waitingVideo') || 'Waiting for video...'}
-                    </p>
-                </div>
+                // Three failed connects = say so. The automatic retry keeps
+                // running behind this (capped backoff), the button just skips
+                // the wait — a viewer must never be stranded on a silent
+                // spinner (2026-08-18 field report).
+                !connected && connectAttempt >= 3 ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                        <i className="fa-solid fa-triangle-exclamation text-amber-400 text-2xl mb-3"></i>
+                        <p className="text-xs text-slate-300 font-bold">
+                            {t('live.viewer.videoTrouble') || 'Having trouble connecting to the video'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                            {t('live.viewer.videoTroubleDesc') || 'Retrying automatically — chat and the board still work'}
+                        </p>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setConnectAttempt(0);
+                            }}
+                            className="mt-4 px-4 py-2 rounded-full bg-brand-cyan text-slate-950 text-xs font-bold active:scale-95 transition-transform"
+                        >
+                            {t('live.viewer.retryNow') || 'Retry now'}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <i className="fa-solid fa-circle-notch animate-spin text-brand-cyan text-xl mb-3"></i>
+                        <p className="text-xs text-slate-400">
+                            {t('live.viewer.waitingVideo') || 'Waiting for video...'}
+                        </p>
+                    </div>
+                )
             ) : feedCount === 1 ? (
                 <CroppedTrackVideo
                     track={mainTrack ?? tableTrack}

@@ -1,5 +1,6 @@
 /**
- * POST /api/webhooks/livekit — LiveKit egress callbacks.
+ * POST /api/webhooks/livekit — LiveKit callbacks: egress (VOD) + participant
+ * joins (viewer_peak).
  *
  * Recording is started at go-live (startRoomRecording) and the egress id is
  * stamped on the stream, but the finished FILE only exists once the egress
@@ -21,6 +22,7 @@
 import { NextResponse } from 'next/server';
 import { WebhookReceiver } from 'livekit-server-sdk';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordViewerPeak } from '@/lib/liveBreaks';
 
 export const runtime = 'nodejs';
 
@@ -48,6 +50,17 @@ export async function POST(req: Request) {
     }
 
     try {
+        // Joins update viewer_peak — the accurate path once this webhook is
+        // configured (the token route's mint-time bump works without it, but
+        // only sees viewers at mint time, not the room's true occupancy).
+        if (event.event === 'participant_joined') {
+            const roomName = event.room?.name;
+            if (roomName?.startsWith('stream_')) {
+                await recordViewerPeak(roomName.slice('stream_'.length), roomName);
+            }
+            return NextResponse.json({ ok: true });
+        }
+
         // Only the terminal egress event carries a finished file.
         if (event.event !== 'egress_ended' || !event.egressInfo) {
             return NextResponse.json({ ok: true, ignored: event.event });

@@ -193,6 +193,27 @@ export async function getRoomActivity(
 }
 
 /**
+ * Concurrent VIEWER count for a room — participants minus the broadcaster's
+ * devices — or null when LiveKit can't answer (unknown, not zero). Broadcaster
+ * devices are the ':main'/':table'/':monitor' identity suffixes
+ * (mintPublisherToken / the monitor grant); everyone else in the room holds a
+ * subscribe-only viewer token.
+ */
+export async function countRoomViewers(room: string): Promise<number | null> {
+    try {
+        const { url, apiKey, apiSecret } = getLiveKitConfig();
+        const svc = new RoomServiceClient(httpHost(url), apiKey, apiSecret);
+        const participants = await svc.listParticipants(room);
+        return participants.filter((p) => !/:(main|table|monitor)$/.test(p.identity)).length;
+    } catch (err) {
+        // Includes the room-already-reaped case — indistinguishable from an
+        // API fault here, and peak tracking must never invent a zero.
+        console.error('[LiveKit] countRoomViewers failed:', err);
+        return null;
+    }
+}
+
+/**
  * Every egress currently running on the account, or null if LiveKit can't be
  * reached. Used by the watchdog to catch recordings that outlived the stream
  * row — stopRoomRecording is best-effort, so a failed stop at end-time leaves

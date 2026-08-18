@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { isFeatureEnabled, requireBeta } from '@/lib/betaAuth';
+import { countRoomViewers } from '@/lib/livekit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { minNextBidSatang } from '@/lib/auctionRules';
@@ -452,6 +453,37 @@ export async function broadcastStreamEvent(
         await admin.channel(`stream-react:${streamId}`).httpSend(event, payload);
     } catch (err) {
         console.error(`[LiveBreaks] ${event} broadcast failed (non-fatal):`, err);
+    }
+}
+
+/**
+ * Record the room's current viewer count into streams.viewer_peak — the
+ * column had NO writer at all until 2026-08-18 (the first real show ended
+ * with viewer_peak=0 and no way to tell reach from retention). Monotonic max
+ * via the `.lt` filter, so concurrent bumps can only raise it. Best-effort:
+ * peak tracking must never fail a join.
+ *
+ * `extraJoiners` covers the token-mint path, where the requester has not
+ * connected to the room yet and would otherwise not count themselves.
+ */
+export async function recordViewerPeak(
+    streamId: string,
+    room: string,
+    extraJoiners = 0,
+): Promise<void> {
+    try {
+        const count = await countRoomViewers(room);
+        if (count === null) return; // unknown ≠ zero — leave the peak alone
+        const peak = count + extraJoiners;
+        if (peak <= 0) return;
+        const admin = createAdminClient();
+        await admin
+            .from('streams')
+            .update({ viewer_peak: peak })
+            .eq('id', streamId)
+            .lt('viewer_peak', peak);
+    } catch (err) {
+        console.warn('[LiveBreaks] viewer peak record failed (non-fatal):', err);
     }
 }
 

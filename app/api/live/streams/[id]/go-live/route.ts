@@ -18,7 +18,11 @@ import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isMissingTableError, requireBroadcaster } from '@/lib/liveBreaks';
 import { mintPublisherToken, roomNameForStream, startRoomRecording } from '@/lib/livekit';
-import { sendShowLiveNotification, sendShowLivePushBlast } from '@/lib/courier';
+import { sendShowEmailBlast, sendShowLiveNotification, sendShowLivePushBlast } from '@/lib/courier';
+
+// The after() fan-out sends ~1k Courier messages in chunks (push blast +
+// email blast) — well past a default function window.
+export const maxDuration = 300;
 
 /**
  * Presale go-live fan-out: notify the distinct buyers of this stream's SOLD
@@ -193,8 +197,11 @@ export async function POST(
         const { buyerIds, title } = await notifyPresaleBuyers(admin, stream.id, user.id);
 
         // Reminder subscribers + the app-wide "we're live" PUSH blast (every
-        // install with an FCM token, minus the seller, the presale buyers and
-        // the reminder subscribers — all already alerted with richer copy).
+        // install with an FCM token) + the EMAIL blast (every account with a
+        // usable address — automated 2026-08-18 after the founder hand-sent
+        // it 9 minutes late; public shows only, so a rehearsal can't email
+        // the whole user base). Excludes the seller, the presale buyers and
+        // the reminder subscribers — all already alerted with richer copy.
         // Runs AFTER the response (next/server after()): the breaker's console
         // must go live instantly, not wait on hundreds of Courier sends.
         after(async () => {
@@ -205,10 +212,15 @@ export async function POST(
                     user.id,
                     title,
                 );
-                await sendShowLivePushBlast(
-                    { streamId: stream.id, title },
-                    [user.id, ...buyerIds, ...reminderIds],
-                );
+                const exclude = [user.id, ...buyerIds, ...reminderIds];
+                // Blasts are for PUBLIC shows only — an unlisted stream is a
+                // rehearsal or private sale, and going live on one must never
+                // push (or email) the whole user base. Presale buyers and
+                // reminder subscribers were already alerted above regardless.
+                if (stream.visibility === 'public') {
+                    await sendShowLivePushBlast({ streamId: stream.id, title }, exclude);
+                    await sendShowEmailBlast({ streamId: stream.id, title }, exclude);
+                }
             } catch (err) {
                 console.warn('[Live/GoLive] go-live fan-out failed (non-fatal):', err);
             }
