@@ -124,8 +124,18 @@ export async function startRoomRecording(room: string): Promise<string | null> {
                             bucket,
                             accessKey,
                             secret,
-                            region: process.env.LIVEKIT_EGRESS_S3_REGION || '',
+                            // Cloudflare R2 (and most S3-compatible stores)
+                            // reject an empty region and expect the literal
+                            // 'auto'. Real AWS keeps whatever is configured,
+                            // where the region is part of addressing.
+                            region:
+                                process.env.LIVEKIT_EGRESS_S3_REGION ||
+                                (process.env.LIVEKIT_EGRESS_S3_ENDPOINT ? 'auto' : ''),
                             endpoint: process.env.LIVEKIT_EGRESS_S3_ENDPOINT || '',
+                            // R2 does not implement per-object ACLs; forcing
+                            // path-style addressing keeps the upload URL shape
+                            // it expects (bucket in the path, not the host).
+                            forcePathStyle: true,
                         }),
                     },
                 }),

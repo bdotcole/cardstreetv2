@@ -57,20 +57,37 @@ export async function POST(req: Request) {
         const egressId = info.egressId;
         if (!egressId) return NextResponse.json({ ok: true, ignored: 'no egress id' });
 
-        // Room-composite egress reports its output under fileResults; the
-        // `location` is the storage URL, `filename` the key we uploaded to.
+        // Room-composite egress reports its output under fileResults:
+        // `location` is the URL it uploaded THROUGH, `filename` the object key.
         const file = info.fileResults?.[0];
         const location = file?.location || null;
-        if (!location) {
-            console.warn(`[LiveKit/Webhook] egress ${egressId} ended with no file location`);
+        const filename = file?.filename || null;
+        if (!location && !filename) {
+            console.warn(`[LiveKit/Webhook] egress ${egressId} ended with no file`);
             return NextResponse.json({ ok: true, ignored: 'no file' });
+        }
+
+        // On R2 (and most S3-compatible stores) `location` points at the
+        // PRIVATE api endpoint — credentials required, useless as a <video>
+        // src. Public reads come from a different host entirely: R2's
+        // pub-*.r2.dev domain or a custom domain bound to the bucket. When
+        // that base is configured we address the object there instead, which
+        // is what makes a VOD actually playable.
+        const publicBase = (process.env.LIVEKIT_EGRESS_PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+        const vodUrl =
+            publicBase && filename
+                ? `${publicBase}/${filename.replace(/^\/+/, '')}`
+                : location;
+        if (!vodUrl) {
+            console.warn(`[LiveKit/Webhook] egress ${egressId}: no usable URL`);
+            return NextResponse.json({ ok: true, ignored: 'no url' });
         }
 
         const admin = createAdminClient();
         const { data, error } = await admin
             .from('streams')
             .update({
-                vod_url: location,
+                vod_url: vodUrl,
                 vod_expires_at: new Date(
                     Date.now() + VOD_RETENTION_DAYS * 24 * 60 * 60 * 1000,
                 ).toISOString(),
