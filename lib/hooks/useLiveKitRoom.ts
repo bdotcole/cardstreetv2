@@ -41,21 +41,28 @@ export type CameraSlot = 'main' | 'table';
 // automatically served the lower layers, only capable connections get the top.
 
 /**
- * Capture constraints per camera. LiveKit turns the preset into `ideal`
- * getUserMedia constraints, so a device that can't reach the requested
- * resolution silently delivers its best — the 1080p table-cam ask degrades to
- * 720p and below on older phones with no manual fallback needed.
- * - Face cam ('user'): h720@30 — a talking head doesn't need more.
- * - Table cam ('environment'): h1080@30 — cards on the table must survive the
- *   broadcaster's crop/zoom and still be readable in the viewer's stacked tile.
+ * Capture constraints per camera: h720@30 on BOTH.
+ *
+ * The table cam asked for 1080p on the theory that cards need every pixel to
+ * survive the crop/zoom. In the field that theory lost: a phone publishing
+ * simulcast encodes THREE layers at once (1080p + 720p + 360p), and a
+ * handheld device cannot sustain that — the encoder saturates, thermally
+ * throttles over a long break, and sheds frames. Two consecutive live shows
+ * were reported laggy at 1080p (2026-08-18).
+ *
+ * 720p cuts the top layer's pixel count by 55%, which is the single largest
+ * reduction in encode load available, and a steady 30fps at 720p reads far
+ * better than a stuttering 1080p — motion is most of a break (hands, packs,
+ * reveals), and a card held still is legible at 720p on the phone screens
+ * viewers actually use. contentHint 'detail' still biases toward sharpness.
+ *
+ * The resolution is an `ideal` constraint, so a capable device may still
+ * deliver more and the ladder below adapts to whatever actually arrives.
  */
 function captureOptionsFor(facingMode: 'user' | 'environment'): VideoCaptureOptions {
     return {
         facingMode,
-        resolution:
-            facingMode === 'environment'
-                ? VideoPresets.h1080.resolution
-                : VideoPresets.h720.resolution,
+        resolution: VideoPresets.h720.resolution,
     };
 }
 
@@ -110,10 +117,15 @@ async function captureTracks(opts: {
 /**
  * Publish options per track. The TOP simulcast layer is the captured track
  * itself (bounded by videoEncoding); videoSimulcastLayers adds the lower
- * rungs, giving 1080p/720p/360p on a 1080p table cam and 720p/360p/180p on the
- * face cam. Bitrate ceilings are ~2x the library presets (1.7M @720p / 3M
- * @1080p) because card fronts are high-frequency detail the encoder smears at
- * the defaults. The ladder derives from the ACTUAL captured size, not the
+ * rungs — 720p/360p/180p for both cams now that capture is h720 everywhere
+ * (see captureOptionsFor). Bitrate ceilings stay ~2x the library presets
+ * (1.7M @720p) because card fronts are high-frequency detail the encoder
+ * smears at the defaults; at 720p that headroom buys visible sharpness
+ * instead of being spent just keeping a 1080p frame alive. The 1080p branch
+ * is kept because resolution is an `ideal` constraint — a device may still
+ * hand back more than we asked for.
+ *
+ * The ladder derives from the ACTUAL captured size, not the
  * requested one, so a 1080p ask that fell back to 720p doesn't publish a
  * duplicate top layer.
  */
