@@ -94,7 +94,19 @@ export function TrackAudio({ track, muted }: { track: RemoteTrack; muted: boolea
         };
     }, [track]);
 
+    // Unmuting can leave the element paused on some mobile browsers. The flip
+    // only ever happens inside a user gesture (a tap on the video), so play()
+    // is permitted here — without it a viewer could tap for sound and get
+    // silence anyway.
+    useEffect(() => {
+        const el = ref.current;
+        if (!el || muted) return;
+        void el.play().catch(() => {
+            // Blocked despite the gesture — nothing more to try.
+        });
+    }, [muted]);
+
     // Muted by default: mobile browsers block unmuted autoplay, so the viewer
-    // page flips this via an explicit "tap for sound" interaction.
+    // page flips this on the first tap anywhere on the video.
     return <audio ref={ref} autoPlay muted={muted} />;
 }

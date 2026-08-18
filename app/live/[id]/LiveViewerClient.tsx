@@ -1670,7 +1670,14 @@ export default function LiveViewerClient() {
     // 'Fit'. Desktop keeps the slot defaults. No stats badges here — receive
     // diagnostics are a console (breaker) surface, never a viewer one.
     const videoArea = (fullBleed: boolean) => (
-        <div className="relative w-full h-full bg-black overflow-hidden">
+        <div
+            // First tap anywhere on the video turns the sound on. That tap IS
+            // the user gesture browsers demand before unmuted playback, so it
+            // replaces the old floating pill with no loss of function. Once
+            // unmuted the handler is inert — tapping never re-mutes, which
+            // would be a nasty surprise mid-break.
+            onClick={audioMuted ? () => setAudioMuted(false) : undefined}
+            className="relative w-full h-full bg-black overflow-hidden">
             {!isLive ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                     <i className="fa-solid fa-tower-broadcast text-slate-600 text-4xl mb-4"></i>
@@ -1728,19 +1735,14 @@ export default function LiveViewerClient() {
                 </div>
             )}
 
-            {/* Remote audio (main cam mic). Muted until the viewer opts in. */}
+            {/* Remote audio (main cam mic). Starts muted because browsers
+                refuse to autoplay audio without a user gesture — but the
+                gesture is now a tap ANYWHERE on the video (see the container's
+                onClick) rather than a floating "Tap for sound" pill, which
+                collided with the header and cluttered the frame. */}
             {remoteFeeds.audio.map((track, i) => (
                 <TrackAudio key={track.sid ?? i} track={track} muted={audioMuted} />
             ))}
-            {isLive && audioMuted && feedCount > 0 && (
-                <button
-                    onClick={() => setAudioMuted(false)}
-                    className="absolute top-16 right-3 px-3 h-9 rounded-full bg-black/60 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 backdrop-blur-sm active:scale-95 transition-all"
-                >
-                    <i className="fa-solid fa-volume-xmark"></i>
-                    {t('live.viewer.unmute') || 'Tap for sound'}
-                </button>
-            )}
 
             {/* The breaker's "now opening" call-out — the on-video moment of
                 the announce-spot flow, so the buyer whose spot is up feels it
@@ -2104,7 +2106,10 @@ export default function LiveViewerClient() {
             <div className="relative h-full lg:hidden">
                 {videoArea(true)}
 
-                <div className="absolute top-0 inset-x-0 pt-[calc(var(--sat)+0.5rem)] px-3 bg-gradient-to-b from-black/70 to-transparent pb-6 pointer-events-none">
+                {/* Sits immediately under the system status bar — --sat alone,
+                    no extra padding. The old +0.5rem pushed the whole cluster
+                    (back, shop, LIVE, viewers, share) visibly down the frame. */}
+                <div className="absolute top-0 inset-x-0 pt-[var(--sat)] px-3 bg-gradient-to-b from-black/70 to-transparent pb-5 pointer-events-none">
                     <div className="pointer-events-auto">{header}</div>
                 </div>
 
