@@ -86,34 +86,42 @@ export const usePushNotifications = () => {
                     routeNotificationTap(event.notification?.data);
                 });
 
-                // Measured 2026-08-18: of 363 registered devices, ZERO were
-                // iOS — no iPhone has ever reached saveToken. Every in-repo
-                // requirement checks out (FirebaseApp.configure, matching
-                // bundle id, aps-environment, swizzling on, getToken called
-                // explicitly), so the failure is environmental: most likely a
-                // missing APNs .p8 in Firebase, or a shipped binary predating
-                // this code. console.error on a user's phone told us none of
-                // that, which is why it went unnoticed for months — report it
-                // where we can actually see it.
-                try {
-                    const { token } = await FirebaseMessaging.getToken();
-                    if (token) {
-                        setFcmToken(token);
-                        saveToken(token);
-                    } else {
-                        Sentry.captureMessage('iOS FCM token empty', {
-                            level: 'warning',
-                            tags: { area: 'push', platform: 'ios' },
-                        });
+                // APNs delivery RACES this call. After the permission grant
+                // the plugin registers with APNs, Apple's roundtrip takes
+                // ~0.1-3s, and until the device token lands the plugin
+                // rejects getToken with "No APNS token specified before
+                // fetching FCM Token" — field-confirmed the day this
+                // instrumentation shipped (CARDSTREET-3H: iPhone, iOS 18.7,
+                // granted permission, lost the race, got no token). One eager
+                // call was all we made, so the race WAS the iOS token
+                // pipeline. Retry with backoff (~20s total) before concluding
+                // anything is broken; tokenReceived above stays as the net
+                // for a token that arrives after we stop asking. If all
+                // attempts fail, the LAST error still names the cause — and
+                // "No APNS token" surviving 6 attempts would mean APNs
+                // delivery itself is broken (swizzling/entitlement), not the
+                // race.
+                let lastErr: unknown = null;
+                for (let attempt = 1; attempt <= 6; attempt++) {
+                    try {
+                        const { token } = await FirebaseMessaging.getToken();
+                        if (token) {
+                            setFcmToken(token);
+                            saveToken(token);
+                            lastErr = null;
+                            break;
+                        }
+                        lastErr = new Error('iOS FCM token empty');
+                    } catch (err) {
+                        lastErr = err;
                     }
-                } catch (err) {
-                    console.error('Error fetching FCM token:', err);
-                    // The Firebase error text names the cause (e.g. "No APNS
-                    // token specified" / "APNS device token not set"), so the
-                    // Sentry issue itself is the diagnosis.
-                    Sentry.captureException(err, {
+                    await new Promise((r) => setTimeout(r, 1200 * attempt));
+                }
+                if (lastErr) {
+                    console.error('Error fetching FCM token:', lastErr);
+                    Sentry.captureException(lastErr, {
                         tags: { area: 'push', platform: 'ios' },
-                        extra: { stage: 'FirebaseMessaging.getToken' },
+                        extra: { stage: 'FirebaseMessaging.getToken', attempts: 6 },
                     });
                 }
 
