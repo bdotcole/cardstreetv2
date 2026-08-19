@@ -5,6 +5,7 @@ import { localizedUrl, requestPathLocale } from '@/lib/i18nRouting'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
+import ActivityPinger from '@/components/ActivityPinger'
 import HtmlLangSync from '@/components/HtmlLangSync'
 import { GoogleAnalytics } from '@next/third-parties/google'
 // Sitewide metadata default, localized per request (middleware resolves the
@@ -190,6 +191,7 @@ fbq('track', 'PageView');`,
                     <ToastProvider>
                         <HtmlLangSync />
                         <PushNotificationManager />
+                        <ActivityPinger />
                         {children}
                     </ToastProvider>
                 </UserSettingsProvider>
