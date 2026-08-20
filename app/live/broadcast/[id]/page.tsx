@@ -1237,6 +1237,40 @@ export default function BroadcastConsolePage() {
     );
 
     // ─── End + settle ───
+    // ─── Clip: mark the moment that just happened ───
+    // One tap, no media work (the clip is a window into the VOD that the
+    // egress is already recording), so this stays usable mid-rip when the
+    // breaker has both hands full. `clipCount` gives the only feedback that
+    // matters live: it went in.
+    const [clipping, setClipping] = useState(false);
+    const [clipCount, setClipCount] = useState(0);
+
+    const markClip = useCallback(async () => {
+        if (clipping) return;
+        setClipping(true);
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/clip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(data.error || t('live.console.clipError') || 'Could not save the clip', 'error');
+                return;
+            }
+            setClipCount((n) => n + 1);
+            showToast(
+                t('live.console.clipSaved') || 'Clip saved — it will be ready after the show',
+                'success',
+            );
+        } catch {
+            showToast(t('live.console.clipError') || 'Could not save the clip', 'error');
+        } finally {
+            setClipping(false);
+        }
+    }, [clipping, streamId, showToast, t]);
+
     const endShow = useCallback(async () => {
         const res = await fetch(`/api/live/streams/${streamId}/end`, { method: 'POST' });
         const data = await res.json();
@@ -1774,6 +1808,19 @@ export default function BroadcastConsolePage() {
                                     : isLive
                                         ? t('live.console.reconnect') || 'Reconnect'
                                         : t('live.console.goLive') || 'Go live'}
+                            </button>
+                        )}
+                        {isLive && (
+                            <button
+                                onClick={() => void markClip()}
+                                disabled={clipping}
+                                className="px-4 h-10 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                <i className="fa-solid fa-scissors mr-2"></i>
+                                {t('live.console.clip') || 'Clip'}
+                                {clipCount > 0 && (
+                                    <span className="ml-2 text-brand-cyan">{clipCount}</span>
+                                )}
                             </button>
                         )}
                         {isLive && (

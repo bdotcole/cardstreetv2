@@ -120,6 +120,25 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: true, ignored: 'unmatched egress' });
         }
 
+        // Clips marked DURING the show were saved with a null vod_url —
+        // the recording did not exist yet. This is the moment it does, so
+        // point them at it and they become watchable. Best-effort: a
+        // failure here must not cost the stream its vod_url, and the clip
+        // page falls back to reading streams.vod_url anyway.
+        const { error: clipErr, count } = await admin
+            .from('stream_clips')
+            .update({ vod_url: vodUrl }, { count: 'exact' })
+            .eq('stream_id', data.id)
+            .is('vod_url', null);
+        if (clipErr) {
+            // Absent before 20260820_stream_clips.sql — nothing to backfill.
+            if (clipErr.code !== 'PGRST205' && clipErr.code !== '42P01') {
+                console.warn('[LiveKit/Webhook] clip backfill failed:', clipErr.message);
+            }
+        } else if (count) {
+            console.log(`[LiveKit/Webhook] ${count} clip(s) linked to the VOD for ${data.id}`);
+        }
+
         console.log(`[LiveKit/Webhook] VOD saved for stream ${data.id}`);
         return NextResponse.json({ ok: true, streamId: data.id });
     } catch (err) {

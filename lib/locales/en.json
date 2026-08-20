@@ -1247,7 +1247,10 @@
                 "sold": "Sold",
                 "unsold": "Unsold",
                 "cancelled": "Cancelled"
-            }
+            },
+            "clip": "Clip",
+            "clipSaved": "Clip saved — ready after the show",
+            "clipError": "Could not save the clip"
         },
         "poll": {
             "title": "Poll",
