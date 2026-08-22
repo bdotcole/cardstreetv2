@@ -540,6 +540,48 @@ export default function LiveViewerClient() {
         if (connected) setConnectAttempt(0);
     }, [connected]);
 
+    // ─── Chat reconciliation: realtime is at-most-once in practice ───
+    // Field-observed 2026-08-22, mid-show: a viewer held a live channel
+    // that delivered the streams UPDATE (header switched lots) but had
+    // silently dropped a chat INSERT 43 minutes in — the Now-on-the-block
+    // block line stayed on the previous lot for the rest of the show.
+    // postgres_changes has no redelivery, so any dropped INSERT is a
+    // permanent hole in this client's chat (user messages included).
+    // A 30s sweep refetches the tail and merges by id: cheap (one small
+    // read per viewer), and it heals every missed row, not just the
+    // announcement banner.
+    useEffect(() => {
+        if (pageState !== 'ready' || stream?.status !== 'live') return;
+        let cancelled = false;
+        const sweep = async () => {
+            try {
+                const res = await fetch(`/api/live/streams/${streamId}/chat`);
+                if (!res.ok) return;
+                const data = await res.json().catch(() => null);
+                const fresh: LiveChatMessage[] = data?.messages ?? [];
+                if (cancelled || fresh.length === 0) return;
+                setChat((prev) => {
+                    const known = new Set(prev.map((m) => m.id));
+                    const missed = fresh.filter((m) => !known.has(m.id));
+                    if (missed.length === 0) return prev;
+                    // Merge and restore chronology — a healed hole lands
+                    // mid-history, not at the tail.
+                    return [...prev, ...missed].sort((a, b) =>
+                        a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0,
+                    );
+                });
+            } catch {
+                // Offline blip — the next sweep catches up.
+            }
+        };
+        const timer = setInterval(() => void sweep(), 30_000);
+        return () => {
+            cancelled = true;
+            clearInterval(timer);
+        };
+    }, [pageState, stream?.status, streamId]);
+
+
     // ─── Public names for chat senders + sold-spot owners (fail-soft) ───
     const neededProfileIds = useMemo(() => {
         const ids = new Set<string>();
