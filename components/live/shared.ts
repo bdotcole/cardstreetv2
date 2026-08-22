@@ -338,6 +338,9 @@ export function pollTotalVotes(poll: LivePollRow): number {
 }
 
 export interface LiveChatMessage {
+    /** Client-synthesized "[name] has joined" line (never persisted; the
+     *  name rides in `body`). Absent on real rows from the API. */
+    join?: boolean;
     id: string;
     stream_id: string;
     sender_id: string;

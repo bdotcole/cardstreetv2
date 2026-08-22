@@ -1479,14 +1479,8 @@ export default function BroadcastConsolePage() {
     const splashedAuctionRef = useRef<Set<string>>(new Set());
 
     // Whatnot-style join lines (ephemeral, deduped per session by name).
-    const [joinLines, setJoinLines] = useState<{ id: number; name: string }[]>([]);
     const seenJoinsRef = useRef<Set<string>>(new Set());
     const joinIdRef = useRef(0);
-    useEffect(() => {
-        if (joinLines.length === 0) return;
-        const timer = setTimeout(() => setJoinLines((prev) => prev.slice(1)), 6000);
-        return () => clearTimeout(timer);
-    }, [joinLines]);
 
     useStreamEvents(streamId, pageState === 'ready' && stream?.status === 'live', {
         onSticker: (sticker, from) => {
@@ -1517,7 +1511,22 @@ export default function BroadcastConsolePage() {
         onViewerJoined: (name) => {
             if (seenJoinsRef.current.has(name)) return;
             seenJoinsRef.current.add(name);
-            setJoinLines((prev) => [...prev.slice(-3), { id: joinIdRef.current++, name }]);
+            // Whatnot-style: the join is a PERSISTENT line in the chat
+            // scroll, not a 6s toast — synthesized locally, never written
+            // to the chat table (reconnects would spam it; the id-merge
+            // sweep ignores rows it does not know are missing).
+            setChat((prev) => [
+                ...prev,
+                {
+                    id: `join-${joinIdRef.current++}`,
+                    stream_id: streamId,
+                    sender_id: '',
+                    body: name,
+                    is_system: false,
+                    join: true,
+                    created_at: new Date().toISOString(),
+                },
+            ]);
         },
     });
 
@@ -3475,6 +3484,11 @@ export default function BroadcastConsolePage() {
                         </div>
                         <div className="flex-1 overflow-y-auto space-y-1 min-h-[200px]">
                             {chat.map((m) =>
+                                m.join ? (
+                                    <p key={m.id} className="text-[12px] text-slate-400 font-bold py-0.5">
+                                        {m.body} {t('live.viewer.joined') || 'has joined'}
+                                    </p>
+                                ) :
                                 m.is_system ? (
                                     <p key={m.id} className="text-[12px] text-amber-300 font-bold text-center py-0.5 break-words">
                                         {m.body}
@@ -3510,11 +3524,6 @@ export default function BroadcastConsolePage() {
                                     </div>
                                 ),
                             )}
-                            {joinLines.map((j) => (
-                                <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5">
-                                    {j.name} {t('live.viewer.joined') || 'joined'}
-                                </p>
-                            ))}
                             <ReactionFeedLines
                                 lines={reactionLines}
                                 anonymousLabel={t('live.stickers.someone') || 'Someone'}

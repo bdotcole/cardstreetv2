@@ -905,14 +905,8 @@ export default function LiveViewerClient() {
     const { splash, showSplash } = useEventSplash();
 
     // Whatnot-style join lines: ephemeral, deduped per session by name.
-    const [joinLines, setJoinLines] = useState<{ id: number; name: string }[]>([]);
     const seenJoinsRef = useRef<Set<string>>(new Set());
     const joinIdRef = useRef(0);
-    useEffect(() => {
-        if (joinLines.length === 0) return;
-        const timer = setTimeout(() => setJoinLines((prev) => prev.slice(1)), 6000);
-        return () => clearTimeout(timer);
-    }, [joinLines]);
 
     // Track the auction each lot last reported so a state push can tell a
     // FRESH hammer from a refetch of an old one (splash once per sale).
@@ -959,7 +953,22 @@ export default function LiveViewerClient() {
         onViewerJoined: (name) => {
             if (seenJoinsRef.current.has(name)) return;
             seenJoinsRef.current.add(name);
-            setJoinLines((prev) => [...prev.slice(-3), { id: joinIdRef.current++, name }]);
+            // Whatnot-style: the join is a PERSISTENT line in the chat
+            // scroll, not a 6s toast — synthesized locally, never written
+            // to the chat table (reconnects would spam it; the id-merge
+            // sweep ignores rows it does not know are missing).
+            setChat((prev) => [
+                ...prev,
+                {
+                    id: `join-${joinIdRef.current++}`,
+                    stream_id: streamId,
+                    sender_id: '',
+                    body: name,
+                    is_system: false,
+                    join: true,
+                    created_at: new Date().toISOString(),
+                },
+            ]);
         },
     });
 
@@ -1314,6 +1323,17 @@ export default function LiveViewerClient() {
         const shadow = limit ? ' [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]' : '';
         return visible.map((m, i) => {
             const faded = limit ? Math.max(0.45, (i + 1) / visible.length) : 1;
+            if (m.join) {
+                return (
+                    <p
+                        key={m.id}
+                        style={limit ? { opacity: faded } : undefined}
+                        className={`text-[12px] text-slate-400 font-bold py-0.5 px-2 break-words${shadow}`}
+                    >
+                        {m.body} {t('live.viewer.joined') || 'has joined'}
+                    </p>
+                );
+            }
             if (m.is_system) {
                 return (
                     <p
@@ -2228,11 +2248,6 @@ export default function LiveViewerClient() {
                     {pollCard && <div className="mb-2">{pollCard}</div>}
                     <div className="mb-2 max-h-[42vh] overflow-hidden flex flex-col justify-end [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
                         {chatMessages(CHAT_OVERLAY_COUNT)}
-                        {joinLines.map((j) => (
-                            <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5 px-2">
-                                {j.name} {t('live.viewer.joined') || 'joined'}
-                            </p>
-                        ))}
                         <ReactionFeedLines
                             lines={reactionLines}
                             anonymousLabel={t('live.stickers.someone') || 'Someone'}
@@ -2382,11 +2397,6 @@ export default function LiveViewerClient() {
                     <div className="flex-1 overflow-y-auto py-2 flex flex-col justify-end">
                         {pinnedBanner && <div className="px-2 pt-2">{pinnedBanner}</div>}
                         {chatMessages()}
-                        {joinLines.map((j) => (
-                            <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5 px-2">
-                                {j.name} {t('live.viewer.joined') || 'joined'}
-                            </p>
-                        ))}
                         <ReactionFeedLines
                             lines={reactionLines}
                             anonymousLabel={t('live.stickers.someone') || 'Someone'}
