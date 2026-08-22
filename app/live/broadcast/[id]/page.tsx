@@ -7,6 +7,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
+import MusicPanel from '@/components/live/MusicPanel';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
@@ -377,6 +378,8 @@ export default function BroadcastConsolePage() {
         remoteFeeds,
         disconnect,
         audioDropped,
+        publishExtraAudio,
+        unpublishExtraAudio,
     } = useLiveKitRoom();
 
     const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
@@ -1888,6 +1891,18 @@ export default function BroadcastConsolePage() {
                         )}
                     </div>
                 </div>
+
+                {/* Background music — visible whenever the show is not over, so the
+                    playlist can be cued during staging before going live. */}
+                {!isEnded && (
+                    <div className="mb-4">
+                        <MusicPanel
+                            connected={connected}
+                            publishExtraAudio={publishExtraAudio}
+                            unpublishExtraAudio={unpublishExtraAudio}
+                        />
+                    </div>
+                )}
 
                 {settleResult != null && (
                     <div className="mb-4 glass rounded-2xl border-brand-green/30 p-4 text-sm text-brand-green font-bold">

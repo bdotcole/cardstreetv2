@@ -60,6 +60,7 @@ export type CameraSlot = 'main' | 'table';
  * deliver more and the ladder below adapts to whatever actually arrives.
  */
 function captureOptionsFor(facingMode: 'user' | 'environment'): VideoCaptureOptions {
+
     return {
         facingMode,
         resolution: VideoPresets.h720.resolution,
@@ -223,6 +224,10 @@ export function useLiveKitRoom() {
     // Pre-join camera preview: tracks opened BEFORE any room exists so the
     // broadcaster sees themselves (and clears the permission prompt) ahead of
     // go-live. publishCamera() adopts these instead of re-opening the device.
+    // The console's background-music publication (see MusicPanel). Owned
+    // here because the Room is; content and lifecycle live with the caller.
+    const extraAudioPubRef = useRef<{ stop: () => void } | null>(null);
+
     const previewTracksRef = useRef<LocalTrack[]>([]);
     const previewFacingRef = useRef<'user' | 'environment' | null>(null);
     /**
@@ -534,10 +539,44 @@ export function useLiveKitRoom() {
         };
     }, [disconnect]);
 
+    /**
+     * Publish one extra audio MediaStreamTrack (background music) alongside
+     * the camera. Replaces any previous extra publication. dtx OFF: music is
+     * continuous, and discontinuous-transmission gates soft passages.
+     */
+    const publishExtraAudio = useCallback(async (track: MediaStreamTrack) => {
+        const room = roomRef.current;
+        if (!room) throw new Error('Room is not connected');
+        extraAudioPubRef.current?.stop();
+        extraAudioPubRef.current = null;
+        const pub = await room.localParticipant.publishTrack(track, {
+            name: 'music',
+            dtx: false,
+            red: true,
+        });
+        extraAudioPubRef.current = {
+            stop: () => {
+                try {
+                    const t = pub.track;
+                    if (t) room.localParticipant.unpublishTrack(t);
+                } catch {
+                    // Room already torn down.
+                }
+            },
+        };
+    }, []);
+
+    const unpublishExtraAudio = useCallback(() => {
+        extraAudioPubRef.current?.stop();
+        extraAudioPubRef.current = null;
+    }, []);
+
     return {
         connect,
         disconnect,
         publishCamera,
+        publishExtraAudio,
+        unpublishExtraAudio,
         startPreview,
         stopPreview,
         setSubscriptionQuality,

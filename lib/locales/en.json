@@ -1256,7 +1256,10 @@
             "pinned": "Pinned for all viewers",
             "unpinned": "Pin removed",
             "pinError": "Could not update the pin",
-            "unpin": "Unpin"
+            "unpin": "Unpin",
+            "music": "Music",
+            "musicEmpty": "No tracks yet — add audio files to the live-music bucket.",
+            "musicVolume": "Music volume"
         },
         "poll": {
             "title": "Poll",
