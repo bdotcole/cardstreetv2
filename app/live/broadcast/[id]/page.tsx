@@ -1245,6 +1245,39 @@ export default function BroadcastConsolePage() {
     const [clipping, setClipping] = useState(false);
     const [clipCount, setClipCount] = useState(0);
 
+    // ─── Pinned message: one line every viewer sees until unpinned ───
+    const [pinDraft, setPinDraft] = useState('');
+    const [pinBusy, setPinBusy] = useState(false);
+
+    const setPin = useCallback(async (message: string | null) => {
+        if (pinBusy) return;
+        setPinBusy(true);
+        try {
+            const res = await fetch(`/api/live/streams/${streamId}/pin`, {
+                method: message ? 'POST' : 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: message ? JSON.stringify({ message }) : undefined,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(data.error || t('live.console.pinError') || 'Could not update the pin', 'error');
+                return;
+            }
+            setStream((s) => (s ? { ...s, pinned_message: message } : s));
+            if (message) setPinDraft('');
+            showToast(
+                message
+                    ? t('live.console.pinned') || 'Pinned for all viewers'
+                    : t('live.console.unpinned') || 'Pin removed',
+                'success',
+            );
+        } catch {
+            showToast(t('live.console.pinError') || 'Could not update the pin', 'error');
+        } finally {
+            setPinBusy(false);
+        }
+    }, [pinBusy, streamId, showToast, t]);
+
     const markClip = useCallback(async () => {
         if (clipping) return;
         setClipping(true);
@@ -3395,6 +3428,35 @@ export default function BroadcastConsolePage() {
                                     ? t('live.console.unfreeze') || 'Unfreeze chat'
                                     : t('live.console.freeze') || 'Freeze chat'}
                             </button>
+                        </div>
+                        {/* Pin: stream-level banner every viewer sees until cleared. */}
+                        <div className="flex gap-2 mb-2">
+                            <input
+                                value={pinDraft}
+                                onChange={(e) => setPinDraft(e.target.value)}
+                                maxLength={200}
+                                placeholder={stream.pinned_message ? (t('live.console.pinReplace') || 'Replace pinned message...') : (t('live.console.pinPlaceholder') || 'Pin a message for all viewers...')}
+                                className={inputCls}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && pinDraft.trim()) void setPin(pinDraft.trim()); }}
+                            />
+                            {stream.pinned_message && !pinDraft.trim() ? (
+                                <button
+                                    onClick={() => void setPin(null)}
+                                    disabled={pinBusy}
+                                    className="h-10 px-3 shrink-0 rounded-xl bg-white/10 border border-white/15 text-white text-[11px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
+                                >
+                                    {t('live.console.unpin') || 'Unpin'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => void setPin(pinDraft.trim())}
+                                    disabled={pinBusy || !pinDraft.trim()}
+                                    aria-label="Pin"
+                                    className="w-10 h-10 shrink-0 rounded-xl bg-white/10 border border-white/15 text-white flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all"
+                                >
+                                    <i className="fa-solid fa-thumbtack text-sm"></i>
+                                </button>
+                            )}
                         </div>
                         <div className="flex-1 overflow-y-auto space-y-1 min-h-[200px]">
                             {chat.map((m) =>

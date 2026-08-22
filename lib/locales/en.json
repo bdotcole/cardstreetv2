@@ -1250,7 +1250,13 @@
             },
             "clip": "Clip",
             "clipSaved": "Clip saved — ready after the show",
-            "clipError": "Could not save the clip"
+            "clipError": "Could not save the clip",
+            "pinPlaceholder": "Pin a message for all viewers...",
+            "pinReplace": "Replace pinned message...",
+            "pinned": "Pinned for all viewers",
+            "unpinned": "Pin removed",
+            "pinError": "Could not update the pin",
+            "unpin": "Unpin"
         },
         "poll": {
             "title": "Poll",

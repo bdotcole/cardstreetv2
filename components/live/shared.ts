@@ -22,6 +22,8 @@ export interface LiveStreamRow {
     livekit_room: string | null;
     chat_disabled: boolean;
     viewer_peak: number;
+    pinned_message?: string | null;
+    pinned_at?: string | null;
     settled_at: string | null;
     created_at: string;
     /** Optional until 20260807_stream_layout.sql is applied — absent = default framing. */

@@ -75,13 +75,24 @@ export async function GET(
         const sellerJoin = 'seller:profiles!streams_seller_id_fkey(display_name, avatar_url)';
         let { data: stream, error: streamErr } = await admin
             .from('streams')
-            .select(`${baseCols}, layout, ${sellerJoin}`)
+            .select(`${baseCols}, layout, pinned_message, pinned_at, ${sellerJoin}`)
             .eq('id', id)
             .single();
 
         // layout (20260807_stream_layout.sql) is additive and applied by hand
         // — until it exists, serve the detail without framing data instead of
         // 404ing every viewer on an undefined-column error.
+        // pinned_message (20260822_stream_pinned_message.sql) may lag the
+        // deploy — retry WITH layout first so the framing data survives the
+        // gap, before the older no-layout fallback below.
+        if (streamErr && streamErr.code === '42703') {
+            ({ data: stream, error: streamErr } = await admin
+                .from('streams')
+                .select(`${baseCols}, layout, ${sellerJoin}`)
+                .eq('id', id)
+                .single());
+        }
+
         if (streamErr && streamErr.code === '42703') {
             ({ data: stream, error: streamErr } = await admin
                 .from('streams')

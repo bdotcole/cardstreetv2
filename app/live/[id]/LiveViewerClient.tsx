@@ -1255,6 +1255,18 @@ export default function LiveViewerClient() {
 
     // Overlay messages get a text shadow — they sit on live video, where the
     // old 12px unshadowed lines were the field test's "can't read the chat".
+    // Streamer-pinned line ("bundle deal today...") — stream-level state, so
+    // it survives chat scroll and moderation. Arrives/updates through the
+    // existing streams postgres_changes subscription; no extra channel.
+    const pinnedBanner = stream?.pinned_message ? (
+        <div className="flex items-start gap-2 rounded-xl bg-brand-cyan/15 border border-brand-cyan/30 px-3 py-2">
+            <i className="fa-solid fa-thumbtack text-brand-cyan text-[11px] mt-0.5"></i>
+            <p className="text-[12px] font-bold text-white leading-snug break-words min-w-0">
+                {stream.pinned_message}
+            </p>
+        </div>
+    ) : null;
+
     const chatMessages = (limit?: number) => {
         const visible = limit ? chat.slice(-limit) : chat;
         const shadow = limit ? ' [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]' : '';
@@ -2170,6 +2182,7 @@ export default function LiveViewerClient() {
 
                 {/* Chat overlay + input + held bar over the lower feed */}
                 <div className="absolute bottom-0 inset-x-0 pb-[calc(var(--sab)+0.75rem)] px-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
+                    {pinnedBanner && <div className="mb-2">{pinnedBanner}</div>}
                     {pollCard && <div className="mb-2">{pollCard}</div>}
                     <div className="mb-2 max-h-[42vh] overflow-hidden flex flex-col justify-end [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
                         {chatMessages(CHAT_OVERLAY_COUNT)}
@@ -2300,7 +2313,22 @@ export default function LiveViewerClient() {
             {/* ─── Desktop (lg:): video left, chat + board right ─── */}
             <div className="hidden lg:flex h-full">
                 <div className="flex-1 relative">
-                    {videoArea(false)}
+                    {/* Phone-aspect stage: desktop renders EXACTLY the framing a phone
+                        viewer gets (same fullBleed cover semantics), centered on a dark
+                        stage. Before this, the same feed was fit into a LANDSCAPE box,
+                        so a broadcaster fill/crop choice that looked right on phones
+                        cover-cropped desktop to ~38% of the frame (measured live
+                        2026-08-22: 720x1280 feed in a 997x682 box) — the seller was
+                        framing against a surface no phone viewer saw. One framing
+                        everywhere means the console manages ONE field of view. */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black">
+                        <div
+                            className="relative h-full max-w-full"
+                            style={{ aspectRatio: '9 / 16' }}
+                        >
+                            {videoArea(true)}
+                        </div>
+                    </div>
                     <div className="absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/70 to-transparent pb-8">
                         {header}
                     </div>
@@ -2310,6 +2338,7 @@ export default function LiveViewerClient() {
                     {pollCard && <div className="px-3 pt-3">{pollCard}</div>}
                     {heldBar && <div className="px-3 pt-3">{heldBar}</div>}
                     <div className="flex-1 overflow-y-auto py-2 flex flex-col justify-end">
+                        {pinnedBanner && <div className="px-2 pt-2">{pinnedBanner}</div>}
                         {chatMessages()}
                         {joinLines.map((j) => (
                             <p key={j.id} className="text-[12px] text-slate-400 font-bold py-0.5 px-2">
