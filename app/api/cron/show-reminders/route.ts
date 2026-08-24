@@ -86,6 +86,23 @@ function startsAtLabel(scheduledAt: string): string {
 async function announceSweep(
     supabase: SupabaseClient<any, 'public', any>,
 ): Promise<{ announced: number; pushes: number; emails: number } | { skipped: string }> {
+    // Quiet hours: the announce is marketing to the WHOLE base, so it never
+    // sends overnight. A show scheduled after midnight (2026-08-22: created
+    // ~02:25, blast landed 02:26 Bangkok) now just waits unclaimed until the
+    // first pass after 09:00. Deliberate edge: a show created overnight that
+    // starts before ~noon can fall under ANNOUNCE_MIN_LEAD_H while waiting
+    // and never announce — same-day early shows behave like rehearsals. The
+    // 15-minute heads-up and go-live alerts are exempt: those are
+    // time-critical and reach only opted-in subscribers.
+    const bkkHour = Number(
+        new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Bangkok',
+            hour: 'numeric',
+            hourCycle: 'h23',
+        }).format(new Date()),
+    );
+    if (!(bkkHour >= 9 && bkkHour < 22)) return { skipped: 'quiet_hours' };
+
     const minIso = new Date(Date.now() + ANNOUNCE_MIN_LEAD_H * 3_600_000).toISOString();
     const maxIso = new Date(Date.now() + ANNOUNCE_MAX_LEAD_H * 3_600_000).toISOString();
 

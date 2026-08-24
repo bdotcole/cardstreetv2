@@ -1040,7 +1040,16 @@
             "signInToWatchDesc": "สมัครฟรีหรือเข้าสู่ระบบ แล้วเข้าชมไลฟ์ได้ทันที",
             "signInCta": "เข้าสู่ระบบ",
             "claimAuction": "ล็อตนี้ขายแบบประมูล — ร่วมประมูลแทน",
-            "claimNotNextTurn": "คิวขายทีละคิว — ยังไม่ถึงคิวนี้"
+            "claimNotNextTurn": "คิวขายทีละคิว — ยังไม่ถึงคิวนี้",
+            "buyCta": "ซื้อ",
+            "buySpotCta": "ซื้อสล็อต",
+            "buyTurnCta": "ซื้อคิวถัดไป",
+            "buyTurnShort": "ซื้อคิว",
+            "pickSpotCta": "เลือกสล็อต",
+            "soldOut": "ขายหมด",
+            "soldOutToast": "ขายหมดแล้ว",
+            "soldProgress": "ขายแล้ว {sold}/{total}",
+            "turnQueueBlocked": "คิวถัดไปกำลังชำระเงิน"
         },
         "scheduled": {
             "startsIn": "ไลฟ์จะเริ่มในอีก",

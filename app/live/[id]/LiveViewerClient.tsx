@@ -713,6 +713,65 @@ export default function LiveViewerClient() {
         [claimingSpotId, myUserId, showToast, t],
     );
 
+    // ─── One-tap FCFS buy: the server picks the spot ───
+    // random/chase/personal/pack-wars spots and rip_till_hit turns are
+    // interchangeable to the buyer, so the big Buy button claims "the next
+    // one" via /claim-next instead of making them hunt a number on the grid.
+    const [claimingNextLotId, setClaimingNextLotId] = useState<string | null>(null);
+    const claimNextSpot = useCallback(
+        async (lot: LiveLotRow) => {
+            if (claimingNextLotId) return;
+            if (!myUserId) {
+                promptAuth(t('live.viewer.signInToBuy') || 'Sign in to grab a spot');
+                return;
+            }
+            setClaimingNextLotId(lot.id);
+            try {
+                const res = await fetch(`/api/live/lots/${lot.id}/claim-next`, { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.claimed === true && data.spot_id) {
+                    setSpots((prev) =>
+                        prev.map((s) =>
+                            s.id === data.spot_id
+                                ? {
+                                      ...s,
+                                      status: 'held',
+                                      held_by: myUserId,
+                                      hold_expires_at: data.hold_expires_at ?? null,
+                                  }
+                                : s,
+                        ),
+                    );
+                    setNow(Date.now());
+                    return;
+                }
+                const reasonKey: Record<string, string> = {
+                    held: 'live.viewer.claimTaken',
+                    unavailable: 'live.viewer.soldOutToast',
+                    lot_closed: 'live.viewer.lotClosed',
+                    stream_not_live: 'live.viewer.notStarted',
+                    own_item: 'live.viewer.claimOwnItem',
+                    suspended: 'live.viewer.claimSuspended',
+                    auction: 'live.viewer.claimAuction',
+                };
+                let message = t('live.viewer.claimError') || 'Could not claim that spot';
+                if (data.code === 'GEO_RESTRICTED') {
+                    message = t('live.viewer.claimGeo') || 'Buying is only available in Thailand for now';
+                } else if (data.code === 'RATE_LIMITED') {
+                    message = t('live.viewer.rateLimited') || 'Slow down a moment';
+                } else if (typeof data.reason === 'string' && reasonKey[data.reason]) {
+                    message = t(reasonKey[data.reason]);
+                }
+                showToast(message, 'error');
+            } catch {
+                showToast(t('live.viewer.claimError') || 'Could not claim that spot', 'error');
+            } finally {
+                setClaimingNextLotId(null);
+            }
+        },
+        [claimingNextLotId, myUserId, promptAuth, showToast, t],
+    );
+
     const runHouseAction = useCallback(async () => {
         const action = houseAction;
         if (!action || houseBusy) return;
@@ -1175,6 +1234,18 @@ export default function LiveViewerClient() {
         (l) => (l.status === 'queued' || l.status === 'active') && l.presale_enabled === true,
     );
 
+    const isSellerViewer = !!myUserId && stream.seller_id === myUserId;
+
+    // Formats where the NUMBER is the product — the buyer must see the board
+    // and choose (a specific pack, a roster slot). Everything else sells FCFS:
+    // the Buy button claims the next available spot server-side, no number
+    // hunting.
+    const isPickFormat = (lot: LiveLotRow) =>
+        lot.item_type === 'pick_your_pack' || lot.item_type === 'character_break';
+    const isQuickBuyFormat = (lot: LiveLotRow) =>
+        ['personal_break', 'random_pack', 'chase_break', 'pack_wars'].includes(lot.item_type) ||
+        (lot.item_type === 'rip_till_hit' && rtyhPricingOf(lot) === 'fixed');
+
     // ─── Shared blocks (mobile + desktop compose them differently) ───
 
     // Admins get a quiet secondary action on the board: long-press (or
@@ -1304,6 +1375,150 @@ export default function LiveViewerClient() {
         );
     };
 
+    // Full-width one-tap Buy for the FCFS formats. The numbered grid below it
+    // stays for transparency (and the superstitious), but nobody has to use
+    // it — and for rip_till_hit it spares the buyer hunting for the one
+    // enabled turn cell.
+    const quickBuyButton = (lot: LiveLotRow, lotSpots: LiveSpotRow[]) => {
+        if (!canBuyLot(lot) || isSellerViewer || !isQuickBuyFormat(lot)) return null;
+        const isRtyh = lot.item_type === 'rip_till_hit';
+        const nextTurn = isRtyh ? nextTurnSpot(lotSpots, now) : null;
+        const soldOut = isRtyh
+            ? lotSpots.every((s) => s.status === 'sold' || s.status === 'cancelled')
+            : !lotSpots.some((s) => isSpotOpenNow(s, now));
+        const priceSatang = (isRtyh ? nextTurn?.price : null) ?? lot.spot_price;
+        const busy = claimingNextLotId === lot.id;
+        const blocked = isRtyh && !soldOut && !nextTurn;
+        const label = soldOut
+            ? t('live.viewer.soldOut') || 'Sold out'
+            : blocked
+                ? t('live.viewer.turnQueueBlocked') || 'Next turn is being paid for'
+                : isRtyh
+                    ? `${t('live.viewer.buyTurnCta') || 'Buy the next rip'}${
+                          nextTurn ? ` · #${nextTurn.spot_number}` : ''
+                      }${priceSatang != null ? ` — ${formatSatang(priceSatang)}` : ''}`
+                    : `${t('live.viewer.buySpotCta') || 'Buy a spot'}${
+                          priceSatang != null ? ` — ${formatSatang(priceSatang)}` : ''
+                      }`;
+        return (
+            <button
+                onClick={() => void claimNextSpot(lot)}
+                disabled={busy || soldOut || blocked}
+                className={`mb-2 w-full h-12 rounded-xl text-xs font-black uppercase active:scale-95 transition-all disabled:opacity-60 ${
+                    isThai ? 'tracking-normal' : 'tracking-widest'
+                } ${
+                    soldOut || blocked
+                        ? 'bg-white/10 text-slate-400'
+                        : 'bg-brand-cyan text-brand-darker'
+                }`}
+            >
+                {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : label}
+            </button>
+        );
+    };
+
+    // ─── Pinned product bar (mobile, Whatnot-style) ───
+    // The lot on the block stays visible over the video: art, sold progress,
+    // price, and ONE big buy action. Before this the only purchase entry on a
+    // phone was the small "Spots" pill next to the chat input. Pick formats
+    // route the tap to the board (the number IS the product); FCFS formats
+    // buy the next available spot in one tap. Auction lots keep their own
+    // quick-bid bar; buy_now lots have no spot rail to sell here.
+    const onBlockBar = (() => {
+        if (!isLive || !activeLot || isSellerViewer || !canBuyLot(activeLot)) return null;
+        if (!isPickFormat(activeLot) && !isQuickBuyFormat(activeLot)) return null;
+        const total = activeSpots.length;
+        if (total === 0) return null;
+        const soldCount = activeSpots.filter((s) => s.status === 'sold').length;
+        const isRtyh = activeLot.item_type === 'rip_till_hit';
+        const nextTurn = isRtyh ? nextTurnSpot(activeSpots, now) : null;
+        const soldOut = isRtyh
+            ? activeSpots.every((s) => s.status === 'sold' || s.status === 'cancelled')
+            : openCount === 0;
+        const blocked = isRtyh && !soldOut && !nextTurn;
+        const priceSatang = (isRtyh ? nextTurn?.price : null) ?? activeLot.spot_price;
+        const busy = claimingNextLotId === activeLot.id;
+        const pick = isPickFormat(activeLot);
+        const img = activeLot.card_data?.images?.small || activeLot.card_data?.images?.large;
+        return (
+            <div className="flex items-center gap-3 rounded-2xl bg-black/70 border border-brand-cyan/30 backdrop-blur-md px-3 py-2.5">
+                {img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={img}
+                        alt=""
+                        className="w-10 h-14 rounded-lg object-cover border border-white/10 shrink-0"
+                    />
+                ) : (
+                    <div className="w-10 h-14 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-box-open text-slate-400 text-sm"></i>
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-black text-white leading-tight truncate">
+                        {activeLot.card_data?.name || t(`live.types.${activeLot.item_type}`)}
+                    </p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                            <div
+                                className="h-full rounded-full bg-emerald-400 transition-all"
+                                style={{ width: `${Math.round((soldCount / total) * 100)}%` }}
+                            />
+                        </div>
+                        <p className="text-[10px] font-black text-slate-300 tabular-nums shrink-0">
+                            {(t('live.viewer.soldProgress') || '{sold}/{total} sold')
+                                .replace('{sold}', String(soldCount))
+                                .replace('{total}', String(total))}
+                        </p>
+                    </div>
+                    {isRtyh && !soldOut && (
+                        <p className="mt-0.5 text-[10px] font-bold text-amber-300 truncate">
+                            {nextTurn
+                                ? `${t('live.viewer.turnWord') || 'Turn'} #${nextTurn.spot_number}`
+                                : t('live.viewer.turnQueueBlocked') || 'Next turn is being paid for'}
+                        </p>
+                    )}
+                </div>
+                <button
+                    onClick={() => {
+                        if (soldOut || blocked) return;
+                        if (pick) setBoardOpen(true);
+                        else void claimNextSpot(activeLot);
+                    }}
+                    disabled={busy || soldOut || blocked}
+                    className={`shrink-0 min-h-12 px-4 rounded-xl text-[11px] font-black uppercase active:scale-95 transition-all disabled:opacity-60 ${
+                        isThai ? 'tracking-normal' : 'tracking-wider'
+                    } ${
+                        soldOut || blocked
+                            ? 'bg-white/10 text-slate-400'
+                            : 'bg-brand-cyan text-brand-darker'
+                    }`}
+                >
+                    {busy ? (
+                        <i className="fa-solid fa-circle-notch animate-spin"></i>
+                    ) : soldOut ? (
+                        t('live.viewer.soldOut') || 'Sold out'
+                    ) : (
+                        <span className="flex flex-col items-center leading-tight gap-0.5">
+                            <span>
+                                {pick
+                                    ? t('live.viewer.pickSpotCta') || 'Pick a spot'
+                                    : isRtyh
+                                        ? t('live.viewer.buyTurnShort') || 'Buy rip'
+                                        : t('live.viewer.buyCta') || 'Buy'}
+                            </span>
+                            {priceSatang != null && (
+                                <span className="text-[13px] tabular-nums">
+                                    {formatSatang(priceSatang)}
+                                </span>
+                            )}
+                        </span>
+                    )}
+                </button>
+            </div>
+        );
+    })();
+
     // Overlay messages get a text shadow — they sit on live video, where the
     // old 12px unshadowed lines were the field test's "can't read the chat".
     // Streamer-pinned line ("bundle deal today...") — stream-level state, so
@@ -1391,8 +1606,6 @@ export default function LiveViewerClient() {
     );
 
     // ─── Live auction panel (replaces the claim grid for auction lots) ───
-    const isSellerViewer = !!myUserId && stream.seller_id === myUserId;
-
     const auctionPanel = (lot: LiveLotRow) => {
         const a = lot.auction ?? null;
         if (!a) {
@@ -1600,6 +1813,7 @@ export default function LiveViewerClient() {
                         <div className="overflow-y-auto">{auctionPanel(activeLot)}</div>
                     ) : (
                         <div className="p-3 overflow-y-auto">
+                            {quickBuyButton(activeLot, activeSpots)}
                             {/* rip_till_hit: whose turn is being ripped, and —
                                 in auction pricing mode — the live bid panel
                                 for the next turn, above the turn ladder. */}
@@ -2190,7 +2404,10 @@ export default function LiveViewerClient() {
                                         </div>
                                     </div>
                                     {presale ? (
-                                        <div className="p-3">{spotGrid(lot, lotSpots)}</div>
+                                        <div className="p-3">
+                                            {quickBuyButton(lot, lotSpots)}
+                                            {spotGrid(lot, lotSpots)}
+                                        </div>
                                     ) : (
                                         <p className="px-4 py-4 text-xs text-slate-500">
                                             {t('live.scheduled.availableWhenLive') ||
@@ -2303,6 +2520,7 @@ export default function LiveViewerClient() {
                                 {t('live.auction.youAreHigh') || "You're the high bidder!"}
                             </p>
                         )}
+                    {onBlockBar && <div className="mb-2">{onBlockBar}</div>}
                     {heldBar && <div className="mb-2">{heldBar}</div>}
                     {isLive && (
                         <div className="mb-2 flex justify-end">

@@ -1694,15 +1694,18 @@ export async function sendShowLivePushBlast(
                 if (templateId) {
                     message.template = templateId;
                 } else if (kind === 'announce') {
+                    // Signal-first, like the email subject: notification trays
+                    // truncate even harder than inbox list views.
+                    const when = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
                     message.content = {
-                        title: show.startsAtLabel
-                            ? `${show.title} — live ${show.startsAtLabel}`
-                            : `${show.title} — going live soon`,
+                        title: when
+                            ? `Live ${when} — ${show.title}`
+                            : `Going live soon — ${show.title}`,
                         body: `Tap to see the show and get notified when it starts — กดดูรายละเอียดไลฟ์และรับแจ้งเตือนเมื่อเริ่ม: ${showUrl}`,
                     };
                 } else {
                     message.content = {
-                        title: `${show.title} is live now`,
+                        title: `LIVE now — ${show.title}`,
                         body: `Watch the live break now — ดูไลฟ์ได้เลยตอนนี้: ${showUrl}`,
                     };
                 }
@@ -1801,12 +1804,18 @@ export async function sendShowEmailBlast(
     }
     if (recipients.length === 0) return 0;
 
+    // Subject leads with the SIGNAL, not the title: long Thai show titles
+    // truncate in inbox list views, so a title-first subject shows only the
+    // cut-off title and none of the "live ... 20:30" part (seen on the
+    // 2026-08-22 announce). "(Bangkok time)" stays in the body where space
+    // is free; the sender name already says CardStreet.
+    const subjectWhen = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
     const subject =
         kind === 'announce'
-            ? show.startsAtLabel
-                ? `${show.title} — live on CardStreet ${show.startsAtLabel}`
-                : `${show.title} — coming soon on CardStreet`
-            : `${show.title} is LIVE now on CardStreet`;
+            ? subjectWhen
+                ? `Live ${subjectWhen} — ${show.title}`
+                : `Coming soon on CardStreet — ${show.title}`
+            : `LIVE now — ${show.title}`;
     // Built per recipient, because the unsubscribe link is signed for one
     // user. This is promotional mail going to the whole base — without a way
     // out in the message itself, the only lever a recipient has is the spam

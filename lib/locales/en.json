@@ -1040,7 +1040,16 @@
             "signInToWatchDesc": "Create a free account or sign in — the show opens right after.",
             "signInCta": "Sign in",
             "claimAuction": "This lot is auctioned — place a bid instead",
-            "claimNotNextTurn": "Turns sell one at a time — this one is not up yet"
+            "claimNotNextTurn": "Turns sell one at a time — this one is not up yet",
+            "buyCta": "Buy",
+            "buySpotCta": "Buy a spot",
+            "buyTurnCta": "Buy the next rip",
+            "buyTurnShort": "Buy rip",
+            "pickSpotCta": "Pick a spot",
+            "soldOut": "Sold out",
+            "soldOutToast": "Sold out — that was the last one",
+            "soldProgress": "{sold}/{total} sold",
+            "turnQueueBlocked": "Next turn is being paid for"
         },
         "scheduled": {
             "startsIn": "Show starts in",
