@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
+import { trackSignUp } from '@/lib/signupEvents';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -364,6 +365,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
             );
 
             if (error) throw error;
+
+            // Record the conversion here, in the session that still carries the
+            // acquisition channel. Waiting for email verification would move it to
+            // whatever session opens the mail link — often another device, where
+            // the organic-search attribution no longer exists.
+            trackSignUp('email');
 
             // Show verification message
             setVerificationEmail(email);

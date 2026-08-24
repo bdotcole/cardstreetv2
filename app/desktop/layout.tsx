@@ -3,6 +3,7 @@ import DesktopFooter from '@/components/desktop/DesktopFooter';
 import DesktopCartProvider from '@/components/desktop/DesktopCartContext';
 import DesktopCartDrawer from '@/components/desktop/DesktopCartDrawer';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
+import SignupTracker from '@/components/SignupTracker';
 import { localePrefix, requestPathLocale } from '@/lib/i18nRouting';
 
 // No metadata here on purpose: the root layout's localized generateMetadata is
@@ -36,6 +37,9 @@ export default async function DesktopLayout({ children }: { children: React.Reac
             {/* Failed email-verification links redirect to / with a #error
                 hash (invisible to server routes) — surface it. */}
             <AuthLinkErrorNotice />
+            {/* Fires the GA4 sign_up event for OAuth accounts (see the
+                cs_new_account marker set in /api/auth/callback). */}
+            <SignupTracker />
         </DesktopCartProvider>
     );
 }

@@ -18,6 +18,7 @@ import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
+import SignupTracker from '@/components/SignupTracker';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
@@ -1869,6 +1870,9 @@ export default function HomePage() {
             {/* Failed email-verification links land here with a #error hash
                 that would otherwise be silently ignored. */}
             <AuthLinkErrorNotice />
+            {/* Fires the GA4 sign_up event for OAuth accounts (see the
+                cs_new_account marker set in /api/auth/callback). */}
+            <SignupTracker />
 
             {/* Forced partner activation — blocks the app until a provisioned
                 partner sets their real email, phone, and password. */}

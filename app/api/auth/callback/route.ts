@@ -41,9 +41,32 @@ export async function GET(request: Request) {
 
     if (code) {
         const supabase = await createClient()
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            return NextResponse.redirect(`${base}${next}`)
+            // OAuth signups are invisible to the browser at click time — the page
+            // has already navigated away to the provider, and only this exchange
+            // reveals whether the returning user is new. Mark a brand-new account
+            // on the redirect so the client can fire the GA4 sign_up event inside
+            // THIS browser session, which is the only place the acquisition
+            // channel still exists (components/SignupTracker.tsx picks it up).
+            //
+            // Age of created_at is the test. last_sign_in_at cannot be used:
+            // Supabase leaves it frozen at signup for the large majority of
+            // accounts, so it never distinguishes a new account from an old one.
+            const createdAt = data?.user?.created_at
+            const isNewAccount = createdAt
+                ? Date.now() - new Date(createdAt).getTime() < 60_000
+                : false
+            if (!isNewAccount) {
+                return NextResponse.redirect(`${base}${next}`)
+            }
+            // Carry the provider through so the event can say google vs apple
+            // rather than guessing; SignupTracker falls back to a plain oauth.
+            const provider = data?.user?.app_metadata?.provider ?? 'oauth'
+            const sep = next.includes('?') ? '&' : '?'
+            return NextResponse.redirect(
+                `${base}${next}${sep}cs_new_account=${encodeURIComponent(provider)}`
+            )
         }
 
         // The PKCE auth code is single-use. A duplicated/retried callback request
