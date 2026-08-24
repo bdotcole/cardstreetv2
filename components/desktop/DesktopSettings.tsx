@@ -29,6 +29,10 @@ interface Prefs {
     notify_price_drops: boolean;
     notify_order_updates: boolean;
     notify_marketing: boolean;
+    // Live-show blasts. Stored in notification_preferences rather than
+    // user_settings, but served and saved through the same profile endpoint.
+    show_live_email: boolean;
+    show_live_push: boolean;
 }
 
 const EMPTY_FORM: ProfileForm = {
@@ -91,6 +95,8 @@ export default function DesktopSettings() {
         notify_price_drops: true,
         notify_order_updates: true,
         notify_marketing: false,
+        show_live_email: true,
+        show_live_push: true,
     });
 
     // Avatar
@@ -126,6 +132,8 @@ export default function DesktopSettings() {
                             notify_price_drops: data.settings.notify_price_drops !== false,
                             notify_order_updates: data.settings.notify_order_updates !== false,
                             notify_marketing: !!data.settings.notify_marketing,
+                            show_live_email: data.settings.show_live_email !== false,
+                            show_live_push: data.settings.show_live_push !== false,
                         });
                     }
                 }
@@ -433,6 +441,12 @@ function PreferencesTab({ prefs, togglePref }: { prefs: Prefs; togglePref: (k: k
                     <ToggleRow icon="fa-arrow-trend-down" label={t('desktop.settings.priceDrops')} desc={t('desktop.settings.priceDropsDesc')} on={prefs.notify_price_drops} onToggle={() => togglePref('notify_price_drops')} />
                     <ToggleRow icon="fa-box" label={t('desktop.settings.orderUpdates')} desc={t('desktop.settings.orderUpdatesDesc')} on={prefs.notify_order_updates} onToggle={() => togglePref('notify_order_updates')} />
                     <ToggleRow icon="fa-bullhorn" label={t('desktop.settings.marketing')} desc={t('desktop.settings.marketingDesc')} on={prefs.notify_marketing} onToggle={() => togglePref('notify_marketing')} />
+                    {/* Email and push split deliberately: a show announcement is
+                        welcome as a push and unwelcome as a 6am email far more
+                        often than the reverse, and one combined switch makes
+                        people turn off both. */}
+                    <ToggleRow icon="fa-envelope" label={t('desktop.settings.liveShowEmail')} desc={t('desktop.settings.liveShowEmailDesc')} on={prefs.show_live_email} onToggle={() => togglePref('show_live_email')} />
+                    <ToggleRow icon="fa-tower-broadcast" label={t('desktop.settings.liveShowPush')} desc={t('desktop.settings.liveShowPushDesc')} on={prefs.show_live_push} onToggle={() => togglePref('show_live_push')} />
                 </div>
             </section>
 

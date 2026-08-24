@@ -1,6 +1,7 @@
 import CourierClient from "@trycourier/courier";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_LABELS } from "./breakerApplication";
+import { unsubscribeUrl } from "./unsubscribeToken";
 
 // Lazy-initialized Courier client. We can't construct at module load because
 // any importing route would crash during `next build` page-data collection if
@@ -142,6 +143,11 @@ async function getUserNotifContext(userId: string): Promise<{
         offer_rejected_email: true, offer_rejected_push: true,
         offer_countered_email: true, offer_countered_push: true,
         offer_expired_email: true, offer_expired_push: true,
+        // Live-show blasts (20260824_show_blast_preferences). Same reasoning:
+        // NOT NULL DEFAULT true in the migration, so a real row never spreads
+        // a NULL over these, and an account with no prefs row at all still
+        // resolves to opted-in.
+        show_live_email: true, show_live_push: true,
     };
 
     return {
@@ -1801,7 +1807,12 @@ export async function sendShowEmailBlast(
                 ? `${show.title} — live on CardStreet ${show.startsAtLabel}`
                 : `${show.title} — coming soon on CardStreet`
             : `${show.title} is LIVE now on CardStreet`;
-    const content = {
+    // Built per recipient, because the unsubscribe link is signed for one
+    // user. This is promotional mail going to the whole base — without a way
+    // out in the message itself, the only lever a recipient has is the spam
+    // button, and that damages the domain we also send order, shipping and
+    // payout mail from.
+    const buildContent = (unsubUrl: string | null) => ({
         version: '2022-01-01',
         elements: [
             { type: 'meta', title: subject },
@@ -1828,8 +1839,24 @@ export async function sendShowEmailBlast(
                 align: 'center',
                 background_color: '#0891b2',
             },
+            // Omitted entirely when the token can't be signed — a dead
+            // unsubscribe link is worse than none, because it reads as an
+            // ignored opt-out.
+            ...(unsubUrl
+                ? [
+                      {
+                          type: 'text',
+                          content:
+                              `ไม่อยากรับอีเมลแจ้งไลฟ์? [ยกเลิกการรับอีเมล](${unsubUrl})` +
+                              ` · Don't want live show emails? [Unsubscribe](${unsubUrl}).` +
+                              ' Order and shipping emails are unaffected.',
+                          align: 'center',
+                          color: '#6b7280',
+                      },
+                  ]
+                : []),
         ],
-    };
+    });
 
     let sent = 0;
     const CHUNK = 10;
@@ -1837,6 +1864,7 @@ export async function sendShowEmailBlast(
         const chunk = recipients.slice(i, i + CHUNK);
         const results = await Promise.allSettled(
             chunk.map(async ({ userId, email }) => {
+                const unsubUrl = unsubscribeUrl(APP_URL, userId, 'show_live_email');
                 const message: Record<string, unknown> = {
                     // user_id for bounce traceability, same as the push blast.
                     to: { ...buildRecipient(email, null), user_id: userId },
@@ -1846,12 +1874,17 @@ export async function sendShowEmailBlast(
                         showUrl,
                         streamId: show.streamId,
                         type: kind === 'announce' ? 'stream_announce' : 'stream_live',
+                        // Also passed to a Courier TEMPLATE, which ignores the
+                        // inline content below — the template must render
+                        // {{unsubscribeUrl}} or the link exists only on the
+                        // inline path.
+                        unsubscribeUrl: unsubUrl,
                     },
                 };
                 if (templateId) {
                     message.template = templateId;
                 } else {
-                    message.content = content;
+                    message.content = buildContent(unsubUrl);
                 }
                 await courier.send.message({ message: message as any });
             }),

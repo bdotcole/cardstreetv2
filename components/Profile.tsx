@@ -103,6 +103,11 @@ interface UserSettings {
   notify_price_drops: boolean;
   notify_order_updates: boolean;
   notify_marketing: boolean;
+  // Live-show blasts. Stored in notification_preferences rather than
+  // user_settings, but served and saved through the same profile endpoint so
+  // this screen keeps one settings shape.
+  show_live_email: boolean;
+  show_live_push: boolean;
 }
 
 interface Rewards {
@@ -320,7 +325,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     two_factor_enabled: false,
     notify_price_drops: true,
     notify_order_updates: true,
-    notify_marketing: false
+    notify_marketing: false,
+    show_live_email: true,
+    show_live_push: true
   });
   const [rewards, setRewards] = useState<Rewards>({
     points_balance: 0,
@@ -1498,7 +1505,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   {[
                     { key: 'notify_price_drops', label: t('profile.priceDropAlerts'), desc: t('profile.priceDropAlertsDesc') },
                     { key: 'notify_order_updates', label: t('profile.orderUpdatesAlerts'), desc: t('profile.orderUpdatesAlertsDesc') },
-                    { key: 'notify_marketing', label: t('profile.marketingAlerts'), desc: t('profile.marketingAlertsDesc') }
+                    { key: 'notify_marketing', label: t('profile.marketingAlerts'), desc: t('profile.marketingAlertsDesc') },
+                    // Split email from push deliberately: a show announcement
+                    // is welcome as a push and unwelcome as a 6am email far
+                    // more often than the reverse, and one combined switch
+                    // makes people turn off both.
+                    { key: 'show_live_email', label: t('profile.liveShowEmail'), desc: t('profile.liveShowEmailDesc') },
+                    { key: 'show_live_push', label: t('profile.liveShowPush'), desc: t('profile.liveShowPushDesc') }
                   ].map((item) => (
                     <div key={item.key} className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">

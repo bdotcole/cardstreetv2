@@ -36,15 +36,36 @@ export async function GET() {
             .eq('user_id', user.id)
             .single()
 
+        // Live-show blast prefs live in notification_preferences, not
+        // user_settings — that is the table lib/courier.ts actually reads when
+        // deciding who gets a blast. Folded into the same `settings` object so
+        // both settings screens keep one shape to render. A missing row (web-only
+        // accounts never get one; it is created when a device registers an FCM
+        // token) and a pre-migration column both resolve to opted-in, matching
+        // the `!== false` convention used everywhere else.
+        const { data: notifPrefs } = await supabase
+            .from('notification_preferences')
+            .select('show_live_email, show_live_push')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+        const blastPrefs = {
+            show_live_email: (notifPrefs as { show_live_email?: boolean } | null)?.show_live_email !== false,
+            show_live_push: (notifPrefs as { show_live_push?: boolean } | null)?.show_live_push !== false,
+        }
+
         return NextResponse.json({
             profile,
-            settings: settings || {
-                phone_number: null,
-                shipping_address: {},
-                two_factor_enabled: false,
-                notify_price_drops: true,
-                notify_order_updates: true,
-                notify_marketing: false
+            settings: {
+                ...(settings || {
+                    phone_number: null,
+                    shipping_address: {},
+                    two_factor_enabled: false,
+                    notify_price_drops: true,
+                    notify_order_updates: true,
+                    notify_marketing: false
+                }),
+                ...blastPrefs
             },
             rewards: rewards || {
                 points_balance: 0,
