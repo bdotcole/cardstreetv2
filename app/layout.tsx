@@ -8,6 +8,7 @@ import PushNotificationManager from '@/components/PushNotificationManager'
 import ActivityPinger from '@/components/ActivityPinger'
 import HtmlLangSync from '@/components/HtmlLangSync'
 import { GoogleAnalytics } from '@next/third-parties/google'
+import AttributionCapture from '@/components/AttributionCapture'
 // Sitewide metadata default, localized per request (middleware resolves the
 // locale into the x-cs-lang header; Thai is canonical). Pages with their own
 // generateMetadata override this. Copy names all six games — the marketplace
@@ -155,6 +156,11 @@ export default async function RootLayout({
                         }),
                     }}
                 />
+                {/* First-touch acquisition capture. In the ROOT layout because the
+                    standalone SEO landings (/prices, /graded, /sell-cards, /faq) sit
+                    outside both shells, and those are the pages organic visitors
+                    land on first. */}
+                <AttributionCapture />
                 {gaId && <GoogleAnalytics gaId={gaId} />}
                 {/* Meta Pixel. Loads inside the iOS WebView and on web; conversion
                     events are sent via lib/metaEvents.ts (which also bridges to the

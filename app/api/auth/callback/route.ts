@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { ATTRIBUTION_COOKIE, parseAttribution } from '@/lib/attribution'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
@@ -59,6 +61,32 @@ export async function GET(request: Request) {
                 : false
             if (!isNewAccount) {
                 return NextResponse.redirect(`${base}${next}`)
+            }
+            // Durable first-touch attribution for OAuth signups. Metadata cannot
+            // be injected through an OAuth round trip the way it can on
+            // supabase.auth.signUp, so the cookie AttributionCapture wrote is read
+            // here and written straight to the profile the trigger just created.
+            //
+            // Service role rather than the user's own session: this is a one-shot
+            // system write, and routing it through RLS would make the column
+            // depend on a policy that exists for a different purpose.
+            //
+            // Fails soft on purpose. If the migration adding the column has not
+            // run, or the profile row is not visible yet, the user must still get
+            // signed in — an analytics field is never worth failing auth over.
+            const attribution = parseAttribution(cookieStore.get(ATTRIBUTION_COOKIE)?.value)
+            if (attribution && data?.user?.id) {
+                try {
+                    const admin = createAdminClient()
+                    const { error: attrErr } = await admin
+                        .from('profiles')
+                        .update({ signup_attribution: attribution })
+                        .eq('id', data.user.id)
+                        .is('signup_attribution', null)
+                    if (attrErr) console.error('[Auth Callback] attribution write failed:', attrErr.message)
+                } catch (e) {
+                    console.error('[Auth Callback] attribution write threw:', e)
+                }
             }
             // Carry the provider through so the event can say google vs apple
             // rather than guessing; SignupTracker falls back to a plain oauth.
