@@ -8,6 +8,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import MusicPanel from '@/components/live/MusicPanel';
+import VodReview from '@/components/live/VodReview';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
@@ -1911,6 +1912,12 @@ export default function BroadcastConsolePage() {
                             unpublishExtraAudio={unpublishExtraAudio}
                         />
                     </div>
+                )}
+
+                {/* Post-show: the recording, playable in place, with retro-clipping.
+                    This is vod_url's only in-app surface. */}
+                {isEnded && stream.vod_url && (
+                    <VodReview streamId={streamId} vodUrl={stream.vod_url} />
                 )}
 
                 {settleResult != null && (

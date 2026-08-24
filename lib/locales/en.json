@@ -1259,7 +1259,18 @@
             "unpin": "Unpin",
             "music": "Music",
             "musicEmpty": "No tracks yet — add audio files to the live-music bucket.",
-            "musicVolume": "Music volume"
+            "musicVolume": "Music volume",
+            "vodReview": "Show recording",
+            "markIn": "Mark start",
+            "markOut": "Mark end",
+            "markClear": "Clear",
+            "clipTitlePlaceholder": "Clip title (optional)...",
+            "clipHere": "Clip this moment",
+            "clipHint": "No marks = the 30 seconds around the playhead. Clips are capped at 2 minutes.",
+            "clipMinted": "Clip created",
+            "clipBadWindow": "End must come after start",
+            "clipUntitled": "Highlight",
+            "clipOpen": "Open"
         },
         "poll": {
             "title": "Poll",

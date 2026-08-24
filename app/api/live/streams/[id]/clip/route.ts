@@ -83,14 +83,33 @@ export async function POST(
         const rawTitle = typeof body?.title === 'string' ? body.title.trim() : '';
         const title = rawTitle ? rawTitle.slice(0, 120) : null;
 
-        const elapsedMs = Date.now() - Date.parse(timing.started_at);
-        // A clock skew or an immediate tap must not produce a negative or
-        // inverted window — clamp to the start of the recording.
-        const startMs = Math.max(0, elapsedMs - PRE_ROLL_MS);
-        const endMs = Math.min(
-            Math.max(startMs + 1000, elapsedMs + POST_ROLL_MS),
-            startMs + MAX_CLIP_MS,
-        );
+        // Two modes. LIVE tap: no window in the body — clip the moment that
+        // just happened relative to NOW. RETRO (post-show VOD review): the
+        // console sends an explicit {startMs, endMs} measured on the VOD
+        // playhead — now-relative math is meaningless once the show is over.
+        const explicitStart = Number.isFinite(body?.startMs) ? Math.floor(body.startMs) : null;
+        const explicitEnd = Number.isFinite(body?.endMs) ? Math.floor(body.endMs) : null;
+        let startMs: number;
+        let endMs: number;
+        if (explicitStart !== null && explicitEnd !== null) {
+            if (explicitStart < 0 || explicitEnd <= explicitStart) {
+                return NextResponse.json({ error: 'Invalid clip window' }, { status: 400 });
+            }
+            if (explicitEnd - explicitStart > MAX_CLIP_MS) {
+                return NextResponse.json({ error: 'Clips are capped at 2 minutes' }, { status: 400 });
+            }
+            startMs = explicitStart;
+            endMs = explicitEnd;
+        } else {
+            const elapsedMs = Date.now() - Date.parse(timing.started_at);
+            // A clock skew or an immediate tap must not produce a negative or
+            // inverted window — clamp to the start of the recording.
+            startMs = Math.max(0, elapsedMs - PRE_ROLL_MS);
+            endMs = Math.min(
+                Math.max(startMs + 1000, elapsedMs + POST_ROLL_MS),
+                startMs + MAX_CLIP_MS,
+            );
+        }
 
         const { data: clip, error } = await admin
             .from('stream_clips')

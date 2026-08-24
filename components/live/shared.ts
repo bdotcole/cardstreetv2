@@ -22,6 +22,9 @@ export interface LiveStreamRow {
     livekit_room: string | null;
     chat_disabled: boolean;
     viewer_peak: number;
+    /** Seller-only (STREAM_SELLER_COLS); absent on viewer fetches. */
+    vod_url?: string | null;
+    vod_expires_at?: string | null;
     pinned_message?: string | null;
     pinned_at?: string | null;
     settled_at: string | null;

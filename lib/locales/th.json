@@ -1259,7 +1259,18 @@
             "unpin": "เอาหมุดออก",
             "music": "เพลง",
             "musicEmpty": "ยังไม่มีเพลง — เพิ่มไฟล์เสียงในบัคเก็ต live-music",
-            "musicVolume": "ระดับเสียงเพลง"
+            "musicVolume": "ระดับเสียงเพลง",
+            "vodReview": "วิดีโอย้อนหลัง",
+            "markIn": "จุดเริ่ม",
+            "markOut": "จุดจบ",
+            "markClear": "ล้าง",
+            "clipTitlePlaceholder": "ชื่อคลิป (ไม่บังคับ)...",
+            "clipHere": "ตัดคลิปตรงนี้",
+            "clipHint": "ไม่ตั้งจุด = 30 วินาทีรอบตำแหน่งวิดีโอ คลิปยาวได้สูงสุด 2 นาที",
+            "clipMinted": "สร้างคลิปแล้ว",
+            "clipBadWindow": "จุดจบต้องอยู่หลังจุดเริ่ม",
+            "clipUntitled": "ไฮไลต์",
+            "clipOpen": "เปิด"
         },
         "poll": {
             "title": "โพล",
