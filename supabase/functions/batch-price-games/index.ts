@@ -107,8 +107,13 @@ function bestNmVariant(jCard: any): any | null {
     if (b.avgPrice > 0) sb += 1000;
     if (a.condition === 'Near Mint' || a.condition === 'NM') sa += 500;
     if (b.condition === 'Near Mint' || b.condition === 'NM') sb += 500;
-    if (a.printing === 'Normal') sa += 50;
-    if (b.printing === 'Normal') sb += 50;
+    // Canonical printing for the single row we keep per card: Normal when the card
+    // has one, else Holofoil. Without the Holofoil tier a holo-only card scored a
+    // flat tie and fell through to Reverse Holofoil.
+    if (a.printing === 'Normal') sa += 60;
+    else if (a.printing === 'Holofoil') sa += 40;
+    if (b.printing === 'Normal') sb += 60;
+    else if (b.printing === 'Holofoil') sb += 40;
     if (sa === sb && a.avgPrice === 0 && b.avgPrice === 0) return (a.price || 99999) - (b.price || 99999);
     return sb - sa;
   });
