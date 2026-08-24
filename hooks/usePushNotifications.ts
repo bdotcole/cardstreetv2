@@ -11,7 +11,24 @@ import { PushNotifications, Token, ActionPerformed, PushNotificationSchema } fro
 // which MobileHome's /?view=offers landing branch handles on mount.
 function routeNotificationTap(data: unknown) {
     const type = (data as { type?: unknown } | null | undefined)?.type;
-    if (typeof type !== 'string' || !type.startsWith('offer_')) return;
+    if (typeof type !== 'string') return;
+    // Stream pushes deep-link to the show. This branch did not exist for
+    // the first two shows, so every accepted stream push (~667 across
+    // 08-18 + 08-22) opened the app to the HOMEPAGE on tap — push
+    // contributed zero measured arrivals while looking fully delivered.
+    // showUrl carries the send's UTM tags, so using it (host-checked)
+    // keeps push arrivals attributable in GA; streamId is the fallback.
+    if (type === 'stream_live' || type === 'stream_announce' || type === 'stream_starting_soon') {
+        const d = data as { showUrl?: unknown; streamId?: unknown };
+        const showUrl = typeof d?.showUrl === 'string' ? d.showUrl : '';
+        if (showUrl.startsWith('https://cardstreet.app/')) {
+            window.location.assign(showUrl);
+        } else if (typeof d?.streamId === 'string' && /^[0-9a-f-]{36}$/.test(d.streamId)) {
+            window.location.assign(`/live/${d.streamId}?utm_source=courier&utm_medium=push&utm_campaign=live_golive`);
+        }
+        return;
+    }
+    if (!type.startsWith('offer_')) return;
     try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* landing fallback still opens Profile */ }
     const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-offers', { cancelable: true }));
     if (unconsumed) window.location.assign('/?view=offers');
