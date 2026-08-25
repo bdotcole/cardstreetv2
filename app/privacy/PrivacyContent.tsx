@@ -23,8 +23,8 @@ interface PrivacyContentData {
 }
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:support@thailandtcg.com" className="text-brand-cyan hover:underline">
-    support@thailandtcg.com
+  <a href="mailto:info@cardstreet.app" className="text-brand-cyan hover:underline">
+    info@cardstreet.app
   </a>
 );
 

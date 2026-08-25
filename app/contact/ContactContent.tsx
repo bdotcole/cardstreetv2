@@ -91,13 +91,13 @@ export default function ContactContent({ prefix }: { prefix: '' | '/en' }) {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{content.emailSupportLabel}</p>
-                <a href="mailto:support@thailandtcg.com" className="text-white font-bold hover:text-brand-cyan transition-colors">
-                  support@thailandtcg.com
+                <a href="mailto:info@cardstreet.app" className="text-white font-bold hover:text-brand-cyan transition-colors">
+                  info@cardstreet.app
                 </a>
               </div>
             </div>
             <a
-              href="mailto:support@thailandtcg.com"
+              href="mailto:info@cardstreet.app"
               className="block w-full text-center bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all"
             >
               {content.sendEmailButton}

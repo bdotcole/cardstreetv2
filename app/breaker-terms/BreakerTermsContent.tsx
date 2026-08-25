@@ -254,7 +254,7 @@ const EN: BreakerTermsData = {
   ],
   questionsLabel: 'Questions',
   questionsBody:
-    'For questions about the Breaker Program or these terms, email support@thailandtcg.com.',
+    'For questions about the Breaker Program or these terms, email info@cardstreet.app.',
   backToApply: 'Back to the breaker application',
 };
 
@@ -462,7 +462,7 @@ const TH: BreakerTermsData = {
   ],
   questionsLabel: 'คำถาม',
   questionsBody:
-    'หากมีคำถามเกี่ยวกับโปรแกรม Breaker หรือข้อกำหนดนี้ กรุณาอีเมลถึง support@thailandtcg.com',
+    'หากมีคำถามเกี่ยวกับโปรแกรม Breaker หรือข้อกำหนดนี้ กรุณาอีเมลถึง info@cardstreet.app',
   backToApply: 'กลับไปที่ใบสมัคร Breaker',
 };
 

@@ -816,7 +816,7 @@ export async function sendFirstTimeSaleEmail(
         const orderNumber = opts.orderNumber || opts.orderId;
         // Deep-link straight to the addressable order page (app/orders/[id]).
         const orderLink = `${appBaseUrl()}/orders/${opts.orderId}`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
         const youtube = (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim();
 
         const data: Record<string, string> = {
@@ -1036,7 +1036,7 @@ export async function sendStripeSetupReminderEmail(
         // ── 5. Send. Roll the claim back on failure so a later run retries. ──
         const touch = touchesSent + 1;
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const { title, body } = stripeNudgeCopy(touch, firstName, resumeUrl, supportEmail);
 
@@ -1173,7 +1173,7 @@ export async function sendFirstListingNudgeEmail(
 
         // ── 4. Send. Roll the claim back on failure so a later run retries. ──
         const vaultUrl = `${appBaseUrl()}/?view=vault`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const title =
             'บัญชีของคุณพร้อมขายแล้ว — ลงขายการ์ดใบแรกเลย! — You\'re verified, list your first card on CardStreet';
@@ -1333,7 +1333,7 @@ export async function sendAbandonedCheckoutNudge(
         const cardId: string | null = listing.card_id ?? null;
         const cardName = ((listing.card_data as any)?.name || '').toString().trim() || 'the card';
         const cardUrl = cardId ? `${appBaseUrl()}/card/${cardId}` : `${appBaseUrl()}/`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
 
         const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
         const routing = buildRouting(wantEmail, wantPush, 'inline');
@@ -2268,7 +2268,7 @@ export async function sendBreakerApplicationConfirmation(applicant: {
     const to = applicant.email.trim();
     if (!to) return false;
 
-    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
     // First name only: "Somchai Tanaka" -> "Somchai". Falls back to no greeting
     // name rather than printing an empty string.
     const firstName = applicant.fullName.trim().split(/\s+/)[0] || '';
