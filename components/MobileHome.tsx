@@ -20,7 +20,7 @@ import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import SignupTracker from '@/components/SignupTracker';
 import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
-import { readAttributionCookie } from '@/lib/attribution';
+import { readAttributionCookie, withWriter } from '@/lib/attribution';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
@@ -1835,7 +1835,7 @@ export default function HomePage() {
                                             // first touch into last touch.
                                             const { error: attrErr } = await supabase
                                                 .from('profiles')
-                                                .update({ signup_attribution: attribution })
+                                                .update({ signup_attribution: withWriter(attribution, 'native') })
                                                 .eq('id', newUser.id)
                                                 .is('signup_attribution', null);
                                             if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);

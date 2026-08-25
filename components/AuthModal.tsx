@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { trackSignUp } from '@/lib/signupEvents';
-import { readAttributionCookie } from '@/lib/attribution';
+import { readAttributionCookie, withWriter } from '@/lib/attribution';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -364,7 +364,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             // has not run yet this is simply ignored — but it stays
                             // in auth.users.raw_user_meta_data, so nothing is lost
                             // and it can be backfilled.
-                            signup_attribution: readAttributionCookie(),
+                            signup_attribution: withWriter(readAttributionCookie(), 'trigger'),
                         },
                         emailRedirectTo: `${window.location.origin}/api/auth/callback`,
                     },

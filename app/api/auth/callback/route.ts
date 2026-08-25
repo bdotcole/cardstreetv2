@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ATTRIBUTION_COOKIE, parseAttribution } from '@/lib/attribution'
+import { ATTRIBUTION_COOKIE, parseAttribution, withWriter } from '@/lib/attribution'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
                     const admin = createAdminClient()
                     const { error: attrErr } = await admin
                         .from('profiles')
-                        .update({ signup_attribution: attribution })
+                        .update({ signup_attribution: withWriter(attribution, 'callback') })
                         .eq('id', data.user.id)
                         .is('signup_attribution', null)
                     if (attrErr) console.error('[Auth Callback] attribution write failed:', attrErr.message)

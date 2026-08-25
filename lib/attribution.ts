@@ -22,6 +22,8 @@ export const ATTRIBUTION_COOKIE = 'cs_attribution';
  *  browse-then-decide journey still credits the source that started it. */
 export const ATTRIBUTION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
+export type AttributionWriter = 'trigger' | 'callback' | 'native';
+
 export interface SignupAttribution {
     /** utm_source, else the referrer host, else 'direct'. */
     src: string;
@@ -33,6 +35,16 @@ export interface SignupAttribution {
     ref?: string;
     /** Landing path, query string stripped. Same reason. */
     lp: string;
+    /**
+     * Which code path wrote the row: the DB trigger (email signup, via user
+     * metadata), the web OAuth callback, or the native deep-link handler.
+     *
+     * Exists because three writers feed one column, and without this there is
+     * no way to tell from the data which of them is working. That ambiguity
+     * cost a full diagnostic cycle on 2026-08-25: a row appeared, and it was
+     * impossible to say whether the native fix had produced it.
+     */
+    w?: AttributionWriter;
     /** First-touch timestamp, ISO date only (no clock time — this is analytics,
      *  not a session log, and a date is enough to cohort by). */
     ts: string;
@@ -82,12 +94,25 @@ const SOCIAL_HOSTS: ReadonlyArray<[match: string, name: string]> = [
     ['reddit.', 'reddit'],
 ];
 
-function classify(host: string): { src: string; med: string } | null {
-    const h = host.toLowerCase();
+/**
+ * Match a host (or a utm_source that looks like one) against a pattern.
+ *
+ * Patterns ending in a dot are TLD-agnostic prefixes: 'google.' matches
+ * www.google.co.th and google.com alike. Everything else is a full domain and
+ * must match exactly or as a subdomain — a bare substring test would make
+ * 'x.com' match linux.com, which it did before this was tightened.
+ */
+function hostMatches(host: string, pattern: string): boolean {
+    if (pattern.endsWith('.')) return host.includes(pattern);
+    return host === pattern || host.endsWith('.' + pattern);
+}
+
+function classify(hint: string): { src: string; med: string } | null {
+    const h = hint.toLowerCase();
     // gemini.google.com must be tested before google., or it reads as search.
-    for (const [match, name] of AI_HOSTS) if (h.includes(match)) return { src: name, med: 'ai' };
-    for (const [match, name] of SEARCH_HOSTS) if (h.includes(match)) return { src: name, med: 'organic' };
-    for (const [match, name] of SOCIAL_HOSTS) if (h.includes(match)) return { src: name, med: 'social' };
+    for (const [match, name] of AI_HOSTS) if (hostMatches(h, match)) return { src: name, med: 'ai' };
+    for (const [match, name] of SEARCH_HOSTS) if (hostMatches(h, match)) return { src: name, med: 'organic' };
+    for (const [match, name] of SOCIAL_HOSTS) if (hostMatches(h, match)) return { src: name, med: 'social' };
     return null;
 }
 
@@ -127,12 +152,20 @@ export function buildAttribution(href: string, referrer: string): SignupAttribut
         }
     }
 
-    const classified = refHost ? classify(refHost) : null;
+    // Classify the utm_source as well as the referrer, and prefer the utm tag.
+    // ChatGPT and other assistants tag outbound links (?utm_source=chatgpt.com)
+    // and send NO referrer, so a referrer-only classifier saw an empty referrer
+    // and filed a known AI referral as 'direct' — observed on the very first
+    // real row this table collected.
+    const hint = utmSource || refHost;
+    const classified = hint ? classify(hint) : null;
 
-    // Explicit utm tags always win: they are a deliberate statement about the
-    // campaign, where the referrer is only ever an inference.
-    const src = utmSource || classified?.src || (refHost ? refHost : 'direct');
-    const med = utmMedium || classified?.med || (refHost ? 'referral' : 'direct');
+    // A recognised source is normalized to its short name, so a utm-tagged visit
+    // (chatgpt.com) and a referrer-derived one (chatgpt) group together instead
+    // of splitting a GROUP BY across two spellings. An explicit utm_medium still
+    // wins outright: utm_source=google&utm_medium=cpc is paid, not organic.
+    const src = classified?.src || utmSource || refHost || 'direct';
+    const med = utmMedium || classified?.med || (hint ? 'referral' : 'direct');
 
     const record: SignupAttribution = {
         src: clamp(src),
@@ -182,4 +215,16 @@ export function readAttributionCookie(): SignupAttribution | null {
 
 export function serializeAttribution(a: SignupAttribution): string {
     return encodeURIComponent(JSON.stringify(a));
+}
+
+/**
+ * Stamp the writing code path onto a record, immediately before it is stored.
+ * Null passes through as null so a caller with no cookie stores nothing rather
+ * than a shell containing only a writer tag.
+ */
+export function withWriter(
+    attribution: SignupAttribution | null,
+    writer: AttributionWriter,
+): SignupAttribution | null {
+    return attribution ? { ...attribution, w: writer } : null;
 }
