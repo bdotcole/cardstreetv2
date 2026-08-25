@@ -1,0 +1,33 @@
+-- Close the anon read on notification_preferences (run in the Supabase SQL
+-- Editor; already applied to production 2026-08-24).
+--
+-- 20260222_notification_preferences.sql created "System can read notification
+-- preferences" as FOR SELECT USING (true) granted to role `public`, which
+-- includes `anon`. The intent was backend/edge reads, but service_role bypasses
+-- RLS entirely and never needed a policy — so the only thing this actually did
+-- was publish the table to anyone holding the anon key, and that key ships in
+-- every client bundle. Verified against production before the drop: a plain
+--   GET /rest/v1/notification_preferences?select=user_id,fcm_token
+-- with the anon key returned every row, i.e. ~360 live FCM device tokens keyed
+-- to their user ids. A token alone cannot send a push (that needs the Firebase
+-- server credential), so this is a device-identifier leak rather than a
+-- notification-spoofing hole — but it is not something the anon key should ever
+-- have been able to enumerate.
+--
+-- Nothing depends on it. Every reader is either service_role (lib/courier.ts,
+-- supabase/functions/release-funds) or a user reading their own row through the
+-- session client (app/api/profile, app/api/users/fcm), and the per-user policies
+-- below are untouched:
+--     "Users can view their own notification preferences"   SELECT USING (auth.uid() = user_id)
+--     "Users can insert their own notification preferences"  INSERT WITH CHECK (auth.uid() = user_id)
+--     "Users can update their own notification preferences"  UPDATE USING (auth.uid() = user_id)
+-- Both SELECT policies are PERMISSIVE, so they OR together — removing the
+-- USING (true) one cannot reduce what the per-user one grants.
+--
+-- This file exists so the drop survives a migration replay or a project
+-- rebuild. Without it, 20260222 would recreate the policy and silently reopen
+-- the leak. IF EXISTS so it is safe to run anywhere, including a fresh project
+-- where 20260222 has just been applied.
+
+DROP POLICY IF EXISTS "System can read notification preferences"
+    ON public.notification_preferences;
