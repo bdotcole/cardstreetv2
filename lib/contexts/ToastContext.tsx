@@ -63,7 +63,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
                 {toasts.map((toast) => (
                     <div
                         key={toast.id}
-                        className="pointer-events-auto flex items-center gap-3 bg-brand-darker/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl p-4 min-w-[300px] max-w-sm animate-slideDown"
+                        className="pointer-events-auto flex items-center gap-3 bg-brand-darker/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl p-4 min-w-[min(300px,100%)] max-w-sm animate-slideDown"
                     >
                         {toast.type === 'success' && (
                             <div className="w-8 h-8 rounded-full bg-brand-green/20 flex items-center justify-center flex-shrink-0">

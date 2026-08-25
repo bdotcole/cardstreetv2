@@ -155,7 +155,7 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
+      <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto animate-slideUp">
         <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center">
           <h3 className="text-white font-black italic skew-x-[-5deg] text-lg uppercase">{isThai ? 'เสนอราคา' : 'Make an Offer'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">

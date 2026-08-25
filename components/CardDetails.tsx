@@ -127,7 +127,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   const displayImageUrl = card.imageUrl;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
+    <div className="fixed inset-0 z-50 max-w-[480px] mx-auto flex flex-col bg-brand-darker animate-slideUp">
       {/* Header with Wishlist Toggle */}
       <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
         <button
@@ -148,7 +148,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-40 scrollbar-hide bg-dots">
+      <div className="flex-1 overflow-y-auto pb-64 scrollbar-hide bg-dots">
         {/* Card Image Showcase with Lazy Loading & High-Res Priority */}
         <div className="p-8 flex justify-center relative min-h-[380px]">
           <div className="absolute inset-0 bg-gradient-to-b from-brand-cyan/5 to-transparent pointer-events-none"></div>
@@ -315,7 +315,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
 
       {/* Action Bar */}
       {actionButtons ? actionButtons : (
-        <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-20">
+        <div className="absolute bottom-0 left-0 w-full px-6 pt-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-20" style={{ paddingBottom: 'calc(1.5rem + var(--sab, 0px))' }}>
           {showSignInPrompt && (
             <button
               onClick={() => onAddToCollection(card)}

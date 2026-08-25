@@ -85,7 +85,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-scaleIn">
+            <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto animate-scaleIn">
                 <div className="p-6 border-b border-white/5">
                     <h3 className="text-xl font-black text-white italic skew-x-[-5deg]">
                         {entityType === 'seller' ? t('report.reportSeller') : t('report.reportListing')}

@@ -250,7 +250,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
                   {step === 'out_for_delivery' && <Truck className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
                   {step === 'delivered' && <CheckCircle className={`w-4 h-4 ${isComplete ? 'text-black' : 'text-slate-600'}`} />}
                 </div>
-                <span className={`text-[8px] uppercase tracking-wider text-center leading-tight ${isCurrent ? 'text-brand-green font-bold' : 'text-slate-600'}`}>
+                <span className={`w-full [overflow-wrap:anywhere] text-[8px] uppercase tracking-wider text-center leading-tight ${isCurrent ? 'text-brand-green font-bold' : 'text-slate-600'}`}>
                   {stepLabel(step)}
                 </span>
               </div>

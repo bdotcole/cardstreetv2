@@ -302,7 +302,7 @@ const Vault: React.FC<VaultProps> = ({
           )}
         </div>
 
-        <h2 className="px-2 text-5xl font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg mb-4">
+        <h2 className="px-2 text-[clamp(2rem,11vw,3rem)] font-black text-white tracking-tighter leading-none italic skew-x-[-6deg] drop-shadow-lg mb-4">
           {currencySymbol}{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </h2>
 
@@ -420,14 +420,14 @@ const Vault: React.FC<VaultProps> = ({
   const renderListings = () => (
     <div className="space-y-6 animate-fadeIn pb-20">
       <div className="flex justify-between items-center pt-4 gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0 flex-1">
           {/* While the asset picker is open, back steps out to the listings
               list (mirroring the hardware-back handler) instead of jumping
               to the Vault root. */}
-          <button onClick={() => isSelectingForListing ? setIsSelectingForListing(false) : setView('folders')} className="w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
+          <button onClick={() => isSelectingForListing ? setIsSelectingForListing(false) : setView('folders')} className="flex-shrink-0 w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </button>
-          <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">
+          <h3 className="min-w-0 truncate text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">
             {isSelectingForListing
               ? (isThai ? 'ประกาศขายใหม่' : 'New Listing')
               : (isThai ? 'กำลังประกาศขาย' : 'Active Listings')}
@@ -437,7 +437,7 @@ const Vault: React.FC<VaultProps> = ({
             button is never a silent no-op. */}
         <button
           onClick={() => setIsSelectingForListing(!isSelectingForListing)}
-          className={`px-6 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all whitespace-nowrap ${isSelectingForListing
+          className={`flex-shrink-0 px-6 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all whitespace-nowrap ${isSelectingForListing
             ? 'glass border border-white/10 text-slate-300'
             : 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/10'}`}
         >
@@ -547,7 +547,7 @@ const Vault: React.FC<VaultProps> = ({
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 min-w-0">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-black">฿</span>
                       <input
                         type="number"

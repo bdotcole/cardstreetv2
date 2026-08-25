@@ -95,6 +95,23 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // Grid density: 2 comfortable columns (default) or 3 compact ones. Play
+  // reviews asked for an adjustable tile size; the choice sticks per device.
+  // Read after mount (not in the initializer) so SSR and hydration agree.
+  const [gridCols, setGridCols] = useState<2 | 3>(2);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('cs_market_grid_cols') === '3') setGridCols(3);
+    } catch { /* storage unavailable (private mode) — session-only default */ }
+  }, []);
+  const toggleGridCols = () => {
+    setGridCols(prev => {
+      const next = prev === 2 ? 3 : 2;
+      try { localStorage.setItem('cs_market_grid_cols', String(next)); } catch { }
+      return next;
+    });
+  };
+
   const openSheet = () => {
     setDraftGame(selectedGame);
     setDraftLanguage(selectedLanguage);
@@ -238,11 +255,11 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
         {/* Filter & Sort Bar */}
         <div className="space-y-3">
-          <div className="flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2">
             {/* Filter Button — opens the bottom sheet */}
             <button
               onClick={openSheet}
-              className={`flex items-center gap-2 h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border active:scale-95 ${activeFilterCount > 0
+              className={`flex-shrink-0 flex items-center gap-2 h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border active:scale-95 ${activeFilterCount > 0
                 ? 'bg-brand-green/15 text-brand-green border-brand-green/40'
                 : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -256,22 +273,34 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               )}
             </button>
 
-            {/* Sort Options */}
-            <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
-              {([
-                { id: 'best_deals', label: t('marketplace.deals') },
-                { id: 'newest', label: t('marketplace.new') },
-                { id: 'price_asc', label: t('marketplace.lowPrice') },
-                { id: 'price_desc', label: t('marketplace.highPrice') }
-              ] as const).map(sort => (
-                <button
-                  key={sort.id}
-                  onClick={() => setSortOrder(sort.id)}
-                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase transition-all ${sortOrder === sort.id ? 'bg-brand-cyan text-brand-darker shadow-md' : 'text-slate-500 hover:text-white'}`}
-                >
-                  {sort.label}
-                </button>
-              ))}
+            {/* Grid density toggle — 2 comfortable / 3 compact columns */}
+            <button
+              onClick={toggleGridCols}
+              aria-label={gridCols === 2 ? 'Switch to compact grid' : 'Switch to large grid'}
+              className="flex-shrink-0 w-9 h-9 rounded-full bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 hover:text-white flex items-center justify-center transition-all active:scale-95"
+            >
+              <i className={`fa-solid ${gridCols === 2 ? 'fa-table-cells' : 'fa-table-cells-large'} text-xs`}></i>
+            </button>
+
+            {/* Sort Options — Thai labels outgrow narrow screens, so the pill
+                group scrolls sideways instead of pushing pills off-screen */}
+            <div className="flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="flex w-max ml-auto bg-white/5 rounded-full p-1 border border-white/10">
+                {([
+                  { id: 'best_deals', label: t('marketplace.deals') },
+                  { id: 'newest', label: t('marketplace.new') },
+                  { id: 'price_asc', label: t('marketplace.lowPrice') },
+                  { id: 'price_desc', label: t('marketplace.highPrice') }
+                ] as const).map(sort => (
+                  <button
+                    key={sort.id}
+                    onClick={() => setSortOrder(sort.id)}
+                    className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase whitespace-nowrap transition-all ${sortOrder === sort.id ? 'bg-brand-cyan text-brand-darker shadow-md' : 'text-slate-500 hover:text-white'}`}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -294,7 +323,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
       {/* Scrollable Listings Grid */}
       <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-3'}`}>
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
             const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
@@ -330,7 +359,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                         src={thumbUrl}
                         alt={listing.card_data.name || 'Card'}
                         fill
-                        sizes="(max-width: 768px) 45vw, 200px"
+                        sizes={gridCols === 3 ? '(max-width: 768px) 30vw, 133px' : '(max-width: 768px) 45vw, 200px'}
                         loading={idx < 6 ? 'eager' : 'lazy'}
                         placeholder="blur"
                         blurDataURL={CARD_BLUR_DATA_URL}
@@ -407,7 +436,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       className="mt-2 w-full h-8 rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                       aria-label={`Make an offer on ${listing.card_data.name}`}
                     >
-                      <i className="fa-solid fa-hand-holding-dollar"></i>
+                      {gridCols === 2 && <i className="fa-solid fa-hand-holding-dollar"></i>}
                       {t('offer.makeOffer')}
                     </button>
                   ) : (
@@ -416,7 +445,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       className="mt-2 w-full h-8 rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all"
                       aria-label={`Buy ${listing.card_data.name} now`}
                     >
-                      <i className="fa-solid fa-bolt"></i>
+                      {gridCols === 2 && <i className="fa-solid fa-bolt"></i>}
                       {t('marketplace.buyNow')}
                     </button>
                   )}
@@ -424,7 +453,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               </div>
             );
           }) : !isLoading ? (
-            <div className="col-span-2 text-center py-20 px-6">
+            <div className="col-span-full text-center py-20 px-6">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
@@ -451,11 +480,11 @@ const Marketplace: React.FC<MarketplaceProps> = ({
           ))}
 
           {/* Infinite scroll trigger */}
-          {!isLoading && hasMore && <div ref={observerRef} className="col-span-2 h-8" />}
+          {!isLoading && hasMore && <div ref={observerRef} className="col-span-full h-8" />}
 
           {/* End of results */}
           {!isLoading && !hasMore && listings.length > 0 && (
-            <p className="col-span-2 text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest py-4">
+            <p className="col-span-full text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest py-4">
               — {listings.length} listings shown —
             </p>
           )}

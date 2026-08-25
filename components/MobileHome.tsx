@@ -542,8 +542,6 @@ export default function HomePage() {
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isWebScannerOpen, setIsWebScannerOpen] = useState(false);
 
-    const [safeArea, setSafeArea] = useState({ top: 0, bottom: 0 });
-
     // Detect Capacitor native platform and set safe area paddings
     // Android WebView often fails to populate env(safe-area-inset-*) correctly
     useEffect(() => {
@@ -562,10 +560,12 @@ export default function HomePage() {
                     }
 
                     if (platform === 'android') {
-                        // Track both top and bottom safe areas now that webview overlays the status bar
-                        setSafeArea({ top: 44, bottom: 24 });
-                        document.documentElement.style.setProperty('--sab', '24px');
-                        document.documentElement.style.setProperty('--sat', '44px');
+                        // The webview overlays the system bars, but Android WebView often
+                        // reports env(safe-area-inset-*) as 0 — so keep hardcoded floors.
+                        // max() lets the real inset win on devices that do report it
+                        // (3-button navigation is ~48px, taller than the 24px floor).
+                        document.documentElement.style.setProperty('--sab', 'max(24px, env(safe-area-inset-bottom, 0px))');
+                        document.documentElement.style.setProperty('--sat', 'max(44px, env(safe-area-inset-top, 0px))');
                     }
                 }
             } catch {
@@ -1861,8 +1861,8 @@ export default function HomePage() {
     return (
         <div className="bg-brand-darker h-[100dvh] w-full flex justify-center selection:bg-brand-cyan/30 overflow-hidden text-slate-200 font-sans"
             style={{
-                paddingTop: safeArea.top ? `${safeArea.top}px` : 'env(safe-area-inset-top, 0px)',
-                paddingBottom: safeArea.bottom ? `${safeArea.bottom}px` : 'env(safe-area-inset-bottom, 0px)',
+                paddingTop: 'var(--sat, env(safe-area-inset-top, 0px))',
+                paddingBottom: 'var(--sab, env(safe-area-inset-bottom, 0px))',
                 paddingLeft: 'env(safe-area-inset-left, 0px)',
                 paddingRight: 'env(safe-area-inset-right, 0px)'
             }}>
@@ -2109,17 +2109,17 @@ export default function HomePage() {
                     </div>
                 </main>
 
-                <nav className="absolute bottom-0 left-0 w-full bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 px-6 pt-2 flex justify-between items-end z-40 animate-slideUp" style={{ paddingBottom: 'calc(var(--nav-bar-height, 0px) + 8px)' }}>
+                <nav className="absolute bottom-0 left-0 w-full bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 px-6 pt-2 pb-2 flex justify-between items-end z-40 animate-slideUp">
                     {/* 1. SHOP (Marketplace) */}
-                    <button onClick={handleShopTab} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'marketplace' ? '-translate-y-2' : ''}`}>
+                    <button onClick={handleShopTab} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 transition-all group p-2 ${activeTab === 'marketplace' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-shop text-xl transition-colors ${activeTab === 'marketplace' ? 'text-brand-purple drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'marketplace' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.shop')}</span>
+                        <span className={`max-w-full truncate text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'marketplace' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.shop')}</span>
                     </button>
 
                     {/* 2. EXPLORE */}
-                    <button onClick={() => setActiveTab('explore')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'explore' ? '-translate-y-2' : ''}`}>
+                    <button onClick={() => setActiveTab('explore')} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 transition-all group p-2 ${activeTab === 'explore' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-magnifying-glass text-xl transition-colors ${activeTab === 'explore' ? 'text-brand-red drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'explore' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.explore')}</span>
+                        <span className={`max-w-full truncate text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'explore' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.explore')}</span>
                     </button>
 
                     {/* 3. SCAN (Center) */}
@@ -2138,13 +2138,13 @@ export default function HomePage() {
                     </div>
 
                     {/* 4. VAULT */}
-                    <button onClick={() => setActiveTab('vault')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'vault' ? '-translate-y-2' : ''}`}>
+                    <button onClick={() => setActiveTab('vault')} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 transition-all group p-2 ${activeTab === 'vault' ? '-translate-y-2' : ''}`}>
                         <i className={`fa-solid fa-vault text-xl transition-colors ${activeTab === 'vault' ? 'text-brand-green drop-shadow-[0_0_10px_rgba(132,204,22,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'vault' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.vault')}</span>
+                        <span className={`max-w-full truncate text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'vault' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.vault')}</span>
                     </button>
 
                     {/* 5. PROFILE */}
-                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 flex-1 transition-all group p-2 ${activeTab === 'profile' ? '-translate-y-2' : ''}`}>
+                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 transition-all group p-2 ${activeTab === 'profile' ? '-translate-y-2' : ''}`}>
                         <span className="relative">
                             <i className={`fa-solid fa-user-astronaut text-xl transition-colors ${activeTab === 'profile' ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
                             {/* Offers needing action (mostly: accepted, awaiting your payment).
@@ -2156,7 +2156,7 @@ export default function HomePage() {
                                 </span>
                             )}
                         </span>
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'profile' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.profile')}</span>
+                        <span className={`max-w-full truncate text-[9px] font-black uppercase tracking-widest transition-opacity ${activeTab === 'profile' ? 'opacity-100 text-white' : 'opacity-0'}`}>{t('nav.profile')}</span>
                     </button>
                 </nav>
 

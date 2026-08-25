@@ -265,7 +265,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'สภาพการ์ด' : 'Condition'}</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {Object.values(CardCondition).filter((cond) => cond !== CardCondition.Sealed).map((cond) => (
+                  {Object.entries(CardCondition).filter(([, cond]) => cond !== CardCondition.Sealed).map(([abbr, cond]) => (
                     <button
                       key={cond}
                       type="button"
@@ -275,7 +275,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                         : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'
                         }`}
                     >
-                      {cond === 'Near Mint' ? 'NM' : cond === 'Lightly Played' ? 'LP' : cond.replace(' ', '')}
+                      {abbr}
                     </button>
                   ))}
                 </div>

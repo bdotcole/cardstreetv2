@@ -45,7 +45,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
   // document.body lets the overlay genuinely cover the app chrome, same as
   // CardDetails (mounted after the nav) and AuthModal (also a portal).
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
+    <div className="fixed inset-0 z-50 max-w-[480px] mx-auto flex flex-col bg-brand-darker animate-slideUp">
       {/* Header */}
       <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
         <button
@@ -134,7 +134,7 @@ const SealedProductDetail: React.FC<SealedProductDetailProps> = ({ product, onCl
       {/* Action Bar — mirrors CardDetails. Adding stores a Card-shaped
           snapshot so the vault/listing pipeline treats it like any card. */}
       {onAddToCollection && (
-        <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex gap-3 z-20">
+        <div className="absolute bottom-0 left-0 w-full px-6 pt-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex gap-3 z-20" style={{ paddingBottom: 'calc(1.5rem + var(--sab, 0px))' }}>
           <button
             onClick={() => onAddToCollection(sealedProductToCard(product))}
             className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"

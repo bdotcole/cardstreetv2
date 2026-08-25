@@ -163,7 +163,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-brand-darker animate-slideUp">
+        <div className="fixed inset-0 z-50 max-w-[480px] mx-auto flex flex-col bg-brand-darker animate-slideUp">
             {/* Header */}
             <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
                 <button
@@ -185,7 +185,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto pb-40 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto pb-64 scrollbar-hide">
                 {/* Swipeable Image Gallery */}
                 <div className="relative w-full">
                     <div className="absolute inset-0 bg-gradient-to-b from-brand-green/5 to-transparent pointer-events-none z-0"></div>
@@ -336,7 +336,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 w-full p-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-50">
+            <div className="absolute bottom-0 left-0 w-full px-6 pt-6 bg-brand-darker/90 backdrop-blur-xl border-t border-white/5 flex flex-col gap-3 z-50" style={{ paddingBottom: 'calc(1.5rem + var(--sab, 0px))' }}>
                 {canOffer && (
                     hasPendingOffer ? (
                         <button
