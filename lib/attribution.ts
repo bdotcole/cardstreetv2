@@ -159,6 +159,27 @@ export function parseAttribution(raw: string | undefined | null): SignupAttribut
     }
 }
 
+/**
+ * Read the first-touch record from document.cookie.
+ *
+ * Lives here rather than in a component because three call sites need it: the
+ * email signup in AuthModal, the native OAuth deep-link handler in MobileHome,
+ * and (by symmetry) anything added later. Returns null when nothing is
+ * recorded, so an untagged signup stores null instead of a misleading shell.
+ */
+export function readAttributionCookie(): SignupAttribution | null {
+    if (typeof document === 'undefined') return null;
+    try {
+        const raw = document.cookie
+            .split('; ')
+            .find((c) => c.startsWith(ATTRIBUTION_COOKIE + '='))
+            ?.slice(ATTRIBUTION_COOKIE.length + 1);
+        return parseAttribution(raw);
+    } catch {
+        return null;
+    }
+}
+
 export function serializeAttribution(a: SignupAttribution): string {
     return encodeURIComponent(JSON.stringify(a));
 }

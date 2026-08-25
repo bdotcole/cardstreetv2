@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { trackSignUp } from '@/lib/signupEvents';
-import { ATTRIBUTION_COOKIE, parseAttribution } from '@/lib/attribution';
+import { readAttributionCookie } from '@/lib/attribution';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -91,25 +91,6 @@ function verifySessionPersisted(supabase: ReturnType<typeof createClient>) {
             // Best-effort diagnostic.
         }
     }, 1500);
-}
-
-/**
- * First-touch acquisition record for the account about to be created, read
- * from the cookie AttributionCapture wrote on the visitor's first page view.
- * Returns null when there is nothing recorded, so an untagged signup stores
- * null rather than a misleading row of empty strings.
- */
-function readAttribution(): unknown {
-    if (typeof document === 'undefined') return null;
-    try {
-        const raw = document.cookie
-            .split('; ')
-            .find((c) => c.startsWith(ATTRIBUTION_COOKIE + '='))
-            ?.slice(ATTRIBUTION_COOKIE.length + 1);
-        return parseAttribution(raw);
-    } catch {
-        return null;
-    }
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }) => {
@@ -383,7 +364,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             // has not run yet this is simply ignored — but it stays
                             // in auth.users.raw_user_meta_data, so nothing is lost
                             // and it can be backfilled.
-                            signup_attribution: readAttribution(),
+                            signup_attribution: readAttributionCookie(),
                         },
                         emailRedirectTo: `${window.location.origin}/api/auth/callback`,
                     },

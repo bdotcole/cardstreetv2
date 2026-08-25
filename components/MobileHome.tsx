@@ -19,6 +19,8 @@ import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import SignupTracker from '@/components/SignupTracker';
+import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
+import { readAttributionCookie } from '@/lib/attribution';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
@@ -1807,7 +1809,42 @@ export default function HomePage() {
                                 console.log('[DeepLink] Exchange Success for user:', sessionData?.user?.id);
                                 // Session is set, UI will update via onAuthStateChange
                                 showToast('Successfully signed in!', 'success');
-                                // Force reload if needed or just let state update
+
+                                // Native OAuth never touches /api/auth/callback: handleOAuthLogin
+                                // sends Capacitor builds to /mobile-redirect, which bounces to the
+                                // cardstreet:// deep link and lands here, so the exchange happens in
+                                // the WebView. The signup instrumentation on that route therefore
+                                // could not see the dominant signup path, and had to be repeated here.
+                                //
+                                // Age of created_at is the new-account test, as on the web route —
+                                // last_sign_in_at is frozen at signup for most accounts.
+                                try {
+                                    const newUser = sessionData?.user;
+                                    const createdAt = newUser?.created_at;
+                                    const isNewAccount = createdAt
+                                        ? Date.now() - new Date(createdAt).getTime() < 60_000
+                                        : false;
+                                    if (newUser && isNewAccount) {
+                                        trackSignUp(signUpMethodFromProvider(newUser.app_metadata?.provider));
+                                        const attribution = readAttributionCookie();
+                                        if (attribution) {
+                                            // The user updating their OWN profile row, which the
+                                            // "Users can update own profile" RLS policy permits — no
+                                            // service-role round trip needed from the client.
+                                            // Guarded on null so a later sign-in cannot restamp
+                                            // first touch into last touch.
+                                            const { error: attrErr } = await supabase
+                                                .from('profiles')
+                                                .update({ signup_attribution: attribution })
+                                                .eq('id', newUser.id)
+                                                .is('signup_attribution', null);
+                                            if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);
+                                        }
+                                    }
+                                } catch (e) {
+                                    // Analytics must never break a sign-in.
+                                    console.error('[DeepLink] signup instrumentation failed:', e);
+                                }
                             }
                         } else {
                             // Check for hash fragments (Implicit flow fallback)

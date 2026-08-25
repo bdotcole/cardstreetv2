@@ -20,6 +20,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { sendGAEvent } from '@next/third-parties/google';
+import { trackMetaEvent } from '@/lib/metaEvents';
 
 export type SignUpMethod = 'email' | 'google' | 'apple' | 'oauth';
 
@@ -62,6 +63,22 @@ export function trackSignUp(method: SignUpMethod): void {
         sendGAEvent('event', 'sign_up', { method, surface: surface() });
     } catch {
         // GA not loaded (env var unset) — nothing to report to.
+    }
+
+    // Meta's standard registration conversion. Routed through trackMetaEvent so
+    // it reaches the web Pixel AND, inside the native app, the Facebook iOS SDK —
+    // the same fan-out Purchase and InitiateCheckout already use.
+    //
+    // Placed inside trackSignUp rather than at each call site so it cannot drift
+    // out of step with the GA4 event: every path that counts a signup counts it
+    // in both places, by construction.
+    //
+    // No value/currency: a registration has no monetary amount, and inventing one
+    // would corrupt ROAS for any campaign optimising on this event.
+    try {
+        trackMetaEvent('CompleteRegistration');
+    } catch {
+        // trackMetaEvent swallows its own errors; this is belt and braces.
     }
 }
 
