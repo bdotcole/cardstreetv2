@@ -100,7 +100,9 @@ const PaymentElementForm: React.FC<{
     /** Fired once orders are created + inventory reserved (before the charge),
      *  so the modal can release the reservation if the buyer then abandons. */
     onOrderReserved?: (transferGroup: string) => void;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved }) => {
+    /** Collector Pass voucher to apply (validated + clamped server-side). */
+    voucherId?: string | null;
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -164,7 +166,7 @@ const PaymentElementForm: React.FC<{
                     // gets charged.
                     // acceptedOfferId (OBO): the server reads the discounted
                     // price from the accepted offer; we never send a price.
-                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb, ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb, ...(acceptedOfferId ? { acceptedOfferId } : {}), ...(voucherId ? { voucherId } : {}) }),
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
@@ -410,6 +412,49 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [estimateError, setEstimateError] = useState<string | null>(null);
 
+    // ─── Collector Pass vouchers ───
+    // Quoted server-side per cart: the discount clamp depends on the seller's
+    // fee tier, which the client can't know. The quoted figure is EXACTLY what
+    // /api/orders/checkout will apply (same rules, same rows), so the total
+    // shown here is the total charged. Silent no-op while the rewards/voucher
+    // flags are dark or the buyer has no vouchers. Never combined with an
+    // accepted offer.
+    interface VoucherQuote {
+        id: string;
+        key: string;
+        amountSatang: number;
+        discountSatang: number;
+        eligible: boolean;
+    }
+    const [vouchers, setVouchers] = useState<VoucherQuote[]>([]);
+    const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
+    useEffect(() => {
+        if (!isOpen || apiEndpoint !== '/api/checkout' || !items || items.length === 0 || acceptedOfferId) {
+            setVouchers([]);
+            setSelectedVoucherId(null);
+            return;
+        }
+        let cancelled = false;
+        fetch('/api/rewards/vouchers/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ items: items.map((i) => ({ id: i.id })) }),
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+                if (cancelled || !d?.enabled) return;
+                setVouchers(
+                    ((d.vouchers ?? []) as VoucherQuote[]).filter((v) => v.eligible && v.discountSatang > 0),
+                );
+            })
+            .catch(() => { /* vouchers simply don't render */ });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, apiEndpoint, acceptedOfferId]);
+    const voucherDiscountThb =
+        (vouchers.find((v) => v.id === selectedVoucherId)?.discountSatang ?? 0) / 100;
+
     useEffect(() => {
         if (!isOpen) {
             setEstimate(null);
@@ -460,6 +505,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
     const effectiveAmount = estimate?.total ?? amount;
+    // What the buyer actually pays: the estimate total minus the exact quoted
+    // voucher discount (fee-funded; can only lower the charge).
+    const displayedTotal = Math.max(0, effectiveAmount - voucherDiscountThb);
     const effectiveShipping = estimate?.shipping ?? shippingFee;
 
     // For the marketplace checkout we must wait for the estimate before
@@ -529,7 +577,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // /api/checkout creates, and mounting Elements in the user's *display*
     // currency would both mismatch the PI and hide PromptPay (THB-only).
     // Dark theme to match the modal.
-    const amountMinor = Math.max(1, Math.round(effectiveAmount * 100));
+    const amountMinor = Math.max(1, Math.round(displayedTotal * 100));
     const elementsCurrency = isMarketplaceCheckout ? 'thb' : (currency || 'thb').toLowerCase();
     const elementsOptions = useMemo<StripeElementsOptions>(() => ({
         mode: 'payment',
@@ -583,14 +631,55 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 {t('paymentFlow.shippingEstimate') || "Flat-rate shipping for this address — you'll be charged exactly the total shown above."}
                             </p>
                         )}
+                        {vouchers.length > 0 && (
+                            <div className="pt-1">
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1.5">
+                                    {t('rewards.voucherApply') || 'Voucher'}
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                        onClick={() => setSelectedVoucherId(null)}
+                                        className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase transition-colors ${
+                                            selectedVoucherId === null
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-white/5 text-slate-400'
+                                        }`}
+                                    >
+                                        {t('rewards.voucherNone') || 'None'}
+                                    </button>
+                                    {vouchers.map((v) => (
+                                        <button
+                                            key={v.id}
+                                            onClick={() => setSelectedVoucherId(v.id)}
+                                            className={`px-2.5 h-7 rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 ${
+                                                selectedVoucherId === v.id
+                                                    ? 'bg-amber-400 text-slate-900'
+                                                    : 'bg-amber-400/10 text-amber-300 border border-amber-400/30'
+                                            }`}
+                                        >
+                                            <i className="fa-solid fa-ticket text-[9px]"></i>
+                                            -฿{(v.discountSatang / 100).toLocaleString()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {voucherDiscountThb > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                    {t('rewards.discount') || 'Voucher discount'}
+                                </span>
+                                <span className="text-sm font-bold text-amber-300">-{formatAmount(voucherDiscountThb)}</span>
+                            </div>
+                        )}
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
-                            <span className="text-2xl font-black text-white">{formatAmount(effectiveAmount)}</span>
+                            <span className="text-2xl font-black text-white">{formatAmount(displayedTotal)}</span>
                         </div>
                         {!isThbDisplay && (
                             <p className="text-[10px] text-slate-500 text-right">
-                                {t('paymentFlow.chargedInThb') || 'Charged in Thai Baht as'} ฿{effectiveAmount.toLocaleString()}.{' '}
+                                {t('paymentFlow.chargedInThb') || 'Charged in Thai Baht as'} ฿{displayedTotal.toLocaleString()}.{' '}
                                 {t('paymentFlow.bankRateNote') || 'Your bank sets the final exchange rate.'}
                             </p>
                         )}
@@ -648,12 +737,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     key={`${amountMinor}-${elementsCurrency}-${estimate?.sellerStripeAccountId || 'platform'}`}
                                 >
                                     <PaymentElementForm
-                                        amountThb={effectiveAmount}
+                                        amountThb={displayedTotal}
                                         formatAmount={formatAmount}
                                         items={items}
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
                                         acceptedOfferId={acceptedOfferId}
+                                        voucherId={selectedVoucherId}
                                         onOrderReserved={handleOrderReserved}
                                         onPaymentSuccess={handlePaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}

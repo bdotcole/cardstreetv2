@@ -205,30 +205,140 @@ export const FIRST_AWARD_BY_KEY: Record<string, FirstAwardDef> =
     Object.fromEntries(FIRST_AWARDS.map((a) => [a.key, a]));
 
 // ---------------------------------------------------------------------------
-// Coin store catalog (Phase 1: display-only preview; redemption ships in the
-// store phase behind its own flag). coin prices obey the pricing law:
-// price >= 100 x max real THB cost — face value is the ceiling, never exceeded.
+// Coin store catalog. Pricing law: coin price >= 100 x max real THB cost —
+// face value is the ceiling, never exceeded. realCostSatang is the amount the
+// monthly reward_budget breaker reserves at redemption (0 = never gated).
+// Effects and gates here MUST match redeem_reward_item + the redeem route.
 // ---------------------------------------------------------------------------
+
+export interface CatalogVoucherDef {
+    type: 'order' | 'shipping';
+    amountSatang: number;
+    minOrderSatang: number;
+    /** Days from redemption until the voucher expires unused. */
+    validDays: number;
+}
 
 export interface CatalogItemDef {
     key: string;
     coins: number;
     kind: 'cosmetic' | 'perk' | 'voucher';
-    /** false until the redemption rail ships. */
+    /** false = shown as "Soon" (deferred SKUs). */
     redeemable: boolean;
+    minLevel?: number;
+    oncePerAccount?: boolean;
+    /** Reserved from the monthly THB budget at redemption. */
+    realCostSatang?: number;
+    /** Hidden in the iOS build (App Store 3.1.1 — digital-goods unlock outside IAP). */
+    iosHidden?: boolean;
+    voucher?: CatalogVoucherDef;
 }
 
 export const CATALOG: readonly CatalogItemDef[] = [
-    { key: 'streak_freeze', coins: 150, kind: 'cosmetic', redeemable: false },
-    { key: 'emote_early_unlock', coins: 300, kind: 'cosmetic', redeemable: false },
-    { key: 'frame_holo', coins: 300, kind: 'cosmetic', redeemable: false },
-    { key: 'frame_rainbow', coins: 500, kind: 'cosmetic', redeemable: false },
-    { key: 'frame_gold', coins: 800, kind: 'cosmetic', redeemable: false },
-    { key: 'chat_name_color', coins: 600, kind: 'cosmetic', redeemable: false },
+    { key: 'streak_freeze', coins: 150, kind: 'cosmetic', redeemable: true },
+    { key: 'emote_early_unlock', coins: 300, kind: 'cosmetic', redeemable: true },
+    { key: 'frame_holo', coins: 300, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
+    { key: 'frame_rainbow', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
+    { key: 'frame_gold', coins: 800, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
+    { key: 'chat_name_color', coins: 600, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
+    // Deferred: needs the marketplace-ranking surface (own beta pass).
     { key: 'listing_boost', coins: 250, kind: 'perk', redeemable: false },
-    { key: 'pro_trial_7d', coins: 1000, kind: 'perk', redeemable: false },
-    { key: 'voucher_10', coins: 1000, kind: 'voucher', redeemable: false },
-    { key: 'voucher_20', coins: 2000, kind: 'voucher', redeemable: false },
-    { key: 'voucher_ship_40', coins: 4000, kind: 'voucher', redeemable: false },
+    { key: 'pro_trial_7d', coins: 1000, kind: 'perk', redeemable: true, oncePerAccount: true, iosHidden: true },
+    { key: 'voucher_10', coins: 1000, kind: 'voucher', redeemable: true, realCostSatang: 1000, voucher: { type: 'order', amountSatang: 1000, minOrderSatang: 30000, validDays: 60 } },
+    { key: 'voucher_20', coins: 2000, kind: 'voucher', redeemable: true, realCostSatang: 2000, voucher: { type: 'order', amountSatang: 2000, minOrderSatang: 50000, validDays: 60 } },
+    { key: 'voucher_ship_40', coins: 4000, kind: 'voucher', redeemable: true, realCostSatang: 4000, voucher: { type: 'shipping', amountSatang: 4000, minOrderSatang: 50000, validDays: 60 } },
+    // Deferred: needs the consume-at-creation / restore-on-abandon rail for sellers.
     { key: 'seller_fee_30', coins: 3000, kind: 'voucher', redeemable: false },
 ];
+
+export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =
+    Object.fromEntries(CATALOG.map((i) => [i.key, i]));
+
+/** Frame item keys -> avatar-ring gradient classes (rendered as the ring
+ *  behind the avatar on profile + seller pages). */
+export const FRAME_STYLES: Record<string, string> = {
+    frame_holo: 'bg-gradient-to-br from-cyan-300 via-sky-400 to-blue-600',
+    frame_rainbow: 'bg-gradient-to-br from-rose-400 via-amber-300 to-indigo-400',
+    frame_gold: 'bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600',
+};
+
+/** Chat name colors (chat_name_color owners pick one; validated server-side
+ *  at equip). 'rainbow' is a gradient-text class stack. */
+export const CHAT_COLORS: Record<string, string> = {
+    gold: 'text-amber-300',
+    pink: 'text-pink-400',
+    lime: 'text-lime-300',
+    violet: 'text-violet-300',
+    rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300 bg-clip-text text-transparent',
+};
+
+// ---------------------------------------------------------------------------
+// Milestone badges — mirrors grant_reward_milestones() in the 20260829
+// migration (thresholds + coins MUST stay identical). Counters are ledger
+// earn-row counts; streak badges read rewards.streak_best.
+// ---------------------------------------------------------------------------
+
+export interface MilestoneDef {
+    rule: string;
+    threshold: number;
+    badge: string;
+    coins: number;
+}
+
+export const MILESTONES: readonly MilestoneDef[] = [
+    { rule: 'order_settled_buyer', threshold: 5, badge: 'buyer_5', coins: 100 },
+    { rule: 'order_settled_buyer', threshold: 25, badge: 'buyer_25', coins: 300 },
+    { rule: 'order_settled_buyer', threshold: 100, badge: 'buyer_100', coins: 1000 },
+    { rule: 'order_settled_seller', threshold: 1, badge: 'seller_1', coins: 100 },
+    { rule: 'order_settled_seller', threshold: 10, badge: 'seller_10', coins: 300 },
+    { rule: 'order_settled_seller', threshold: 50, badge: 'seller_50', coins: 1000 },
+    { rule: 'order_settled_seller', threshold: 250, badge: 'seller_250', coins: 3000 },
+    { rule: 'review', threshold: 10, badge: 'reviews_10', coins: 100 },
+    { rule: 'review', threshold: 50, badge: 'reviews_50', coins: 300 },
+    { rule: 'vault_add', threshold: 50, badge: 'vault_50', coins: 0 },
+    { rule: 'vault_add', threshold: 250, badge: 'vault_250', coins: 0 },
+    { rule: 'vault_add', threshold: 1000, badge: 'vault_1000', coins: 0 },
+    { rule: 'chat_stream', threshold: 25, badge: 'chat_25', coins: 0 },
+    { rule: 'streak_best', threshold: 30, badge: 'streak_30', coins: 0 },
+    { rule: 'streak_best', threshold: 100, badge: 'streak_100', coins: 0 },
+    { rule: 'streak_best', threshold: 365, badge: 'streak_365', coins: 0 },
+];
+
+// ---------------------------------------------------------------------------
+// Voucher checkout math (server-side; unit-tested in the local harness)
+// ---------------------------------------------------------------------------
+
+/** A buyer voucher is funded entirely from the platform fee: the discount can
+ *  never exceed the cart's total fee, so the platform's take floors at zero
+ *  and the seller's proceeds are untouched (TH direct charges). */
+export function voucherDiscountSatang(faceSatang: number, totalFeeSatang: number): number {
+    return Math.max(0, Math.min(Math.round(faceSatang), Math.round(totalFeeSatang)));
+}
+
+/**
+ * Split a voucher discount across a cart's orders proportionally to each
+ * order's platform fee (a per-order slice can never exceed that order's fee,
+ * so every order's fee stays >= 0). Remainder satang go to the largest-fee
+ * order. Returns per-order discounts in satang, same order as `feesSatang`.
+ */
+export function distributeVoucherDiscount(feesSatang: number[], discountSatang: number): number[] {
+    const totalFee = feesSatang.reduce((s, f) => s + Math.max(0, f), 0);
+    const discount = voucherDiscountSatang(discountSatang, totalFee);
+    if (discount <= 0 || totalFee <= 0) return feesSatang.map(() => 0);
+
+    const shares = feesSatang.map((f) => Math.floor((Math.max(0, f) / totalFee) * discount));
+    let remainder = discount - shares.reduce((s, x) => s + x, 0);
+    // Hand out the leftover satang to the largest-fee orders first, never
+    // pushing a share past its order's fee.
+    const order = feesSatang
+        .map((f, i) => ({ f: Math.max(0, f), i }))
+        .sort((a, b) => b.f - a.f);
+    for (const { f, i } of order) {
+        if (remainder <= 0) break;
+        const room = f - shares[i];
+        const take = Math.min(room, remainder);
+        shares[i] += take;
+        remainder -= take;
+    }
+    return shares;
+}

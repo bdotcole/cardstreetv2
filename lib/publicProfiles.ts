@@ -30,16 +30,19 @@ export interface PublicSeller {
     // Owner/official-account flag derived in the view from role='admin'. Replaces
     // the raw `role` in cross-user reads so admin identity isn't enumerable.
     is_official?: boolean;
-    // Collector Pass display columns (20260828 migration). Optional because the
-    // view may predate the migration — see the fallback in fetchPublicSellers.
+    // Collector Pass display columns (20260828 + 20260829 migrations).
+    // Optional because the view may predate them — see the fallback in
+    // fetchPublicSellers.
     reward_level?: number | null;
     displayed_badges?: string[] | null;
+    equipped_frame?: string | null;
+    equipped_chat_color?: string | null;
 }
 
 const PUBLIC_SELLER_COLUMNS_LEGACY =
     'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, is_official';
 const PUBLIC_SELLER_COLUMNS =
-    `${PUBLIC_SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges`;
+    `${PUBLIC_SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame, equipped_chat_color`;
 
 // Set after the first "column does not exist" failure so every later fetch
 // goes straight to the legacy list. PostgREST rejects the WHOLE select when

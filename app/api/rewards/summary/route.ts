@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { requireBeta } from '@/lib/betaAuth';
+import { requireBeta, isFeatureEnabled } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { awardFirst } from '@/lib/rewards';
 import { bangkokDateString, bangkokDayStartIso, bangkokWeekday } from '@/lib/rewards';
@@ -56,14 +56,17 @@ export async function GET() {
             await awardFirst(admin, user.id, 'first_profile_complete');
         }
 
+        // select('*') so the row shape tracks whichever migrations have run —
+        // the store migration's columns (equipped_frame, ...) must not be able
+        // to dark the whole hub when only the foundation migration is applied.
         const { data: rw, error: rwErr } = await admin
             .from('rewards')
-            .select('xp_total, level, coin_balance, streak_days, streak_best, last_checkin_date, streak_freezes, free_repair_used')
+            .select('*')
             .eq('user_id', user.id)
             .maybeSingle();
 
-        if (rwErr) {
-            // 42703 / PGRST204: migration not applied yet — rewards UI stays dark.
+        if (rwErr || (rw && typeof rw.xp_total === 'undefined')) {
+            // Foundation migration not applied yet — rewards UI stays dark.
             return NextResponse.json({ signedIn: true, enabled: false });
         }
 
@@ -85,7 +88,7 @@ export async function GET() {
         }
         const cycleDay = ((Math.max(1, prospectiveStreak) - 1) % 7) + 1;
 
-        const [todayRows, journeyRows, recentRows] = await Promise.all([
+        const [todayRows, journeyRows, recentRows, ownedRows, badgeRows, vouchersEnabled] = await Promise.all([
             admin
                 .from('reward_ledger')
                 .select('rule_key, ref_id, xp, coins, created_at')
@@ -109,6 +112,24 @@ export async function GET() {
                 .order('created_at', { ascending: false })
                 .limit(10)
                 .then((r) => (r.data ?? []) as LedgerRow[]),
+            // Store state — all fail-soft to [] while the 20260829 migration
+            // is unapplied (the store tab then just shows nothing owned).
+            admin
+                .from('reward_items')
+                .select('id, item_key, status, meta, expires_at')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .limit(100)
+                .then((r) => (r.data ?? []) as { id: string; item_key: string; status: string; meta: Record<string, unknown> | null; expires_at: string | null }[]),
+            admin
+                .from('reward_ledger')
+                .select('ref_id')
+                .eq('user_id', user.id)
+                .eq('rule_key', 'badge')
+                .eq('entry_type', 'earn')
+                .limit(100)
+                .then((r) => (r.data ?? []) as { ref_id: string }[]),
+            isFeatureEnabled('rewards_vouchers'),
         ]);
 
         const countByRule = new Map<string, number>();
@@ -150,6 +171,12 @@ export async function GET() {
                 coins: r.coins,
                 at: r.created_at,
             })),
+            owned: ownedRows.map((o) => ({ id: o.id, key: o.item_key, meta: o.meta ?? {}, expiresAt: o.expires_at })),
+            badges: badgeRows.map((b) => b.ref_id),
+            displayedBadges: Array.isArray(rw?.displayed_badges) ? rw.displayed_badges : [],
+            equippedFrame: typeof rw?.equipped_frame === 'string' ? rw.equipped_frame : null,
+            equippedChatColor: typeof rw?.equipped_chat_color === 'string' ? rw.equipped_chat_color : null,
+            vouchersEnabled: vouchersEnabled === true,
         }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (err) {
         console.error('[Rewards/Summary] error:', err);

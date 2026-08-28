@@ -4,8 +4,18 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
-import { CATALOG, CHECKIN_CALENDAR, QUEST_COINS, bandForLevel, levelProgress } from '@/lib/rewardTiers';
+import { CATALOG, CHAT_COLORS, CHECKIN_CALENDAR, FRAME_STYLES, QUEST_COINS, bandForLevel, levelProgress } from '@/lib/rewardTiers';
 import type { RewardsSummary } from '@/lib/hooks/useRewardsSummary';
+
+/** Opaque swatch fills for the name-color picker (CHAT_COLORS are text
+ *  classes, unusable as swatch backgrounds). */
+const COLOR_SWATCH: Record<string, string> = {
+    gold: 'bg-amber-400',
+    pink: 'bg-pink-400',
+    lime: 'bg-lime-400',
+    violet: 'bg-violet-400',
+    rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300',
+};
 
 /**
  * The Rewards Hub — Whatnot-style rewards sheet opened from the header coin
@@ -92,7 +102,72 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
         }
     }, [claimingSlot, refresh, showFlash, t]);
 
+    // ─── Store actions ───
+    // Two-tap redeem: first tap arms the confirm, second tap (within 4s) buys.
+    const [confirmKey, setConfirmKey] = useState<string | null>(null);
+    const [busyKey, setBusyKey] = useState<string | null>(null);
+    const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); }, []);
+
+    const redeem = useCallback(async (itemKey: string) => {
+        if (busyKey) return;
+        if (confirmKey !== itemKey) {
+            setConfirmKey(itemKey);
+            if (confirmTimer.current) clearTimeout(confirmTimer.current);
+            confirmTimer.current = setTimeout(() => setConfirmKey(null), 4000);
+            return;
+        }
+        setConfirmKey(null);
+        setBusyKey(itemKey);
+        try {
+            const res = await fetch('/api/rewards/redeem', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ itemKey }),
+            });
+            const data = await res.json().catch(() => null);
+            if (data?.ok) {
+                showFlash(t('rewards.redeemed'));
+            } else {
+                const reasonKey = `rewards.redeemError.${data?.reason ?? 'unavailable'}`;
+                const msg = t(reasonKey);
+                showFlash(msg === reasonKey ? t('rewards.redeemFailed') : msg);
+            }
+            await refresh();
+        } catch {
+            // fail-soft
+        } finally {
+            setBusyKey(null);
+        }
+    }, [busyKey, confirmKey, refresh, showFlash, t]);
+
+    const equip = useCallback(async (payload: { frame?: string | null; chatColor?: string | null }) => {
+        if (busyKey) return;
+        setBusyKey('equip');
+        try {
+            await fetch('/api/rewards/equip', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            await refresh();
+        } catch {
+            // fail-soft
+        } finally {
+            setBusyKey(null);
+        }
+    }, [busyKey, refresh]);
+
     if (!open || !summary) return null;
+
+    // Store derivations (defensive against a summary cached before the store
+    // fields existed).
+    const owned = summary.owned ?? [];
+    const activeVouchers = owned.filter((o) => o.key.startsWith('voucher'));
+    const isIos = typeof window !== 'undefined'
+        && (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'ios';
 
     const prog = levelProgress(summary.xp);
     const band = bandForLevel(summary.level);
@@ -353,26 +428,121 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                         )}
 
                         {tab === 'shop' && (
-                            <div>
-                                <p className="text-slate-500 text-[11px] font-semibold px-1 mb-3">{t('rewards.shopNote')}</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {CATALOG.map((item) => (
-                                        <div key={item.key} className="glass rounded-2xl border border-white/5 p-3.5 flex flex-col gap-2">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className="text-white text-xs font-bold leading-snug">{t(`rewards.item.${item.key}`)}</p>
-                                                {!item.redeemable && (
-                                                    <span className="text-[8px] font-black uppercase tracking-wide bg-white/5 text-slate-500 rounded-md px-1.5 py-0.5 shrink-0">
-                                                        {t('rewards.shopSoon')}
+                            <div className="space-y-4">
+                                {/* Voucher wallet */}
+                                {activeVouchers.length > 0 && (
+                                    <div>
+                                        <h4 className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 px-1">{t('rewards.walletTitle')}</h4>
+                                        <div className="glass rounded-2xl border border-amber-400/20 divide-y divide-white/5">
+                                            {activeVouchers.map((v) => (
+                                                <div key={v.id} className="px-4 py-2.5 flex items-center justify-between">
+                                                    <span className="text-amber-200 text-xs font-bold">
+                                                        <i className="fa-solid fa-ticket mr-1.5 text-amber-400"></i>
+                                                        {t(`rewards.item.${v.key}`)}
                                                     </span>
+                                                    {v.expiresAt && (
+                                                        <span className="text-[9px] text-slate-500 font-bold">
+                                                            {t('rewards.expires')} {new Date(v.expiresAt).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-slate-500 text-[10px] font-semibold px-1 mt-1.5">{t('rewards.walletHint')}</p>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    {CATALOG.filter((item) => !(item.iosHidden && isIos)).map((item) => {
+                                        const ownedCount = owned.filter((o) => o.key === item.key).length;
+                                        const isOwnedOnce = item.oncePerAccount === true && ownedCount > 0;
+                                        const levelLocked = (item.minLevel ?? 1) > summary.level;
+                                        const vouchersOff = item.kind === 'voucher' && !summary.vouchersEnabled;
+                                        const available = item.redeemable && !vouchersOff;
+                                        const freezeCapped = item.key === 'streak_freeze' && summary.freezes >= 2;
+                                        const canBuy = available && !levelLocked && !isOwnedOnce && !freezeCapped
+                                            && summary.coins >= item.coins;
+                                        const isFrame = item.key in FRAME_STYLES;
+                                        return (
+                                            <div key={item.key} className="glass rounded-2xl border border-white/5 p-3.5 flex flex-col gap-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-white text-xs font-bold leading-snug">{t(`rewards.item.${item.key}`)}</p>
+                                                    {!available && (
+                                                        <span className="text-[8px] font-black uppercase tracking-wide bg-white/5 text-slate-500 rounded-md px-1.5 py-0.5 shrink-0">
+                                                            {t('rewards.shopSoon')}
+                                                        </span>
+                                                    )}
+                                                    {available && levelLocked && (
+                                                        <span className="text-[8px] font-black uppercase tracking-wide bg-white/10 text-slate-400 rounded-md px-1.5 py-0.5 shrink-0">
+                                                            <i className="fa-solid fa-lock mr-1"></i>Lv {item.minLevel}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {isFrame && (
+                                                    <div className={`h-6 rounded-lg ${FRAME_STYLES[item.key]}`} />
+                                                )}
+                                                <div className="flex items-center justify-between gap-2 mt-auto">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <i className="fa-solid fa-coins text-amber-400 text-[10px]"></i>
+                                                        <span className="text-amber-300 text-sm font-black tabular-nums">{item.coins.toLocaleString()}</span>
+                                                    </span>
+                                                    {isOwnedOnce && isFrame ? (
+                                                        <button
+                                                            onClick={() => void equip({ frame: summary.equippedFrame === item.key ? null : item.key })}
+                                                            disabled={busyKey !== null}
+                                                            className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase transition-colors ${
+                                                                summary.equippedFrame === item.key
+                                                                    ? 'bg-brand-cyan text-brand-darker'
+                                                                    : 'bg-white/10 text-slate-300'
+                                                            }`}
+                                                        >
+                                                            {summary.equippedFrame === item.key ? t('rewards.equipped') : t('rewards.equip')}
+                                                        </button>
+                                                    ) : isOwnedOnce ? (
+                                                        <span className="text-[9px] font-black uppercase text-brand-cyan">{t('rewards.owned')}</span>
+                                                    ) : freezeCapped ? (
+                                                        <span className="text-[9px] font-black uppercase text-slate-500">{t('rewards.freezeMax')}</span>
+                                                    ) : available && !levelLocked ? (
+                                                        <button
+                                                            onClick={() => void redeem(item.key)}
+                                                            disabled={!canBuy || busyKey !== null}
+                                                            className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase transition-colors ${
+                                                                confirmKey === item.key
+                                                                    ? 'bg-amber-400 text-slate-900'
+                                                                    : canBuy
+                                                                        ? 'bg-white/10 text-white hover:bg-white/20'
+                                                                        : 'bg-white/5 text-slate-500'
+                                                            }`}
+                                                        >
+                                                            {busyKey === item.key
+                                                                ? '...'
+                                                                : confirmKey === item.key
+                                                                    ? t('rewards.confirm')
+                                                                    : t('rewards.redeem')}
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                                {/* Owned name color: swatch picker */}
+                                                {item.key === 'chat_name_color' && isOwnedOnce && (
+                                                    <div className="flex gap-1.5 pt-1">
+                                                        {Object.keys(CHAT_COLORS).map((c) => (
+                                                            <button
+                                                                key={c}
+                                                                onClick={() => void equip({ chatColor: summary.equippedChatColor === c ? null : c })}
+                                                                disabled={busyKey !== null}
+                                                                aria-label={c}
+                                                                className={`w-6 h-6 rounded-full border-2 ${
+                                                                    summary.equippedChatColor === c ? 'border-white' : 'border-transparent'
+                                                                } ${COLOR_SWATCH[c] ?? 'bg-slate-500'}`}
+                                                            />
+                                                        ))}
+                                                    </div>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-1.5 mt-auto">
-                                                <i className="fa-solid fa-coins text-amber-400 text-[10px]"></i>
-                                                <span className="text-amber-300 text-sm font-black tabular-nums">{item.coins.toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
+                                <p className="text-slate-500 text-[10px] font-semibold px-1">{t('rewards.shopFootnote')}</p>
                             </div>
                         )}
                     </div>

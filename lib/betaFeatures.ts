@@ -17,7 +17,7 @@
  *     because it requires a DB read.
  */
 
-export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewards';
+export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewards' | 'rewards_vouchers';
 
 // 'live_streams' gates viewing/bidding/buying in a live show; 'live_broadcast'
 // is the invite-only broadcaster grant (a live seller is a Connect seller with
@@ -26,7 +26,9 @@ export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewa
 // 'rewards' gates the Collector Pass rewards system (dark launch; kill-switch
 // row seeded false by 20260828_collector_pass_foundation.sql). Graduate it by
 // adding it to GA_FEATURES once the founder approves launch.
-export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards'];
+// 'rewards_vouchers' separately gates the checkout voucher rail (20260829) so
+// the money-touching half is independently killable.
+export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards', 'rewards_vouchers'];
 
 /**
  * Features GRADUATED to general availability (2026-08-16 founder call:

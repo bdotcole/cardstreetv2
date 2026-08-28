@@ -16,10 +16,11 @@ export interface SellerInfo {
     review_count: number | null;
     is_verified_shop: boolean | null;
     created_at: string | null;
-    // Collector Pass display columns; absent until the 20260828 migration runs
-    // (the select falls back to the legacy column list).
+    // Collector Pass display columns; absent until the 20260828/20260829
+    // migrations run (the select falls back to the legacy column list).
     reward_level?: number | null;
     displayed_badges?: string[] | null;
+    equipped_frame?: string | null;
 }
 
 const LISTING_SELECT = `
@@ -38,7 +39,7 @@ export const getSellerPageData = cache(
             'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at';
         const firstTry = await supabase
             .from('public_profiles')
-            .select(`${SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges`)
+            .select(`${SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame`)
             .eq('username', username)
             .maybeSingle<SellerInfo>();
         let seller = firstTry.data;

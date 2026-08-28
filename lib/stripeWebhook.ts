@@ -249,6 +249,11 @@ export async function handleStripeWebhook(
                                     .eq('status', 'sold');
                             }
 
+                            // Return any Collector Pass voucher this checkout
+                            // consumed (CAS-idempotent, fail-soft no-op).
+                            const { restoreVouchersForTransferGroup } = await import('@/lib/rewards');
+                            await restoreVouchersForTransferGroup(supabase, transferGroup);
+
                             console.log(`${logPrefix} Reverted ${orderIds.length} orders and ${listingIds.length} listings for failed payment`);
                         }
                     } catch (revertErr) {

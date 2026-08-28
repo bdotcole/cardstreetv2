@@ -10,6 +10,7 @@ import GradedSlabFrame from './GradedSlabFrame';
 import RankChip from './rewards/rankChip';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
+import { FRAME_STYLES } from '@/lib/rewardTiers';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -71,7 +72,11 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
             {/* Profile Header */}
             <div className="px-6 mt-6 text-center space-y-4 relative z-10">
                 <div className="relative mx-auto w-24 h-24">
-                    <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow">
+                    {/* Equipped Collector Pass frame replaces the default ring. */}
+                    <div className={`w-24 h-24 rounded-full p-1 ${
+                        (publicSeller?.equipped_frame && FRAME_STYLES[publicSeller.equipped_frame])
+                            || 'bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow'
+                    }`}>
                         <img src={seller.avatar} className="w-full h-full rounded-full object-cover border-4 border-brand-darker" alt={seller.name} />
                     </div>
                 </div>

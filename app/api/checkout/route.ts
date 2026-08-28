@@ -99,16 +99,31 @@ export async function POST(req: Request) {
             shipping_fee: number | null;
             platform_fee: number | null;
             stripe_region: string | null;
+            discount_amount?: number | null;
         };
 
-        const { data: orders, error: ordersErr } = await admin
+        // discount_amount is the Collector Pass voucher discount (20260829
+        // migration). Selecting a missing column fails the WHOLE query, so
+        // fall back to the legacy list until the migration is applied —
+        // checkout must never break over a cosmetic-era column.
+        let { data: orders, error: ordersErr } = await admin
             .from('orders')
             .select(
                 'id, buyer_id, seller_id, status, total_amount, shipping_fee, ' +
-                'platform_fee, stripe_region'
+                'platform_fee, stripe_region, discount_amount'
             )
             .eq('transfer_group', transferGroup)
             .returns<OrderRow[]>();
+        if (ordersErr) {
+            ({ data: orders, error: ordersErr } = await admin
+                .from('orders')
+                .select(
+                    'id, buyer_id, seller_id, status, total_amount, shipping_fee, ' +
+                    'platform_fee, stripe_region'
+                )
+                .eq('transfer_group', transferGroup)
+                .returns<OrderRow[]>());
+        }
 
         if (ordersErr || !orders || orders.length === 0) {
             return NextResponse.json({ error: 'No orders for this transfer_group' }, { status: 404 });
@@ -124,11 +139,16 @@ export async function POST(req: Request) {
         }
 
         // ─── Authoritative amount in satang (integer math, never floats). ───
+        // discount_amount (voucher) comes off the buyer's charge; the matching
+        // platform_fee reduction was stamped at order creation, so the
+        // application_fee sum below is already discounted and the seller's
+        // net (charge − fee) is unchanged.
         const amountSatang = orders.reduce(
             (sum, o) =>
                 sum +
                 Math.round(Number(o.total_amount || 0) * 100) +
-                Math.round(Number(o.shipping_fee || 0) * 100),
+                Math.round(Number(o.shipping_fee || 0) * 100) -
+                Math.round(Number(o.discount_amount || 0) * 100),
             0,
         );
         if (amountSatang <= 0) {

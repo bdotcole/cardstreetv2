@@ -180,6 +180,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Failed to cancel orders' }, { status: 500 });
         }
 
+        // A Collector Pass voucher consumed by this checkout is returned to
+        // the wallet with the reservation (fail-soft; no-op without one).
+        if ((cancelled ?? []).length > 0) {
+            const { restoreVouchersForTransferGroup } = await import('@/lib/rewards');
+            await restoreVouchersForTransferGroup(admin, transferGroup);
+        }
+
         const listingIds = (cancelled ?? [])
             .map(o => o.listing_id)
             .filter((v): v is string => typeof v === 'string');

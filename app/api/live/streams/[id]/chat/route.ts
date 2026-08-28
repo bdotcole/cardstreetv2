@@ -13,7 +13,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { CHAT_BODY_MAX, requireViewerOrSeller, resolvePublicViewer } from '@/lib/liveBreaks';
 import { awardEvent, awardFirst } from '@/lib/rewards';
 import { EARN } from '@/lib/rewardTiers';
-import { extractEmoteKeys, emoteMinLevel } from '@/components/rewards/emotes';
+import { extractEmoteKeys, emoteMinLevel, EMOTE_PACKS } from '@/components/rewards/emotes';
 
 const CHAT_WINDOW_SECONDS = 30;
 const CHAT_MAX_PER_WINDOW = 10;
@@ -86,6 +86,7 @@ export async function POST(
         const emoteKeys = extractEmoteKeys(text);
         if (emoteKeys.length > 0 && !isSeller) {
             let level = 1;
+            const ownedPacks = new Set<string>();
             try {
                 const { data: rw } = await admin
                     .from('rewards')
@@ -93,8 +94,22 @@ export async function POST(
                     .eq('user_id', user.id)
                     .maybeSingle();
                 if (typeof rw?.level === 'number') level = rw.level;
+                // Early-unlocked packs (coin store) count as entitled.
+                const { data: unlocks } = await admin
+                    .from('reward_items')
+                    .select('meta')
+                    .eq('user_id', user.id)
+                    .eq('item_key', 'emote_early_unlock')
+                    .eq('status', 'active');
+                for (const u of (unlocks ?? []) as { meta: { pack?: string } | null }[]) {
+                    if (u.meta?.pack) ownedPacks.add(u.meta.pack);
+                }
             } catch { /* fail toward locked */ }
-            const locked = emoteKeys.find((k) => emoteMinLevel(k) > level);
+            const packOf = (k: string) => EMOTE_PACKS.find((p) => p.emotes.includes(k));
+            const locked = emoteKeys.find((k) => {
+                const pack = packOf(k);
+                return emoteMinLevel(k) > level && !(pack && ownedPacks.has(pack.key));
+            });
             if (locked) {
                 return NextResponse.json(
                     { error: 'Emote locked', code: 'EMOTE_LOCKED', emote: locked, minLevel: emoteMinLevel(locked) },
@@ -178,16 +193,29 @@ export async function GET(
                     .map((m) => m.sender_id as string),
             )];
             if (senderIds.length > 0) {
-                const { data: levels } = await admin
+                type DisplayRow = { id: string; reward_level: number | null; equipped_chat_color?: string | null };
+                // Two-step: the chat-color column arrives with the store
+                // migration; retry level-only so a half-applied schema still
+                // renders chips.
+                let rows: DisplayRow[] | null = null;
+                const first = await admin
                     .from('public_profiles')
-                    .select('id, reward_level')
+                    .select('id, reward_level, equipped_chat_color')
                     .in('id', senderIds);
-                const levelById = new Map(
-                    ((levels ?? []) as { id: string; reward_level: number | null }[])
-                        .map((r) => [r.id, r.reward_level]),
-                );
+                if (first.data) {
+                    rows = first.data as DisplayRow[];
+                } else {
+                    const second = await admin
+                        .from('public_profiles')
+                        .select('id, reward_level')
+                        .in('id', senderIds);
+                    rows = (second.data as DisplayRow[] | null) ?? null;
+                }
+                const byId = new Map((rows ?? []).map((r) => [r.id, r]));
                 for (const m of ordered) {
-                    m.sender_level = levelById.get(m.sender_id as string) ?? null;
+                    const row = byId.get(m.sender_id as string);
+                    m.sender_level = row?.reward_level ?? null;
+                    m.sender_chat_color = row?.equipped_chat_color ?? null;
                 }
             }
         } catch { /* chips just don't render */ }

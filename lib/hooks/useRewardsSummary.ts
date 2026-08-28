@@ -24,6 +24,13 @@ export interface RewardsJourneyStep {
     done: boolean;
 }
 
+export interface RewardsOwnedItem {
+    id: string;
+    key: string;
+    meta: Record<string, unknown>;
+    expiresAt: string | null;
+}
+
 export interface RewardsSummary {
     signedIn: boolean;
     enabled: boolean;
@@ -40,6 +47,13 @@ export interface RewardsSummary {
     questBonusClaimed: boolean;
     journey: RewardsJourneyStep[];
     recent: { rule: string; xp: number; coins: number; at: string }[];
+    /** Store state (empty until the 20260829 migration is applied). */
+    owned: RewardsOwnedItem[];
+    badges: string[];
+    displayedBadges: string[];
+    equippedFrame: string | null;
+    equippedChatColor: string | null;
+    vouchersEnabled: boolean;
 }
 
 let cached: RewardsSummary | null = null;

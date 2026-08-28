@@ -6,7 +6,7 @@ import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
 import RankChip from '@/components/rewards/rankChip';
-import { bandForLevel } from '@/lib/rewardTiers';
+import { bandForLevel, FRAME_STYLES } from '@/lib/rewardTiers';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
@@ -82,13 +82,19 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
             </nav>
 
             <header className="flex items-center gap-4 mt-6">
-                <span className="w-16 h-16 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-white/10 flex items-center justify-center text-xl font-black text-white">
-                    {seller.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={seller.avatar_url} alt={name} className="w-full h-full object-cover" />
-                    ) : (
-                        name.charAt(0).toUpperCase()
-                    )}
+                <span className={`w-16 h-16 rounded-full shrink-0 ${
+                    (seller.equipped_frame && FRAME_STYLES[seller.equipped_frame])
+                        ? `p-[3px] ${FRAME_STYLES[seller.equipped_frame]}`
+                        : ''
+                }`}>
+                    <span className="w-full h-full rounded-full bg-slate-700 overflow-hidden border border-white/10 flex items-center justify-center text-xl font-black text-white">
+                        {seller.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={seller.avatar_url} alt={name} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                            name.charAt(0).toUpperCase()
+                        )}
+                    </span>
                 </span>
                 <div>
                     <div className="flex items-center gap-2 flex-wrap">

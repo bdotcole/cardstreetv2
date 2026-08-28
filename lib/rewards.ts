@@ -91,3 +91,61 @@ export function bangkokWeekday(now: Date = new Date()): number {
 export function bangkokDayStartIso(now: Date = new Date()): string {
     return new Date(`${bangkokDateString(now)}T00:00:00+07:00`).toISOString();
 }
+
+// ---------------------------------------------------------------------------
+// Store / voucher helpers
+// ---------------------------------------------------------------------------
+
+export interface VoucherItemRow {
+    id: string;
+    item_key: string;
+    status: string;
+    meta: {
+        type?: 'order' | 'shipping';
+        amountSatang?: number;
+        minOrderSatang?: number;
+        transfer_group?: string;
+    } | null;
+    expires_at: string | null;
+}
+
+/** The buyer's active (unused, unexpired) voucher items. Never throws. */
+export async function listActiveVouchers(admin: AdminClient, userId: string): Promise<VoucherItemRow[]> {
+    try {
+        const { data, error } = await admin
+            .from('reward_items')
+            .select('id, item_key, status, meta, expires_at')
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .like('item_key', 'voucher%');
+        if (error) return [];
+        const now = Date.now();
+        return ((data ?? []) as VoucherItemRow[]).filter(
+            (v) => !v.expires_at || Date.parse(v.expires_at) > now,
+        );
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Restore any voucher consumed by a transfer_group whose checkout died
+ * (abandoned, cancelled, failed payment). CAS inside the RPC makes double
+ * restores no-ops; fail-soft — a missed restore is admin-recoverable.
+ */
+export async function restoreVouchersForTransferGroup(admin: AdminClient, transferGroup: string): Promise<void> {
+    try {
+        if (!transferGroup) return;
+        const { data, error } = await admin
+            .from('reward_items')
+            .select('id')
+            .eq('status', 'consumed')
+            .eq('meta->>transfer_group', transferGroup);
+        if (error || !data) return;
+        for (const row of data as { id: string }[]) {
+            await admin.rpc('restore_reward_item', { p_item: row.id });
+        }
+    } catch (err) {
+        console.warn('[Rewards] voucher restore failed (non-fatal):', (err as Error)?.message);
+    }
+}

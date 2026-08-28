@@ -65,6 +65,14 @@
         {
             "path": "/api/cron/recompute-internal-prices",
             "schedule": "0 2 * * 1"
+        },
+        {
+            "path": "/api/cron/rewards-milestones",
+            "schedule": "45 2 * * *"
+        },
+        {
+            "path": "/api/cron/rewards-expiry",
+            "schedule": "30 3 1 * *"
         }
     ]
 }

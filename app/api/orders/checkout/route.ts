@@ -37,6 +37,9 @@ import {
 } from '@/lib/flashExpress';
 import { applyProSellerRate, effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
 import { isPremium } from '@/lib/entitlements';
+import { isFeatureEnabled } from '@/lib/betaAuth';
+import { distributeVoucherDiscount, voucherDiscountSatang } from '@/lib/rewardTiers';
+import type { VoucherItemRow } from '@/lib/rewards';
 import { getRequestCountry, isPurchaseAllowedFromCountry } from '@/lib/geo';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
@@ -104,6 +107,11 @@ export async function POST(req: Request) {
             typeof body?.expectedTotal === 'number' && body.expectedTotal > 0
                 ? body.expectedTotal
                 : null;
+        // Collector Pass buyer voucher (funded from the platform fee). Gated
+        // behind its own kill switch, and never combinable with an accepted
+        // offer (the offer is already the discount).
+        const voucherId: string | null =
+            typeof body?.voucherId === 'string' && body.voucherId.length > 0 ? body.voucherId : null;
 
         if (items.length === 0) {
             return NextResponse.json({ error: 'No items provided' }, { status: 400 });
@@ -404,14 +412,85 @@ export async function POST(req: Request) {
             });
         }
 
+        // ─── Collector Pass voucher (before the guard, no side effects yet) ───
+        // The discount comes ENTIRELY out of the platform fee: each order's
+        // platform_fee drops by its share and discount_amount records what
+        // comes off the buyer's charge, so the seller's proceeds
+        // (total + shipping − fee) are mathematically unchanged — mandatory on
+        // TH direct charges. Clamped at the cart's total fee, so our take
+        // floors at zero and never goes negative.
+        let voucherDiscountTotalSatang = 0;
+        let voucherItem: VoucherItemRow | null = null;
+        if (voucherId) {
+            if (acceptedOfferId) {
+                return NextResponse.json(
+                    { error: 'Vouchers cannot be combined with an offer', code: 'VOUCHER_WITH_OFFER' },
+                    { status: 400 },
+                );
+            }
+            if (!(await isFeatureEnabled('rewards_vouchers'))) {
+                return NextResponse.json(
+                    { error: 'Vouchers are temporarily unavailable', code: 'VOUCHER_UNAVAILABLE' },
+                    { status: 403 },
+                );
+            }
+            const { data: vRow, error: vErr } = await supabase
+                .from('reward_items')
+                .select('id, item_key, status, meta, expires_at')
+                .eq('id', voucherId)
+                .eq('user_id', buyerId)
+                .maybeSingle();
+            const voucher = (vRow ?? null) as VoucherItemRow | null;
+            const voucherType = voucher?.meta?.type;
+            if (
+                vErr || !voucher || voucher.status !== 'active' ||
+                (voucherType !== 'order' && voucherType !== 'shipping') ||
+                (voucher.expires_at && Date.parse(voucher.expires_at) <= Date.now())
+            ) {
+                return NextResponse.json(
+                    { error: 'This voucher is no longer available', code: 'VOUCHER_INVALID' },
+                    { status: 400 },
+                );
+            }
+            const subtotalSatang = ordersToInsert.reduce(
+                (sum, o) => sum + Math.round(Number(o.total_amount) * 100), 0,
+            );
+            if (subtotalSatang < Number(voucher.meta?.minOrderSatang ?? 0)) {
+                return NextResponse.json(
+                    { error: 'Order is below this voucher\'s minimum', code: 'VOUCHER_MIN_ORDER' },
+                    { status: 400 },
+                );
+            }
+            const feesSatang = ordersToInsert.map((o) => Math.round(Number(o.platform_fee) * 100));
+            const totalFeeSatang = feesSatang.reduce((s, f) => s + f, 0);
+            voucherDiscountTotalSatang = voucherDiscountSatang(
+                Number(voucher.meta?.amountSatang ?? 0), totalFeeSatang,
+            );
+            if (voucherDiscountTotalSatang <= 0) {
+                return NextResponse.json(
+                    { error: 'This voucher cannot apply to this order', code: 'VOUCHER_NOT_APPLICABLE' },
+                    { status: 400 },
+                );
+            }
+            const shares = distributeVoucherDiscount(feesSatang, voucherDiscountTotalSatang);
+            ordersToInsert.forEach((o, i) => {
+                o.platform_fee = (feesSatang[i] - shares[i]) / 100;
+                o.discount_amount = shares[i] / 100;
+            });
+            voucherItem = voucher;
+        }
+
         // ─── No-overcharge guard (before any side effects) ───
         // Compute the authoritative total now and compare against what the buyer
         // was shown. If we'd charge MORE than displayed, reject cleanly — no
         // listings reserved, no orders created — so the buyer reviews the new
         // total instead of getting a surprise charge. A 1-satang tolerance
-        // absorbs rounding.
+        // absorbs rounding. (A voucher only LOWERS the total, so it can never
+        // trip this guard.)
         const computedTotalSatang = ordersToInsert.reduce(
-            (sum, o) => sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100),
+            (sum, o) =>
+                sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100)
+                - Math.round(Number(o.discount_amount ?? 0) * 100),
             0,
         );
         if (expectedTotal !== null && computedTotalSatang > Math.round(expectedTotal * 100) + 1) {
@@ -425,6 +504,32 @@ export async function POST(req: Request) {
             );
         }
 
+        // ─── Consume the voucher (CAS) BEFORE any reservation. ───
+        // The CAS makes a double-spend structurally impossible; every failure
+        // path below restores it. A voucher lost to a crash between here and
+        // the restore is admin-recoverable (reward_items keeps the group tag).
+        if (voucherItem) {
+            const { data: consumed, error: consumeErr } = await supabase.rpc('consume_reward_item', {
+                p_item: voucherItem.id,
+                p_user: buyerId,
+                p_meta_patch: { transfer_group: transferGroup },
+            });
+            if (consumeErr || consumed !== true) {
+                return NextResponse.json(
+                    { error: 'This voucher was already used', code: 'VOUCHER_USED' },
+                    { status: 409 },
+                );
+            }
+        }
+        const restoreVoucher = async () => {
+            if (!voucherItem) return;
+            try {
+                await supabase.rpc('restore_reward_item', { p_item: voucherItem.id });
+            } catch (restoreErr) {
+                console.error('[Orders/Checkout] voucher restore failed:', (restoreErr as Error)?.message);
+            }
+        };
+
         // ─── Reserve listings via CAS on status='active' BEFORE creating orders. ───
         // If any listing was already sold by a concurrent checkout, .update returns
         // fewer rows and we abort without inserting orders.
@@ -437,6 +542,7 @@ export async function POST(req: Request) {
 
         if (reserveErr) {
             console.error('[Orders/Checkout] Reservation update failed:', reserveErr);
+            await restoreVoucher();
             return NextResponse.json({ error: 'Failed to reserve listings' }, { status: 500 });
         }
 
@@ -448,6 +554,7 @@ export async function POST(req: Request) {
             if (reservedIds.length > 0) {
                 await supabase.from('listings').update({ status: 'active' }).in('id', reservedIds).eq('status', 'sold');
             }
+            await restoreVoucher();
             return NextResponse.json(
                 { error: 'One or more listings were just sold by another buyer' },
                 { status: 409 }
@@ -464,6 +571,7 @@ export async function POST(req: Request) {
             console.error('[Orders/Checkout] Order insert failed:', insertErr);
             // Same 'sold' guard as the partial-reservation rollback above.
             await supabase.from('listings').update({ status: 'active' }).in('id', listingIds).eq('status', 'sold');
+            await restoreVoucher();
             return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 });
         }
 
@@ -487,7 +595,9 @@ export async function POST(req: Request) {
         // 'sold' but the row is still readable.
 
         const totalSatang = ordersToInsert.reduce(
-            (sum, o) => sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100),
+            (sum, o) =>
+                sum + Math.round(Number(o.total_amount) * 100) + Math.round(Number(o.shipping_fee) * 100)
+                - Math.round(Number(o.discount_amount ?? 0) * 100),
             0,
         );
 
@@ -498,6 +608,7 @@ export async function POST(req: Request) {
             // Single source of truth for the amount Stripe will charge.
             totalAmount: totalSatang / 100,
             totalSatang,
+            discountSatang: voucherDiscountTotalSatang,
             region: orderRegion,
             message: 'Orders created with pending_payment status. Proceed to payment.',
         });

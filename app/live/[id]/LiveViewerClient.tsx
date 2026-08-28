@@ -49,6 +49,8 @@ import type { StickerKey } from '@/components/live/stickers';
 import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
 import RankChip from '@/components/rewards/rankChip';
 import { ChatBody, EMOTE_PACKS, EmoteIcon } from '@/components/rewards/emotes';
+import { CHAT_COLORS } from '@/lib/rewardTiers';
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 
 // Stripe Elements only loads when a checkout actually opens.
 const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentSheet'), { ssr: false });
@@ -131,6 +133,10 @@ export default function LiveViewerClient() {
     const [chat, setChat] = useState<LiveChatMessage[]>([]);
     const [profiles, setProfiles] = useState<Map<string, PublicSeller>>(new Map());
     const [myUserId, setMyUserId] = useState<string | null>(null);
+    // Own Collector Pass state (level + early-unlocked emote packs) for the
+    // emote tray. Must live up here with the other hooks — the render below
+    // has early returns.
+    const { summary: myRewards } = useRewardsSummary(!!myUserId);
 
     const [boardOpen, setBoardOpen] = useState(false);
     // Sound ON by default; flipped to muted only if the browser refuses
@@ -1569,8 +1575,10 @@ export default function LiveViewerClient() {
                     </p>
                 );
             }
-            const senderLevel =
-                profiles.get(m.sender_id)?.reward_level ?? m.sender_level ?? null;
+            const senderProfile = profiles.get(m.sender_id);
+            const senderLevel = senderProfile?.reward_level ?? m.sender_level ?? null;
+            const colorKey = senderProfile?.equipped_chat_color ?? m.sender_chat_color ?? null;
+            const nameClass = (colorKey && CHAT_COLORS[colorKey]) || 'text-brand-cyan';
             return (
                 <p
                     key={m.id}
@@ -1580,7 +1588,7 @@ export default function LiveViewerClient() {
                     {typeof senderLevel === 'number' && (
                         <RankChip level={senderLevel} className="mr-1" />
                     )}
-                    <span className="font-black text-brand-cyan mr-1.5">
+                    <span className={`font-black mr-1.5 ${nameClass}`}>
                         {displayName(m.sender_id, m.sender)}
                     </span>
                     <span className="text-white"><ChatBody body={m.body} /></span>
@@ -1590,13 +1598,21 @@ export default function LiveViewerClient() {
     };
 
     // Level-gated emote tray. Own level comes from the same public_profiles
-    // hydration map chat chips use; pre-migration it resolves to 1 and every
+    // hydration map chat chips use; early-unlocked packs (coin store) come
+    // from the rewards summary. Pre-migration both resolve empty and every
     // pack shows locked (the server gate agrees, so nothing can desync).
-    const myLevel = (myUserId ? profiles.get(myUserId)?.reward_level : null) ?? 1;
+    const myLevel = myRewards?.level
+        ?? ((myUserId ? profiles.get(myUserId)?.reward_level : null) ?? 1);
+    const myUnlockedPacks = new Set(
+        (myRewards?.owned ?? [])
+            .filter((o) => o.key === 'emote_early_unlock')
+            .map((o) => String((o.meta as { pack?: string })?.pack ?? ''))
+            .filter(Boolean),
+    );
     const emoteTray = emoteOpen && myUserId ? (
         <div className="mb-2 rounded-2xl bg-black/80 border border-white/15 backdrop-blur-md p-3 space-y-2.5 max-h-48 overflow-y-auto">
             {EMOTE_PACKS.map((pack) => {
-                const unlocked = myLevel >= pack.minLevel;
+                const unlocked = myLevel >= pack.minLevel || myUnlockedPacks.has(pack.key);
                 return (
                     <div key={pack.key}>
                         <div className="flex items-center gap-2 mb-1">

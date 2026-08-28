@@ -15,6 +15,7 @@ import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
 import RankChip from '@/components/rewards/rankChip';
 import { ChatBody } from '@/components/rewards/emotes';
+import { CHAT_COLORS } from '@/lib/rewardTiers';
 import {
     AUCTION_DURATION_CHOICES,
     AUCTION_DURATION_DEFAULT,
@@ -3508,7 +3509,7 @@ export default function BroadcastConsolePage() {
                                             {typeof m.sender_level === 'number' && (
                                                 <RankChip level={m.sender_level} className="mr-1" />
                                             )}
-                                            <span className="font-black text-brand-cyan mr-1.5">
+                                            <span className={`font-black mr-1.5 ${(m.sender_chat_color && CHAT_COLORS[m.sender_chat_color]) || 'text-brand-cyan'}`}>
                                                 {m.sender?.display_name || '...'}
                                             </span>
                                             <span className="text-white/90"><ChatBody body={m.body} /></span>

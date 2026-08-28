@@ -355,6 +355,9 @@ export interface LiveChatMessage {
      *  public_profiles (null pre-migration / for realtime rows — the viewer
      *  falls back to its own public_profiles hydration map). */
     sender_level?: number | null;
+    /** Equipped chat name color key (lib/rewardTiers CHAT_COLORS), same
+     *  attachment path as sender_level. */
+    sender_chat_color?: string | null;
 }
 
 /** Spot/lot money is INTEGER SATANG everywhere in the live schema; the UI is
