@@ -197,6 +197,75 @@ function buildRouting(wantEmail: boolean, wantPush: boolean, contentSource: 'tem
 }
 
 /**
+ * Element `channels` filter for push-only Elemental elements. Lists both the
+ * channel class and the provider name because our inline routing addresses the
+ * provider directly ("firebase-fcm", see buildRouting) — whichever string
+ * Courier matches element scoping against, the element renders on the push
+ * and nowhere else.
+ */
+const PUSH_ELEMENT_CHANNELS = ['push', 'firebase-fcm'];
+
+/**
+ * Elemental content that gives email and push DIFFERENT bodies in one send.
+ *
+ * Why: simple `content: {title, body}` renders the same body verbatim on
+ * every routed channel, so copy written for email — paragraphs, raw URLs,
+ * support footers — was landing in notification trays as multi-hundred-
+ * character walls with visible links (push QC 2026-08-27, verified against
+ * Courier's rendered-output API). Per-element `channels` scoping splits them:
+ * email keeps the long-form copy and a CTA button, push gets one short line.
+ * The push tap never needs a visible URL — the FCM handlers deep-link from
+ * the message `data` payload (hooks/usePushNotifications.ts).
+ *
+ * `title` doubles as the email subject and the push title, so keep the
+ * signal in front (trays and inbox lists truncate the tail). Thai titles
+ * still need postmarkOverride(title) at the call site — Courier's email
+ * subject encoder truncates non-ASCII at 48 bytes (see SUBJECTS).
+ */
+// Returns `any`: the SDK's ElementalContent union doesn't know the spec's
+// per-element `channels` property (the API accepts it), and the existing
+// Elemental sends already pass `message as any` for the same reason.
+function emailPlusPushContent(c: {
+    title: string;
+    emailParagraphs: { text: string; muted?: boolean }[];
+    cta?: { label: string; url: string };
+    /** Muted line rendered under the CTA button (support contact, etc.). */
+    emailFooter?: string;
+    pushBody: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}): any {
+    return {
+        version: '2022-01-01',
+        elements: [
+            { type: 'meta', title: c.title },
+            ...c.emailParagraphs.map((p) => ({
+                type: 'text',
+                content: p.text,
+                ...(p.muted ? { color: '#6b7280' } : {}),
+                channels: ['email'],
+            })),
+            ...(c.cta
+                ? [
+                      {
+                          type: 'action',
+                          content: c.cta.label,
+                          href: c.cta.url,
+                          style: 'button',
+                          align: 'center',
+                          background_color: '#0891b2',
+                          channels: ['email'],
+                      },
+                  ]
+                : []),
+            ...(c.emailFooter
+                ? [{ type: 'text', content: c.emailFooter, color: '#6b7280', align: 'center', channels: ['email'] }]
+                : []),
+            { type: 'text', content: c.pushBody, channels: PUSH_ELEMENT_CHANNELS },
+        ],
+    };
+}
+
+/**
  * Notifies the seller when their item is sold.
  */
 export async function sendSoldNotification(sellerId: string, orderDetails: any) {
@@ -454,15 +523,22 @@ export async function sendPurchaseCompletedNotification(sellerId: string, orderD
     if (routing.channels.length === 0) return;
 
     try {
+        const title = 'การขายเสร็จสมบูรณ์ — Sale complete';
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Purchase Completed! 💰",
-                    body: `The buyer has confirmed receipt of order ${orderDetails.id}. Your funds are being released to your account!`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: 'The buyer confirmed receipt of your order. Your funds are being released to your account.' },
+                        { text: 'ผู้ซื้อยืนยันรับสินค้าเรียบร้อยแล้ว — เงินจากคำสั่งซื้อนี้กำลังถูกโอนเข้าบัญชีของคุณ', muted: true },
+                    ],
+                    cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderDetails.id}` },
+                    pushBody: 'ผู้ซื้อยืนยันรับสินค้าแล้ว เงินกำลังถูกโอนให้คุณ · Buyer confirmed receipt — funds on the way.',
+                }),
                 routing,
-                data: { orderId: orderDetails.id, type: 'purchase_completed' }
+                data: { orderId: orderDetails.id, type: 'purchase_completed' },
+                providers: postmarkOverride(title),
             }
         });
         console.log(`[Courier] ✅ 'Purchase Completed' notification sent to seller ${sellerId}`);
@@ -497,13 +573,22 @@ export async function sendPayoutCompletedNotification(sellerId: string, orderId:
     if (routing.channels.length === 0) return;
 
     try {
+        const amountLabel = `฿${amount.toLocaleString()}`;
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Payout Sent! 💸",
-                    body: `Your payout of ฿${amount.toLocaleString()} for order ${orderId} has been successfully transferred to your Stripe account.`,
-                },
+                content: emailPlusPushContent({
+                    // Amount-first: the figure IS the signal, and trays truncate
+                    // the tail. Same copy as the TH-path send in
+                    // supabase/functions/release-funds/index.ts — change both.
+                    title: `Payout sent — ${amountLabel}`,
+                    emailParagraphs: [
+                        { text: `Your payout of ${amountLabel} for this order has been transferred to your Stripe account.` },
+                        { text: `เงิน ${amountLabel} จากคำสั่งซื้อนี้ถูกโอนเข้าบัญชี Stripe ของคุณเรียบร้อยแล้ว`, muted: true },
+                    ],
+                    cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+                    pushBody: 'โอนเข้าบัญชี Stripe ของคุณแล้ว · Sent to your Stripe account.',
+                }),
                 routing,
                 data: { orderId, type: 'payout_completed', amount }
             }
@@ -540,15 +625,22 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
     if (routing.channels.length === 0) return;
 
     try {
+        const title = 'พัสดุถึงแล้ว — Package delivered';
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Package Delivered! 📦",
-                    body: `Your Flash Express package (${trackingNumber}) for order ${orderId} has been delivered. Please confirm receipt in the app to release funds to the seller.`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `Your Flash Express package (${trackingNumber}) has been delivered. Please confirm receipt in the app to release the seller's funds.` },
+                        { text: `พัสดุ Flash Express (${trackingNumber}) ของคุณจัดส่งเรียบร้อยแล้ว — กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย`, muted: true },
+                    ],
+                    cta: { label: 'Confirm receipt · ยืนยันรับสินค้า', url: `${appBaseUrl()}/orders/${orderId}` },
+                    pushBody: 'กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย · Confirm receipt in the app.',
+                }),
                 routing,
-                data: { orderId, type: 'package_delivered', trackingNumber }
+                data: { orderId, type: 'package_delivered', trackingNumber },
+                providers: postmarkOverride(title),
             }
         });
         console.log(`[Courier] ✅ 'Package Delivered' notification sent to buyer ${buyerId}`);
@@ -593,15 +685,23 @@ export async function sendCardRequestFulfilledNotification(
     const extra = details.note?.trim() ? ` ${details.note.trim()}` : '';
 
     try {
+        const title = `${card} is now on CardStreet`;
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Your requested card is here! 🎴",
-                    body: `Good news — "${card}" has been added to the CardStreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `Good news — "${card}" has been added to the CardStreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.` },
+                        { text: `การ์ดที่คุณขอ "${card}" ถูกเพิ่มเข้าแคตตาล็อกแล้ว — ค้นหาในแอปเพื่อเพิ่มเข้าคอลเลกชันหรือหาซื้อในตลาด`, muted: true },
+                    ],
+                    pushBody: 'การ์ดที่คุณขอถูกเพิ่มแล้ว — ค้นหาในแอปได้เลย · Search the app to collect or buy it.',
+                }),
                 routing,
                 data: { type: 'card_request_fulfilled', searchQuery: card },
+                // Requested cards can have Thai names, pushing the subject past
+                // Courier's 48-byte encoded-word cliff (see SUBJECTS).
+                providers: postmarkOverride(title),
             },
         });
         console.log(`[Courier] ✅ 'Card Request Fulfilled' notification sent to requester ${requesterId}`);
@@ -884,9 +984,7 @@ export const NUDGE_MIN_SPACING_MS = 48 * 3600_000;
 function stripeNudgeCopy(
     touch: number,
     firstName: string,
-    resumeUrl: string,
-    supportEmail: string,
-): { title: string; body: string } {
+): { title: string; thBody: string; enBody: string; pushBody: string } {
     const thHi = firstName ? `สวัสดีคุณ ${firstName},\n\n` : '';
     const enHi = firstName ? `Hi ${firstName},\n\n` : '';
     const thPrep =
@@ -917,17 +1015,20 @@ function stripeNudgeCopy(
         'This is our last reminder about your payout setup. Finish it whenever you\'re ' +
             'ready and you can list cards and get paid straight away.',
     ];
+    // One tray-sized line per touch — the email paragraphs above never reach
+    // the push channel (see emailPlusPushContent).
+    const pushBodies = [
+        'เหลืออีกไม่กี่ขั้นตอน — แตะเพื่อทำต่อ · A few steps left — tap to finish.',
+        'ทำให้เสร็จวันนี้แล้วเริ่มลงขายได้เลย · Finish today and start selling.',
+        'เตือนครั้งสุดท้าย — แตะเพื่อทำให้เสร็จ · Last reminder — tap to finish.',
+    ];
 
     const i = Math.min(Math.max(touch, 1), titles.length) - 1;
     return {
         title: titles[i],
-        body:
-            `${thHi}${thBodies[i]}\n\n${thPrep}\n\n` +
-            `ทำต่อได้ที่: ${resumeUrl}\n\n` +
-            '- - -\n\n' +
-            `${enHi}${enBodies[i]}\n\n${enPrep}\n\n` +
-            `Pick up where you left off: ${resumeUrl}\n\n` +
-            `Questions? Contact ${supportEmail}`,
+        thBody: `${thHi}${thBodies[i]}\n\n${thPrep}`,
+        enBody: `${enHi}${enBodies[i]}\n\n${enPrep}`,
+        pushBody: pushBodies[i],
     };
 }
 
@@ -1038,13 +1139,22 @@ export async function sendStripeSetupReminderEmail(
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
-        const { title, body } = stripeNudgeCopy(touch, firstName, resumeUrl, supportEmail);
+        const { title, thBody, enBody, pushBody } = stripeNudgeCopy(touch, firstName);
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: buildRecipient(email, fcmToken),
-                    content: { title, body },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            { text: thBody },
+                            { text: enBody, muted: true },
+                        ],
+                        cta: { label: 'ทำต่อเลย · Resume setup', url: resumeUrl },
+                        emailFooter: `มีคำถาม? ติดต่อ ${supportEmail} · Questions? Contact ${supportEmail}`,
+                        pushBody,
+                    }),
                     routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'stripe_setup_nudge', touch },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
@@ -1175,25 +1285,33 @@ export async function sendFirstListingNudgeEmail(
         const vaultUrl = `${appBaseUrl()}/?view=vault`;
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
-        const title =
-            'บัญชีของคุณพร้อมขายแล้ว — ลงขายการ์ดใบแรกเลย! — You\'re verified, list your first card on CardStreet';
-        const body =
-            `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
-            'การตั้งค่าการรับเงินของคุณเสร็จสมบูรณ์แล้ว — ตอนนี้ลงขายการ์ดได้เลย ' +
-            'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ก็เริ่มขายได้ทันที เงินจากการขายเข้าบัญชีธนาคารของคุณโดยตรง\n\n' +
-            `ลงขายการ์ดใบแรก: ${vaultUrl}\n\n` +
-            '- - -\n\n' +
-            `${firstName ? `Hi ${firstName},\n\n` : ''}` +
-            'Your payout setup is complete — you can sell now. Scan cards into your vault, ' +
-            'tap "New Listing", and the money from every sale goes straight to your bank account.\n\n' +
-            `List your first card: ${vaultUrl}\n\n` +
-            `Questions? Contact ${supportEmail}`;
+        const title = 'บัญชีพร้อมขายแล้ว — You\'re verified, list your first card';
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: buildRecipient(email, fcmToken),
-                    content: { title, body },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            {
+                                text:
+                                    `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
+                                    'การตั้งค่าการรับเงินของคุณเสร็จสมบูรณ์แล้ว — ตอนนี้ลงขายการ์ดได้เลย ' +
+                                    'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ก็เริ่มขายได้ทันที เงินจากการขายเข้าบัญชีธนาคารของคุณโดยตรง',
+                            },
+                            {
+                                text:
+                                    `${firstName ? `Hi ${firstName},\n\n` : ''}` +
+                                    'Your payout setup is complete — you can sell now. Scan cards into your vault, ' +
+                                    'tap "New Listing", and the money from every sale goes straight to your bank account.',
+                                muted: true,
+                            },
+                        ],
+                        cta: { label: 'ลงขายการ์ดใบแรก · List your first card', url: vaultUrl },
+                        emailFooter: `มีคำถาม? ติดต่อ ${supportEmail} · Questions? Contact ${supportEmail}`,
+                        pushBody: 'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ได้เลย · Scan a card and tap New Listing.',
+                    }),
                     routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'first_listing_nudge' },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
@@ -1340,21 +1458,29 @@ export async function sendAbandonedCheckoutNudge(
         if (routing.channels.length === 0) return 'skipped';
 
         try {
+            const title = `ยังซื้อ ${cardName} ได้อยู่ — Still want ${cardName}?`;
             const sendResult = await courier.send.message({
                 message: {
                     to: recipient,
-                    content: {
-                        title: `ยังซื้อ ${cardName} ได้อยู่ — Still want ${cardName}?`,
-                        body:
-                            `คุณเริ่มสั่งซื้อ "${cardName}" ไว้แต่การชำระเงินยังไม่เสร็จ — ` +
-                            'การ์ดใบนี้ยังมีอยู่และพร้อมให้คุณซื้อ ' +
-                            `กดที่นี่เพื่อซื้อให้เสร็จก่อนใคร: ${cardUrl}\n\n` +
-                            '- - -\n\n' +
-                            `You started buying "${cardName}" but the payment didn't go through — ` +
-                            'good news, it\'s still available. Complete your purchase before ' +
-                            `someone else grabs it: ${cardUrl}\n\n` +
-                            `Need a hand? Contact ${supportEmail}`,
-                    },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            {
+                                text:
+                                    `คุณเริ่มสั่งซื้อ "${cardName}" ไว้แต่การชำระเงินยังไม่เสร็จ — ` +
+                                    'การ์ดใบนี้ยังมีอยู่และพร้อมให้คุณซื้อให้เสร็จก่อนใคร',
+                            },
+                            {
+                                text:
+                                    `You started buying "${cardName}" but the payment didn't go through — ` +
+                                    'good news, it\'s still available. Complete your purchase before someone else grabs it.',
+                                muted: true,
+                            },
+                        ],
+                        cta: { label: 'ซื้อให้เสร็จ · Complete purchase', url: cardUrl },
+                        emailFooter: `ติดขัดตรงไหน? ติดต่อ ${supportEmail} · Need a hand? Contact ${supportEmail}`,
+                        pushBody: 'การ์ดยังว่างอยู่ — แตะเพื่อซื้อให้เสร็จ · Still available — tap to finish checkout.',
+                    }),
                     routing,
                     // Push deep-link payload (read by the mobile FCM handler).
                     data: {
@@ -1363,6 +1489,9 @@ export async function sendAbandonedCheckoutNudge(
                         listingId: listing.id,
                         ...(cardId ? { cardId } : {}),
                     },
+                    // Thai-first subject exceeds Courier's 48-byte encoded-word
+                    // cliff (see SUBJECTS) — force the full subject at Postmark.
+                    providers: postmarkOverride(title),
                 },
             });
             console.log(
@@ -1449,11 +1578,11 @@ export async function sendWishlistListingAlert(
     if (templateId) {
         message.template = templateId;
     } else {
+        // Title already carries card + price — the body only adds the source
+        // and the action. One short line serves both channels.
         message.content = {
             title: `${listing.cardName} just listed — ${priceLabel}`,
-            body:
-                `${listing.cardName} (${listing.condition}) from your wishlist was just listed for ${priceLabel} on CardStreet. ` +
-                `การ์ดใน Wishlist ของคุณเพิ่งถูกลงขาย — เปิด CardStreet เพื่อดูก่อนใคร`,
+            body: `จาก Wishlist ของคุณ (${listing.condition}) — แตะเพื่อดูก่อนใคร · From your wishlist — tap to see it first.`,
         };
     }
 
@@ -1525,16 +1654,37 @@ export async function sendShowLiveNotification(
         message.template = templateId;
     } else {
         // A reminder subscriber never reserved anything — saying they did
-        // would read as a mistake and undercut the alert.
-        message.content = {
-            title: `${show.title} is live now`,
-            body:
+        // would read as a mistake and undercut the alert. The show URL lives
+        // in the email CTA and the push `data` payload only — never in the
+        // visible body (the tap deep-links; a pasted UTM URL just reads as
+        // clutter in a tray).
+        const title = `LIVE now — ${show.title}`;
+        message.content = emailPlusPushContent({
+            title,
+            emailParagraphs: [
+                {
+                    text:
+                        show.reason === 'reminder'
+                            ? `${show.title} — the show you asked to be reminded about — is live on CardStreet right now.`
+                            : `${show.title} — the show you reserved a spot in — is live on CardStreet right now.`,
+                },
+                {
+                    text:
+                        show.reason === 'reminder'
+                            ? `ไลฟ์ ${show.title} ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — เข้ามาดูได้เลย`
+                            : `ไลฟ์ ${show.title} ที่คุณจองสปอตไว้เริ่มแล้ว — เข้ามาดูได้เลย`,
+                    muted: true,
+                },
+            ],
+            cta: { label: 'Watch now / ดูไลฟ์เลย', url: showUrl },
+            pushBody:
                 show.reason === 'reminder'
-                    ? `The show you asked to be reminded about is live now — watch it here: ${showUrl} ` +
-                      `ไลฟ์ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`
-                    : `The show you reserved a spot in is live now — watch it here: ${showUrl} ` +
-                      `ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`,
-        };
+                    ? 'ไลฟ์ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — แตะเพื่อดู · Tap to watch.'
+                    : 'ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — แตะเพื่อดู · Your show has started — tap to watch.',
+        });
+        // Thai show titles push the subject past Courier's 48-byte encoded-word
+        // cliff (see SUBJECTS) — force the full subject at Postmark.
+        message.providers = postmarkOverride(title);
     }
 
     try {
@@ -1586,12 +1736,19 @@ export async function sendShowStartingSoonNotification(
     if (templateId) {
         message.template = templateId;
     } else {
-        message.content = {
-            title: `${show.title} starts in ${show.minutes} minutes`,
-            body:
-                `The show you asked to be reminded about starts soon: ${showUrl} ` +
-                `ไลฟ์ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่ม: ${showUrl}`,
-        };
+        // Signal-first title (trays truncate the tail of long Thai titles);
+        // URL only in the email CTA + push `data`, never the visible body.
+        const title = `Starts in ${show.minutes} min — ${show.title}`;
+        message.content = emailPlusPushContent({
+            title,
+            emailParagraphs: [
+                { text: `${show.title} — the show you asked to be reminded about — starts in about ${show.minutes} minutes on CardStreet.` },
+                { text: `ไลฟ์ ${show.title} ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่มในอีกประมาณ ${show.minutes} นาที`, muted: true },
+            ],
+            cta: { label: 'Watch now / ดูไลฟ์เลย', url: showUrl },
+            pushBody: 'ไลฟ์ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่ม — แตะเพื่อเข้าดู · Tap to watch.',
+        });
+        message.providers = postmarkOverride(title);
     }
 
     try {
@@ -1695,18 +1852,20 @@ export async function sendShowLivePushBlast(
                     message.template = templateId;
                 } else if (kind === 'announce') {
                     // Signal-first, like the email subject: notification trays
-                    // truncate even harder than inbox list views.
+                    // truncate even harder than inbox list views. The show URL
+                    // rides only in `data` (tap deep-link + GA attribution) —
+                    // a pasted UTM URL in the visible body reads as clutter.
                     const when = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
                     message.content = {
                         title: when
                             ? `Live ${when} — ${show.title}`
                             : `Going live soon — ${show.title}`,
-                        body: `Tap to see the show and get notified when it starts — กดดูรายละเอียดไลฟ์และรับแจ้งเตือนเมื่อเริ่ม: ${showUrl}`,
+                        body: 'แตะเพื่อดูรายละเอียดและรับแจ้งเตือนเมื่อไลฟ์เริ่ม · Tap to see the show and get a start reminder.',
                     };
                 } else {
                     message.content = {
                         title: `LIVE now — ${show.title}`,
-                        body: `Watch the live break now — ดูไลฟ์ได้เลยตอนนี้: ${showUrl}`,
+                        body: 'ดูไลฟ์ได้เลยตอนนี้ — แตะเพื่อเข้าดู · Watch the live break now.',
                     };
                 }
                 await courier.send.message({ message: message as any });
@@ -1923,22 +2082,25 @@ export interface OfferNotifDetails {
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/$/, '');
 
 /**
- * Branded Courier Elemental content for an offer email. `meta.title` is the email
- * subject; the two text blocks are the bilingual body (EN then TH, muted); the
- * action is a CTA button. The Courier default brand wraps this with the logo /
- * header. Push renders meta.title as the title and the text blocks as the body.
- * Rendering falls to this only when no dashboard template id is set for the event.
+ * Branded Courier Elemental content for an offer notification. `meta.title` is
+ * the email subject AND the push title; the two long text blocks + CTA button
+ * are email-only, and the push channel renders just the short `push` line
+ * (see emailPlusPushContent — before that scoping, the CTA button rendered
+ * into delivered push bodies as a raw "label: URL" line, verified against
+ * Courier's output API 2026-08-27). The Courier default brand wraps the email
+ * with the logo / header. Rendering falls to this only when no dashboard
+ * template id is set for the event.
  */
-function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: string; cta: string }) {
-    return {
-        version: '2022-01-01',
-        elements: [
-            { type: 'meta', title: c.subject },
-            { type: 'text', content: c.bodyEn },
-            { type: 'text', content: c.bodyTh, color: '#6b7280' },
-            { type: 'action', content: c.cta, href: `${APP_URL}/?view=offers`, style: 'button', align: 'center', background_color: '#0891b2' },
+function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string }) {
+    return emailPlusPushContent({
+        title: c.subject,
+        emailParagraphs: [
+            { text: c.bodyEn },
+            { text: c.bodyTh, muted: true },
         ],
-    };
+        cta: { label: c.cta, url: `${APP_URL}/?view=offers` },
+        pushBody: c.push,
+    });
 }
 
 /**
@@ -1957,7 +2119,7 @@ async function sendOfferNotification(
         pushPref: string;
         template: string;
         pushType: string;
-        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string };
+        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string };
     },
 ): Promise<void> {
     const courier = getCourier();
@@ -2032,6 +2194,7 @@ export async function sendOfferReceivedNotification(recipientId: string, details
             bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline.`,
             bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
+            push: 'แตะเพื่อตอบรับ ต่อรอง หรือปฏิเสธ · Tap to accept, counter, or decline.',
         }),
     });
 }
@@ -2048,6 +2211,7 @@ export async function sendOfferAcceptedNotification(buyerId: string, details: Of
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay now to complete the purchase before someone else buys it.`,
             bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว — ชำระเงินให้เสร็จก่อนใคร`,
             cta: 'Pay now · ชำระเงิน',
+            push: 'ชำระเงินตอนนี้ก่อนมีคนซื้อตัดหน้า · Pay now before someone else buys it.',
         }),
     });
 }
@@ -2064,6 +2228,7 @@ export async function sendOfferRejectedNotification(offerorId: string, details: 
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. You can make a new offer anytime.`,
             bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
             cta: 'Browse · เลือกซื้อ',
+            push: 'ลองเสนอราคาใหม่ได้ทุกเมื่อ · You can make a new offer anytime.',
         }),
     });
 }
@@ -2080,6 +2245,7 @@ export async function sendOfferCounteredNotification(offerorId: string, details:
             bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline.`,
             bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
+            push: 'แตะเพื่อตอบรับหรือต่อรองกลับ · Tap to accept or counter back.',
         }),
     });
 }
@@ -2096,6 +2262,7 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
             bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
             cta: 'Browse · เลือกซื้อ',
+            push: 'ข้อเสนอหมดอายุหรือสินค้าถูกขายแล้ว · It expired or the listing sold.',
         }),
     });
 }
@@ -2124,6 +2291,7 @@ export async function sendOfferPaymentReminderNotification(
             bodyEn: `Your accepted offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is still waiting for payment. It isn't reserved — another buyer can still take it until you pay.`,
             bodyTh: `ข้อเสนอที่ได้รับการตอบรับของคุณยังรอการชำระเงิน สินค้ายังไม่ถูกจอง — ผู้อื่นซื้อได้จนกว่าคุณจะชำระเงิน`,
             cta: 'Pay now · ชำระเงิน',
+            push: 'ยังไม่ถูกจอง — ชำระเงินเพื่อปิดดีล · Not reserved until you pay.',
         }),
     });
 }

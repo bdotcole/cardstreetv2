@@ -323,16 +323,24 @@ serve(async (_req) => {
                             }
                             if (wantPush && fcmToken) {
                                 recipient.firebaseToken = fcmToken
-                                channels.push("push")
+                                // Inline content must name the FCM provider directly:
+                                // the generic "push" channel has no provider binding
+                                // outside dashboard templates, and Courier silently
+                                // routes it to its own Inbox instead of Firebase
+                                // (see buildRouting in lib/courier.ts).
+                                channels.push("firebase-fcm")
                             }
 
+                            // Amount-first title, no order UUID, no URL — same copy as
+                            // sendPayoutCompletedNotification in lib/courier.ts; change both.
                             const currencySymbol = orderRegion === 'th' ? '฿' : '$'
+                            const amountLabel = `${currencySymbol}${(notifyNetCents / 100).toLocaleString()}`
                             await courier.send({
                                 message: {
                                     to: recipient,
                                     content: {
-                                        title: "CardStreet: Payout Sent! 💸",
-                                        body: `Your payout of ${currencySymbol}${(notifyNetCents / 100).toLocaleString()} for order ${order.id} has been successfully transferred to your Stripe account.`,
+                                        title: `Payout sent — ${amountLabel}`,
+                                        body: 'โอนเข้าบัญชี Stripe ของคุณแล้ว · Sent to your Stripe account.',
                                     },
                                     routing: { method: "all", channels },
                                     data: { orderId: order.id, type: 'payout_completed', amount: notifyNetCents / 100, currency: transferCurrency }

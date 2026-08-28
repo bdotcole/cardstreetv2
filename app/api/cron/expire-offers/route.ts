@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendOfferExpiredNotification } from '@/lib/courier';
+import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,9 +30,11 @@ export async function GET(request: NextRequest) {
     const started = Date.now();
     const summary = { expired: 0, notified: 0, errors: 0 };
 
+    // listings(card_data) rides along so the notification can name the card —
+    // without it every expiry push/email reads "Offer expired — a card".
     const { data: due, error } = await supabase
         .from('offers')
-        .select('id, buyer_id, seller_id, actor_role, listing_id, amount')
+        .select('id, buyer_id, seller_id, actor_role, listing_id, amount, listings(card_data)')
         .eq('status', 'pending')
         .lte('expires_at', new Date().toISOString())
         .limit(200);
@@ -62,6 +65,7 @@ export async function GET(request: NextRequest) {
                 offerId: offer.id,
                 amount: offer.amount,
                 listingId: offer.listing_id,
+                cardName: cardNameFromListingEmbed((offer as { listings?: unknown }).listings),
             });
             summary.notified++;
         } catch (e) {
