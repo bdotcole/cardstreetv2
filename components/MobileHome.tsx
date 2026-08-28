@@ -7,8 +7,10 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review, Offer } from '@/types';
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS } from '@/constants';
-import CurrencySwitcher from '@/components/CurrencySwitcher';
 import LanguagePicker from '@/components/LanguagePicker';
+import RewardsChip from '@/components/rewards/RewardsChip';
+import RewardsHub from '@/components/rewards/RewardsHub';
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import Explore from '@/components/Explore';
 import Marketplace from '@/components/Marketplace';
 import AddCard from '@/components/AddCard';
@@ -496,7 +498,6 @@ export default function HomePage() {
 
     const {
         settings,
-        updateCurrency,
         updateLanguage
     } = useUserSettings();
 
@@ -528,6 +529,25 @@ export default function HomePage() {
     const offerBadge = useOfferBadge(
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
     );
+    // Collector Pass rewards: the header coin chip replaced the currency
+    // switcher (currency now lives in Profile > Settings). Beta-gated + signed
+    // in only; the summary hook fails closed so the chip simply doesn't render
+    // until /api/rewards/summary answers enabled.
+    const rewardsActive = hasLiveBeta('rewards') && !!user && user.provider !== 'guest';
+    const { summary: rewardsSummary, refresh: refreshRewards } = useRewardsSummary(rewardsActive);
+    const [isRewardsOpen, setIsRewardsOpen] = useState(false);
+    // Profile's Rewards menu row (and future push deep-links) open the hub via
+    // a window event — Profile renders inside this shell, so the event is the
+    // cheapest cross-component channel that survives its z-[200] panels.
+    useEffect(() => {
+        const onOpenRewards = () => {
+            setIsRewardsOpen(true);
+            void refreshRewards();
+        };
+        window.addEventListener('cs:openRewards', onOpenRewards);
+        return () => window.removeEventListener('cs:openRewards', onOpenRewards);
+    }, [refreshRewards]);
+
     const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
     // In-checkout shipping-details gate (see AddressGateResume above).
     const [addressGate, setAddressGate] = useState<{
@@ -1982,7 +2002,14 @@ export default function HomePage() {
                             </button>
 
                             <LanguagePicker currentLanguage={language} onLanguageChange={(newLang) => updateLanguage(newLang)} />
-                            <CurrencySwitcher currentCurrency={currency} onCurrencyChange={(newCurrency) => updateCurrency(newCurrency)} />
+                            {rewardsSummary && (
+                                <RewardsChip
+                                    coins={rewardsSummary.coins}
+                                    unclaimed={!rewardsSummary.checkinClaimedToday}
+                                    onClick={() => { setIsRewardsOpen(true); void refreshRewards(); }}
+                                    label={t('rewards.title')}
+                                />
+                            )}
                         </div>
                     </header>
 
@@ -2329,6 +2356,13 @@ export default function HomePage() {
                     acceptedOfferId={acceptedOfferId ?? undefined}
                     onPaymentSuccess={handlePaymentSuccess}
                     onPaymentFailed={(err) => showToast(`${t('paymentFlow.paymentFailed') || 'Payment failed'}: ${err}`, 'error')}
+                />
+
+                <RewardsHub
+                    open={isRewardsOpen}
+                    onClose={() => setIsRewardsOpen(false)}
+                    summary={rewardsSummary}
+                    refresh={refreshRewards}
                 />
             </div>
         </div>

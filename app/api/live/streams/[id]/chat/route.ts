@@ -11,6 +11,8 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { CHAT_BODY_MAX, requireViewerOrSeller, resolvePublicViewer } from '@/lib/liveBreaks';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 const CHAT_WINDOW_SECONDS = 30;
 const CHAT_MAX_PER_WINDOW = 10;
@@ -85,6 +87,19 @@ export async function POST(
             console.error('[Live/Chat] insert failed:', insertErr?.message);
             return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
         }
+
+        // Collector Pass: XP for the FIRST message in each stream (ref_id =
+        // stream id) with a daily stream cap — the 10/30s rate limit above
+        // bounds raw spam, this bounds reward farming. XP only, never coins.
+        await awardEvent(admin, {
+            userId: user.id,
+            rule: EARN.CHAT_STREAM.rule,
+            ref: stream.id,
+            xp: EARN.CHAT_STREAM.xp,
+            coins: 0,
+            dailyCap: EARN.CHAT_STREAM.dailyCap,
+        });
+        await awardFirst(admin, user.id, 'first_chat');
 
         return NextResponse.json({ success: true, message });
     } catch (err: any) {

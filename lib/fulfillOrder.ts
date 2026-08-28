@@ -20,6 +20,8 @@ import {
 } from '@/lib/courier';
 import { voidOffersForSoldListing } from '@/lib/voidOffersForListing';
 import { recordInternalSales } from '@/lib/internalPricing';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { orderXp } from '@/lib/rewardTiers';
 
 function getAdminSupabase(): SupabaseClient {
     return createClient(
@@ -242,6 +244,25 @@ export async function fulfillOrdersByTransferGroup(
         }
 
         result.ordersUpdated = winningCount;
+
+        // ─── Collector Pass XP (fail-soft, exactly-once) ───
+        // Awarded only on the full CAS win above, so webhook/finalize races
+        // can't double-fire; the ledger's UNIQUE (user, rule, order id) makes
+        // even a re-entered invocation a no-op. XP only at 'paid' — coins for
+        // transactions mint at escrow release in release-funds (clawback-safe).
+        try {
+            for (const o of orders) {
+                if (!o.buyer_id || !o.seller_id || o.buyer_id === o.seller_id) continue;
+                const xp = orderXp(Number(o.total_amount) || 0);
+                if (xp > 0) {
+                    await awardEvent(supabase, { userId: o.buyer_id, rule: 'order_paid_buyer', ref: o.id, xp, coins: 0 });
+                    await awardEvent(supabase, { userId: o.seller_id, rule: 'order_paid_seller', ref: o.id, xp, coins: 0 });
+                }
+                await awardFirst(supabase, o.buyer_id, 'first_purchase');
+            }
+        } catch (rewardErr) {
+            console.warn('[Fulfillment] reward award error (non-fatal):', (rewardErr as Error)?.message);
+        }
 
         // ─── Feature B: record realized sales for internal pricing (dark) ───
         // Reached only on a full CAS win (the partial-win branch returned above),

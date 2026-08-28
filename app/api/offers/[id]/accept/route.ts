@@ -13,6 +13,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { sendOfferAcceptedNotification } from '@/lib/courier';
 import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
+import { awardEvent } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +59,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!won || won.length !== 1) {
         return NextResponse.json({ error: 'Offer is no longer pending' }, { status: 409 });
     }
+
+    // Collector Pass: seller XP when an offer on their listing is accepted —
+    // a counterparty action, deliberately never awarded on offer creation
+    // (creating offers is free and reversible). Fail-soft, once per offer.
+    await awardEvent(admin, {
+        userId: offer.seller_id,
+        rule: EARN.OFFER_ACCEPTED.rule,
+        ref: offer.id,
+        xp: EARN.OFFER_ACCEPTED.xp,
+        coins: 0,
+        dailyCap: EARN.OFFER_ACCEPTED.dailyCap,
+    });
 
     // Notify the offer's buyer (whoever will pay).
     const cardName = cardNameFromListingEmbed((offer as { card_data?: unknown }).card_data);

@@ -20,6 +20,7 @@ import { finalizeLiveSpotOrders, finalizeLiveShippingFeeOrder } from '@/lib/live
 import { syncPremiumFromSubscription } from '@/lib/premiumEntitlement';
 import { publishDraftListings } from '@/lib/draftListings';
 import { notifyWishlistersOfSellerActivation } from '@/lib/wishlistAlerts';
+import { awardFirst } from '@/lib/rewards';
 import {
     getStripeForRegion,
     getAllWebhookSecretsForRegion,
@@ -357,6 +358,11 @@ export async function handleStripeWebhook(
                                 );
                             } catch (publishErr) {
                                 console.error(`${logPrefix} Draft publish failed:`, publishErr);
+                            }
+                            // Collector Pass: seller finished Stripe onboarding —
+                            // a one-shot Journey award (fail-soft, ledger-deduped).
+                            for (const r of updRows as { id: string }[]) {
+                                await awardFirst(supabase, r.id, 'first_stripe_complete');
                             }
                         }
                     }

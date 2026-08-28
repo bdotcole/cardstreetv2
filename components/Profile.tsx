@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
+import CurrencySwitcher from './CurrencySwitcher';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
@@ -110,13 +111,6 @@ interface UserSettings {
   show_live_push: boolean;
 }
 
-interface Rewards {
-  points_balance: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-  lifetime_points: number;
-  tier_progress: number;
-}
-
 interface Order {
   id: string;
   status: 'pending' | 'paid' | 'label_generated' | 'processing' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
@@ -181,14 +175,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
-
-const tierConfig = {
-  bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
-  silver: { color: 'from-slate-400 to-slate-600', icon: Crown, next: 'gold', pointsNeeded: 2000 },
-  gold: { color: 'from-yellow-400 to-amber-500', icon: Crown, next: 'platinum', pointsNeeded: 5000 },
-  platinum: { color: 'from-purple-400 to-indigo-600', icon: Zap, next: null, pointsNeeded: null }
-};
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -306,7 +293,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
   // user_settings state below.
-  const { settings: appSettings, updateTheme } = useUserSettings();
+  const { settings: appSettings, updateTheme, updateCurrency } = useUserSettings();
   // Live-breaks beta (fails closed — no grant, no menu item, zero hint).
   const { hasBeta } = useBetaFeatures();
   // Count for the "My Offers" row badge — offers accepted and awaiting the
@@ -328,12 +315,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     notify_marketing: false,
     show_live_email: true,
     show_live_push: true
-  });
-  const [rewards, setRewards] = useState<Rewards>({
-    points_balance: 0,
-    tier: 'bronze',
-    lifetime_points: 0,
-    tier_progress: 0
   });
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -491,7 +472,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         const data = await res.json();
         if (data.profile) setProfileData(data.profile);
         if (data.settings) setSettings(data.settings);
-        if (data.rewards) setRewards(data.rewards);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -954,6 +934,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   // Menu sections
   const baseMenuSections = [
+    // Collector Pass entry — opens the shell's Rewards Hub sheet (which
+    // renders above these z-[200] panels) via the window event MobileHome
+    // listens for. Beta-gated so nothing shows while the system is dark.
+    ...(hasBeta('rewards')
+      ? [{
+          title: t('rewards.menuSection'),
+          items: [
+            { name: t('rewards.menuTitle'), icon: Gift, action: () => { window.dispatchEvent(new Event('cs:openRewards')); }, color: 'text-amber-400' }
+          ]
+        }]
+      : []),
     {
       title: t('profile.account'),
       items: [
@@ -1002,15 +993,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   ];
 
   const isPartner = user?.isPartner || profileData?.role === 'partner' || !!profileData?.partner_joined_at;
+  // Operations slots in just before Support + Pro (the last two sections);
+  // index computed rather than hardcoded because the Rewards section above is
+  // conditional and would shift a fixed slice point.
+  const opsInsertAt = baseMenuSections.length - 2;
   const menuSections = isPartner ? [
-    ...baseMenuSections.slice(0, 3),
+    ...baseMenuSections.slice(0, opsInsertAt),
     {
       title: t('profile.operations'),
       items: [
         { name: t('profile.partnerDashboard'), icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
       ]
     },
-    ...baseMenuSections.slice(3)
+    ...baseMenuSections.slice(opsInsertAt)
   ] : baseMenuSections;
 
   // Guest/Logged out view
@@ -1059,8 +1054,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       </>
     );
   }
-
-  const TierIcon = tierConfig[rewards.tier].icon;
 
   return (
     <div className="relative min-h-screen pb-20">
@@ -1354,71 +1347,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           </motion.div>
         )}
 
-        {/* Payment Methods Panel */}
-        {/* Rewards Panel */}
-        {activePanel === 'rewards' && (
-          <motion.div
-            key="rewards"
-            variants={slideVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
-          >
-            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-              <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-slate-400" />
-                </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Rewards</h2>
-              </div>
-
-              {/* Points Balance Card */}
-              <div className={`glass p-6 rounded-3xl border border-white/10 bg-gradient-to-br ${tierConfig[rewards.tier].color} relative overflow-hidden`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-4">
-                    <TierIcon className="w-6 h-6 text-white" />
-                    <span className="text-white/80 text-xs uppercase tracking-widest font-bold">{rewards.tier} Member</span>
-                  </div>
-                  <p className="text-5xl font-black text-white mb-1">{rewards.points_balance.toLocaleString()}</p>
-                  <p className="text-white/60 text-sm">Available Points</p>
-                </div>
-              </div>
-
-              {/* Tier Progress */}
-              {tierConfig[rewards.tier].next && (
-                <div className="glass p-4 rounded-2xl border border-white/5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs uppercase tracking-wider font-bold">Progress to {tierConfig[rewards.tier].next}</span>
-                    <span className="text-white font-bold text-sm">{rewards.lifetime_points} / {tierConfig[rewards.tier].pointsNeeded}</span>
-                  </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min((rewards.lifetime_points / (tierConfig[rewards.tier].pointsNeeded || 1)) * 100, 100)}%` }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className={`h-full rounded-full bg-gradient-to-r ${tierConfig[rewards.tier].color}`}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="glass p-4 rounded-2xl border border-white/5 text-center">
-                  <p className="text-2xl font-black text-white">{rewards.lifetime_points.toLocaleString()}</p>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider">Lifetime Points</p>
-                </div>
-                <div className="glass p-4 rounded-2xl border border-white/5 text-center">
-                  <p className="text-2xl font-black text-brand-green">฿{(rewards.points_balance * 0.5).toFixed(0)}</p>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider">Points Value</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* Settings Panel */}
         {activePanel === 'settings' && (
           <motion.div
@@ -1458,6 +1386,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       {label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Preferences: display currency (moved here from the header —
+                  its old slot now holds the Rewards coin chip) */}
+              <div className="space-y-3">
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{t('profile.preferences')}</h4>
+                <div className="glass rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Wallet className="w-5 h-5 text-brand-cyan shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-white font-semibold text-sm">{t('profile.displayCurrency')}</p>
+                      <p className="text-slate-500 text-xs truncate">{t('profile.displayCurrencyHint')}</p>
+                    </div>
+                  </div>
+                  <CurrencySwitcher
+                    currentCurrency={appSettings.currency}
+                    onCurrencyChange={(c) => updateCurrency(c)}
+                  />
                 </div>
               </div>
 

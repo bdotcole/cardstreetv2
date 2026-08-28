@@ -236,7 +236,10 @@ serve(async (_req) => {
                 }
 
                 // ─── Step 4: Update order record ───
-                const { error: updateError } = await supabase
+                // .select('id') turns the CAS into a visible win/lose: zero rows
+                // means a concurrent tick already released this order, and the
+                // reward block below must not run for it.
+                const { data: releasedRows, error: updateError } = await supabase
                     .from('orders')
                     .update({
                         escrow_status: 'released',
@@ -248,12 +251,87 @@ serve(async (_req) => {
                     })
                     .eq('id', order.id)
                     .eq('escrow_status', 'held') // Double-check: only update if still held (race condition guard)
+                    .select('id')
 
                 if (updateError) {
                     console.error(`[release-funds] Failed to update order ${order.id} after payout:`, updateError)
                     results.push({ orderId: order.id, status: 'transfer_ok_db_failed', error: updateError.message })
                     failed++
                     continue
+                }
+
+                // ─── Collector Pass settlement awards (fail-soft) ───
+                // Transaction COINS mint only here, at the clawback-safe escrow
+                // release. This is a Deno function that cannot import Next lib
+                // code, so the math is inlined — it MUST match
+                // settlementCoins() in lib/rewardTiers.ts: buyer 1% of item
+                // total (1 coin = 1 satang) capped 500, seller 0.5% capped 300,
+                // nothing under a ฿100 order, and combined coins never above
+                // 50% of the order's ACTUAL platform fee (so self-dealing stays
+                // money-losing at every partner tier). Ledger UNIQUE keys make
+                // every award idempotent; errors never block the payout.
+                if ((releasedRows?.length ?? 0) > 0) {
+                    try {
+                        const award = (user: string, rule: string, ref: string, xp: number, coins: number) =>
+                            supabase.rpc('award_reward_event', {
+                                p_user: user, p_rule_key: rule, p_ref_id: ref,
+                                p_xp: xp, p_coins: coins, p_daily_cap: null,
+                            })
+
+                        const totalTHB = Number(order.total_amount) || 0
+                        const feeSatang = Math.max(0, Math.round((Number(order.platform_fee) || 0) * 100))
+                        let buyerCoins = 0
+                        let sellerCoins = 0
+                        if (totalTHB >= 100 && feeSatang > 0) {
+                            buyerCoins = Math.min(500, Math.round(totalTHB))
+                            sellerCoins = Math.min(300, Math.round(totalTHB / 2))
+                            const maxCombined = Math.floor(feeSatang / 2)
+                            const combined = buyerCoins + sellerCoins
+                            if (combined > maxCombined) {
+                                const scale = maxCombined / combined
+                                buyerCoins = Math.floor(buyerCoins * scale)
+                                sellerCoins = Math.floor(sellerCoins * scale)
+                            }
+                        }
+
+                        if (order.buyer_id && order.seller_id && order.buyer_id !== order.seller_id) {
+                            await award(order.seller_id, 'order_settled_seller', order.id, 25, sellerCoins)
+                            if (buyerCoins > 0) {
+                                await award(order.buyer_id, 'order_settled_buyer', order.id, 0, buyerCoins)
+                            }
+                            // First-time chain: first settled sale (values from
+                            // lib/rewardTiers.ts FIRST_AWARDS; UNIQUE = one-shot).
+                            await award(order.seller_id, 'first_sale_settled', 'first', 150, 100)
+
+                            // Deferred referral coins: the referrer earns their 100
+                            // coins only when the referred user's order actually
+                            // settles (signup alone pays XP only). Once per referred
+                            // user via ref_id = buyer id; capped 10/month.
+                            const { data: buyerProfile } = await supabase
+                                .from('profiles')
+                                .select('referred_by')
+                                .eq('id', order.buyer_id)
+                                .maybeSingle()
+                            const referrer = buyerProfile?.referred_by
+                            if (referrer && referrer !== order.buyer_id && referrer !== order.seller_id) {
+                                const bangkokNow = new Date(Date.now() + 7 * 3600_000)
+                                const monthStart = new Date(Date.UTC(
+                                    bangkokNow.getUTCFullYear(), bangkokNow.getUTCMonth(), 1,
+                                )).toISOString()
+                                const { count } = await supabase
+                                    .from('reward_ledger')
+                                    .select('id', { count: 'exact', head: true })
+                                    .eq('user_id', referrer)
+                                    .eq('rule_key', 'referral_converted')
+                                    .gte('created_at', monthStart)
+                                if ((count ?? 0) < 10) {
+                                    await award(referrer, 'referral_converted', order.buyer_id, 0, 100)
+                                }
+                            }
+                        }
+                    } catch (rewardErr) {
+                        console.warn(`[release-funds] reward award error for order ${order.id} (non-fatal):`, rewardErr)
+                    }
                 }
 
                 console.log(`[release-funds] Successfully released funds for order ${order.id} → ${payoutOrTransferId}`)

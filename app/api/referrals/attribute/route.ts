@@ -21,6 +21,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { REF_COOKIE, ATTRIBUTION_WINDOW_DAYS, isValidSlugFormat, isValidInstallId } from '@/lib/referrals';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 function clearCookie(response: NextResponse): NextResponse {
     response.cookies.set(REF_COOKIE, '', { maxAge: 0, path: '/' });
@@ -103,6 +105,20 @@ export async function POST(request: NextRequest) {
             country: request.headers.get('x-vercel-ip-country') || null,
         });
         if (eventErr) console.error('[Referrals/Attribute] signup event insert failed:', eventErr);
+
+        // Collector Pass: XP for the referrer at signup (once per referred user
+        // — ref_id is the referred account's id). The 100-coin half is deferred
+        // to the referred user's first SETTLED order (release-funds), matching
+        // the anti-farming posture: bare signups are cheap to fake, settled
+        // orders are not. Fail-soft.
+        await awardEvent(admin, {
+            userId: partner.id,
+            rule: EARN.REFERRAL_SIGNUP.rule,
+            ref: user.id,
+            xp: EARN.REFERRAL_SIGNUP.xp,
+            coins: 0,
+        });
+        await awardFirst(admin, partner.id, 'first_referral');
 
         // Android devices report their install via /api/referrals/install, which
         // already incremented total_downloads. When this signup comes from such a

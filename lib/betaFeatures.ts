@@ -17,13 +17,16 @@
  *     because it requires a DB read.
  */
 
-export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast';
+export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewards';
 
 // 'live_streams' gates viewing/bidding/buying in a live show; 'live_broadcast'
 // is the invite-only broadcaster grant (a live seller is a Connect seller with
 // this flag). Both have a matching beta_feature_flags kill-switch row seeded by
 // supabase/migrations/20260704_live_streams.sql.
-export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast'];
+// 'rewards' gates the Collector Pass rewards system (dark launch; kill-switch
+// row seeded false by 20260828_collector_pass_foundation.sql). Graduate it by
+// adding it to GA_FEATURES once the founder approves launch.
+export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards'];
 
 /**
  * Features GRADUATED to general availability (2026-08-16 founder call:
