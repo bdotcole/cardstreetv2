@@ -47,6 +47,8 @@ import {
 import { useStreamEvents, type SpotFocusEvent } from '@/components/live/streamEvents';
 import type { StickerKey } from '@/components/live/stickers';
 import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
+import RankChip from '@/components/rewards/rankChip';
+import { ChatBody, EMOTE_PACKS, EmoteIcon } from '@/components/rewards/emotes';
 
 // Stripe Elements only loads when a checkout actually opens.
 const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentSheet'), { ssr: false });
@@ -137,6 +139,8 @@ export default function LiveViewerClient() {
     const [audioMuted, setAudioMuted] = useState(false);
     const [chatInput, setChatInput] = useState('');
     const [sending, setSending] = useState(false);
+    // Collector Pass emote picker (packs unlock by level; see rewards/emotes).
+    const [emoteOpen, setEmoteOpen] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [claimingSpotId, setClaimingSpotId] = useState<string | null>(null);
     // ─── Admin house-reserve (quiet board filler; the routes re-verify the
@@ -583,12 +587,16 @@ export default function LiveViewerClient() {
 
 
     // ─── Public names for chat senders + sold-spot owners (fail-soft) ───
+    // Every sender is hydrated (not just embed-less realtime rows): the
+    // public_profiles row also carries reward_level for the chat rank chip.
+    // Own id included so the emote picker knows which packs are unlocked.
     const neededProfileIds = useMemo(() => {
         const ids = new Set<string>();
-        for (const m of chat) if (!m.is_system && !m.sender) ids.add(m.sender_id);
+        for (const m of chat) if (!m.is_system) ids.add(m.sender_id);
         for (const s of spots) if (s.status === 'sold' && s.buyer_id) ids.add(s.buyer_id);
+        if (myUserId) ids.add(myUserId);
         return [...ids].filter((id) => !profiles.has(id));
-    }, [chat, spots, profiles]);
+    }, [chat, spots, profiles, myUserId]);
 
     useEffect(() => {
         if (neededProfileIds.length === 0) return;
@@ -839,6 +847,7 @@ export default function LiveViewerClient() {
                     BANNED: 'live.viewer.banned',
                     CHAT_DISABLED: 'live.viewer.chatFrozen',
                     RATE_LIMITED: 'live.viewer.rateLimited',
+                    EMOTE_LOCKED: 'live.viewer.emoteLocked',
                 };
                 showToast(
                     (data.code && codeKey[data.code] && t(codeKey[data.code])) ||
@@ -1560,48 +1569,115 @@ export default function LiveViewerClient() {
                     </p>
                 );
             }
+            const senderLevel =
+                profiles.get(m.sender_id)?.reward_level ?? m.sender_level ?? null;
             return (
                 <p
                     key={m.id}
                     style={limit ? { opacity: faded } : undefined}
                     className={`text-sm leading-snug py-1 px-2 break-words${shadow}`}
                 >
+                    {typeof senderLevel === 'number' && (
+                        <RankChip level={senderLevel} className="mr-1" />
+                    )}
                     <span className="font-black text-brand-cyan mr-1.5">
                         {displayName(m.sender_id, m.sender)}
                     </span>
-                    <span className="text-white">{m.body}</span>
+                    <span className="text-white"><ChatBody body={m.body} /></span>
                 </p>
             );
         });
     };
 
+    // Level-gated emote tray. Own level comes from the same public_profiles
+    // hydration map chat chips use; pre-migration it resolves to 1 and every
+    // pack shows locked (the server gate agrees, so nothing can desync).
+    const myLevel = (myUserId ? profiles.get(myUserId)?.reward_level : null) ?? 1;
+    const emoteTray = emoteOpen && myUserId ? (
+        <div className="mb-2 rounded-2xl bg-black/80 border border-white/15 backdrop-blur-md p-3 space-y-2.5 max-h-48 overflow-y-auto">
+            {EMOTE_PACKS.map((pack) => {
+                const unlocked = myLevel >= pack.minLevel;
+                return (
+                    <div key={pack.key}>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                {t(`rewards.emotePack.${pack.key}`)}
+                            </span>
+                            {!unlocked && (
+                                <span className="text-[8px] font-black uppercase rounded bg-white/10 text-slate-500 px-1.5 py-px">
+                                    <i className="fa-solid fa-lock mr-1"></i>Lv {pack.minLevel}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex gap-1.5">
+                            {pack.emotes.map((key) => (
+                                <button
+                                    key={key}
+                                    onClick={() => {
+                                        if (!unlocked) return;
+                                        setChatInput((v) => `${v}:${key}: `);
+                                    }}
+                                    disabled={!unlocked}
+                                    aria-label={key}
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                                        unlocked
+                                            ? 'bg-white/10 hover:bg-white/20 active:scale-90'
+                                            : 'bg-white/5 opacity-35'
+                                    }`}
+                                >
+                                    <EmoteIcon emote={key} className="w-5 h-5" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    ) : null;
+
     const chatInputRow = (
-        <div className="flex items-center gap-2">
-            <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') void sendChat();
-                }}
-                maxLength={300}
-                placeholder={
-                    stream.chat_disabled
-                        ? t('live.viewer.chatFrozen') || 'Chat is frozen by the host'
-                        : !myUserId
-                            ? t('live.viewer.signInToChat') || 'Sign in to join the chat'
-                            : t('live.viewer.chatPlaceholder') || 'Say something...'
-                }
-                disabled={stream.chat_disabled || stream.status === 'ended'}
-                className="flex-1 h-11 rounded-full bg-black/50 border border-white/15 px-4 text-sm text-white outline-none focus:border-brand-cyan/60 placeholder:text-slate-500 disabled:opacity-50 backdrop-blur-sm"
-            />
-            <button
-                onClick={() => void sendChat()}
-                disabled={sending || !chatInput.trim()}
-                aria-label={t('live.common.send')}
-                className="w-11 h-11 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center disabled:opacity-40 active:scale-90 transition-all"
-            >
-                <i className="fa-solid fa-paper-plane text-sm"></i>
-            </button>
+        <div>
+            {emoteTray}
+            <div className="flex items-center gap-2">
+                {myUserId && (
+                    <button
+                        onClick={() => setEmoteOpen((v) => !v)}
+                        aria-label={t('rewards.emotePicker')}
+                        className={`w-11 h-11 rounded-full border flex items-center justify-center shrink-0 backdrop-blur-sm active:scale-90 transition-all ${
+                            emoteOpen
+                                ? 'bg-brand-cyan text-brand-darker border-brand-cyan'
+                                : 'bg-black/50 border-white/15 text-slate-300'
+                        }`}
+                    >
+                        <i className="fa-regular fa-face-smile text-sm"></i>
+                    </button>
+                )}
+                <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') void sendChat();
+                    }}
+                    maxLength={300}
+                    placeholder={
+                        stream.chat_disabled
+                            ? t('live.viewer.chatFrozen') || 'Chat is frozen by the host'
+                            : !myUserId
+                                ? t('live.viewer.signInToChat') || 'Sign in to join the chat'
+                                : t('live.viewer.chatPlaceholder') || 'Say something...'
+                    }
+                    disabled={stream.chat_disabled || stream.status === 'ended'}
+                    className="flex-1 h-11 rounded-full bg-black/50 border border-white/15 px-4 text-sm text-white outline-none focus:border-brand-cyan/60 placeholder:text-slate-500 disabled:opacity-50 backdrop-blur-sm"
+                />
+                <button
+                    onClick={() => void sendChat()}
+                    disabled={sending || !chatInput.trim()}
+                    aria-label={t('live.common.send')}
+                    className="w-11 h-11 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center disabled:opacity-40 active:scale-90 transition-all"
+                >
+                    <i className="fa-solid fa-paper-plane text-sm"></i>
+                </button>
+            </div>
         </div>
     );
 

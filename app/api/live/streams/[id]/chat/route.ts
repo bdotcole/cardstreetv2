@@ -13,6 +13,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { CHAT_BODY_MAX, requireViewerOrSeller, resolvePublicViewer } from '@/lib/liveBreaks';
 import { awardEvent, awardFirst } from '@/lib/rewards';
 import { EARN } from '@/lib/rewardTiers';
+import { extractEmoteKeys, emoteMinLevel } from '@/components/rewards/emotes';
 
 const CHAT_WINDOW_SECONDS = 30;
 const CHAT_MAX_PER_WINDOW = 10;
@@ -77,6 +78,31 @@ export async function POST(
             );
         }
 
+        // Collector Pass emotes are level-gated: a body containing known
+        // `:emote:` tokens is checked against the sender's level (unknown
+        // tokens are plain text and skip this entirely). Pre-migration the
+        // level lookup fails -> level 1 -> emotes read as locked, which is
+        // the honest state; sellers bypass the gate in their own room.
+        const emoteKeys = extractEmoteKeys(text);
+        if (emoteKeys.length > 0 && !isSeller) {
+            let level = 1;
+            try {
+                const { data: rw } = await admin
+                    .from('rewards')
+                    .select('level')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+                if (typeof rw?.level === 'number') level = rw.level;
+            } catch { /* fail toward locked */ }
+            const locked = emoteKeys.find((k) => emoteMinLevel(k) > level);
+            if (locked) {
+                return NextResponse.json(
+                    { error: 'Emote locked', code: 'EMOTE_LOCKED', emote: locked, minLevel: emoteMinLevel(locked) },
+                    { status: 403 },
+                );
+            }
+        }
+
         const { data: message, error: insertErr } = await admin
             .from('stream_chat_messages')
             .insert({ stream_id: stream.id, sender_id: user.id, body: text })
@@ -138,9 +164,37 @@ export async function GET(
             return NextResponse.json({ error: 'Failed to load chat' }, { status: 500 });
         }
 
+        // The multi-line embed select defeats supabase-js's row inference, so
+        // the rows are treated as plain records here.
+        const ordered = ((messages ?? []) as unknown as Record<string, unknown>[]).reverse();
+
+        // Attach each sender's Collector Pass level (rank chips in both chat
+        // renderers). Fail-soft: pre-migration the view lacks the column and
+        // this whole block quietly no-ops.
+        try {
+            const senderIds = [...new Set(
+                ordered
+                    .filter((m) => m.is_system !== true && typeof m.sender_id === 'string')
+                    .map((m) => m.sender_id as string),
+            )];
+            if (senderIds.length > 0) {
+                const { data: levels } = await admin
+                    .from('public_profiles')
+                    .select('id, reward_level')
+                    .in('id', senderIds);
+                const levelById = new Map(
+                    ((levels ?? []) as { id: string; reward_level: number | null }[])
+                        .map((r) => [r.id, r.reward_level]),
+                );
+                for (const m of ordered) {
+                    m.sender_level = levelById.get(m.sender_id as string) ?? null;
+                }
+            }
+        } catch { /* chips just don't render */ }
+
         // Chronological for rendering; the query was newest-first to get the
         // LAST 100.
-        return NextResponse.json({ messages: (messages ?? []).reverse() });
+        return NextResponse.json({ messages: ordered });
     } catch (err: any) {
         console.error('[Live/Chat] GET error:', err);
         return NextResponse.json({ error: 'Failed to load chat' }, { status: 500 });

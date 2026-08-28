@@ -13,6 +13,8 @@ import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
+import RankChip from '@/components/rewards/rankChip';
+import { ChatBody } from '@/components/rewards/emotes';
 import {
     AUCTION_DURATION_CHOICES,
     AUCTION_DURATION_DEFAULT,
@@ -3503,10 +3505,13 @@ export default function BroadcastConsolePage() {
                                 ) : (
                                     <div key={m.id} className="group flex items-start gap-2 text-sm py-0.5">
                                         <p className="flex-1 leading-snug break-words">
+                                            {typeof m.sender_level === 'number' && (
+                                                <RankChip level={m.sender_level} className="mr-1" />
+                                            )}
                                             <span className="font-black text-brand-cyan mr-1.5">
                                                 {m.sender?.display_name || '...'}
                                             </span>
-                                            <span className="text-white/90">{m.body}</span>
+                                            <span className="text-white/90"><ChatBody body={m.body} /></span>
                                         </p>
                                         {m.sender_id !== stream.seller_id && (
                                             <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">

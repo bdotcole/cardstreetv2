@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
+import RankChip from '@/components/rewards/rankChip';
+import { bandForLevel } from '@/lib/rewardTiers';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
@@ -89,12 +91,19 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                     )}
                 </span>
                 <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-2xl font-black text-white">{name}</h1>
                         {seller.is_verified_shop && (
                             <span className="text-brand-cyan" title={lang === 'EN' ? 'Verified shop' : 'ร้านค้าที่ยืนยันแล้ว'}>
                                 <i className="fa-solid fa-circle-check"></i>
                             </span>
+                        )}
+                        {typeof seller.reward_level === 'number' && (
+                            <RankChip
+                                level={seller.reward_level}
+                                variant="page"
+                                label={lang === 'EN' ? bandForLevel(seller.reward_level).name : bandForLevel(seller.reward_level).nameTh}
+                            />
                         )}
                     </div>
                     <p className="text-sm text-slate-400 mt-1">

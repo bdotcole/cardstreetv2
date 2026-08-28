@@ -1008,6 +1008,7 @@
             "banned": "You are banned from this chat",
             "sendError": "Message not sent",
             "rateLimited": "Slow down a moment",
+            "emoteLocked": "That emote unlocks at a higher Collector level",
             "loadError": "Could not load this show",
             "claimError": "Could not claim that spot",
             "claimTaken": "Someone got that spot first",
@@ -1414,6 +1415,14 @@
         "shopSoon": "Soon",
         "menuSection": "Rewards",
         "menuTitle": "Collector Pass",
+        "emotePicker": "Emotes",
+        "emotePack": {
+            "starter": "Starter",
+            "trainer": "Trainer",
+            "pullrites": "Pull Rites",
+            "breaker": "Breaker",
+            "legend": "Legend"
+        },
         "quest": {
             "vault_add": "Add a card to your vault",
             "wishlist_add": "Wishlist a card",

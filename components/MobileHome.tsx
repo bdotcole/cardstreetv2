@@ -2132,6 +2132,7 @@ export default function HomePage() {
                         {activeTab === 'profile' && (
                             <Profile
                                 user={user}
+                                rewardsLevel={rewardsSummary?.level ?? null}
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
                                 onNavigatePartner={() => setActiveTab('partner')}
                                 onPayOffer={handlePayOffer}

@@ -351,6 +351,10 @@ export interface LiveChatMessage {
     is_system: boolean;
     created_at: string;
     sender?: { display_name: string | null; avatar_url: string | null } | null;
+    /** Collector Pass level, attached by the chat GET route from
+     *  public_profiles (null pre-migration / for realtime rows — the viewer
+     *  falls back to its own public_profiles hydration map). */
+    sender_level?: number | null;
 }
 
 /** Spot/lot money is INTEGER SATANG everywhere in the live schema; the UI is

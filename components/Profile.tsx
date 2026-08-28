@@ -12,6 +12,7 @@ import {
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
 import CurrencySwitcher from './CurrencySwitcher';
+import RankChip from './rewards/rankChip';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
@@ -31,6 +32,9 @@ import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 
 interface ProfileProps {
   user: UserProfile | null;
+  // Collector Pass level from the shell's rewards summary (null while the
+  // system is dark or the user is signed out) — renders the header rank chip.
+  rewardsLevel?: number | null;
   onNavigatePartner?: () => void;
   onGuestLogin?: () => void;
   // Notifies the parent shell whether a slide-in sub-panel is open, so the
@@ -288,7 +292,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -1100,8 +1104,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
                 {user.provider !== 'guest' ? (
-                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem]">
-                     {profileData?.username ? `@${profileData.username}` : ' '}
+                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem] flex items-center gap-2">
+                     <span>{profileData?.username ? `@${profileData.username}` : ' '}</span>
+                     {typeof rewardsLevel === 'number' && <RankChip level={rewardsLevel} />}
                    </p>
                 ) : (
                    <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">

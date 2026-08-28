@@ -16,6 +16,10 @@ export interface SellerInfo {
     review_count: number | null;
     is_verified_shop: boolean | null;
     created_at: string | null;
+    // Collector Pass display columns; absent until the 20260828 migration runs
+    // (the select falls back to the legacy column list).
+    reward_level?: number | null;
+    displayed_badges?: string[] | null;
 }
 
 const LISTING_SELECT = `
@@ -30,11 +34,24 @@ export const getSellerPageData = cache(
     async (username: string): Promise<{ seller: SellerInfo | null; listings: MarketplaceListing[] }> => {
         const supabase = await createClient();
 
-        const { data: seller } = await supabase
+        const SELLER_COLUMNS_LEGACY =
+            'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at';
+        const firstTry = await supabase
             .from('public_profiles')
-            .select('id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at')
+            .select(`${SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges`)
             .eq('username', username)
             .maybeSingle<SellerInfo>();
+        let seller = firstTry.data;
+        // Pre-migration the view lacks the Collector Pass columns and PostgREST
+        // rejects the whole select — retry with the legacy list so seller pages
+        // never 404 over a cosmetic column.
+        if (firstTry.error) {
+            ({ data: seller } = await supabase
+                .from('public_profiles')
+                .select(SELLER_COLUMNS_LEGACY)
+                .eq('username', username)
+                .maybeSingle<SellerInfo>());
+        }
         if (!seller) return { seller: null, listings: [] };
 
         const { data: rows } = await supabase

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserProfile, Review } from '@/types';
 import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
@@ -7,6 +7,9 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import GradedSlabFrame from './GradedSlabFrame';
+import RankChip from './rewards/rankChip';
+import { createClient } from '@/lib/supabase/client';
+import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -23,6 +26,27 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const { t } = useTranslation();
+
+    // Collector Pass display data (rank + showcased badges) — fetched here
+    // rather than threaded through the listing embed so the page is correct
+    // no matter which surface navigated to it. Fail-soft: no row, no chrome.
+    const [publicSeller, setPublicSeller] = useState<PublicSeller | null>(null);
+    useEffect(() => {
+        if (!seller?.id) return;
+        let cancelled = false;
+        fetchPublicSellers(createClient(), [seller.id]).then((map) => {
+            if (!cancelled) setPublicSeller(map.get(seller.id) ?? null);
+        });
+        return () => { cancelled = true; };
+    }, [seller?.id]);
+
+    const badgeLabel = (key: string) => {
+        const lk = `rewards.badge.${key}`;
+        const v = t(lk);
+        return v === lk ? key.replace(/_/g, ' ') : v;
+    };
+    const displayedBadges = publicSeller?.displayed_badges ?? seller.badges ?? [];
+    const rewardLevel = publicSeller?.reward_level ?? null;
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -54,17 +78,18 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
 
                 <div>
                     <h1 className="text-2xl font-black text-white italic skew-x-[-5deg] mb-1">{seller.name}</h1>
-                    {(seller.isPartner || (seller.badges && seller.badges.length > 0)) && (
-                        <div className="flex items-center justify-center gap-2 mb-3">
+                    {(seller.isPartner || displayedBadges.length > 0 || rewardLevel != null) && (
+                        <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+                            {rewardLevel != null && <RankChip level={rewardLevel} variant="page" />}
                             {seller.isPartner && (
                                 <span className="px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-[9px] font-black text-brand-cyan uppercase tracking-wider flex items-center gap-1">
                                     <i className="fa-solid fa-circle-check"></i>
                                     {t('seller.officialPartner')}
                                 </span>
                             )}
-                            {seller.badges?.map(badge => (
+                            {displayedBadges.map(badge => (
                                 <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                    {badge}
+                                    {badgeLabel(badge)}
                                 </span>
                             ))}
                         </div>
