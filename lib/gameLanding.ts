@@ -178,21 +178,26 @@ export const GAME_LANDINGS: GameLandingContent[] = [
     {
         slug: 'yugioh',
         gameId: 'yugioh',
+        // Thai writes the franchise both ways: ยูกิ (clipped, conversational) and
+        // ยูกิโอ (the full name, and the label lib/games.ts uses on set pages).
+        // The page said only ยูกิ. Leading with ยูกิโอ costs nothing and covers
+        // both, because ยูกิโอ contains ยูกิ as a substring — a search for the
+        // short form still matches every occurrence of the long one.
         title: {
-            th: 'การ์ดยูกิ (Yu-Gi-Oh!) — ซื้อ ขาย เช็คราคาในไทย | CardStreet',
+            th: 'การ์ดยูกิโอ (Yu-Gi-Oh!) — ซื้อ ขาย เช็คราคาการ์ดยูกิในไทย | CardStreet',
             en: 'Yu-Gi-Oh! Cards Thailand — Buy, Sell & Prices | CardStreet',
         },
         description: {
-            th: 'ซื้อขายการ์ดยูกิ Yu-Gi-Oh! ในไทย เช็คราคาตลาดเรียลไทม์ทุกใบ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
+            th: 'ซื้อขายการ์ดยูกิโอ Yu-Gi-Oh! ในไทย เช็คราคาตลาดเรียลไทม์ทุกใบ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
             en: 'Buy and sell Yu-Gi-Oh! cards in Thailand with live market prices, verified sellers, buyer protection, and nationwide delivery.',
         },
         h1: {
-            th: 'การ์ดยูกิ (Yu-Gi-Oh!)',
+            th: 'การ์ดยูกิโอ (Yu-Gi-Oh!)',
             en: 'Yu-Gi-Oh! Cards in Thailand',
         },
         intro: {
             th: [
-                'ตลาดซื้อขายการ์ดยูกิสำหรับนักเล่นและนักสะสมชาวไทย ครอบคลุมการ์ด Yu-Gi-Oh! ตั้งแต่ชุดคลาสสิกจนถึงชุดล่าสุด พร้อมราคาตลาดที่อัปเดตทุกวันให้เทียบก่อนซื้อหรือตั้งขาย',
+                'ตลาดซื้อขายการ์ดยูกิโอสำหรับนักเล่นและนักสะสมชาวไทย ครอบคลุมการ์ด Yu-Gi-Oh! ตั้งแต่ชุดคลาสสิกจนถึงชุดล่าสุด พร้อมราคาตลาดที่อัปเดตทุกวันให้เทียบก่อนซื้อหรือตั้งขาย',
                 'ทุกออเดอร์ได้รับความคุ้มครอง ผู้ขายผ่านการยืนยันตัวตน ชำระผ่านบัตรหรือพร้อมเพย์ และจัดส่งทั่วประเทศด้วย Flash Express',
                 'วิธีเช็คราคาการ์ดยูกิบน CardStreet เริ่มจากพิมพ์ชื่อการ์ดหรือรหัสการ์ดที่พิมพ์อยู่บนตัวการ์ด แล้วเปิดหน้าการ์ดใบนั้นเพื่อดูราคาตลาดเป็นเงินบาทพร้อมกราฟราคาย้อนหลัง แคตตาล็อกของเรารวมทั้งการ์ดภาษาอังกฤษ (TCG) และการ์ดภาษาญี่ปุ่น (OCG) กว่า 45,000 ใบ จาก 800 กว่าชุด จึงหาการ์ดเก่าที่หายากหรือการ์ดที่วางขายเฉพาะในญี่ปุ่นได้ในที่เดียวกัน',
             ],
@@ -250,21 +255,25 @@ export const GAME_LANDINGS: GameLandingContent[] = [
     {
         slug: 'mtg',
         gameId: 'mtg',
+        // เมจิก is this site's own Thai label for the game (lib/games.ts) and every
+        // MTG set page renders it as การ์ดเมจิก — but the landing page, which is
+        // what ranks, never said the word. Added to the title, description and
+        // first intro line alongside the Latin name.
         title: {
-            th: 'การ์ด Magic: The Gathering (MTG) — ซื้อ ขาย เช็คราคาในไทย | CardStreet',
+            th: 'การ์ดเมจิก Magic: The Gathering (MTG) — ซื้อ ขาย เช็คราคาในไทย | CardStreet',
             en: 'Magic: The Gathering Cards Thailand — Buy, Sell & Prices | CardStreet',
         },
         description: {
-            th: 'ซื้อขายการ์ด MTG (Magic: The Gathering) ในไทย เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
+            th: 'ซื้อขายการ์ดเมจิก MTG (Magic: The Gathering) ในไทย เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
             en: 'Buy and sell Magic: The Gathering singles in Thailand with live market prices, verified sellers, buyer protection, and nationwide delivery.',
         },
         h1: {
-            th: 'การ์ด Magic: The Gathering (MTG)',
+            th: 'การ์ดเมจิก Magic: The Gathering (MTG)',
             en: 'Magic: The Gathering Cards in Thailand',
         },
         intro: {
             th: [
-                'ตลาดซื้อขายการ์ด Magic: The Gathering สำหรับผู้เล่นชาวไทย ครอบคลุมการ์ดเดี่ยวจากหลายยุคหลายชุด พร้อมราคาตลาดที่อัปเดตทุกวัน จะหาการ์ดลง Commander, Modern หรือสะสม ก็เทียบราคาได้ก่อนตัดสินใจ',
+                'ตลาดซื้อขายการ์ดเมจิก Magic: The Gathering สำหรับผู้เล่นชาวไทย ครอบคลุมการ์ดเดี่ยวจากหลายยุคหลายชุด พร้อมราคาตลาดที่อัปเดตทุกวัน จะหาการ์ดลง Commander, Modern หรือสะสม ก็เทียบราคาได้ก่อนตัดสินใจ',
                 'ซื้อจากผู้ขายในไทยที่ยืนยันตัวตนแล้ว ไม่ต้องรอของจากต่างประเทศ ทุกออเดอร์มีระบบคุ้มครองผู้ซื้อและจัดส่งด้วย Flash Express',
                 'วิธีเช็คราคาการ์ด MTG บน CardStreet ให้พิมพ์ชื่อการ์ดเป็นภาษาอังกฤษแล้วเปิดหน้าการ์ดใบนั้น จะเห็นราคาตลาดเป็นเงินบาทพร้อมกราฟราคาย้อนหลัง 7 30 และ 90 วัน ซึ่งช่วยให้เห็นว่าการ์ดกำลังขึ้นหรือลงก่อนตัดสินใจซื้อหรือขาย การ์ดใบเดียวกันที่มาจากคนละชุดหรือคนละเวอร์ชันจะมีราคาไม่เท่ากัน จึงควรเลือกให้ตรงชุดที่ถืออยู่',
             ],
@@ -341,7 +350,7 @@ export const GAME_LANDINGS: GameLandingContent[] = [
         },
         intro: {
             th: [
-                'การ์ดดิสนีย์ Disney Lorcana คือเกมการ์ดสะสมที่คนไทยเล่นและเก็บกันมากขึ้นทุกปี CardStreet คือตลาดซื้อขายสำหรับนักสะสมชาวไทยโดยเฉพาะ รวมการ์ดตัวละครดิสนีย์ตั้งแต่ชุดแรก The First Chapter จนถึงชุดล่าสุด พร้อมราคาตลาดอัปเดตทุกวัน',
+                'การ์ดดิสนีย์ Disney Lorcana หรือที่หลายคนเขียนว่าการ์ดลอคาน่า คือเกมการ์ดสะสมที่คนไทยเล่นและเก็บกันมากขึ้นทุกปี CardStreet คือตลาดซื้อขายสำหรับนักสะสมชาวไทยโดยเฉพาะ รวมการ์ดตัวละครดิสนีย์ตั้งแต่ชุดแรก The First Chapter จนถึงชุดล่าสุด พร้อมราคาตลาดอัปเดตทุกวัน',
                 'ซื้อจากผู้ขายที่ยืนยันตัวตนในไทย มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ และจัดส่งทั่วประเทศ หรือลงขายการ์ดของคุณเองได้ฟรี',
                 'วิธีเช็คราคาการ์ดดิสนีย์ให้แม่น ราคาการ์ด Lorcana ในไทยขยับตามราคาตลาดโลกและตามของที่มีขายจริงในประเทศ ให้พิมพ์ชื่อตัวละครหรือชื่อการ์ดเป็นภาษาอังกฤษ แล้วเปิดหน้าการ์ดเพื่อดูราคาตลาดเป็นเงินบาท วันที่อัปเดตล่าสุด และรายการที่มีคนลงขายอยู่ตอนนี้ จะได้เทียบทันทีว่าราคาที่เห็นในกลุ่มซื้อขายถูกหรือแพงกว่าราคากลาง การ์ด Lorcana ใบเดียวกันมีหลายระดับความหายากและมีทั้งแบบธรรมดาและแบบ Foil ซึ่งราคาไม่เท่ากัน จึงควรเลือกให้ตรงกับใบที่ถืออยู่ ดูราคาทั้งชุดพร้อมกันได้จากหน้าชุดการ์ด',
             ],
@@ -400,11 +409,11 @@ export const GAME_LANDINGS: GameLandingContent[] = [
         slug: 'riftbound',
         gameId: 'riftbound',
         title: {
-            th: 'การ์ด Riftbound (League of Legends TCG) — ซื้อ ขาย เช็คราคา | CardStreet',
+            th: 'การ์ด Riftbound (การ์ดเกม LoL - League of Legends) — ซื้อ ขาย เช็คราคา | CardStreet',
             en: 'Riftbound (League of Legends TCG) Thailand — Buy, Sell & Prices | CardStreet',
         },
         description: {
-            th: 'ซื้อขายการ์ด Riftbound การ์ดเกม League of Legends จาก Riot Games ในไทย เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ส่งทั่วไทย',
+            th: 'ซื้อขายการ์ด Riftbound การ์ดเกม LoL (League of Legends) จาก Riot Games ในไทย เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ส่งทั่วไทย',
             en: 'Buy and sell Riftbound — the League of Legends trading card game by Riot Games — in Thailand with live market prices, verified sellers, and nationwide delivery.',
         },
         h1: {
@@ -413,7 +422,7 @@ export const GAME_LANDINGS: GameLandingContent[] = [
         },
         intro: {
             th: [
-                'Riftbound คือการ์ดเกมสะสมจากจักรวาล League of Legends โดย Riot Games CardStreet รวมการ์ด Riftbound พร้อมราคาตลาดอัปเดตทุกวัน ให้นักสะสมชาวไทยตามเก็บแชมเปียนอย่าง Jinx, Yasuo และ Ahri ได้ตั้งแต่วันแรก',
+                'Riftbound คือการ์ดเกมสะสมจากจักรวาล League of Legends (LoL) โดย Riot Games หรือที่คนไทยเรียกกันสั้น ๆ ว่าการ์ดเกม LoL นั่นเอง CardStreet รวมการ์ด Riftbound พร้อมราคาตลาดอัปเดตทุกวัน ให้นักสะสมชาวไทยตามเก็บแชมเปียนอย่าง Jinx, Yasuo และ Ahri ได้ตั้งแต่วันแรก',
                 'ซื้อจากผู้ขายที่ยืนยันตัวตนในไทย มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ และจัดส่งทั่วประเทศ หรือลงขายการ์ดของคุณเองได้ฟรี',
                 'วิธีเช็คราคาการ์ด Riftbound บน CardStreet ให้พิมพ์ชื่อการ์ดหรือชื่อแชมเปี้ยนจาก League of Legends ที่อยู่บนการ์ด แล้วเปิดหน้าการ์ดเพื่อดูราคาตลาดเป็นเงินบาทพร้อมกราฟราคาย้อนหลัง เนื่องจาก Riftbound เพิ่งเริ่มวางจำหน่าย ราคาจึงยังขยับได้เร็วในช่วงนี้ การดูกราฟย้อนหลังก่อนตัดสินใจซื้อหรือขายจึงช่วยได้มาก',
             ],
