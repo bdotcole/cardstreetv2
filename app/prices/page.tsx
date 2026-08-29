@@ -17,16 +17,21 @@ import PricesContent from './PricesContent';
 // Note the colloquial spelling โปเกม่อน (with ไม้เอก) alongside โปเกมอน: the
 // ranking query uses the former and the rest of the site uses the latter, so
 // this page deliberately carries both and serves the two variants at once.
+//
+// แอป and ดิสนีย์ are here for the same reason. "แอปเช็คราคาการ์ดโปเกม่อน" ranks
+// at position 8 with zero clicks while the word แอป appeared nowhere on the page,
+// and Thai searchers say การ์ดดิสนีย์ rather than Lorcana — the Latin name was
+// present, the Thai one was not.
 export async function generateMetadata(): Promise<Metadata> {
     const pathLocale = await requestPathLocale();
     const isThai = pathLocale === 'th';
     return {
         metadataBase: new URL(BASE_URL),
         title: isThai
-            ? 'เช็คราคาการ์ดโปเกม่อน ยูกิ วันพีช — ราคาตลาดล่าสุด | CardStreet'
+            ? 'แอปเช็คราคาการ์ดโปเกม่อน ดิสนีย์ ยูกิ วันพีช — ราคาตลาดล่าสุด | CardStreet'
             : 'Check Trading Card Prices in Thailand — Pokémon, Yu-Gi-Oh, One Piece | CardStreet',
         description: isThai
-            ? 'เช็คราคาการ์ดโปเกม่อน ยูกิ วันพีช MTG และ Lorcana ฟรี ราคาตลาดกว่า 100,000 ใบ อัปเดตทุกวัน สแกนการ์ดด้วยกล้องเพื่อดูราคาได้ทันที ทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่น'
+            ? 'เช็คราคาการ์ดโปเกม่อน การ์ดดิสนีย์ ยูกิ วันพีช MTG และ Lorcana ฟรี ราคาตลาดกว่า 100,000 ใบ อัปเดตทุกวัน สแกนการ์ดด้วยกล้องเพื่อดูราคาได้ทันที ทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่น'
             : 'Free market prices for over 100,000 trading cards — Pokémon, Yu-Gi-Oh!, One Piece, Magic, Lorcana and Riftbound. Updated daily, priced in Thai baht, with English, Thai and Japanese printings priced separately.',
         alternates: buildAlternates('/prices', pathLocale),
         openGraph: {

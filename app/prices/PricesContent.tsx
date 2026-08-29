@@ -42,7 +42,7 @@ interface Strings {
 const EN: Strings = {
   h1: 'Check Trading Card Prices — Free, Updated Daily',
   intro1:
-    'Wondering what your cards are worth? CardStreet tracks market prices for over 100,000 cards across more than 1,200 sets — Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound. Search a card by name or number and see its current price straight away. Free, no account needed.',
+    'Wondering what your cards are worth? CardStreet tracks market prices for over 100,000 cards across more than 1,200 sets — Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound. Search a card by name or number and see its current price straight away. Free, no account needed. It works as a card price-check app on your phone too: CardStreet has Android and iOS apps for checking prices while you are standing in a shop or opening a booster — scan a card with the camera to pull up its market price, no typing card names one at a time.',
   intro2:
     'Prices update daily from real sale data and are always shown in Thai baht, so there is no currency maths to do. Thai-language Pokémon cards are priced separately from their English and Japanese counterparts, because they trade in different markets — Thailand’s MA, SV and AS sets carry their own prices rather than inheriting English ones.',
   howTitle: 'How to check a card’s price',
@@ -158,7 +158,7 @@ const EN: Strings = {
 const TH: Strings = {
   h1: 'เช็คราคาการ์ด — ราคาตลาดล่าสุด ฟรี',
   intro1:
-    'อยากรู้ว่าการ์ดในมือมีมูลค่าเท่าไหร่? CardStreet รวบรวมราคาตลาดของการ์ดสะสมกว่า 100,000 ใบ จาก 1,200 กว่าชุด ทั้งโปเกม่อน ยูกิโอ วันพีช Magic: The Gathering, Disney Lorcana และ Riftbound ค้นหาชื่อการ์ดหรือเลขในชุด แล้วดูราคาล่าสุดได้ทันที ไม่มีค่าใช้จ่าย ไม่ต้องสมัครสมาชิก',
+    'อยากรู้ว่าการ์ดในมือมีมูลค่าเท่าไหร่? CardStreet รวบรวมราคาตลาดของการ์ดสะสมกว่า 100,000 ใบ จาก 1,200 กว่าชุด ทั้งโปเกม่อน ยูกิโอ วันพีช การ์ดดิสนีย์ (Disney Lorcana) Magic: The Gathering และ Riftbound ค้นหาชื่อการ์ดหรือเลขในชุด แล้วดูราคาล่าสุดได้ทันที ไม่มีค่าใช้จ่าย ไม่ต้องสมัครสมาชิก ใช้เป็นแอปเช็คราคาการ์ดบนมือถือก็ได้ เพราะ CardStreet มีแอปทั้ง Android และ iOS สำหรับคนที่อยากเช็คราคาตอนอยู่หน้าร้านหรือระหว่างเปิดบูสเตอร์ สแกนการ์ดด้วยกล้องแล้วดูราคาตลาดได้ทันที ไม่ต้องพิมพ์ชื่อการ์ดทีละใบ',
   intro2:
     'ราคาบน CardStreet อัปเดตทุกวันจากข้อมูลการซื้อขายจริง และแสดงเป็นเงินบาทเสมอ ไม่ต้องแปลงค่าเงินเอง การ์ดโปเกมอนภาษาไทยมีราคาแยกจากฉบับภาษาอังกฤษและญี่ปุ่น เพราะเป็นคนละตลาดกัน — ชุด MA, SV และ AS ของไทยจึงมีราคาของตัวเอง ไม่ได้ใช้ราคาการ์ดอังกฤษมาทับ',
   howTitle: 'วิธีเช็คราคาการ์ด',

@@ -322,12 +322,17 @@ export const GAME_LANDINGS: GameLandingContent[] = [
     {
         slug: 'lorcana',
         gameId: 'lorcana',
+        // Thai collectors search for this game by the Disney brand, not the
+        // Lorcana one: "การ์ดดิสนีย์" and "เช็คราคาการ์ดดิสนีย์" both rank for this
+        // page in Search Console while the phrase appeared nowhere on it. The
+        // Thai copy now leads with การ์ดดิสนีย์ and keeps the Latin name beside
+        // it, so one URL serves both vocabularies.
         title: {
-            th: 'การ์ด Disney Lorcana — ซื้อ ขาย เช็คราคาในไทย | CardStreet',
+            th: 'การ์ดดิสนีย์ Disney Lorcana — ซื้อ ขาย เช็คราคาในไทย | CardStreet',
             en: 'Disney Lorcana Cards Thailand — Buy, Sell & Prices | CardStreet',
         },
         description: {
-            th: 'ซื้อขายการ์ด Disney Lorcana ในไทย เช็คราคาตลาดเรียลไทม์ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
+            th: 'ซื้อขายการ์ดดิสนีย์ Disney Lorcana ในไทย เช็คราคาการ์ดดิสนีย์แบบเรียลไทม์ ผู้ขายยืนยันตัวตน ระบบคุ้มครองผู้ซื้อ ส่งทั่วไทย',
             en: 'Buy and sell Disney Lorcana cards in Thailand with live market prices, verified sellers, buyer protection, and nationwide delivery.',
         },
         h1: {
@@ -336,22 +341,22 @@ export const GAME_LANDINGS: GameLandingContent[] = [
         },
         intro: {
             th: [
-                'ตลาดซื้อขายการ์ด Disney Lorcana สำหรับนักสะสมชาวไทย รวมการ์ดตัวละครดิสนีย์ตั้งแต่ชุดแรก The First Chapter จนถึงชุดล่าสุด พร้อมราคาตลาดอัปเดตทุกวัน',
+                'การ์ดดิสนีย์ Disney Lorcana คือเกมการ์ดสะสมที่คนไทยเล่นและเก็บกันมากขึ้นทุกปี CardStreet คือตลาดซื้อขายสำหรับนักสะสมชาวไทยโดยเฉพาะ รวมการ์ดตัวละครดิสนีย์ตั้งแต่ชุดแรก The First Chapter จนถึงชุดล่าสุด พร้อมราคาตลาดอัปเดตทุกวัน',
                 'ซื้อจากผู้ขายที่ยืนยันตัวตนในไทย มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ และจัดส่งทั่วประเทศ หรือลงขายการ์ดของคุณเองได้ฟรี',
-                'วิธีเช็คราคาการ์ด Lorcana บน CardStreet ให้พิมพ์ชื่อตัวละครหรือชื่อการ์ดเป็นภาษาอังกฤษ แล้วเปิดหน้าการ์ดเพื่อดูราคาตลาดเป็นเงินบาทพร้อมกราฟราคาย้อนหลัง การ์ด Lorcana ใบเดียวกันมีหลายระดับความหายากและมีทั้งแบบธรรมดาและแบบ Foil ซึ่งราคาไม่เท่ากัน จึงควรเลือกให้ตรงกับใบที่ถืออยู่ ดูราคาทั้งชุดพร้อมกันได้จากหน้าชุดการ์ด',
+                'วิธีเช็คราคาการ์ดดิสนีย์ให้แม่น ราคาการ์ด Lorcana ในไทยขยับตามราคาตลาดโลกและตามของที่มีขายจริงในประเทศ ให้พิมพ์ชื่อตัวละครหรือชื่อการ์ดเป็นภาษาอังกฤษ แล้วเปิดหน้าการ์ดเพื่อดูราคาตลาดเป็นเงินบาท วันที่อัปเดตล่าสุด และรายการที่มีคนลงขายอยู่ตอนนี้ จะได้เทียบทันทีว่าราคาที่เห็นในกลุ่มซื้อขายถูกหรือแพงกว่าราคากลาง การ์ด Lorcana ใบเดียวกันมีหลายระดับความหายากและมีทั้งแบบธรรมดาและแบบ Foil ซึ่งราคาไม่เท่ากัน จึงควรเลือกให้ตรงกับใบที่ถืออยู่ ดูราคาทั้งชุดพร้อมกันได้จากหน้าชุดการ์ด',
             ],
             en: [
-                'A Disney Lorcana marketplace for collectors in Thailand, covering Disney character cards from The First Chapter to the latest set with daily-updated market prices.',
+                'Disney Lorcana is a collectible card game with a fast-growing following in Thailand. CardStreet is a marketplace built for collectors here, covering Disney character cards from The First Chapter to the latest set with daily-updated market prices.',
                 'Buy from identity-verified sellers in Thailand with buyer protection on every order and nationwide delivery — or list your own cards free.',
-                'To check a Disney Lorcana card price on CardStreet, search the character or card name in English and open the card page for its market price in Thai baht with price history. The same Lorcana card exists at several rarities and in foil and non-foil, which are not worth the same, so match the version you hold. Set pages show every card in a set with its price together.',
+                'How to check a Disney Lorcana price accurately: prices here track both the global market and what is actually available locally. Search the character or card name in English and open the card page for its market price in Thai baht, when it was last updated, and any live listings — so you can tell at a glance whether a price quoted in a buy-sell group is above or below the going rate. The same Lorcana card exists at several rarities and in foil and non-foil, which are not worth the same, so match the version you hold. Set pages show every card in a set with its price together.',
             ],
         },
         faqs: [
             {
-                q: { th: 'ซื้อการ์ด Lorcana ในไทยได้ที่ไหน?', en: 'Where can I buy Lorcana cards in Thailand?' },
+                q: { th: 'การ์ดดิสนีย์ (Disney Lorcana) ซื้อที่ไหนในไทยดี?', en: 'Where can I buy Disney Lorcana cards in Thailand?' },
                 a: {
-                    th: 'CardStreet รวมการ์ด Disney Lorcana จากผู้ขายในไทยที่ยืนยันตัวตนแล้ว พร้อมระบบคุ้มครองผู้ซื้อและจัดส่งทั่วประเทศ',
-                    en: 'CardStreet lists Disney Lorcana cards from identity-verified sellers in Thailand, with buyer protection and nationwide delivery.',
+                    th: 'ซื้อได้ทั้งจากร้านการ์ดหน้าร้าน กลุ่มซื้อขายบนโซเชียล และมาร์เก็ตเพลสออนไลน์ ข้อดีของการซื้อผ่าน CardStreet คือเห็นราคาตลาดของการ์ดใบนั้นควบคู่ไปกับราคาที่ผู้ขายตั้ง จึงรู้ทันทีว่าคุ้มไหม ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ และจัดส่งทั่วไทย',
+                    en: 'Through local card shops, social buy-sell groups, or online marketplaces. Buying on CardStreet shows you the card’s market price next to the seller’s asking price, so you know immediately whether it is a fair deal. Every seller is identity-verified, purchases are covered by buyer protection, and shipping is nationwide.',
                 },
             },
             {

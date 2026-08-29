@@ -21,6 +21,16 @@ function gameLabel(game: string, lang: 'EN' | 'TH'): string {
     return getGameLabel(game, lang === 'EN' ? 'en' : 'th');
 }
 
+// Thai puts no space between a noun and its modifier, so "การ์ดโปเกมอน" is
+// correct — but lorcana and riftbound legitimately carry a Latin localizedName.th
+// (lib/games.ts), which ran the scripts together as "การ์ดDisney Lorcana". Space
+// only when the label does not start in Thai script.
+function thaiCardLabel(game: string): string {
+    const label = getGameLabel(game, 'th');
+    if (!label) return 'การ์ด';
+    return /^[฀-๿]/.test(label) ? `การ์ด${label}` : `การ์ด ${label}`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
     const { setId } = await params;
     const { set, cards } = await getSetPageData(setId);
@@ -32,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
     const title =
         lang === 'EN'
             ? `${set.name} — ${game} Cards & Prices | CardStreet`
-            : `${set.name} — การ์ด${game} เช็คราคาและรายการขาย | CardStreet`;
+            : `${set.name} — ${thaiCardLabel(set.game)} เช็คราคาและรายการขาย | CardStreet`;
     const description =
         lang === 'EN'
             ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
