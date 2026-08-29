@@ -101,15 +101,13 @@ const SET_INTROS: Record<string, SetIntro> = {
   // where /lorcana is the #1 page on the domain on a handful of listings and
   // /sets/S7D is the only set page in the top-pages report.
   //
-  // THREE CLAIMS FROM THE DRAFT WERE WRONG BY THE TIME IT SHIPPED and were
-  // rewritten off fresh market_values, not off the draft:
-  //   sv09   — Salamence ex outranks Lillie's Clefairy ex, not the reverse.
-  //   me02.5 — Mega Dragonite ex sits between Pikachu ex and Mega Gengar ex,
-  //            so "the two most valuable" named the wrong pair.
-  //   swsh9  — the runner-up is Umbreon V (#TG22), not Umbreon VMAX (#TG23),
-  //            and the superlative is dropped entirely: a mispriced Empoleon
-  //            (#037, rarity R, ~THB 60k) currently tops the set, so no
-  //            "most valuable" claim about swsh9 can be made honestly today.
+  // RANKING CLAIMS MUST BE CHECKED AGAINST THE **DISPLAY** PRICE, i.e. the one
+  // lib/cardMapper.ts picks: ungraded only (GRADED_CONDITION_RE), Raw_NM then
+  // Near Mint. market_values also holds PSA/BGS/CGC/SGC slab rows whose prices
+  // run orders of magnitude above raw — a 4-cent Common can carry a $12,000
+  // BGS 10 row. Taking max() across all conditions therefore ranks graded slabs,
+  // not cards, and it briefly produced three wrong "corrections" here (shipped
+  // f3cba7f, reverted in this commit). The original 2026-08-18 claims were right.
   //
   // Apostrophes are straight ('), matching the catalog exactly — the copy
   // promises a collector can find the named card, and a curly quote breaks a
@@ -145,20 +143,20 @@ const SET_INTROS: Record<string, SetIntro> = {
     en: "การผงาดของผู้ไร้พ่าย (SV10s) is a Thai-language Pokemon set packed with special-art rares of the series best-known characters. Team Rocket's Mewtwo ex is the most valuable card in it, followed by Cynthia's Garchomp ex and Ethan's Ho-Oh ex. Check current market prices across the full set, then buy or sell authentic copies with sellers in Thailand.",
   },
   'me02.5': {
-    th: 'Ascended Heroes (me02.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุคเมก้าที่ขนการ์ดหายากมาเต็ม โดยมี Pikachu ex และ Mega Dragonite ex แบบ Special Illustration Rare เป็นสองใบที่ราคาสูงสุด ตามด้วย Mega Gengar ex แบบเดียวกัน ส่วน Mega Charizard Y ex แบบ Mega Hyper Rare คือใบที่สายเมก้าตามล่า สายสะสมการ์ดภาษาอังกฤษเช็คราคาได้ทุกใบ แล้วซื้อ-ขายของแท้จากผู้ขายในไทยได้โดยตรง',
-    en: 'Ascended Heroes (me02.5) is an English-language Mega-era set loaded with chase cards. The Special Illustration Rare Pikachu ex and Mega Dragonite ex are the two most valuable cards in it, with the Special Illustration Rare Mega Gengar ex behind them, while the Mega Hyper Rare Mega Charizard Y ex is the one Mega collectors hunt. Check the price of every card in the set and buy or sell authentic copies directly from sellers inside Thailand.',
+    th: 'Ascended Heroes (me02.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุคเมก้าที่ขนการ์ดหายากมาเต็ม โดยมี Mega Gengar ex และ Pikachu ex แบบ Special Illustration Rare เป็นสองใบที่ราคาสูงสุด ตามด้วย Mega Dragonite ex แบบเดียวกัน ส่วน Mega Charizard Y ex แบบ Mega Hyper Rare คือใบที่สายเมก้าตามล่า สายสะสมการ์ดภาษาอังกฤษเช็คราคาได้ทุกใบ แล้วซื้อ-ขายของแท้จากผู้ขายในไทยได้โดยตรง',
+    en: 'Ascended Heroes (me02.5) is an English-language Mega-era set loaded with chase cards. The Special Illustration Rare Mega Gengar ex and Pikachu ex are the two most valuable cards in it, with the Special Illustration Rare Mega Dragonite ex behind them, while the Mega Hyper Rare Mega Charizard Y ex is the one Mega collectors hunt. Check the price of every card in the set and buy or sell authentic copies directly from sellers inside Thailand.',
   },
   'sv04.5': {
     th: 'Paldean Fates (sv04.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษสายชายนี่ที่นักสะสมทั่วโลกตามเก็บ ใบชูโรงคือ Mew ex แบบ SAR ที่เป็นการ์ดราคาสูงสุดของชุดแบบทิ้งห่าง ตามด้วย Charizard ex และ Gardevoir ex แบบ SAR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทีละใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทย',
     en: 'Paldean Fates (sv04.5) is the English-language shiny set collectors worldwide keep coming back to. The SAR Mew ex is comfortably the most valuable card in it, followed by the SAR Charizard ex and Gardevoir ex. Check the latest price card by card, then buy or sell authentic copies with sellers across Thailand.',
   },
   sv09: {
-    th: "Journey Together (sv09) คือชุดการ์ดโปเกมอนภาษาอังกฤษที่เน้นการ์ด ex ของตัวละคร โดยมี Salamence ex แบบ SAR เป็นใบราคาสูงสุดของชุด ตามติดด้วย Lillie's Clefairy ex แบบ SAR ที่ราคาไล่กันมาแบบหายใจรดต้นคอ ส่วน N's Zoroark ex ก็เป็นอีกใบที่คนไล่เก็บ เช็คราคาตลาดของทุกใบในชุด แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายในไทยได้ในหน้านี้",
-    en: "Journey Together (sv09) is an English-language set centred on character ex cards. The SAR Salamence ex is the most valuable card in it, with the SAR Lillie's Clefairy ex right behind it, and N's Zoroark ex another one collectors chase. Check market prices across the full set, then buy or sell authentic copies from sellers in Thailand.",
+    th: "Journey Together (sv09) คือชุดการ์ดโปเกมอนภาษาอังกฤษที่เน้นการ์ด ex ของตัวละคร โดยมี Lillie's Clefairy ex แบบ SAR เป็นใบราคาสูงสุดของชุด ตามด้วย Salamence ex และ N's Zoroark ex แบบ SAR เช็คราคาตลาดของทุกใบในชุด แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายในไทยได้ในหน้านี้",
+    en: "Journey Together (sv09) is an English-language set centred on character ex cards. The SAR Lillie's Clefairy ex is the most valuable card in it, with the SAR Salamence ex and N's Zoroark ex behind it. Check market prices across the full set, then buy or sell authentic copies from sellers in Thailand.",
   },
   swsh9: {
-    th: 'Brilliant Stars (swsh9) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุค Sword & Shield ที่นักสะสมยังตามเก็บถึงวันนี้ ใบที่คนตามหามากที่สุดคือ Charizard V แบบ SR ตามด้วยหมวด Trainer Gallery ที่รวมการ์ดอีวุยทั้งตระกูลไว้ ทั้ง Umbreon V, Flareon และ Jolteon ซึ่งเป็นกลุ่มการ์ดที่ราคาดีที่สุดของชุดรองจาก Charizard เช็คราคาการ์ดโปเกม่อนย้อนยุคได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
-    en: 'Brilliant Stars (swsh9) is a Sword & Shield-era English set collectors still chase today. The SR Charizard V is the card most people come looking for, followed by the Trainer Gallery subset — Umbreon V, Flareon and Jolteon among them — which holds the strongest prices in the set after Charizard. Check prices across the whole set, then buy or sell authentic copies with sellers all over Thailand.',
+    th: 'Brilliant Stars (swsh9) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุค Sword & Shield ที่นักสะสมยังตามเก็บถึงวันนี้ ใบที่ราคาแรงที่สุดคือ Charizard V แบบ SR ตามด้วย Umbreon VMAX จากหมวด Trainer Gallery และ Charizard VSTAR แบบ SAR เช็คราคาการ์ดโปเกม่อนย้อนยุคได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
+    en: 'Brilliant Stars (swsh9) is a Sword & Shield-era English set collectors still chase today. The SR Charizard V is the most valuable card in it, followed by the Trainer Gallery Umbreon VMAX and the SAR Charizard VSTAR. Check prices across the whole set, then buy or sell authentic copies with sellers all over Thailand.',
   },
   s7d: {
     th: 'Skyscraping Perfection (S7D) คือชุดการ์ดโปเกมอนภาษาญี่ปุ่นยุค Sword & Shield ที่สายสะสมการ์ดญี่ปุ่นในไทยยังตามหา ใบราคาสูงสุดของชุดคือ Noivern V (オンバーンV) แบบ Super Rare ตามด้วย Duraludon V และการ์ดเทรนเนอร์ Raihan เช็คราคาการ์ดโปเกม่อนภาษาญี่ปุ่นได้ทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
