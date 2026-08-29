@@ -641,10 +641,15 @@ export default function DesktopCardDetail({
                 client: its whole purpose is to be in the initial HTML, where it
                 takes the page from one outlink (the breadcrumb) to thirteen and
                 adds a few hundred characters of card-specific text. */}
-            {siblings.length >= 2 && (
+            {siblings.length >= 1 && (
                 <section className="mt-12 border-t border-white/10 pt-8">
                     <div className="flex items-baseline justify-between gap-4">
-                        <h2 className="text-lg font-black text-white">{t('desktop.card.moreFromSet')}</h2>
+                        {/* A block topped up from the wider game is not "more from
+                            this set", and mislabelling it would be a claim the
+                            tiles themselves contradict. */}
+                        <h2 className="text-lg font-black text-white">
+                            {t(siblings.some((s) => s.fromOtherSet) ? 'desktop.card.moreFromGame' : 'desktop.card.moreFromSet')}
+                        </h2>
                         {setId && card.set && (
                             <Link
                                 href={`${pathPrefix}/sets/${setId}`}

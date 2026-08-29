@@ -734,6 +734,7 @@
             "noListings": "No active listings for this card right now.",
             "addToCart": "Add to cart",
             "moreFromSet": "More from this set",
+            "moreFromGame": "More cards in this game",
             "viewWholeSet": "View the whole set"
         },
         "cart": {

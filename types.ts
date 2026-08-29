@@ -219,4 +219,10 @@ export interface SiblingCard {
   imageSmall: string | null;
   /** THB, or null when the catalog has no market value for the card. */
   marketPrice: number | null;
+  /**
+   * True when the tile was topped up from elsewhere in the same game because
+   * the card's own set was too small to fill the block. Drives the heading, so
+   * a mixed list is not labelled "more from this set".
+   */
+  fromOtherSet?: boolean;
 }

@@ -95,6 +95,76 @@ const SET_INTROS: Record<string, SetIntro> = {
     th: 'Attack of the Vine! คือชุดการ์ด Disney Lorcana ที่นักสะสมในไทยจับตามากที่สุดชุดหนึ่ง โดยมีการ์ดระดับ Iconic อย่าง Belle & Beast - Certain as the Sun และ Lilo & Stitch - Fun-Loving Friends เป็นใบราคาสูงสุด ส่วนการ์ด Enchanted ทั้งชุดก็เป็นของหายากที่คนตามเก็บ เช็คราคาการ์ด Lorcana ล่าสุด แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
     en: 'Attack of the Vine! is one of the most closely watched Disney Lorcana sets among collectors in Thailand. The Iconic Belle & Beast - Certain as the Sun and Lilo & Stitch - Fun-Loving Friends are the top cards, with the set’s Enchanted cards close behind. Check the latest Lorcana prices and buy or sell authentic copies with sellers across Thailand.',
   },
+
+  // Batch 3 (drafted 2026-08-18, re-verified against the live catalog before
+  // shipping 2026-08-28). Picked from active listings and from Search Console,
+  // where /lorcana is the #1 page on the domain on a handful of listings and
+  // /sets/S7D is the only set page in the top-pages report.
+  //
+  // THREE CLAIMS FROM THE DRAFT WERE WRONG BY THE TIME IT SHIPPED and were
+  // rewritten off fresh market_values, not off the draft:
+  //   sv09   — Salamence ex outranks Lillie's Clefairy ex, not the reverse.
+  //   me02.5 — Mega Dragonite ex sits between Pikachu ex and Mega Gengar ex,
+  //            so "the two most valuable" named the wrong pair.
+  //   swsh9  — the runner-up is Umbreon V (#TG22), not Umbreon VMAX (#TG23),
+  //            and the superlative is dropped entirely: a mispriced Empoleon
+  //            (#037, rarity R, ~THB 60k) currently tops the set, so no
+  //            "most valuable" claim about swsh9 can be made honestly today.
+  //
+  // Apostrophes are straight ('), matching the catalog exactly — the copy
+  // promises a collector can find the named card, and a curly quote breaks a
+  // copy-paste search.
+  //
+  // sv10s keeps its Thai name in English copy on purpose: the bare code SV10 is
+  // a Japanese row ("The Glory of Team Rocket") but at printed_total 98 against
+  // SV10s's 138 it is a different product, so it is NOT this set's English name.
+  // sv6-th does get "Transformation Mask" — SV6 is Japanese, same name, and both
+  // are printed_total 101, which is what confirms the 1:1 Thai reprint. Both
+  // re-checked 2026-08-28.
+  //
+  // S7D-th was considered and rejected: all 67 of its rows are still unpriced,
+  // so the standard "เช็คราคาได้ทุกใบ" promise would be false on that page.
+  'lorcana-11': {
+    th: 'Winterspell คือชุดการ์ดดิสนีย์ Disney Lorcana ที่สายสะสมในไทยตามหากันหนักที่สุดชุดหนึ่ง การ์ดระดับ Iconic อย่าง Moana - Curious Explorer และ Pocahontas - Peacekeeper คือสองใบที่ราคาสูงสุดของชุด ส่วนสาย Enchanted ก็มี Elsa - Ice Artisan เป็นเป้าหมายหลัก เช็คราคาการ์ดดิสนีย์ล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย ไม่ต้องรอสั่งข้ามประเทศ',
+    en: 'Winterspell is one of the most hunted Disney Lorcana sets among collectors in Thailand. The Iconic Moana - Curious Explorer and Pocahontas - Peacekeeper are the two most valuable cards in it, with the Enchanted Elsa - Ice Artisan leading the rest. Check the latest Lorcana prices card by card, then buy or sell authentic copies with sellers inside Thailand — no international ordering.',
+  },
+  'lorcana-12': {
+    th: "Wilds Unknown คือชุดการ์ดดิสนีย์ Disney Lorcana ที่มี Buzz Lightyear - Jungle Ranger ระดับ Iconic เป็นใบราคาแรงที่สุดของชุดแบบทิ้งห่าง ตามด้วย Merida - Formidable Archer และการ์ด Enchanted อย่าง You've Got a Friend in Me ที่นักสะสมไล่เก็บกันไม่หยุด อยากรู้ว่าราคาขยับไปถึงไหนแล้ว เช็คราคาการ์ดดิสนีย์แบบอัปเดต แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายทั่วไทยได้ในหน้านี้",
+    en: "Wilds Unknown is a Disney Lorcana set headlined by the Iconic Buzz Lightyear - Jungle Ranger, comfortably the most valuable card in it, followed by Merida - Formidable Archer and the Enchanted You've Got a Friend in Me. See where prices have moved across the whole set, then buy or sell authentic copies from sellers all over Thailand.",
+  },
+  'lorcana-10': {
+    th: 'Whispers in the Well คือชุดการ์ดดิสนีย์ Disney Lorcana ที่ขึ้นชื่อเรื่องการ์ดหายากระดับ Iconic โดยมี Ariel - Ethereal Voice และ Hades - Looking for a Deal เป็นสองใบที่ราคาสูงสุด ส่วนการ์ด Enchanted อย่าง Spooky Sight ก็เป็นใบที่คนตามเก็บกันเยอะ เช็คราคาการ์ดดิสนีย์ทีละใบแบบเรียลไทม์ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'Whispers in the Well is a Disney Lorcana set known for its Iconic rares, with Ariel - Ethereal Voice and Hades - Looking for a Deal the two most valuable cards in it and the Enchanted Spooky Sight close behind. Check live Lorcana prices card by card, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  'sv6-th': {
+    th: 'หน้ากากจอมลวงตา (SV6) คือชุดการ์ดโปเกมอนภาษาไทยที่มีการ์ดเทรนเนอร์อาร์ตพิเศษเป็นจุดขาย โดยเซย์ยุแบบ SAR คือใบราคาสูงสุดของชุด ตามด้วยซุกุริแบบ SAR และลัคกีแบบ AR ที่หาซื้อกันไม่หยุด ใครกำลังไล่เก็บชุดนี้ เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทยได้ในหน้าเดียว',
+    en: 'Transformation Mask (SV6) is a Thai-language Pokemon set built around its special-art trainer cards. The SAR Carmine is the most valuable card in the set, followed by the SAR Kieran and the AR Chansey. Check the latest price for every card in the set, then buy or sell authentic copies with sellers across Thailand.',
+  },
+  sv10s: {
+    th: 'การผงาดของผู้ไร้พ่าย (SV10s) คือชุดการ์ดโปเกมอนภาษาไทยที่รวมการ์ด SAR ของตัวละครดังไว้แน่นทั้งชุด นำโดยมิวทู ex ของแก๊งร็อกเกต ที่เป็นใบแพงที่สุด ตามด้วยกาเบรียส ex ของชิโรนะ และโฮโอ ex ของฮิบิกิ สายสะสมการ์ดตัวละครห้ามพลาดชุดนี้ เช็คราคาตลาดล่าสุดของทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย',
+    en: "การผงาดของผู้ไร้พ่าย (SV10s) is a Thai-language Pokemon set packed with special-art rares of the series best-known characters. Team Rocket's Mewtwo ex is the most valuable card in it, followed by Cynthia's Garchomp ex and Ethan's Ho-Oh ex. Check current market prices across the full set, then buy or sell authentic copies with sellers in Thailand.",
+  },
+  'me02.5': {
+    th: 'Ascended Heroes (me02.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุคเมก้าที่ขนการ์ดหายากมาเต็ม โดยมี Pikachu ex และ Mega Dragonite ex แบบ Special Illustration Rare เป็นสองใบที่ราคาสูงสุด ตามด้วย Mega Gengar ex แบบเดียวกัน ส่วน Mega Charizard Y ex แบบ Mega Hyper Rare คือใบที่สายเมก้าตามล่า สายสะสมการ์ดภาษาอังกฤษเช็คราคาได้ทุกใบ แล้วซื้อ-ขายของแท้จากผู้ขายในไทยได้โดยตรง',
+    en: 'Ascended Heroes (me02.5) is an English-language Mega-era set loaded with chase cards. The Special Illustration Rare Pikachu ex and Mega Dragonite ex are the two most valuable cards in it, with the Special Illustration Rare Mega Gengar ex behind them, while the Mega Hyper Rare Mega Charizard Y ex is the one Mega collectors hunt. Check the price of every card in the set and buy or sell authentic copies directly from sellers inside Thailand.',
+  },
+  'sv04.5': {
+    th: 'Paldean Fates (sv04.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษสายชายนี่ที่นักสะสมทั่วโลกตามเก็บ ใบชูโรงคือ Mew ex แบบ SAR ที่เป็นการ์ดราคาสูงสุดของชุดแบบทิ้งห่าง ตามด้วย Charizard ex และ Gardevoir ex แบบ SAR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทีละใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทย',
+    en: 'Paldean Fates (sv04.5) is the English-language shiny set collectors worldwide keep coming back to. The SAR Mew ex is comfortably the most valuable card in it, followed by the SAR Charizard ex and Gardevoir ex. Check the latest price card by card, then buy or sell authentic copies with sellers across Thailand.',
+  },
+  sv09: {
+    th: "Journey Together (sv09) คือชุดการ์ดโปเกมอนภาษาอังกฤษที่เน้นการ์ด ex ของตัวละคร โดยมี Salamence ex แบบ SAR เป็นใบราคาสูงสุดของชุด ตามติดด้วย Lillie's Clefairy ex แบบ SAR ที่ราคาไล่กันมาแบบหายใจรดต้นคอ ส่วน N's Zoroark ex ก็เป็นอีกใบที่คนไล่เก็บ เช็คราคาตลาดของทุกใบในชุด แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายในไทยได้ในหน้านี้",
+    en: "Journey Together (sv09) is an English-language set centred on character ex cards. The SAR Salamence ex is the most valuable card in it, with the SAR Lillie's Clefairy ex right behind it, and N's Zoroark ex another one collectors chase. Check market prices across the full set, then buy or sell authentic copies from sellers in Thailand.",
+  },
+  swsh9: {
+    th: 'Brilliant Stars (swsh9) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุค Sword & Shield ที่นักสะสมยังตามเก็บถึงวันนี้ ใบที่คนตามหามากที่สุดคือ Charizard V แบบ SR ตามด้วยหมวด Trainer Gallery ที่รวมการ์ดอีวุยทั้งตระกูลไว้ ทั้ง Umbreon V, Flareon และ Jolteon ซึ่งเป็นกลุ่มการ์ดที่ราคาดีที่สุดของชุดรองจาก Charizard เช็คราคาการ์ดโปเกม่อนย้อนยุคได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
+    en: 'Brilliant Stars (swsh9) is a Sword & Shield-era English set collectors still chase today. The SR Charizard V is the card most people come looking for, followed by the Trainer Gallery subset — Umbreon V, Flareon and Jolteon among them — which holds the strongest prices in the set after Charizard. Check prices across the whole set, then buy or sell authentic copies with sellers all over Thailand.',
+  },
+  s7d: {
+    th: 'Skyscraping Perfection (S7D) คือชุดการ์ดโปเกมอนภาษาญี่ปุ่นยุค Sword & Shield ที่สายสะสมการ์ดญี่ปุ่นในไทยยังตามหา ใบราคาสูงสุดของชุดคือ Noivern V (オンバーンV) แบบ Super Rare ตามด้วย Duraludon V และการ์ดเทรนเนอร์ Raihan เช็คราคาการ์ดโปเกม่อนภาษาญี่ปุ่นได้ทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'Skyscraping Perfection (S7D) is a Japanese-language Sword & Shield-era set that Japanese-card collectors in Thailand still hunt. The Super Rare Noivern V (オンバーンV) is the most valuable card in it, followed by Duraludon V and the trainer card Raihan. Check Japanese Pokemon card prices one by one, then buy or sell authentic copies with sellers in Thailand.',
+  },
+
 };
 
 /** Intro copy for a set page, or null when the set has none. */

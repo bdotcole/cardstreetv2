@@ -78,28 +78,88 @@ export const getSetSiblings = cache(
             .limit(SIBLING_CANDIDATES);
 
         const seen = new Set<string>();
-        return (data || [])
+        // Sets carry one row per rarity of the same print, so a naive slice can
+        // render the same card name three times in a row.
+        const dedupe = (card: Card) => {
+            const key = `${card.name}|${card.number ?? ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        };
+        const toTile = (card: Card, fromOtherSet: boolean): SiblingCard => ({
+            id: card.id,
+            name: card.name,
+            number: card.number ?? null,
+            rarity: card.rarity ?? null,
+            // Thumbnails always use image_small; image_large in a grid was
+            // the single biggest cause of slow set loads (see CLAUDE.md).
+            imageSmall: card.images?.small ?? null,
+            marketPrice: card.marketPrice || null,
+            ...(fromOtherSet ? { fromOtherSet: true } : {}),
+        });
+
+        const sameSet = (data || [])
             .map((row) => mapSupabaseCardToInternal(row))
-            .filter((card) => {
-                // Sets carry one row per rarity of the same print, so a naive
-                // slice can render the same card name three times in a row.
-                const key = `${card.name}|${card.number ?? ''}`;
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            })
+            .filter(dedupe)
             .sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0))
             .slice(0, SIBLING_COUNT)
-            .map((card) => ({
-                id: card.id,
-                name: card.name,
-                number: card.number ?? null,
-                rarity: card.rarity ?? null,
-                // Thumbnails always use image_small; image_large in a grid was
-                // the single biggest cause of slow set loads (see CLAUDE.md).
-                imageSmall: card.images?.small ?? null,
-                marketPrice: card.marketPrice || null,
-            }));
+            .map((card) => toTile(card, false));
+
+        if (sameSet.length >= SIBLING_COUNT) return sameSet;
+
+        // 256 sets in the catalog hold six cards or fewer, and a set of one
+        // yields nothing at all — which drops the page back to ~700 characters
+        // of body text and a single outlink, exactly the shape GSC files as a
+        // Soft 404 (1,272 pages and climbing as of 2026-08-28). Top the block up
+        // from the same game so every card page keeps its tiles whatever set it
+        // is in. Only runs on the short path, so the common case pays nothing.
+        const { data: own } = await supabase
+            .from('pokemon_cards')
+            .select('game, language')
+            .eq('id', excludeId)
+            .maybeSingle();
+        const game = (own as { game?: string | null } | null)?.game;
+        if (!game) return sameSet;
+        // Match language too: a Thai card's block filling with Japanese prints
+        // would be lateral links to pages the reader cannot use.
+        const language = (own as { language?: string | null } | null)?.language ?? null;
+
+        // Windowed by id RELATIVE TO THIS CARD rather than from the top of the
+        // game, so two cards in different tiny sets do not receive an identical
+        // block — a fill that was the same everywhere would be templated text,
+        // which is the problem this is meant to solve. Cards within one tiny set
+        // still share a fill, matching the same-set behaviour documented above.
+        // `gt`/`lt` on the primary key stays an index range scan; OFFSET would not.
+        const fillQuery = (dir: 'after' | 'before') => {
+            let qb = supabase
+                .from('pokemon_cards')
+                .select(CATALOG_SELECT)
+                .eq('game', game)
+                .neq('set_id', setId)
+                .not('image_small', 'is', null);
+            if (language) qb = qb.eq('language', language);
+            return dir === 'after'
+                ? qb.gt('id', excludeId).order('id', { ascending: true }).limit(SIBLING_CANDIDATES)
+                : qb.lt('id', excludeId).order('id', { ascending: false }).limit(SIBLING_CANDIDATES);
+        };
+
+        const { data: after } = await fillQuery('after');
+        let candidates = after || [];
+        // Wrap when the card sits near the end of its game's id range, or the
+        // last cards in every game would get a short block for a second reason.
+        if (candidates.length < SIBLING_CANDIDATES) {
+            const { data: before } = await fillQuery('before');
+            candidates = candidates.concat(before || []);
+        }
+
+        const fill = candidates
+            .map((row) => mapSupabaseCardToInternal(row))
+            .filter(dedupe)
+            .sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0))
+            .slice(0, SIBLING_COUNT - sameSet.length)
+            .map((card) => toTile(card, true));
+
+        return sameSet.concat(fill);
     }
 );
 
