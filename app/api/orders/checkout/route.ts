@@ -412,7 +412,47 @@ export async function POST(req: Request) {
             });
         }
 
-        // ─── Collector Pass voucher (before the guard, no side effects yet) ───
+        // ─── Collector Pass SELLER fee voucher (auto-applies, no client input) ───
+        // Reduces the platform fee on the seller's next sale — the buyer's
+        // price never moves, so no display/guard plumbing is involved. Runs
+        // BEFORE the buyer voucher so the buyer discount clamps against the
+        // already-reduced fee (quote does the same, keeping totals exact).
+        // Consumed alongside the buyer voucher after the guard; every failure
+        // path restores both.
+        let sellerVoucher: VoucherItemRow | null = null;
+        let sellerVoucherShares: number[] = [];
+        try {
+            const cartSellerIds = [...new Set(ordersToInsert.map((o) => String(o.seller_id)))];
+            if (cartSellerIds.length === 1 && (await isFeatureEnabled('rewards_vouchers'))) {
+                const { data: sfRows } = await supabase
+                    .from('reward_items')
+                    .select('id, item_key, status, meta, expires_at')
+                    .eq('user_id', cartSellerIds[0])
+                    .eq('item_key', 'seller_fee_30')
+                    .eq('status', 'active')
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+                const sf = ((sfRows ?? [])[0] ?? null) as VoucherItemRow | null;
+                if (sf && (!sf.expires_at || Date.parse(sf.expires_at) > Date.now())) {
+                    const feesNow = ordersToInsert.map((o) => Math.round(Number(o.platform_fee) * 100));
+                    const totalFeeNow = feesNow.reduce((s, f) => s + f, 0);
+                    const reduction = voucherDiscountSatang(Number(sf.meta?.amountSatang ?? 0), totalFeeNow);
+                    if (reduction > 0) {
+                        sellerVoucherShares = distributeVoucherDiscount(feesNow, reduction);
+                        ordersToInsert.forEach((o, i) => {
+                            o.platform_fee = (feesNow[i] - sellerVoucherShares[i]) / 100;
+                        });
+                        sellerVoucher = sf;
+                    }
+                    // reduction 0 (admin seller, zero fee): leave the voucher
+                    // unconsumed for a sale where it's actually worth something.
+                }
+            }
+        } catch {
+            // Fee-voucher lookup is best-effort; a hiccup charges the normal fee.
+        }
+
+        // ─── Collector Pass BUYER voucher (before the guard, no side effects yet) ───
         // The discount comes ENTIRELY out of the platform fee: each order's
         // platform_fee drops by its share and discount_amount records what
         // comes off the buyer's charge, so the seller's proceeds
@@ -504,10 +544,39 @@ export async function POST(req: Request) {
             );
         }
 
-        // ─── Consume the voucher (CAS) BEFORE any reservation. ───
+        // ─── Consume the vouchers (CAS) BEFORE any reservation. ───
         // The CAS makes a double-spend structurally impossible; every failure
-        // path below restores it. A voucher lost to a crash between here and
-        // the restore is admin-recoverable (reward_items keeps the group tag).
+        // path below restores everything consumed here. A voucher lost to a
+        // crash between here and the restore is admin-recoverable
+        // (reward_items keeps the transfer_group tag).
+        const consumedVoucherIds: string[] = [];
+        const restoreVoucher = async () => {
+            for (const itemId of consumedVoucherIds) {
+                try {
+                    await supabase.rpc('restore_reward_item', { p_item: itemId });
+                } catch (restoreErr) {
+                    console.error('[Orders/Checkout] voucher restore failed:', (restoreErr as Error)?.message);
+                }
+            }
+        };
+        if (sellerVoucher) {
+            const { data: consumed, error: consumeErr } = await supabase.rpc('consume_reward_item', {
+                p_item: sellerVoucher.id,
+                p_user: String(ordersToInsert[0].seller_id),
+                p_meta_patch: { transfer_group: transferGroup },
+            });
+            if (consumeErr || consumed !== true) {
+                // Raced away (a parallel checkout on the same seller consumed
+                // it first). Add the exact shares back — precise regardless of
+                // any buyer-voucher mutation that happened after them.
+                ordersToInsert.forEach((o, i) => {
+                    o.platform_fee = (Math.round(Number(o.platform_fee) * 100) + (sellerVoucherShares[i] ?? 0)) / 100;
+                });
+                sellerVoucher = null;
+            } else {
+                consumedVoucherIds.push(sellerVoucher.id);
+            }
+        }
         if (voucherItem) {
             const { data: consumed, error: consumeErr } = await supabase.rpc('consume_reward_item', {
                 p_item: voucherItem.id,
@@ -515,20 +584,14 @@ export async function POST(req: Request) {
                 p_meta_patch: { transfer_group: transferGroup },
             });
             if (consumeErr || consumed !== true) {
+                await restoreVoucher();
                 return NextResponse.json(
                     { error: 'This voucher was already used', code: 'VOUCHER_USED' },
                     { status: 409 },
                 );
             }
+            consumedVoucherIds.push(voucherItem.id);
         }
-        const restoreVoucher = async () => {
-            if (!voucherItem) return;
-            try {
-                await supabase.rpc('restore_reward_item', { p_item: voucherItem.id });
-            } catch (restoreErr) {
-                console.error('[Orders/Checkout] voucher restore failed:', (restoreErr as Error)?.message);
-            }
-        };
 
         // ─── Reserve listings via CAS on status='active' BEFORE creating orders. ───
         // If any listing was already sold by a concurrent checkout, .update returns

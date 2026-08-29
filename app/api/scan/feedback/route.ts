@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { checkRateLimit, requestIp } from '@/lib/rateLimit';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 export const runtime = 'nodejs';
 
@@ -85,6 +88,33 @@ export async function POST(req: Request) {
                 p_phash: event.phash,
             });
             if (learnError) console.warn('[scan/feedback] learn failed (non-fatal):', learnError.message);
+        }
+
+        // Collector Pass: XP for a candidate-VALIDATED confirm only (the bare
+        // confirmed_card_id write above is client-forgeable and never keyed
+        // on). ref = card id, so rescanning the same card earns exactly once,
+        // ever — quest scans can't be farmed into Gemini burn. XP only, and
+        // only when a cookie session rode along (the route stays anonymous).
+        if (
+            outcome === 'confirmed' &&
+            cardId &&
+            Array.isArray(event.candidate_ids) &&
+            event.candidate_ids.includes(cardId)
+        ) {
+            try {
+                const { data: { user } } = await (await createServerClient()).auth.getUser();
+                if (user) {
+                    await awardEvent(admin, {
+                        userId: user.id,
+                        rule: EARN.SCAN_CONFIRM.rule,
+                        ref: cardId,
+                        xp: EARN.SCAN_CONFIRM.xp,
+                        coins: 0,
+                        dailyCap: EARN.SCAN_CONFIRM.dailyCap,
+                    });
+                    await awardFirst(admin, user.id, 'first_scan');
+                }
+            } catch { /* anonymous or auth hiccup — no award */ }
         }
 
         return NextResponse.json({ ok: true });

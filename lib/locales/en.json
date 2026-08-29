@@ -1470,12 +1470,21 @@
             "vault_add": "Add a card to your vault",
             "wishlist_add": "Wishlist a card",
             "chat_stream": "Say hi in a live chat",
-            "listing_publish": "List a card for sale"
+            "listing_publish": "List a card for sale",
+            "scan_confirm": "Scan a new card"
         },
+        "boardTitle": "This week's top collectors",
+        "boardPitch": "Join the weekly leaderboard — your display name and XP earned this week, nothing else.",
+        "boardJoin": "Join the leaderboard",
+        "boardLeave": "Leave",
+        "boardWaiting": "Waiting for more collectors to join",
+        "boardYou": "You",
         "journey": {
             "first_account": "Join CardStreet",
             "first_profile_complete": "Complete your profile",
             "first_push": "Turn on notifications",
+            "first_scan": "Scan and confirm your first card",
+            "first_watch": "Watch 10 minutes of a live show",
             "first_vault": "Add your first card to the vault",
             "first_wishlist": "Add a card to your wishlist",
             "first_chat": "Chat in a live stream",
@@ -1489,6 +1498,8 @@
         },
         "rule": {
             "checkin": "Daily check-in",
+            "scan_confirm": "Card scanned",
+            "watch_10m": "Watched a live show",
             "quest": "Daily challenge",
             "quest_bonus": "All-challenges bonus",
             "vault_add": "Card added to vault",

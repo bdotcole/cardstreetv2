@@ -142,6 +142,40 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
         }
     }, [busyKey, confirmKey, refresh, showFlash, t]);
 
+    // ─── Weekly leaderboard (opt-in, XP only) ───
+    interface BoardRow { rank: number; xp_week: number; level: number; display_name: string | null; username: string | null; user_id: string }
+    interface BoardData { available: boolean; optedIn: boolean; entrants: number; rows: BoardRow[]; myRank: number | null; myXp: number | null }
+    const [board, setBoard] = useState<BoardData | null>(null);
+    const [boardBusy, setBoardBusy] = useState(false);
+    useEffect(() => {
+        if (!open || tab !== 'challenges' || board) return;
+        let cancelled = false;
+        fetch('/api/rewards/leaderboard', { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (!cancelled && d) setBoard(d as BoardData); })
+            .catch(() => { /* board simply doesn't render */ });
+        return () => { cancelled = true; };
+    }, [open, tab, board]);
+
+    const toggleBoard = useCallback(async (optIn: boolean) => {
+        if (boardBusy) return;
+        setBoardBusy(true);
+        try {
+            await fetch('/api/rewards/leaderboard', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ optIn }),
+            });
+            const res = await fetch('/api/rewards/leaderboard', { credentials: 'include' });
+            if (res.ok) setBoard(await res.json());
+        } catch {
+            // fail-soft
+        } finally {
+            setBoardBusy(false);
+        }
+    }, [boardBusy]);
+
     const equip = useCallback(async (payload: { frame?: string | null; chatColor?: string | null }) => {
         if (busyKey) return;
         setBusyKey('equip');
@@ -165,7 +199,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
     // Store derivations (defensive against a summary cached before the store
     // fields existed).
     const owned = summary.owned ?? [];
-    const activeVouchers = owned.filter((o) => o.key.startsWith('voucher'));
+    const activeVouchers = owned.filter((o) => o.key.startsWith('voucher') || o.key === 'seller_fee_30');
     const isIos = typeof window !== 'undefined'
         && (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'ios';
 
@@ -424,6 +458,68 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Weekly leaderboard — opt-in, XP only, badges-for-pride */}
+                                {board?.available && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2 px-1">
+                                            <h4 className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{t('rewards.boardTitle')}</h4>
+                                            {board.optedIn && (
+                                                <button
+                                                    onClick={() => void toggleBoard(false)}
+                                                    disabled={boardBusy}
+                                                    className="text-[9px] font-bold uppercase text-slate-500 hover:text-slate-300"
+                                                >
+                                                    {t('rewards.boardLeave')}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {!board.optedIn ? (
+                                            <div className="glass rounded-2xl border border-white/5 p-4 text-center space-y-2">
+                                                <p className="text-slate-400 text-xs font-semibold">{t('rewards.boardPitch')}</p>
+                                                <button
+                                                    onClick={() => void toggleBoard(true)}
+                                                    disabled={boardBusy}
+                                                    className="h-9 px-4 rounded-xl bg-brand-cyan text-brand-darker text-[10px] font-black uppercase tracking-wide"
+                                                >
+                                                    {boardBusy ? '...' : t('rewards.boardJoin')}
+                                                </button>
+                                            </div>
+                                        ) : board.entrants < 5 ? (
+                                            <div className="glass rounded-2xl border border-white/5 p-4 text-center">
+                                                <p className="text-slate-400 text-xs font-semibold">
+                                                    {t('rewards.boardWaiting')} ({board.entrants}/5)
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="glass rounded-2xl border border-white/5 divide-y divide-white/5">
+                                                {board.rows.slice(0, 10).map((r) => (
+                                                    <div
+                                                        key={r.user_id}
+                                                        className={`px-4 py-2 flex items-center gap-3 ${board.myRank === r.rank ? 'bg-brand-cyan/10' : ''}`}
+                                                    >
+                                                        <span className="w-6 text-center text-[10px] font-black text-slate-500 tabular-nums shrink-0">{r.rank}</span>
+                                                        <span className="flex-1 text-xs font-bold text-white truncate">
+                                                            {r.display_name || r.username || '...'}
+                                                        </span>
+                                                        <span className="text-[10px] font-black text-brand-cyan tabular-nums shrink-0">
+                                                            +{r.xp_week.toLocaleString()} XP
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {board.myRank !== null && board.myRank > 10 && (
+                                                    <div className="px-4 py-2 flex items-center gap-3 bg-brand-cyan/10">
+                                                        <span className="w-6 text-center text-[10px] font-black text-slate-500 tabular-nums shrink-0">{board.myRank}</span>
+                                                        <span className="flex-1 text-xs font-bold text-white truncate">{t('rewards.boardYou')}</span>
+                                                        <span className="text-[10px] font-black text-brand-cyan tabular-nums shrink-0">
+                                                            +{(board.myXp ?? 0).toLocaleString()} XP
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </>
                         )}
 

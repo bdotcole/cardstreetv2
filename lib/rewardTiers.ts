@@ -103,7 +103,7 @@ export const QUEST_BONUS_COINS = 10;
 
 export interface QuestDef {
     /** The ledger rule whose Bangkok-day earn rows measure progress. */
-    rule: 'vault_add' | 'wishlist_add' | 'chat_stream' | 'listing_publish';
+    rule: 'vault_add' | 'wishlist_add' | 'chat_stream' | 'listing_publish' | 'scan_confirm';
     target: number;
 }
 
@@ -111,13 +111,16 @@ export interface QuestDef {
  * Fixed, deterministic quest schedule keyed by Bangkok weekday (0 = Sunday,
  * matching Date#getDay). Identical for every user — deliberately no per-user
  * randomization (Thai gambling-law posture: nothing chance-based, ever).
+ * scan_confirm counts only candidate-validated confirms of cards the user has
+ * never confirmed before (ledger ref = card id), so quest scans can't be
+ * farmed by rescanning one card — the COGS-attack fix from the design review.
  */
 export const QUESTS_BY_WEEKDAY: readonly (readonly QuestDef[])[] = [
     /* Sun */[{ rule: 'vault_add', target: 3 }, { rule: 'wishlist_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
     /* Mon */[{ rule: 'vault_add', target: 2 }, { rule: 'wishlist_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
-    /* Tue */[{ rule: 'vault_add', target: 1 }, { rule: 'wishlist_add', target: 2 }, { rule: 'chat_stream', target: 1 }],
+    /* Tue */[{ rule: 'scan_confirm', target: 1 }, { rule: 'vault_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
     /* Wed */[{ rule: 'vault_add', target: 2 }, { rule: 'wishlist_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
-    /* Thu */[{ rule: 'vault_add', target: 1 }, { rule: 'wishlist_add', target: 2 }, { rule: 'chat_stream', target: 1 }],
+    /* Thu */[{ rule: 'scan_confirm', target: 1 }, { rule: 'wishlist_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
     /* Fri */[{ rule: 'vault_add', target: 2 }, { rule: 'wishlist_add', target: 1 }, { rule: 'chat_stream', target: 1 }],
     /* Sat */[{ rule: 'listing_publish', target: 1 }, { rule: 'vault_add', target: 2 }, { rule: 'chat_stream', target: 1 }],
 ];
@@ -130,6 +133,11 @@ export const QUESTS_BY_WEEKDAY: readonly (readonly QuestDef[])[] = [
 export const EARN = {
     /** First chat message per stream per day-capped stream count. */
     CHAT_STREAM: { rule: 'chat_stream', xp: 5, coins: 0, dailyCap: 3 },
+    /** Candidate-validated scan confirm; ref = card id (once per card, ever). */
+    SCAN_CONFIRM: { rule: 'scan_confirm', xp: 5, coins: 0, dailyCap: 10 },
+    /** 10+ minutes watched in one stream (LiveKit-webhook-verified); ref =
+     *  stream id (once per stream). XP only — never coins. */
+    WATCH_10M: { rule: 'watch_10m', xp: 10, coins: 0, dailyCap: 2 },
     /** Seller's offer got accepted (counterparty action — never on creation). */
     OFFER_ACCEPTED: { rule: 'offer_accepted', xp: 10, coins: 0, dailyCap: 5 },
     /** Referrer credit at attributed signup; coins release at conversion. */
@@ -189,8 +197,10 @@ export const FIRST_AWARDS: readonly FirstAwardDef[] = [
     { key: 'first_account', xp: 25, coins: 20, journey: true },
     { key: 'first_profile_complete', xp: 25, coins: 20, journey: true },
     { key: 'first_push', xp: 25, coins: 20, journey: true },
+    { key: 'first_scan', xp: 30, coins: 20, journey: true },
     { key: 'first_vault', xp: 20, coins: 10, journey: true },
     { key: 'first_wishlist', xp: 10, coins: 10, journey: true },
+    { key: 'first_watch', xp: 20, coins: 10, journey: true },
     { key: 'first_chat', xp: 10, coins: 10, journey: true },
     { key: 'first_purchase', xp: 100, coins: 100, journey: true },
     { key: 'first_review', xp: 20, coins: 20, journey: true },
@@ -212,7 +222,9 @@ export const FIRST_AWARD_BY_KEY: Record<string, FirstAwardDef> =
 // ---------------------------------------------------------------------------
 
 export interface CatalogVoucherDef {
-    type: 'order' | 'shipping';
+    /** 'order'/'shipping' discount the BUYER picks at checkout;
+     *  'seller_fee' auto-applies to the SELLER's next sale's platform fee. */
+    type: 'order' | 'shipping' | 'seller_fee';
     amountSatang: number;
     minOrderSatang: number;
     /** Days from redemption until the voucher expires unused. */
@@ -247,8 +259,10 @@ export const CATALOG: readonly CatalogItemDef[] = [
     { key: 'voucher_10', coins: 1000, kind: 'voucher', redeemable: true, realCostSatang: 1000, voucher: { type: 'order', amountSatang: 1000, minOrderSatang: 30000, validDays: 60 } },
     { key: 'voucher_20', coins: 2000, kind: 'voucher', redeemable: true, realCostSatang: 2000, voucher: { type: 'order', amountSatang: 2000, minOrderSatang: 50000, validDays: 60 } },
     { key: 'voucher_ship_40', coins: 4000, kind: 'voucher', redeemable: true, realCostSatang: 4000, voucher: { type: 'shipping', amountSatang: 4000, minOrderSatang: 50000, validDays: 60 } },
-    // Deferred: needs the consume-at-creation / restore-on-abandon rail for sellers.
-    { key: 'seller_fee_30', coins: 3000, kind: 'voucher', redeemable: false },
+    // Auto-applies to the seller's next sale's platform fee (never the buyer's
+    // price), consumed at order creation and restored by the same
+    // transfer_group sweep buyer vouchers use.
+    { key: 'seller_fee_30', coins: 3000, kind: 'voucher', redeemable: true, minLevel: 7, realCostSatang: 3000, voucher: { type: 'seller_fee', amountSatang: 3000, minOrderSatang: 0, validDays: 90 } },
 ];
 
 export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =

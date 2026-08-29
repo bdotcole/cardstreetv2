@@ -95,6 +95,11 @@ export interface ScanResult {
 export interface ScanPayload {
   image?: string;
   text?: string;
+  // Authenticated scanner, when known. Set ONLY by /api/scan from the cookie
+  // session (any client-sent value is overwritten there) — scanning stays
+  // fully usable anonymously; this merely attributes scan_events rows so the
+  // Collector Pass can award confirmed scans per user.
+  userId?: string | null;
   languageHint?: 'en' | 'jp' | 'th' | 'other';
   // Optional game hint from the UI. The scan entry is game-agnostic today (the user
   // scans any card), so this is usually absent and the game is auto-detected. When a
@@ -162,6 +167,7 @@ export const scannerService = {
         result,
         error: error ?? null,
         latencyMs: Date.now() - startedAt,
+        userId: payload.userId ?? null,
       });
       if (result) return { ...result, scanId };
       if (mode === 'live') {
@@ -245,11 +251,12 @@ export const scannerService = {
     result: ScanResult | null;
     error: string | null;
     latencyMs: number;
+    userId?: string | null;
   }): Promise<void> {
     try {
       const supabase = getSupabase();
       const matches = entry.result?.matches ?? [];
-      const { error } = await supabase.from('scan_events').insert({
+      const row: Record<string, unknown> = {
         id: entry.scanId,
         mode: entry.mode,
         source: entry.result?.source ?? null,
@@ -260,7 +267,16 @@ export const scannerService = {
         match_distance: entry.result?.matchDistance ?? null,
         latency_ms: entry.latencyMs,
         error: entry.error ? entry.error.slice(0, 500) : null,
-      });
+      };
+      if (entry.userId) row.user_id = entry.userId;
+      let { error } = await supabase.from('scan_events').insert(row);
+      // scan_events.user_id arrives with 20260828_collector_pass_foundation —
+      // an unknown column fails the WHOLE insert, and telemetry must never be
+      // lost to a pending migration. Retry the legacy shape.
+      if (error && 'user_id' in row && (error.code === 'PGRST204' || error.code === '42703')) {
+        delete row.user_id;
+        ({ error } = await supabase.from('scan_events').insert(row));
+      }
       if (error) console.warn('[ScannerService] scan_events insert failed (non-fatal):', error.message);
     } catch (e) {
       console.warn('[ScannerService] scan_events insert failed (non-fatal):', e);

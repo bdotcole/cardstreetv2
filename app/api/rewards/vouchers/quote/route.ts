@@ -77,6 +77,30 @@ export async function POST(req: Request) {
             totalFeeSatang += Math.round(priceSatang * (feeMap.get(r.seller_id) ?? NON_PARTNER_FEE_FRACTION));
         }
 
+        // A pending SELLER fee voucher auto-applies at checkout before the
+        // buyer voucher clamps — mirror that here so the quoted buyer discount
+        // is exactly what checkout computes (otherwise the no-overcharge guard
+        // would 409 on partner-ish fee headroom).
+        if (sellerIds.length === 1) {
+            try {
+                const { data: sfRows } = await admin
+                    .from('reward_items')
+                    .select('meta, expires_at')
+                    .eq('user_id', sellerIds[0])
+                    .eq('item_key', 'seller_fee_30')
+                    .eq('status', 'active')
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+                const sf = (sfRows ?? [])[0] as { meta: { amountSatang?: number } | null; expires_at: string | null } | undefined;
+                if (sf && (!sf.expires_at || Date.parse(sf.expires_at) > Date.now())) {
+                    totalFeeSatang = Math.max(
+                        0,
+                        totalFeeSatang - voucherDiscountSatang(Number(sf.meta?.amountSatang ?? 0), totalFeeSatang),
+                    );
+                }
+            } catch { /* quote against the full fee — worst case a rare 409 retry */ }
+        }
+
         const vouchers = (await listActiveVouchers(admin, user.id)).map((v) => {
             const face = Number(v.meta?.amountSatang ?? 0);
             const minOrder = Number(v.meta?.minOrderSatang ?? 0);

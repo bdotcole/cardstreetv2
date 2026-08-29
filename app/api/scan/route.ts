@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scannerService } from '@/services/scannerService';
 import { checkRateLimit, requestIp } from '@/lib/rateLimit';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 // nodejs runtime is required: the pHash step uses `sharp` for image decoding,
 // which is a native module unavailable in Edge.
@@ -41,6 +42,16 @@ export async function POST(req: Request) {
         if (!payload.image && !payload.text) {
             return NextResponse.json({ error: 'No image or native text payload provided' }, { status: 400 });
         }
+
+        // OPTIONAL attribution for Collector Pass scan awards: resolve the
+        // cookie session if one rode along; anonymous scans keep working
+        // exactly as before. The client can never claim an identity — any
+        // body-supplied userId is overwritten here.
+        payload.userId = null;
+        try {
+            const { data: { user } } = await (await createServerClient()).auth.getUser();
+            payload.userId = user?.id ?? null;
+        } catch { /* anonymous scan */ }
 
         const result = await scannerService.scanCard(payload);
         return NextResponse.json(result);
