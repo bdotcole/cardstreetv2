@@ -78,6 +78,21 @@ export async function POST(req: Request) {
             const note = typeof body?.note === 'string' ? body.note.slice(0, 500) : '';
             if (!orderId) return NextResponse.json({ error: 'orderId required' }, { status: 400 });
 
+            // Idempotency: the reversal must run at most once per order — a
+            // double-submit would debit the users twice. The order_refunds row
+            // is the claim; refuse when it already exists.
+            const { data: priorRefund } = await admin
+                .from('order_refunds')
+                .select('order_id')
+                .eq('order_id', orderId)
+                .maybeSingle();
+            if (priorRefund) {
+                return NextResponse.json(
+                    { error: 'This order was already clawed back', code: 'ALREADY_CLAWED_BACK' },
+                    { status: 409 },
+                );
+            }
+
             const { data: rows, error } = await admin
                 .from('reward_ledger')
                 .select('user_id, rule_key, xp, coins')
