@@ -13,6 +13,8 @@ interface PersonInfo {
     banned_at: string | null
     banned_reason: string | null
     active_listings: number
+    stripe_account_id: string | null
+    stripe_account_status: string | null
 }
 
 // GET /api/admin/reports — all reports, enriched with reporter, the reported
@@ -109,6 +111,8 @@ export async function GET() {
             banned_at: (p.banned_at as string) ?? null,
             banned_reason: (p.banned_reason as string) ?? null,
             active_listings: activeCount.get(id) ?? 0,
+            stripe_account_id: (p.stripe_account_id as string) ?? null,
+            stripe_account_status: (p.stripe_account_status as string) ?? null,
         }
     }
 

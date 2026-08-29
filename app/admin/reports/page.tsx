@@ -12,6 +12,8 @@ interface PersonInfo {
     banned_at: string | null
     banned_reason: string | null
     active_listings: number
+    stripe_account_id: string | null
+    stripe_account_status: string | null
 }
 
 interface ReportListing {
@@ -60,12 +62,14 @@ const LISTING_STATUS_COLORS: Record<string, string> = {
     removed: 'bg-brand-red/20 text-brand-red border-brand-red/30',
 }
 
-function SellerBox({ seller, onBan, onUnban, banBusy }: {
+function SellerBox({ seller, onBan, onUnban, onRejectStripe, banBusy }: {
     seller: PersonInfo
     onBan: () => void
     onUnban: () => void
+    onRejectStripe: () => void
     banBusy: boolean
 }) {
+    const stripeRejected = seller.stripe_account_status === 'rejected'
     return (
         <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -91,13 +95,26 @@ function SellerBox({ seller, onBan, onUnban, banBusy }: {
                     All their listings
                 </a>
                 {seller.banned_at ? (
-                    <button
-                        onClick={onUnban}
-                        disabled={banBusy}
-                        className="px-2.5 py-1 text-[10px] font-bold text-slate-300 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition disabled:opacity-40"
-                    >
-                        Unban
-                    </button>
+                    <>
+                        <button
+                            onClick={onUnban}
+                            disabled={banBusy}
+                            className="px-2.5 py-1 text-[10px] font-bold text-slate-300 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition disabled:opacity-40"
+                        >
+                            Unban
+                        </button>
+                        {seller.stripe_account_id && (
+                            <button
+                                onClick={onRejectStripe}
+                                disabled={banBusy || stripeRejected}
+                                title={stripeRejected ? 'Stripe account already rejected' : 'Permanently disable charges and payouts on their Stripe account'}
+                                className="px-2.5 py-1 text-[10px] font-black uppercase text-brand-red bg-brand-red/10 border border-brand-red/20 rounded-lg hover:bg-brand-red/20 transition disabled:opacity-40"
+                            >
+                                <i className="fa-brands fa-stripe-s mr-1" />
+                                {stripeRejected ? 'Stripe rejected' : 'Reject Stripe'}
+                            </button>
+                        )}
+                    </>
                 ) : (
                     <button
                         onClick={onBan}
@@ -189,6 +206,27 @@ export default function AdminReportsPage() {
                 const data = await res.json().catch(() => ({}))
                 window.alert(data?.error ?? 'Failed to unban')
             }
+            await fetchReports()
+        } finally {
+            setBusyId(null)
+        }
+    }
+
+    const rejectStripe = async (report: ReportRow, seller: PersonInfo) => {
+        const name = seller.display_name ?? seller.email ?? seller.id
+        const confirmed = window.confirm(
+            `Permanently reject ${name}'s Stripe account (${seller.stripe_account_id})?\n\n` +
+            `This disables charges and payouts on it for good. Stripe does NOT allow un-rejecting an account — ` +
+            `there is no way to undo this, including via Stripe support.`
+        )
+        if (!confirmed) return
+        setBusyId(report.id)
+        try {
+            const res = await fetch(`/api/admin/users/${seller.id}/stripe-reject`, { method: 'POST' })
+            const data = await res.json().catch(() => ({}))
+            window.alert(res.ok
+                ? `Stripe account ${data.accountId ?? ''} rejected — charges and payouts are permanently disabled.`
+                : `Could not reject: ${data?.error ?? res.status}`)
             await fetchReports()
         } finally {
             setBusyId(null)
@@ -361,6 +399,7 @@ export default function AdminReportsPage() {
                                             banBusy={busy}
                                             onBan={() => openBanModal(report, seller)}
                                             onUnban={() => unbanSeller(report, seller)}
+                                            onRejectStripe={() => rejectStripe(report, seller)}
                                         />
                                     )}
                                 </div>

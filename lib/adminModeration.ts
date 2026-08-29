@@ -140,27 +140,61 @@ export async function banUserAsAdmin(
 
     // 4. Optional, irreversible: kill their payment rails.
     if (opts.rejectStripe) {
-        if (!profile.stripe_account_id) {
-            result.stripeRejected = 'No Stripe account on file';
-        } else {
-            const region = (profile.stripe_region as StripeRegion) || 'th';
-            if (!isRegionConfigured(region)) {
-                result.stripeRejected = `Stripe region '${region}' is not configured`;
-            } else {
-                try {
-                    await getStripeForRegion(region).accounts.reject(profile.stripe_account_id, { reason: 'fraud' });
-                    result.stripeRejected = true;
-                } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err);
-                    // An already-rejected account is the state we wanted.
-                    result.stripeRejected = /rejected/i.test(message) ? true : message;
-                }
-            }
-        }
+        result.stripeRejected = await rejectConnectedAccount(profile);
     }
 
     result.ok = true;
     return result;
+}
+
+/**
+ * Reject the seller's Stripe connected account (reason 'fraud'), permanently
+ * disabling charges and payouts on it. Stripe cannot un-reject an account.
+ *
+ * @returns true on success, or a human-readable reason it didn't happen.
+ */
+async function rejectConnectedAccount(
+    profile: { stripe_account_id?: string | null; stripe_region?: string | null },
+): Promise<true | string> {
+    if (!profile.stripe_account_id) return 'No Stripe account on file';
+
+    const region = (profile.stripe_region as StripeRegion) || 'th';
+    if (!isRegionConfigured(region)) return `Stripe region '${region}' is not configured`;
+
+    try {
+        await getStripeForRegion(region).accounts.reject(profile.stripe_account_id, { reason: 'fraud' });
+        return true;
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // An already-rejected account is the state we wanted.
+        return /rejected/i.test(message) ? true : message;
+    }
+}
+
+/**
+ * Reject a seller's Stripe account on its own, without re-running a ban.
+ * Needed because the ban dialog (which carries the opt-in checkbox) is only
+ * reachable for a not-yet-banned account — this covers deciding to kill the
+ * payment rails after the ban has already landed.
+ */
+export async function rejectStripeAsAdmin(
+    userId: string,
+): Promise<{ ok: boolean; error?: string; accountId?: string }> {
+    const supabase = createAdminClient();
+
+    const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id, role, stripe_account_id, stripe_region')
+        .eq('id', userId)
+        .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!profile) return { ok: false, error: 'Profile not found' };
+    if (profile.role === 'admin') return { ok: false, error: 'Refusing to reject an admin account' };
+
+    const outcome = await rejectConnectedAccount(profile);
+    if (outcome !== true) return { ok: false, error: outcome };
+
+    return { ok: true, accountId: profile.stripe_account_id ?? undefined };
 }
 
 export async function unbanUserAsAdmin(userId: string): Promise<{ ok: boolean; error?: string }> {
