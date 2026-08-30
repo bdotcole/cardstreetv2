@@ -73,6 +73,10 @@
         {
             "path": "/api/cron/rewards-expiry",
             "schedule": "30 3 1 * *"
+        },
+        {
+            "path": "/api/cron/indexnow-content",
+            "schedule": "0 5 * * 1"
         }
     ]
 }
