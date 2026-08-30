@@ -572,6 +572,218 @@ export const GUIDES: Guide[] = [
             ],
         },
     },
+    {
+        slug: 'mtg-same-card-many-printings',
+        game: 'mtg',
+        updated: '2026-08-30',
+        title: {
+            th: "การ์ดเมจิกใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | CardStreet",
+            en: "One Magic Card, Many Printings: Why the Prices Differ | CardStreet",
+        },
+        description: {
+            th: "การ์ด Magic: The Gathering ใบเดียวกันถูกพิมพ์ซ้ำข้ามหลายชุดหลายปี แต่ละเวอร์ชันราคาไม่เท่ากัน อธิบายวิธีดูว่าใบที่ถืออยู่คือเวอร์ชันไหน และเทียบราคาให้ตรง",
+            en: "The same Magic: The Gathering card is reprinted across many sets and years, and the versions are not worth the same. How to tell which printing you hold, and compare the right price.",
+        },
+        h1: {
+            th: "การ์ดเมจิกใบเดียวกัน ทำไมราคาต่างกัน",
+            en: "One Magic Card, Many Printings",
+        },
+        body: {
+            th: [
+                "เรื่องที่ทำให้คนเพิ่งเริ่มเล่นเมจิกงงมากที่สุดคือ การ์ดชื่อเดียวกันที่หาเจอในเน็ตมีราคาตั้งแต่หลักสิบไปจนถึงหลักพัน ทั้งที่ดูเป็นการ์ดใบเดียวกัน คำตอบคือมันไม่ใช่ใบเดียวกัน",
+                "Magic: The Gathering พิมพ์การ์ดใบเดิมซ้ำข้ามชุดมาตลอดหลายสิบปี การ์ดยอดนิยมอย่าง Sol Ring มีอยู่ในแคตตาล็อกของเราเกือบสี่สิบเวอร์ชัน กระจายอยู่ในชุดกว่ายี่สิบชุด และ Swords to Plowshares ก็มีเกือบยี่สิบเวอร์ชันเช่นกัน แต่ละเวอร์ชันคือคนละสินค้าในตลาด",
+                "สิ่งที่ทำให้ราคาต่างกันมีสามอย่างหลัก อย่างแรกคือชุดที่มา ชุดเก่าหรือชุดที่พิมพ์น้อยย่อมแพงกว่าชุดที่เพิ่งออก อย่างที่สองคือแบบฟอยล์หรือไม่ฟอยล์ ซึ่งเป็นคนละราคากันเสมอ และอย่างที่สามคือกรอบและอาร์ตพิเศษ เช่น เวอร์ชันอาร์ตขยายเต็มขอบหรือเวอร์ชันภาพพิเศษ ซึ่งมักแพงกว่าเวอร์ชันปกติของชุดเดียวกัน",
+                "วิธีดูว่าถือเวอร์ชันไหนอยู่ ให้ดูสัญลักษณ์ชุดที่กลางการ์ดด้านขวา ซึ่งบอกว่ามาจากชุดไหน และดูเลขการ์ดกับรหัสชุดที่แถบล่างสุดของการ์ด การ์ดสมัยใหม่พิมพ์ข้อมูลนี้ไว้ครบ",
+                "ข้อผิดพลาดที่แพงที่สุดคือเอาราคาของเวอร์ชันหนึ่งไปตั้งขายหรือไปต่อรองซื้ออีกเวอร์ชันหนึ่ง ทั้งที่ราคาห่างกันหลายเท่า",
+                "บน CardStreet การ์ดแต่ละเวอร์ชันมีหน้าของตัวเอง พร้อมราคาตลาดเป็นเงินบาท เลือกให้ตรงชุดและตรงแบบฟอยล์ แล้วราคาที่เห็นจะเป็นราคาของใบที่ถืออยู่จริง ไม่ใช่ค่าเฉลี่ยของทุกเวอร์ชันรวมกัน",
+            ],
+            en: [
+                "The thing that confuses new Magic players most is finding the same card name priced anywhere from pocket change to serious money. The answer is that they are not the same card.",
+                "Magic: The Gathering has reprinted its cards across sets for decades. A staple like Sol Ring exists in our catalog in nearly forty versions spread across more than twenty sets, and Swords to Plowshares in nearly twenty. Each printing is a separate product to the market.",
+                "Three things drive the difference. First, the set it came from — older or smaller print runs cost more than a recent release. Second, foil versus non-foil, which are always priced separately. Third, frame and special art treatments such as extended-art or showcase versions, which usually sell above the normal version from the same set.",
+                "To identify which printing you hold, look at the set symbol on the right-hand side of the card, which tells you the set, and read the collector number and set code in the bottom strip. Modern cards print all of it.",
+                "The expensive mistake is quoting one printing's price while buying or selling another, when they can be many times apart.",
+                "On CardStreet each printing has its own page with a market price in Thai baht. Match the set and the foil treatment, and the price you see belongs to the card you actually hold, not a blended average across every version.",
+            ],
+        },
+    },
+    {
+        slug: 'mtg-rarity-guide',
+        game: 'mtg',
+        updated: '2026-08-30',
+        title: {
+            th: "ระดับความหายากการ์ดเมจิก Common Uncommon Rare Mythic | CardStreet",
+            en: "Magic: The Gathering Rarities Explained: Common to Mythic | CardStreet",
+        },
+        description: {
+            th: "อธิบายระดับความหายากของการ์ด Magic: The Gathering ทั้งสี่ระดับ พร้อมเรื่องฟอยล์และอาร์ตพิเศษ ที่มีผลกับราคามากกว่าระดับความหายากในหลายกรณี",
+            en: "The four Magic: The Gathering rarity tiers explained, plus foil and special art treatments, which often matter more to price than rarity does.",
+        },
+        h1: {
+            th: "ระดับความหายากการ์ดเมจิก",
+            en: "Magic: The Gathering Rarities Explained",
+        },
+        body: {
+            th: [
+                "Magic: The Gathering ใช้ระดับความหายากเพียงสี่ระดับ ซึ่งน้อยกว่าเกมการ์ดอื่นมาก ดูได้จากสีของสัญลักษณ์ชุดที่กลางการ์ดด้านขวา",
+                "Common คือระดับพื้นฐาน สัญลักษณ์สีดำ Uncommon สัญลักษณ์สีเงิน Rare สัญลักษณ์สีทอง และ Mythic ซึ่งเป็นระดับสูงสุด สัญลักษณ์สีส้มแดง",
+                "แต่จุดสำคัญของเมจิกคือ ระดับความหายากบอกราคาได้น้อยกว่าที่คนคิด การ์ด Common บางใบที่จำเป็นในรูปแบบการเล่นยอดนิยมมีราคาสูงกว่าการ์ด Mythic ที่ไม่มีใครใช้หลายเท่า ราคาของเมจิกขับเคลื่อนด้วยความต้องการในการเล่นและจำนวนที่พิมพ์ออกมา มากกว่าตัวสัญลักษณ์บนการ์ด",
+                "สิ่งที่มีผลกับราคาไม่แพ้กันคือแบบพิมพ์ การ์ดใบเดียวกันมักมีทั้งแบบธรรมดาและแบบฟอยล์ และในชุดสมัยใหม่ยังมีเวอร์ชันอาร์ตขยายหรืออาร์ตพิเศษเพิ่มเข้ามาอีก แต่ละแบบมีราคาของตัวเอง",
+                "เพราะแบบนี้ วิธีที่ใช้ได้จริงคือดูระดับความหายากเพื่อจัดกลุ่มคร่าว ๆ แล้วเปิดหน้าการ์ดของเวอร์ชันที่ถืออยู่เพื่อดูราคาจริง เพราะสองใบที่ระดับเดียวกันในชุดเดียวกันก็ราคาต่างกันได้มาก",
+                "CardStreet มีชุดการ์ดเมจิกเจ็ดสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูทีละใบ หรือค้นหาชื่อการ์ดเป็นภาษาอังกฤษเพื่อไปที่ใบนั้นโดยตรง",
+            ],
+            en: [
+                "Magic: The Gathering uses only four rarity tiers, far fewer than most card games. You read it from the colour of the set symbol on the right-hand side of the card.",
+                "Common is the base tier, with a black symbol. Uncommon is silver, Rare is gold, and Mythic — the top tier — is orange-red.",
+                "The important part is that rarity predicts price less well in Magic than people expect. A Common that is essential to a popular format can be worth many times a Mythic nobody plays. Magic prices are driven by play demand and print run rather than the symbol on the card.",
+                "Treatment matters just as much. The same card usually exists in normal and foil, and modern sets add extended-art and showcase versions on top. Each has its own price.",
+                "So use rarity to place a card roughly, then open the page for the exact version you hold. Two cards at the same rarity in the same set can still be far apart.",
+                "CardStreet carries over seventy Magic sets. Browse a set page card by card, or search the card name in English to go straight to it.",
+            ],
+        },
+    },
+    {
+        slug: 'buy-mtg-cards-thailand',
+        game: 'mtg',
+        updated: '2026-08-30',
+        title: {
+            th: "ซื้อการ์ดเมจิก Magic: The Gathering ในไทยที่ไหนดี | CardStreet",
+            en: "Where to Buy Magic: The Gathering Cards in Thailand | CardStreet",
+        },
+        description: {
+            th: "เทียบช่องทางซื้อการ์ดเมจิกในไทย ทั้งร้านหน้าร้าน กลุ่มซื้อขาย และการสั่งจากต่างประเทศ พร้อมข้อดีข้อเสียเรื่องราคา เวลารอ และความเสี่ยง",
+            en: "Card shops, buy-sell groups and overseas ordering compared for buying Magic: The Gathering in Thailand, on price, waiting time and risk.",
+        },
+        h1: {
+            th: "ซื้อการ์ดเมจิกในไทยที่ไหนดี",
+            en: "Where to Buy Magic Cards in Thailand",
+        },
+        body: {
+            th: [
+                "การ์ดเมจิกไม่มีฉบับภาษาไทย ของที่หมุนเวียนในประเทศเป็นฉบับภาษาอังกฤษที่นำเข้ามา คนเล่นในไทยจึงมีสามทางเลือกหลัก และแต่ละทางเหมาะกับสถานการณ์ต่างกัน",
+                "ร้านการ์ดในประเทศ ได้ของทันทีและได้เห็นสภาพก่อนจ่าย เหมาะกับคนที่ต้องการการ์ดไปลงเด็คให้ทันสุดสัปดาห์นี้ ข้อจำกัดคือใบเดี่ยวที่หายากหรือเวอร์ชันเฉพาะมักไม่มีในสต็อก",
+                "สั่งจากเว็บต่างประเทศ ตัวเลือกเยอะที่สุดและบางใบราคาถูกกว่า แต่ต้องบวกค่าส่งระหว่างประเทศ รอหลายสัปดาห์ และมีความเสี่ยงเรื่องภาษีนำเข้ากับการ์ดเสียหายระหว่างทาง สำหรับการ์ดใบละไม่กี่ร้อยบาท ค่าส่งมักกินส่วนต่างจนไม่คุ้ม",
+                "ซื้อจากผู้เล่นในไทยด้วยกัน ได้ของเร็ว ไม่มีค่าส่งข้ามประเทศ และมักต่อรองได้ ข้อควรระวังคือต้องรู้ราคากลางก่อน ไม่งั้นไม่มีทางรู้ว่าที่เสนอมาถูกหรือแพง และถ้าไม่มีตัวกลางก็ต้องรับความเสี่ยงเอง",
+                "CardStreet อยู่ในกลุ่มสุดท้ายแต่แก้สองข้อเสียนั้น ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้ง จึงเทียบได้ทันที ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ จ่ายผ่านบัตรหรือพร้อมเพย์ และส่งภายในประเทศ ไม่ต้องรอของข้ามทวีป",
+                "คำแนะนำสั้น ๆ ถ้าต้องใช้การ์ดสัปดาห์นี้ให้หาในประเทศ ถ้าเก็บของแพงหรือเวอร์ชันเฉพาะ ให้เทียบราคากลางก่อนเสมอไม่ว่าจะซื้อจากทางไหน",
+            ],
+            en: [
+                "Magic has no Thai-language edition, so what circulates here is the imported English printing. Players in Thailand have three main routes, each suited to a different situation.",
+                "Local card shops give you the card today and let you see its condition before paying. Good when you need something for a deck this weekend. The limit is that scarce singles and specific printings are usually not in stock.",
+                "Ordering from overseas sites offers the widest selection and sometimes lower prices, but adds international shipping, weeks of waiting, and the risk of import duty or damage in transit. For cards worth a few hundred baht, postage usually eats the saving.",
+                "Buying from other players in Thailand is fast, has no international shipping, and often leaves room to negotiate. The catch is that you need a reference price, or there is no way to judge an offer — and without an intermediary the risk is yours.",
+                "CardStreet sits in that last group but fixes both drawbacks. Every card page shows the market price next to the seller's asking price, so you can judge a deal immediately. Sellers are identity-verified, every order carries buyer protection, payment is by card or PromptPay, and shipping is domestic — no waiting on a parcel from another continent.",
+                "Short version: if you need the card this week, buy locally. If you are buying something expensive or a specific printing, check the reference price first, whichever route you use.",
+            ],
+        },
+    },
+    {
+        slug: 'yugioh-same-card-many-printings',
+        game: 'yugioh',
+        updated: '2026-08-30',
+        title: {
+            th: "การ์ดยูกิโอใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | CardStreet",
+            en: "One Yu-Gi-Oh Card, Many Printings: Why the Prices Differ | CardStreet",
+        },
+        description: {
+            th: "การ์ดยูกิโอใบเดียวกันถูกพิมพ์ซ้ำข้ามหลายชุดในระดับความหายากที่ต่างกัน ราคาจึงห่างกันมาก อธิบายวิธีดูรหัสการ์ดเพื่อรู้ว่าถือเวอร์ชันไหนอยู่",
+            en: "The same Yu-Gi-Oh card is reprinted across many sets at different rarities, so prices vary enormously. How to read the card code to know which version you hold.",
+        },
+        h1: {
+            th: "การ์ดยูกิโอใบเดียวกัน ทำไมราคาต่างกัน",
+            en: "One Yu-Gi-Oh Card, Many Printings",
+        },
+        body: {
+            th: [
+                "ยูกิโอเป็นเกมที่พิมพ์การ์ดใบเดิมซ้ำมากที่สุดเกมหนึ่ง และนี่คือสาเหตุที่ราคาการ์ดชื่อเดียวกันในเน็ตต่างกันได้เป็นร้อยเท่า",
+                "ตัวอย่างจากแคตตาล็อกของเรา บลูอายส์ไวท์ดราก้อน มีอยู่เกือบหกสิบเวอร์ชัน กระจายอยู่ในชุดกว่าห้าสิบชุด ส่วนแบล็คเมจิเชียนมีราวห้าสิบเวอร์ชันในชุดกว่าสี่สิบชุด ทุกเวอร์ชันคือคนละใบในสายตาตลาด",
+                "สิ่งที่ทำให้ยูกิโอต่างจากเกมอื่นคือ การ์ดใบเดิมมักถูกพิมพ์ซ้ำในระดับความหายากที่ไม่เท่ากัน ใบเดียวกันอาจออกเป็น Common ในชุดหนึ่ง และเป็น Secret Rare ในอีกชุดหนึ่ง ราคาจึงห่างกันมหาศาลทั้งที่ข้อความบนการ์ดเหมือนกันทุกตัวอักษร",
+                "วิธีรู้ว่าถือเวอร์ชันไหน ให้ดูรหัสที่มุมล่างของการ์ด เป็นรูปแบบตัวอักษรของชุดตามด้วยเลขการ์ด รหัสนี้ระบุชุดที่การ์ดมาจากอย่างเจาะจง และเป็นข้อมูลที่ต้องใช้เวลาเทียบราคา",
+                "อีกจุดที่ต้องดูคือระดับความหายากที่พิมพ์ไว้และลักษณะของตัวหนังสือชื่อการ์ด เพราะระดับที่ต่างกันใช้สีและการสะท้อนแสงของชื่อการ์ดต่างกัน",
+                "บน CardStreet แต่ละเวอร์ชันมีหน้าของตัวเองพร้อมราคาตลาดเป็นเงินบาท แคตตาล็อกมีชุดยูกิโอรวมกันแปดร้อยกว่าชุด ทั้งฉบับภาษาอังกฤษและภาษาญี่ปุ่น เลือกให้ตรงรหัสชุดแล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
+            ],
+            en: [
+                "Yu-Gi-Oh reprints its cards more heavily than almost any other game, which is why the same card name can appear online at prices a hundred times apart.",
+                "From our own catalog: Blue-Eyes White Dragon exists in nearly sixty versions across more than fifty sets, and Dark Magician in around fifty versions across more than forty. Every printing is a different card to the market.",
+                "What makes Yu-Gi-Oh unusual is that the same card is reprinted at different rarities. One card can be a Common in one set and a Secret Rare in another, so the prices diverge enormously even though the text on the card is identical.",
+                "To identify your version, read the code in the bottom corner: the set's letter code followed by the card number. That code pins down exactly which set the card came from, and it is what you need in order to compare a price.",
+                "Also check the printed rarity and the treatment of the card name, since different rarities use different colouring and reflectivity on the name text.",
+                "On CardStreet each printing has its own page with a market price in Thai baht. The catalog carries over eight hundred Yu-Gi-Oh sets across the English and Japanese releases. Match the set code and the price you see belongs to the card in your hand.",
+            ],
+        },
+    },
+    {
+        slug: 'yugioh-rarity-guide',
+        game: 'yugioh',
+        updated: '2026-08-30',
+        title: {
+            th: "ระดับความหายากการ์ดยูกิโอ Super Ultra Secret ต่างกันยังไง | CardStreet",
+            en: "Yu-Gi-Oh Rarities Explained: Super, Ultra, Secret and Beyond | CardStreet",
+        },
+        description: {
+            th: "อธิบายระดับความหายากของการ์ดยูกิโอ ตั้งแต่ Common ไปจนถึง Secret Rare, Prismatic Secret Rare และ Starlight Rare พร้อมวิธีดูจากตัวหนังสือชื่อการ์ด",
+            en: "Yu-Gi-Oh rarity tiers from Common up to Secret Rare, Prismatic Secret Rare and Starlight Rare, and how to tell them apart from the card name treatment.",
+        },
+        h1: {
+            th: "ระดับความหายากการ์ดยูกิโอ",
+            en: "Yu-Gi-Oh Card Rarities Explained",
+        },
+        body: {
+            th: [
+                "ยูกิโอมีระดับความหายากมากกว่าเกมการ์ดอื่นอย่างชัดเจน และวิธีแยกที่ง่ายที่สุดคือดูที่ตัวหนังสือชื่อการ์ดด้านบน ว่าเป็นสีอะไรและสะท้อนแสงแบบไหน",
+                "Common คือระดับพื้นฐาน ชื่อการ์ดเป็นตัวหนังสือสีดำธรรมดา Rare ชื่อการ์ดเป็นสีเงินสะท้อนแสง",
+                "Super Rare ตัวการ์ดมีฟอยล์ที่ภาพ ส่วน Ultra Rare ชื่อการ์ดเป็นสีทองสะท้อนแสง ซึ่งเป็นสองระดับที่พบบ่อยในกลุ่มการ์ดที่มีราคา",
+                "Secret Rare ชื่อการ์ดมีลายสะท้อนแสงแบบรุ้ง เป็นระดับที่ราคาสูงในเกือบทุกชุด และยังมี Prismatic Secret Rare ซึ่งเป็นรุ่นพิเศษกว่านั้นอีก",
+                "Starlight Rare คือระดับที่หายากที่สุดในชุดสมัยใหม่ พบได้ในอัตราที่ต่ำมาก และมักเป็นใบที่แพงที่สุดของชุด",
+                "นอกจากระดับปกติแล้วยังมีคำว่า Short Print ซึ่งไม่ใช่ระดับความหายากโดยตรง แต่หมายถึงการ์ดที่พิมพ์ออกมาน้อยกว่าใบอื่นในระดับเดียวกัน ทำให้ราคาสูงกว่าที่ระดับความหายากบอกไว้",
+                "ข้อควรจำเดียวกับทุกเกมคือ ระดับความหายากไม่ใช่ราคา การ์ดที่จำเป็นในเด็คแข่งราคาสูงได้แม้เป็น Common และการ์ดระดับสูงที่ไม่มีใครใช้ก็ราคาไม่ขยับ วิธีที่แม่นคือเปิดหน้าการ์ดของเวอร์ชันที่ถืออยู่แล้วดูราคาตลาดจริง",
+            ],
+            en: [
+                "Yu-Gi-Oh has noticeably more rarity tiers than other card games, and the easiest way to tell them apart is the card name text at the top: its colour and how it catches light.",
+                "Common is the base tier, with plain black name text. Rare has silver reflective name text.",
+                "Super Rare adds foil to the artwork, while Ultra Rare uses gold reflective name text. These two cover most of the cards that carry real value.",
+                "Secret Rare uses a rainbow-reflective treatment on the name and sits high in almost every set, and Prismatic Secret Rare is a further step above that.",
+                "Starlight Rare is the scarcest tier in modern sets, pulled at very low rates, and is usually the most valuable card in its set.",
+                "You will also see Short Print, which is not a rarity as such but means a card was printed in smaller numbers than others at the same tier, pushing its price above what the rarity suggests.",
+                "The same caveat applies as in every game: rarity is not price. A Common that a competitive deck needs can be expensive, and a high-rarity card nobody plays goes nowhere. Open the page for the exact version you hold and read the market price.",
+            ],
+        },
+    },
+    {
+        slug: 'yugioh-tcg-vs-ocg',
+        game: 'yugioh',
+        updated: '2026-08-30',
+        title: {
+            th: "การ์ดยูกิโอ TCG กับ OCG ต่างกันยังไง เลือกเก็บแบบไหนดี | CardStreet",
+            en: "Yu-Gi-Oh TCG vs OCG: What Is the Difference, and Which to Collect | CardStreet",
+        },
+        description: {
+            th: "การ์ดยูกิโอแบ่งเป็น TCG ฉบับภาษาอังกฤษ และ OCG ฉบับภาษาญี่ปุ่น สองฝั่งมีชุด กติกา และราคาต่างกัน อธิบายให้ครบก่อนตัดสินใจเก็บสายไหน",
+            en: "Yu-Gi-Oh splits into the English-language TCG and the Japanese OCG, with different sets, different banlists and different prices. What to know before choosing a side.",
+        },
+        h1: {
+            th: "ยูกิโอ TCG กับ OCG ต่างกันยังไง",
+            en: "Yu-Gi-Oh TCG vs OCG",
+        },
+        body: {
+            th: [
+                "การ์ดยูกิโอแบ่งเป็นสองโลกที่แยกจากกันชัดเจน ฝั่ง TCG คือฉบับภาษาอังกฤษที่ขายในไทยและทั่วโลกนอกเอเชียตะวันออก ส่วนฝั่ง OCG คือฉบับภาษาญี่ปุ่นที่ขายในญี่ปุ่นและบางประเทศในเอเชีย และไม่มีฉบับภาษาไทย",
+                "สองฝั่งนี้ไม่ได้แค่ต่างกันที่ภาษา ชุดการ์ดออกไม่พร้อมกันและไม่เหมือนกัน การ์ดบางใบออกในฝั่งหนึ่งก่อนอีกฝั่งเป็นปี และรายการการ์ดต้องห้ามในการแข่งก็คนละรายการ ทำให้การ์ดที่แข็งในสนามของแต่ละฝั่งไม่เหมือนกัน",
+                "ขนาดของการ์ดก็ต่างกันเล็กน้อย การ์ด OCG เล็กกว่าการ์ด TCG จึงใช้ปะปนกันในเด็คเดียวไม่ได้ถ้าจะลงแข่งอย่างเป็นทางการ และต้องใช้ซองใส่คนละขนาด",
+                "ในแง่ราคา สองฝั่งเป็นคนละตลาดกันโดยสิ้นเชิง การ์ดใบเดียวกันในฝั่ง TCG กับ OCG ราคาไม่เท่ากันและบางใบต่างกันมาก การเอาราคาฝั่งหนึ่งไปอ้างกับอีกฝั่งจึงพลาดได้ง่าย",
+                "สำหรับคนไทยที่จะเริ่มเก็บ ถ้าตั้งใจจะลงแข่งในไทยหรือขายต่อในกลุ่มคนไทย ฝั่ง TCG ภาษาอังกฤษเป็นทางที่ตรงกว่า ถ้าเก็บเพื่อสะสมงานอาร์ตหรืออยากได้การ์ดใหม่ก่อน ฝั่ง OCG ก็มีเสน่ห์ของมัน",
+                "CardStreet มีทั้งสองฝั่งในแคตตาล็อกเดียวกัน ชุดภาษาอังกฤษหกร้อยกว่าชุดและชุดภาษาญี่ปุ่นอีกร้อยแปดสิบชุด ราคาแยกกันตามฉบับ จึงเทียบได้ตรงกับใบที่ถืออยู่จริง",
+            ],
+            en: [
+                "Yu-Gi-Oh splits into two clearly separate worlds. The TCG is the English-language release sold in Thailand and across most of the world; the OCG is the Japanese release sold in Japan and parts of Asia. There is no Thai-language edition of either.",
+                "The difference is more than language. The two sides get different sets on different schedules, some cards arrive on one side years before the other, and each has its own banlist — so the decks that dominate competitively are not the same.",
+                "The cards are even physically different sizes. OCG cards are slightly smaller than TCG cards, so they cannot be mixed in one deck for sanctioned play and need different sleeves.",
+                "On price they are completely separate markets. The same card in TCG and OCG is not worth the same, and for some cards the gap is wide, so quoting one side's price against the other is an easy mistake.",
+                "For collectors in Thailand: if you intend to play in local events or resell within Thai groups, the English TCG is the more direct route. If you are collecting for the artwork or want cards earlier, the OCG has its own appeal.",
+                "CardStreet carries both in one catalog — over six hundred English sets and a further one hundred and eighty Japanese ones — priced separately, so you can compare against the exact card you hold.",
+            ],
+        },
+    },
 ];
 
 /** A guide by slug, or null. */
