@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
+import { getGuidesForGame } from '@/lib/guides';
 import { getGame } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
@@ -113,6 +114,11 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
     const prefix = localePrefix(pathLocale);
     const game = getGame(landing.gameId);
 
+    // Guides for this game. The link surface matters as much as the copy:
+    // a guide with no inbound link from the page that already ranks is a guide
+    // nobody finds.
+    const guides = getGuidesForGame(landing.gameId);
+
     const allSets = await getAllSets();
     const gameSets = allSets.filter((s) => s.game === landing.gameId);
     const newest = gameSets.slice(0, SETS_SHOWN);
@@ -185,6 +191,31 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                                 </Link>
                             );
                         })}
+                    </div>
+                </section>
+            )}
+
+            {guides.length > 0 && (
+                <section className="mt-12 max-w-3xl">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                        <h2 className="text-xl font-black text-white">
+                            {isThai ? 'คู่มือและบทความ' : 'Guides'}
+                        </h2>
+                        <Link href={`${prefix}/guides`} className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
+                            {isThai ? 'ดูทั้งหมด →' : 'All guides →'}
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {guides.map((g) => (
+                            <Link
+                                key={g.slug}
+                                href={`${prefix}/guides/${g.slug}`}
+                                className="block rounded-xl border border-white/10 bg-white/[0.03] hover:border-brand-cyan/40 hover:bg-white/[0.06] transition-colors p-4"
+                            >
+                                <span className="block text-sm font-bold text-white">{g.h1[l]}</span>
+                                <span className="block mt-1 text-xs text-slate-400 line-clamp-2">{g.description[l]}</span>
+                            </Link>
+                        ))}
                     </div>
                 </section>
             )}

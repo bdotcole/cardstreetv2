@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { BASE_URL, sitemapAlternates } from '@/lib/i18nRouting';
+import { GUIDES } from '@/lib/guides';
 
 // Public, indexable routes. The marketplace homepage plus the evergreen content
 // pages — the surfaces search engines and AI answer engines should crawl. Each
@@ -41,6 +42,16 @@ const ROUTES: {
   { path: '/sell-cards', lastModified: '2026-08-14', changeFrequency: 'monthly', priority: 0.7 },
   // Breaker application landing — the intake funnel for Cardstreet Live hosts.
   { path: '/become-a-breaker', lastModified: '2026-08-10', changeFrequency: 'monthly', priority: 0.7 },
+  // Guides index — the crawl entry point to the long-form articles.
+  { path: '/guides', lastModified: '2026-08-30', changeFrequency: 'weekly', priority: 0.8 },
+  // One entry per guide. lastModified comes from each guide's own `updated`,
+  // so editing one article does not falsely re-date the rest.
+  ...GUIDES.map((g) => ({
+    path: `/guides/${g.slug}`,
+    lastModified: g.updated,
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  })),
   { path: '/faq', lastModified: '2026-08-12', changeFrequency: 'monthly', priority: 0.8 },
   // /help is deliberately absent: it duplicates the /faq accordion and
   // canonicalizes there (app/help/page.tsx) — sitemaps list canonicals only.
