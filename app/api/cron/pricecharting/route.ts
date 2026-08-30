@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
     buildProductByIdUrl,
-    gradedRowsFromProduct,
+    buildCsvDownloadUrl,
+    gradedRowsFromCsv,
+    parseCsvLine,
+    csvDollarsToUsd,
     centsToUsd,
     thaiSealedEstimateThb,
+    PC_CATEGORY,
 } from '@/lib/pricecharting';
 import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 
@@ -13,12 +17,12 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 // so no re-matching). The initial backfill is the .mjs ingest; this keeps it fresh.
 //
 // Cadence is daily rather than weekly because the caps below bound throughput, not
-// the schedule: pricecharting_map has grown to ~56k rows, so at GRADED_CAP per run a
+// the schedule: pricecharting_map has grown to ~56k rows, so at the old per-run cap a
 // weekly cron needed ~141 weeks for a full cycle and most rows sat months stale.
 //
 // WALL CLOCK, NOT THE CAPS, IS THE REAL LIMIT. Each item costs ~875ms end to end
 // (PriceCharting round trip + two Supabase writes), so the old 50s budget only ever
-// got through ~57 cards — 14% of GRADED_CAP. Worse, graded ran first against a single
+// got through ~57 cards — 14% of that cap. Worse, graded ran first against a single
 // shared budget and consumed all of it, so the sealed loop below broke on its very
 // first overBudget() check and `sealedUpdated` was 0 on every run: sealed prices sat
 // frozen from 2026-06-29/07-04 onward. Two fixes:
@@ -55,24 +59,59 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 // the yield predictable. Raising the real ceiling needs PriceCharting to lift the
 // token's quota, or a switch to the bulk price-guide CSV (one request per category).
 //
+// THE GRADED PASS NOW TAKES THAT SECOND OPTION, and the per-product JSON API is gone
+// from it. Measured 2026-08-30, the arithmetic was no longer arguable: 71,939 mapped
+// rows against a hard ceiling of ~243 items/run is a 295-DAY cycle. Worse, the
+// `nullsFirst` ordering meant the 10,164 never-priced Japanese Yu-Gi-Oh rows absorbed
+// every run's entire budget, so MTG, Lorcana and English Yu-Gi-Oh had not been
+// refreshed ONCE since the 2026-06-29 ingest — a starvation *inside* the ordering that
+// no amount of pacing could fix.
+//
+// One bulk CSV covers a whole category, so the vendor cost of refreshing a category
+// drops from thousands of throttled requests to ONE. Measured for pokemon-cards:
+// 92,667 rows / 14.1MB in 29s, of which ~28s is PriceCharting generating the file
+// (a fixed per-category cost; the transfer itself is ~1.3s). Every one of our 20,217
+// mapped Pokemon ids was present — a 100% hit rate, because the CSV `id` column IS
+// `pricecharting_map.pricecharting_id`, so nothing needs re-matching.
+//
+// One category per run, chosen stalest-first (see pickStalestGame). Five categories
+// against a daily cron puts every mapped card on a ~5-day cycle instead of 295 days,
+// and because the choice is driven by last_priced_at the rotation is self-balancing:
+// refreshing a category stamps its rows, which drops it to the back of the queue.
+//
+// The 1-request/second token bucket still governs the SEALED pass, which is still
+// per-product (sealed rows live in sealed_products, keyed differently, and a sealed
+// product's THB estimate needs a sales lookup the CSV cannot answer). Graded no longer
+// competing for those slots is why sealed can now use the whole rate-limited budget.
+//
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 // Needs PRICECHARTING_TOKEN in the Vercel env.
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-// 1000 is PostgREST's hard response ceiling — `.limit(1500)` verifiably still
-// returns 1000 rows. Raising this alone buys nothing; going past it needs a paged
-// candidate query, and paging an `order by last_priced_at` full of NULL ties can
-// duplicate or skip rows, so it is not worth it for the extra ~24 days of cycle.
-const GRADED_CAP = 1000;  // mapped cards refreshed per run
+// Mapped cards pulled per page. 1000 is PostgREST's hard response ceiling —
+// `.limit(1500)` verifiably still returns 1000 rows — so it is a page size, not a
+// run cap: the graded pass now pages until the category is done or the deadline hits.
+const GRADED_PAGE = 1000;
+// Ordering ties are the reason paging is safe here. `order by last_priced_at` over a
+// bulk-stamped column is full of exact ties, and a tie can reshuffle between pages,
+// which duplicates or skips rows. Adding card_id as a tiebreaker makes the sort total
+// and therefore stable across pages. Do not drop it.
 const SEALED_CAP = 600;   // sealed products refreshed per run
-// Concurrency no longer sets the request rate — the global gate below does. These
-// only need enough lanes that a lane's Supabase writes (~100ms for the two round
-// trips) overlap the next lane's wait for its slot, so the gate stays saturated. Any
-// higher just queues callers against the same 1/s cadence.
-const GRADED_CONCURRENCY = 3;
 const SEALED_CONCURRENCY = 3;   // sealed items may also run a sales lookup
+// market_values rows per upsert. The graded pass writes ~6 rows per card, so a large
+// category is ~200k rows; batching at 1000 keeps each round trip well inside
+// PostgREST's request limits while holding the write count to ~200 calls.
+const UPSERT_BATCH = 1000;
+// Cap on the CSV we will buffer. pokemon-cards measured 14.1MB; 96MB is ~7x the
+// largest category and still far under the function's memory, but it bounds a
+// pathological response instead of letting it OOM the run.
+const CSV_MAX_BYTES = 96 * 1024 * 1024;
+// The CSV is one request but a SLOW one (~28s of server-side generation before the
+// first byte). It must not be able to eat the whole graded deadline if the vendor
+// stalls, so it gets its own ceiling well inside GRADED_DEADLINE_MS.
+const CSV_TIMEOUT_MS = 90_000;
 // 280s left almost no headroom under maxDuration: a manual run on 2026-08-04 was
 // killed with FUNCTION_INVOCATION_TIMEOUT at exactly 300s and returned no body at
 // all, so the diagnostics never surfaced. The gap must cover the slowest in-flight
@@ -250,84 +289,181 @@ export async function GET(request: NextRequest) {
     const ERROR_SAMPLE_CAP = 40;
     const errors: string[] = [];
 
-    // --- Graded: stalest-mapped cards ------------------------------------------
-    const { data: maps } = await supabase
-        .from('pricecharting_map')
-        .select('card_id, pricecharting_id')
-        .order('last_priced_at', { ascending: true, nullsFirst: true })
-        .limit(GRADED_CAP);
+    // --- Graded: one whole category per run, from the bulk CSV ------------------
+    //
+    // Which category? The one owning the stalest mapped rows. Sampling the head of
+    // the stalest-first ordering and taking the modal game is deliberately more
+    // robust than reading a single row: one orphaned map row (a card_id no longer in
+    // pokemon_cards) would otherwise pin the whole run to the wrong category forever.
+    let gradedGame: string | null = null;
+    let gradedCategory: string | null = null;
+    let gradedMapped = 0;
+    let gradedUnresolved = 0;
+    let gradedCsvRows = 0;
+    let gradedComplete = false;
 
-    // The market_values unique key includes language; reuse the card's market
-    // language (ja -> jp) so refreshes update the same row the ingest wrote.
-    // Chunked to stay clear of PostgREST's 1000-row response cap, which GRADED_CAP now
-    // sits exactly on. A truncated lookup fails SILENTLY and badly: every missing card
-    // falls back to 'en', writing English-language price rows onto Japanese and Thai
-    // cards instead of updating the rows the ingest actually wrote.
-    // `game` must be written EXPLICITLY for the same reason `language` must. The column
-    // is NOT NULL DEFAULT 'pokemon', and an upsert only assigns the columns it supplies,
-    // so omitting it is silent on refreshes (the existing row keeps its game) and wrong
-    // on inserts (a brand-new row takes the default). That made the bug invisible until
-    // a non-Pokemon catalog first grew graded rows: the JA Yu-Gi-Oh ingest put 1,318
-    // `ygo-*` rows under game='pokemon' between 2026-08-04 and 2026-08-09.
-    const cardIds = (maps || []).map((m) => m.card_id);
-    const langByCard = new Map<string, string>();
-    const gameByCard = new Map<string, string>();
-    const jpOnePiece = new Set<string>();
-    for (let i = 0; i < cardIds.length; i += 500) {
-        const { data: cards } = await supabase
-            .from('pokemon_cards')
-            .select('id, language, game')
-            .in('id', cardIds.slice(i, i + 500));
-        for (const c of cards || []) {
-            langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
-            if (c.game) gameByCard.set(c.id, c.game);
-            if (c.game === 'onepiece' && c.language === 'ja') jpOnePiece.add(c.id);
-        }
+    const { data: staleHead } = await supabase
+        .from('pricecharting_map')
+        .select('game')
+        .not('game', 'is', null)
+        .order('last_priced_at', { ascending: true, nullsFirst: true })
+        .order('card_id', { ascending: true })
+        .limit(500);
+    if (staleHead?.length) {
+        const tally = new Map<string, number>();
+        for (const r of staleHead) tally.set(r.game, (tally.get(r.game) || 0) + 1);
+        gradedGame = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        gradedCategory = PC_CATEGORY[gradedGame] ?? null;
     }
 
-    await pool(maps || [], GRADED_CONCURRENCY, gradedOverDeadline, async (m) => {
+    if (gradedGame && gradedCategory) {
         try {
-            const product = await fetchProduct(m.pricecharting_id);
-            const lang = langByCard.get(m.card_id) || 'en';
-            const game = gameByCard.get(m.card_id) || 'pokemon';
-            const rows = gradedRowsFromProduct(product).map((r) => ({
-                card_id: m.card_id,
-                language: lang,
-                game,
-                condition: r.condition,
-                printing: null,
-                market_avg: r.usd,
-                currency: 'USD',
-                last_updated: new Date().toISOString(),
-            }));
-            // JP One Piece has no JustTCG coverage, so PriceCharting's loose price
-            // is the only ungraded source — refresh the Raw_NM headline row too.
-            if (jpOnePiece.has(m.card_id)) {
-                const loose = centsToUsd(product['loose-price']);
-                if (loose != null) {
-                    rows.push({
-                        card_id: m.card_id,
-                        language: lang,
-                        game,
-                        condition: 'Raw_NM',
-                        printing: null,
-                        market_avg: loose,
-                        currency: 'USD',
-                        last_updated: new Date().toISOString(),
-                    });
+            // ONE request for the entire category. Prices here are DOLLAR STRINGS, not
+            // the cents the JSON product API returns — see csvDollarsToUsd.
+            const csvRes = await fetch(buildCsvDownloadUrl(token, gradedCategory), {
+                signal: AbortSignal.timeout(CSV_TIMEOUT_MS),
+            });
+            noteStatus(`csv:${csvRes.status}`);
+            if (!csvRes.ok) throw new Error(`CSV ${csvRes.status}`);
+            const csvText = await csvRes.text();
+            if (csvText.length > CSV_MAX_BYTES) throw new Error(`CSV too large: ${csvText.length}`);
+
+            const csvLines = csvText.split('\n');
+            const header = parseCsvLine(csvLines[0] || '');
+            const colIndex: Record<string, number> = {};
+            header.forEach((h, i) => { colIndex[h.trim()] = i; });
+            const idCol = colIndex['id'];
+            const looseCol = colIndex['loose-price'];
+            if (idCol == null) throw new Error('CSV has no id column');
+
+            // pcId -> graded rows (+ loose, for the JP One Piece ungraded fallback).
+            const priceById = new Map<string, { graded: Array<{ condition: string; usd: number }>; loose: number | null }>();
+            for (let i = 1; i < csvLines.length; i++) {
+                if (!csvLines[i]) continue;
+                const f = parseCsvLine(csvLines[i]);
+                const pcId = f[idCol];
+                if (!pcId) continue;
+                priceById.set(pcId, {
+                    graded: gradedRowsFromCsv(f, colIndex),
+                    loose: looseCol == null ? null : csvDollarsToUsd(f[looseCol]),
+                });
+            }
+            gradedCsvRows = priceById.size;
+
+            // Walk this category's mapped cards stalest-first, ALWAYS taking the head
+            // of the ordering rather than an increasing OFFSET.
+            //
+            // Offset paging is broken here and silently so: stamping a page sets
+            // last_priced_at = now, which moves those rows to the BACK of the sort, so
+            // the window slides out from under the offset and every page after the
+            // first skips ~GRADED_PAGE rows. Taking range(0, N-1) each time makes the
+            // stamp itself the cursor — processed rows leave the head on their own.
+            //
+            // The `lt runStart` filter is what terminates the loop: rows stamped by
+            // THIS run are excluded, so the query drains to empty exactly when the
+            // category is done, instead of handing back the rows we just wrote.
+            const runStart = new Date().toISOString();
+            while (!gradedOverDeadline()) {
+                const { data: maps, error: mapErr } = await supabase
+                    .from('pricecharting_map')
+                    .select('card_id, pricecharting_id')
+                    .eq('game', gradedGame)
+                    .or(`last_priced_at.is.null,last_priced_at.lt.${runStart}`)
+                    .order('last_priced_at', { ascending: true, nullsFirst: true })
+                    .order('card_id', { ascending: true })
+                    .range(0, GRADED_PAGE - 1);
+                if (mapErr) throw mapErr;
+                if (!maps?.length) { gradedComplete = true; break; }
+                gradedMapped += maps.length;
+
+                // The market_values unique key includes language; reuse the card's market
+                // language (ja -> jp) so refreshes update the same row the ingest wrote.
+                // Chunked to stay clear of PostgREST's 1000-row response cap, which a full
+                // page sits exactly on. A truncated lookup used to fail SILENTLY and badly:
+                // every missing card fell back to 'en', writing English-language price rows
+                // onto Japanese and Thai cards. Unresolved cards are now SKIPPED and counted
+                // rather than defaulted, so a lookup gap can never mislabel a row again.
+                // `game` must be written EXPLICITLY for the same reason `language` must. The
+                // column is NOT NULL DEFAULT 'pokemon', and an upsert only assigns the columns
+                // it supplies, so omitting it is silent on refreshes (the existing row keeps
+                // its game) and wrong on inserts (a brand-new row takes the default). That made
+                // the bug invisible until a non-Pokemon catalog first grew graded rows: the JA
+                // Yu-Gi-Oh ingest put 1,318 `ygo-*` rows under game='pokemon' in Aug 2026.
+                const pageIds = maps.map((m) => m.card_id);
+                const langByCard = new Map<string, string>();
+                const gameByCard = new Map<string, string>();
+                const jpOnePiece = new Set<string>();
+                for (let i = 0; i < pageIds.length; i += 500) {
+                    const { data: cards } = await supabase
+                        .from('pokemon_cards')
+                        .select('id, language, game')
+                        .in('id', pageIds.slice(i, i + 500));
+                    for (const c of cards || []) {
+                        langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
+                        if (c.game) gameByCard.set(c.id, c.game);
+                        if (c.game === 'onepiece' && c.language === 'ja') jpOnePiece.add(c.id);
+                    }
                 }
+
+                const stamp = new Date().toISOString();
+                const rows: any[] = [];
+                const stamped: string[] = [];
+                for (const m of maps) {
+                    // Stamp EVERY row the page hands us, before any skip decision.
+                    // A row that is considered but never stamped stays at the head of
+                    // the stalest ordering, so the very next query returns it again and
+                    // the loop spins on it forever. Both skips below are permanent
+                    // conditions, not transient ones: an orphaned map row (card_id no
+                    // longer in pokemon_cards) and an id the CSV has no graded price for
+                    // would each re-appear every iteration. Leaving rows unstamped is
+                    // also the shape of the original bug — the never-priced NULLs that
+                    // sat at the head and starved every other category.
+                    stamped.push(m.card_id);
+                    const priced = priceById.get(String(m.pricecharting_id));
+                    const lang = langByCard.get(m.card_id);
+                    const game = gameByCard.get(m.card_id);
+                    if (!lang || !game) { gradedUnresolved++; continue; }
+                    if (!priced) continue;
+                    for (const r of priced.graded) {
+                        rows.push({
+                            card_id: m.card_id, language: lang, game,
+                            condition: r.condition, printing: null,
+                            market_avg: r.usd, currency: 'USD', last_updated: stamp,
+                        });
+                    }
+                    // JP One Piece has no JustTCG coverage, so PriceCharting's loose price
+                    // is the only ungraded source — refresh the Raw_NM headline row too.
+                    if (jpOnePiece.has(m.card_id) && priced.loose != null) {
+                        rows.push({
+                            card_id: m.card_id, language: lang, game,
+                            condition: 'Raw_NM', printing: null,
+                            market_avg: priced.loose, currency: 'USD', last_updated: stamp,
+                        });
+                    }
+                }
+
+                for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+                    const { error } = await supabase.from('market_values')
+                        .upsert(rows.slice(i, i + UPSERT_BATCH), { onConflict: 'card_id,language,condition' });
+                    if (error) throw error;
+                    gradedRows += Math.min(UPSERT_BATCH, rows.length - i);
+                }
+                // Stamp last. If the upserts above threw, these rows stay stale and are
+                // retried next run rather than being marked done on a failed write.
+                for (let i = 0; i < stamped.length; i += UPSERT_BATCH) {
+                    const { error } = await supabase.from('pricecharting_map')
+                        .update({ last_priced_at: stamp })
+                        .in('card_id', stamped.slice(i, i + UPSERT_BATCH));
+                    if (error) throw error;
+                }
+                gradedCards += stamped.length;
+
+                if (maps.length < GRADED_PAGE) { gradedComplete = true; break; }
             }
-            if (rows.length) {
-                const { error } = await supabase.from('market_values').upsert(rows, { onConflict: 'card_id,language,condition' });
-                if (error) throw error;
-                gradedRows += rows.length;
-            }
-            await supabase.from('pricecharting_map').update({ last_priced_at: new Date().toISOString() }).eq('card_id', m.card_id);
-            gradedCards++;
         } catch (e: any) {
-            if (errors.length < ERROR_SAMPLE_CAP) errors.push(`graded ${m.pricecharting_id}: ${e.message}`);
+            if (errors.length < ERROR_SAMPLE_CAP) errors.push(`graded ${gradedCategory}: ${e.message}`);
         }
-    });
+    }
 
     const gradedElapsedMs = elapsed();
     console.log('[pricecharting] graded pass done', JSON.stringify(snapshot()));
@@ -401,6 +537,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         success: true,
         gradedCards, gradedRows, sealedUpdated,
+        // Which category this run refreshed, and whether it drained it. `gradedComplete`
+        // false means the deadline cut the category short; the next run resumes it,
+        // because its unstamped rows are still the stalest in the table.
+        gradedGame, gradedCategory, gradedComplete,
+        gradedMapped,
+        // CSV rows the vendor returned for the category. A sudden collapse here is the
+        // signal that a category slug has gone bad — PriceCharting answers an unknown
+        // category with an unrelated fallback rather than a 404.
+        gradedCsvRows,
+        // Mapped rows whose card_id no longer resolves in pokemon_cards. Small and flat
+        // is fine; a jump means an ingest deleted cards without cleaning the map.
+        gradedUnresolved,
         // Phase timings make the budget split auditable: sealedUpdated === 0 with a
         // non-trivial sealedElapsedMs means sealed genuinely had no stale rows, not
         // that it was starved again.

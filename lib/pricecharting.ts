@@ -157,3 +157,60 @@ export function gradedRowsFromProduct(
   }
   return out;
 }
+
+/** Dollar string from the bulk CSV ("$1,234.50") -> USD number. Null for blank/zero. */
+export function csvDollarsToUsd(cell: string | undefined): number | null {
+  if (!cell) return null;
+  const n = parseFloat(cell.replace(/[$,"]/g, '').trim());
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Split one CSV line, honouring double-quoted fields.
+ *
+ * A naive `split(',')` MISALIGNS EVERY COLUMN AFTER THE NAME: PriceCharting
+ * product names routinely contain commas ("Charizard, Champion's Path") and are
+ * quoted, so the price columns shift left and graded prices land under the wrong
+ * condition. `id` happens to be field 0, which is why a naive split still looks
+ * like it works when you only check match rates.
+ */
+export function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      // "" is an escaped quote inside a quoted field.
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else cur += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === ',') { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/**
+ * Graded prices from one bulk-CSV row, keyed by our market_values condition.
+ *
+ * Mirrors gradedRowsFromProduct, but the CSV carries DOLLAR STRINGS where the
+ * JSON product API carries integer cents — feeding CSV cells to centsToUsd would
+ * silently divide every price by 100.
+ */
+export function gradedRowsFromCsv(
+  fields: string[],
+  colIndex: Record<string, number>,
+): Array<{ condition: string; usd: number }> {
+  const out: Array<{ condition: string; usd: number }> = [];
+  for (const [field, condition] of Object.entries(GRADED_FIELD_MAP)) {
+    const idx = colIndex[field];
+    if (idx == null || idx < 0) continue;
+    const usd = csvDollarsToUsd(fields[idx]);
+    if (usd != null) out.push({ condition, usd });
+  }
+  return out;
+}
