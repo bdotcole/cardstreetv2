@@ -23,28 +23,33 @@ export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewa
 // is the invite-only broadcaster grant (a live seller is a Connect seller with
 // this flag). Both have a matching beta_feature_flags kill-switch row seeded by
 // supabase/migrations/20260704_live_streams.sql.
-// 'rewards' gates the Collector Pass rewards system (dark launch; kill-switch
-// row seeded false by 20260828_collector_pass_foundation.sql). Graduate it by
-// adding it to GA_FEATURES once the founder approves launch.
+// 'rewards' gates the Collector Pass rewards system (kill-switch row seeded
+// by 20260828_collector_pass_foundation.sql; graduated to GA_FEATURES
+// 2026-08-30).
 // 'rewards_vouchers' separately gates the checkout voucher rail (20260829) so
 // the money-touching half is independently killable.
 export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards', 'rewards_vouchers'];
 
 /**
- * Features GRADUATED to general availability (2026-08-16 founder call:
- * "make the live section available for viewers"): every signed-in user
- * passes the per-user grant check — no profiles.beta_features entry needed.
- * Sign-in and the global kill switch STILL apply, so
- * `UPDATE beta_feature_flags SET enabled=false WHERE feature='live_streams'`
+ * Features GRADUATED to general availability: every signed-in user passes the
+ * per-user grant check — no profiles.beta_features entry needed. Sign-in and
+ * the global kill switch STILL apply, so
+ * `UPDATE beta_feature_flags SET enabled=false WHERE feature='<name>'`
  * remains the one-statement off switch for everyone.
+ *
+ * - 'live_streams' (2026-08-16 founder call: "make the live section available
+ *   for viewers"). The RLS twin is supabase/migrations/20260819_live_viewers_ga.sql
+ *   (Realtime respects RLS, so without it a GA viewer's board/chat would never
+ *   update live).
+ * - 'rewards' (2026-08-30 founder call: Collector Pass public launch).
+ *   'rewards_vouchers' needs no entry — it is checked only as a global
+ *   kill switch (isFeatureEnabled), never as a per-user grant.
  *
  * Broadcasting ('live_broadcast') is deliberately NOT here — it stays
  * invite-only behind the admin wall until breaker-application onboarding
- * starts granting it. The RLS twin of this graduation is
- * supabase/migrations/20260819_live_viewers_ga.sql (Realtime respects RLS,
- * so without it a GA viewer's board/chat would never update live).
+ * starts granting it.
  */
-export const GA_FEATURES: readonly BetaFeature[] = ['live_streams'];
+export const GA_FEATURES: readonly BetaFeature[] = ['live_streams', 'rewards'];
 
 export function isBetaFeature(value: unknown): value is BetaFeature {
   return typeof value === 'string' && (BETA_FEATURES as readonly string[]).includes(value);
