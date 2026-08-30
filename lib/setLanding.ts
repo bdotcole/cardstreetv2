@@ -163,6 +163,20 @@ const SET_INTROS: Record<string, SetIntro> = {
     en: 'Skyscraping Perfection (S7D) is a Japanese-language Sword & Shield-era set that Japanese-card collectors in Thailand still hunt. The Super Rare Noivern V (オンバーンV) is the most valuable card in it, followed by Duraludon V and the trainer card Raihan. Check Japanese Pokemon card prices one by one, then buy or sell authentic copies with sellers in Thailand.',
   },
 
+  // Marvel's Spider-Man. Added for a MEASURED query rather than a hunch:
+  // "thwip app" carries 86 impressions and 0 clicks — the biggest zero-click
+  // query on the domain — and Thwip! is a card in THIS set (#20). 283 of the
+  // 286 rows are priced, so the standard "check every price" promise holds;
+  // that is the same test that disqualified S7D-th from batch 3.
+  //
+  // The Soul Stone's seven-figure baht price is CORRECT, not a bad row: the
+  // cosmic foil textless printing traded at USD 32,999 on TCGplayer, confirmed
+  // externally before the copy was written to lean on it.
+  'mtg-spm': {
+    th: 'Marvel’s Spider-Man คือชุดการ์ดเมจิก (Magic: The Gathering) ที่จับมือกับมาร์เวล และกลายเป็นชุดที่คนพูดถึงมากที่สุดชุดหนึ่ง ใบชูโรงคือ The Soul Stone ซึ่งเวอร์ชันหายากที่สุดซื้อขายกันในหลักล้านบาท ถัดมาคือ Spectacular Spider-Man และการ์ด Mythic สองหน้าอย่าง Eddie Brock // Venom, Lethal Protector กับ Peter Parker // Amazing Spider-Man ส่วนสายเล่นก็ตามเก็บการ์ดอย่าง Thwip! กันด้วย เช็คราคาการ์ดในชุดนี้ได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย',
+    en: 'Marvel’s Spider-Man is Magic: The Gathering’s Marvel crossover set and one of the most talked-about releases in years. The Soul Stone leads it — its rarest treatment trades in the millions of baht — followed by Spectacular Spider-Man and the double-faced Mythics Eddie Brock // Venom, Lethal Protector and Peter Parker // Amazing Spider-Man. Players also chase commons like Thwip!. Check the price of every card in the set, then buy or sell authentic copies with sellers in Thailand.',
+  },
+
 };
 
 /** Intro copy for a set page, or null when the set has none. */
