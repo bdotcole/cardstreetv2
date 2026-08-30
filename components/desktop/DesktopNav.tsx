@@ -9,6 +9,8 @@ import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import RewardsChip from '@/components/rewards/RewardsChip';
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
 import { sealedProductToCard } from '@/lib/sealedProduct';
@@ -48,6 +50,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // the whole desktop shell instead of one per component (multiple
     // concurrent getUser() calls were contending on the gotrue auth lock).
     const { items: cartItems, openCart, user } = useDesktopCart();
+    // Collector Pass chip. Shares one cached summary fetch with the hub host in
+    // the desktop layout; null (hidden) when signed out or the flag is off.
+    const { summary: rewards } = useRewardsSummary(!!user);
     const [query, setQuery] = useState('');
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -262,6 +267,17 @@ export default function DesktopNav({ pathPrefix = '' }: {
                         {language}
                     </span>
                 </button>
+
+                {rewards && (
+                    <div className="shrink-0">
+                        <RewardsChip
+                            coins={rewards.coins}
+                            unclaimed={!rewards.checkinClaimedToday}
+                            onClick={() => window.dispatchEvent(new Event('cs:openRewards'))}
+                            label={t('rewards.title') || 'Rewards'}
+                        />
+                    </div>
+                )}
 
                 <button
                     onClick={openCart}

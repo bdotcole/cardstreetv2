@@ -59,6 +59,14 @@ export interface RewardsSummary {
 let cached: RewardsSummary | null = null;
 let inflight: Promise<RewardsSummary | null> | null = null;
 
+/**
+ * Broadcast so every mounted consumer re-reads the cache after a refresh.
+ * The desktop shell renders two consumers (the nav's coin chip and the hub
+ * host in the layout); without this they hold independent state and the chip
+ * keeps showing the pre-claim balance after a check-in.
+ */
+const SUMMARY_EVENT = 'cs:rewardsSummaryChanged';
+
 async function fetchSummary(): Promise<RewardsSummary | null> {
     try {
         const res = await fetch('/api/rewards/summary', { credentials: 'include' });
@@ -97,13 +105,16 @@ export function useRewardsSummary(active: boolean) {
         if (!active) return;
         let alive = true;
         ensureRewardsSummary().then((s) => { if (alive) setSummary(s); });
-        return () => { alive = false; };
+        const onChanged = () => { if (alive) setSummary(cached); };
+        window.addEventListener(SUMMARY_EVENT, onChanged);
+        return () => { alive = false; window.removeEventListener(SUMMARY_EVENT, onChanged); };
     }, [active]);
 
     const refresh = useCallback(async () => {
         invalidateRewardsSummary();
         const s = await ensureRewardsSummary();
         if (activeRef.current) setSummary(s);
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event(SUMMARY_EVENT));
         return s;
     }, []);
 

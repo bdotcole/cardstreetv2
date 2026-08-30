@@ -2,6 +2,7 @@ import DesktopNav from '@/components/desktop/DesktopNav';
 import DesktopFooter from '@/components/desktop/DesktopFooter';
 import DesktopCartProvider from '@/components/desktop/DesktopCartContext';
 import DesktopCartDrawer from '@/components/desktop/DesktopCartDrawer';
+import DesktopRewardsHost from '@/components/desktop/DesktopRewardsHost';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import SignupTracker from '@/components/SignupTracker';
 import { localePrefix, requestPathLocale } from '@/lib/i18nRouting';
@@ -34,6 +35,9 @@ export default async function DesktopLayout({ children }: { children: React.Reac
                 <DesktopFooter pathPrefix={pathPrefix} />
             </div>
             <DesktopCartDrawer />
+            {/* Rewards Hub overlay. Mounted here, not in DesktopNav — the nav's
+                backdrop-blur would trap its fixed positioning under the header. */}
+            <DesktopRewardsHost />
             {/* Failed email-verification links redirect to / with a #error
                 hash (invisible to server routes) — surface it. */}
             <AuthLinkErrorNotice />
