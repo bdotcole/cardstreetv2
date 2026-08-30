@@ -247,6 +247,185 @@ export const GUIDES: Guide[] = [
             ],
         },
     },
+    {
+        slug: 'thai-vs-japanese-vs-english-pokemon-cards',
+        game: 'pokemon',
+        updated: '2026-08-30',
+        title: {
+            th: 'การ์ดโปเกม่อนไทย ญี่ปุ่น อังกฤษ ต่างกันยังไง และราคาต่างกันแค่ไหน | CardStreet',
+            en: 'Thai vs Japanese vs English Pokemon Cards, and Why the Prices Differ | CardStreet',
+        },
+        description: {
+            th: 'การ์ดโปเกม่อนใบเดียวกันในภาษาไทย ญี่ปุ่น และอังกฤษ คือคนละใบในสายตาตลาด และราคาก็ต่างกันจริง อธิบายว่าต่างกันตรงไหน และควรเทียบราคาแบบไหนถึงจะไม่พลาด',
+            en: 'The same Pokemon card in Thai, Japanese and English is three different cards to the market, and the prices genuinely differ. What separates them, and how to compare the right one.',
+        },
+        h1: {
+            th: 'การ์ดโปเกม่อนไทย ญี่ปุ่น อังกฤษ ต่างกันยังไง',
+            en: 'Thai vs Japanese vs English Pokemon Cards',
+        },
+        body: {
+            th: [
+                'คำถามที่นักสะสมไทยเจอตั้งแต่ใบแรกคือ การ์ดใบเดียวกันแต่คนละภาษา ราคาเท่ากันไหม คำตอบคือไม่เท่า และไม่ได้ต่างกันนิดเดียวด้วย',
+                'สาเหตุคือทั้งสามภาษาเป็นคนละตลาดกันจริง ๆ การ์ดภาษาไทยพิมพ์ตามชุดญี่ปุ่นแบบหนึ่งต่อหนึ่ง เลขการ์ดตรงกัน ภาพเหมือนกัน แต่คนซื้อคนขายคนละกลุ่ม ปริมาณที่พิมพ์ออกมาต่างกัน และความต้องการในแต่ละประเทศก็ไม่เหมือนกัน ส่วนชุดภาษาอังกฤษมักเรียงเลขใหม่ทั้งชุด ทำให้เลขการ์ดไม่ตรงกับฉบับญี่ปุ่นเลย',
+                'ในทางปฏิบัติ การ์ดฉบับภาษาไทยมักซื้อขายกันต่ำกว่าใบแฝดภาษาญี่ปุ่นที่เลขเดียวกันอย่างเห็นได้ชัด นี่คือสิ่งที่เห็นได้จากข้อมูลราคาจริง ไม่ใช่ความรู้สึก และเป็นข้อมูลที่หาจากเว็บทั่วไปไม่ค่อยได้ เพราะเว็บส่วนใหญ่ไม่ได้เก็บราคาการ์ดไทยแยกไว้ต่างหาก',
+                'ข้อผิดพลาดที่ทำให้เสียเงินบ่อยที่สุดคือ เห็นราคาการ์ดใบหนึ่งจากเว็บต่างประเทศแล้วเอามาอ้างอิงกับการ์ดไทยที่ถืออยู่ ราคาที่เห็นนั้นเป็นของฉบับภาษาอังกฤษหรือญี่ปุ่น ซึ่งคนละใบกับที่มีอยู่จริง',
+                'วิธีที่ถูกต้องคือดูสามอย่างบนการ์ดก่อนเสมอ หนึ่ง ภาษาที่พิมพ์บนตัวการ์ด สอง รหัสชุดที่มุมล่าง เช่น MA5 หรือ SV8a ซึ่งบอกได้ทันทีว่าเป็นชุดไทยหรือชุดญี่ปุ่น และสาม เลขการ์ดในชุด แล้วค่อยเปิดหน้าการ์ดที่ตรงทั้งสามอย่าง',
+                'CardStreet เก็บราคาของทั้งสามภาษาแยกกัน มีชุดภาษาไทยเก้าสิบกว่าชุด ชุดญี่ปุ่นเก้าสิบชุด และชุดภาษาอังกฤษอีกร้อยสี่สิบกว่าชุด ราคาที่แสดงจึงเป็นของใบที่ถืออยู่จริง ไม่ใช่ราคาเฉลี่ยข้ามภาษา',
+            ],
+            en: [
+                'The first question most collectors in Thailand hit: is the same card worth the same in Thai, Japanese and English? It is not, and the gap is not small.',
+                'The reason is that all three are genuinely separate markets. Thai cards are printed from the Japanese sets one-to-one, so the collector numbers match and the artwork is identical, but the buyers, the print runs and the demand are all different. English sets usually renumber entirely, so their collector numbers do not line up with the Japanese release at all.',
+                'In practice, Thai prints trade noticeably below their Japanese twins at the same collector number. That comes out of real price data rather than impression, and it is hard to find elsewhere, because most sites do not track Thai cards as their own market at all.',
+                'The most expensive mistake is taking a price from an overseas site and applying it to the Thai card in your hand. That figure belongs to the English or Japanese print, which is a different card.',
+                'The right method is to check three things on the card first: the language it is printed in, the set code in the bottom corner (MA5 or SV8a tells you immediately whether it is a Thai or Japanese set), and the collector number. Then open the card page that matches all three.',
+                'CardStreet prices all three separately, with over ninety Thai sets, ninety Japanese sets and more than a hundred and forty English ones. The price you see belongs to the card you actually hold, not a blended average across languages.',
+            ],
+        },
+    },
+    {
+        slug: 'pokemon-rarity-codes-thai',
+        game: 'pokemon',
+        updated: '2026-08-30',
+        title: {
+            th: 'รหัสความหายากการ์ดโปเกม่อน SR SAR AR UR HR อ่านยังไง | CardStreet',
+            en: 'Pokemon Card Rarity Codes Explained: SR, SAR, AR, UR, HR | CardStreet',
+        },
+        description: {
+            th: 'อธิบายรหัสความหายากบนการ์ดโปเกม่อนไทยและญี่ปุ่น ทั้ง C U R RR AR SR SAR UR HR และ ACE ว่าแต่ละตัวหมายถึงอะไร และตัวไหนคือกลุ่มที่ราคาสูงจริง',
+            en: 'What C, U, R, RR, AR, SR, SAR, UR, HR and ACE actually mean on Thai and Japanese Pokemon cards, and which of them are the ones that carry real value.',
+        },
+        h1: {
+            th: 'รหัสความหายากการ์ดโปเกม่อน อ่านยังไง',
+            en: 'Pokemon Card Rarity Codes Explained',
+        },
+        body: {
+            th: [
+                'การ์ดโปเกม่อนฉบับภาษาไทยและญี่ปุ่นพิมพ์รหัสความหายากไว้ข้างเลขการ์ดที่มุมล่าง เป็นตัวย่อสั้น ๆ ที่อ่านออกแล้วจะรู้ทันทีว่าใบที่ถืออยู่อยู่ชั้นไหนของชุด',
+                'กลุ่มพื้นฐานคือ C คือ Common ใบธรรมดาที่เจอมากที่สุด U คือ Uncommon R คือ Rare และ RR คือ Double Rare ซึ่งเป็นระดับของการ์ด ex ทั่วไป สี่กลุ่มนี้คือส่วนใหญ่ของทุกซองและมักมีมูลค่าไม่สูง',
+                'กลุ่มที่ราคาเริ่มขยับคือ AR ย่อมาจาก Art Rare เป็นการ์ดภาพเต็มใบที่ยังใช้เลขในชุดปกติ SR คือ Super Rare ตัวหนังสือและขอบเป็นแบบสะท้อนแสง และ UR คือ Ultra Rare ซึ่งเป็นการ์ดทองในหลายชุด',
+                'กลุ่มบนสุดที่นักสะสมไล่ล่ากันจริงคือ SAR ย่อมาจาก Special Art Rare เป็นภาพพิเศษเต็มใบและมักเป็นใบที่แพงที่สุดของชุด HR คือ Hyper Rare และในชุดยุคเมก้ายังมี MUR เพิ่มเข้ามาอีกระดับ',
+                'นอกจากนี้ยังมี ACE ซึ่งเป็นการ์ด ACE SPEC ที่ใส่ในเด็คได้ใบเดียว และ TR สำหรับการ์ดเทรนเนอร์บางกลุ่ม',
+                'ข้อควรจำคือรหัสความหายากบอกแค่ชั้นของการ์ด ไม่ได้บอกราคาโดยตรง การ์ด SAR ของตัวละครดังราคาสูงกว่าการ์ด SAR ของตัวละครที่ไม่มีคนตามเก็บหลายเท่า และการ์ด R ธรรมดาที่ถูกใช้ในเด็คยอดนิยมก็แพงกว่าที่ระดับความหายากบอกไว้ได้เหมือนกัน',
+                'วิธีที่แม่นที่สุดคือดูรหัสเพื่อจัดกลุ่มคร่าว ๆ แล้วเปิดหน้าการ์ดใบนั้นดูราคาตลาดจริง เพราะสองใบที่รหัสเดียวกันในชุดเดียวกันก็ราคาต่างกันได้มาก',
+            ],
+            en: [
+                'Thai and Japanese Pokemon cards print a rarity code next to the collector number in the bottom corner. Learning to read it tells you immediately which tier of the set a card belongs to.',
+                'The base group: C is Common, the everyday pull. U is Uncommon, R is Rare, and RR is Double Rare, which is where most ordinary ex cards sit. These four make up the bulk of any pack and are usually modest in value.',
+                'Where prices start to move: AR stands for Art Rare, a full-art card that still uses a normal set number. SR is Super Rare, with reflective text and borders. UR is Ultra Rare, the gold cards in many sets.',
+                'The top group collectors actually hunt: SAR, or Special Art Rare, a special full-art treatment that is usually the most valuable card in its set. HR is Hyper Rare, and Mega-era sets add MUR above that again.',
+                'You will also see ACE for ACE SPEC cards, which are limited to one per deck, and TR on some trainer cards.',
+                'The thing to remember is that a rarity code tells you the tier, not the price. An SAR of a popular character is worth many times an SAR of one nobody collects, and an ordinary R that sees heavy competitive play can beat what its rarity suggests.',
+                'The reliable method is to use the code to place a card roughly, then open its page for the actual market price, because two cards with the same code in the same set can still be far apart.',
+            ],
+        },
+    },
+    {
+        slug: 'most-valuable-thai-pokemon-cards',
+        game: 'pokemon',
+        updated: '2026-08-30',
+        title: {
+            th: 'การ์ดโปเกม่อนภาษาไทยใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet',
+            en: 'The Most Valuable Thai-Language Pokemon Cards | CardStreet',
+        },
+        description: {
+            th: 'รวมการ์ดโปเกม่อนภาษาไทยที่ราคาสูงที่สุด จากชุด MA, SV และยุค AS พร้อมวิธีเช็คราคาตลาดล่าสุดของใบที่ถืออยู่จริง',
+            en: 'The highest-value Thai-language Pokemon cards across the MA, SV and AS-era sets, and how to check a live market price for the exact card you hold.',
+        },
+        h1: {
+            th: 'การ์ดโปเกม่อนภาษาไทยใบไหนแพงที่สุด',
+            en: 'The Most Valuable Thai-Language Pokemon Cards',
+        },
+        body: {
+            th: [
+                'การ์ดโปเกม่อนภาษาไทยเพิ่งมีมาไม่กี่ปี แต่บางใบขึ้นไปถึงหลักหมื่นบาทแล้ว และเกือบทั้งหมดมาจากระดับ SAR กับ MUR ซึ่งเป็นชั้นบนสุดของชุด',
+                'ใบที่นักสะสมไทยตามหามากที่สุดกลุ่มหนึ่งอยู่ในชุดยุคเมก้า ได้แก่ เมก้าลิซาร์ดอน X ex จากชุดอัคคีสีคราม เมก้าเก็งกาex จากชุดวิวัฒนาการเมก้า ดรีมex และ เมก้าดาร์กไรex กับ เมก้าเก็คโคกะex จากชุดเงามืดคุกคาม',
+                'ฝั่งชุด SV ก็มีใบใหญ่อยู่หลายใบ ทั้ง มิว ex จากไชนีเทรเชอร์ex ลิซาร์ดอน ex จากโปเกมอนการ์ด 151 แบล็กกี ex จากเทศกาลเทรัสตัลex และ พิคาชูex จากวอยด์บลาสต์',
+                'ส่วนใครที่เก็บการ์ดไทยยุคเก่ากว่านั้น ชุดยุค AS ก็ยังมีใบราคาดีอยู่ เช่น ลิซาร์ดอนGX, เรชิรัม & เซครอมGX, มิวทู & มิวGX และ เก็งกา & มิมิคคิวGX',
+                'ราคาของการ์ดกลุ่มนี้ขยับตลอด บทความที่ใส่ตัวเลขไว้จึงล้าสมัยเร็วมาก วิธีที่ใช้ได้จริงคือเปิดหน้าการ์ดใบนั้นแล้วดูราคาตลาดล่าสุดเป็นเงินบาท พร้อมวันที่อัปเดตและกราฟย้อนหลัง',
+                'สิ่งที่ต้องระวังเป็นพิเศษกับการ์ดไทยคือ ต้องเทียบให้ตรงชุดและตรงเลขการ์ด เพราะการ์ดตัวละครเดียวกันมีทั้งเวอร์ชัน RR ธรรมดาและเวอร์ชัน SAR ในชุดเดียวกัน และราคาต่างกันหลายสิบเท่า',
+            ],
+            en: [
+                'Thai-language Pokemon cards have only existed for a few years, but some already trade in the tens of thousands of baht, and nearly all of them come from the SAR and MUR tiers at the top of each set.',
+                'One cluster of the most-hunted cards sits in the Mega-era sets: Mega Charizard X ex from อัคคีสีคราม, Mega Gengar ex from วิวัฒนาการเมก้า ดรีมex, and Mega Darkrai ex and Mega Greninja ex from เงามืดคุกคาม.',
+                'The SV sets carry several more: Mew ex from ไชนีเทรเชอร์ex, Charizard ex from Pokemon Card 151, Umbreon ex from เทศกาลเทรัสตัลex, and Pikachu ex from วอยด์บลาสต์.',
+                'If you collect older Thai cards, the AS-era sets still hold value too, with cards like Charizard-GX, Reshiram & Zekrom-GX, Mewtwo & Mew-GX and Gengar & Mimikyu-GX.',
+                'Prices in this group move constantly, so any article with numbers in it goes stale quickly. The method that works is to open the card page and read the current market price in baht, with its update date and history chart.',
+                'One thing to watch with Thai cards especially: match both the set and the collector number. The same character exists as an ordinary RR and as an SAR within a single set, and the gap between them is many times over.',
+            ],
+        },
+    },
+    {
+        slug: 'spot-fake-pokemon-cards-thai',
+        game: 'pokemon',
+        updated: '2026-08-30',
+        title: {
+            th: 'การ์ดโปเกม่อนปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | CardStreet',
+            en: 'How to Spot Fake Pokemon Cards Before You Pay | CardStreet',
+        },
+        description: {
+            th: 'วิธีตรวจการ์ดโปเกม่อนปลอมด้วยตัวเอง ทั้งเนื้อการ์ด งานพิมพ์ ตัวหนังสือ ขอบ และสัญญาณเตือนที่จับได้บ่อยที่สุด พร้อมข้อควรระวังเฉพาะการ์ดภาษาไทย',
+            en: 'Check a Pokemon card yourself: stock, print quality, text, edges and the tell that catches most counterfeits, plus what is specific to Thai-language cards.',
+        },
+        h1: {
+            th: 'การ์ดโปเกม่อนปลอม ดูยังไง',
+            en: 'How to Spot Fake Pokemon Cards',
+        },
+        body: {
+            th: [
+                'การ์ดโปเกม่อนเป็นการ์ดที่มีของปลอมเยอะที่สุดในตลาด เพราะเป็นเกมที่คนเล่นมากที่สุดและราคาสูงที่สุด สิ่งที่ตรวจได้เองมีดังนี้',
+                'แสงส่องผ่าน การ์ดแท้มีชั้นฟอยล์สีดำอยู่ตรงกลางระหว่างกระดาษสองชั้น ส่องไฟจากด้านหลังแล้วแสงจะไม่ทะลุ ถ้าส่องแล้วเห็นแสงผ่านชัดเจน มีโอกาสสูงมากว่าเป็นของปลอม',
+                'ความคมของงานพิมพ์ ซูมดูตัวหนังสือเล็กที่สุดบนการ์ด เช่น ข้อความลิขสิทธิ์ที่ขอบล่าง ของแท้คมและอ่านออกทุกตัว ของปลอมมักฟุ้งหรือขอบตัวอักษรเบลอ',
+                'สีและความอิ่มตัว ของปลอมมักสีจัดเกินไปหรือซีดกว่าปกติ เทียบกับภาพการ์ดใบเดียวกันจากแคตตาล็อกที่เชื่อถือได้จะเห็นชัด',
+                'ผิวสัมผัสและขอบ การ์ดแท้ตัดขอบเรียบสม่ำเสมอ ผิวมีลายพื้นผิวละเอียด ถ้าลูบแล้วลื่นเกินไปหรือขอบหยาบให้ระวัง',
+                'สำหรับการ์ดภาษาไทยโดยเฉพาะ ให้ดูรหัสชุดที่มุมล่างว่าตรงกับชุดที่มีอยู่จริงหรือไม่ เช่น MA1 ถึง MA5 หรือ SV ชุดต่าง ๆ ของปลอมหลายใบใช้รหัสที่ไม่มีอยู่จริง หรือเอาภาพจากชุดญี่ปุ่นมาใส่รหัสไทย',
+                'ข้อสุดท้ายที่จับได้บ่อยที่สุดคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี เพราะแบบนี้การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน CardStreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุด และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ ถ้าของไม่ตรงตามที่ระบุก็มีขั้นตอนรองรับ',
+            ],
+            en: [
+                'Pokemon is the most counterfeited trading card game there is, because it has the most players and the highest prices. Here is what you can check yourself.',
+                'Light test. A genuine card has a black foil layer sandwiched between two paper layers, so shining a light behind it does not pass through. If light comes through clearly, it is very likely fake.',
+                'Print sharpness. Zoom in on the smallest text on the card, such as the copyright line along the bottom edge. On a real card every character is crisp and legible; fakes blur or bleed.',
+                'Colour and saturation. Counterfeits usually run either oversaturated or washed out. Comparing against the same card in a catalog you trust makes it obvious.',
+                'Texture and edges. Genuine cards are cut cleanly and evenly and have a fine surface texture. Too slick to the touch, or rough edges, is a warning.',
+                'Specific to Thai cards: check that the set code in the bottom corner is a set that actually exists, such as MA1 through MA5 or the SV sets. Many fakes carry codes that were never printed, or use Japanese set artwork under a Thai code.',
+                'The tell that catches the most fakes is still the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. That is why knowing the going rate is the best counterfeit defence there is. Every card page on CardStreet shows the current market price, and buying through the platform means the seller is identity-verified with buyer protection on the order.',
+            ],
+        },
+    },
+    {
+        slug: 'thai-pokemon-set-codes',
+        game: 'pokemon',
+        updated: '2026-08-30',
+        title: {
+            th: 'ชุดการ์ดโปเกม่อนไทยมีอะไรบ้าง รหัส MA SV AS อ่านยังไง | CardStreet',
+            en: 'Thai Pokemon Sets Explained: What MA, SV and AS Set Codes Mean | CardStreet',
+        },
+        description: {
+            th: 'อธิบายรหัสชุดการ์ดโปเกม่อนภาษาไทย ทั้งยุค AS ยุค SV และยุคเมก้า MA ว่าแต่ละรหัสคือชุดไหน และใช้ดูอะไรได้บ้างเวลาเช็คราคา',
+            en: 'What the AS, SV and MA set codes on Thai Pokemon cards mean, which era each belongs to, and how to use them when checking a price.',
+        },
+        h1: {
+            th: 'ชุดการ์ดโปเกม่อนไทย และรหัสชุดที่ควรรู้',
+            en: 'Thai Pokemon Sets and Their Set Codes',
+        },
+        body: {
+            th: [
+                'รหัสชุดที่พิมพ์อยู่มุมล่างของการ์ดคือข้อมูลที่มีประโยชน์ที่สุดบนตัวการ์ด เพราะบอกได้ทั้งว่าเป็นการ์ดภาษาอะไร มาจากยุคไหน และใช้หาหน้าการ์ดที่ถูกต้องได้เร็วที่สุด',
+                'การ์ดโปเกม่อนภาษาไทยแบ่งได้เป็นสามยุคใหญ่ ยุคแรกคือรหัสขึ้นต้นด้วย AS ซึ่งเป็นการ์ดยุค Sun และ Moon ชุดกลุ่มนี้เก่าที่สุดในบรรดาการ์ดไทย และหลายใบยังมีราคาดีอยู่',
+                'ยุคถัดมาคือรหัสขึ้นต้นด้วย SV ซึ่งมาจากยุค Scarlet และ Violet เช่น ไชนีเทรเชอร์ex โปเกมอนการ์ด 151 เทศกาลเทรัสตัลex และการผงาดของผู้ไร้พ่าย เป็นกลุ่มที่มีจำนวนชุดมากที่สุด',
+                'ยุคล่าสุดคือรหัสขึ้นต้นด้วย MA ซึ่งเป็นยุคเมก้า ไล่ตั้งแต่วิวัฒนาการเมก้า อัคคีสีคราม วิวัฒนาการเมก้า ดรีมex วอยด์บลาสต์ ไปจนถึงเงามืดคุกคาม นอกจากนี้ยังมีรหัสขึ้นต้นด้วย MAT ซึ่งเป็นแท็กติกเด็คของยุคเดียวกัน',
+                'จุดที่ต้องระวังคือรหัสชุดของไทยกับญี่ปุ่นบางชุดใช้ตัวเดียวกัน เพราะการ์ดไทยพิมพ์ตามชุดญี่ปุ่นแบบหนึ่งต่อหนึ่ง เวลาเช็คราคาจึงต้องดูภาษาบนการ์ดควบคู่ไปด้วยเสมอ ไม่งั้นจะได้ราคาของฉบับญี่ปุ่นมาแทน',
+                'CardStreet มีชุดการ์ดโปเกม่อนภาษาไทยเก้าสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูราคาทีละใบได้ หรือพิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาเพื่อไปที่ใบนั้นโดยตรง',
+            ],
+            en: [
+                'The set code printed in the bottom corner is the single most useful piece of information on a card. It tells you the language, the era, and it is the fastest way to reach the right card page.',
+                'Thai Pokemon cards fall into three broad eras. The first uses codes beginning with AS, from the Sun and Moon era. These are the oldest Thai-language cards and a number of them still hold strong prices.',
+                'Next come the SV codes, from the Scarlet and Violet era, covering sets like ไชนีเทรเชอร์ex, Pokemon Card 151, เทศกาลเทรัสตัลex and การผงาดของผู้ไร้พ่าย. This is the largest group by number of sets.',
+                'The current era uses MA codes, the Mega era, running from วิวัฒนาการเมก้า through อัคคีสีคราม, วิวัฒนาการเมก้า ดรีมex and วอยด์บลาสต์ to เงามืดคุกคาม. You will also see MAT codes, which are the tactics decks from the same era.',
+                'The catch is that some Thai and Japanese sets share a code, because Thai cards are printed from the Japanese sets one-to-one. When checking a price you must read the language on the card as well, or you will end up looking at the Japanese print instead.',
+                'CardStreet carries over ninety Thai-language Pokemon sets. Open a set page to browse it card by card, or type the set code and collector number into search to go straight to one.',
+            ],
+        },
+    },
 ];
 
 /** A guide by slug, or null. */
