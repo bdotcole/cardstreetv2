@@ -426,6 +426,152 @@ export const GUIDES: Guide[] = [
             ],
         },
     },
+    {
+        slug: 'one-piece-english-vs-japanese',
+        game: 'onepiece',
+        updated: '2026-08-30',
+        title: {
+            th: 'การ์ดวันพีชภาษาอังกฤษกับภาษาญี่ปุ่น เลือกเก็บแบบไหนดี | CardStreet',
+            en: 'One Piece Card Game: English or Japanese, Which Should You Collect | CardStreet',
+        },
+        description: {
+            th: 'การ์ดวันพีชไม่มีฉบับภาษาไทย คนไทยจึงต้องเลือกระหว่างฉบับภาษาอังกฤษกับภาษาญี่ปุ่น เทียบให้ครบทั้งราคา ความหาง่าย เลขการ์ด และการขายต่อ',
+            en: 'The One Piece Card Game has no Thai-language release, so collectors here choose between the English and Japanese editions. Price, availability, numbering and resale compared.',
+        },
+        h1: {
+            th: 'การ์ดวันพีช ภาษาอังกฤษหรือญี่ปุ่นดี',
+            en: 'One Piece Cards: English or Japanese?',
+        },
+        body: {
+            th: [
+                'ต่างจากการ์ดโปเกม่อนที่มีฉบับภาษาไทยขายในประเทศ การ์ดวันพีชไม่มีฉบับภาษาไทยเลย คนไทยที่เริ่มเก็บจึงต้องตัดสินใจตั้งแต่ใบแรกว่าจะเดินสายภาษาอังกฤษหรือภาษาญี่ปุ่น และสองสายนี้เป็นคนละตลาดกันจริง ๆ',
+                'ฉบับภาษาญี่ปุ่นออกก่อนเสมอ ชุดใหม่จะมาถึงมือคนเก็บสายญี่ปุ่นก่อนสายอังกฤษหลายเดือน ใครอยากได้การ์ดใหม่ก่อนใครมักเลือกทางนี้ ราคากล่องมักถูกกว่าเมื่อเทียบใบต่อใบ แต่ต้องสั่งนำเข้าและรอ',
+                'ฉบับภาษาอังกฤษหาซื้อในไทยง่ายกว่า ร้านการ์ดในประเทศสต็อกไว้มากกว่า และถ้าจะขายต่อในกลุ่มคนไทยก็มักมีคนซื้อกว้างกว่า เพราะอ่านข้อความบนการ์ดได้โดยตรง',
+                'เรื่องเลขการ์ดเป็นจุดที่หลายคนเข้าใจผิด ทั้งสองฉบับใช้รหัสเดียวกัน เช่น OP05-006 หรือ ST18-002 ทำให้ดูเหมือนเป็นใบเดียวกัน แต่ราคาตลาดของสองฉบับไม่เท่ากัน และบางใบต่างกันมาก การเอาราคาฝั่งหนึ่งมาอ้างกับอีกฝั่งจึงพลาดได้ง่าย',
+                'สิ่งที่ควรทำก่อนซื้อหรือขายทุกครั้งคือ ดูภาษาบนตัวการ์ดก่อน แล้วเปิดหน้าการ์ดของฉบับนั้นโดยเฉพาะ CardStreet เก็บราคาของทั้งสองฉบับแยกกัน มีชุดภาษาอังกฤษห้าสิบแปดชุดและชุดภาษาญี่ปุ่นห้าสิบห้าชุดในแคตตาล็อก',
+                'สรุปสำหรับคนเพิ่งเริ่ม ถ้าอยากเล่นกับคนไทยและขายต่อง่าย เลือกภาษาอังกฤษ ถ้าเน้นสะสมงานอาร์ตและอยากได้ชุดใหม่ก่อน เลือกภาษาญี่ปุ่น และไม่ว่าจะสายไหน ให้เทียบราคาของฉบับที่ถืออยู่จริงเสมอ',
+            ],
+            en: [
+                'Unlike Pokemon, which has a Thai-language edition sold locally, the One Piece Card Game has no Thai release at all. Collectors here have to choose between English and Japanese from the first card, and the two are genuinely separate markets.',
+                'Japanese releases come first. New sets reach Japanese-track collectors months ahead of English, so anyone who wants cards early tends to go that way. Boxes are often cheaper per card, but they have to be imported and waited for.',
+                'English is easier to buy in Thailand. Local card shops stock more of it, and reselling within Thai groups usually reaches a wider audience, because buyers can read the card text directly.',
+                'Card numbering is where people get caught out. Both editions use the same codes — OP05-006, ST18-002 — which makes them look like the same card. Their market prices are not the same, and for some cards the gap is wide. Quoting a price from one edition against the other is an easy way to lose money.',
+                'So before buying or selling, read the language on the card first, then open the page for that specific edition. CardStreet prices both separately, with fifty-eight English sets and fifty-five Japanese sets in the catalog.',
+                'For beginners: if you want to play with people in Thailand and resell easily, take English. If you are collecting for the art and want new sets first, take Japanese. Either way, always compare against the edition you actually hold.',
+            ],
+        },
+    },
+    {
+        slug: 'one-piece-set-codes',
+        game: 'onepiece',
+        updated: '2026-08-30',
+        title: {
+            th: 'รหัสชุดการ์ดวันพีช OP ST EB PRB อ่านยังไง | CardStreet',
+            en: 'One Piece Set Codes Explained: OP, ST, EB and PRB | CardStreet',
+        },
+        description: {
+            th: 'อธิบายรหัสชุดการ์ดวันพีชที่พิมพ์อยู่บนการ์ด ทั้ง OP, ST, EB และ PRB ว่าแต่ละแบบคือชุดประเภทไหน และใช้หาราคาการ์ดใบที่ถืออยู่ยังไง',
+            en: 'What the OP, ST, EB and PRB codes printed on One Piece cards mean, what kind of product each one is, and how to use them to find the right price.',
+        },
+        h1: {
+            th: 'รหัสชุดการ์ดวันพีช OP ST EB PRB',
+            en: 'One Piece Set Codes Explained',
+        },
+        body: {
+            th: [
+                'ทุกใบของการ์ดวันพีชมีรหัสพิมพ์อยู่ เช่น OP05-006 หรือ ST18-002 อ่านรหัสนี้เป็นแล้วจะรู้ทันทีว่าการ์ดมาจากสินค้าประเภทไหน และหาหน้าการ์ดที่ถูกต้องได้เร็วขึ้นมาก',
+                'ตัวอักษรข้างหน้าบอกประเภทของชุด OP คือบูสเตอร์หลัก เป็นชุดใหญ่ประจำซีซัน มีการ์ดเยอะที่สุดและมีใบระดับ SEC อยู่ในนี้ ST คือสตาร์ทเตอร์เด็ค เป็นเด็คสำเร็จรูปที่ซื้อแล้วเล่นได้เลย การ์ดส่วนใหญ่ราคาไม่สูงแต่บางใบเป็นใบที่ต้องมีในเด็คแข่ง',
+                'EB คือเอ็กซ์ตร้าบูสเตอร์ เป็นชุดเสริมขนาดเล็กกว่าชุดหลัก ส่วน PRB คือพรีเมียมบูสเตอร์ ซึ่งเป็นชุดที่รวมการ์ดอาร์ตพิเศษไว้เยอะเป็นพิเศษ',
+                'นอกจากนี้ยังมีการ์ดโปรโมชันที่แจกตามงานแข่งหรือแถมกับสินค้า กลุ่มนี้บางใบเป็นการ์ดที่ราคาสูงที่สุดในเกม โดยเฉพาะใบที่มีเลขซีเรียลกำกับ',
+                'ตัวเลขสองหลักหลังตัวอักษรคือลำดับของชุด และตัวเลขสามหลักหลังขีดคือเลขการ์ดในชุดนั้น ดังนั้น OP05-006 หมายถึงการ์ดใบที่ 6 ของบูสเตอร์หลักชุดที่ 5',
+                'ข้อควรระวังคือรหัสเดียวกันใช้ทั้งฉบับภาษาอังกฤษและภาษาญี่ปุ่น การ์ดคนละภาษาที่รหัสตรงกันคือคนละใบในตลาดและราคาไม่เท่ากัน เวลาเช็คราคาจึงต้องดูภาษาบนการ์ดควบคู่กับรหัสเสมอ',
+                'CardStreet มีชุดการ์ดวันพีชรวมกันร้อยกว่าชุดทั้งสองภาษา พิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาก็ไปที่ใบนั้นได้โดยตรง',
+            ],
+            en: [
+                'Every One Piece card carries a printed code such as OP05-006 or ST18-002. Learning to read it tells you what kind of product the card came from and gets you to the right card page much faster.',
+                'The letters identify the set type. OP is a main booster, the large seasonal release with the most cards and the SEC-tier chase cards in it. ST is a starter deck, a ready-to-play product; most of its cards are inexpensive, though some are competitive staples.',
+                'EB is an extra booster, a smaller supplementary set. PRB is a premium booster, which packs in a much higher share of special-art cards.',
+                'Separately there are promotional cards handed out at events or bundled with products. Some of these are the most valuable cards in the game, particularly the serial-numbered ones.',
+                'The two digits after the letters are the set number, and the three digits after the dash are the card number within it. So OP05-006 is card 6 of the fifth main booster.',
+                'The catch: the same code is used for both the English and Japanese editions. Cards sharing a code across languages are different cards to the market and are not worth the same, so always read the language alongside the code when checking a price.',
+                'CardStreet carries over a hundred One Piece sets across both languages. Type the set code and card number into search to go straight to a card.',
+            ],
+        },
+    },
+    {
+        slug: 'one-piece-rarity-guide',
+        game: 'onepiece',
+        updated: '2026-08-30',
+        title: {
+            th: 'ระดับความหายากการ์ดวันพีช C UC R SR SEC L คืออะไร | CardStreet',
+            en: 'One Piece Card Rarities Explained: C, UC, R, SR, SEC and L | CardStreet',
+        },
+        description: {
+            th: 'อธิบายระดับความหายากของการ์ดวันพีช ทั้ง C UC R SR SEC และการ์ด Leader ว่าแต่ละระดับคืออะไร ระดับไหนคือกลุ่มที่ราคาสูง และทำไมการ์ดโปรโมบางใบถึงแพงกว่าทุกระดับ',
+            en: 'What C, UC, R, SR, SEC and Leader mean on One Piece cards, which tiers carry real value, and why some promos outrank every rarity in the set.',
+        },
+        h1: {
+            th: 'ระดับความหายากการ์ดวันพีช',
+            en: 'One Piece Card Rarities Explained',
+        },
+        body: {
+            th: [
+                'การ์ดวันพีชพิมพ์ระดับความหายากไว้ที่มุมล่างของการ์ด ใกล้กับรหัสชุด เป็นตัวย่อสั้น ๆ ที่บอกได้ทันทีว่าใบนั้นอยู่ชั้นไหน',
+                'C คือ Common และ UC คือ Uncommon สองระดับนี้คือส่วนใหญ่ของทุกซองและมักมีมูลค่าไม่สูง R คือ Rare ซึ่งเป็นชั้นกลาง และในกลุ่มนี้มีการ์ดที่ใช้ในเด็คแข่งอยู่หลายใบ ทำให้บางใบราคาสูงกว่าที่ระดับความหายากบอกไว้',
+                'SR คือ Super Rare เป็นชั้นที่ราคาเริ่มขยับจริงจัง และเป็นระดับของการ์ดอาร์ตพิเศษหลายใบ',
+                'SEC คือ Secret Rare ซึ่งเป็นระดับที่หายากที่สุดในบูสเตอร์ปกติ ใบที่แพงที่สุดของแต่ละชุดหลักมักอยู่ระดับนี้',
+                'L คือการ์ด Leader ซึ่งเป็นการ์ดหัวหน้าเด็ค ใบละหนึ่งต่อเด็ค การ์ด Leader ไม่ได้แพงเพราะหายาก แต่แพงเพราะจำเป็นสำหรับเด็คที่แข็งในสนาม ราคาจึงขึ้นลงตามเมตาการแข่งมากกว่าตามความหายาก',
+                'สิ่งที่ทำให้การ์ดวันพีชต่างจากเกมอื่นคือ การ์ดโปรโมชันที่แจกตามงานแข่ง โดยเฉพาะใบที่มีเลขซีเรียลกำกับ สามารถมีราคาสูงกว่าการ์ด SEC ในบูสเตอร์ปกติหลายเท่า เพราะจำนวนที่มีอยู่จริงน้อยกว่ามาก',
+                'เพราะแบบนี้ระดับความหายากจึงใช้จัดกลุ่มคร่าว ๆ ได้ แต่ไม่ใช่ตัวบอกราคา วิธีที่แม่นคือเปิดหน้าการ์ดใบนั้นแล้วดูราคาตลาดจริงของฉบับภาษาที่ถืออยู่',
+            ],
+            en: [
+                'One Piece cards print their rarity in the bottom corner next to the set code, as a short abbreviation that places the card immediately.',
+                'C is Common and UC is Uncommon. These two make up the bulk of any pack and are usually modest. R is Rare, the middle tier, and this group contains a number of competitive staples, so some Rares are worth more than their tier suggests.',
+                'SR is Super Rare, where prices start to move seriously, and it covers many of the special-art cards.',
+                'SEC is Secret Rare, the scarcest tier in a normal booster. The most valuable card in a main set usually sits here.',
+                "L marks a Leader card, the deck's captain, one per deck. Leaders are not expensive because they are scarce; they are expensive when they anchor a strong deck, so their prices track the competitive meta rather than rarity.",
+                'What sets One Piece apart from other games is that promotional cards from events — especially serial-numbered ones — can be worth many times an SEC from a normal booster, simply because far fewer exist.',
+                'So rarity is useful for placing a card roughly, but it is not a price. The reliable method is to open the card page and read the actual market price for the language edition you hold.',
+            ],
+        },
+    },
+    {
+        slug: 'spot-fake-one-piece-cards',
+        game: 'onepiece',
+        updated: '2026-08-30',
+        title: {
+            th: 'การ์ดวันพีชปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | CardStreet',
+            en: 'How to Spot Fake One Piece Cards Before You Pay | CardStreet',
+        },
+        description: {
+            th: 'วิธีตรวจการ์ดวันพีชปลอมด้วยตัวเอง ทั้งเนื้อการ์ด งานพิมพ์ สี ขอบ และข้อควรระวังเฉพาะการ์ดนำเข้า เพราะการ์ดวันพีชในไทยเป็นของนำเข้าทั้งหมด',
+            en: 'Check a One Piece card yourself — stock, print, colour, edges — plus what to watch for with imports, since every One Piece card in Thailand is imported.',
+        },
+        h1: {
+            th: 'การ์ดวันพีชปลอม ดูยังไง',
+            en: 'How to Spot Fake One Piece Cards',
+        },
+        body: {
+            th: [
+                'การ์ดวันพีชในไทยเป็นของนำเข้าทั้งหมด ไม่มีฉบับภาษาไทย ผู้ซื้อจึงเสียเปรียบเรื่องข้อมูลตั้งแต่ต้น และของปลอมก็ตามราคาที่สูงขึ้นมาเสมอ สิ่งที่ตรวจได้เองมีดังนี้',
+                'เนื้อการ์ดและน้ำหนัก การ์ดแท้มีความหนาและน้ำหนักสม่ำเสมอ ของปลอมมักบางกว่าหรือแข็งกระด้างผิดปกติ ถ้ามีใบแท้ใบอื่นอยู่ในมือ ให้เทียบความหนาด้านข้างดู',
+                'งานพิมพ์และตัวหนังสือ ซูมดูข้อความเล็กที่ขอบล่างและข้อความบรรยายเอฟเฟกต์ ของแท้คมทุกตัวอักษร ของปลอมมักเบลอ ขอบตัวอักษรฟุ้ง หรือเว้นระยะไม่เท่ากัน',
+                'สีและฟอยล์ การ์ดอาร์ตพิเศษของวันพีชมีลวดลายฟอยล์ที่สะท้อนแสงเป็นแบบเฉพาะ ของปลอมมักสะท้อนแบบแบน ๆ ทั้งใบ หรือสีจัดเกินจริง เอียงดูใต้แสงจะเห็นต่างชัด',
+                'ขอบและมุม การ์ดแท้ตัดขอบเรียบ มุมโค้งเท่ากันทั้งสี่มุม ถ้าขอบหยาบหรือมุมไม่เท่ากันให้ระวัง',
+                'รหัสชุดกับภาษา ตรวจว่ารหัสบนการ์ดเป็นชุดที่มีอยู่จริง และตรงกับภาษาที่พิมพ์บนการ์ด ของปลอมหลายใบเอาอาร์ตของฉบับหนึ่งไปใส่รหัสของอีกฉบับ',
+                'สุดท้ายคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน CardStreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุดแยกตามภาษา และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ',
+            ],
+            en: [
+                'Every One Piece card in Thailand is imported — there is no Thai edition — so buyers start at an information disadvantage, and counterfeits follow the prices up. Here is what you can check yourself.',
+                'Stock and weight. Genuine cards are consistent in thickness and weight. Fakes are often thinner, or oddly stiff. If you have a known-genuine card to hand, compare the edges side by side.',
+                'Print and text. Zoom in on the small text along the bottom edge and the effect text. On a real card every character is crisp; fakes blur, bleed at the edges, or space text unevenly.',
+                'Colour and foil. One Piece special-art cards use a distinctive foil pattern that catches light in a particular way. Counterfeits often reflect flatly across the whole card, or run oversaturated. Tilting under a light shows it up.',
+                'Edges and corners. Real cards are cut cleanly with all four corners rounded identically. Rough edges or uneven corners are a warning.',
+                "Set code against language. Check that the code is a set that exists and matches the language printed on the card. Many fakes put one edition's artwork under the other edition's code.",
+                'And finally the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. Knowing the going rate is the best counterfeit defence there is. Every card page on CardStreet shows the current market price per language edition, and buying through the platform means an identity-verified seller and buyer protection on the order.',
+            ],
+        },
+    },
 ];
 
 /** A guide by slug, or null. */
