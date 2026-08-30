@@ -14,6 +14,7 @@ interface PersonInfo {
     active_listings: number
     stripe_account_id: string | null
     stripe_account_status: string | null
+    stripe_region: string | null
 }
 
 interface ReportListing {
@@ -70,6 +71,10 @@ function SellerBox({ seller, onBan, onUnban, onRejectStripe, banBusy }: {
     banBusy: boolean
 }) {
     const stripeRejected = seller.stripe_account_status === 'rejected'
+    // Stripe only permits accounts.reject where the platform is liable for
+    // negative balances. TH uses direct charges with the seller as merchant of
+    // record, so rejection can never succeed there — don't offer it as live.
+    const rejectUnavailable = (seller.stripe_region ?? 'th') === 'th'
     return (
         <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -106,12 +111,16 @@ function SellerBox({ seller, onBan, onUnban, onRejectStripe, banBusy }: {
                         {seller.stripe_account_id && (
                             <button
                                 onClick={onRejectStripe}
-                                disabled={banBusy || stripeRejected}
-                                title={stripeRejected ? 'Stripe account already rejected' : 'Permanently disable charges and payouts on their Stripe account'}
+                                disabled={banBusy || stripeRejected || rejectUnavailable}
+                                title={
+                                    stripeRejected ? 'Stripe account already rejected'
+                                        : rejectUnavailable ? 'Stripe does not allow rejecting accounts on the TH platform — rejection requires the platform to be liable for negative balances, but the seller is merchant of record under direct charges. The account ban is the effective control.'
+                                            : 'Permanently disable charges and payouts on their Stripe account'
+                                }
                                 className="px-2.5 py-1 text-[10px] font-black uppercase text-brand-red bg-brand-red/10 border border-brand-red/20 rounded-lg hover:bg-brand-red/20 transition disabled:opacity-40"
                             >
                                 <i className="fa-brands fa-stripe-s mr-1" />
-                                {stripeRejected ? 'Stripe rejected' : 'Reject Stripe'}
+                                {stripeRejected ? 'Stripe rejected' : rejectUnavailable ? 'Stripe reject N/A' : 'Reject Stripe'}
                             </button>
                         )}
                     </>

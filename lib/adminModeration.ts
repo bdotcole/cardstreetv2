@@ -167,7 +167,18 @@ async function rejectConnectedAccount(
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // An already-rejected account is the state we wanted.
-        return /rejected/i.test(message) ? true : message;
+        if (/already been rejected|rejected\./i.test(message)) return true;
+
+        // Stripe only permits accounts.reject where the PLATFORM is liable for
+        // negative balances. TH runs direct charges with the seller as merchant
+        // of record precisely because Stripe Thailand forbids platform-liable
+        // Connect accounts — so rejection is structurally unavailable there, and
+        // no dashboard setting changes it. Say so instead of leaking a bare
+        // Stripe string that reads like a misconfiguration.
+        if (/not authorized to reject/i.test(message)) {
+            return `Stripe does not allow rejecting this account: rejection requires the platform to be liable for negative balances, and on the ${region.toUpperCase()} platform the seller is merchant of record (direct charges). The account ban is the effective control here.`;
+        }
+        return message;
     }
 }
 

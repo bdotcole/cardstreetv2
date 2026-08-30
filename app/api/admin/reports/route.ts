@@ -15,6 +15,7 @@ interface PersonInfo {
     active_listings: number
     stripe_account_id: string | null
     stripe_account_status: string | null
+    stripe_region: string | null
 }
 
 // GET /api/admin/reports — all reports, enriched with reporter, the reported
@@ -113,6 +114,7 @@ export async function GET() {
             active_listings: activeCount.get(id) ?? 0,
             stripe_account_id: (p.stripe_account_id as string) ?? null,
             stripe_account_status: (p.stripe_account_status as string) ?? null,
+            stripe_region: (p.stripe_region as string) ?? null,
         }
     }
 
