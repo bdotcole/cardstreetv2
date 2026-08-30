@@ -84,6 +84,60 @@ const JP_SLUG_OVERRIDES: Record<string, string> = {
 const NAME_SLUG_OVERRIDES: Record<string, string> = {
   'lorcana-8': 'reign-of-jafar-disney-lorcana',
   'mtg-hoc': 'the-hobbit-eternal-legal-magic-the-gathering',
+
+  // MTG Commander and Art Series products. Scryfall names them "<Set> Commander" /
+  // "<Set> Art Series"; JustTCG names them "Commander: <Set>" / "Art Series: <Set>",
+  // so norm() never lines the two up and every one of these would sit unpriced.
+  'mtg-onc': 'commander-phyrexia-all-will-be-one-magic-the-gathering',
+  'mtg-moc': 'commander-march-of-the-machine-magic-the-gathering',
+  'mtg-ltc': 'commander-the-lord-of-the-rings-tales-of-middle-earth-magic-the-gathering',
+  'mtg-woc': 'commander-wilds-of-eldraine-magic-the-gathering',
+  'mtg-lcc': 'commander-the-lost-caverns-of-ixalan-magic-the-gathering',
+  'mtg-mkc': 'commander-murders-at-karlov-manor-magic-the-gathering',
+  'mtg-otc': 'commander-outlaws-of-thunder-junction-magic-the-gathering',
+  'mtg-m3c': 'commander-modern-horizons-3-magic-the-gathering',
+  'mtg-blc': 'commander-bloomburrow-magic-the-gathering',
+  'mtg-dsc': 'commander-duskmourn-house-of-horror-magic-the-gathering',
+  'mtg-fdc': 'commander-foundations-magic-the-gathering',
+  'mtg-drc': 'commander-aetherdrift-magic-the-gathering',
+  'mtg-tdc': 'commander-tarkir-dragonstorm-magic-the-gathering',
+  'mtg-fic': 'commander-final-fantasy-magic-the-gathering',
+  'mtg-eoc': 'commander-edge-of-eternities-magic-the-gathering',
+  'mtg-ecc': 'commander-lorwyn-eclipsed-magic-the-gathering',
+  'mtg-soc': 'commander-secrets-of-strixhaven-magic-the-gathering',
+  'mtg-msc': 'commander-marvel-super-heroes-magic-the-gathering',
+  'mtg-frc': 'commander-reality-fracture-magic-the-gathering',
+  'mtg-trc': 'commander-star-trek-magic-the-gathering',
+  // Fallout and Doctor Who carry no "Commander" in the JustTCG name at all.
+  'mtg-pip': 'universes-beyond-fallout-magic-the-gathering',
+  'mtg-who': 'universes-beyond-doctor-who-magic-the-gathering',
+  'mtg-aone': 'art-series-phyrexia-all-will-be-one-magic-the-gathering',
+  'mtg-amom': 'art-series-march-of-the-machine-magic-the-gathering',
+  'mtg-altr': 'art-series-universes-beyond-the-lord-of-the-rings-tales-of-middle-earth-magic-the-gathering',
+  'mtg-acmm': 'art-series-commander-masters-magic-the-gathering',
+  'mtg-awoe': 'art-series-wilds-of-eldraine-magic-the-gathering',
+  'mtg-alci': 'art-series-the-lost-caverns-of-ixalan-magic-the-gathering',
+  'mtg-amkm': 'art-series-murders-at-karlov-manor-magic-the-gathering',
+  'mtg-aotj': 'art-series-outlaws-of-thunder-junction-magic-the-gathering',
+  'mtg-amh3': 'art-series-modern-horizons-3-magic-the-gathering',
+  'mtg-aacr': 'art-series-universes-beyond-assassin-s-creed-magic-the-gathering',
+  'mtg-ablb': 'art-series-bloomburrow-magic-the-gathering',
+  'mtg-adsk': 'art-series-duskmourn-house-of-horror-magic-the-gathering',
+  'mtg-afdn': 'art-series-foundations-magic-the-gathering',
+  'mtg-ainr': 'art-series-innistrad-remastered-magic-the-gathering',
+  'mtg-adft': 'art-series-aetherdrift-magic-the-gathering',
+  'mtg-atdm': 'art-series-tarkir-dragonstorm-magic-the-gathering',
+  'mtg-afin': 'art-series-final-fantasy-magic-the-gathering',
+  'mtg-aeoe': 'art-series-edge-of-eternities-magic-the-gathering',
+  'mtg-aspm': 'art-series-marvel-s-spider-man-magic-the-gathering',
+  'mtg-atla': 'art-series-avatar-the-last-airbender-magic-the-gathering',
+  'mtg-aecl': 'art-series-lorwyn-eclipsed-magic-the-gathering',
+  'mtg-atmt': 'art-series-teenage-mutant-ninja-turtles-magic-the-gathering',
+  'mtg-asos': 'art-series-secrets-of-strixhaven-magic-the-gathering',
+  'mtg-amsh': 'art-series-marvel-super-heroes-magic-the-gathering',
+  // mtg-atle (Avatar Eternal Art Series) is deliberately absent: JustTCG has a single
+  // Avatar art-series set, already claimed by mtg-atla, and the two number their cards
+  // from 1 for different art. Mapping both invites the number-collision misprice.
 };
 
 // Set-name key for resolving JustTCG set slugs. Card-level matching lives in
