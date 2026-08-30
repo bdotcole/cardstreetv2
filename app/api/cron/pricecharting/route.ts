@@ -147,6 +147,36 @@ const HEARTBEAT_MS = 15_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Split ids into chunks bounded by TOTAL CHARACTER LENGTH, not by count.
+ *
+ * PostgREST puts `.in()` values in the query STRING, so the limit that actually
+ * bites is URL length, and id length varies wildly by game: a Pokemon id is ~8
+ * chars ("xy7-27") but an MTG id is a 41-char UUID
+ * ("mtg-fbdaa29b-85ff-4a06-b27e-fcdbdfd4a3fe").
+ *
+ * A flat chunk of 500 is therefore safe for four games and broken for the fifth.
+ * Measured 2026-08-30: 500 MTG ids build a 20,499-char list and the request dies
+ * with `TypeError: fetch failed` — not a PostgREST error, a transport failure —
+ * while the same 500 for Pokemon (4,609 chars) and Lorcana (6,489) succeed. That
+ * is why this is length-based: any count-based cap is a guess about the longest
+ * id some future catalog might use.
+ */
+function chunkByLength(ids: string[], maxChars = 6_000, maxCount = 500): string[][] {
+    const out: string[][] = [];
+    let cur: string[] = [];
+    let len = 0;
+    for (const id of ids) {
+        // +1 for the comma separator between values.
+        if (cur.length && (len + id.length + 1 > maxChars || cur.length >= maxCount)) {
+            out.push(cur); cur = []; len = 0;
+        }
+        cur.push(id); len += id.length + 1;
+    }
+    if (cur.length) out.push(cur);
+    return out;
+}
+
+/**
  * Serializes every outbound PriceCharting call onto a shared `interval`-spaced
  * schedule, across both passes — the quota is per token, so a per-pass or per-lane
  * limiter would not bound the account-wide rate that actually matters.
@@ -378,8 +408,10 @@ export async function GET(request: NextRequest) {
 
                 // The market_values unique key includes language; reuse the card's market
                 // language (ja -> jp) so refreshes update the same row the ingest wrote.
-                // Chunked to stay clear of PostgREST's 1000-row response cap, which a full
-                // page sits exactly on. A truncated lookup used to fail SILENTLY and badly:
+                // Chunked by chunkByLength to stay clear of BOTH PostgREST's 1000-row
+                // response cap (a full page sits exactly on it) and the URL-length limit
+                // that a count-based chunk silently blows for long ids. See that helper.
+                // A truncated lookup used to fail SILENTLY and badly:
                 // every missing card fell back to 'en', writing English-language price rows
                 // onto Japanese and Thai cards. Unresolved cards are now SKIPPED and counted
                 // rather than defaulted, so a lookup gap can never mislabel a row again.
@@ -393,11 +425,18 @@ export async function GET(request: NextRequest) {
                 const langByCard = new Map<string, string>();
                 const gameByCard = new Map<string, string>();
                 const jpOnePiece = new Set<string>();
-                for (let i = 0; i < pageIds.length; i += 500) {
-                    const { data: cards } = await supabase
+                for (const chunk of chunkByLength(pageIds)) {
+                    const { data: cards, error: cardErr } = await supabase
                         .from('pokemon_cards')
                         .select('id, language, game')
-                        .in('id', pageIds.slice(i, i + 500));
+                        .in('id', chunk);
+                    // MUST throw, not shrug. `.in()` builds the id list into the query
+                    // STRING, so a failure here is a whole-chunk loss, and swallowing it
+                    // would send every card in the chunk down the unresolved path — which
+                    // stamps the rows as done while writing no prices at all. The failure
+                    // is invisible in every counter except gradedUnresolved. Throwing
+                    // aborts the page BEFORE the stamp, so the rows stay stale and retry.
+                    if (cardErr) throw cardErr;
                     for (const c of cards || []) {
                         langByCard.set(c.id, c.language === 'ja' ? 'jp' : (c.language || 'en'));
                         if (c.game) gameByCard.set(c.id, c.game);
@@ -450,10 +489,16 @@ export async function GET(request: NextRequest) {
                 }
                 // Stamp last. If the upserts above threw, these rows stay stale and are
                 // retried next run rather than being marked done on a failed write.
-                for (let i = 0; i < stamped.length; i += UPSERT_BATCH) {
+                //
+                // chunkByLength, not UPSERT_BATCH: the ids ride in the query string here
+                // (it is the `.in()` filter of an UPDATE, not a request body), so 1000 MTG
+                // ids build a ~41KB URL and PostgREST answers 400 Bad Request. The row
+                // batch size that is fine for the upsert above — whose payload is a body —
+                // is not a safe batch size for a filter.
+                for (const chunk of chunkByLength(stamped)) {
                     const { error } = await supabase.from('pricecharting_map')
                         .update({ last_priced_at: stamp })
-                        .in('card_id', stamped.slice(i, i + UPSERT_BATCH));
+                        .in('card_id', chunk);
                     if (error) throw error;
                 }
                 gradedCards += stamped.length;
