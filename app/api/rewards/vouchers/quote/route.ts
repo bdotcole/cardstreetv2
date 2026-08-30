@@ -87,7 +87,7 @@ export async function POST(req: Request) {
                     .from('reward_items')
                     .select('meta, expires_at')
                     .eq('user_id', sellerIds[0])
-                    .eq('item_key', 'seller_fee_30')
+                    .like('item_key', 'seller_fee_%')
                     .eq('status', 'active')
                     .order('created_at', { ascending: true })
                     .limit(1);

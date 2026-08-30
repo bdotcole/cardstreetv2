@@ -14,8 +14,25 @@ const COLOR_SWATCH: Record<string, string> = {
     pink: 'bg-pink-400',
     lime: 'bg-lime-400',
     violet: 'bg-violet-400',
+    cyan: 'bg-cyan-400',
+    mint: 'bg-emerald-400',
+    sky: 'bg-sky-400',
+    crimson: 'bg-red-500',
+    amber: 'bg-amber-500',
+    ice: 'bg-slate-200',
+    toxic: 'bg-lime-500',
     rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300',
 };
+
+/** Shop sections, in ladder order: free-to-us cosmetics first, then perks,
+ *  then the money-backed vouchers at the top of the ladder. */
+const SHOP_GROUPS: readonly { kind: 'cosmetic' | 'perk' | 'voucher'; labelKey: string }[] = [
+    { kind: 'cosmetic', labelKey: 'rewards.groupCosmetics' },
+    { kind: 'perk', labelKey: 'rewards.groupPerks' },
+    { kind: 'voucher', labelKey: 'rewards.groupVouchers' },
+];
+
+const COLOR_SKU_PREFIX = 'chat_color_';
 
 /**
  * The Rewards Hub — Whatnot-style rewards sheet opened from the header coin
@@ -199,7 +216,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
     // Store derivations (defensive against a summary cached before the store
     // fields existed).
     const owned = summary.owned ?? [];
-    const activeVouchers = owned.filter((o) => o.key.startsWith('voucher') || o.key === 'seller_fee_30');
+    const activeVouchers = owned.filter((o) => o.key.startsWith('voucher') || o.key.startsWith('seller_fee'));
     const isIos = typeof window !== 'undefined'
         && (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'ios';
 
@@ -548,8 +565,18 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    {CATALOG.filter((item) => !(item.iosHidden && isIos)).map((item) => {
+                                {SHOP_GROUPS.map((group) => {
+                                  const groupItems = CATALOG.filter(
+                                      (item) => item.kind === group.kind && !(item.iosHidden && isIos),
+                                  );
+                                  if (groupItems.length === 0) return null;
+                                  return (
+                                    <div key={group.kind} className="flex flex-col gap-2">
+                                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-wide px-1">
+                                          {t(group.labelKey)}
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {groupItems.map((item) => {
                                         const ownedCount = owned.filter((o) => o.key === item.key).length;
                                         const isOwnedOnce = item.oncePerAccount === true && ownedCount > 0;
                                         const levelLocked = (item.minLevel ?? 1) > summary.level;
@@ -559,6 +586,9 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                         const canBuy = available && !levelLocked && !isOwnedOnce && !freezeCapped
                                             && summary.coins >= item.coins;
                                         const isFrame = item.key in FRAME_STYLES;
+                                        const soloColor = item.key.startsWith(COLOR_SKU_PREFIX)
+                                            ? item.key.slice(COLOR_SKU_PREFIX.length)
+                                            : null;
                                         return (
                                             <div key={item.key} className="glass rounded-2xl border border-white/5 p-3.5 flex flex-col gap-2">
                                                 <div className="flex items-start justify-between gap-2">
@@ -577,6 +607,9 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                 {isFrame && (
                                                     <div className={`h-6 rounded-lg ${FRAME_STYLES[item.key]}`} />
                                                 )}
+                                                {soloColor && (
+                                                    <div className={`h-6 rounded-lg ${COLOR_SWATCH[soloColor] ?? 'bg-slate-500'}`} />
+                                                )}
                                                 <div className="flex items-center justify-between gap-2 mt-auto">
                                                     <span className="flex items-center gap-1.5">
                                                         <i className="fa-solid fa-coins text-amber-400 text-[10px]"></i>
@@ -593,6 +626,18 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                             }`}
                                                         >
                                                             {summary.equippedFrame === item.key ? t('rewards.equipped') : t('rewards.equip')}
+                                                        </button>
+                                                    ) : isOwnedOnce && soloColor ? (
+                                                        <button
+                                                            onClick={() => void equip({ chatColor: summary.equippedChatColor === soloColor ? null : soloColor })}
+                                                            disabled={busyKey !== null}
+                                                            className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase transition-colors ${
+                                                                summary.equippedChatColor === soloColor
+                                                                    ? 'bg-brand-cyan text-brand-darker'
+                                                                    : 'bg-white/10 text-slate-300'
+                                                            }`}
+                                                        >
+                                                            {summary.equippedChatColor === soloColor ? t('rewards.equipped') : t('rewards.equip')}
                                                         </button>
                                                     ) : isOwnedOnce ? (
                                                         <span className="text-[9px] font-black uppercase text-brand-cyan">{t('rewards.owned')}</span>
@@ -636,8 +681,11 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                 )}
                                             </div>
                                         );
-                                    })}
-                                </div>
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                                 <p className="text-slate-500 text-[10px] font-semibold px-1">{t('rewards.shopFootnote')}</p>
                             </div>
                         )}

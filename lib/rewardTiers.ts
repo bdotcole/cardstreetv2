@@ -247,22 +247,49 @@ export interface CatalogItemDef {
 }
 
 export const CATALOG: readonly CatalogItemDef[] = [
+    // ---- Cosmetics: zero marginal cost, so they carry the low/mid range and
+    // give every balance something to aim at without touching the budget.
     { key: 'streak_freeze', coins: 150, kind: 'cosmetic', redeemable: true },
-    { key: 'emote_early_unlock', coins: 300, kind: 'cosmetic', redeemable: true },
-    { key: 'frame_holo', coins: 300, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
-    { key: 'frame_rainbow', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
-    { key: 'frame_gold', coins: 800, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
-    { key: 'chat_name_color', coins: 600, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
+    { key: 'chat_color_cyan', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
+    { key: 'chat_color_mint', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
+    { key: 'chat_color_sky', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
+    { key: 'frame_neon', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
+    { key: 'chat_color_crimson', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 6, oncePerAccount: true },
+    { key: 'chat_color_amber', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 6, oncePerAccount: true },
+    { key: 'frame_sakura', coins: 400, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
+    { key: 'frame_forest', coins: 400, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
+    { key: 'emote_early_unlock', coins: 400, kind: 'cosmetic', redeemable: true },
+    { key: 'chat_color_ice', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 9, oncePerAccount: true },
+    { key: 'chat_color_toxic', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 9, oncePerAccount: true },
+    { key: 'frame_holo', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
+    { key: 'frame_sunset', coins: 650, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
+    { key: 'frame_rainbow', coins: 800, kind: 'cosmetic', redeemable: true, minLevel: 5, oncePerAccount: true },
+    { key: 'frame_abyss', coins: 1000, kind: 'cosmetic', redeemable: true, minLevel: 6, oncePerAccount: true },
+    { key: 'frame_ember', coins: 1300, kind: 'cosmetic', redeemable: true, minLevel: 8, oncePerAccount: true },
+    { key: 'frame_glacier', coins: 1300, kind: 'cosmetic', redeemable: true, minLevel: 8, oncePerAccount: true },
+    { key: 'frame_gold', coins: 1800, kind: 'cosmetic', redeemable: true, minLevel: 10, oncePerAccount: true },
+    // Unlocks every chat colour incl. rainbow, which no single-colour SKU sells.
+    { key: 'chat_name_color', coins: 2200, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
+    { key: 'frame_prism', coins: 2600, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
+    { key: 'frame_void', coins: 4000, kind: 'cosmetic', redeemable: true, minLevel: 16, oncePerAccount: true },
+    { key: 'frame_crown', coins: 8000, kind: 'cosmetic', redeemable: true, minLevel: 20, oncePerAccount: true },
+
+    // ---- Perks
     // Deferred: needs the marketplace-ranking surface (own beta pass).
     { key: 'listing_boost', coins: 250, kind: 'perk', redeemable: false },
-    { key: 'pro_trial_7d', coins: 1000, kind: 'perk', redeemable: true, oncePerAccount: true, iosHidden: true },
-    { key: 'voucher_10', coins: 1000, kind: 'voucher', redeemable: true, realCostSatang: 1000, voucher: { type: 'order', amountSatang: 1000, minOrderSatang: 30000, validDays: 60 } },
-    { key: 'voucher_20', coins: 2000, kind: 'voucher', redeemable: true, realCostSatang: 2000, voucher: { type: 'order', amountSatang: 2000, minOrderSatang: 50000, validDays: 60 } },
-    { key: 'voucher_ship_40', coins: 4000, kind: 'voucher', redeemable: true, realCostSatang: 4000, voucher: { type: 'shipping', amountSatang: 4000, minOrderSatang: 50000, validDays: 60 } },
-    // Auto-applies to the seller's next sale's platform fee (never the buyer's
-    // price), consumed at order creation and restored by the same
-    // transfer_group sweep buyer vouchers use.
-    { key: 'seller_fee_30', coins: 3000, kind: 'voucher', redeemable: true, minLevel: 7, realCostSatang: 3000, voucher: { type: 'seller_fee', amountSatang: 3000, minOrderSatang: 0, validDays: 90 } },
+    { key: 'pro_trial_7d', coins: 2500, kind: 'perk', redeemable: true, oncePerAccount: true, iosHidden: true },
+
+    // ---- Vouchers: the only SKUs that cost real money, so they sit far up the
+    // ladder. Value per coin RISES with the tier (0.83 -> 1.00 satang) so
+    // saving is rewarded, while never breaching the 1 coin = 1 satang ceiling.
+    { key: 'voucher_25', coins: 3000, kind: 'voucher', redeemable: true, realCostSatang: 2500, voucher: { type: 'order', amountSatang: 2500, minOrderSatang: 30000, validDays: 60 } },
+    { key: 'voucher_ship_40', coins: 4500, kind: 'voucher', redeemable: true, realCostSatang: 4000, voucher: { type: 'shipping', amountSatang: 4000, minOrderSatang: 50000, validDays: 60 } },
+    { key: 'seller_fee_50', coins: 6000, kind: 'voucher', redeemable: true, minLevel: 7, realCostSatang: 5000, voucher: { type: 'seller_fee', amountSatang: 5000, minOrderSatang: 0, validDays: 90 } },
+    { key: 'voucher_60', coins: 7000, kind: 'voucher', redeemable: true, realCostSatang: 6000, voucher: { type: 'order', amountSatang: 6000, minOrderSatang: 60000, validDays: 60 } },
+    { key: 'voucher_ship_100', coins: 11000, kind: 'voucher', redeemable: true, realCostSatang: 10000, voucher: { type: 'shipping', amountSatang: 10000, minOrderSatang: 100000, validDays: 90 } },
+    { key: 'voucher_150', coins: 16000, kind: 'voucher', redeemable: true, realCostSatang: 15000, voucher: { type: 'order', amountSatang: 15000, minOrderSatang: 120000, validDays: 90 } },
+    { key: 'seller_fee_150', coins: 16000, kind: 'voucher', redeemable: true, minLevel: 10, realCostSatang: 15000, voucher: { type: 'seller_fee', amountSatang: 15000, minOrderSatang: 0, validDays: 120 } },
+    { key: 'voucher_400', coins: 40000, kind: 'voucher', redeemable: true, realCostSatang: 40000, voucher: { type: 'order', amountSatang: 40000, minOrderSatang: 250000, validDays: 90 } },
 ];
 
 export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =
@@ -271,9 +298,23 @@ export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =
 /** Frame item keys -> avatar-ring gradient classes (rendered as the ring
  *  behind the avatar on profile + seller pages). */
 export const FRAME_STYLES: Record<string, string> = {
+    // Entry tier
+    frame_neon: 'bg-gradient-to-br from-cyan-400 via-teal-300 to-emerald-400',
+    frame_sakura: 'bg-gradient-to-br from-pink-200 via-rose-300 to-fuchsia-400',
+    frame_forest: 'bg-gradient-to-br from-lime-300 via-emerald-400 to-teal-600',
+    // Mid tier
     frame_holo: 'bg-gradient-to-br from-cyan-300 via-sky-400 to-blue-600',
+    frame_sunset: 'bg-gradient-to-br from-orange-300 via-rose-400 to-purple-500',
     frame_rainbow: 'bg-gradient-to-br from-rose-400 via-amber-300 to-indigo-400',
+    frame_abyss: 'bg-gradient-to-br from-indigo-400 via-violet-600 to-slate-900',
+    // High tier
+    frame_ember: 'bg-gradient-to-br from-amber-300 via-orange-500 to-red-600',
+    frame_glacier: 'bg-gradient-to-br from-slate-100 via-cyan-200 to-sky-500',
     frame_gold: 'bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600',
+    // Prestige - deep level gates, the long-haul chase
+    frame_prism: 'bg-gradient-to-br from-fuchsia-400 via-cyan-300 to-amber-300',
+    frame_void: 'bg-gradient-to-br from-slate-900 via-purple-800 to-slate-950',
+    frame_crown: 'bg-gradient-to-br from-yellow-200 via-amber-400 to-rose-500',
 };
 
 /** Chat name colors (chat_name_color owners pick one; validated server-side
@@ -283,6 +324,15 @@ export const CHAT_COLORS: Record<string, string> = {
     pink: 'text-pink-400',
     lime: 'text-lime-300',
     violet: 'text-violet-300',
+    cyan: 'text-cyan-300',
+    mint: 'text-emerald-300',
+    sky: 'text-sky-300',
+    crimson: 'text-red-400',
+    amber: 'text-amber-400',
+    ice: 'text-slate-200',
+    toxic: 'text-lime-400',
+    // Bundle-only: never sold as a single colour, so it stays the tell of a
+    // full unlock.
     rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300 bg-clip-text text-transparent',
 };
 

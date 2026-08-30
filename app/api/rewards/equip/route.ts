@@ -49,11 +49,14 @@ export async function POST(req: Request) {
             if (color === null) {
                 update.equipped_chat_color = null;
             } else if (typeof color === 'string' && color in CHAT_COLORS) {
+                // Either the all-colours bundle or the single-colour SKU for
+                // this exact colour. 'rainbow' has no single-colour SKU, so it
+                // stays bundle-only by construction.
                 const { data } = await admin
                     .from('reward_items')
                     .select('id')
                     .eq('user_id', user.id)
-                    .eq('item_key', 'chat_name_color')
+                    .in('item_key', ['chat_name_color', `chat_color_${color}`])
                     .eq('status', 'active')
                     .limit(1);
                 if (!data || data.length === 0) {
