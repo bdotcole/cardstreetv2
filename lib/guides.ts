@@ -784,6 +784,117 @@ export const GUIDES: Guide[] = [
             ],
         },
     },
+    {
+        slug: 'riftbound-beginner-guide-thai',
+        game: 'riftbound',
+        updated: '2026-08-30',
+        title: {
+            th: "Riftbound คือการ์ดเกมอะไร คนเล่น LoL เริ่มยังไง | CardStreet",
+            en: "What Is Riftbound? A Starting Guide for League of Legends Players | CardStreet",
+        },
+        description: {
+            th: "Riftbound คือการ์ดเกม LoL จาก Riot Games ที่เพิ่งเปิดตัว อธิบายว่ามีชุดอะไรบ้าง เริ่มเก็บยังไง และทำไมเกมที่ยังใหม่ถึงเป็นจังหวะที่ดีสำหรับนักสะสม",
+            en: "Riftbound is Riot's League of Legends card game, still new. What sets exist, how to start collecting, and why a young game is an unusual opportunity.",
+        },
+        h1: {
+            th: "Riftbound คืออะไร และเริ่มเก็บยังไง",
+            en: "What Is Riftbound, and How to Start",
+        },
+        body: {
+            th: [
+                "Riftbound คือเกมการ์ดสะสมอย่างเป็นทางการจากจักรวาล League of Legends พัฒนาโดย Riot Games คนไทยหลายคนเรียกกันสั้น ๆ ว่าการ์ดเกม LoL และถ้าคุณเล่น LoL อยู่แล้ว คุณรู้จักตัวละครเกือบทั้งหมดในเกมนี้อยู่แล้ว ทั้งจิงซ์ ยาสึโอะ อาลี ลักซ์ ดาริอัส วิคเตอร์ ทีโม และอีกมาก",
+                "สิ่งที่ทำให้ Riftbound ต่างจากการ์ดเกมอื่นที่คนไทยเก็บกันคือ มันยังใหม่มาก ชุดแรกคือ Origins เพิ่งออกปลายปี 2025 ตามด้วย Origins: Proving Grounds, Spiritforged, Unleashed และล่าสุดคือ Vendetta รวมทั้งหมดห้าชุดเท่านั้น",
+                "ตัวเลขนี้สำคัญกว่าที่คิด เพราะการ์ดโปเกม่อนมีนับหมื่นใบ ยูกิโอมีมากกว่านั้นอีก แต่ Riftbound ทั้งเกมมีการ์ดพันกว่าใบ ซึ่งหมายความว่านักสะสมคนหนึ่งยังไล่เก็บให้ครบทั้งชุดได้จริง เป็นโอกาสที่หายไปแล้วในเกมที่มีอายุยาวกว่านี้",
+                "อีกข้อที่ต่างคือราคายังขยับเร็ว เกมที่เพิ่งเริ่มยังไม่มีราคานิ่ง การ์ดใบเดียวกันอาจขึ้นหรือลงหลายสิบเปอร์เซ็นต์ในไม่กี่เดือน ตามผลการแข่งและกระแสของตัวละคร ก่อนซื้อหรือขายจึงควรดูกราฟราคาย้อนหลังเสมอ ไม่ใช่แค่ราคาวันนี้",
+                "Riftbound ยังไม่มีฉบับภาษาไทย ของที่หมุนเวียนในประเทศเป็นฉบับภาษาอังกฤษที่นำเข้ามา ร้านที่สต็อกครบจึงยังมีไม่มาก",
+                "สำหรับคนเริ่มต้น แนะนำให้เริ่มจากแชมเปียนที่ตัวเองเล่นใน LoL อยู่แล้ว เพราะจะสนุกกว่าและตัดสินใจง่ายกว่า แล้วค่อยขยับไปดูการ์ดระดับ Showcase ที่เป็นงานอาร์ตพิเศษ",
+                "CardStreet มีการ์ด Riftbound ครบทั้งห้าชุดในแคตตาล็อก และมีราคาตลาดครบทุกใบ เช็คราคาได้ทุกใบเป็นเงินบาท แล้วซื้อ-ขายกับผู้ขายในไทยได้โดยไม่ต้องสั่งข้ามประเทศ",
+            ],
+            en: [
+                "Riftbound is the official collectible card game of the League of Legends universe, made by Riot Games. If you already play LoL you already know almost every character in it — Jinx, Yasuo, Ahri, Lux, Darius, Viktor, Teemo and many more.",
+                "What makes Riftbound different from the other games collectors here follow is how new it is. The first set, Origins, arrived in late 2025, followed by Origins: Proving Grounds, Spiritforged, Unleashed and most recently Vendetta. Five sets in total.",
+                "That number matters more than it looks. Pokemon runs to tens of thousands of cards and Yu-Gi-Oh to more than that, but the whole of Riftbound is a little over a thousand. A single collector can still realistically complete a set — an opportunity that has long since closed in older games.",
+                "Prices also still move quickly. A young game has not settled, and a card can swing tens of percent in a few months on competitive results and champion popularity. Check the price history chart before buying or selling, not just today's number.",
+                "There is no Thai-language Riftbound release, so what circulates here is the imported English printing, and few shops carry a full range.",
+                "For beginners, start with the champions you already play in LoL. It is more enjoyable and the decisions are easier. From there, move on to the Showcase cards, which carry the special artwork.",
+                "CardStreet carries all five Riftbound sets, with a market price on every single card. Check any of them in Thai baht, then buy or sell with sellers inside Thailand rather than ordering from overseas.",
+            ],
+        },
+    },
+    {
+        slug: 'riftbound-rarity-guide',
+        game: 'riftbound',
+        updated: '2026-08-30',
+        title: {
+            th: "ระดับความหายากการ์ด Riftbound และคำว่า Showcase Signature คืออะไร | CardStreet",
+            en: "Riftbound Rarities Explained: Epic, Showcase, Signature and Overnumbered | CardStreet",
+        },
+        description: {
+            th: "อธิบายระดับความหายากของการ์ด Riftbound ตั้งแต่ Common ถึง Epic และคำเฉพาะอย่าง Showcase, Signature, Alternate Art และ Overnumbered ที่ไม่มีในการ์ดเกมอื่น",
+            en: "Riftbound rarity tiers from Common to Epic, plus the terms unique to this game — Showcase, Signature, Alternate Art and Overnumbered — and which ones carry the value.",
+        },
+        h1: {
+            th: "ระดับความหายากการ์ด Riftbound",
+            en: "Riftbound Rarities Explained",
+        },
+        body: {
+            th: [
+                "Riftbound ใช้คำเรียกความหายากที่ไม่เหมือนการ์ดเกมอื่น คนที่ย้ายมาจากโปเกม่อนหรือยูกิโอจะเจอคำใหม่หลายคำ และบางคำไม่ใช่ระดับความหายากด้วยซ้ำ แต่เป็นแบบพิมพ์",
+                "ระดับพื้นฐานเรียงจากพบบ่อยไปหายากคือ Common, Uncommon, Rare และ Epic สี่ระดับนี้คือโครงหลักของทุกชุด และการ์ดส่วนใหญ่ที่เปิดได้จะอยู่ในสามระดับแรก",
+                "Showcase คือกลุ่มที่ราคาสูงที่สุดของเกม เป็นการ์ดงานอาร์ตพิเศษที่พิมพ์ในสัดส่วนน้อยกว่าการ์ดปกติมาก การ์ดที่แพงที่สุดของ Riftbound แทบทั้งหมดมาจากกลุ่มนี้",
+                "ในกลุ่ม Showcase ยังมีคำกำกับย่อยที่ต้องรู้ Signature คือเวอร์ชันที่มีลายเซ็นของศิลปินหรือของตัวละครกำกับ เป็นกลุ่มที่ราคาสูงที่สุดในบรรดา Showcase ส่วน Ultimate เป็นอีกแบบพิเศษที่พบในการ์ดบางใบ",
+                "Alternate Art คือการ์ดใบเดิมที่ใช้ภาพต่างจากเวอร์ชันปกติ และ Overnumbered หมายถึงการ์ดที่เลขการ์ดเกินจำนวนของชุด เช่น การ์ดใบที่ 227 ในชุดที่มี 221 ใบ ซึ่งเป็นวิธีที่เกมนี้ใช้บอกว่าเป็นการ์ดพิเศษนอกชุดปกติ",
+                "จุดที่ต้องระวังคือ การ์ดตัวละครเดียวกันมีได้หลายเวอร์ชันในชุดเดียว ทั้งแบบปกติ แบบ Alternate Art และแบบ Showcase Signature ราคาต่างกันหลายสิบเท่า ดูเลขการ์ดที่มุมล่างเสมอ เพราะเลขคือสิ่งเดียวที่แยกเวอร์ชันได้แน่นอน",
+                "บน CardStreet การ์ด Riftbound ทุกใบมีราคาตลาด เลือกเวอร์ชันให้ตรงเลขการ์ด แล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
+            ],
+            en: [
+                "Riftbound uses rarity language that does not match other card games. Anyone arriving from Pokemon or Yu-Gi-Oh will meet several new terms, and some of them are not rarities at all but print treatments.",
+                "The base tiers, from most common to scarcest, are Common, Uncommon, Rare and Epic. These four form the backbone of every set, and most cards you open sit in the first three.",
+                "Showcase is where the value is. These are special-artwork cards printed at far lower rates than normal ones, and almost every expensive Riftbound card comes from this group.",
+                "Within Showcase there are sub-labels worth knowing. Signature marks a version carrying a signature treatment and is the highest-priced group among Showcase cards. Ultimate is another special treatment found on certain cards.",
+                "Alternate Art is the same card with different artwork from the standard version. Overnumbered means a card whose collector number runs past the set's stated size — card 227 in a 221-card set, for instance — which is how this game marks a card as sitting outside the normal run.",
+                "The thing to watch: the same character can exist in several versions within one set — standard, Alternate Art, and Showcase Signature — with prices tens of times apart. Always read the collector number in the bottom corner, because the number is the only thing that reliably separates them.",
+                "Every Riftbound card on CardStreet carries a market price. Match the version by collector number and the price you see belongs to the card in your hand.",
+            ],
+        },
+    },
+    {
+        slug: 'most-valuable-riftbound-cards',
+        game: 'riftbound',
+        updated: '2026-08-30',
+        title: {
+            th: "การ์ด Riftbound ใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet",
+            en: "The Most Valuable Riftbound Cards, and How to Check Prices | CardStreet",
+        },
+        description: {
+            th: "รวมการ์ด Riftbound ที่ราคาสูงที่สุด ทั้งกลุ่ม Showcase Signature และการ์ดพิเศษอย่าง Baron Nashor พร้อมวิธีเช็คราคาตลาดล่าสุดของใบที่ถืออยู่",
+            en: "The Riftbound cards sitting at the top of the market — the Showcase Signature group and specials like Baron Nashor — and how to check a live price for the card you hold.",
+        },
+        h1: {
+            th: "การ์ด Riftbound ใบไหนแพงที่สุด",
+            en: "The Most Valuable Riftbound Cards",
+        },
+        body: {
+            th: [
+                "Riftbound เพิ่งเปิดตัวได้ไม่ถึงปี แต่การ์ดใบท็อปของเกมขึ้นไปถึงหลักหมื่นบาทแล้ว และเกือบทั้งหมดมาจากกลุ่ม Showcase โดยเฉพาะเวอร์ชัน Signature",
+                "ใบที่อยู่บนสุดของตลาดตอนนี้คือ Akali - Rogue Assassin เวอร์ชัน Signature จากชุด Vendetta ตามด้วย Baron Nashor เวอร์ชัน Ultimate จากชุด Unleashed ซึ่งเป็นการ์ดที่นักสะสมพูดถึงมากที่สุดใบหนึ่งตั้งแต่ชุดออก",
+                "กลุ่ม Signature ของแชมเปียนดังก็ยืนราคาสูงทั้งแถบ ทั้ง Diana - Scorn of the Moon, Zed - Master of Shadows, Jayce - Defender of Tomorrow, Kennen - Heart of the Tempest และ LeBlanc - Deceiver",
+                "ในชุด Spiritforged ก็มี Soraka - Wanderer เวอร์ชัน Signature และ Ahri - Inquisitive แบบ Overnumbered ที่เป็นเป้าหมายของคนไล่เก็บ",
+                "สิ่งที่ต้องเข้าใจกับเกมที่ยังใหม่คือ ราคายังไม่นิ่ง การ์ดที่แพงที่สุดวันนี้อาจไม่ใช่ใบเดิมในอีกหกเดือน เพราะชุดใหม่ออกถี่และผลการแข่งเปลี่ยนความต้องการได้เร็ว บทความที่ใส่ตัวเลขไว้จึงล้าสมัยเร็วเป็นพิเศษในเกมนี้",
+                "วิธีที่ใช้ได้จริงคือเปิดหน้าการ์ดใบนั้นแล้วดูราคาตลาดล่าสุดพร้อมกราฟย้อนหลัง เพื่อดูว่ากำลังขึ้นหรือลง ไม่ใช่ดูแค่ตัวเลขวันนี้",
+                "ข้อได้เปรียบของ Riftbound คือแคตตาล็อกยังเล็กพอที่จะมีราคาครบทุกใบ การ์ด Riftbound ทุกใบใน CardStreet มีราคาตลาดให้เช็ค ไม่มีใบไหนที่ต้องเดา",
+            ],
+            en: [
+                "Riftbound is less than a year old, yet its top cards already reach the tens of thousands of baht, and almost all of them come from the Showcase group — particularly the Signature versions.",
+                "At the top of the market right now is Akali - Rogue Assassin in its Signature version from Vendetta, followed by Baron Nashor in the Ultimate treatment from Unleashed, one of the most talked-about cards since the set landed.",
+                "The Signature versions of popular champions hold strong prices across the board: Diana - Scorn of the Moon, Zed - Master of Shadows, Jayce - Defender of Tomorrow, Kennen - Heart of the Tempest and LeBlanc - Deceiver.",
+                "Spiritforged contributes Soraka - Wanderer in Signature and the Overnumbered Ahri - Inquisitive, both of which collectors chase.",
+                "The thing to understand about a young game is that prices have not settled. The most expensive card today may not be the same one in six months, because sets arrive frequently and competitive results move demand quickly. Articles with numbers in them go stale unusually fast here.",
+                "The method that works is to open the card page and read the current market price alongside the history chart, so you can see whether it is climbing or falling rather than just what it costs today.",
+                "Riftbound's advantage is that the catalog is still small enough to be priced completely. Every Riftbound card on CardStreet has a market price to check — none of them require guesswork.",
+            ],
+        },
+    },
 ];
 
 /** A guide by slug, or null. */
