@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getAllSets } from '@/lib/setPageData';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import DesktopSetsBrowser from '@/components/desktop/DesktopSetsBrowser';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
         title,
         description,
         alternates: buildAlternates('/sets', pathLocale),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/sets', pathLocale) },
+        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/sets', pathLocale), images: DEFAULT_OG_IMAGE },
     };
 }
 

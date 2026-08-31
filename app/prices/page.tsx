@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import PricesContent from './PricesContent';
 
 // Price-check landing page.
@@ -35,6 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
             : 'Free market prices for over 100,000 trading cards — Pokémon, Yu-Gi-Oh!, One Piece, Magic, Lorcana and Riftbound. Updated daily, priced in Thai baht, with English, Thai and Japanese printings priced separately.',
         alternates: buildAlternates('/prices', pathLocale),
         openGraph: {
+            images: DEFAULT_OG_IMAGE,
             title: isThai
                 ? 'เช็คราคาการ์ดสะสม — ราคาตลาดล่าสุด ฟรี | CardStreet'
                 : 'Check Trading Card Prices — Free, Updated Daily | CardStreet',

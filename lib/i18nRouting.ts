@@ -11,6 +11,16 @@ import { headers } from 'next/headers';
 
 export const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app';
 
+/**
+ * Branded 1200x630 share image (app/opengraph-image.tsx). Next's file-convention
+ * image only reaches routes WITHOUT their own openGraph metadata object, so every
+ * page that sets openGraph explicitly must reference this or it shares as a blank
+ * card on Facebook/Line — which is exactly what /pokemon, /faq and eleven other
+ * content pages did until 2026-08-30. Pages with a better subject-specific image
+ * (card art, set logos) keep their own.
+ */
+export const DEFAULT_OG_IMAGE = [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630 }];
+
 export type UiLocale = 'th' | 'en';
 
 /** Absolute URL for a path in a given UI locale. */

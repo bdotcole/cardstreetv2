@@ -6,7 +6,7 @@ import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGuidesForGame } from '@/lib/guides';
 import { getGame } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
 
 // Per-game landing pages (/pokemon, /one-piece, /yugioh, /mtg, /lorcana,
@@ -39,6 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         description: landing.description[lang],
         alternates: buildAlternates(`/${landing.slug}`, pathLocale),
         openGraph: {
+            images: DEFAULT_OG_IMAGE,
             title: landing.title[lang],
             description: landing.description[lang],
             type: 'website',

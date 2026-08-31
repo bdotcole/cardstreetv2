@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import ContactContent from './ContactContent';
 
 // Server wrapper so the shared /contact route emits canonical + hreflang in
@@ -17,6 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
       : 'Contact the CardStreet support team for help with orders, accounts, listings, and disputes. Email support in English and Thai, with replies within 1–2 business days.',
     alternates: buildAlternates('/contact', pathLocale),
     openGraph: {
+        images: DEFAULT_OG_IMAGE,
       title: isThai ? 'ติดต่อ CardStreet' : 'Contact CardStreet',
       description: isThai
         ? 'ติดต่อทีมซัพพอร์ต CardStreet เรื่องคำสั่งซื้อ บัญชี รายการขาย และข้อพิพาทในประเทศไทย'

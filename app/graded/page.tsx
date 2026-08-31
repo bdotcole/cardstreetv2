@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import GradedContent from './GradedContent';
 import { GRADED_HOWTO } from './howToSteps';
 
@@ -30,6 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
             : 'Check graded card prices for PSA, BGS, CGC and SGC — over 230,000 graded prices, updated daily and shown in Thai baht, plus an AI tool that estimates a card’s grade from a photo.',
         alternates: buildAlternates('/graded', pathLocale),
         openGraph: {
+            images: DEFAULT_OG_IMAGE,
             title: isThai
                 ? 'ราคาการ์ดเกรด PSA, BGS, CGC และ SGC | CardStreet'
                 : 'Graded Card Prices — PSA, BGS, CGC and SGC | CardStreet',

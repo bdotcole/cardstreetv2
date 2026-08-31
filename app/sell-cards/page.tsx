@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import SellCardsContent from './SellCardsContent';
 import { SELL_HOWTO } from './howToSteps';
 
@@ -28,6 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
             : 'Sell your trading cards on CardStreet — free to list, no monthly fees, and you only pay a fee when a card sells. Flash Express shipping labels and automatic payouts to your Thai bank account.',
         alternates: buildAlternates('/sell-cards', pathLocale),
         openGraph: {
+            images: DEFAULT_OG_IMAGE,
             title: isThai
                 ? 'ขายการ์ดสะสมบน CardStreet — ลงขายฟรี'
                 : 'Sell Your Cards on CardStreet — Free to List',

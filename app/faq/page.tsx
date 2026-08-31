@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import FaqPageContent from '@/components/FaqPageContent';
 import { buildFaqJsonLd } from '@/lib/faqData';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 
 // Dedicated, crawlable FAQ landing page. This is a top-level shared route (like
 // /help, /terms, /privacy) so both the mobile SPA and the desktop site link to
@@ -27,6 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       : 'Answers about buying, selling, scanning, and shipping Pokémon, Magic, Yu-Gi-Oh, and One Piece trading cards on CardStreet in Thailand. Buyer protection, fees, payouts, PromptPay, and graded cards explained.',
     alternates: buildAlternates('/faq', pathLocale),
     openGraph: {
+        images: DEFAULT_OG_IMAGE,
       title: isThai
         ? 'คำถามที่พบบ่อย CardStreet — ซื้อ ขาย และสแกนการ์ดสะสมในไทย'
         : 'CardStreet FAQ — Buying, Selling & Scanning Trading Cards in Thailand',

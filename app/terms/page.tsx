@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import TermsContent from './TermsContent';
 
 // Server wrapper so the shared /terms route emits canonical + hreflang in <head>.
@@ -17,6 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
       : 'CardStreet Terms of Service: marketplace rules, prohibited and counterfeit items, seller fees, payments, shipping, and dispute resolution for trading cards in Thailand.',
     alternates: buildAlternates('/terms', pathLocale),
     openGraph: {
+        images: DEFAULT_OG_IMAGE,
       title: isThai ? 'ข้อกำหนดการใช้บริการ CardStreet' : 'CardStreet Terms of Service',
       description: isThai
         ? 'กฎของมาร์เก็ตเพลส ค่าธรรมเนียมผู้ขาย การชำระเงิน การจัดส่ง และการระงับข้อพิพาทบน CardStreet'

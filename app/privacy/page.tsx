@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import PrivacyContent from './PrivacyContent';
 
 // Server wrapper so the shared /privacy route emits canonical + hreflang in
@@ -17,6 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
       : 'How CardStreet collects, uses, and protects your personal data — accounts, payments via Stripe, seller verification, third-party sharing, and your privacy rights.',
     alternates: buildAlternates('/privacy', pathLocale),
     openGraph: {
+        images: DEFAULT_OG_IMAGE,
       title: isThai ? 'นโยบายความเป็นส่วนตัวของ CardStreet' : 'CardStreet Privacy Policy',
       description: isThai
         ? 'CardStreet เก็บ ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณอย่างไร'
