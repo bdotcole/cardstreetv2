@@ -30,6 +30,18 @@ export interface Guide {
     updated: string;
     /** One string per paragraph. A short paragraph acts as a sub-heading. */
     body: { th: string[]; en: string[] };
+    /**
+     * Optional Q&A distilled from the body — never new claims. Rendered as a
+     * visible FAQ section AND emitted as FAQPage JSON-LD, so the schema always
+     * mirrors on-page content (same rule as the game landings).
+     */
+    faqs?: { q: { th: string; en: string }; a: { th: string; en: string } }[];
+    /**
+     * Optional links to the EXACT printings the guide names. The guides tell
+     * readers to match the specific version — this block applies that advice to
+     * ourselves, and turns every named card into a crawlable path.
+     */
+    cards?: { label: string; id: string }[];
 }
 
 export const GUIDES: Guide[] = [
@@ -37,6 +49,16 @@ export const GUIDES: Guide[] = [
         slug: 'lorcana-most-valuable-cards',
         game: 'lorcana',
         updated: '2026-08-30',
+        cards: [
+            { label: "Buzz Lightyear - Jungle Ranger (Iconic)", id: 'lorcana-2956' },
+            { label: "Mickey Mouse - Brave Little Prince (Iconic)", id: 'lorcana-2178' },
+            { label: "Minnie Mouse - Sweetheart Princess (Iconic)", id: 'lorcana-2177' },
+            { label: "Belle & Beast - Certain as the Sun (Iconic)", id: 'lorcana-3216' },
+            { label: "Merida - Formidable Archer (Iconic)", id: 'lorcana-2957' },
+            { label: "Lilo & Stitch - Fun-Loving Friends (Iconic)", id: 'lorcana-3215' },
+            { label: "Ariel - Ethereal Voice (Iconic)", id: 'lorcana-2430' },
+            { label: "Winnie the Pooh - Hunny Wizard (Enchanted)", id: 'lorcana-2145' },
+        ],
         title: {
             th: 'การ์ด Lorcana แพงที่สุด มีใบไหนบ้าง และเช็คราคายังไงให้ทันตลาด | CardStreet',
             en: 'The Most Valuable Disney Lorcana Cards, and How to Check Prices That Stay Current | CardStreet',
@@ -72,6 +94,12 @@ export const GUIDES: Guide[] = [
         slug: 'buy-lorcana-thailand',
         game: 'lorcana',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "ซื้อการ์ด Lorcana ในไทยที่ไหนถูกที่สุด", en: "Where are Lorcana cards cheapest in Thailand?" },
+              a: { th: "กลุ่มซื้อขายบนโซเชียลมักได้ราคาดีที่สุดเพราะซื้อตรงจากนักสะสม แต่ไม่มีตัวกลางคุ้มครอง ถ้าต้องการราคาที่เทียบกับราคากลางได้และมีระบบคุ้มครองผู้ซื้อ ให้ใช้มาร์เก็ตเพลสเฉพาะการ์ดอย่าง CardStreet ซึ่งแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้งไว้", en: "Social buy-sell groups are usually cheapest, since you buy straight from collectors, but there is no intermediary protecting you. For a price you can compare against the market rate with buyer protection, use a card-specific marketplace like CardStreet, which shows the market price next to each asking price." } },
+            { q: { th: "การ์ด Lorcana มีฉบับภาษาไทยไหม", en: "Is there a Thai-language Lorcana release?" },
+              a: { th: "ยังไม่มี ของที่หาซื้อได้ในไทยทั้งหมดเป็นฉบับภาษาอังกฤษที่นำเข้ามา ร้านที่สต็อกครบจึงมีไม่มาก และราคาขยับตามค่าเงินกับรอบการนำเข้า", en: "No. Everything sold in Thailand is the imported English edition, so few shops carry a full range and prices move with exchange rates and import cycles." } },
+        ],
         title: {
             th: 'ซื้อการ์ด Disney Lorcana ที่ไหนดีในไทย เทียบทุกช่องทาง | CardStreet',
             en: 'Where to Buy Disney Lorcana Cards in Thailand, Every Option Compared | CardStreet',
@@ -179,6 +207,14 @@ export const GUIDES: Guide[] = [
         slug: 'lorcana-enchanted-vs-regular',
         game: 'lorcana',
         updated: '2026-08-30',
+        cards: [
+            { label: "Winnie the Pooh - Hunny Wizard (Enchanted #227)", id: 'lorcana-2145' },
+            { label: "Winnie the Pooh - Hunny Wizard (Common #41)", id: 'lorcana-1977' },
+            { label: "Buzz Lightyear - Jungle Ranger (Iconic #241)", id: 'lorcana-2956' },
+            { label: "Buzz Lightyear - Jungle Ranger (Legendary #91)", id: 'lorcana-2806' },
+            { label: "Belle & Beast - Certain as the Sun (Iconic #245)", id: 'lorcana-3216' },
+            { label: "Belle & Beast - Certain as the Sun (Super Rare #132)", id: 'lorcana-3103' },
+        ],
         title: {
             th: 'การ์ด Lorcana Enchanted กับใบธรรมดา ราคาต่างกันกี่เท่า | CardStreet',
             en: 'Enchanted vs Regular Lorcana Cards, How Big Is the Price Gap | CardStreet',
@@ -216,6 +252,12 @@ export const GUIDES: Guide[] = [
         slug: 'lorcana-vs-pokemon-magic',
         game: 'lorcana',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "มือใหม่ควรเริ่มเกมการ์ดไหนดี", en: "Which card game should a beginner start with?" },
+              a: { th: "เลือกจากตัวละครที่ชอบก่อน Lorcana ได้เปรียบเรื่องตัวละครดิสนีย์ที่คนไทยรู้จักอยู่แล้ว การ์ดโปเกม่อนได้เปรียบเรื่องสภาพคล่องและมีฉบับภาษาไทย ส่วนเมจิกได้เปรียบเรื่องความลึกของเกมสำหรับคนที่อยากเล่นจริงจัง", en: "Pick by the characters you already like. Lorcana wins on familiar Disney characters, Pokemon wins on liquidity and a Thai-language edition, and Magic wins on game depth for people who want to play seriously." } },
+            { q: { th: "เกมการ์ดไหนขายต่อง่ายที่สุดในไทย", en: "Which card game is easiest to resell in Thailand?" },
+              a: { th: "การ์ดโปเกม่อน มีทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น คนซื้อคนขายเยอะที่สุด และมีชุดภาษาไทยที่หาซื้อได้ในประเทศโดยตรง", en: "Pokemon, by a wide margin. It exists in Thai, English and Japanese, has the most buyers and sellers, and has Thai-language sets sold domestically." } },
+        ],
         title: {
             th: 'Disney Lorcana เทียบกับการ์ดโปเกม่อนและ Magic เริ่มเกมไหนดี | CardStreet',
             en: 'Disney Lorcana vs Pokemon and Magic, Which Should You Start Collecting | CardStreet',
@@ -323,6 +365,16 @@ export const GUIDES: Guide[] = [
         slug: 'most-valuable-thai-pokemon-cards',
         game: 'pokemon',
         updated: '2026-08-30',
+        cards: [
+            { label: "เมก้าลิซาร์ดอน X ex (SAR)", id: 'MA2-137' },
+            { label: "เมก้าเก็งกาex (SAR)", id: 'MA3-240' },
+            { label: "เมก้าดาร์กไรex (MUR)", id: 'MA5-238-th' },
+            { label: "เมก้าเก็คโคกะex (MUR)", id: 'MA5-237-th' },
+            { label: "มิว ex (SAR)", id: 'th-SV4a-347' },
+            { label: "ลิซาร์ดอน ex (SAR)", id: 'th-SV2a-201' },
+            { label: "แบล็กกี ex (SAR)", id: 'fa04c249-4e5f-49fc-8524-834b166dd55d' },
+            { label: "พิคาชูex (SAR)", id: 'MA4-173-th' },
+        ],
         title: {
             th: 'การ์ดโปเกม่อนภาษาไทยใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet',
             en: 'The Most Valuable Thai-Language Pokemon Cards | CardStreet',
@@ -430,6 +482,12 @@ export const GUIDES: Guide[] = [
         slug: 'one-piece-english-vs-japanese',
         game: 'onepiece',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "การ์ดวันพีชมีฉบับภาษาไทยไหม", en: "Is there a Thai-language One Piece Card Game release?" },
+              a: { th: "ไม่มี คนไทยต้องเลือกระหว่างฉบับภาษาอังกฤษกับภาษาญี่ปุ่นตั้งแต่ใบแรก ฉบับอังกฤษหาซื้อในไทยง่ายกว่าและขายต่อกว้างกว่า ส่วนฉบับญี่ปุ่นออกก่อนหลายเดือนและกล่องมักถูกกว่า", en: "No. Collectors here choose between English and Japanese from the first card. English is easier to buy and resell locally; Japanese arrives months earlier and boxes are often cheaper per card." } },
+            { q: { th: "การ์ดวันพีชภาษาอังกฤษกับญี่ปุ่นราคาเท่ากันไหม", en: "Do English and Japanese One Piece cards cost the same?" },
+              a: { th: "ไม่เท่า ทั้งที่ใช้รหัสการ์ดเดียวกัน เช่น OP05-006 สองฉบับเป็นคนละตลาดและบางใบราคาต่างกันมาก เช็คราคาให้ตรงกับฉบับภาษาที่ถืออยู่เสมอ", en: "No — even though they share codes like OP05-006, the two editions are separate markets and some cards differ widely. Always check the price of the language edition you actually hold." } },
+        ],
         title: {
             th: 'การ์ดวันพีชภาษาอังกฤษกับภาษาญี่ปุ่น เลือกเก็บแบบไหนดี | CardStreet',
             en: 'One Piece Card Game: English or Japanese, Which Should You Collect | CardStreet',
@@ -646,6 +704,12 @@ export const GUIDES: Guide[] = [
         slug: 'buy-mtg-cards-thailand',
         game: 'mtg',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "ซื้อการ์ดเมจิกในไทยหรือสั่งจากต่างประเทศดีกว่า", en: "Should I buy Magic cards locally or order from overseas?" },
+              a: { th: "ถ้าต้องใช้การ์ดเร็วให้ซื้อในประเทศ ได้ของทันทีและเห็นสภาพก่อนจ่าย การสั่งจากต่างประเทศตัวเลือกเยอะกว่าแต่ต้องรอหลายสัปดาห์ และสำหรับการ์ดราคาไม่กี่ร้อยบาท ค่าส่งมักกินส่วนต่างจนไม่คุ้ม", en: "If you need the card soon, buy locally — you get it today and see its condition first. Overseas ordering has more selection but takes weeks, and for cards worth a few hundred baht the postage usually eats the saving." } },
+            { q: { th: "การ์ดเมจิกมีฉบับภาษาไทยไหม", en: "Is there a Thai-language Magic: The Gathering edition?" },
+              a: { th: "ไม่มี การ์ดเมจิกที่หมุนเวียนในไทยเป็นฉบับภาษาอังกฤษที่นำเข้ามาทั้งหมด เวลาเช็คราคาให้เทียบกับเวอร์ชันและชุดที่ตรงกับใบที่ถืออยู่เสมอ", en: "No. Magic cards circulating in Thailand are all the imported English printing. When checking a price, always compare against the exact set and treatment of the card you hold." } },
+        ],
         title: {
             th: "ซื้อการ์ดเมจิก Magic: The Gathering ในไทยที่ไหนดี | CardStreet",
             en: "Where to Buy Magic: The Gathering Cards in Thailand | CardStreet",
@@ -753,6 +817,12 @@ export const GUIDES: Guide[] = [
         slug: 'yugioh-tcg-vs-ocg',
         game: 'yugioh',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "การ์ดยูกิ TCG กับ OCG ใช้แข่งด้วยกันได้ไหม", en: "Can Yu-Gi-Oh TCG and OCG cards be played together?" },
+              a: { th: "ในการแข่งอย่างเป็นทางการไม่ได้ การ์ดสองฝั่งขนาดต่างกันเล็กน้อย ใช้ซองคนละขนาด และรายการการ์ดต้องห้ามก็คนละชุดกัน", en: "Not in sanctioned play. The two sides use slightly different card sizes, need different sleeves, and run separate banlists." } },
+            { q: { th: "คนไทยควรเก็บการ์ดยูกิฝั่งไหน", en: "Which side should collectors in Thailand pick?" },
+              a: { th: "ถ้าตั้งใจลงแข่งในไทยหรือขายต่อในกลุ่มคนไทย ฝั่ง TCG ภาษาอังกฤษตรงกว่า ถ้าสะสมงานอาร์ตหรืออยากได้การ์ดใหม่ก่อน ฝั่ง OCG ภาษาญี่ปุ่นก็มีเสน่ห์ของมัน ราคาสองฝั่งไม่เท่ากัน เทียบให้ตรงฉบับเสมอ", en: "For local events and resale, the English TCG is the more direct route; for artwork and earlier releases, the Japanese OCG has its appeal. The two are priced separately, so always compare the right edition." } },
+        ],
         title: {
             th: "การ์ดยูกิโอ TCG กับ OCG ต่างกันยังไง เลือกเก็บแบบไหนดี | CardStreet",
             en: "Yu-Gi-Oh TCG vs OCG: What Is the Difference, and Which to Collect | CardStreet",
@@ -788,6 +858,12 @@ export const GUIDES: Guide[] = [
         slug: 'riftbound-beginner-guide-thai',
         game: 'riftbound',
         updated: '2026-08-30',
+        faqs: [
+            { q: { th: "Riftbound มีการ์ดกี่ชุดแล้ว", en: "How many Riftbound sets are there?" },
+              a: { th: "ห้าชุด ได้แก่ Origins, Origins: Proving Grounds, Spiritforged, Unleashed และล่าสุดคือ Vendetta รวมการ์ดพันกว่าใบ ซึ่งยังเล็กพอที่นักสะสมคนเดียวจะไล่เก็บครบชุดได้จริง", en: "Five: Origins, Origins: Proving Grounds, Spiritforged, Unleashed and most recently Vendetta — a little over a thousand cards in total, still small enough for one collector to realistically complete a set." } },
+            { q: { th: "การ์ด Riftbound ใบไหนแพงที่สุด", en: "Which Riftbound cards are the most valuable?" },
+              a: { th: "เกือบทั้งหมดอยู่ในกลุ่ม Showcase โดยเฉพาะเวอร์ชัน Signature ราคายังขยับเร็วเพราะเกมยังใหม่ เช็คราคาตลาดล่าสุดได้ทุกใบบน CardStreet", en: "Almost all sit in the Showcase group, particularly the Signature versions. Prices still move quickly because the game is young — every card has a live market price on CardStreet." } },
+        ],
         title: {
             th: "Riftbound คือการ์ดเกมอะไร คนเล่น LoL เริ่มยังไง | CardStreet",
             en: "What Is Riftbound? A Starting Guide for League of Legends Players | CardStreet",
@@ -862,6 +938,17 @@ export const GUIDES: Guide[] = [
         slug: 'most-valuable-riftbound-cards',
         game: 'riftbound',
         updated: '2026-08-30',
+        cards: [
+            { label: "Akali - Rogue Assassin (Signature)", id: 'rb-vendetta-189-166-709668' },
+            { label: "Baron Nashor (Ultimate)", id: 'rb-unleashed-238-219' },
+            { label: "Diana - Scorn of the Moon (Signature)", id: 'rb-unleashed-234-219-684506' },
+            { label: "Zed - Master of Shadows (Signature)", id: 'rb-vendetta-191-166-709666' },
+            { label: "Jayce - Defender of Tomorrow (Signature)", id: 'rb-vendetta-194-166-709103' },
+            { label: "Kennen - Heart of the Tempest (Signature)", id: 'rb-vendetta-197-166-709667' },
+            { label: "LeBlanc - Deceiver (Signature)", id: 'rb-unleashed-235-219-685609' },
+            { label: "Soraka - Wanderer (Signature)", id: 'rb-spiritforged-239-221' },
+            { label: "Ahri - Inquisitive (Overnumbered)", id: 'rb-spiritforged-227-221' },
+        ],
         title: {
             th: "การ์ด Riftbound ใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet",
             en: "The Most Valuable Riftbound Cards, and How to Check Prices | CardStreet",

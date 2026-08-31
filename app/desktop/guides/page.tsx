@@ -26,7 +26,14 @@ export async function generateMetadata(): Promise<Metadata> {
         title,
         description,
         alternates: buildAlternates('/guides', pathLocale),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/guides', pathLocale) },
+        openGraph: {
+            title,
+            description,
+            type: 'website',
+            siteName: 'CardStreet',
+            url: localizedUrl('/guides', pathLocale),
+            images: [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630 }],
+        },
     };
 }
 

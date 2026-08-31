@@ -41,6 +41,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             type: 'article',
             siteName: 'CardStreet',
             url: localizedUrl(`/guides/${guide.slug}`, pathLocale),
+            images: [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630 }],
         },
     };
 }
@@ -72,6 +73,19 @@ function buildJsonLd(guide: NonNullable<ReturnType<typeof getGuide>>, gameName: 
                 isPartOf: { '@id': `${BASE_URL}/#website` },
                 publisher: { '@type': 'Organization', name: 'CardStreet', url: BASE_URL },
             },
+            // FAQPage only where the guide carries visible Q&A — schema must
+            // mirror on-page content, same rule as the game landings.
+            ...(guide.faqs?.length
+                ? [{
+                    '@type': 'FAQPage',
+                    inLanguage: isThai ? 'th-TH' : 'en-TH',
+                    mainEntity: guide.faqs.map((f) => ({
+                        '@type': 'Question',
+                        name: isThai ? f.q.th : f.q.en,
+                        acceptedAnswer: { '@type': 'Answer', text: isThai ? f.a.th : f.a.en },
+                    })),
+                }]
+                : []),
         ],
     };
 }
@@ -137,6 +151,42 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
                             {isThai ? `ดูการ์ด ${gameName} ทั้งหมด →` : `Browse all ${gameName} cards →`}
                         </Link>
                     </div>
+                )}
+                {guide.cards && guide.cards.length > 0 && (
+                    <section className="mt-10">
+                        <h2 className="text-lg font-black text-white mb-3">
+                            {isThai ? 'การ์ดที่พูดถึงในบทความนี้' : 'Cards named in this guide'}
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {guide.cards.map((c) => (
+                                <Link
+                                    key={c.id}
+                                    href={`${prefix}/card/${c.id}`}
+                                    className="block rounded-lg border border-white/10 bg-white/[0.03] hover:border-brand-cyan/40 hover:bg-white/[0.06] transition-colors px-4 py-2.5 text-sm font-bold text-white"
+                                >
+                                    {c.label}
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {guide.faqs && guide.faqs.length > 0 && (
+                    <section className="mt-10">
+                        <h2 className="text-lg font-black text-white mb-3">
+                            {isThai ? 'คำถามที่พบบ่อย' : 'Frequently asked questions'}
+                        </h2>
+                        <div className="space-y-2">
+                            {guide.faqs.map((f) => (
+                                <details key={f.q.en} className="group bg-slate-800/40 border border-white/5 rounded-xl">
+                                    <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-white">
+                                        {f.q[l]}
+                                    </summary>
+                                    <p className="px-4 pb-4 text-sm text-slate-300 leading-relaxed">{f.a[l]}</p>
+                                </details>
+                            ))}
+                        </div>
+                    </section>
                 )}
             </article>
 

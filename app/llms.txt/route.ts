@@ -1,4 +1,10 @@
 import { BASE_URL } from '@/lib/i18nRouting';
+import { GUIDES } from '@/lib/guides';
+
+// The guides section is GENERATED from lib/guides.ts so it can never go stale:
+// the 24 articles shipped 2026-08-30 were invisible here for a day because this
+// file was hand-written prose. Anything added to GUIDES appears automatically.
+const guideLines = GUIDES.map((g) => `- [${g.h1.en}](${BASE_URL}/guides/${g.slug}): ${g.description.en}`).join('\n');
 
 // llms.txt — a concise, machine-readable site overview for AI answer engines
 // (ChatGPT, Perplexity, Claude, Gemini) following the llmstxt.org convention.
@@ -21,6 +27,12 @@ const BODY = `# CardStreet
 ## Catalog
 
 - [All card sets](${BASE_URL}/sets): browsable set list for every game, each set linking to per-card pages with live Thai-baht market prices
+
+## Guides
+
+Collector guides written from CardStreet's own market-price data, in Thai and English. Thai versions live at the same paths; English under /en.
+
+${guideLines}
 
 ## Help
 
