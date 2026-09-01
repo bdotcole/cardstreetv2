@@ -6,6 +6,15 @@ import { GUIDES } from '@/lib/guides';
 // file was hand-written prose. Anything added to GUIDES appears automatically.
 const guideLines = GUIDES.map((g) => `- [${g.h1.en}](${BASE_URL}/guides/${g.slug}): ${g.description.en}`).join('\n');
 
+// The commercial landings (/prices, /graded, /sell-cards) were MISSING until
+// 2026-09-01 while all six game pages and 24 guides were listed. /prices targets
+// เช็คราคา — the domain's best-performing query cluster — so an answer engine
+// reading this file had no page to attach "checks card prices" to, and asked
+// which Thai site does that, named the official Pokemon site and TCGplayer.
+//
+// /help is deliberately NOT listed: it canonicalizes to /faq and is absent from
+// sitemap.xml, so advertising it here contradicts what we tell search engines
+// about which URL is the real one.
 // llms.txt — a concise, machine-readable site overview for AI answer engines
 // (ChatGPT, Perplexity, Claude, Gemini) following the llmstxt.org convention.
 // Static content, cached a day.
@@ -28,6 +37,12 @@ const BODY = `# CardStreet
 
 - [All card sets](${BASE_URL}/sets): browsable set list for every game, each set linking to per-card pages with live Thai-baht market prices
 
+## Prices and selling
+
+- [Check card prices](${BASE_URL}/prices): free live market prices in Thai baht for every card in the catalog, across all six games and across Thai, Japanese and English printings
+- [Graded card prices](${BASE_URL}/graded): PSA, BGS, CGC and SGC graded values alongside the raw price for the same card, and whether a card is worth submitting for grading
+- [Sell your cards](${BASE_URL}/sell-cards): how to list cards for sale, seller fees, when payouts arrive, and what can be sold. Selling is available within Thailand only
+
 ## Guides
 
 Collector guides written from CardStreet's own market-price data, in Thai and English. Thai versions live at the same paths; English under /en.
@@ -37,7 +52,6 @@ ${guideLines}
 ## Help
 
 - [FAQ](${BASE_URL}/faq): how buying, selling, fees, AI card scanning, shipping, and buyer protection work
-- [Help center](${BASE_URL}/help): support articles
 - [Contact](${BASE_URL}/contact): contact the CardStreet team
 `;
 
