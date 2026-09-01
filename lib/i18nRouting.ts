@@ -91,3 +91,26 @@ export function sitemapAlternates(path: string): Record<string, string> {
     'x-default': localizedUrl(path, 'th'),
   };
 }
+
+/**
+ * The `<url>` entries for one path in an XML sitemap: ONE PER LOCALE VARIANT,
+ * each repeating the full hreflang cluster.
+ *
+ * The catalog sitemaps used to emit only the bare Thai `<loc>` with the English
+ * URL present solely as an hreflang annotation. hreflang tells a crawler that a
+ * page it already found has a translation; it is not a discovery path. Combined
+ * with a language control that was a `<button>`, that left the entire /en tree
+ * with zero inbound links and zero sitemap presence.
+ *
+ * Shared so the sets and sellers sitemaps cannot drift apart, and so the next
+ * XML sitemap gets the right shape by default.
+ */
+export function sitemapUrlEntries(path: string): string {
+  const th = localizedUrl(path, 'th');
+  const en = localizedUrl(path, 'en');
+  const links =
+    `<xhtml:link rel="alternate" hreflang="th-TH" href="${th}"/>` +
+    `<xhtml:link rel="alternate" hreflang="en-TH" href="${en}"/>` +
+    `<xhtml:link rel="alternate" hreflang="x-default" href="${th}"/>`;
+  return `<url><loc>${th}</loc>${links}</url><url><loc>${en}</loc>${links}</url>`;
+}

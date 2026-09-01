@@ -62,12 +62,28 @@ const ROUTES: {
   { path: '/breaker-terms', lastModified: '2026-08-10', changeFrequency: 'yearly', priority: 0.3 },
 ];
 
+// ONE <url> PER LOCALE VARIANT, not one Thai entry carrying hreflang hints.
+// Google's documented pattern is a <loc> for every variant, each repeating the
+// full alternate set. Until 2026-09-01 this emitted only the bare Thai URL, so
+// the whole /en tree had no sitemap presence at all and — with the language
+// control still a <button> — no internal links either. hreflang is a hint about
+// a page a crawler already found; it is not a way to find one.
+const variantUrl = (path: string, locale: 'th' | 'en'): string => {
+  const clean = path === '/' ? '' : path;
+  // The Thai form is kept byte-identical to what has been in the sitemap since
+  // 2026-08-14 (homepage = bare origin, no trailing slash). Rewriting an already
+  // indexed <loc> for cosmetic consistency is churn with no upside.
+  return locale === 'en' ? `${BASE_URL}/en${clean}` : `${BASE_URL}${clean}` || `${BASE_URL}/`;
+};
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  return ROUTES.map(({ path, lastModified, changeFrequency, priority }) => ({
-    url: `${BASE_URL}${path === '/' ? '' : path}` || `${BASE_URL}/`,
-    lastModified: new Date(lastModified),
-    changeFrequency,
-    priority,
-    alternates: { languages: sitemapAlternates(path) },
-  }));
+  return ROUTES.flatMap(({ path, lastModified, changeFrequency, priority }) =>
+    (['th', 'en'] as const).map((locale) => ({
+      url: variantUrl(path, locale),
+      lastModified: new Date(lastModified),
+      changeFrequency,
+      priority,
+      alternates: { languages: sitemapAlternates(path) },
+    })),
+  );
 }

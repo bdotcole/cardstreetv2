@@ -26,6 +26,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ page: s
     const urls = cards
         .map(({ id, lastmod }) => {
             const path = `/card/${id}`;
+            // DELIBERATELY ONE <loc> PER CARD, Thai only — unlike the sets and
+            // sellers sitemaps, which emit both variants via sitemapUrlEntries().
+            // This file class is ~84k URLs and most of the catalog already sits in
+            // "discovered, not indexed"; doubling it would spend crawl budget on
+            // English twins of a Thai-first catalog rather than on getting the Thai
+            // pages indexed. The en-TH hreflang below still declares the variant.
+            // Revisit only when the Thai card pages are substantially indexed.
             const th = localizedUrl(path, 'th');
             const en = localizedUrl(path, 'en');
             return (

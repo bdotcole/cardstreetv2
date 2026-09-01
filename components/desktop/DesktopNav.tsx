@@ -138,13 +138,29 @@ export default function DesktopNav({ pathPrefix = '' }: {
         await createClient().auth.signOut();
     };
 
-    const toggleLanguage = async () => {
+    // The /en tree had ZERO inbound internal links from anywhere on the site:
+    // this control was a <button>, so hreflang was the only signal pointing at it,
+    // and hreflang is a hint about a page a crawler already found, not a way to
+    // find one. It is an <a href> now, and the click actually navigates to the
+    // other locale's URL so the address bar, the canonical and the UI language
+    // stay in agreement instead of the language flipping underneath a Thai URL.
+    //
+    // Derived from the pathname so it stays correct even where pathPrefix is not
+    // passed. usePathname() reports the browser URL and is typed nullable, and
+    // middleware rewrites /en to the bare route — so normalise once, then tolerate
+    // either form.
+    const currentPath = pathname || '/';
+    const isEnPath = pathPrefix === '/en' || currentPath === '/en' || currentPath.startsWith('/en/');
+    const barePath = currentPath.startsWith('/en/') ? currentPath.slice(3) : currentPath === '/en' ? '/' : currentPath;
+    const otherLocaleHref = isEnPath ? barePath : `/en${barePath === '/' ? '' : barePath}`;
+
+    const toggleLanguage = async (e?: React.MouseEvent) => {
+        e?.preventDefault();
         const next = language === 'TH' ? 'EN' : 'TH';
         await updateLanguage(next);
-        // Client chrome re-renders instantly via useTranslation; refresh so the
-        // server-rendered desktop pages (/sets, /card, /collection) re-read the
-        // updated cs_lang cookie via the x-cs-lang header and flip locale too.
-        router.refresh();
+        // Navigating (rather than router.refresh()) means the server pages re-read
+        // the locale from the URL prefix, which is also what drives the canonical.
+        router.push(otherLocaleHref);
     };
 
     const displayName =
@@ -257,8 +273,10 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     })}
                 </nav>
 
-                <button
+                <a
+                    href={otherLocaleHref}
                     onClick={toggleLanguage}
+                    hrefLang={language === 'TH' ? 'en' : 'th'}
                     className="hidden lg:flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
                     title={language === 'TH' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
                     aria-label={language === 'TH' ? 'Switch to English' : 'Switch to Thai'}
@@ -266,7 +284,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     <span className="text-[11px] font-black text-slate-300 group-hover:text-white transition-colors">
                         {language}
                     </span>
-                </button>
+                </a>
 
                 {rewards && (
                     <div className="shrink-0">
@@ -433,12 +451,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             </Link>
                         )}
                         <div className="flex items-center gap-3 pt-3 mt-1 border-t border-white/5">
-                            <button
-                                onClick={toggleLanguage}
+                            <a
+                                href={otherLocaleHref}
+                                onClick={(e) => { setMobileNavOpen(false); toggleLanguage(e); }}
+                                hrefLang={language === 'TH' ? 'en' : 'th'}
                                 className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] font-black text-slate-300 transition-colors"
                             >
                                 {language === 'TH' ? 'EN' : 'ไทย'}
-                            </button>
+                            </a>
                             {user ? (
                                 <button
                                     onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
