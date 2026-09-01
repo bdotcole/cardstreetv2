@@ -7,6 +7,7 @@ import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_UR
 import { getSetLogoUrl } from '@/lib/imageUtils';
 import { getGameLabel } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
+import { buildSetSummary } from '@/lib/setSummary';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import type { Card } from '@/types';
 
@@ -100,6 +101,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
     const game = gameLabel(set.game, lang);
     const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
     const intro = getSetIntro(setId);
+    const summary = buildSetSummary(set, cards, lang);
     // Internal links follow the URL variant, not the cookie language: on
     // /en/sets/<id> the breadcrumbs and the card grid must stay inside /en.
     const pathLocale = await requestPathLocale();
@@ -140,6 +142,12 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
             {intro && (
                 <p className="text-sm text-slate-400 leading-relaxed mt-6 max-w-3xl">
                     {lang === 'EN' ? intro.en : intro.th}
+                </p>
+            )}
+
+            {summary && (
+                <p className="text-sm text-slate-500 leading-relaxed mt-3 max-w-3xl">
+                    {summary}
                 </p>
             )}
 
