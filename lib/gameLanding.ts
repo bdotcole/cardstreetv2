@@ -201,6 +201,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                     en: 'Yes. Signing up is free, listing is free, and you pay a fee only when a card actually sells. CardStreet suggests a price from current market data, handles payment securely, and lets you print a Flash Express shipping label straight from the app.',
                 },
             },
+            {
+                q: { th: 'การ์ดลีดเดอร์ (Leader) กับการ์ดตัวละครต่างกันยังไง?', en: 'What is the difference between a Leader and a Character card?' },
+                a: {
+                    th: 'ทุกเด็คต้องมีการ์ดลีดเดอร์หนึ่งใบวางไว้ตลอดเกม ลีดเดอร์เป็นตัวกำหนดว่าเด็คนั้นใช้สีอะไรได้บ้าง ส่วนการ์ดตัวละครคือการ์ดที่ลงสนามระหว่างเล่น เพราะลีดเดอร์กำหนดทิศทางของทั้งเด็ค คนเล่นจึงมักเลือกลีดเดอร์ก่อนแล้วค่อยหาการ์ดที่เข้ากัน ราคาของลีดเดอร์ยอดนิยมจึงขยับตามความนิยมของเด็คนั้น',
+                    en: 'Every deck runs exactly one Leader, which stays in play for the whole game and determines which colours the deck may use. Character cards are what you play onto the field during the game. Because the Leader sets the direction of the whole deck, players usually pick one first and build around it, which is why popular Leaders move in price with the decks they enable.',
+                },
+            },
+            {
+                q: { th: 'เอาการ์ดวันพีชภาษาญี่ปุ่นไปแข่งในไทยได้ไหม?', en: 'Can I play Japanese One Piece cards at Thai events?' },
+                a: {
+                    th: 'ขึ้นอยู่กับกติกาของงานนั้น หลายงานกำหนดให้ใช้การ์ดฉบับเดียวกันทั้งเด็ค บางงานอนุญาตให้ปนได้ถ้ามีเอกสารแปลกำกับ ควรอ่านกติกาของผู้จัดก่อนทุกครั้ง ถ้าเก็บไว้สะสมอย่างเดียวเรื่องนี้ไม่มีผล',
+                    en: 'It depends on the event. Many organisers require a single edition throughout a deck, while some allow mixing if you carry a translation. Read the organiser rules first. If you are collecting rather than competing, it makes no difference.',
+                },
+            },
+            {
+                q: { th: 'การ์ดวันพีชชุดเก่ายังหาซื้อได้ไหม ราคาขึ้นหรือเปล่า?', en: 'Are older One Piece sets still available, and are they going up?' },
+                a: {
+                    th: 'ชุดแรก ๆ ของเกมพิมพ์น้อยกว่าความต้องการมาก ของในตลาดจึงเหลือน้อยและราคาสูงกว่าชุดใหม่ที่พิมพ์เพียงพอ การ์ดใบเดียวกันที่ถูกพิมพ์ซ้ำในชุดรวมภายหลังมักถูกกว่าเวอร์ชันชุดแรกอยู่พอสมควร ก่อนซื้อจึงควรดูให้แน่ว่ากำลังซื้อเวอร์ชันไหน',
+                    en: 'The game’s earliest sets were printed well below demand, so stock is thin and prices sit above newer sets that were printed to meet the market. The same card reprinted in a later collection is usually noticeably cheaper than its original printing, so check which version you are buying.',
+                },
+            },
+            {
+                q: { th: 'การ์ดวันพีชปลอมเจอบ่อยไหม?', en: 'Are fake One Piece cards common?' },
+                a: {
+                    th: 'เจอได้ โดยเฉพาะการ์ดราคาสูงอย่างอาร์ตพิเศษและใบที่ใช้ในเด็คแข่ง จุดที่ดูง่ายที่สุดคือความคมของตัวอักษรและสีของขอบการ์ดเวลาส่องไฟ ถ้าซื้อจากคนที่ไม่รู้จักให้ขอรูปจริงหลายมุมก่อนโอน มีคู่มือดูการ์ดปลอมแบบละเอียดอยู่ในหน้าคู่มือ',
+                    en: 'They exist, particularly on high-value cards such as alternate arts and competitive staples. The easiest checks are text sharpness and the colour of the card edge under light. Buying from someone you do not know, ask for real photos from several angles before transferring. There is a detailed guide to spotting fakes in the guides section.',
+                },
+            },
         ],
     },
     {
@@ -278,6 +306,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                     en: 'CardStreet card pages show graded prices broken out by grading company and grade — PSA, BGS, CGC, and TAG — next to the raw price, so you can see immediately how much grading changes what a card is worth. That is the number worth looking at before you decide to send anything in.',
                 },
             },
+            {
+                q: { th: 'การ์ดยูกิ 1st Edition กับ Unlimited ต่างกันยังไง?', en: 'What is the difference between 1st Edition and Unlimited?' },
+                a: {
+                    th: 'การ์ด 1st Edition มาจากรอบพิมพ์แรกของชุดนั้นและมีข้อความ 1st Edition กำกับใต้ภาพ ส่วน Unlimited คือรอบพิมพ์ถัดมาที่ไม่มีข้อความนี้ ทั้งสองใช้แข่งได้เหมือนกัน แต่ในตลาดสะสม 1st Edition มักมีราคาสูงกว่าเพราะพิมพ์จำนวนน้อยกว่า ยิ่งเป็นการ์ดเก่าหรือการ์ดหายากส่วนต่างยิ่งชัด',
+                    en: 'A 1st Edition card comes from a set’s first print run and carries the words "1st Edition" under the artwork; the Unlimited printings that follow do not. Both are tournament legal, but 1st Edition usually carries a premium in the collector market because fewer were made, and the gap widens on older or rarer cards.',
+                },
+            },
+            {
+                q: { th: 'การ์ดยูกิที่ถูกแบนยังมีราคาไหม?', en: 'Do banned Yu-Gi-Oh! cards still hold value?' },
+                a: {
+                    th: 'มี แต่ด้วยเหตุผลคนละอย่าง การ์ดที่ถูกแบนจะเสียกลุ่มผู้ซื้อสายแข่งไป ราคาจึงมักปรับลงหลังประกาศ ส่วนที่เหลืออยู่คือนักสะสมกับคนที่เล่นแบบไม่เป็นทางการ การ์ดเก่าที่มีชื่อเสียงบางใบจึงยังราคาสูงแม้จะแบนไปแล้ว และรายชื่อแบนของ TCG กับ OCG ไม่เหมือนกัน ใบที่แบนฝั่งหนึ่งอาจยังใช้ได้อีกฝั่ง',
+                    en: 'Yes, but for different reasons. A banned card loses its competitive buyers, so the price usually softens after an announcement, leaving collector and casual demand behind. Some famous older cards stay expensive despite being banned. The TCG and OCG banlists also differ, so a card banned on one side may still be legal on the other.',
+                },
+            },
+            {
+                q: { th: 'เริ่มเล่นยูกิต้องซื้ออะไรบ้าง?', en: 'What do I need to buy to start playing Yu-Gi-Oh!?' },
+                a: {
+                    th: 'วิธีที่ประหยัดที่สุดคือเริ่มจากเด็คสำเร็จรูปที่พร้อมเล่นได้ทันที แล้วค่อยซื้อการ์ดใบเดี่ยวมาเสริมเฉพาะใบที่ต้องใช้จริง การเปิดซองสุ่มเพื่อหาการ์ดที่อยากได้มักแพงกว่าการซื้อใบนั้นตรง ๆ หลายเท่า เช็คราคาใบเดี่ยวก่อนตัดสินใจได้ฟรีบน CardStreet',
+                    en: 'The cheapest route is a ready-to-play structure deck, then buying only the individual cards you actually need. Opening random packs to chase a specific card usually costs several times more than simply buying that card. You can check single-card prices on CardStreet for free before deciding.',
+                },
+            },
+            {
+                q: { th: 'เก็บการ์ดยูกิเก่าไว้ยังไงให้ยังขายได้ราคา?', en: 'How should I store older Yu-Gi-Oh! cards to keep their value?' },
+                a: {
+                    th: 'ศัตรูของการ์ดเก่าคือความชื้นกับแสง ซึ่งประเทศไทยมีทั้งสองอย่างเยอะ ใส่ซองใสแล้วเก็บในกล่องปิด วางไว้ในที่ไม่โดนแดดและไม่ติดผนังห้องน้ำ การ์ดที่ขอบยังคมและผิวยังเงาต่างจากใบที่เก็บไม่ดีหลายเท่าเวลาขาย และถ้าตั้งใจจะส่งเกรดยิ่งต้องระวังตั้งแต่วันแรก',
+                    en: 'The enemies of older cards are humidity and light, and Thailand has plenty of both. Sleeve them, keep them in a closed box, and store that away from direct sun and away from bathroom walls. A card with sharp edges and an unclouded surface can be worth several times one that was stored badly — and if you intend to submit it for grading, that care has to start on day one.',
+                },
+            },
         ],
     },
     {
@@ -352,6 +408,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                 a: {
                     th: 'ได้ หน้าการ์ดจะแสดงราคาของการ์ดที่ผ่านการเกรดแยกตามบริษัทและระดับเกรด ทั้ง PSA, BGS, CGC และ TAG ควบคู่กับราคาการ์ดแบบไม่เกรด ทำให้เทียบได้ในหน้าเดียวว่าการ์ดใบนั้นเมื่อเกรดแล้วมูลค่าเปลี่ยนไปแค่ไหน',
                     en: 'Yes. Card pages show graded prices broken out by grading company and grade — PSA, BGS, CGC, and TAG — next to the raw price, so you can compare on one screen how much grading changes what a card is worth.',
+                },
+            },
+            {
+                q: { th: 'การ์ด MTG แบบฟอยล์กับธรรมดา ราคาต่างกันมากไหม?', en: 'How much more is a foil Magic card worth?' },
+                a: {
+                    th: 'ต่างกันได้ตั้งแต่เล็กน้อยจนถึงหลายเท่า ขึ้นอยู่กับว่าการ์ดใบนั้นมีคนอยากได้แบบฟอยล์แค่ไหน การ์ดที่นิยมใน Commander มักมีส่วนต่างฟอยล์สูงเพราะคนอยากได้ไว้ในเด็คตัวเอง ส่วนการ์ดพื้นฐานที่มีเยอะแทบไม่มีส่วนต่าง บน CardStreet แต่ละเวอร์ชันแยกกันคนละหน้าและมีราคาของตัวเอง',
+                    en: 'Anywhere from marginal to several times over, depending on demand for that specific card in foil. Cards popular in Commander often carry a large foil premium because people want them in their own deck, while common staples show almost no gap. On CardStreet each version is its own page with its own price.',
+                },
+            },
+            {
+                q: { th: 'การ์ด MTG ภาษาอื่นใช้แข่งได้ไหม?', en: 'Can I play non-English Magic cards in tournaments?' },
+                a: {
+                    th: 'ได้ Magic ถือว่าการ์ดทุกภาษาเป็นการ์ดใบเดียวกัน โดยยึดข้อความทางการเป็นหลัก ผู้เล่นหลายคนจึงซื้อเวอร์ชันภาษาญี่ปุ่นเพราะงานอาร์ตหรือเพราะราคาถูกกว่า ในงานแข่งอาจถูกขอให้อธิบายข้อความบนการ์ด จึงควรรู้ความหมายของใบที่ใช้อยู่',
+                    en: 'Yes. Magic treats every language printing as the same card, with the official rules text as the reference, which is why many players buy Japanese versions for the artwork or the lower price. At events you may be asked to explain what a card does, so know the text on the ones you play.',
+                },
+            },
+            {
+                q: { th: 'เริ่มเล่น Commander ต้องมีการ์ดกี่ใบ?', en: 'How many cards do I need for a Commander deck?' },
+                a: {
+                    th: 'เด็ค Commander ใช้การ์ด 100 ใบพอดี ประกอบด้วยการ์ดผู้นำหนึ่งใบและการ์ดอื่นอีก 99 ใบที่ห้ามซ้ำกันเลยยกเว้นการ์ดที่ดินพื้นฐาน นั่นแปลว่าต้องหาการ์ดต่างใบเกือบร้อยชนิด ซึ่งเป็นเหตุผลที่คนส่วนใหญ่เริ่มจากเด็คสำเร็จรูปแล้วค่อยเปลี่ยนทีละใบ',
+                    en: 'A Commander deck is exactly 100 cards: one commander plus 99 others, and apart from basic lands no card may be repeated. That means sourcing nearly a hundred different cards, which is why most people start from a preconstructed deck and swap cards in over time.',
+                },
+            },
+            {
+                q: { th: 'การ์ด MTG ที่เพิ่งออกควรรีบซื้อเลยไหม?', en: 'Should I buy Magic cards as soon as a set releases?' },
+                a: {
+                    th: 'ส่วนใหญ่ไม่ต้องรีบ ราคาการ์ดชุดใหม่มักสูงในช่วงสัปดาห์แรกแล้วค่อยลงเมื่อของเข้าตลาดมากขึ้น ยกเว้นการ์ดที่กลายเป็นตัวหลักของเด็คที่ชนะบ่อย ซึ่งอาจขึ้นต่อสวนทาง ดูราคาย้อนหลังประกอบก่อนตัดสินใจจะเห็นว่าใบนั้นอยู่ช่วงไหนของรอบ',
+                    en: 'Usually not. New-set prices tend to peak in the first weeks and ease as product reaches the market — the exception being cards that turn out to be staples of winning decks, which can climb instead. Reading the price history shows where in that cycle a card currently sits.',
                 },
             },
         ],
@@ -431,6 +515,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                     en: 'Yes, and right now there is more demand than supply — more people search for Lorcana cards in Thailand than there are listings for them. Signing up and listing are free, you pay only when a card sells, CardStreet suggests a price from current market data, and shipping is built in.',
                 },
             },
+            {
+                q: { th: 'Disney Lorcana เล่นยังไง ใช้การ์ดกี่ใบ?', en: 'How do you play Disney Lorcana, and how many cards do you need?' },
+                a: {
+                    th: 'เด็ค Lorcana ใช้การ์ดอย่างน้อย 60 ใบ เลือกได้ไม่เกินสองสีหมึก และการ์ดชื่อเดียวกันใส่ได้ไม่เกินสี่ใบ เป้าหมายคือสะสมแต้มที่เรียกว่า lore ให้ครบ 20 ก่อนคู่แข่ง โดยส่งตัวละครออกไปทำภารกิจ กติกาพื้นฐานเรียนรู้ได้ในไม่กี่ตา จึงชวนคนที่ไม่เคยเล่นการ์ดเกมมาลองได้ง่าย',
+                    en: 'A Lorcana deck is at least 60 cards, using up to two ink colours, with no more than four copies of any one card name. The goal is to collect 20 lore before your opponent by sending characters on quests. The basics take only a few turns to pick up, which makes it an easy game to introduce to someone who has never played a card game.',
+                },
+            },
+            {
+                q: { th: 'เด็ค Lorcana สำเร็จรูปคุ้มไหมสำหรับมือใหม่?', en: 'Are Lorcana starter decks worth it for beginners?' },
+                a: {
+                    th: 'คุ้ม ถ้าเป้าหมายคือได้เริ่มเล่นเร็วที่สุด เพราะได้การ์ดครบพร้อมเล่นในกล่องเดียวโดยไม่ต้องไล่หาทีละใบ แต่ถ้าเป้าหมายคือเก็บการ์ดสวย ๆ การซื้อใบเดี่ยวที่อยากได้ตรง ๆ คุ้มกว่า เพราะเด็คสำเร็จรูปมักไม่มีการ์ดหายากระดับบนอยู่ในนั้น',
+                    en: 'Worth it if your goal is to start playing quickly, since everything you need is in one box rather than hunted card by card. If your goal is collecting the attractive cards, buying the specific singles you want goes further, because preconstructed decks generally do not contain the top rarities.',
+                },
+            },
+            {
+                q: { th: 'Lorcana ออกชุดใหม่บ่อยแค่ไหน?', en: 'How often do new Lorcana sets release?' },
+                a: {
+                    th: 'ออกต่อเนื่องหลายชุดต่อปี ซึ่งเร็วพอที่การ์ดชุดเก่าจะเริ่มหายไปจากหน้าร้านภายในไม่กี่เดือน สำหรับตลาดไทยที่ของเข้ามาเป็นรอบ ผลคือชุดเก่าหาซื้อยากขึ้นและราคาขยับขึ้นตามของที่เหลือ ดูรายการชุดทั้งหมดพร้อมจำนวนการ์ดได้ที่หน้าชุดการ์ด',
+                    en: 'Several sets arrive each year, fast enough that older ones start disappearing from shelves within months. In Thailand, where stock lands in waves, that means older sets get harder to find and drift upward as remaining copies thin out. The set list on this page shows every set with its card count.',
+                },
+            },
+            {
+                q: { th: 'ซื้อการ์ด Lorcana จากต่างประเทศต่างจากซื้อในไทยไหม?', en: 'Is buying Lorcana from overseas different to buying in Thailand?' },
+                a: {
+                    th: 'ตัวการ์ดเหมือนกัน เพราะ Lorcana ที่ขายในไทยเป็นฉบับภาษาอังกฤษชุดเดียวกับที่ขายต่างประเทศ ต่างกันที่ราคารวมและความเสี่ยง สั่งจากต่างประเทศมีค่าส่งและภาษี บวกเวลารอและความเสี่ยงเรื่องสภาพระหว่างทาง ส่วนการซื้อจากผู้ขายในไทยได้ของเร็วกว่าและติดต่อกลับได้ง่ายกว่าถ้ามีปัญหา',
+                    en: 'The cards are identical, because the Lorcana sold in Thailand is the same English edition sold abroad. What differs is landed cost and risk: ordering from overseas adds shipping, duties, waiting time and the chance of damage in transit, while buying from a seller inside Thailand arrives faster and is easier to resolve if something goes wrong.',
+                },
+            },
         ],
     },
     {
@@ -501,6 +613,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                 a: {
                     th: 'คนที่เพิ่งเริ่มมักเริ่มจากชุดเริ่มต้นที่พร้อมเล่นได้ทันที แล้วค่อยหาซื้อการ์ดใบเดี่ยวเพิ่มเฉพาะใบที่ต้องใช้จริง วิธีนี้ประหยัดกว่าการไล่ซื้อแพ็คสุ่ม เพราะเลือกได้ว่าจะจ่ายเงินให้ใบไหน เช็คราคาการ์ดแต่ละใบบน CardStreet ก่อนตัดสินใจได้ฟรี',
                     en: 'Most new players start with a ready-to-play starter set and then buy only the individual cards they actually need. That works out cheaper than chasing random packs, because you choose exactly what you pay for. You can check the price of any single card on CardStreet for free before deciding.',
+                },
+            },
+            {
+                q: { th: 'Riftbound เล่นกี่คน ใช้เวลานานแค่ไหน?', en: 'How many players is Riftbound, and how long is a game?' },
+                a: {
+                    th: 'รองรับตั้งแต่สองถึงสี่คน และเกมหนึ่งจบเร็วกว่าการ์ดเกมหลายเกม โดยเฉลี่ยไม่ถึงยี่สิบห้านาที เป้าหมายคือแย่งยึดพื้นที่บนสนามให้ได้ครบแปดแต้มก่อนคู่แข่ง ไม่ใช่การไล่ลดพลังชีวิตแบบเกมอื่น',
+                    en: 'It supports two to four players and finishes faster than many card games, averaging under twenty-five minutes. The goal is to capture battlefields and reach eight points before your opponents, rather than grinding down a life total.',
+                },
+            },
+            {
+                q: { th: 'เด็ค Riftbound ใช้การ์ดกี่ใบ?', en: 'How many cards are in a Riftbound deck?' },
+                a: {
+                    th: 'เด็คหลักใช้อย่างน้อยสี่สิบใบ บวกกับเด็ครูนอีกสิบสองใบพอดี และการ์ดแชมเปียนที่ต้องเข้ากับ Legend ที่เลือกไว้ จุดที่ต่างจากเกมอื่นคือทรัพยากรมาจากเด็ครูนแยกต่างหาก จึงไม่เจอปัญหาจั่วได้แต่การ์ดทรัพยากรหรือจั่วไม่ได้เลย',
+                    en: 'The main deck is at least forty cards, plus a rune deck of exactly twelve and a champion matching your chosen Legend. What sets it apart is that resources come from that separate rune deck, so you do not get the flooded-or-starved draws other games suffer from.',
+                },
+            },
+            {
+                q: { th: 'Riftbound เหมาะกับคนที่ไม่เคยเล่นการ์ดเกมมาก่อนไหม?', en: 'Is Riftbound suitable if I have never played a card game?' },
+                a: {
+                    th: 'เหมาะ เพราะเกมยังใหม่ ทุกคนเริ่มพร้อมกัน ไม่ต้องไล่ตามการ์ดที่ออกมาสิบปีก่อนเหมือนเกมอื่น และถ้าเคยเล่น League of Legends อยู่แล้วจะคุ้นกับตัวละครและสกิลบนการ์ดตั้งแต่ใบแรก จำนวนชุดที่ออกมายังนับได้ไม่กี่ชุด การไล่เก็บให้ครบจึงยังเป็นไปได้จริง',
+                    en: 'Yes. The game is new enough that everyone starts together, with no decade of back catalogue to catch up on, and anyone who plays League of Legends will recognise the characters and abilities from the first card. With only a handful of sets released, completing a collection is still realistic.',
+                },
+            },
+            {
+                q: { th: 'ซื้อการ์ด Riftbound มือสองต้องดูอะไรบ้าง?', en: 'What should I check when buying second-hand Riftbound cards?' },
+                a: {
+                    th: 'ดูสภาพจากรูปจริงเสมอ โดยเฉพาะมุมทั้งสี่และผิวหน้าการ์ดที่สะท้อนแสง เพราะรอยขีดบนการ์ดผิวมันเห็นชัดกว่าการ์ดผิวด้าน และเทียบกับราคาตลาดที่แสดงอยู่ก่อนตกลง เพราะตลาด Riftbound ในไทยยังใหม่ ราคาที่ตั้งขายจึงต่างกันมากระหว่างผู้ขายแต่ละคน',
+                    en: 'Always judge condition from real photos, especially the four corners and the reflective face, since scratches show more on a glossy card than a matte one. Compare against the displayed market price before agreeing, because the Riftbound market in Thailand is new enough that asking prices still vary widely between sellers.',
                 },
             },
         ],
