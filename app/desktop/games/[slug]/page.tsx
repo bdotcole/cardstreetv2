@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGuidesForGame } from '@/lib/guides';
+import { getLandingSections } from '@/lib/gameLandingSections';
 import { getGame } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
@@ -120,6 +121,12 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
     // nobody finds.
     const guides = getGuidesForGame(landing.gameId);
 
+    // Prose sections. Every landing was 3 intro paragraphs + 6 FAQs and nothing
+    // else, which capped the head-term pages at 4 h2s and left them thinner than
+    // /graded. Chosen per game against that game's own guide coverage - see
+    // lib/gameLandingSections.ts.
+    const sections = getLandingSections(landing.gameId);
+
     const allSets = await getAllSets();
     const gameSets = allSets.filter((s) => s.game === landing.gameId);
     const newest = gameSets.slice(0, SETS_SHOWN);
@@ -154,6 +161,17 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                     <p key={p.slice(0, 24)}>{p}</p>
                 ))}
             </section>
+
+            {sections.map((sec) => (
+                <section key={sec.h2.en} className="mt-10 max-w-3xl">
+                    <h2 className="text-xl font-black text-white mb-3">{sec.h2[l]}</h2>
+                    <div className="space-y-3 text-sm md:text-base text-slate-300 leading-relaxed">
+                        {sec.body[l].map((para) => (
+                            <p key={para.slice(0, 24)}>{para}</p>
+                        ))}
+                    </div>
+                </section>
+            ))}
 
             {newest.length > 0 && (
                 <section className="mt-12">

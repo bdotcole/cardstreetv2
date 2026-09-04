@@ -101,6 +101,34 @@ export const GAME_LANDINGS: GameLandingContent[] = [
                     en: 'Yes. CardStreet carries sealed booster boxes, booster packs, and special set boxes in Thai, English, and Japanese, with market prices alongside singles. Sealed product appeals both to people who want to open it and to collectors holding it, since boxes from sets that have gone out of print tend to move up over time.',
                 },
             },
+            {
+                q: { th: 'การ์ดโปเกมอนภาษาไทยกับภาษาญี่ปุ่น ใบไหนถูกกว่า?', en: 'Are Thai or Japanese Pokémon cards cheaper?' },
+                a: {
+                    th: 'ส่วนใหญ่การ์ดภาษาไทยถูกกว่าใบญี่ปุ่นที่เป็นการ์ดเดียวกัน เพราะชุดไทยพิมพ์ตามชุดญี่ปุ่นโดยใช้เลขการ์ดชุดเดียวกัน แต่ไม่ใช่ทุกใบ บางใบที่หายากเป็นพิเศษราคาสวนทางได้ วิธีที่แน่นอนที่สุดคือเปิดหน้าการ์ดทั้งสองภาษาบน CardStreet แล้วเทียบราคากันตรง ๆ',
+                    en: 'Thai prints are usually cheaper than the Japanese card they were printed from, because Thai sets follow the Japanese set using the same collector numbers — but not always, and unusually scarce cards can run the other way. The reliable check is to open both language versions on CardStreet and compare the prices directly.',
+                },
+            },
+            {
+                q: { th: 'ซื้อการ์ดโปเกมอนบน CardStreet ปลอดภัยไหม?', en: 'Is buying Pokémon cards on CardStreet safe?' },
+                a: {
+                    th: 'ผู้ขายทุกคนต้องยืนยันตัวตนก่อนลงขาย การชำระเงินผ่านระบบที่ปลอดภัยและมีการคุ้มครองผู้ซื้อ ส่งผ่าน Flash Express มีเลขติดตามพัสดุทุกออเดอร์ ถ้าของที่ได้รับไม่ตรงกับที่ลงขายไว้ ติดต่อทีมงานเข้ามาช่วยตรวจสอบได้',
+                    en: 'Every seller is identity-verified before they can list. Payment goes through secure checkout with buyer protection, orders ship via Flash Express with tracking, and if what arrives does not match the listing you can contact our team to look into it.',
+                },
+            },
+            {
+                q: { th: 'การ์ดโปเกมอนของปลอมดูยังไง?', en: 'How do I spot a fake Pokémon card?' },
+                a: {
+                    th: 'จุดที่ดูง่ายที่สุดคือความคมของตัวอักษร สีของขอบการ์ดเวลาส่องไฟ และน้ำหนักการ์ดเทียบกับใบแท้ที่มีอยู่ในมือ ถ้าซื้อจากคนที่ไม่รู้จักให้ขอรูปด้านหลังและรูปขอบการ์ดในแสงธรรมชาติเสมอ ไม่ใช่รูปสต็อกจากอินเทอร์เน็ต มีคู่มือดูการ์ดปลอมแบบละเอียดอยู่ในหน้าคู่มือ',
+                    en: 'The easiest tells are how crisp the text prints, the colour of the card edge under light, and the weight against a genuine card you already own. Buying from someone you do not know, always ask for photos of the back and the edges in natural light rather than stock images. There is a detailed guide to spotting fakes in the guides section.',
+                },
+            },
+            {
+                q: { th: 'อยากขายการ์ดโปเกมอนที่มีอยู่ ต้องทำยังไง?', en: 'How do I sell the Pokémon cards I already own?' },
+                a: {
+                    th: 'สมัครเป็นผู้ขายและยืนยันตัวตนก่อน จากนั้นสแกนหรือค้นหาการ์ดที่จะขาย ตั้งราคาโดยดูราคาตลาดที่แสดงอยู่เป็นตัวตั้ง แล้วรอผู้ซื้อกดสั่ง รายละเอียดเรื่องค่าธรรมเนียมและรอบโอนเงินอยู่ในหน้าขายการ์ด',
+                    en: 'Register as a seller and verify your identity, then scan or search for the card, set your price using the displayed market price as a reference, and wait for a buyer. Fees and payout timing are covered on the selling page.',
+                },
+            },
         ],
     },
     {
