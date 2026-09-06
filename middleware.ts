@@ -15,7 +15,7 @@ const APP_UA_MARKER = 'CardStreetApp'
 // makes these pages visible to Google's mobile-first crawler. Only the native
 // Capacitor app keeps the old redirect into the SPA, which deep-links /card/*
 // via the ?card= param.
-const PUBLIC_CONTENT_PREFIXES = ['/card', '/sets', '/seller', '/guides']
+const PUBLIC_CONTENT_PREFIXES = ['/card', '/sets', '/seller', '/guides', '/shops']
 
 // Game landing pages: clean top-level URLs that render from /desktop/games/*.
 // Universal (all devices) like the other public content pages.
@@ -320,6 +320,8 @@ export const config = {
         // Long-form guides (see PUBLIC_CONTENT_PREFIXES).
         '/guides',
         '/guides/:path*',
+        // Seller shop directory (see PUBLIC_CONTENT_PREFIXES).
+        '/shops',
         '/sell',
         '/orders',
         '/collection',

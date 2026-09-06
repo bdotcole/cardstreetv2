@@ -33,6 +33,20 @@ export default function DesktopFooter({ pathPrefix = '' }: {
                     ))}
                     <Link href={`${pathPrefix}/sets`} className="hover:text-slate-300 transition-colors">{t('desktop.navSets')}</Link>
                 </nav>
+                {/* Commercial + seller-acquisition links, sitewide.
+                    Measured 2026-09-01: /sell-cards had THREE inbound internal links and none
+                    from the homepage, and the seller shops holding the entire active inventory
+                    had ZERO links from any content page. With 222 active listings against
+                    117,322 card pages, supply is the binding constraint — so a seller-intent
+                    click is worth more than a buyer-intent one, and these belong on every page
+                    rather than on three. */}
+                <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2" aria-label={language === 'TH' ? 'ซื้อขายการ์ด' : 'Buy and sell'}>
+                    <Link href={`${pathPrefix}/prices`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'เช็คราคาการ์ด' : 'Check card prices'}</Link>
+                    <Link href={`${pathPrefix}/graded`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ราคาการ์ดเกรด' : 'Graded card prices'}</Link>
+                    <Link href={`${pathPrefix}/shops`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ร้านขายการ์ด' : 'Card shops'}</Link>
+                    <Link href={`${pathPrefix}/sell-cards`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ขายการ์ดของคุณ' : 'Sell your cards'}</Link>
+                    <Link href={`${pathPrefix}/guides`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'คู่มือและบทความ' : 'Guides'}</Link>
+                </nav>
                 {/* App-store links. Sitewide because the public content pages
                     (card / set / seller / game landings) are where search drops
                     people, and until now none of them offered the app at all —

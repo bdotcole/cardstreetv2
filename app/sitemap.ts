@@ -33,6 +33,8 @@ const ROUTES: {
   { path: '/riftbound', lastModified: '2026-08-13', changeFrequency: 'weekly', priority: 0.9 },
   // Set index — the crawl entry point to all ~1k set pages.
   { path: '/sets', lastModified: '2026-08-07', changeFrequency: 'weekly', priority: 0.8 },
+  // Seller shop directory — the crawl path to every shop with live inventory.
+  { path: '/shops', lastModified: '2026-09-01', changeFrequency: 'daily', priority: 0.8 },
   // Price-check landing — targets เช็คราคาการ์ดโปเกม่อน, the best-ranking query.
   { path: '/prices', lastModified: '2026-08-14', changeFrequency: 'weekly', priority: 0.8 },
   // Graded-cards landing — targets การ์ดเกรด / ราคาการ์ดเกรด / PSA 10 ราคา.
