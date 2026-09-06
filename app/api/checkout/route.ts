@@ -179,6 +179,19 @@ export async function POST(req: Request) {
                 stripe_region: region,
             },
             transfer_group: transferGroup,
+            // Ask the issuer for a 3DS challenge rather than letting Stripe pick.
+            // Left unset, Stripe chose "Data Only" 3DS — it shares data with the
+            // issuer but never challenges the cardholder, so fraud liability
+            // stays with the issuer. On high-value cross-border cards that is a
+            // decline pattern: three attempts on one ฿8,536 order (Visa ••1606,
+            // MC ••8276, MC ••5158 — NZ-issued, TH billing address) all came
+            // back `card_declined` after Data Only auth, and the Aug 9-23 window
+            // ran a 62.5% failure rate across ฿39,055. Requesting the challenge
+            // shifts liability to the issuer, which is what lifts approval on
+            // exactly this profile.
+            payment_method_options: {
+                card: { request_three_d_secure: 'any' },
+            },
         };
 
         if (usePaymentElement) {
