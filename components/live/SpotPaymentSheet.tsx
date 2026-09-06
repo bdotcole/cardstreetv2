@@ -276,7 +276,12 @@ const PayForm: React.FC<{
     return (
         <>
             <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
-                <PaymentElement onReady={() => setReady(true)} options={{ layout: 'tabs' }} />
+                {/* PromptPay first, at every amount — same rule and same reason
+                    as components/PaymentModal.tsx. */}
+                <PaymentElement
+                    onReady={() => setReady(true)}
+                    options={{ layout: 'tabs', paymentMethodOrder: ['promptpay', 'card'] }}
+                />
             </div>
             <button
                 onClick={onPay}
@@ -302,6 +307,9 @@ interface ConfirmResult {
     /** Stripe's error code — 'card_declined' (retryable) vs
      *  'amount_too_small' (not). */
     code?: string;
+    /** The issuer refused the card, as opposed to any other failure. Drives the
+     *  "try PromptPay" prompt rather than showing the issuer's own message. */
+    cardDeclined?: boolean;
     paymentIntentId?: string;
     status?: string;
 }
@@ -324,7 +332,17 @@ const ConfirmBridge: React.FC<{
                 confirmParams: { return_url: returnUrl },
                 redirect: 'if_required',
             });
-            if (error) return { error: error.message || 'Payment failed', code: error.code };
+            if (error) {
+                // Flag a card decline so the sheet can point at PromptPay,
+                // matching components/PaymentModal.tsx. A live break is the
+                // worst place to dead-end a buyer: the spot is held on a timer
+                // and "try another card" spends it.
+                const cardDeclined =
+                    error.type === 'card_error' ||
+                    error.code === 'card_declined' ||
+                    !!(error as { decline_code?: string }).decline_code;
+                return { error: error.message || 'Payment failed', code: error.code, cardDeclined };
+            }
             return { paymentIntentId: paymentIntent?.id, status: paymentIntent?.status };
         });
     }, [stripe, elements, register]);
@@ -573,7 +591,12 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                 name: 'error',
                 message: hard
                     ? t('live.payment.minCharge') || 'Minimum purchase is ฿10 — add another spot'
-                    : result.error,
+                    // A declined card gets the PromptPay prompt instead of the
+                    // issuer's own opaque message. PromptPay already leads the
+                    // tabs, so Try Again puts them on a rail that cannot decline.
+                    : result.cardDeclined
+                        ? t('paymentFlow.cardDeclinedTryPromptPay')
+                        : result.error,
                 hard,
             });
             return;

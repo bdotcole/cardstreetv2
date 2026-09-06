@@ -108,6 +108,27 @@ const PaymentElementForm: React.FC<{
     const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [ready, setReady] = useState(false);
+    // Set after a card is declined. Only used for the inline explanation now —
+    // PromptPay already leads at every amount (see paymentMethodOrder), so the
+    // ordering does not need to change on a decline; the buyer needs to be TOLD
+    // why, not silently re-ordered.
+    const [cardDeclined, setCardDeclined] = useState(false);
+
+    // PromptPay first. Always, at every amount.
+    //
+    // It is a bank push: no issuer authorisation step, so no decline path, no
+    // card limit, no cross-border interchange. Cards have all three, and that is
+    // where the money has actually been lost — 5 of 8 payments failed over
+    // Aug 9-23 (฿39,055), three `insufficient_funds` and two `try_again_later`.
+    //
+    // This was originally gated above ฿1,500 on the theory that small orders are
+    // safe on card. That theory protects the wrong thing: the ceiling that
+    // matters is the one a Thai bank sets by DEFAULT on online/international
+    // spend, which the cardholder has to raise in their banking app and mostly
+    // has not — and a first-time buyer who bounces on a ฿300 order is lost just
+    // as completely as one who bounces on ฿8,536. PromptPay is also simply the
+    // rail this market prefers. Card is still right there in the second tab.
+    const paymentMethodOrder = ['promptpay', 'card'];
 
     // A declined card (or 3DS failure) leaves the listings already reserved
     // (`sold`) and a re-confirmable PaymentIntent already created. Cache the
@@ -240,7 +261,21 @@ const PaymentElementForm: React.FC<{
                 // Reservation + PaymentIntent are retained (retryRef untouched)
                 // so the buyer can fix their card and click Pay again without
                 // re-reserving their own listings.
-                onPaymentFailed(error.message || 'Payment failed');
+                //
+                // On a card decline, name PromptPay rather than dead-ending.
+                // The issuer has already refused; "try a different card" is the
+                // advice that lost the ฿8,536 order three times across two days.
+                // PromptPay has no issuer authorisation step to refuse.
+                const isCardDecline =
+                    error.type === 'card_error' ||
+                    error.code === 'card_declined' ||
+                    !!(error as { decline_code?: string }).decline_code;
+                if (isCardDecline) {
+                    setCardDeclined(true);
+                    onPaymentFailed(t('paymentFlow.cardDeclinedTryPromptPay'));
+                } else {
+                    onPaymentFailed(error.message || 'Payment failed');
+                }
                 setLoading(false);
                 return;
             }
@@ -293,8 +328,19 @@ const PaymentElementForm: React.FC<{
 
     return (
         <>
+            {cardDeclined && (
+                <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 flex items-start gap-3">
+                    <i className="fa-solid fa-circle-info text-amber-400 mt-0.5" aria-hidden="true"></i>
+                    <p className="text-[13px] leading-snug text-amber-100">
+                        {t('paymentFlow.promptPayFallbackHint')}
+                    </p>
+                </div>
+            )}
             <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
-                <PaymentElement onReady={() => setReady(true)} options={{ layout: 'tabs' }} />
+                <PaymentElement
+                    onReady={() => setReady(true)}
+                    options={{ layout: 'tabs', paymentMethodOrder }}
+                />
             </div>
             <button
                 onClick={handlePay}
