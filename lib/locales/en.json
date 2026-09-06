@@ -830,7 +830,10 @@
         "limitReached": "You have too many active offers.",
         "cooldown": "Please wait before offering again on this listing.",
         "rateLimited": "Too many offers — please slow down.",
-        "failed": "Failed to submit offer."
+        "failed": "Failed to submit offer.",
+        "sharePayLink": "Send pay link",
+        "payLinkCopied": "Pay link copied",
+        "expiresIn48h": "Expires 48 hours after acceptance."
     },
     "pro": {
         "title": "CardStreet Pro",

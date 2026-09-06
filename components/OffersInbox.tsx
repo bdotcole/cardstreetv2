@@ -53,7 +53,7 @@ const statusLabel = (status: string, isThai: boolean): string => {
 };
 
 const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -129,6 +129,29 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
 
   // Actions available depend on who made the pending row (actor_role) vs. the
   // viewer's role on this offer (viewerRole), matching the server's state machine.
+  // Native share sheet where it exists — the destination is LINE and the sheet
+  // is how a phone gets there. Clipboard elsewhere, with the button confirming
+  // the copy so a silent no-op is impossible to mistake for success.
+  const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
+  const sharePayLink = async (offerId: string) => {
+    const url = `${window.location.origin}/pay/${offerId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ url });
+        return;
+      }
+    } catch {
+      // Sheet dismissed or blocked — fall through to the clipboard.
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedOfferId(offerId);
+      setTimeout(() => setCopiedOfferId(null), 2000);
+    } catch {
+      // Clipboard denied — nothing further to offer here.
+    }
+  };
+
   const renderActions = (o: Offer) => {
     const isViewerActor = o.viewerRole === o.actor_role;
     const busy = busyId === o.id;
@@ -156,10 +179,23 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       }
       // Seller side: an accepted offer is NOT a completed sale — the buyer
       // still has to pay. Saying nothing here read as "sold" to sellers.
+      // The share button exists because the chase happens in LINE, not in the
+      // app: without a link to paste, "have you paid yet" is all the seller
+      // has, and the link is the only version of that message that converts.
       return (
-        <p className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wide">
-          {isThai ? 'รอผู้ซื้อชำระเงิน' : 'Waiting for buyer to pay'}
-        </p>
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wide">
+            {isThai ? 'รอผู้ซื้อชำระเงิน' : 'Waiting for buyer to pay'}
+          </p>
+          <button
+            onClick={() => sharePayLink(o.id)}
+            className="w-full sm:w-auto h-10 px-4 bg-white/5 border border-white/10 text-slate-200 font-black text-[10px] tracking-widest rounded-lg uppercase"
+          >
+            <i className="fa-solid fa-paper-plane mr-2 text-[9px]"></i>
+            {copiedOfferId === o.id ? t('offer.payLinkCopied') : t('offer.sharePayLink')}
+          </button>
+          <p className="text-[10px] text-slate-500">{t('offer.expiresIn48h')}</p>
+        </div>
       );
     }
 

@@ -58,6 +58,7 @@ const EXACT_PATHS = new Set([
 
     // Standalone feature routes. /trade is the target a trade QR encodes, so a
     // scan has to reach it for the same reason the table-cam /live/ link does.
+    // /pay/<offerId> is prefix-matched below, not here.
     '/premium',
     '/grade',
     '/trade',
@@ -79,7 +80,13 @@ const EXACT_PATHS = new Set([
  * bare '/' for the native app, so navigating would spend a round trip to land
  * exactly where doing nothing already leaves the user.
  */
-const PREFIX_PATHS = ['/card/']
+/**
+ * /pay/ is the accepted-offer pay link, shared over LINE. Tapping it on a phone
+ * with the app installed fires appUrlOpen and nothing else, so without this
+ * entry the link a seller sent to chase payment silently lands the buyer on the
+ * SPA home — the exact failure /become-a-breaker had.
+ */
+const PREFIX_PATHS = ['/card/', '/pay/']
 
 /**
  * Strip a locale prefix so /en/faq matches the same entry as /faq. The lookahead

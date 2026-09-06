@@ -192,6 +192,9 @@ export default function HomePage() {
     // beside the tab state because the landing effect below consumes it, and
     // handed down to the Vault, which opens that listing's price editor.
     const [repriceCardId, setRepriceCardId] = useState<string | null>(null);
+    // Offer id from a pay link. Consumed once the offer is loadable — see the
+    // effect near handlePayOffer.
+    const [payOfferId, setPayOfferId] = useState<string | null>(null);
 
     // Shop tab press. Re-tapping the tab you're already on returns to that
     // tab's root — here, the Live-vs-Marketplace chooser. Routed through
@@ -242,6 +245,25 @@ export default function HomePage() {
             try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
             setActiveTab('profile');
             params.delete('view');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
+        // /?payOffer=<offerId> — the accepted-offer pay link (see app/pay/
+        // [offerId]/route.ts, which is what actually gets shared on LINE).
+        // Held in state; the offers list loads asynchronously, so the pay flow
+        // is dispatched by the effect below once the offer is in hand.
+        const payOffer = params.get('payOffer');
+        if (payOffer) {
+            setPayOfferId(payOffer);
+            setActiveTab('profile');
+            try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+            params.delete('payOffer');
             const rest = params.toString();
             window.history.replaceState(
                 null,
@@ -1206,6 +1228,39 @@ export default function HomePage() {
         setAcceptedOfferId(offer.id);
         setIsPaymentModalOpen(true);
     };
+
+    // Consume a pay link (/pay/<offerId> -> /?payOffer=<id>). Waits for a real
+    // session: the link is shared over LINE and routinely opened by someone not
+    // signed in on that device, and dispatching before auth would fail the
+    // buyer-profile gate for the wrong reason. One shot per id — cleared before
+    // dispatch so a failed attempt does not loop.
+    useEffect(() => {
+        if (!payOfferId || !user || user.provider === 'guest') return;
+        const id = payOfferId;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch('/api/offers?state=active', { cache: 'no-store' });
+                if (!res.ok) throw new Error('offers fetch failed');
+                const data = await res.json();
+                const list: Offer[] = Array.isArray(data?.offers) ? data.offers : (Array.isArray(data) ? data : []);
+                const offer = list.find((o) => o.id === id);
+                if (cancelled) return;
+                setPayOfferId(null);
+                if (!offer) {
+                    // Paid, expired, withdrawn, or someone else's — the Offers
+                    // panel is already open behind this and shows the truth.
+                    showToast(t('offer.payUnavailable'), 'error');
+                    return;
+                }
+                void handlePayOffer({ offer });
+            } catch {
+                if (!cancelled) setPayOfferId(null);
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [payOfferId, user]);
 
     // Buy Now skips the cart and opens the payment modal directly, so it runs
     // the same geo, auth, and buyer-profile (address + phone) gates as cart

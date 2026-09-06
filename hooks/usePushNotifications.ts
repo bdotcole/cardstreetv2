@@ -62,6 +62,17 @@ function routeNotificationTap(data: unknown) {
         return;
     }
     if (!type.startsWith('offer_')) return;
+    // An ACCEPTED offer has exactly one next step, so its tap goes straight to
+    // payment rather than to the Offers list. Every other offer push (received,
+    // countered, rejected, expired) needs the list, where the user chooses.
+    if (type === 'offer_accepted') {
+        const d = data as { offerId?: unknown };
+        const offerId = typeof d?.offerId === 'string' ? d.offerId : '';
+        if (offerId) {
+            window.location.assign(`/pay/${encodeURIComponent(offerId)}`);
+            return;
+        }
+    }
     try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* landing fallback still opens Profile */ }
     const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-offers', { cancelable: true }));
     if (unconsumed) window.location.assign('/?view=offers');

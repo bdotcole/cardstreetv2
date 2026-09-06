@@ -2101,16 +2101,33 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').re
  * with the logo / header. Rendering falls to this only when no dashboard
  * template id is set for the event.
  */
-function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string }) {
+function buildOfferEmailContent(c: {
+    subject: string; bodyEn: string; bodyTh: string; cta: string; push: string;
+    /** Overrides the CTA destination. The accepted-offer mail points straight
+     *  at the pay link rather than at the Offers list, which is one more screen
+     *  between a buyer who has decided and the payment. */
+    ctaUrl?: string;
+}) {
     return emailPlusPushContent({
         title: c.subject,
         emailParagraphs: [
             { text: c.bodyEn },
             { text: c.bodyTh, muted: true },
         ],
-        cta: { label: c.cta, url: `${APP_URL}/?view=offers` },
+        cta: { label: c.cta, url: c.ctaUrl ?? `${APP_URL}/?view=offers` },
         pushBody: c.push,
     });
+}
+
+/**
+ * The shareable pay link for an accepted offer (app/pay/[offerId]/route.ts).
+ *
+ * Exported because the seller needs it too: the deal is agreed in the app and
+ * then chased in LINE, and until now the seller had nothing to send. A link
+ * they can paste is the whole difference between "have you paid yet" and a tap.
+ */
+export function offerPayUrl(offerId: string): string {
+    return `${APP_URL}/pay/${offerId}`;
 }
 
 /**
@@ -2129,7 +2146,7 @@ async function sendOfferNotification(
         pushPref: string;
         template: string;
         pushType: string;
-        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string };
+        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string; ctaUrl?: string };
     },
 ): Promise<void> {
     const courier = getCourier();
@@ -2160,6 +2177,10 @@ async function sendOfferNotification(
             amount: details.amount,
             priceLabel,
             cardName,
+            // The pay link, so a template-backed send can use it too and the
+            // push tap has a destination that is the payment itself rather than
+            // the Offers list.
+            payUrl: offerPayUrl(details.offerId),
             // Push deep-link payload (read by the mobile FCM handler).
             type: cfg.pushType,
         },
@@ -2218,10 +2239,14 @@ export async function sendOfferAcceptedNotification(buyerId: string, details: Of
         pushType: 'offer_accepted',
         inline: (priceLabel, cardName) => ({
             subject: `Offer accepted — ${cardName}`,
-            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay now to complete the purchase before someone else buys it.`,
-            bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว — ชำระเงินให้เสร็จก่อนใคร`,
+            // 48 hours is stated because it is now true: the hourly cron
+            // expires accepted offers at that mark. A deadline nobody enforces
+            // is worse than none, and one nobody states is not a deadline.
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay within 48 hours to complete the purchase — the card stays on sale until you do.`,
+            bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว ชำระเงินภายใน 48 ชั่วโมง — การ์ดยังเปิดขายอยู่จนกว่าคุณจะชำระ`,
             cta: 'Pay now · ชำระเงิน',
-            push: 'ชำระเงินตอนนี้ก่อนมีคนซื้อตัดหน้า · Pay now before someone else buys it.',
+            push: 'ชำระเงินภายใน 48 ชม. ก่อนมีคนซื้อตัดหน้า · Pay within 48h before someone else buys it.',
+            ctaUrl: offerPayUrl(details.offerId),
         }),
     });
 }
