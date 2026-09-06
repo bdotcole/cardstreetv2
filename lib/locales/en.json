@@ -24,7 +24,10 @@
         "expansion": "Expansion",
         "english": "English",
         "thai": "Thai",
-        "japanese": "Japanese"
+        "japanese": "Japanese",
+        "noSetsAvailable": "No sets available",
+        "selectSetShort": "Select set",
+        "buyFrom": "Buy from"
     },
     "marketplace": {
         "title": "Marketplace",
@@ -56,7 +59,9 @@
         "reset": "Reset",
         "anyPrice": "Any",
         "minPrice": "Min",
-        "maxPrice": "Max"
+        "maxPrice": "Max",
+        "emptyTitle": "Nothing listed yet",
+        "emptyBody": "No active listings match these filters."
     },
     "common": {
         "loading": "Loading...",
@@ -278,7 +283,15 @@
         "scanCard": "Scan Card",
         "realtimeVisionAI": "Real-Time Vision AI",
         "searchRegistry": "Search Registry",
-        "globalArchives": "Global Product Archives"
+        "globalArchives": "Global Product Archives",
+        "trackCollection": "Track your TCG collection",
+        "registrySearch": "Registry Search",
+        "searchPlaceholder": "Search name, set, number...",
+        "syncingDatabase": "Syncing multilingual database...",
+        "marketLabel": "Market",
+        "searchEmpty": "Search the live catalog",
+        "analyzingCard": "Analyzing card",
+        "aiVisionProcessing": "AI vision processing..."
     },
     "cardRequest": {
         "noMatches": "No matches in the registry for",
@@ -909,7 +922,8 @@
             "topHoldings": "Top Holdings",
             "movers": "This Week's Movers",
             "upsellDesc": "Portfolio value history, cost basis and unrealized P/L, top holdings, allocation, and weekly movers — your collection as a portfolio."
-        }
+        },
+        "freeForEveryone": "Free for everyone"
     },
     "live": {
         "chooser": {
@@ -1554,6 +1568,64 @@
         },
         "groupCosmetics": "Cosmetics",
         "groupPerks": "Perks",
-        "groupVouchers": "Vouchers"
+        "groupVouchers": "Vouchers",
+        "inviteTitle": "Invite a friend",
+        "inviteShare": "Share",
+        "inviteCopied": "Copied"
+    },
+    "auth": {
+        "welcomeTitle": "Welcome to",
+        "subtitleDefault": "Sign in to sync your collection across devices",
+        "subtitleVerify": "Check your email to verify your account",
+        "subtitleReset": "Reset your password to get back in",
+        "signIn": "Sign In",
+        "signUp": "Sign Up",
+        "createAccount": "Create Account",
+        "continueGoogle": "Continue with Google",
+        "continueApple": "Continue with Apple",
+        "orWithEmail": "Or with email",
+        "username": "Username",
+        "usernamePlaceholder": "Enter a unique username",
+        "usernameHint": "Letters, numbers, and underscores only",
+        "fullName": "Full Name",
+        "fullNamePlaceholder": "Enter your full name",
+        "phoneOptional": "Phone Number (Optional)",
+        "email": "Email",
+        "emailOrUsername": "Email or username",
+        "emailPlaceholder": "your@email.com",
+        "emailOrUsernamePlaceholder": "your@email.com or username",
+        "password": "Password",
+        "forgotPassword": "Forgot password?",
+        "pleaseWait": "Please wait...",
+        "sending": "Sending...",
+        "termsPrefix": "By continuing, you agree to our",
+        "termsOfService": "Terms of Service",
+        "and": "and",
+        "privacyPolicy": "Privacy Policy",
+        "verifyTitle": "Verify Your Email",
+        "verifySentTo": "We've sent a verification link to",
+        "verifyHint": "Click the link in your email to complete your registration. Links work once — always use the newest email.",
+        "resendSent": "A fresh verification email is on its way. It replaces any earlier links, so use the newest one.",
+        "resendEmail": "Resend email",
+        "backToSignIn": "Back to Sign In",
+        "checkEmailTitle": "Check Your Email",
+        "forgotIntro": "Enter the email on your account and we'll send you a link to set a new password.",
+        "forgotSentPrefix": "If an account exists for",
+        "forgotSentSuffix": "we've sent a link to set a new password.",
+        "sendResetLink": "Send Reset Link",
+        "timeout": "This is taking longer than expected. Please check your connection and try again.",
+        "resendFailed": "Failed to resend verification email",
+        "signUpFailed": "Failed to create account"
+    },
+    "toast": {
+        "wishlistFailed": "Failed to update wishlist",
+        "vaultAddFailed": "Failed to add card to collection",
+        "paymentSuccess": "Payment successful — thank you for your purchase!",
+        "authLinkUsed": "That link was already used or expired. Try signing in, or resend the email from the sign-in screen.",
+        "emailConfirmed": "Email confirmed — you're signed in!",
+        "authFailed": "Authentication failed",
+        "loginFailed": "Login failed",
+        "signedIn": "Signed in successfully",
+        "unknownError": "Unknown error"
     }
 }

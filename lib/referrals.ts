@@ -98,8 +98,15 @@ export function generatePartnerSlug(displayName: string | null | undefined): str
 }
 
 /**
- * Returns the partner's slug, generating and persisting one if missing.
+ * Returns the account's slug, generating and persisting one if missing.
  * Retries on the (unlikely) unique-constraint collision.
+ *
+ * Returns what is actually STORED, not what was generated. The `.is(null)`
+ * guard makes a concurrent second call match zero rows and report no error, so
+ * returning the locally generated slug would hand a caller a link that resolves
+ * to nothing. That race went from near-impossible to routine when referral
+ * slugs stopped being partner-only (2026-09-05): every account now mints on
+ * first use, and the mobile shell and desktop can both ask at once.
  */
 export async function ensurePartnerSlug(
     admin: SupabaseClient,
@@ -111,12 +118,27 @@ export async function ensurePartnerSlug(
 
     for (let attempt = 0; attempt < 3; attempt++) {
         const slug = generatePartnerSlug(displayName);
-        const { error } = await admin
+        const { data, error } = await admin
             .from('profiles')
             .update({ partner_qr_slug: slug })
             .eq('id', partnerId)
-            .is('partner_qr_slug', null);
-        if (!error) return slug;
+            .is('partner_qr_slug', null)
+            .select('partner_qr_slug');
+        if (!error) {
+            if (data && data.length > 0) return data[0].partner_qr_slug as string;
+            // Zero rows updated: someone else won the race and the row already
+            // has a slug. Read theirs rather than claiming ours.
+            const { data: row } = await admin
+                .from('profiles')
+                .select('partner_qr_slug')
+                .eq('id', partnerId)
+                .single();
+            const stored = row?.partner_qr_slug as string | null | undefined;
+            if (stored) return stored;
+            // No slug and no row updated — the profile is gone. Retrying cannot
+            // help, and returning a slug nothing resolves to would be worse.
+            throw new Error('Profile not found while minting a referral slug');
+        }
         // 23505 = unique violation — regenerate and retry; anything else is fatal.
         if (String(error.code) !== '23505') throw new Error(error.message);
     }

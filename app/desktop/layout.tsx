@@ -1,5 +1,6 @@
 import DesktopNav from '@/components/desktop/DesktopNav';
 import DesktopFooter from '@/components/desktop/DesktopFooter';
+import GetAppBanner from '@/components/desktop/GetAppBanner';
 import DesktopCartProvider from '@/components/desktop/DesktopCartContext';
 import DesktopCartDrawer from '@/components/desktop/DesktopCartDrawer';
 import DesktopRewardsHost from '@/components/desktop/DesktopRewardsHost';
@@ -31,6 +32,9 @@ export default async function DesktopLayout({ children }: { children: React.Reac
         <DesktopCartProvider>
             <div className="min-h-screen flex flex-col">
                 <DesktopNav pathPrefix={pathPrefix} />
+                {/* Phone-width only (see the component): these pages are served
+                    to phones as well as desktops, and had no route to the app. */}
+                <GetAppBanner />
                 <main className="flex-1 w-full max-w-screen-2xl mx-auto px-4 md:px-8 py-8">{children}</main>
                 <DesktopFooter pathPrefix={pathPrefix} />
             </div>

@@ -22,7 +22,7 @@ import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import SignupTracker from '@/components/SignupTracker';
 import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
-import { readAttributionCookie, withWriter } from '@/lib/attribution';
+import { readAttributionCookie, unknownAttribution, withWriter } from '@/lib/attribution';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
@@ -77,6 +77,17 @@ const LANDING_TABS = ['explore', 'marketplace', 'add', 'vault', 'profile', 'part
 type LandingTab = (typeof LANDING_TABS)[number];
 const isLandingTab = (v: string | null): v is LandingTab =>
     !!v && (LANDING_TABS as readonly string[]).includes(v);
+
+// Desktop account URLs a phone was bounced off, named as ?tab= values by
+// middleware.ts (SPA_TAB_FOR_PATH). They aren't tabs here — the SPA keeps
+// selling inside the Vault and orders/settings inside Profile — so each maps
+// to the real tab plus, where needed, the sessionStorage flag Profile reads on
+// mount to open the right panel (the cs_open_payouts / cs_open_offers pattern).
+const TAB_ALIASES: Record<string, { tab: LandingTab; profileFlag?: string }> = {
+    sell: { tab: 'vault' },
+    orders: { tab: 'profile', profileFlag: 'cs_open_orders' },
+    settings: { tab: 'profile', profileFlag: 'cs_open_settings' },
+};
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
 
@@ -232,6 +243,26 @@ export default function HomePage() {
             return;
         }
 
+        // /?openRewards=1 opens the Rewards Hub — the streak-at-risk push's
+        // cold-start fallback, for when the app was killed and no shell was
+        // mounted to consume the cs:openRewards event. A sessionStorage flag
+        // rather than an event dispatch (the cs_open_payouts pattern): this
+        // branch runs in a pre-paint effect, and the hub's own listener is
+        // registered by a later passive effect, so an event fired here could
+        // arrive before anything is listening.
+        if (params.get('openRewards') === '1') {
+            try { sessionStorage.setItem('cs_open_rewards', '1'); } catch { /* lands on the tab instead */ }
+            params.delete('openRewards');
+            // Deliberately falls through: ?tab= on the same URL still decides
+            // which tab sits behind the hub.
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+        }
+
         // /?view=vault lands in the Vault — the first-listing activation
         // email's CTA deep-links here. Strip the param like the branches above.
         if (params.get('view') === 'vault') {
@@ -247,11 +278,16 @@ export default function HomePage() {
         }
 
         // /?tab=<name> lands on an explicit tab — the Pro hub's back button
-        // returns via /?tab=profile. Strip the param (keeping everything
+        // returns via /?tab=profile, and middleware bounces /sell, /orders,
+        // /collection and /settings here. Strip the param (keeping everything
         // else) so a refresh doesn't re-apply it.
         const tab = params.get('tab');
-        if (isLandingTab(tab)) {
-            setActiveTab(tab);
+        const alias = tab ? TAB_ALIASES[tab] : undefined;
+        if (alias || isLandingTab(tab)) {
+            if (alias?.profileFlag) {
+                try { sessionStorage.setItem(alias.profileFlag, '1'); } catch { /* opens Profile root instead */ }
+            }
+            setActiveTab(alias ? alias.tab : (tab as LandingTab));
             params.delete('tab');
             const rest = params.toString();
             window.history.replaceState(
@@ -540,11 +576,25 @@ export default function HomePage() {
     // a window event — Profile renders inside this shell, so the event is the
     // cheapest cross-component channel that survives its z-[200] panels.
     useEffect(() => {
-        const onOpenRewards = () => {
+        const onOpenRewards = (e: Event) => {
+            // Mark the event consumed. The streak push's tap handler dispatches
+            // this cancelable and hard-navigates when nothing cancels it (the
+            // cs-open-offers pattern), so without preventDefault a tap would
+            // open the hub AND reload the page out from under it.
+            e.preventDefault();
             setIsRewardsOpen(true);
             void refreshRewards();
         };
         window.addEventListener('cs:openRewards', onOpenRewards);
+        // Cold-start half of the same deep link: the landing effect (which runs
+        // before this one) leaves a flag when the URL carried ?openRewards=1.
+        try {
+            if (sessionStorage.getItem('cs_open_rewards') === '1') {
+                sessionStorage.removeItem('cs_open_rewards');
+                setIsRewardsOpen(true);
+                void refreshRewards();
+            }
+        } catch { /* storage unavailable (private mode) */ }
         return () => window.removeEventListener('cs:openRewards', onOpenRewards);
     }, [refreshRewards]);
 
@@ -857,10 +907,20 @@ export default function HomePage() {
     // resumes after sign-in. Replaces the old toast + jump to the Profile
     // tab, which lost the user's context and buried the sign-in CTA.
     const [authGateMessage, setAuthGateMessage] = useState<string | null>(null);
+    // Which tab the wall opens on. Sign-in is right for gates a returning user
+    // hits (their vault, their wishlist); Buy Now is not one of those — someone
+    // tapping it on a listing is far more likely to have no account yet, and a
+    // sign-in form asks them for a password they never set.
+    const [authGateMode, setAuthGateMode] = useState<'signin' | 'signup'>('signin');
     const pendingAuthActionRef = useRef<(PendingAuthAction & { at: number }) | null>(null);
-    const requireAuth = (message: string, pending?: PendingAuthAction): boolean => {
+    const requireAuth = (
+        message: string,
+        pending?: PendingAuthAction,
+        mode: 'signin' | 'signup' = 'signin',
+    ): boolean => {
         if (!user || user.provider === 'guest') {
             pendingAuthActionRef.current = pending ? { ...pending, at: Date.now() } : null;
+            setAuthGateMode(mode);
             setAuthGateMessage(message);
             return false;
         }
@@ -879,7 +939,7 @@ export default function HomePage() {
         } catch (error: any) {
             console.error('Failed to update wishlist:', error);
             const errorMessage = error?.message || 'Unknown error';
-            showToast(`Failed to update wishlist: ${errorMessage}`, 'error');
+            showToast(`${t('toast.wishlistFailed')}: ${errorMessage}`, 'error');
         }
     };
 
@@ -927,7 +987,7 @@ export default function HomePage() {
             console.error('Failed to add card to collection:', error);
             // Show more detailed error for debugging
             const errorMessage = error?.message || 'Unknown error';
-            showToast(`Failed to add card to collection: ${errorMessage}`, 'error');
+            showToast(`${t('toast.vaultAddFailed')}: ${errorMessage}`, 'error');
         }
     };
 
@@ -1085,7 +1145,7 @@ export default function HomePage() {
         const listing = listingArg ?? selectedListing;
         if (!listing) return;
         if (!(await ensureCanPurchase())) return;
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg })) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg }, 'signup')) return;
         if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing }))) return;
         setCart([{
             id: listing.id,
@@ -1206,7 +1266,7 @@ export default function HomePage() {
         fetchGlobalListings();
         refreshCollections();
 
-        showToast(`Payment Successful! Thank you for your purchase.`, 'success');
+        showToast(t('toast.paymentSuccess'), 'success');
     };
 
     const handleScanCard = async () => {
@@ -1684,12 +1744,12 @@ export default function HomePage() {
                             });
                             if (verifyErr) {
                                 console.error('[DeepLink] Email verification failed:', verifyErr);
-                                showToast('That link was already used or expired. Try signing in, or resend the email from the sign-in screen.', 'error');
+                                showToast(t('toast.authLinkUsed'), 'error');
                             } else if (otpType === 'recovery') {
                                 window.location.href = '/reset-password';
                             } else {
                                 // Session is set; onAuthStateChange updates the UI.
-                                showToast('Email confirmed — you are signed in!', 'success');
+                                showToast(t('toast.emailConfirmed'), 'success');
                             }
                             return;
                         }
@@ -1813,7 +1873,7 @@ export default function HomePage() {
 
                         if (error) {
                             console.error('[DeepLink] Auth Error:', error, errorDescription);
-                            showToast(`Authentication Failed: ${errorDescription || error}`, 'error');
+                            showToast(`${t('toast.authFailed')}: ${errorDescription || error}`, 'error');
                             return;
                         }
 
@@ -1824,11 +1884,11 @@ export default function HomePage() {
 
                             if (sessionError) {
                                 console.error('[DeepLink] Exchange Failed:', sessionError);
-                                showToast(`Login Failed: ${sessionError.message}`, 'error');
+                                showToast(`${t('toast.loginFailed')}: ${sessionError.message}`, 'error');
                             } else {
                                 console.log('[DeepLink] Exchange Success for user:', sessionData?.user?.id);
                                 // Session is set, UI will update via onAuthStateChange
-                                showToast('Successfully signed in!', 'success');
+                                showToast(t('toast.signedIn'), 'success');
 
                                 // Native OAuth never touches /api/auth/callback: handleOAuthLogin
                                 // sends Capacitor builds to /mobile-redirect, which bounces to the
@@ -1847,19 +1907,22 @@ export default function HomePage() {
                                     if (newUser && isNewAccount) {
                                         trackSignUp(signUpMethodFromProvider(newUser.app_metadata?.provider));
                                         const attribution = readAttributionCookie();
-                                        if (attribution) {
-                                            // The user updating their OWN profile row, which the
-                                            // "Users can update own profile" RLS policy permits — no
-                                            // service-role round trip needed from the client.
-                                            // Guarded on null so a later sign-in cannot restamp
-                                            // first touch into last touch.
-                                            const { error: attrErr } = await supabase
-                                                .from('profiles')
-                                                .update({ signup_attribution: withWriter(attribution, 'native') })
-                                                .eq('id', newUser.id)
-                                                .is('signup_attribution', null);
-                                            if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);
-                                        }
+                                        // The user updating their OWN profile row, which the
+                                        // "Users can update own profile" RLS policy permits — no
+                                        // service-role round trip needed from the client.
+                                        // Guarded on null so a later sign-in cannot restamp
+                                        // first touch into last touch. A missing cookie records
+                                        // the miss rather than nothing, matching the web callback.
+                                        const { error: attrErr } = await supabase
+                                            .from('profiles')
+                                            .update({
+                                                signup_attribution: attribution
+                                                    ? withWriter(attribution, 'native')
+                                                    : unknownAttribution('callback_nocookie', '/'),
+                                            })
+                                            .eq('id', newUser.id)
+                                            .is('signup_attribution', null);
+                                        if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);
                                     }
                                 } catch (e) {
                                     // Analytics must never break a sign-in.
@@ -1881,9 +1944,9 @@ export default function HomePage() {
                                     });
                                     if (setSessionError) {
                                         console.error('[DeepLink] SetSession Failed:', setSessionError);
-                                        showToast('Login Failed: ' + setSessionError.message, 'error');
+                                        showToast(`${t('toast.loginFailed')}: ${setSessionError.message}`, 'error');
                                     } else {
-                                        showToast('Successfully signed in!', 'success');
+                                        showToast(t('toast.signedIn'), 'success');
                                     }
                                 }
                             }
@@ -1902,7 +1965,7 @@ export default function HomePage() {
         if (error === 'auth_failed') {
             const details = params.get('details');
             console.error("Auth Failed Redirect Detected:", details);
-            showToast(`Authentication failed: ${details || 'Unknown error'}`, 'error');
+            showToast(`${t('toast.authFailed')}: ${details || t('toast.unknownError')}`, 'error');
 
             // Clean up URL
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -2321,6 +2384,7 @@ export default function HomePage() {
                 <AuthModal
                     isOpen={authGateMessage !== null}
                     contextMessage={authGateMessage ?? undefined}
+                    initialMode={authGateMode}
                     onClose={() => {
                         setAuthGateMessage(null);
                         // Distinguish cancel from post-sign-in close: the email

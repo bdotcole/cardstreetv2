@@ -20,10 +20,29 @@ interface ExploreProps {
   onAddToCollection?: (card: Card) => void;
 }
 
+/**
+ * Which catalog language a browse should open on.
+ *
+ * A Thai-first app that opens its catalog on the English Pokémon sets asks
+ * every Thai collector to change a dropdown before they see a single card they
+ * own — and the Thai catalog (~6.6k cards, ~100% imaged) is the one they came
+ * for. getGameLanguages is the authority on what exists, so MTG and Lorcana
+ * still open on English rather than on a language with no sets behind it.
+ */
+function preferredLanguageForGame(gameId: string, uiIsThai: boolean): GameLanguageCode {
+  if (uiIsThai && getGameLanguages(gameId).some((l) => l.code === 'th')) return 'th';
+  return defaultLanguageForGame(gameId);
+}
+
 const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection }) => {
   const { t, isThai } = useTranslation();
   const [selectedGame, setSelectedGame] = useState<string>('pokemon');
-  const [selectedLanguage, setSelectedLanguage] = useState<GameLanguageCode>('en');
+  // Seeded from the UI language (see preferredLanguageForGame). Lazy initial
+  // state, not an effect: seeding after mount would fire the sets fetch twice
+  // and flash the English sets first.
+  const [selectedLanguage, setSelectedLanguage] = useState<GameLanguageCode>(() =>
+    preferredLanguageForGame('pokemon', isThai),
+  );
   const showLanguageSelector = gameHasMultipleLanguages(selectedGame);
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
@@ -371,7 +390,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                       key={g.id}
                       onClick={() => {
                         setSelectedGame(g.id);
-                        setSelectedLanguage(defaultLanguageForGame(g.id));
+                        setSelectedLanguage(preferredLanguageForGame(g.id, isThai));
                         setSelectedSetId('');
                         setIsGameOpen(false);
                       }}
@@ -419,7 +438,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 <div className="w-full h-10 bg-white/5 rounded-lg skeleton opacity-20"></div>
               ) : visibleSets.length === 0 ? (
                 <div className="w-full h-10 bg-brand-darker rounded-lg px-3 flex items-center border border-white/10">
-                  <span className="text-xs font-bold text-slate-500">No sets available</span>
+                  <span className="text-xs font-bold text-slate-500">{t('explore.noSetsAvailable')}</span>
                 </div>
               ) : (
                 <>
@@ -430,7 +449,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                     {selectedSet ? (
                       <span className="text-xs font-bold text-slate-300 truncate pr-4">{selectedSet.name}</span>
                     ) : (
-                      <span className="text-xs font-bold text-slate-500">Select Set</span>
+                      <span className="text-xs font-bold text-slate-500">{t('explore.selectSetShort')}</span>
                     )}
                     <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
                   </button>
@@ -655,7 +674,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                         <div className="text-right">
                           {listing ? (
                             <>
-                              <p className="text-brand-green text-base font-black tracking-tight">Buy from {currencySymbol}{Math.round((listing.minPrice || 0) * exchangeRate).toLocaleString()}</p>
+                              <p className="text-brand-green text-base font-black tracking-tight">{t('explore.buyFrom')} {currencySymbol}{Math.round((listing.minPrice || 0) * exchangeRate).toLocaleString()}</p>
                               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{listing.count} {t('explore.listings')}</p>
                             </>
                           ) : (

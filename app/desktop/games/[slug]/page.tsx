@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
 import { getGuidesForGame } from '@/lib/guides';
 import { getLandingSections } from '@/lib/gameLandingSections';
-import { getGame } from '@/lib/games';
+import { getGame, thaiCardNoun } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
+import LandingCtaRow from '@/components/desktop/LandingCtaRow';
 
 // Per-game landing pages (/pokemon, /one-piece, /yugioh, /mtg, /lorcana,
 // /riftbound — middleware rewrites those clean URLs here for every device).
@@ -161,6 +162,22 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                     <p key={p.slice(0, 24)}>{p}</p>
                 ))}
             </section>
+
+            {/* Above the fold-ish, right after the intro rather than only at the
+                bottom: this is the page's highest-intent moment, and a reader who
+                stops after the first section still gets an offer. */}
+            <LandingCtaRow
+                lang={lang}
+                prefix={prefix}
+                gameId={landing.gameId}
+                browseLabel={{
+                    en: `Browse ${game.name} listings`,
+                    // thaiCardNoun, not a fresh Thai string: lib/games.ts is
+                    // where Thai game names live, and duplicating them is how
+                    // One Piece ended up spelled two ways across the site.
+                    th: `ดู${thaiCardNoun(landing.gameId)}ที่ประกาศขาย`,
+                }}
+            />
 
             {sections.map((sec) => (
                 <section key={sec.h2.en} className="mt-10 max-w-3xl">

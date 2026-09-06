@@ -10,6 +10,7 @@ import {
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { attachSellers } from '@/lib/publicProfiles';
+import { trackEngagement } from '@/lib/engagementEvents';
 
 /**
  * Thrown when a seller tries to create a listing while their profile is
@@ -292,11 +293,22 @@ export const marketplaceService = {
                 throw error;
             }
 
-            // Wake the wishlist-alert fan-out (Pro perk). This insert runs in
-            // the browser, so alerting needs a server round-trip -- strictly
-            // fire-and-forget: a failed alert must never fail the listing.
-            // Drafts skip it: wishlisters are alerted at publish time instead
-            // (see the auto-publish hooks), never about an unbuyable listing.
+            // Only a real publish counts, not a draft: the listing_publish
+            // reward trigger fires on status='active', so counting drafts here
+            // would put GA and the ledger permanently out of step.
+            if (!asDraft && data?.id) {
+                trackEngagement('listing_publish', {
+                    card_id: params.cardId,
+                    price: Number(params.price) || 0,
+                    condition: params.condition ?? '',
+                });
+            }
+
+            // Wake the wishlist-alert fan-out. This insert runs in the browser,
+            // so alerting needs a server round-trip -- strictly fire-and-forget:
+            // a failed alert must never fail the listing. Drafts skip it:
+            // wishlisters are alerted at publish time instead (see the
+            // auto-publish hooks), never about an unbuyable listing.
             if (!asDraft && data?.id && typeof fetch !== 'undefined') {
                 void fetch('/api/alerts/listing-created', {
                     method: 'POST',

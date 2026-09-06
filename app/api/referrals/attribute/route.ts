@@ -69,11 +69,16 @@ export async function POST(request: NextRequest) {
             return clearCookie(NextResponse.json({ attributed: false, reason: 'account_too_old' }));
         }
 
+        // No partner_joined_at filter — see the same change in
+        // app/join/[slug]/route.ts. Referral slugs are minted for every
+        // account, so an invite from an ordinary collector must attribute.
+        // The seller-fee ladder is unaffected: app/api/orders/checkout keys the
+        // partner fee off partner_joined_at, not off total_downloads, so
+        // referrals earned by a non-partner never discount their fee.
         const { data: partner } = await admin
             .from('profiles')
             .select('id')
             .eq('partner_qr_slug', slug)
-            .not('partner_joined_at', 'is', null)
             .maybeSingle();
 
         if (!partner || partner.id === user.id) {

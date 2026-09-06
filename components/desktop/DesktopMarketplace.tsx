@@ -78,7 +78,15 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         }
     }, [searchParams, router, pathPrefix]);
 
-    const [game, setGame] = useState('all');
+    // ?game=<id> seeds the filter so the game landing pages can send a visitor
+    // straight to that game's listings ("Browse Pokémon listings"). Validated
+    // against GAMES — an unknown id falls back to 'all' rather than filtering
+    // the grid down to nothing. Seed only: the chips own it from then on, so a
+    // later chip click is not fought by the URL.
+    const gameParam = searchParams?.get('game') ?? '';
+    const [game, setGame] = useState(
+        GAMES.some((g) => g.id === gameParam) ? gameParam : 'all',
+    );
     const [language, setLanguage] = useState('all');
 
     // Game-first flow (mirrors the sets browser): the language sub-filter only

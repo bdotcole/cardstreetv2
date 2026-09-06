@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
-import { getGameLabel } from '@/lib/games';
+import { getGameLabel, thaiCardNoun } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
 import { buildSetSummary } from '@/lib/setSummary';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
+import LandingCtaRow from '@/components/desktop/LandingCtaRow';
 import type { Card } from '@/types';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -22,15 +23,6 @@ function gameLabel(game: string, lang: 'EN' | 'TH'): string {
     return getGameLabel(game, lang === 'EN' ? 'en' : 'th');
 }
 
-// Thai puts no space between a noun and its modifier, so "การ์ดโปเกมอน" is
-// correct — but lorcana and riftbound legitimately carry a Latin localizedName.th
-// (lib/games.ts), which ran the scripts together as "การ์ดDisney Lorcana". Space
-// only when the label does not start in Thai script.
-function thaiCardLabel(game: string): string {
-    const label = getGameLabel(game, 'th');
-    if (!label) return 'การ์ด';
-    return /^[฀-๿]/.test(label) ? `การ์ด${label}` : `การ์ด ${label}`;
-}
 
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
     const { setId } = await params;
@@ -43,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
     const title =
         lang === 'EN'
             ? `${set.name} — ${game} Cards & Prices | CardStreet`
-            : `${set.name} — ${thaiCardLabel(set.game)} เช็คราคาและรายการขาย | CardStreet`;
+            : `${set.name} — ${thaiCardNoun(set.game)} เช็คราคาและรายการขาย | CardStreet`;
     const description =
         lang === 'EN'
             ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
@@ -156,6 +148,20 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
             ) : (
                 <DesktopSetCards cards={cards} pathPrefix={prefix} />
             )}
+
+            {/* Below the grid here, not above it: a set page's job is the card
+                list, and a reader who scrolls the whole set is the one worth
+                asking. The game landings put the same row after the intro,
+                where the shape of the page is different. */}
+            <LandingCtaRow
+                lang={lang}
+                prefix={prefix}
+                gameId={set.game}
+                browseLabel={{
+                    en: `Browse ${gameLabel(set.game, 'EN')} listings`,
+                    th: `ดู${thaiCardNoun(set.game)}ที่ประกาศขาย`,
+                }}
+            />
         </div>
     );
 }

@@ -23,7 +23,25 @@ const GAME_LANDING_PATHS = ['/pokemon', '/mtg', '/yugioh', '/one-piece', '/riftb
 
 // Account/workflow URLs owned by the desktop experience. They render from the
 // internal /desktop/* tree; phones hitting them are bounced to the mobile SPA.
+//
+// The bounce carries the destination with it. Every one of these paths has a
+// real equivalent inside the SPA, and dropping a phone visitor on the
+// marketplace tab instead — which is what a bare redirect to '/' did — silently
+// discards the intent of the link they tapped. That penalty lands hardest on
+// exactly the traffic these URLs get: an emailed "finish your listing" CTA, a
+// shared /orders link, a push tap.
 const DESKTOP_ONLY_PREFIXES = ['/sell', '/orders', '/collection', '/settings']
+
+// Which SPA tab each of the above resolves to. Consumed by the ?tab= handler in
+// components/MobileHome.tsx, which maps 'sell'/'orders'/'settings' onto the
+// real tab (plus, for the last two, the Profile panel to open). Keys must stay
+// in step with DESKTOP_ONLY_PREFIXES.
+const SPA_TAB_FOR_PATH: Record<string, string> = {
+    '/sell': 'sell',
+    '/orders': 'orders',
+    '/collection': 'vault',
+    '/settings': 'settings',
+}
 
 // URLs that exist for BOTH experiences at the same path: desktop browsers get
 // the desktop-shell wrapper under /desktop/*, phones keep the standalone page
@@ -103,13 +121,19 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
         return { kind: 'rewrite', pathname: `/desktop/games${basePath}`, uaVary: false }
     }
 
-    if (DESKTOP_ONLY_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {
+    const desktopOnly = DESKTOP_ONLY_PREFIXES.find((p) => basePath === p || basePath.startsWith(`${p}/`))
+    if (desktopOnly) {
         if (isDesktopClient(request)) {
             return { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
         }
         // Phones land on the mobile SPA — these are account surfaces whose
-        // mobile equivalents live inside the SPA's own tabs.
-        return { kind: 'redirect', pathname: '/', search: '', uaVary: true }
+        // mobile equivalents live inside the SPA's own tabs. Name the tab, and
+        // keep the caller's own query string: these links routinely carry
+        // ?stripe_connect=, ?view= and utm_* params that the SPA and its
+        // analytics both read, and the old bare redirect dropped all of them.
+        const params = new URLSearchParams(request.nextUrl.search)
+        params.set('tab', SPA_TAB_FOR_PATH[desktopOnly])
+        return { kind: 'redirect', pathname: '/', search: `?${params.toString()}`, uaVary: true }
     }
 
     if (DESKTOP_WRAPPED_PREFIXES.some((p) => basePath === p || basePath.startsWith(`${p}/`))) {

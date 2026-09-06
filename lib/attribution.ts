@@ -22,7 +22,23 @@ export const ATTRIBUTION_COOKIE = 'cs_attribution';
  *  browse-then-decide journey still credits the source that started it. */
 export const ATTRIBUTION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
-export type AttributionWriter = 'trigger' | 'callback' | 'native';
+export type AttributionWriter =
+    | 'trigger'
+    | 'callback'
+    | 'native'
+    /**
+     * The OAuth callback ran for a brand-new account but found no cs_attribution
+     * cookie. Measured 2026-09-05: 27 of 111 accounts created since the feature
+     * shipped had a null column, and 26 of those predate the 2026-08-25 native
+     * writer fix — but ~2% keep leaking, all OAuth, and every one of them was
+     * INDISTINGUISHABLE from a pre-feature row because a missing cookie wrote
+     * nothing at all. Writing this instead of null separates "we asked and
+     * couldn't tell" from "we never asked", which is the difference between a
+     * measurable gap and an invisible one.
+     */
+    | 'callback_nocookie'
+    /** Filled in by the user via the one-tap "how did you hear about us" card. */
+    | 'survey';
 
 export interface SignupAttribution {
     /** utm_source, else the referrer host, else 'direct'. */
@@ -215,6 +231,47 @@ export function readAttributionCookie(): SignupAttribution | null {
 
 export function serializeAttribution(a: SignupAttribution): string {
     return encodeURIComponent(JSON.stringify(a));
+}
+
+/**
+ * The record to store when a signup path ran but had no cookie to read.
+ *
+ * src/med are 'unknown' rather than 'direct': a genuinely direct visit DOES get
+ * a cookie (buildAttribution always returns a record for a parseable URL), so
+ * filing a cookie-less signup as direct would quietly inflate the one bucket
+ * that already dominates the data and make the gap unfindable.
+ */
+/**
+ * The answer set for the "how did you hear about us" card
+ * (components/AttributionSurvey.tsx, written by /api/attribution/survey).
+ *
+ * Values are stored as `src`, so they deliberately reuse the vocabulary this
+ * module already emits ('google', 'facebook', 'tiktok', 'chatgpt') — a
+ * self-reported Google and a measured Google must group together in a GROUP BY,
+ * or the survey answers form their own useless island. `med` is always
+ * 'survey', so the two kinds of evidence stay separable.
+ *
+ * 'friend' and 'shop' have no measured equivalent, which is exactly the point:
+ * word of mouth and the physical card shops are the channels a referrer-based
+ * classifier is structurally blind to, and there is no other way to see them.
+ */
+export const SURVEY_SOURCES = [
+    'google', 'facebook', 'tiktok', 'youtube', 'instagram',
+    'chatgpt', 'friend', 'shop', 'other',
+] as const;
+export type SurveySource = (typeof SURVEY_SOURCES)[number];
+
+export function unknownAttribution(
+    writer: AttributionWriter,
+    landingPath = '/',
+): SignupAttribution {
+    return {
+        src: 'unknown',
+        med: 'unknown',
+        lp: landingPath.slice(0, MAX_FIELD),
+        ts: new Date().toISOString().slice(0, 10),
+        w: writer,
+    };
 }
 
 /**

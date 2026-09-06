@@ -28,6 +28,23 @@ function routeNotificationTap(data: unknown) {
         }
         return;
     }
+    // Retention pushes. Both are inert without a destination: a nudge that
+    // opens the homepage is the same bug the stream branch above was added to
+    // fix (~667 pushes that all landed nowhere).
+    if (type === 'streak_at_risk') {
+        // The Rewards Hub is a shell overlay, not a route — ask the mounted
+        // shell to open it, and only hard-navigate if nothing consumed the
+        // event (cold start from a killed app, or a non-SPA page).
+        const unconsumed = window.dispatchEvent(new CustomEvent('cs:openRewards', { cancelable: true }));
+        if (unconsumed) window.location.assign('/?tab=profile&openRewards=1');
+        return;
+    }
+    if (type === 'weekly_digest') {
+        // Both halves of the digest — wishlist matches and vault price moves —
+        // are read from the Vault tab.
+        window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=weekly_digest');
+        return;
+    }
     if (!type.startsWith('offer_')) return;
     try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* landing fallback still opens Profile */ }
     const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-offers', { cancelable: true }));

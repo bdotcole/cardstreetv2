@@ -1,8 +1,16 @@
 /**
- * GET /api/referrals/me — the logged-in partner's referral link + stats.
+ * GET /api/referrals/me — the logged-in user's referral link + stats.
  *
- * Generates and persists partner_qr_slug on first call (lazily, so partners
- * promoted after the 20260611 backfill still get one). Non-partners get 403.
+ * Generates and persists partner_qr_slug on first call, for EVERY account, not
+ * just partners. The referral machinery — /join/<slug>, the cs_ref cookie, the
+ * attribution endpoint, the referral_signup / referral_converted rewards — was
+ * already complete and already paid out; the only thing standing between an
+ * ordinary collector and inviting a friend was this 403. Growth for a
+ * marketplace with a demand problem should not be limited to the handful of
+ * accounts with partner_joined_at set.
+ *
+ * `isPartner` is still reported so the partner portal can keep showing the
+ * commercial framing (tier, fee ladder) that only applies to partners.
  */
 
 import { NextResponse } from 'next/server';
@@ -26,21 +34,24 @@ export async function GET() {
 
         const { data: profile, error: profileErr } = await admin
             .from('profiles')
-            .select('id, display_name, role, partner_joined_at, partner_qr_slug, total_downloads')
+            .select('id, display_name, username, role, partner_joined_at, partner_qr_slug, total_downloads')
             .eq('id', user.id)
             .single();
 
         if (profileErr || !profile) {
             return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
         }
-        // Same partner gate the app shell uses: partner_joined_at is canonical,
-        // role === 'partner' covers legacy rows.
-        if (!profile.partner_joined_at && profile.role !== 'partner') {
-            return NextResponse.json({ error: 'Not a partner account' }, { status: 403 });
-        }
+        // Same partner test the app shell uses (partner_joined_at is canonical,
+        // role === 'partner' covers legacy rows) — reported, no longer a gate.
+        const isPartner = !!profile.partner_joined_at || profile.role === 'partner';
 
+        // display_name first, username as the fallback: generatePartnerSlug is
+        // ASCII-only (slugs end up in QR codes and Play Store referrer params),
+        // and a Thai-only display name reduces to nothing, which would give
+        // every Thai collector a slug reading 'partner-<hex>'. Usernames are
+        // already constrained to [a-z0-9_], so they always survive.
         const slug = await ensurePartnerSlug(
-            admin, profile.id, profile.partner_qr_slug, profile.display_name
+            admin, profile.id, profile.partner_qr_slug, profile.display_name || profile.username
         );
 
         const countOf = async (eventType: string): Promise<number> => {
@@ -57,6 +68,7 @@ export async function GET() {
 
         return NextResponse.json({
             slug,
+            isPartner,
             link: `${getAppBaseUrl()}/join/${slug}`,
             clicks,
             installs,

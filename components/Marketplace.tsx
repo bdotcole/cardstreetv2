@@ -73,7 +73,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   currency = 'THB',
   exchangeRate = 1,
 }) => {
-  const { t } = useTranslation();
+  const { t, isThai } = useTranslation();
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -457,8 +457,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
-              <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">Signal Lost</h3>
-              <p className="text-slate-500 text-xs">No active listings found in this sector.</p>
+              <h3 className={`text-white font-bold text-sm mb-1 ${isThai ? '' : 'uppercase tracking-widest'}`}>{t('marketplace.emptyTitle')}</h3>
+              <p className="text-slate-500 text-xs">{t('marketplace.emptyBody')}</p>
               <button
                 onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"

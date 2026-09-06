@@ -29,6 +29,7 @@ import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { groupByTransferGroup } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
+import AttributionSurvey from '@/components/AttributionSurvey';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -439,6 +440,25 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
       if (sessionStorage.getItem('cs_open_offers') === '1') {
         sessionStorage.removeItem('cs_open_offers');
         setActivePanel('offers');
+      }
+    } catch { /* storage unavailable (private mode) */ }
+  }, []);
+
+  // Bounced here from a desktop-only URL on a phone: middleware rewrites
+  // /orders -> /?tab=orders and /settings -> /?tab=settings, and the shell
+  // turns those into a flag + the profile tab (see TAB_ALIASES in
+  // components/MobileHome.tsx). Land on the panel the URL actually named
+  // instead of the profile root.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('cs_open_orders') === '1') {
+        sessionStorage.removeItem('cs_open_orders');
+        setActivePanel('orders');
+        return;
+      }
+      if (sessionStorage.getItem('cs_open_settings') === '1') {
+        sessionStorage.removeItem('cs_open_settings');
+        setActivePanel('settings');
       }
     } catch { /* storage unavailable (private mode) */ }
   }, []);
@@ -1072,6 +1092,12 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
             exit="exit"
             className="space-y-8 py-6"
           >
+            {/* "How did you hear about us" — renders only for accounts whose
+                acquisition channel the cookie never captured, once, dismissible.
+                Here rather than in the shell chrome: it must not compete with a
+                task the user is mid-way through. */}
+            <AttributionSurvey />
+
             {/* Profile Header */}
             <div className="text-center pb-4">
               <div className="relative w-24 h-24 mx-auto mb-5">

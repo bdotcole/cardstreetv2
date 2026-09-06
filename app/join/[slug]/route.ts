@@ -46,11 +46,14 @@ export async function GET(
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // No partner_joined_at filter: every account gets a referral slug now (see
+    // app/api/referrals/me), so a slug belonging to an ordinary collector who
+    // invited a friend has to resolve here too. partner_qr_slug is unique and
+    // only ever server-minted, so the slug itself is the authorization.
     const { data: partner } = await admin
         .from('profiles')
         .select('id')
         .eq('partner_qr_slug', slug)
-        .not('partner_joined_at', 'is', null)
         .maybeSingle();
 
     if (!partner) {

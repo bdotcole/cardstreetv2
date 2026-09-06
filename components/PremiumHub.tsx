@@ -65,9 +65,17 @@ export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' 
   // destinations — they render with a check instead of a chevron.
   const FEATURES: { href?: string; icon: string; title: string; desc: string }[] = [
     { href: '/grade', icon: 'fa-wand-magic-sparkles', title: t('pro.graderTitle'), desc: t('pro.graderDesc') },
-    { href: '/trade', icon: 'fa-right-left', title: t('pro.tradeTitle'), desc: t('pro.tradeDesc') },
     { href: '/insights', icon: 'fa-chart-line', title: t('pro.insightsTitle'), desc: t('pro.insightsDesc') },
     { icon: 'fa-tags', title: t('pro.sellerRateTitle'), desc: t('pro.sellerRateDesc') },
+  ];
+
+  // Freed on 2026-09-05 (lib/entitlements.ts FEATURE_TIERS). They stay on this
+  // page — it is the only place either is linked from — but they must not sit
+  // in the list above, which is the pitch for a paid plan: advertising two
+  // features every account already has is the sort of thing a subscriber
+  // notices and asks for a refund over.
+  const FREE_FEATURES: { href?: string; icon: string; title: string; desc: string }[] = [
+    { href: '/trade', icon: 'fa-right-left', title: t('pro.tradeTitle'), desc: t('pro.tradeDesc') },
     { icon: 'fa-bell', title: t('pro.alertsTitle'), desc: t('pro.alertsDesc') },
   ];
 
@@ -219,6 +227,30 @@ export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' 
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{f.desc}</p>
                 </div>
                 <i className={`fa-solid ${!premium ? 'fa-lock text-slate-600' : f.href ? 'fa-chevron-right text-brand-cyan' : 'fa-circle-check text-emerald-400'}`}></i>
+              </div>
+            </a>
+          ))}
+
+          {/* Included free. Never locked and always tappable, regardless of
+              plan — this is the only route into the Trade Finder in the app. */}
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400/80 pt-3 px-1">
+            {t('pro.freeForEveryone')}
+          </p>
+          {FREE_FEATURES.map((f) => (
+            <a
+              key={f.title}
+              href={f.href}
+              className={`block glass rounded-3xl border-white/10 p-5 transition-all ${f.href ? 'active:scale-[0.98]' : ''}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-400/10 flex items-center justify-center flex-shrink-0">
+                  <i className={`fa-solid ${f.icon} text-emerald-400`}></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-black">{f.title}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{f.desc}</p>
+                </div>
+                <i className={`fa-solid ${f.href ? 'fa-chevron-right text-emerald-400' : 'fa-circle-check text-emerald-400'}`}></i>
               </div>
             </a>
           ))}

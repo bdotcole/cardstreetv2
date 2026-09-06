@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { CATALOG, CHAT_COLORS, CHECKIN_CALENDAR, FRAME_STYLES, QUEST_COINS, bandForLevel, levelProgress } from '@/lib/rewardTiers';
 import type { RewardsSummary } from '@/lib/hooks/useRewardsSummary';
+import InviteCard from '@/components/rewards/InviteCard';
 
 /** Opaque swatch fills for the name-color picker (CHAT_COLORS are text
  *  classes, unusable as swatch backgrounds). */
@@ -384,6 +385,11 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                 : `${t('rewards.claimCheckin')} +${CHECKIN_CALENDAR[summary.cycleDay - 1] ?? 5}`}
                                     </button>
                                 </div>
+
+                                {/* Invite a friend. In Overview rather than
+                                    Challenges: it is not a daily task, it is the
+                                    one action here that brings a new person in. */}
+                                <InviteCard />
 
                                 {/* Recent activity */}
                                 {summary.recent.length > 0 && (

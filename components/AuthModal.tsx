@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { isPasswordStructurallyValid } from '@/lib/passwordPolicy';
 import { trackSignUp } from '@/lib/signupEvents';
-import { readAttributionCookie, withWriter } from '@/lib/attribution';
+import { readAttributionCookie, unknownAttribution, withWriter } from '@/lib/attribution';
 import { X, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -17,6 +17,14 @@ interface AuthModalProps {
     // the header so a gate-triggered prompt reads as a step toward what the
     // user was doing, not a generic interruption.
     contextMessage?: string;
+    /**
+     * Which tab the wall opens on. Defaults to 'signin', which is right when
+     * the user reached the wall from something only an existing account does.
+     * Buy Now is the opposite case: someone who taps it on a listing is far
+     * more likely to have no account at all, and showing them a sign-in form
+     * asks for a password they never set.
+     */
+    initialMode?: 'signin' | 'signup';
 }
 
 type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot' | 'forgot-sent';
@@ -33,9 +41,6 @@ class AuthTimeoutError extends Error {
         this.name = 'AuthTimeoutError';
     }
 }
-
-const AUTH_TIMEOUT_USER_MESSAGE =
-    'This is taking longer than expected. Please check your connection and try again.';
 
 async function withAuthWatchdog<T>(step: string, run: () => Promise<T>): Promise<T> {
     Sentry.addBreadcrumb({ category: 'auth', message: `${step}: start`, level: 'info' });
@@ -93,8 +98,8 @@ function verifySessionPersisted(supabase: ReturnType<typeof createClient>) {
     }, 1500);
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }) => {
-    const [mode, setMode] = useState<AuthMode>('signin');
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage, initialMode = 'signin' }) => {
+    const [mode, setMode] = useState<AuthMode>(initialMode);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
@@ -122,6 +127,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
 
     // Portal target is document.body, which only exists after mount.
     useEffect(() => setMounted(true), []);
+
+    // Both shells keep this component mounted and toggle `isOpen`, so the
+    // initial state above is only read once per page load — without this, the
+    // second wall of a session would open on whatever tab the first one was
+    // left on, and initialMode would be silently ignored. Only on the
+    // closed -> open edge: resetting on every render would fight the user's
+    // own tab clicks.
+    const wasOpenRef = React.useRef(false);
+    useEffect(() => {
+        if (isOpen && !wasOpenRef.current) {
+            setMode(initialMode);
+            setError(null);
+        }
+        wasOpenRef.current = isOpen;
+    }, [isOpen, initialMode]);
 
     // Web OAuth navigates the whole page away. If the user backs out of the
     // provider's page, bfcache restores this page with `loading` still true —
@@ -212,7 +232,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
             console.error(`Error logging in with ${provider}:`, err);
             const label = provider === 'apple' ? 'Apple' : 'Google';
             setError(err instanceof AuthTimeoutError
-                ? AUTH_TIMEOUT_USER_MESSAGE
+                ? t('auth.timeout')
                 : `Failed to sign in with ${label}. Please try again.`);
             setLoading(false);
         }
@@ -276,7 +296,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                 return;
             }
             setError(err instanceof AuthTimeoutError
-                ? AUTH_TIMEOUT_USER_MESSAGE
+                ? t('auth.timeout')
                 : err.message || 'Invalid email or password');
             setLoading(false);
         }
@@ -306,7 +326,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
         } catch (err: any) {
             console.error('Error sending password reset:', err);
             setError(err instanceof AuthTimeoutError
-                ? AUTH_TIMEOUT_USER_MESSAGE
+                ? t('auth.timeout')
                 : err.message || 'Failed to send reset email');
             setLoading(false);
         }
@@ -331,8 +351,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
             console.error('Error resending verification email:', err);
             setResendState('idle');
             setError(err instanceof AuthTimeoutError
-                ? AUTH_TIMEOUT_USER_MESSAGE
-                : err.message || 'Failed to resend verification email');
+                ? t('auth.timeout')
+                : err.message || t('auth.resendFailed'));
         }
     };
 
@@ -364,7 +384,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             // has not run yet this is simply ignored — but it stays
                             // in auth.users.raw_user_meta_data, so nothing is lost
                             // and it can be backfilled.
-                            signup_attribution: withWriter(readAttributionCookie(), 'trigger'),
+                            // Falls back to an explicit "unknown" record rather
+                            // than null: the trigger discards anything that is
+                            // not a JSON object, so a null here left the account
+                            // indistinguishable from the pre-feature back
+                            // catalogue (see lib/attribution.ts).
+                            signup_attribution:
+                                withWriter(readAttributionCookie(), 'trigger') ??
+                                unknownAttribution('callback_nocookie', window.location.pathname),
                         },
                         emailRedirectTo: `${window.location.origin}/api/auth/callback`,
                     },
@@ -385,8 +412,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
         } catch (err: any) {
             console.error('Error signing up:', err);
             setError(err instanceof AuthTimeoutError
-                ? AUTH_TIMEOUT_USER_MESSAGE
-                : err.message || 'Failed to create account');
+                ? t('auth.timeout')
+                : err.message || t('auth.signUpFailed'));
             setLoading(false);
         }
     };
@@ -419,14 +446,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                         <i className="fa-solid fa-cards text-2xl text-brand-darker"></i>
                     </div>
                     <h2 className="text-2xl font-black text-white italic skew-x-[-5deg] text-center">
-                        Welcome to <span className="text-brand-cyan">CardStreet</span>
+                        {t('auth.welcomeTitle')} <span className="text-brand-cyan">CardStreet</span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-2 font-medium text-center max-w-sm mx-auto">
                         {mode === 'verify'
-                            ? 'Check your email to verify your account'
+                            ? t('auth.subtitleVerify')
                             : mode === 'forgot' || mode === 'forgot-sent'
-                                ? 'Reset your password to get back in'
-                                : contextMessage || 'Sign in to sync your collection across devices'}
+                                ? t('auth.subtitleReset')
+                                : contextMessage || t('auth.subtitleDefault')}
                     </p>
                 </div>
 
@@ -437,13 +464,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             <div className="w-16 h-16 bg-brand-green/20 rounded-full flex items-center justify-center mx-auto mb-2">
                                 <Mail className="w-8 h-8 text-brand-green" />
                             </div>
-                            <h3 className="text-lg font-bold text-white">Verify Your Email</h3>
+                            <h3 className="text-lg font-bold text-white">{t('auth.verifyTitle')}</h3>
                             <p className="text-sm text-slate-400 leading-relaxed">
-                                We've sent a verification link to <span className="text-brand-cyan font-semibold">{verificationEmail}</span>
+                                {t('auth.verifySentTo')} <span className="text-brand-cyan font-semibold">{verificationEmail}</span>
                             </p>
                             <p className="text-xs text-slate-500">
-                                Click the link in your email to complete your registration.
-                                Links work once — always use the newest email.
+                                {t('auth.verifyHint')}
                             </p>
                         </div>
 
@@ -459,8 +485,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                         {resendState === 'sent' && (
                             <div className="bg-brand-cyan/10 border border-brand-cyan/20 rounded-xl p-4">
                                 <p className="text-sm text-cyan-100">
-                                    A fresh verification email is on its way. It replaces any
-                                    earlier links, so use the newest one.
+                                    {t('auth.resendSent')}
                                 </p>
                             </div>
                         )}
@@ -473,12 +498,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             {resendState === 'sending' ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    <span>Sending...</span>
+                                    <span>{t('auth.sending')}</span>
                                 </>
                             ) : resendCooldown > 0 ? (
-                                <span>Resend email ({resendCooldown}s)</span>
+                                <span>{t('auth.resendEmail')} ({resendCooldown}s)</span>
                             ) : (
-                                <span>Resend email</span>
+                                <span>{t('auth.resendEmail')}</span>
                             )}
                         </button>
 
@@ -491,7 +516,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             }}
                             className="w-full h-12 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors"
                         >
-                            Back to Sign In
+                            {t('auth.backToSignIn')}
                         </button>
                     </div>
                 ) : mode === 'forgot' || mode === 'forgot-sent' ? (
@@ -502,10 +527,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                 <div className="w-16 h-16 bg-brand-green/20 rounded-full flex items-center justify-center mx-auto mb-2">
                                     <Mail className="w-8 h-8 text-brand-green" />
                                 </div>
-                                <h3 className="text-lg font-bold text-white">Check Your Email</h3>
+                                <h3 className="text-lg font-bold text-white">{t('auth.checkEmailTitle')}</h3>
                                 <p className="text-sm text-slate-400 leading-relaxed">
-                                    If an account exists for <span className="text-brand-cyan font-semibold">{verificationEmail}</span>,
-                                    we&apos;ve sent a link to set a new password.
+                                    {t('auth.forgotSentPrefix')} <span className="text-brand-cyan font-semibold">{verificationEmail}</span>,
+                                    {t('auth.forgotSentSuffix')}
                                 </p>
                             </div>
                         ) : (
@@ -519,20 +544,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     </div>
                                 )}
                                 <p className="text-sm text-slate-400 leading-relaxed">
-                                    Enter the email on your account and we&apos;ll send you a link to
-                                    set a new password.
+                                    {t('auth.forgotIntro')}
                                 </p>
                                 <form onSubmit={handleForgotPassword} className="space-y-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                             <Mail className="w-3 h-3" />
-                                            Email
+                                            {t('auth.email')}
                                         </label>
                                         <input
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            placeholder="your@email.com"
+                                            placeholder={t('auth.emailPlaceholder')}
                                             required
                                             className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                         />
@@ -545,10 +569,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                         {loading ? (
                                             <>
                                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                                <span>Please wait...</span>
+                                                <span>{t('auth.pleaseWait')}</span>
                                             </>
                                         ) : (
-                                            <span>Send Reset Link</span>
+                                            <span>{t('auth.sendResetLink')}</span>
                                         )}
                                     </button>
                                 </form>
@@ -561,7 +585,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             }}
                             className="w-full h-12 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors"
                         >
-                            Back to Sign In
+                            {t('auth.backToSignIn')}
                         </button>
                     </div>
                 ) : (
@@ -579,7 +603,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     : 'text-slate-400 hover:text-white'
                                     }`}
                             >
-                                Sign In
+                                {t('auth.signIn')}
                             </button>
                             <button
                                 onClick={() => {
@@ -591,7 +615,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     : 'text-slate-400 hover:text-white'
                                     }`}
                             >
-                                Sign Up
+                                {t('auth.signUp')}
                             </button>
                         </div>
 
@@ -616,7 +640,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                 className="theme-dark-locked w-full h-12 bg-white hover:bg-slate-50 active:bg-slate-100 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-slate-900 shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <i className="fa-brands fa-google text-xl text-red-500 group-hover:scale-110 transition-transform"></i>
-                                <span>Continue with Google</span>
+                                <span>{t('auth.continueGoogle')}</span>
                             </button>
 
                             <button
@@ -625,7 +649,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                 className="theme-dark-locked w-full h-12 bg-black hover:bg-zinc-900 active:bg-zinc-800 rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-white shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
                             >
                                 <i className="fa-brands fa-apple text-xl group-hover:scale-110 transition-transform"></i>
-                                <span>Continue with Apple</span>
+                                <span>{t('auth.continueApple')}</span>
                             </button>
                         </div>
 
@@ -633,7 +657,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                         <div className="relative flex py-2 items-center">
                             <div className="flex-grow border-t border-slate-700"></div>
                             <span className="flex-shrink-0 mx-4 text-[10px] text-slate-500 uppercase font-bold tracking-widest">
-                                Or with email
+                                {t('auth.orWithEmail')}
                             </span>
                             <div className="flex-grow border-t border-slate-700"></div>
                         </div>
@@ -646,18 +670,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                             <User className="w-3 h-3" />
-                                            Username
+                                            {t('auth.username')}
                                         </label>
                                         <input
                                             type="text"
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
-                                            placeholder="Enter a unique username"
+                                            placeholder={t('auth.usernamePlaceholder')}
                                             required
                                             minLength={3}
                                             maxLength={20}
                                             pattern="[a-zA-Z0-9_]+"
-                                            title="Letters, numbers, and underscores only"
+                                            title={t('auth.usernameHint')}
                                             className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                         />
                                     </div>
@@ -666,13 +690,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                             <User className="w-3 h-3" />
-                                            Full Name
+                                            {t('auth.fullName')}
                                         </label>
                                         <input
                                             type="text"
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
-                                            placeholder="Enter your full name"
+                                            placeholder={t('auth.fullNamePlaceholder')}
                                             required
                                             className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:border-brand-cyan focus:outline-none transition-colors"
                                         />
@@ -682,7 +706,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                             <Phone className="w-3 h-3" />
-                                            Phone Number (Optional)
+                                            {t('auth.phoneOptional')}
                                         </label>
                                         <input
                                             type="tel"
@@ -699,13 +723,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                     <Mail className="w-3 h-3" />
-                                    {mode === 'signin' ? 'Email or username' : 'Email'}
+                                    {mode === 'signin' ? t('auth.emailOrUsername') : t('auth.email')}
                                 </label>
                                 <input
                                     type={mode === 'signin' ? 'text' : 'email'}
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder={mode === 'signin' ? 'your@email.com or username' : 'your@email.com'}
+                                    placeholder={mode === 'signin' ? t('auth.emailOrUsernamePlaceholder') : t('auth.emailPlaceholder')}
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     required
@@ -717,7 +741,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                                     <Lock className="w-3 h-3" />
-                                    Password
+                                    {t('auth.password')}
                                 </label>
                                 <input
                                     type="password"
@@ -741,7 +765,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                             }}
                                             className="text-[11px] font-bold text-brand-cyan hover:underline"
                                         >
-                                            Forgot password?
+                                            {t('auth.forgotPassword')}
                                         </button>
                                     </div>
                                 )}
@@ -756,19 +780,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage }
                                 {loading ? (
                                     <>
                                         <Loader2 className="w-5 h-5 animate-spin" />
-                                        <span>Please wait...</span>
+                                        <span>{t('auth.pleaseWait')}</span>
                                     </>
                                 ) : (
-                                    <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                                    <span>{mode === 'signin' ? t('auth.signIn') : t('auth.createAccount')}</span>
                                 )}
                             </button>
                         </form>
 
                         {/* Terms */}
                         <p className="text-[10px] text-slate-500 text-center leading-relaxed">
-                            By continuing, you agree to our{' '}
-                            <span className="text-brand-cyan">Terms of Service</span> and{' '}
-                            <span className="text-brand-cyan">Privacy Policy</span>.
+                            {t('auth.termsPrefix')}{' '}
+                            <span className="text-brand-cyan">{t('auth.termsOfService')}</span> {t('auth.and')}{' '}
+                            <span className="text-brand-cyan">{t('auth.privacyPolicy')}</span>.
                         </p>
                     </div>
                 )}

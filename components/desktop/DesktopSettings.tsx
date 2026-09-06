@@ -9,6 +9,7 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
 import ThaiAddressFields from '@/components/ThaiAddressFields';
+import AttributionSurvey from '@/components/AttributionSurvey';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
 type Tab = 'profile' | 'preferences';
@@ -260,6 +261,13 @@ export default function DesktopSettings() {
         <div className="max-w-3xl">
             <h1 className="text-2xl font-black text-white">{t('desktop.settings.title')}</h1>
             <p className="text-sm text-slate-400 mt-1">{t('desktop.settings.subtitle')}</p>
+
+            {/* Desktop counterpart of the card in components/Profile.tsx. Only
+                renders for accounts whose acquisition channel was never
+                captured; once, dismissible. */}
+            <div className="mt-6">
+                <AttributionSurvey />
+            </div>
 
             <div className="flex gap-2 mt-6 border-b border-white/5 pb-3">
                 {([['profile', t('desktop.editProfile')], ['preferences', t('desktop.settings.preferences')]] as [Tab, string][]).map(([id, label]) => (

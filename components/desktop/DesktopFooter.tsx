@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { PLAY_STORE_URL, IOS_APP_STORE_URL } from '@/lib/appLinks';
 
 // Game landing pages (see middleware GAME_LANDING_PATHS). Sitewide footer links
 // are the primary internal-link path search engines use to discover them.
@@ -31,6 +32,25 @@ export default function DesktopFooter({ pathPrefix = '' }: {
                         </Link>
                     ))}
                     <Link href={`${pathPrefix}/sets`} className="hover:text-slate-300 transition-colors">{t('desktop.navSets')}</Link>
+                </nav>
+                {/* App-store links. Sitewide because the public content pages
+                    (card / set / seller / game landings) are where search drops
+                    people, and until now none of them offered the app at all —
+                    the only download paths were the /download QR and a partner
+                    referral link, neither of which an organic visitor ever sees. */}
+                <nav
+                    className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+                    aria-label={language === 'TH' ? 'ดาวน์โหลดแอป' : 'Get the app'}
+                >
+                    <span className="font-bold text-slate-400">
+                        {language === 'TH' ? 'โหลดแอป CardStreet' : 'Get the CardStreet app'}
+                    </span>
+                    <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">
+                        <i className="fa-brands fa-google-play mr-1.5"></i>Google Play
+                    </a>
+                    <a href={IOS_APP_STORE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">
+                        <i className="fa-brands fa-apple mr-1.5"></i>App Store
+                    </a>
                 </nav>
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <p>© {new Date().getFullYear()} CardStreet TCG</p>

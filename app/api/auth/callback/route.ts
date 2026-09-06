@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ATTRIBUTION_COOKIE, parseAttribution, withWriter } from '@/lib/attribution'
+import { ATTRIBUTION_COOKIE, parseAttribution, unknownAttribution, withWriter } from '@/lib/attribution'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
@@ -74,13 +74,23 @@ export async function GET(request: Request) {
             // Fails soft on purpose. If the migration adding the column has not
             // run, or the profile row is not visible yet, the user must still get
             // signed in — an analytics field is never worth failing auth over.
+            //
+            // No cookie is still a result. This branch used to write nothing at
+            // all when the cookie was missing, which left those accounts looking
+            // exactly like the pre-feature back catalogue — so "how many OAuth
+            // signups lose their channel" was unanswerable from the column that
+            // exists to answer it. unknownAttribution() records the miss under
+            // its own writer tag instead (see lib/attribution.ts).
             const attribution = parseAttribution(cookieStore.get(ATTRIBUTION_COOKIE)?.value)
-            if (attribution && data?.user?.id) {
+            if (data?.user?.id) {
                 try {
                     const admin = createAdminClient()
+                    const record = attribution
+                        ? withWriter(attribution, 'callback')
+                        : unknownAttribution('callback_nocookie', next)
                     const { error: attrErr } = await admin
                         .from('profiles')
-                        .update({ signup_attribution: withWriter(attribution, 'callback') })
+                        .update({ signup_attribution: record })
                         .eq('id', data.user.id)
                         .is('signup_attribution', null)
                     if (attrErr) console.error('[Auth Callback] attribution write failed:', attrErr.message)

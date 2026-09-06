@@ -304,7 +304,10 @@ export default function DesktopCartDrawer() {
                 </div>
             )}
 
-            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            {/* Sign-UP first: this wall only ever opens from checkout, and
+                someone buying for the first time usually has no account yet.
+                Matches the mobile Buy Now gate in components/MobileHome.tsx. */}
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode="signup" />
 
             <PurchaseRegionModal isOpen={regionBlocked} onClose={() => setRegionBlocked(false)} />
 

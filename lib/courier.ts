@@ -148,6 +148,14 @@ async function getUserNotifContext(userId: string): Promise<{
         // a NULL over these, and an account with no prefs row at all still
         // resolves to opted-in.
         show_live_email: true, show_live_push: true,
+        // Retention pushes (streak-at-risk, weekly digest). These have NO
+        // migration behind them yet, on purpose: the spread above cannot
+        // override a default with a column that does not exist, so both resolve
+        // to opted-in today, and adding real columns later starts honoring them
+        // with no code change. The streak nudge is deliberately push-only —
+        // a daily email about a check-in streak is spam by any measure.
+        streak_push: true,
+        digest_email: true, digest_push: true,
     };
 
     return {
@@ -2318,6 +2326,153 @@ export async function sendOfferPaymentReminderNotification(
  * that has already been written to the database. The caller fires it via
  * `after()` so the applicant's response isn't waiting on an email.
  */
+/**
+ * Streak-at-risk nudge. PUSH ONLY, by design.
+ *
+ * A daily email reminding someone to open an app is spam, and would burn the
+ * sender reputation that the order and shipping mail depends on. Push costs
+ * nothing, is silent when declined, and is the channel a daily loop belongs on.
+ * Accordingly this returns false rather than falling back to email when the
+ * user has no token: no token means no nudge, full stop.
+ *
+ * Content is inline (no Courier template), so routing must name the FCM
+ * provider explicitly — see buildRouting: the bare `push` channel resolves to
+ * Courier Inbox for inline content and the notification is silently dropped.
+ */
+export async function sendStreakAtRiskPush(
+    userId: string,
+    streak: number,
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { fcmToken, prefs } = await getUserNotifContext(userId);
+    if (!fcmToken || prefs.streak_push === false) return false;
+
+    try {
+        await courier.send.message({
+            message: {
+                // user_id rides along so a failed send is traceable back to OUR
+                // user id in Courier's log — without it the log shows an opaque
+                // anon_* profile and a dead token can never be pruned.
+                to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                routing: buildRouting(false, true, 'inline'),
+                data: { type: 'streak_at_risk', streak },
+                content: {
+                    // Number first: a tray notification is read at a glance, and
+                    // the streak length IS the reason to care.
+                    title: `${streak} วันติด — อย่าให้ขาด · ${streak}-day streak`,
+                    body: 'เช็คอินวันนี้เพื่อรักษาสตรีคและรับเหรียญ · Check in today to keep your streak and claim your coins.',
+                },
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] streak nudge to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+export interface WeeklyDigest {
+    /** Active listings on cards this user has wishlisted. */
+    wishlistMatches: number;
+    /** Cheapest wishlist match, for the headline. */
+    topMatchName?: string;
+    topMatchPrice?: number;
+    /** Biggest 7-day mover in the user's vault. */
+    moverName?: string;
+    moverPercent?: number;
+}
+
+/**
+ * Weekly digest: wishlist matches + the week's biggest price move in the vault.
+ *
+ * PUSH FIRST — a push when the user has a token, email only for the accounts
+ * that cannot receive one. Two reasons. The obvious one is cost and inbox
+ * fatigue. The load-bearing one is that this app's email is transactional
+ * (orders, shipping, payouts) and a weekly marketing send from the same domain
+ * is how that reputation gets spent; push has no shared reputation to lose.
+ *
+ * Never sends an empty digest — the caller is responsible for skipping users
+ * with nothing to report, and this asserts it, because "0 new matches this
+ * week" is exactly the notification that teaches people to disable them.
+ */
+export async function sendWeeklyDigestNotification(
+    userId: string,
+    digest: WeeklyDigest,
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+    if (digest.wishlistMatches <= 0 && digest.moverPercent === undefined) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantPush = !!fcmToken && prefs.digest_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.digest_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const matchLineTh = digest.wishlistMatches > 0
+        ? `มีการ์ดใน Wishlist ${digest.wishlistMatches} ใบวางขายอยู่`
+        : '';
+    const matchLineEn = digest.wishlistMatches > 0
+        ? `${digest.wishlistMatches} card${digest.wishlistMatches === 1 ? '' : 's'} from your wishlist ${digest.wishlistMatches === 1 ? 'is' : 'are'} listed`
+        : '';
+    const moverLineTh = digest.moverName && digest.moverPercent !== undefined
+        ? `${digest.moverName} ${digest.moverPercent > 0 ? '+' : ''}${digest.moverPercent}% สัปดาห์นี้`
+        : '';
+    const moverLineEn = digest.moverName && digest.moverPercent !== undefined
+        ? `${digest.moverName} moved ${digest.moverPercent > 0 ? '+' : ''}${digest.moverPercent}% this week`
+        : '';
+
+    const title = digest.wishlistMatches > 0
+        ? `${matchLineTh || matchLineEn} · CardStreet`
+        : `${moverLineTh || moverLineEn} · CardStreet`;
+    const body = [matchLineEn, moverLineEn].filter(Boolean).join(' · ')
+        || 'Your weekly CardStreet summary.';
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'weekly_digest', wishlistMatches: digest.wishlistMatches },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: userId },
+                routing: buildRouting(true, false, 'inline'),
+                // Thai in the subject needs the Postmark override: Courier's own
+                // subject encoder truncates non-ASCII at 48 bytes (see SUBJECTS).
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        ...(matchLineEn ? [{ text: `${matchLineTh} · ${matchLineEn}.` }] : []),
+                        ...(moverLineEn ? [{ text: `${moverLineTh} · ${moverLineEn}.` }] : []),
+                        ...(digest.topMatchName && digest.topMatchPrice !== undefined
+                            ? [{ text: `เช่น ${digest.topMatchName} — ฿${digest.topMatchPrice.toLocaleString('en-US')} · e.g. ${digest.topMatchName} at ฿${digest.topMatchPrice.toLocaleString('en-US')}.`, muted: true }]
+                            : []),
+                    ],
+                    cta: {
+                        label: 'เปิด CardStreet · Open CardStreet',
+                        url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=weekly_digest`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] weekly digest to ${userId} failed:`, error);
+        return false;
+    }
+}
+
 export async function sendBreakerApplicationAlert(application: {
     id: string;
     fullName: string;

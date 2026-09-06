@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requirePremium } from '@/lib/premiumAuth';
+import { requireFeature } from '@/lib/premiumAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAppBaseUrl } from '@/lib/stripe';
 
@@ -19,7 +19,7 @@ function generateCode(): string {
 }
 
 export async function GET() {
-  const gate = await requirePremium();
+  const gate = await requireFeature('trade_finder');
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
 

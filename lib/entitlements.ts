@@ -20,12 +20,18 @@ export type PremiumFeature =
 /** Each feature -> minimum tier required. Anything not listed is free. */
 export const FEATURE_TIERS: Record<PremiumFeature, PlanTier> = {
   ai_grader: 'premium',
-  trade_finder: 'premium',
+  // Free since 2026-09-05. Both of the features flipped here are demand-side:
+  // with 9 buyers ever, the paywall was protecting revenue that did not exist
+  // while suppressing the two things that pull a collector back into the app.
+  // They stay LISTED here rather than deleted, so the server gate and the
+  // client hook keep resolving them through one map -- putting a tier back is
+  // a one-word change, not a hunt through call sites.
+  trade_finder: 'free',
   advanced_market: 'premium',
   // 5% seller fee (vs the 9% standard) -- enforced in app/api/orders/checkout.
   pro_seller_rate: 'premium',
   // Email/push when a wishlisted card gets listed -- lib/wishlistAlerts.ts.
-  wishlist_alerts: 'premium',
+  wishlist_alerts: 'free',
 };
 
 export const PREMIUM_FEATURES = Object.keys(FEATURE_TIERS) as PremiumFeature[];

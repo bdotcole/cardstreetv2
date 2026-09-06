@@ -166,6 +166,21 @@ export function getGameLabel(id: string | null | undefined, locale: 'en' | 'th')
   return game ? game.localizedName[locale] : (id ?? '');
 }
 
+/**
+ * Thai noun phrase for "<game> cards" — "การ์ดโปเกมอน", "การ์ด Disney Lorcana".
+ *
+ * Thai puts no space between a noun and its modifier, so the Thai-script labels
+ * concatenate directly; lorcana and riftbound legitimately carry a Latin
+ * localizedName.th, which ran the scripts together as "การ์ดDisney Lorcana"
+ * before the guard. Lives here beside the labels themselves rather than in a
+ * page, because more than one surface now builds this phrase.
+ */
+export function thaiCardNoun(id: string | null | undefined): string {
+  const label = getGameLabel(id, 'th');
+  if (!label) return 'การ์ด';
+  return /^[\u0E00-\u0E7F]/.test(label) ? `การ์ด${label}` : `การ์ด ${label}`;
+}
+
 export function getGameLanguages(id: string | null | undefined): GameLanguage[] {
   return getGame(id).languages;
 }

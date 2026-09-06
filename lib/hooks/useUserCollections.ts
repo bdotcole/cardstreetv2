@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, UserCollectionItem, CardCondition, CustomCollection } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
+import { trackEngagement } from '@/lib/engagementEvents';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 
 interface UseUserCollectionsReturn {
@@ -276,6 +277,11 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 .single();
 
             if (error) throw error;
+
+            // After the insert succeeds, so the GA count matches the ledger's:
+            // the vault_add reward is granted by a row trigger, and a failed
+            // insert grants nothing.
+            trackEngagement('vault_add', { card_id: safeCard.id, game: safeCard.game ?? '' });
 
             // Update local state
             setCollections(prev => prev.map(col => {

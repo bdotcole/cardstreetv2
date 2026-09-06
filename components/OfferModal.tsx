@@ -8,6 +8,7 @@ import CheckoutAddressSheet, {
 } from '@/components/CheckoutAddressSheet';
 import { BUYER_REQUIRED_PROFILE_FIELDS, checkBuyerProfileComplete } from '@/lib/profileValidation';
 import { isValidThaiPhone } from '@/lib/utils/phone';
+import { trackEngagement } from '@/lib/engagementEvents';
 
 interface OfferModalProps {
   listingId: string;
@@ -102,6 +103,9 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
         setSubmitting(false);
         return;
       }
+      // Only past the !res.ok branch above: a rejected offer (too low, cooldown,
+      // rate limit) creates no offer row, so it must not count as one here.
+      trackEngagement('offer_made', { listing_id: listingId, amount: value });
       notifyOffersChanged();
       onSubmitted?.();
       onClose();

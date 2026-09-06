@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requirePremium } from '@/lib/premiumAuth';
+import { requireFeature } from '@/lib/premiumAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // Trade Finder: list my collection items with their for_trade flag (GET) and
@@ -36,7 +36,7 @@ function slim(row: any): SlimItem {
 }
 
 export async function GET() {
-  const gate = await requirePremium();
+  const gate = await requireFeature('trade_finder');
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
 
@@ -53,7 +53,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const gate = await requirePremium();
+  const gate = await requireFeature('trade_finder');
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
 
