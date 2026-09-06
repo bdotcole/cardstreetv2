@@ -19,6 +19,9 @@ export interface ParsedRow {
   gradingCompany?: GradingCompany;
   grade?: number;
   purchasePrice?: number;
+  /** Asking price from a `list price` / `sell price` column. Creates a listing;
+   *  purchasePrice never does. */
+  listPrice?: number;
   language?: string;
   game?: string;
   // Sealed products (booster boxes, ETBs, ...) are resolved against sealed_products
@@ -60,5 +63,7 @@ export interface ImportRow {
   gradingCompany?: GradingCompany;
   grade?: number;
   purchasePrice?: number;
+  /** Asking price. When present the import also creates a listing for this row. */
+  listPrice?: number;
   isSealed?: boolean; // resolve the card_id against sealed_products, not pokemon_cards
 }

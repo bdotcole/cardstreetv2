@@ -30,6 +30,9 @@ import { getThumbnailUrl } from '@/lib/imageUtils';
 import { groupByTransferGroup } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import AttributionSurvey from '@/components/AttributionSurvey';
+import SellerChecklist from '@/components/SellerChecklist';
+import { resolveSellerState, type SellerState } from '@/lib/sellerState';
+import { SELLER_REQUIRED_PROFILE_FIELDS } from '@/lib/profileValidation';
 
 interface ProfileProps {
   user: UserProfile | null;
@@ -419,6 +422,41 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
       setActivePanel('payouts');
     }
   }, []);
+
+  // Post-Stripe-return checklist. Resolved once, from the same helper both
+  // shells use, and only when the URL says we just came back from onboarding —
+  // it is a "here is what's left" card, not a permanent fixture.
+  const [sellerChecklistState, setSellerChecklistState] = useState<SellerState | null>(null);
+  const [hasAnyListing, setHasAnyListing] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const cn = new URLSearchParams(window.location.search).get('stripe_connect');
+    if (cn !== 'complete' || !user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const [{ data: profile }, statusRes, { count }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+            .eq('id', user.id)
+            .single<Record<string, string | boolean | null>>(),
+          fetch('/api/stripe/connect/status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+          supabase
+            .from('listings')
+            .select('id', { count: 'exact', head: true })
+            .eq('seller_id', user.id),
+        ]);
+        if (cancelled) return;
+        setHasAnyListing((count ?? 0) > 0);
+        setSellerChecklistState(resolveSellerState(true, profile, statusRes));
+      } catch {
+        // Best-effort card — silence beats a broken one.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // Opened from the shell's stalled-payout banner: the shell sets this flag
   // and switches to the profile tab (remounting us) — land on payouts.
@@ -1092,6 +1130,20 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
             exit="exit"
             className="space-y-8 py-6"
           >
+            {/* Back from Stripe's hosted onboarding. Same card as /sell, shown
+                on the return only: this is the moment the seller has finished
+                something effortful and has no idea what is left. */}
+            {sellerChecklistState && (
+              <SellerChecklist
+                state={sellerChecklistState}
+                hasListing={hasAnyListing}
+                onFixShipping={() => setActivePanel('account')}
+                onSetupPayouts={() => setActivePanel('payouts')}
+                onList={() => window.dispatchEvent(new Event('cs-open-vault'))}
+                onDismiss={() => setSellerChecklistState(null)}
+              />
+            )}
+
             {/* "How did you hear about us" — renders only for accounts whose
                 acquisition channel the cookie never captured, once, dismissible.
                 Here rather than in the shell chrome: it must not compete with a

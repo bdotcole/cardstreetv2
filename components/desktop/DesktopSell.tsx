@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -13,6 +13,10 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import ListingForm from '@/components/ListingForm';
 import AuthModal from '@/components/AuthModal';
+import SellerStateBanner from '@/components/SellerStateBanner';
+import SellerChecklist from '@/components/SellerChecklist';
+import MostWantedList from '@/components/MostWantedList';
+import { resolveSellerState, needsPayoutActionInState } from '@/lib/sellerState';
 import StripePreScreen from '@/components/StripePreScreen';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
@@ -38,6 +42,11 @@ export default function DesktopSell() {
     const [stripeLoading, setStripeLoading] = useState(false);
     const [showPreScreen, setShowPreScreen] = useState(false);
     const [profileIncomplete, setProfileIncomplete] = useState(false);
+    // Raw profile row, so the shared seller-state helper can be given the same
+    // inputs the mobile shell gives it (see lib/sellerState.ts).
+    const [sellerProfile, setSellerProfile] = useState<Record<string, string | boolean | null> | null>(null);
+    // Focus target for the checklist's "list one" step.
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     // What's being listed: single cards or sealed products (boxes, ETBs, ...).
     // Sealed results are mapped to Card-shaped snapshots so the same results
@@ -90,6 +99,7 @@ export default function DesktopSell() {
                     setProfileIncomplete(
                         !completeness.complete && !isStripeOnlyIncomplete(completeness.missing)
                     );
+                    setSellerProfile(data as Record<string, string | boolean | null>);
                 }
             });
     }, [user, searchParams, refreshMyListings]);
@@ -159,6 +169,7 @@ export default function DesktopSell() {
                 image_front_url: listingData.image_front_url,
                 image_back_url: listingData.image_back_url,
                 acceptsOffers: listingData.accepts_offers,
+                quantity: listingData.quantity,
             });
             setListingCard(null);
             if (created?.status === 'draft') {
@@ -243,30 +254,46 @@ export default function DesktopSell() {
         );
     }
 
-    const payoutsReady = stripeStatus?.chargesEnabled === true;
+    // One derivation for both shells. The old banner keyed on chargesEnabled
+    // alone, so a seller Stripe was still reviewing was told to "finish payout
+    // setup" and handed a button that reopened a form they had completed.
+    const sellerState = resolveSellerState(!!user, sellerProfile, stripeStatus);
 
     return (
         <div>
             <h1 className="text-2xl font-black text-white">{t('desktop.sell.title')}</h1>
             <p className="text-sm text-slate-400 mt-1">{t('desktop.sell.subtitle')}</p>
 
-            {stripeStatus && !payoutsReady && (
-                <div className="flex flex-wrap items-center justify-between gap-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-4 mt-6">
-                    <div>
-                        <p className="text-amber-300 font-bold text-sm">
-                            {stripeStatus.connected ? t('desktop.sell.payoutsFinish') : t('desktop.sell.payoutsSetup')}
-                        </p>
-                        <p className="text-slate-400 text-xs mt-0.5">
-                            {t('desktop.sell.payoutsDesc')}
-                        </p>
-                    </div>
-                    <button
-                        onClick={launchStripeOnboarding}
-                        disabled={stripeLoading}
-                        className="bg-amber-400 hover:bg-amber-300 text-brand-darker text-xs font-black px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
-                    >
-                        {stripeLoading ? t('desktop.sell.payoutsOpening') : stripeStatus.connected ? t('desktop.sell.payoutsContinue') : t('desktop.sell.payoutsStart')}
-                    </button>
+            {stripeStatus && (
+                <SellerStateBanner
+                    state={sellerState}
+                    busy={stripeLoading}
+                    className="mt-6"
+                    onAction={
+                        needsPayoutActionInState(sellerState)
+                            ? launchStripeOnboarding
+                            : sellerState === 'shipping_incomplete'
+                                // Plain navigation, not the router: /settings is
+                                // middleware-routed per device, so it must be a
+                                // real request.
+                                ? () => { window.location.href = '/settings?tab=profile'; }
+                                : undefined
+                    }
+                />
+            )}
+
+            {/* Back from Stripe's hosted onboarding — the moment the seller has
+                just done something effortful and has no idea what remains.
+                Shown only on that return, not permanently. */}
+            {searchParams?.get('stripe_connect') === 'complete' && (
+                <div className="mt-6 max-w-2xl">
+                    <SellerChecklist
+                        state={sellerState}
+                        hasListing={myListings.length > 0}
+                        onFixShipping={() => { window.location.href = '/settings?tab=profile'; }}
+                        onSetupPayouts={launchStripeOnboarding}
+                        onList={() => searchInputRef.current?.focus()}
+                    />
                 </div>
             )}
 
@@ -312,6 +339,7 @@ export default function DesktopSell() {
                     <div className="relative flex-1 max-w-2xl">
                         <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
                         <input
+                            ref={searchInputRef}
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
@@ -370,6 +398,18 @@ export default function DesktopSell() {
                     })}
                 </div>
             )}
+
+            {/* What buyers are asking for and nobody is selling. Above the
+                seller's own listings on purpose: it is the only part of this
+                page that answers "what should I list next". */}
+            <div className="mt-12 max-w-2xl">
+                {/* No ownedCardIds here: this page loads the seller's LISTINGS,
+                    not their vault, and every card with an active listing is
+                    already excluded server-side — passing them would highlight
+                    nothing. The mobile vault does have the collection and
+                    passes it. */}
+                <MostWantedList onSelect={(cardId) => { window.location.href = `/card/${cardId}`; }} />
+            </div>
 
             <h2 className="text-sm font-black text-white uppercase tracking-widest mt-12 mb-4">
                 {t('desktop.sell.yourListings')} <span className="text-slate-500">({myListings.length})</span>

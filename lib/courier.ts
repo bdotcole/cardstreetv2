@@ -156,6 +156,8 @@ async function getUserNotifContext(userId: string): Promise<{
         // a daily email about a check-in streak is spam by any measure.
         streak_push: true,
         digest_email: true, digest_push: true,
+        demand_email: true, demand_push: true,
+        stale_listing_email: true, stale_listing_push: true,
     };
 
     return {
@@ -2469,6 +2471,138 @@ export async function sendWeeklyDigestNotification(
         return 'email';
     } catch (error) {
         console.error(`[Courier] weekly digest to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+/**
+ * "Someone wants a card in your vault." PUSH FIRST, email only without a token.
+ *
+ * The wishlist table has been collecting demand since launch and no seller
+ * could see any of it. This is the seller-side counterpart of the buyer digest:
+ * the buyer gets told when a wanted card is listed, the seller gets told when a
+ * card they already own is wanted.
+ *
+ * Deliberately names ONE card rather than summarising. A count ("3 cards in
+ * your vault are wanted") is a statistic; a name is an action.
+ */
+export async function sendVaultDemandNotification(
+    userId: string,
+    top: { cardName: string; wishlisters: number; suggestedPrice: number; othersCount: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantPush = !!fcmToken && prefs.demand_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.demand_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const priceLabel = `฿${top.suggestedPrice.toLocaleString('en-US')}`;
+    const title = `${top.wishlisters} คนตามหา ${top.cardName} · ${top.wishlisters} ${top.wishlisters === 1 ? 'person wants' : 'people want'} ${top.cardName}`;
+    const more = top.othersCount > 0
+        ? ` (+${top.othersCount} more in your vault)`
+        : '';
+    const body = `คุณมีใบนี้อยู่ในคลัง ลงขายราว ${priceLabel} · You have one in your vault — list it for about ${priceLabel}${more}.`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'vault_demand', wishlisters: top.wishlisters },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: userId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: {
+                        label: 'ลงขายเลย · List it',
+                        url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=vault_demand`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] vault demand to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+/**
+ * "This listing has sat for a month above market — reprice to ฿X?"
+ *
+ * The tap target is the listing, not a generic screen: a nudge that drops
+ * someone on their listings page and leaves them to find the right row is the
+ * same nudge that produced 667 stream pushes landing on the homepage.
+ */
+export async function sendStaleListingNudge(
+    sellerId: string,
+    listing: { listingId: string; cardId: string; cardName: string; currentPrice: number; suggestedPrice: number; ageDays: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantPush = !!fcmToken && prefs.stale_listing_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.stale_listing_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const from = `฿${listing.currentPrice.toLocaleString('en-US')}`;
+    const to = `฿${listing.suggestedPrice.toLocaleString('en-US')}`;
+    const title = `${listing.cardName} — ${listing.ageDays} วันยังไม่ขาย · unsold for ${listing.ageDays} days`;
+    const body = `ราคาสูงกว่าตลาด ลองปรับจาก ${from} เป็น ${to} · Priced above market. Try ${from} → ${to}.`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: sellerId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: {
+                        type: 'stale_listing',
+                        listingId: listing.listingId,
+                        cardId: listing.cardId,
+                        suggestedPrice: listing.suggestedPrice,
+                    },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: sellerId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: {
+                        label: 'แก้ราคา · Update the price',
+                        // cardId for the same reason as the push tap handler:
+                        // the vault's price editor is keyed on the collection
+                        // item, which knows its card but not its listing.
+                        url: `${appBaseUrl()}/?tab=vault&reprice=${encodeURIComponent(listing.cardId)}&utm_source=courier&utm_medium=email&utm_campaign=stale_listing`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] stale listing nudge to ${sellerId} failed:`, error);
         return false;
     }
 }

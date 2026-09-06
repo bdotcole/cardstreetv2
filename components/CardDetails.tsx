@@ -6,6 +6,8 @@ import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { marketplaceService } from '@/services/marketplaceService';
+import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
+import { useCardWishlistDemand } from '@/lib/hooks/useWishlistDemand';
 
 interface CardDetailsProps {
   card: Card;
@@ -25,6 +27,13 @@ interface CardDetailsProps {
   // Signed-out viewers get a "sign in to save this" banner above the action
   // bar — the post-scan moment is the strongest signup hook in the app.
   showSignInPrompt?: boolean;
+  /**
+   * Opens the listing flow for this card from the default action bar. Omitted
+   * on surfaces where selling makes no sense (a listing the user is buying).
+   * The strip hides itself when the catalog has no usable market value, so a
+   * card priced at the 10-baht placeholder never invites a 20-baht listing.
+   */
+  onSellCard?: (card: Card) => void;
 }
 
 const CardDetails: React.FC<CardDetailsProps> = ({
@@ -42,9 +51,13 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   exchangeRate = 1,
   isVaultView = false,
   vaultActionButtons,
-  showSignInPrompt = false
+  showSignInPrompt = false,
+  onSellCard
 }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
+
+  const suggestedSell = suggestedSellPrice(card.marketPrice);
+  const wishlistDemand = useCardWishlistDemand(card?.id);
 
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -328,6 +341,34 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                   : 'Sign in free to save this card to your vault'}
               </span>
               <i className="fa-solid fa-arrow-right text-brand-cyan"></i>
+            </button>
+          )}
+          {/* "Sell for ~฿X". Above the two primary buttons rather than beside
+              them: a third button in that row shrinks all three below a
+              comfortable tap target on a 360dp phone, and this is the CTA the
+              marketplace is short of. Hidden without a usable market value. */}
+          {onSellCard && suggestedSell > 0 && (
+            <button
+              onClick={() => onSellCard(card)}
+              className="w-full flex items-center gap-3 bg-brand-green/10 border border-brand-green/25 rounded-xl px-4 py-3 text-left active:scale-[0.98] transition-all"
+            >
+              <i className="fa-solid fa-tag text-brand-green text-lg"></i>
+              <span className="flex-1 min-w-0 text-sm font-bold text-white leading-snug">
+                {isThai ? 'ขายใบนี้ได้ราว' : 'Sell yours for about'}{' '}
+                <span className="text-brand-green">฿{suggestedSell.toLocaleString()}</span>
+                {/* Demand turns a generic prompt into a specific one: "someone
+                    is waiting for this" is a far stronger reason to list than
+                    "you could sell this". */}
+                {wishlistDemand > 0 && (
+                  <span className="block text-[11px] font-semibold text-amber-300/90 mt-0.5">
+                    <i className="fa-solid fa-heart text-[9px] mr-1"></i>
+                    {wishlistDemand === 1
+                      ? t('sell.demandOne')
+                      : `${wishlistDemand} ${t('sell.demandMany')}`}
+                  </span>
+                )}
+              </span>
+              <i className="fa-solid fa-arrow-right text-brand-green text-sm"></i>
             </button>
           )}
           <div className="flex gap-3">

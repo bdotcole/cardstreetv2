@@ -39,6 +39,22 @@ function routeNotificationTap(data: unknown) {
         if (unconsumed) window.location.assign('/?tab=profile&openRewards=1');
         return;
     }
+    if (type === 'vault_demand') {
+        // The wanted card is in their vault, so that is where the tap lands.
+        window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=vault_demand');
+        return;
+    }
+    if (type === 'stale_listing') {
+        // cardId, not listingId: the vault's price editor is keyed on the
+        // COLLECTION ITEM, and collection_items carries a card_id but no
+        // listing_id — so the card is the only identifier both ends share.
+        const d = data as { cardId?: unknown };
+        const id = typeof d?.cardId === 'string' ? d.cardId : '';
+        window.location.assign(
+            `/?tab=vault${id ? `&reprice=${encodeURIComponent(id)}` : ''}&utm_source=courier&utm_medium=push&utm_campaign=stale_listing`,
+        );
+        return;
+    }
     if (type === 'weekly_digest') {
         // Both halves of the digest — wishlist matches and vault price moves —
         // are read from the Vault tab.

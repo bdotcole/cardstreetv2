@@ -85,6 +85,14 @@
         {
             "path": "/api/cron/weekly-digest",
             "schedule": "0 11 * * 5"
+        },
+        {
+            "path": "/api/cron/vault-demand",
+            "schedule": "0 12 * * 3"
+        },
+        {
+            "path": "/api/cron/stale-listings",
+            "schedule": "0 12 * * 2"
         }
     ]
 }

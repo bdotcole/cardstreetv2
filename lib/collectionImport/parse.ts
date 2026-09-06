@@ -18,6 +18,14 @@ const HEADER_ALIASES: Record<string, keyof ColumnFields> = {
   'grading company': 'gradingCompany', 'grading_company': 'gradingCompany', company: 'gradingCompany', grader: 'gradingCompany',
   price: 'purchasePrice', 'purchase price': 'purchasePrice', 'purchase_price': 'purchasePrice',
   cost: 'purchasePrice', paid: 'purchasePrice', 'buy price': 'purchasePrice',
+  // Asking price, kept separate from `price`/`cost`. A bare `price` column has
+  // always meant what the shop PAID here, and silently re-reading it as an
+  // asking price would list a shop's whole inventory at cost. A sheet that
+  // wants to create listings has to name the column unambiguously.
+  'list price': 'listPrice', 'listing price': 'listPrice', list_price: 'listPrice',
+  'sell price': 'listPrice', 'selling price': 'listPrice', sell: 'listPrice',
+  'sale price': 'listPrice', ask: 'listPrice', 'asking price': 'listPrice',
+  'retail price': 'listPrice', retail: 'listPrice',
   language: 'language', lang: 'language',
   game: 'game',
   type: 'productType', product: 'productType', 'product type': 'productType', 'product_type': 'productType', producttype: 'productType', sealed: 'productType',
@@ -25,7 +33,7 @@ const HEADER_ALIASES: Record<string, keyof ColumnFields> = {
 
 interface ColumnFields {
   set: string; number: string; name: string; condition: string; quantity: string;
-  grade: string; gradingCompany: string; purchasePrice: string; language: string; game: string; productType: string;
+  grade: string; gradingCompany: string; purchasePrice: string; listPrice: string; language: string; game: string; productType: string;
 }
 
 // Normalize a `type` cell to a sealed_products.product_type. Anything non-empty but
@@ -130,7 +138,7 @@ export function parseInventoryText(text: string): ParseResult {
     const cells = splitLine(lines[li], delim);
     const f: ColumnFields = {
       set: '', number: '', name: '', condition: '', quantity: '',
-      grade: '', gradingCompany: '', purchasePrice: '', language: '', game: '', productType: '',
+      grade: '', gradingCompany: '', purchasePrice: '', listPrice: '', language: '', game: '', productType: '',
     };
     fieldByCol.forEach((field, ci) => {
       if (field) f[field] = cells[ci] ?? '';
@@ -144,6 +152,7 @@ export function parseInventoryText(text: string): ParseResult {
     const grade = parseGrade(f.grade, f.gradingCompany);
     const qtyNum = parseInt(f.quantity.replace(/[^0-9]/g, ''), 10);
     const priceNum = parseFloat(f.purchasePrice.replace(/[^0-9.]/g, ''));
+    const listNum = parseFloat(f.listPrice.replace(/[^0-9.]/g, ''));
 
     const row: ParsedRow = {
       rowIndex,
@@ -157,6 +166,7 @@ export function parseInventoryText(text: string): ParseResult {
       gradingCompany: isSealed ? undefined : grade.gradingCompany,
       grade: isSealed ? undefined : grade.grade,
       purchasePrice: Number.isFinite(priceNum) && priceNum > 0 ? priceNum : undefined,
+      listPrice: Number.isFinite(listNum) && listNum > 0 ? listNum : undefined,
       language: f.language.trim().toLowerCase() || undefined,
       game: f.game.trim().toLowerCase() || undefined,
       isSealed,
@@ -175,12 +185,14 @@ export function parseInventoryText(text: string): ParseResult {
 // Sample sheet offered as a downloadable template in the importer UI. The `type`
 // column is what makes a row a sealed product (booster_box / etb / booster_pack /
 // bundle / collection); leave it blank for singles.
+// `price` is what you PAID; `list price` is what you want for it. Only the
+// latter creates a listing — see the HEADER_ALIASES note.
 export const TEMPLATE_CSV = [
-  'set,number,name,condition,quantity,grade,company,type,price',
-  'sv4pt5,234,Charizard ex,NM,1,,,,',
-  'sv4pt5,234,Charizard ex,NM,1,10,PSA,,',
-  'MA3,087,,NM,3,,,,',
-  'swsh3,20,Drednaw,LP,2,,,,45',
-  'sv4pt5,,,,1,,,booster_box,',
-  'sv4pt5,,,,2,,,etb,',
+  'set,number,name,condition,quantity,grade,company,type,price,list price',
+  'sv4pt5,234,Charizard ex,NM,1,,,,,',
+  'sv4pt5,234,Charizard ex,NM,1,10,PSA,,,',
+  'MA3,087,,NM,3,,,,,',
+  'swsh3,20,Drednaw,LP,2,,,,45,120',
+  'sv4pt5,,,,1,,,booster_box,,',
+  'sv4pt5,,,,2,,,etb,,',
 ].join('\n');

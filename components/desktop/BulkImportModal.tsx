@@ -43,7 +43,11 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
   const [choices, setChoices] = useState<Record<number, RowChoice>>({});
   const [target, setTarget] = useState(defaultCollectionId || collections[0]?.id || '');
   const [importing, setImporting] = useState(false);
-  const [doneMsg, setDoneMsg] = useState<{ imported: number; failed: number; gradedMissing: boolean } | null>(null);
+  const [doneMsg, setDoneMsg] = useState<{ imported: number; listed: number; listedAsDraft: boolean; failed: number; gradedMissing: boolean } | null>(null);
+  // Opt-in, default OFF. A sheet can carry a list-price column for the shop's
+  // own bookkeeping, and putting someone's inventory on sale because a column
+  // was named a certain way would be the worst kind of surprise.
+  const [createListings, setCreateListings] = useState(false);
 
   const reset = () => {
     setStep('input'); setRawText(''); setHeaderError(null); setRows([]); setChoices({}); setDoneMsg(null);
@@ -131,6 +135,13 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includedRows, choices, rows]);
 
+  // How many included rows carry an asking price. Drives the toggle's count and
+  // disables it entirely for a sheet with no such column, so the checkbox never
+  // promises something the data cannot deliver.
+  const listPriceRowCount = includedRows.filter(
+    (r) => typeof r.input.listPrice === 'number' && r.input.listPrice > 0,
+  ).length;
+
   const runImport = async () => {
     if (!target) { showToast(t('desktop.collection.bulkImport.pickVault'), 'error'); return; }
     const items: ImportRow[] = [];
@@ -146,6 +157,11 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
         gradingCompany: r.input.gradingCompany,
         grade: r.input.grade,
         purchasePrice: r.input.purchasePrice,
+        // Only when the seller asked for listings. The column can be present in
+        // a sheet someone is importing purely as a collection, and creating
+        // listings they did not ask for would put their cards on sale by
+        // accident.
+        listPrice: createListings ? r.input.listPrice : undefined,
         isSealed: !!r.input.isSealed,
       });
     }
@@ -160,7 +176,13 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
       });
       if (!res.ok) { showToast(t('desktop.collection.bulkImport.importFailed'), 'error'); return; }
       const data = await res.json();
-      setDoneMsg({ imported: data.imported || 0, failed: (data.failed || []).length, gradedMissing: !!data.gradedColumnsMissing });
+      setDoneMsg({
+        imported: data.imported || 0,
+        listed: data.listed || 0,
+        listedAsDraft: !!data.listedAsDraft,
+        failed: (data.failed || []).length,
+        gradedMissing: !!data.gradedColumnsMissing,
+      });
       setStep('done');
       onImported();
     } catch {
@@ -345,6 +367,30 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
                 </div>
               </div>
 
+              {/* Also list for sale. Opt-in and default off — see createListings. */}
+              <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createListings}
+                  onChange={(e) => setCreateListings(e.target.checked)}
+                  disabled={listPriceRowCount === 0}
+                  className="mt-0.5 w-4 h-4 accent-brand-cyan disabled:opacity-40"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-white">
+                    {t('bulkImport.createListings')}
+                    {listPriceRowCount > 0 && (
+                      <span className="ml-2 text-[11px] font-black text-brand-green">({listPriceRowCount})</span>
+                    )}
+                  </span>
+                  <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    {listPriceRowCount === 0
+                      ? t('bulkImport.noListPriceColumn')
+                      : t('bulkImport.createListingsHint')}
+                  </span>
+                </span>
+              </label>
+
               <div className="flex justify-between gap-2 pt-2">
                 <button onClick={() => setStep('input')} className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white px-4 py-2 transition-colors">
                   <i className="fa-solid fa-arrow-left text-xs"></i>{t('desktop.collection.bulkImport.back')}
@@ -366,6 +412,12 @@ export default function BulkImportModal({ isOpen, onClose, collections, defaultC
                 <i className="fa-solid fa-check text-2xl text-emerald-400"></i>
               </div>
               <h3 className="text-white font-black text-lg">{doneMsg.imported} {t('desktop.collection.bulkImport.doneImported')}</h3>
+              {doneMsg.listed > 0 && (
+                <p className="text-brand-green text-sm mt-1 font-bold">
+                  {doneMsg.listed} {t('bulkImport.doneListed')}
+                  {doneMsg.listedAsDraft ? ` — ${t('bulkImport.doneListedDraft')}` : ''}
+                </p>
+              )}
               {doneMsg.failed > 0 && <p className="text-slate-400 text-sm mt-1">{doneMsg.failed} {t('desktop.collection.bulkImport.doneFailed')}</p>}
               {doneMsg.gradedMissing && <p className="text-amber-400/80 text-xs mt-2 max-w-md mx-auto">{t('desktop.collection.bulkImport.gradedColumnsMissing')}</p>}
               <div className="mt-6">

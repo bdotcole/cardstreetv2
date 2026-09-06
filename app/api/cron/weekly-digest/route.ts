@@ -201,6 +201,12 @@ export async function GET(request: NextRequest) {
             .sort((a, b) => b[1].wishlistMatches - a[1].wishlistMatches)
             .slice(0, MAX_SENDS);
 
+        // ?dryRun=1 counts and sends nothing — see the note in vault-demand.
+        if (request.nextUrl.searchParams.get('dryRun') === '1') {
+            console.log(`[Cron/WeeklyDigest] DRY RUN — would notify ${targets.length} user(s)`);
+            return NextResponse.json({ ok: true, dryRun: true, candidates: targets.length, push: 0, email: 0 });
+        }
+
         let push = 0;
         let email = 0;
         const SEND_CHUNK = 10;

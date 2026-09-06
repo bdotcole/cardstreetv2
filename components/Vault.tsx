@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { CustomCollection, Card, UserCollectionItem } from '../types';
+import { CustomCollection, Card, CardCondition, UserCollectionItem } from '../types';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
 import ListingForm from './ListingForm';
+import { useWishlistDemand } from '@/lib/hooks/useWishlistDemand';
+import MostWantedList from './MostWantedList';
+import BulkListSheet, { type BulkListRow } from './BulkListSheet';
 import MasterSetPicker from './MasterSetPicker';
 import GamePicker from './GamePicker';
 import SetBrowser from './SetBrowser';
@@ -41,6 +44,21 @@ interface VaultProps {
   currency: string;
   exchangeRate: number;
   onRemoveFromCollection?: (collectionId: string, itemId: string) => Promise<void>;
+  /**
+   * Card id from a stale-listing nudge (/?tab=vault&reprice=<cardId>). Opens
+   * the listings view with that card's inline price editor already open, so a
+   * "reprice to ฿X" push lands on the control instead of on a list.
+   */
+  repriceCardId?: string | null;
+  /**
+   * Lists several vault cards at once. Omitted and the multi-select action bar
+   * never appears, so a surface that cannot handle bulk simply keeps the
+   * one-at-a-time flow.
+   */
+  onBulkListCards?: (
+    rows: BulkListRow[],
+    opts: { condition: CardCondition; useCatalogArt: boolean },
+  ) => Promise<void>;
 }
 
 type VaultView = 'folders' | 'wishlist' | 'listings' | 'collections' | 'master-game' | 'master' | 'sets' | 'set-detail';
@@ -63,7 +81,9 @@ const Vault: React.FC<VaultProps> = ({
   currencySymbol,
   currency,
   exchangeRate,
-  onRemoveFromCollection
+  onRemoveFromCollection,
+  repriceCardId,
+  onBulkListCards
 }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
@@ -76,6 +96,33 @@ const Vault: React.FC<VaultProps> = ({
   // Inline quick price edit on an active listing (one at a time, keyed by item id)
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState('');
+  const repriceHandledRef = useRef<string | null>(null);
+
+  // Multi-select for bulk listing, keyed by collection-item id. Empty set =
+  // ordinary single-tap behaviour, so the existing one-card flow is untouched
+  // until the seller deliberately starts a selection.
+  const [selectedForBulk, setSelectedForBulk] = useState<Set<string>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleBulkSelection = (itemId: string) => {
+    setSelectedForBulk((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+  // 450ms: long enough not to fire on a normal tap, short enough not to feel
+  // stuck. Cancelled on touchmove so a scroll never starts a selection.
+  const startLongPress = (itemId: string) => {
+    cancelLongPress();
+    longPressRef.current = setTimeout(() => toggleBulkSelection(itemId), 450);
+  };
+  const cancelLongPress = () => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+  };
   const [isSavingPrice, setIsSavingPrice] = useState(false);
   const [timeframe, setTimeframe] = useState('1M');
   const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
@@ -251,6 +298,28 @@ const Vault: React.FC<VaultProps> = ({
       }
     });
   }, [allVaultItems, collectionSearchQuery, sortOption]);
+
+  // Land a reprice nudge on the actual control. Declared here, AFTER
+  // allVaultItems, because the dependency array is evaluated during render —
+  // referencing it from above would be a temporal-dead-zone crash, not just
+  // untidy. Runs once per card id, and only once the item exists.
+  useEffect(() => {
+    if (!repriceCardId || repriceHandledRef.current === repriceCardId) return;
+    const match = allVaultItems.find(({ card, item }) => card.id === repriceCardId && item.isListing);
+    if (!match) return;
+    repriceHandledRef.current = repriceCardId;
+    setView('listings');
+    setEditingPriceItemId(match.item.id);
+    setPriceDraft(String(match.item.listingPrice ?? ''));
+  }, [repriceCardId, allVaultItems]);
+
+  // Wishlist demand for everything in the vault. Batched and cached by the
+  // hook, so the whole list costs one request rather than one per tile.
+  const vaultCardIds = useMemo(
+    () => [...new Set(allVaultItems.map(({ card }) => card.id))],
+    [allVaultItems],
+  );
+  const demandCounts = useWishlistDemand(vaultCardIds);
 
   const handleRemoveCard = async (e: React.MouseEvent, colId: string, itemId: string) => {
     e.stopPropagation();
@@ -447,7 +516,21 @@ const Vault: React.FC<VaultProps> = ({
 
       {isSelectingForListing ? (
         <div className="space-y-4 animate-fadeIn">
-          <p className="px-2 text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('vault.selectAsset')}</p>
+          <div className="flex items-center justify-between gap-3 px-2">
+            <p className={`text-[9px] text-slate-500 font-black ${isThai ? '' : 'uppercase tracking-widest'}`}>
+              {selectedForBulk.size > 0
+                ? `${selectedForBulk.size} ${isThai ? 'ใบที่เลือก' : 'selected'}`
+                : t('vault.selectAsset')}
+            </p>
+            {selectedForBulk.size > 0 && (
+              <button
+                onClick={() => setSelectedForBulk(new Set())}
+                className="text-[10px] font-black text-slate-400 hover:text-white transition-colors"
+              >
+                {isThai ? 'ล้าง' : 'Clear'}
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             {allVaultItems.filter(({ item }) => !item.isListing).length === 0 ? (
               <div className="py-20 text-center glass rounded-[2.5rem] border-dashed border-white/5">
@@ -457,9 +540,32 @@ const Vault: React.FC<VaultProps> = ({
               allVaultItems.filter(({ item }) => !item.isListing).map(({ colId, item, card }) => (
                 <button
                   key={item.id}
-                  onClick={() => onListCard(colId, item, card)}
-                  className="w-full glass p-4 rounded-3xl flex items-center gap-4 border-white/5 active:scale-[0.98] transition-all text-left group"
+                  // Tap lists one card, as before. Long-press starts a
+                  // multi-select; once anything is selected, a plain tap
+                  // toggles instead of opening the form — so a bulk pass is
+                  // never interrupted by the single-card modal.
+                  onClick={() => {
+                    if (selectedForBulk.size > 0) toggleBulkSelection(item.id);
+                    else onListCard(colId, item, card);
+                  }}
+                  onContextMenu={(e) => { e.preventDefault(); toggleBulkSelection(item.id); }}
+                  onTouchStart={() => startLongPress(item.id)}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  className={`w-full glass p-4 rounded-3xl flex items-center gap-4 border-white/5 active:scale-[0.98] transition-all text-left group ${
+                    selectedForBulk.has(item.id) ? 'ring-2 ring-brand-cyan bg-brand-cyan/5' : ''
+                  }`}
                 >
+                  <span
+                    onClick={(e) => { e.stopPropagation(); toggleBulkSelection(item.id); }}
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
+                      selectedForBulk.has(item.id)
+                        ? 'bg-brand-cyan border-brand-cyan text-brand-darker'
+                        : 'border-white/15 text-transparent'
+                    }`}
+                  >
+                    <i className="fa-solid fa-check text-[10px]"></i>
+                  </span>
                   <div className="w-12 h-16 rounded-xl overflow-hidden bg-white/5 p-1 flex-shrink-0 relative">
                     <Image 
                       src={getThumbnailUrl(card.images?.small || card.imageUrl)} 
@@ -481,17 +587,40 @@ const Vault: React.FC<VaultProps> = ({
               ))
             )}
           </div>
+
+          {/* Sticky action bar — only once something is selected. */}
+          {selectedForBulk.size > 0 && (
+            <div className="sticky bottom-24 z-30">
+              <button
+                onClick={() => setBulkSheetOpen(true)}
+                className="w-full h-14 rounded-2xl bg-brand-green text-brand-darker font-black text-sm shadow-2xl shadow-brand-green/20 active:scale-95 transition-all"
+              >
+                {isThai ? `ลงขาย ${selectedForBulk.size} ใบ` : `List ${selectedForBulk.size} selected`}
+              </button>
+            </div>
+          )}
         </div>
       ) : myVaultListings.length === 0 ? (
-        <div className="text-center py-32 glass rounded-[2.5rem] border-dashed border-white/5">
-          <i className="fa-solid fa-tag text-4xl text-slate-800 mb-6"></i>
-          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] px-12 leading-relaxed">{t('vault.noActiveListings')}</p>
-          <button
-            onClick={() => setIsSelectingForListing(true)}
-            className="mt-8 px-8 h-12 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors"
-          >
-            {t('vault.startSelling')}
-          </button>
+        <div className="space-y-6">
+          <div className="text-center py-20 glass rounded-[2.5rem] border-dashed border-white/5">
+            <i className="fa-solid fa-tag text-4xl text-slate-800 mb-6"></i>
+            <p className={`text-[10px] text-slate-600 font-bold px-12 leading-relaxed ${isThai ? '' : 'uppercase tracking-[0.2em]'}`}>{t('vault.noActiveListings')}</p>
+            <button
+              onClick={() => setIsSelectingForListing(true)}
+              className={`mt-8 px-8 h-12 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-300 hover:bg-white/10 transition-colors ${isThai ? '' : 'uppercase tracking-widest'}`}
+            >
+              {t('vault.startSelling')}
+            </button>
+          </div>
+          {/* A seller with no listings is exactly who needs to be told what
+              buyers are asking for. Tapping a row they own opens that card. */}
+          <MostWantedList
+            ownedCardIds={vaultCardIds}
+            onSelect={(cardId) => {
+              const owned = allVaultItems.find(({ card }) => card.id === cardId);
+              if (owned) { setViewingCard(owned.card); setViewingItem({ colId: owned.colId, item: owned.item }); }
+            }}
+          />
         </div>
       ) : (
         <div className="space-y-4">
@@ -600,6 +729,26 @@ const Vault: React.FC<VaultProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {bulkSheetOpen && onBulkListCards && (
+        <BulkListSheet
+          entries={allVaultItems.filter(({ item }) => selectedForBulk.has(item.id))}
+          submitting={bulkSubmitting}
+          onCancel={() => setBulkSheetOpen(false)}
+          onConfirm={async (rows, opts) => {
+            setBulkSubmitting(true);
+            try {
+              await onBulkListCards(rows, opts);
+              setSelectedForBulk(new Set());
+              setBulkSheetOpen(false);
+              setIsSelectingForListing(false);
+              setView('listings');
+            } finally {
+              setBulkSubmitting(false);
+            }
+          }}
+        />
       )}
 
       {listingTarget && (
@@ -778,6 +927,16 @@ const Vault: React.FC<VaultProps> = ({
                       </span>
                     </div>
                     <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{item.condition}</span>
+                    {/* Wishlist demand. The one number that turns a vault from
+                        a list of things you own into a list of things someone
+                        else is waiting for — and it was collected all along
+                        (297 rows) with nobody able to see it. */}
+                    {(demandCounts[card.id] ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-[8px] font-black text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-md">
+                        <i className="fa-solid fa-heart text-[7px]"></i>
+                        {demandCounts[card.id]} {t('sell.wanted')}
+                      </span>
+                    )}
                   </div>
                 </div>
 

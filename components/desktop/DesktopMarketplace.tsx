@@ -88,6 +88,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         GAMES.some((g) => g.id === gameParam) ? gameParam : 'all',
     );
     const [language, setLanguage] = useState('all');
+    const [section, setSection] = useState<'singles' | 'sealed'>('singles');
 
     // Game-first flow (mirrors the sets browser): the language sub-filter only
     // appears once a specific multi-language game is picked. games.ts declares
@@ -115,6 +116,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             .getActiveListings({
                 search: q || undefined,
                 game,
+                kind: section,
                 language: language === 'all' ? undefined : language,
                 sort,
                 limit: PAGE_SIZE,
@@ -130,7 +132,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         return () => {
             cancelled = true;
         };
-    }, [q, game, language, sort]);
+    }, [q, game, language, section, sort]);
 
     const loadMore = async () => {
         setLoadingMore(true);
@@ -138,6 +140,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             const rows = await marketplaceService.getActiveListings({
                 search: q || undefined,
                 game,
+                kind: section,
                 language: language === 'all' ? undefined : language,
                 sort,
                 limit: PAGE_SIZE,
@@ -182,6 +185,24 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-6">
+                {/* Singles / Sealed, matching the mobile shop screen. A section,
+                    not a filter chip — see ListingKind in marketplaceService. */}
+                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-full p-1 mr-2">
+                    {([
+                        { id: 'singles' as const, label: t('marketplace.sectionSingles') },
+                        { id: 'sealed' as const, label: t('marketplace.sectionSealed') },
+                    ]).map(({ id, label }) => (
+                        <button
+                            key={id}
+                            onClick={() => setSection(id)}
+                            className={`px-4 py-1 rounded-full text-xs font-bold transition-colors ${
+                                section === id ? 'bg-brand-cyan text-brand-darker' : 'text-slate-300 hover:text-white'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
                 <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => selectGame('all')} />
                 {GAMES.filter((g) => g.enabled).map((g) => (
                     <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => selectGame(g.id)} />

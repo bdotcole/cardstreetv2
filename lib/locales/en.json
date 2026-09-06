@@ -61,7 +61,11 @@
         "minPrice": "Min",
         "maxPrice": "Max",
         "emptyTitle": "Nothing listed yet",
-        "emptyBody": "No active listings match these filters."
+        "emptyBody": "No active listings match these filters.",
+        "sectionSingles": "Singles",
+        "sectionSealed": "Sealed",
+        "sectionLive": "Live",
+        "sealedEmpty": "No sealed products listed yet."
     },
     "common": {
         "loading": "Loading...",
@@ -1634,5 +1638,64 @@
         "loginFailed": "Login failed",
         "signedIn": "Signed in successfully",
         "unknownError": "Unknown error"
+    },
+    "sellerState": {
+        "signedOutTitle": "Sign in to sell",
+        "signedOutBody": "Listing is free. You only pay a fee when a card sells.",
+        "signedOutCta": "Sign in",
+        "shippingTitle": "Add your shipping details",
+        "shippingBody": "Flash Express needs your address and phone to collect a sold card. Takes under a minute.",
+        "shippingCta": "Add details",
+        "canListTitle": "You can list now",
+        "canListBody": "Your listings go live the moment your payout setup finishes. Nothing is lost in the meantime.",
+        "payoutsCta": "Set up payouts (2 minutes)",
+        "payoutsResumeCta": "Finish payout setup (2 minutes)",
+        "reviewTitle": "Payouts are being reviewed",
+        "reviewBody": "Stripe is checking your details. Keep listing — everything publishes as soon as they finish.",
+        "readyTitle": "You're set up to sell",
+        "readyBody": "Listings go live immediately and payouts land in your bank account."
+    },
+    "listingPrice": {
+        "aboveMarket": "above market",
+        "belowMarket": "below market",
+        "atMarket": "About market price",
+        "lowestActive": "Lowest active listing",
+        "highWarning": "Priced well above market — cards this far over rarely sell.",
+        "confirmPrompt": "That's well over market. Tap again to list at this price.",
+        "useRecommended": "Use recommended",
+        "sellFor": "Sell for"
+    },
+    "sell": {
+        "demandOne": "1 person wants this",
+        "demandMany": "people want this",
+        "mostWantedTitle": "Wanted, nobody selling",
+        "mostWantedBody": "Cards on other collectors' wishlists with no active listing. If one is in your vault, you have the only copy for sale.",
+        "mostWantedEmpty": "Every wishlisted card currently has a seller.",
+        "inYourVault": "In your vault",
+        "wanted": "wanted"
+    },
+    "sellerChecklist": {
+        "title": "Three steps to your first sale",
+        "body": "You can list at any point — listings publish themselves once payouts are ready.",
+        "shipping": "Shipping address and phone",
+        "payouts": "Payout account",
+        "payoutsReview": "Payout account — Stripe is reviewing",
+        "listing": "List your first card",
+        "listCta": "List one",
+        "dismiss": "Dismiss"
+    },
+    "bulkImport": {
+        "createListings": "Also list these for sale",
+        "createListingsHint": "Uses the sheet's \"list price\" column. Rows without one are imported to your vault only.",
+        "noListPriceColumn": "No \"list price\" column found — add one to create listings.",
+        "doneListed": "listed for sale",
+        "doneListedDraft": "saved as drafts — they go live when your payout setup finishes"
+    },
+    "listingPhotos": {
+        "useCatalogArt": "Use the catalog image",
+        "useCatalogArtHint": "Allowed for near-mint cards up to ฿300. Above that, buyers need to see the actual card.",
+        "photosRequired": "Photos of the actual card are required above ฿300 or below near-mint.",
+        "quantity": "How many copies?",
+        "quantityHint": "Creates one listing per copy, so each can sell separately."
     }
 }

@@ -86,6 +86,12 @@ export async function GET(request: NextRequest) {
         // MIN_STREAK floor already excludes them. Nothing to add back.
         const targets = atRisk.slice(0, MAX_SENDS);
 
+        // ?dryRun=1 counts and sends nothing — see the note in vault-demand.
+        if (request.nextUrl.searchParams.get('dryRun') === '1') {
+            console.log(`[Cron/StreakAtRisk] DRY RUN — would push to ${targets.length} user(s)`);
+            return NextResponse.json({ ok: true, dryRun: true, atRisk: atRisk.length, sent: 0 });
+        }
+
         let sent = 0;
         const CHUNK = 10;
         for (let i = 0; i < targets.length; i += CHUNK) {

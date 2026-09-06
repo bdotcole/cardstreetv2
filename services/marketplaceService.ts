@@ -79,10 +79,19 @@ export interface MarketplaceListing {
 
 export type ListingSort = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
 
+/**
+ * Singles vs sealed product. Sealed is a different purchase with different
+ * expectations (no condition, no grading, a box not a card), and mixing the two
+ * in one grid made the sealed catalog invisible — measured 2026-09-06, exactly
+ * 1 of 222 active listings is sealed.
+ */
+export type ListingKind = 'all' | 'singles' | 'sealed';
+
 export interface ListingFilters {
     search?: string;
     language?: string;
     game?: string;
+    kind?: ListingKind;
     minPrice?: number;
     maxPrice?: number;
     sort?: ListingSort;
@@ -101,6 +110,7 @@ export const marketplaceService = {
             search,
             language,
             game,
+            kind = 'all',
             minPrice,
             maxPrice,
             sort = 'newest',
@@ -159,6 +169,18 @@ export const marketplaceService = {
                     } else {
                         query = query.eq('card_data->>game', game);
                     }
+                }
+
+                // Singles vs sealed. The key is ABSENT on almost every listing
+                // rather than false — 221 of 222 active rows carry no isSealed
+                // at all (they predate sealed selling) — so singles must accept
+                // null as well as false, exactly like the legacy game filter
+                // above. Testing `.neq('...isSealed','true')` would silently
+                // drop all 221, which is the entire marketplace.
+                if (kind === 'sealed') {
+                    query = query.eq('card_data->>isSealed', 'true');
+                } else if (kind === 'singles') {
+                    query = query.or('card_data->>isSealed.is.null,card_data->>isSealed.eq.false');
                 }
 
                 // Server-side price range
@@ -223,6 +245,13 @@ export const marketplaceService = {
         image_front_url?: string;
         image_back_url?: string;
         acceptsOffers?: boolean;
+        /**
+         * Copies to list. N identical ROWS, not a quantity column: checkout
+         * reserves a listing by flipping its status, so one row per physical
+         * card is what makes two buyers able to buy two copies at once. A
+         * quantity column would need that reservation rewritten.
+         */
+        quantity?: number;
     }): Promise<MarketplaceListing | null> {
         const supabase = createClient();
 
@@ -260,23 +289,31 @@ export const marketplaceService = {
             // required fields, even if the caller passed a partial Card.
             const safeCard = normalizeCard(params.cardData, params.cardId);
 
+            // Bounded: a slip in a quantity field must not mint hundreds of
+            // listings. 20 is well past any realistic stack of one card.
+            const copies = Math.min(20, Math.max(1, Math.round(params.quantity ?? 1)));
+            const row = {
+                seller_id: user.id,
+                card_id: params.cardId,
+                card_data: safeCard,
+                price: params.price,
+                condition: params.condition,
+                is_graded: params.isGraded || false,
+                grading_company: params.gradingCompany || null,
+                grade: params.grade || null,
+                image_front_url: params.image_front_url || null,
+                image_back_url: params.image_back_url || null,
+                accepts_offers: params.acceptsOffers ?? false,
+                status: asDraft ? 'draft' : 'active',
+            };
+
+            // Returns the FIRST row; the caller only needs one representative
+            // listing (for the toast and the vault item's listed state).
             const { data, error } = await supabase
                 .from('listings')
-                .insert({
-                    seller_id: user.id,
-                    card_id: params.cardId,
-                    card_data: safeCard,
-                    price: params.price,
-                    condition: params.condition,
-                    is_graded: params.isGraded || false,
-                    grading_company: params.gradingCompany || null,
-                    grade: params.grade || null,
-                    image_front_url: params.image_front_url || null,
-                    image_back_url: params.image_back_url || null,
-                    accepts_offers: params.acceptsOffers ?? false,
-                    status: asDraft ? 'draft' : 'active'
-                })
+                .insert(Array.from({ length: copies }, () => row))
                 .select()
+                .limit(1)
                 .single();
 
             if (error) {

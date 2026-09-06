@@ -264,6 +264,38 @@ export async function fulfillOrdersByTransferGroup(
             console.warn('[Fulfillment] reward award error (non-fatal):', (rewardErr as Error)?.message);
         }
 
+        // ─── Stamp when each listing actually sold ───
+        // listings.status flips to 'sold' at CHECKOUT, as a reservation, and
+        // flips back to 'active' when a checkout dies — so created_at..now on a
+        // sold row measures "time until someone started a checkout", and a
+        // relisted card's clock is indistinguishable from a fresh one. sold_at
+        // is written HERE, on the settle, which is the only moment a sale is
+        // real. Without it, "how long does a card take to sell" has no answer,
+        // and the stale-listing cron has no way to learn what a normal age is.
+        //
+        // Fail-soft and never overwritten (sold_at IS NULL guard): a retried
+        // webhook or the /api/orders/finalize fallback must not move the
+        // timestamp, and an analytics column must never fail a fulfillment.
+        try {
+            const settledListingIds = orders
+                .map(o => o.listing_id)
+                .filter((v): v is string => typeof v === 'string');
+            if (settledListingIds.length > 0) {
+                const { error: soldAtErr } = await supabase
+                    .from('listings')
+                    .update({ sold_at: new Date().toISOString() })
+                    .in('id', settledListingIds)
+                    .is('sold_at', null);
+                // 42703 = column missing (migration not applied yet) — expected,
+                // quiet, by the same convention as the rewards RPCs.
+                if (soldAtErr && soldAtErr.code !== '42703') {
+                    console.warn('[Fulfillment] sold_at stamp failed (non-fatal):', soldAtErr.message);
+                }
+            }
+        } catch (soldAtErr) {
+            console.warn('[Fulfillment] sold_at stamp threw (non-fatal):', (soldAtErr as Error)?.message);
+        }
+
         // ─── Feature B: record realized sales for internal pricing (dark) ───
         // Reached only on a full CAS win (the partial-win branch returned above),
         // so every `orders` row was won by this invocation and no other worker is

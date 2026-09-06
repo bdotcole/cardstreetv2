@@ -69,6 +69,9 @@ import PartnerRequest from '@/components/PartnerRequest';
 import PartnerFinishSetup from '@/components/PartnerFinishSetup';
 import SellerProfile from '@/components/SellerProfile';
 import BuylistRequest from '@/components/BuylistRequest';
+import SellPromptSheet from '@/components/SellPromptSheet';
+import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
+import { resolveSellerState, sellerStateCopy, type StripeConnectStatus } from '@/lib/sellerState';
 
 // Tabs that are safe to land on directly (via /?tab=<name> or a same-session
 // restore). 'seller_profile' needs a seller loaded in state and 'home' no
@@ -185,6 +188,11 @@ export default function HomePage() {
         return () => window.removeEventListener('popstate', onPop);
     }, []);
 
+    // Card id from a stale-listing nudge's ?reprice= param. Declared up here
+    // beside the tab state because the landing effect below consumes it, and
+    // handed down to the Vault, which opens that listing's price editor.
+    const [repriceCardId, setRepriceCardId] = useState<string | null>(null);
+
     // Shop tab press. Re-tapping the tab you're already on returns to that
     // tab's root — here, the Live-vs-Marketplace chooser. Routed through
     // history like the back button so the entry pushed on the way in is
@@ -241,6 +249,22 @@ export default function HomePage() {
                 `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
             );
             return;
+        }
+
+        // /?reprice=<cardId> — from a stale-listing nudge. Held in state and
+        // handed to the Vault, which opens that listing's price editor. Stripped
+        // like the others so a refresh does not re-open it.
+        const reprice = params.get('reprice');
+        if (reprice) {
+            setRepriceCardId(reprice);
+            params.delete('reprice');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            // Falls through: ?tab=vault on the same URL still picks the tab.
         }
 
         // /?openRewards=1 opens the Rewards Hub — the streak-at-risk push's
@@ -326,6 +350,15 @@ export default function HomePage() {
         };
         window.addEventListener('cs-open-offers', onOpenOffers);
         return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+    }, []);
+
+    // Profile's seller checklist asks the shell to switch tabs rather than
+    // navigating: Profile renders inside this shell, and a hard navigation
+    // would tear down and rebuild the whole SPA to move one tab.
+    useEffect(() => {
+        const onOpenVault = () => setActiveTab('vault');
+        window.addEventListener('cs-open-vault', onOpenVault);
+        return () => window.removeEventListener('cs-open-vault', onOpenVault);
     }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -430,6 +463,11 @@ export default function HomePage() {
     // the user leaves the profile tab, so completing setup clears it without
     // a reload. Session-dismissible.
     const [payoutSetupStalled, setPayoutSetupStalled] = useState(false);
+    // The same two inputs DesktopSell feeds lib/sellerState.ts, so both shells
+    // describe a seller's situation identically instead of each inventing a
+    // rule (see the header of that module for what they used to disagree about).
+    const [sellerStripeStatus, setSellerStripeStatus] = useState<StripeConnectStatus | null>(null);
+    const [sellerProfileRow, setSellerProfileRow] = useState<Record<string, string | boolean | null> | null>(null);
     // First-listing activation: the seller is fully verified but has never
     // listed a card. Shares the status fetch below; the "has no listings"
     // half of the condition is derived from the vault (hasAnyListing).
@@ -464,14 +502,32 @@ export default function HomePage() {
                 if (!res.ok) return; // banners are best-effort — fail quiet
                 const s = await res.json();
                 if (!cancelled) {
+                    setSellerStripeStatus(s);
                     if (!payoutNudgeDismissed) {
                         setPayoutSetupStalled(
                             !!s.connected && s.detailsSubmitted !== true && s.chargesEnabled !== true
                         );
                     }
-                    setFirstListingEligible(s.chargesEnabled === true);
+                    // details_submitted, not charges_enabled. Stripe's async
+                    // review can take days, and a seller who finished the form
+                    // is done with their half — telling them nothing until
+                    // Stripe finishes wastes the window where they still
+                    // remember they meant to list something. Listings created
+                    // in the meantime save as drafts and publish themselves.
+                    setFirstListingEligible(s.chargesEnabled === true || s.detailsSubmitted === true);
                 }
             } catch { /* fail quiet */ }
+            try {
+                // Shipping fields, so the shared helper can tell
+                // 'shipping_incomplete' from a payout problem. Same select the
+                // listing gate uses.
+                const { data } = await createClient()
+                    .from('profiles')
+                    .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                    .eq('id', user.id)
+                    .single<Record<string, string | boolean | null>>();
+                if (!cancelled && data) setSellerProfileRow(data);
+            } catch { /* fail quiet — the banner degrades, nothing breaks */ }
         })();
         return () => { cancelled = true; };
     }, [user, activeTab]);
@@ -518,6 +574,15 @@ export default function HomePage() {
     const openFirstListing = () => {
         setActiveTab('vault');
     };
+
+    // Shared derivation, same helper the desktop sell page uses. Falls back to
+    // 'no_payout_account' copy while the profile row is still loading, which is
+    // the state the banner is almost always shown in anyway.
+    const shellSellerState = resolveSellerState(
+        !!user && user.provider !== 'guest',
+        sellerProfileRow,
+        sellerStripeStatus,
+    );
 
     const dismissFirstListingPrompt = () => {
         setFirstListingDismissed(true);
@@ -983,6 +1048,14 @@ export default function HomePage() {
             if (activeTab !== 'explore') {
                 setActiveTab('vault');
             }
+
+            // Offer to sell it, at the one moment the card is still in their
+            // hand. Not during a bulk Explore add — interrupting every add with
+            // a sheet would make adding ten cards unusable. The sheet renders
+            // nothing without a usable market value.
+            if (activeTab !== 'explore' && suggestedSellPrice(card.marketPrice) > 0) {
+                setSellPrompt(card);
+            }
         } catch (error: any) {
             console.error('Failed to add card to collection:', error);
             // Show more detailed error for debugging
@@ -1349,6 +1422,7 @@ export default function HomePage() {
             // Step 4: Handle results
             if (matches.length === 1) {
                 setSelectedCard(matches[0]);
+                maybePromptSellAfterScan(matches[0]);
             } else if (matches.length > 1) {
                 setScanCandidates(matches);
             } else {
@@ -1378,6 +1452,36 @@ export default function HomePage() {
     // Listing State (New)
     const [listingTarget, setListingTarget] = useState<{ colId: string, item: UserCollectionItem, card: Card } | null>(null);
 
+    // A listing tap that hit the shipping-profile gate. Without this the user
+    // was sent to the Profile tab and the card they were selling was simply
+    // forgotten — they had to find it in the vault again and start over, which
+    // is the same dead end the auth gate's pendingAuthActionRef exists to
+    // prevent. Same shape and same 10-minute staleness cap, for the same
+    // reason: a much-later profile edit must not resurrect a forgotten tap.
+    const pendingListingRef = useRef<{ colId: string; item: UserCollectionItem; card: Card; at: number } | null>(null);
+
+    // "Sell it for ~฿X?" after a scan confirm or a vault add. Holds the card
+    // only; the vault item is resolved at tap time, because the collections
+    // state has not settled when this is set.
+    const [sellPrompt, setSellPrompt] = useState<Card | null>(null);
+
+    /**
+     * Queue the sell sheet for a card a scan just confirmed.
+     *
+     * Only for cards ALREADY in the vault. A scan of something new ends in a
+     * vault add, and that path raises the sheet itself — firing here too would
+     * show it twice for one scan. This covers the case a vault add can never
+     * reach: scanning a card you already own, which is exactly what someone
+     * does when they are working through a pile deciding what to sell.
+     */
+    const maybePromptSellAfterScan = (card: Card) => {
+        if (suggestedSellPrice(card.marketPrice) <= 0) return;
+        const owned = customCollections.some((c) =>
+            c.items.some((i) => i.cardId === card.id && !i.isListing),
+        );
+        if (owned) setSellPrompt(card);
+    };
+
     // Click-time gate on listing creation. We check the seller's shipping
     // fields before opening ListingForm so they don't fill out price /
     // condition / photos only to be rejected at submit. The same check is
@@ -1402,6 +1506,10 @@ export default function HomePage() {
                 // fields still block: Flash needs them and they're filled
                 // in-app in seconds.
                 if (!isStripeOnlyIncomplete(completeness.missing)) {
+                    // Stash the card so finishing the profile drops the user
+                    // back into the listing form for THIS card, instead of
+                    // leaving them on Profile with nothing to show for it.
+                    pendingListingRef.current = { colId, item, card, at: Date.now() };
                     showToast(t('profile.incompleteSeller'), 'error');
                     setActiveTab('profile');
                     return;
@@ -1412,8 +1520,72 @@ export default function HomePage() {
             // marketplaceService.createListing will re-check on submit.
             console.warn('[Listing gate] Profile completeness check failed, falling through:', err);
         }
+        pendingListingRef.current = null;
         setListingTarget({ colId, item, card });
+        // The form renders inside the Vault tab, so a listing started from a
+        // card detail or the post-scan sheet has to land there to be seen.
+        setActiveTab('vault');
     };
+
+    /**
+     * Start listing a card the user owns, without the caller having to know
+     * which collection it sits in. Used by the "Sell for ~฿X" strip and the
+     * post-scan sheet, where all we have is the card.
+     *
+     * Prefers an unlisted copy: someone with two of a card who already listed
+     * one wants to list the other, not to re-open the live listing.
+     */
+    const startListingForCard = async (card: Card): Promise<boolean> => {
+        for (const col of customCollections) {
+            const item = col.items.find((i) => i.cardId === card.id && !i.isListing);
+            if (item) {
+                await handleStartListing(col.id, item, card);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Resume a listing that was interrupted by the profile-completion detour,
+    // once the user leaves the Profile tab. Re-reads the profile rather than
+    // trusting that they finished: if the fields are still missing they simply
+    // did not complete it, and the pending intent is dropped rather than
+    // bouncing them back to Profile in a loop.
+    const prevTabForListingRef = useRef(activeTab);
+    useEffect(() => {
+        const leftProfile = prevTabForListingRef.current === 'profile' && activeTab !== 'profile';
+        prevTabForListingRef.current = activeTab;
+        const pending = pendingListingRef.current;
+        if (!leftProfile || !pending || !user) return;
+        if (Date.now() - pending.at > 10 * 60_000) {
+            pendingListingRef.current = null;
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                    .eq('id', user.id)
+                    .single<Record<string, string | boolean | null>>();
+                const completeness = checkSellerProfileComplete(profile);
+                if (cancelled) return;
+                if (completeness.complete || isStripeOnlyIncomplete(completeness.missing)) {
+                    pendingListingRef.current = null;
+                    setListingTarget({ colId: pending.colId, item: pending.item, card: pending.card });
+                    setActiveTab('vault');
+                } else {
+                    pendingListingRef.current = null;
+                }
+            } catch {
+                pendingListingRef.current = null;
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, user]);
 
     // Global Active Listings state powered by Supabase
     const [activeListings, setActiveListings] = useState<MarketplaceListing[]>([]);
@@ -1498,6 +1670,53 @@ export default function HomePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    /**
+     * List several vault cards in one pass (see components/BulkListSheet.tsx).
+     *
+     * Sequential, not Promise.all: createListing re-reads the seller profile on
+     * every call and a 50-wide burst would be 50 simultaneous profile reads
+     * plus 50 inserts, which is how a bulk action turns into a rate limit.
+     * Partial success is reported honestly rather than rolled back — a seller
+     * who got 47 of 50 listed wants the 47.
+     */
+    const handleBulkListCards = async (
+        rows: { colId: string; item: UserCollectionItem; card: Card; price: number }[],
+        opts: { condition: CardCondition; useCatalogArt: boolean },
+    ) => {
+        let created = 0;
+        let drafts = 0;
+        for (const row of rows) {
+            try {
+                const listing = await marketplaceService.createListing({
+                    cardId: row.card.id,
+                    cardData: row.card,
+                    price: row.price,
+                    condition: opts.condition,
+                    // Catalog art means no uploaded photos; the tile falls back
+                    // to card_data.images on its own.
+                    acceptsOffers: false,
+                });
+                if (listing?.status === 'draft') drafts++;
+                created++;
+                await updateCollectionItem(row.colId, row.item.id, {
+                    isListing: true,
+                    listingPrice: row.price,
+                    listingStatus: listing?.status === 'draft' ? 'draft' : 'active',
+                });
+            } catch (error) {
+                console.error('[BulkList] failed for', row.card.id, error);
+            }
+        }
+        await fetchGlobalListings();
+        if (created === 0) {
+            showToast(t('paymentFlow.listingFailed'), 'error');
+        } else if (drafts > 0) {
+            showToast(`${created}/${rows.length} · ${t('paymentFlow.listingDraftSaved')}`, 'success');
+        } else {
+            showToast(`${created}/${rows.length} · ${t('paymentFlow.listingPublished')}`, 'success');
+        }
+    };
+
     const handlePublishListing = async (listingData: any) => {
         if (!listingTarget) return;
 
@@ -1514,7 +1733,8 @@ export default function HomePage() {
                 grade: listingData.grade,
                 image_front_url: listingData.image_front_url,
                 image_back_url: listingData.image_back_url,
-                acceptsOffers: listingData.accepts_offers
+                acceptsOffers: listingData.accepts_offers,
+                quantity: listingData.quantity,
             });
             const isDraft = created?.status === 'draft';
 
@@ -2076,12 +2296,17 @@ export default function HomePage() {
                         </div>
                     </header>
 
-                    {/* Stalled Stripe onboarding: one tap back into payout setup */}
+                    {/* Stalled Stripe onboarding: one tap back into payout setup.
+                        The copy is the change that matters — it used to read as a
+                        blocker, and draft-first listings mean it never was one.
+                        Same wording as the desktop banner via lib/sellerState.ts. */}
                     {payoutSetupStalled && activeTab !== 'profile' && (
                         <div className="w-full px-6 py-2.5 bg-amber-400/10 border-b border-amber-400/20 flex items-center gap-2 z-40 shrink-0">
                             <button onClick={openPayoutSetup} className="flex-1 flex items-center gap-2.5 text-left min-w-0">
                                 <i className="fa-solid fa-circle-exclamation text-amber-400 text-sm shrink-0"></i>
-                                <span className="text-amber-200 text-xs font-bold leading-snug">{t('profile.payoutNudgeBanner')}</span>
+                                <span className="text-amber-200 text-xs font-bold leading-snug">
+                                    {t(sellerStateCopy(shellSellerState).bodyKey)}
+                                </span>
                                 <i className="fa-solid fa-chevron-right text-amber-400/70 text-[10px] shrink-0 ml-auto"></i>
                             </button>
                             <button
@@ -2130,6 +2355,10 @@ export default function HomePage() {
                         {activeTab === 'marketplace' && !showShopChooser && (
                             <Marketplace
                                 initialGame={marketGameFilter}
+                                // Only behind the beta grant, so the Live
+                                // section never appears for users who cannot
+                                // reach live shows.
+                                onLive={hasLiveBeta('live_streams') ? () => { window.location.assign('/live'); } : undefined}
                                 onSelectCard={setSelectedCard}
                                 onSelectListing={setSelectedListing}
                                 onSellerClick={(seller) => {
@@ -2169,6 +2398,8 @@ export default function HomePage() {
                         {activeTab === 'add' && <AddCard onScanClick={handleScanCard} onSelectCard={setSelectedCard} isScanning={isAiLoading} />}
                         {activeTab === 'vault' && (
                             <Vault
+                                repriceCardId={repriceCardId}
+                                onBulkListCards={handleBulkListCards}
                                 customCollections={customCollections}
                                 wishlist={wishlist}
                                 onUpdateCollections={(updatedCollections) => {
@@ -2288,7 +2519,7 @@ export default function HomePage() {
                     </button>
                 </nav>
 
-                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { sendScanFeedback(lastScanRef.current?.scanId, 'confirmed', card.id); setSelectedCard(card); setScanCandidates([]); }} onCancel={() => { sendScanFeedback(lastScanRef.current?.scanId, 'rejected'); setScanCandidates([]); }} />}
+                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { sendScanFeedback(lastScanRef.current?.scanId, 'confirmed', card.id); setSelectedCard(card); setScanCandidates([]); maybePromptSellAfterScan(card); }} onCancel={() => { sendScanFeedback(lastScanRef.current?.scanId, 'rejected'); setScanCandidates([]); }} />}
                 {selectedCard && (
                     <CardDetails
                         card={selectedCard}
@@ -2307,9 +2538,36 @@ export default function HomePage() {
                             setSelectedCard(null);
                         }}
                         listings={activeListings}
+                        onSellCard={(card) => {
+                            setSelectedCard(null);
+                            void (async () => {
+                                // Already in their vault: straight into the
+                                // listing form. Not yet: add it first, which is
+                                // a prerequisite for listing anyway, and the
+                                // vault-add path then offers the sell sheet.
+                                const started = await startListingForCard(card);
+                                if (!started) await handleAddToCollection(card);
+                            })();
+                        }}
                         onAddToCart={(item) => handleAddToCart(item)}
                         currency={currency}
                         exchangeRate={exchangeRate}
+                    />
+                )}
+
+                {/* "Sell it for ~฿X?" — only with no card detail open, so it
+                    never stacks on top of one. Both triggers (vault add, scan
+                    confirm) close the detail first. */}
+                {sellPrompt && !selectedCard && (
+                    <SellPromptSheet
+                        card={sellPrompt}
+                        suggested={suggestedSellPrice(sellPrompt.marketPrice)}
+                        onDismiss={() => setSellPrompt(null)}
+                        onList={() => {
+                            const card = sellPrompt;
+                            setSellPrompt(null);
+                            void startListingForCard(card);
+                        }}
                     />
                 )}
 

@@ -26,6 +26,12 @@ interface MarketplaceProps {
   listings?: MarketplaceListing[];   // used only for Explore price overlay, marketplace fetches its own
   currency?: string;
   exchangeRate?: number;
+  /**
+   * Opens Live Breaks. When omitted the Live section is not rendered at all —
+   * the shell only passes it behind the 'live_streams' beta grant, so a tab
+   * that leads nowhere never appears.
+   */
+  onLive?: () => void;
 }
 
 // OBO offers are behind a single build-time flag; when off, every tile shows
@@ -72,6 +78,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   currentUserId = null,
   currency = 'THB',
   exchangeRate = 1,
+  onLive,
 }) => {
   const { t, isThai } = useTranslation();
 
@@ -143,6 +150,12 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   }, [sheetOpen]);
 
   // ── Data state ──────────────────────────────────────────────────────────────
+  // Singles / Sealed. Not a filter chip inside the sheet but a top-level
+  // section: buying a sealed box and buying a single card are different
+  // errands, and burying sealed behind a filter is why exactly 1 of 222
+  // listings is sealed. 'Live' is the third section and is a navigation, not a
+  // listing query — it only appears when the shell passes onLive (beta grant).
+  const [section, setSection] = useState<'singles' | 'sealed'>('singles');
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -164,6 +177,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       search: debouncedSearch,
       language: selectedLanguage === 'all' ? undefined : selectedLanguage,
       game: selectedGame === 'all' ? undefined : selectedGame,
+      kind: section,
       minPrice: priceRange[0],
       maxPrice: priceRange[1],
       sort: sortOrder,
@@ -180,14 +194,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     }
     setHasMore(data.length === PAGE_SIZE);
     setIsLoading(false);
-  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder, offset]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder, offset]);
 
   // When filters change, reset and re-fetch
   useEffect(() => {
     setOffset(0);
     fetchListings(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder]);
 
   // ── Infinite scroll observer ─────────────────────────────────────────────────
   const observerRef = useRef<HTMLDivElement | null>(null);
@@ -251,6 +265,36 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Section switch: Singles / Sealed / Live. Above the filters because
+            it is not a filter — each is a different thing to shop for, and the
+            filter sheet's own state (game, language, price) applies within
+            whichever section is selected. */}
+        <div className="flex w-full bg-white/5 rounded-full p-1 border border-white/10 mb-3">
+          {([
+            { id: 'singles' as const, label: t('marketplace.sectionSingles') },
+            { id: 'sealed' as const, label: t('marketplace.sectionSealed') },
+          ]).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setSection(id)}
+              className={`flex-1 h-9 rounded-full text-[11px] font-black transition-all ${
+                section === id ? 'bg-brand-cyan text-brand-darker' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {onLive && (
+            <button
+              onClick={onLive}
+              className="flex-1 h-9 rounded-full text-[11px] font-black text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-red"></span>
+              {t('marketplace.sectionLive')}
+            </button>
+          )}
         </div>
 
         {/* Filter & Sort Bar */}
@@ -458,7 +502,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
               <h3 className={`text-white font-bold text-sm mb-1 ${isThai ? '' : 'uppercase tracking-widest'}`}>{t('marketplace.emptyTitle')}</h3>
-              <p className="text-slate-500 text-xs">{t('marketplace.emptyBody')}</p>
+              <p className="text-slate-500 text-xs">
+                {section === 'sealed' ? t('marketplace.sealedEmpty') : t('marketplace.emptyBody')}
+              </p>
               <button
                 onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
