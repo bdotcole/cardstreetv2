@@ -10,7 +10,9 @@
  *   if (gate instanceof NextResponse) return gate;
  *   const { user } = gate;  // inside the beta from here on
  *
- * Two layers, both server-side:
+ * Three layers:
+ *   0. lib/betaFeatures.ts DISABLED_FEATURES -- off in code for everyone,
+ *      checked before any DB read.
  *   1. Global kill switch: beta_feature_flags.enabled -- flipping it off
  *      disables the feature for EVERYONE (admins included) without a deploy.
  *      Money-touching routes must never skip this.
@@ -24,7 +26,7 @@ import { NextResponse } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { hasBeta, type BetaFeature } from '@/lib/betaFeatures';
+import { hasBeta, isFeatureDisabledInCode, type BetaFeature } from '@/lib/betaFeatures';
 
 export interface BetaContext {
   user: User;
@@ -32,6 +34,8 @@ export interface BetaContext {
 
 /** Is the feature globally enabled? Fails CLOSED on lookup errors. */
 export async function isFeatureEnabled(feature: BetaFeature): Promise<boolean> {
+  // A code-level off switch outranks the DB flag and saves the lookup.
+  if (isFeatureDisabledInCode(feature)) return false;
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('beta_feature_flags')

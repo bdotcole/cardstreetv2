@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isFeatureDisabledInCode } from '@/lib/betaFeatures';
 import ClipPlayer from '@/components/live/ClipPlayer';
 
 /**
@@ -42,6 +44,9 @@ const CLIP_COLS =
     'profiles!streams_seller_id_fkey(display_name))';
 
 async function loadClip(id: string): Promise<ClipRow | null> {
+    // Clips are windows into a live show, so they go dark with the rest of the
+    // Live section -- no stranded share link pointing at a 404 hub.
+    if (isFeatureDisabledInCode('live_streams')) return null;
     try {
         const admin = createAdminClient();
         const { data } = await admin
@@ -81,6 +86,7 @@ export async function generateMetadata({
 }
 
 export default async function ClipPage({ params }: { params: Promise<{ id: string }> }) {
+    if (isFeatureDisabledInCode('live_streams')) notFound();
     const { id } = await params;
     const clip = await loadClip(id);
 

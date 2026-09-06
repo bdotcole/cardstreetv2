@@ -36,7 +36,11 @@ export async function GET() {
         (anonFlags ?? []).map((f: { feature: string; enabled: boolean }) => [f.feature, f.enabled]),
       );
       const features: Record<string, boolean> = { ...empty };
-      for (const f of GA_FEATURES) features[f] = anonEnabled.get(f) === true;
+      // hasBeta (not a bare GA_FEATURES membership test) so a feature turned
+      // off in code stays hidden from logged-out visitors too.
+      for (const f of GA_FEATURES) {
+        features[f] = anonEnabled.get(f) === true && hasBeta(f, null, false);
+      }
       return NextResponse.json({ features }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const [{ data: profile }, { data: flags }] = await Promise.all([

@@ -51,22 +51,45 @@ export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams'
  */
 export const GA_FEATURES: readonly BetaFeature[] = ['live_streams', 'rewards'];
 
+/**
+ * Features switched OFF in code for EVERYONE -- admins and per-user grant
+ * holders included. This is a stronger lever than the beta_feature_flags
+ * kill switch (which an admin still passes on the client) and than removing a
+ * name from GA_FEATURES (which only revokes the blanket grant): a listed
+ * feature has no entry point anywhere and every server gate refuses it.
+ *
+ * - live_streams / live_broadcast (2026-09-04 founder call: hold off on breaks).
+ *   The whole Live section is hidden, so the Shop tab opens straight on the
+ *   Marketplace instead of the Live-vs-Marketplace chooser.
+ *
+ * Re-enabling is deleting the entry -- no migration, no per-user grant edits,
+ * and the DB kill-switch rows stay exactly as they were.
+ */
+export const DISABLED_FEATURES: readonly BetaFeature[] = ['live_streams', 'live_broadcast'];
+
+/** Is this feature switched off in code, ahead of any grant or DB lookup? */
+export function isFeatureDisabledInCode(feature: BetaFeature): boolean {
+  return (DISABLED_FEATURES as readonly string[]).includes(feature);
+}
+
 export function isBetaFeature(value: unknown): value is BetaFeature {
   return typeof value === 'string' && (BETA_FEATURES as readonly string[]).includes(value);
 }
 
 /**
  * Does this user pass the beta gate for a feature, given their cached grants?
- * `betaFeatures` is profiles.beta_features (may be null on old rows); admins
- * pass unconditionally, and GA features pass for everyone. The global kill
- * switch is enforced separately on the server -- a `true` here still yields
- * no access while the switch is off.
+ * `betaFeatures` is profiles.beta_features (may be null on old rows); a feature in
+ * DISABLED_FEATURES is refused outright, admins otherwise pass unconditionally,
+ * and GA features pass for everyone. The global kill switch is enforced
+ * separately on the server -- a `true` here still yields no access while the
+ * switch is off.
  */
 export function hasBeta(
   feature: BetaFeature,
   betaFeatures: readonly string[] | null | undefined,
   isAdmin: boolean,
 ): boolean {
+  if (isFeatureDisabledInCode(feature)) return false;
   if (isAdmin) return true;
   if ((GA_FEATURES as readonly string[]).includes(feature)) return true;
   return Array.isArray(betaFeatures) && betaFeatures.includes(feature);
