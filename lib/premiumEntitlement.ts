@@ -39,7 +39,19 @@ export async function syncPremiumFromSubscription(sub: Stripe.Subscription): Pro
   }
 
   const status = STATUS_MAP[sub.status] ?? 'expired';
-  const periodEndUnix = (sub as any).current_period_end as number | undefined;
+  // Stripe moved current_period_end off Subscription and onto the subscription
+  // ITEM. The SDK (stripe@20, pinned API 2026-02-25.clover) no longer declares
+  // it on Subscription at all, so the previous `(sub as any).current_period_end`
+  // read undefined on every event — entitledUntil stayed null and premium_until
+  // was never written. A paying subscriber was charged and granted nothing, via
+  // both the webhook and the /api/premium/finalize fallback (they share this
+  // function), and PremiumHub only renders Manage when premiumUntil is set, so
+  // they would also have had no in-app way to cancel.
+  //
+  // Keep this TYPED. The `as any` is what hid the breakage for the whole life
+  // of the feature; without it this would have been a build error the day the
+  // SDK was bumped.
+  const periodEndUnix = sub.items?.data?.[0]?.current_period_end;
   const periodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
 
   // Entitled while the paid period runs, grace-extended for retry windows.
