@@ -55,6 +55,10 @@ const statusLabel = (status: string, isThai: boolean): string => {
 const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) => {
   const { t, isThai } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
+  // Declared with the other hooks, not beside sharePayLink where it is used:
+  // this component returns early while loading, so a hook further down the body
+  // is a conditional hook and React refuses it.
+  const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,12 +131,9 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
   };
 
-  // Actions available depend on who made the pending row (actor_role) vs. the
-  // viewer's role on this offer (viewerRole), matching the server's state machine.
   // Native share sheet where it exists — the destination is LINE and the sheet
   // is how a phone gets there. Clipboard elsewhere, with the button confirming
   // the copy so a silent no-op is impossible to mistake for success.
-  const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
   const sharePayLink = async (offerId: string) => {
     const url = `${window.location.origin}/pay/${offerId}`;
     try {
@@ -152,6 +153,8 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
   };
 
+  // Actions available depend on who made the pending row (actor_role) vs. the
+  // viewer's role on this offer (viewerRole), matching the server's state machine.
   const renderActions = (o: Offer) => {
     const isViewerActor = o.viewerRole === o.actor_role;
     const busy = busyId === o.id;

@@ -1702,5 +1702,13 @@
         "photosRequired": "Photos of the actual card are required above ฿300 or below near-mint.",
         "quantity": "How many copies?",
         "quantityHint": "Creates one listing per copy, so each can sell separately."
+    },
+    "shipping": {
+        "note": "Shipping from ฿40 · Flash Express · 1-3 days",
+        "noteShort": "+ ฿40 shipping",
+        "sameSellerFree": "Add more from this seller — shipping stays",
+        "perSellerNote": "Shipping is charged once per seller.",
+        "checkoutSeller": "Checkout with",
+        "oneSellerAtATime": "One seller at a time — each ships separately."
     }
 }

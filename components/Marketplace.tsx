@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import ShippingNote from '@/components/ShippingNote';
+import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
@@ -443,6 +445,12 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       </p>
                     )}
                   </div>
+                  {/* Cheap cards only: below ฿200 the shipping is a large share
+                      of the total and finding it at the payment screen is a
+                      bait. Above that it is noise on a tile. */}
+                  {showShippingNoteOnTile(listing.price) && (
+                    <ShippingNote variant="short" className="block mt-0.5" />
+                  )}
 
                   {/* Seller */}
                   <div

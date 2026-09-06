@@ -42,6 +42,13 @@ const fmtTHB = (n: number): string => `฿${Math.round(n).toLocaleString()}`;
 const STATUS: Record<string, { tone: string; en: string; th: string }> = {
     pending: { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', en: 'Awaiting payment', th: 'รอการชำระเงิน' },
     pending_payment: { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', en: 'Awaiting payment', th: 'รอการชำระเงิน' },
+    // PromptPay settles asynchronously: the buyer has scanned and paid, and the
+    // bank confirmation lands seconds to minutes later via the webhook. Between
+    // those two moments "Awaiting payment" reads as "your payment failed" to
+    // someone who just watched their banking app succeed — the single worst
+    // thing to tell a first-time buyer on a rail we are actively pushing them
+    // toward. This is the state that says "we have it, we are checking".
+    payment_confirming: { tone: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/30', en: 'Confirming payment', th: 'กำลังยืนยันการชำระเงิน' },
     paid: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', en: 'Processing', th: 'กำลังดำเนินการ' },
     label_generated: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', en: 'Ready to ship', th: 'พร้อมจัดส่ง' },
     processing: { tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', en: 'Processing', th: 'กำลังดำเนินการ' },
@@ -57,12 +64,37 @@ const STATUS: Record<string, { tone: string; en: string; th: string }> = {
 // Statuses where a seller can still pull the shipping label.
 const SHIPPABLE = new Set(['paid', 'label_generated', 'processing', 'shipped', 'out_for_delivery']);
 
+/**
+ * Seller handling window, in days. Matches the Product JSON-LD's handlingTime
+ * (minValue 1, maxValue 2) on every card page — the promise a buyer may already
+ * have read in a search result, so the order page must not quote a different one.
+ */
+const HANDLING_DAYS = 2;
+
+/** "Seller ships by <date>", or null before payment (nothing to promise yet). */
+function shipByLabel(createdAt: string, status: string, isThai: boolean): string | null {
+    if (status === 'pending' || status === 'pending_payment' || status === 'cancelled') return null;
+    const t = Date.parse(createdAt);
+    if (!Number.isFinite(t)) return null;
+    return new Date(t + HANDLING_DAYS * 864e5).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short',
+    });
+}
+
 const shellClass = 'min-h-screen bg-brand-darker text-white p-6 pb-24';
 
 export default function OrderDetailContent({ order, role, orderId, signedOut }: Props) {
     const { isThai } = useTranslation();
     const [labelBusy, setLabelBusy] = useState(false);
     const [labelError, setLabelError] = useState<string | null>(null);
+    // Read in an effect, not during render: this page is server-rendered and a
+    // window read at render time would not match on hydration.
+    const [confirming, setConfirming] = useState(false);
+    React.useEffect(() => {
+        try {
+            setConfirming(new URLSearchParams(window.location.search).get('confirming') === '1');
+        } catch { /* no query string — the real status stands */ }
+    }, []);
 
     if (signedOut || !order) {
         return (
@@ -88,8 +120,19 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
         );
     }
 
-    const st = STATUS[order.status] ?? { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', en: order.status.replace(/_/g, ' '), th: order.status.replace(/_/g, ' ') };
+    // ?confirming=1 arrives straight from a PromptPay authorisation: the buyer
+    // has paid, the webhook has not landed yet, and the row still says
+    // pending_payment. Show the confirming state for that window instead of
+    // "Awaiting payment", which reads as a failure. Only an override of the
+    // LABEL — the order's real status is untouched, and a refresh after the
+    // webhook lands shows the true one.
+    const effectiveStatus =
+        confirming && (order.status === 'pending_payment' || order.status === 'pending')
+            ? 'payment_confirming'
+            : order.status;
+    const st = STATUS[effectiveStatus] ?? { tone: 'bg-slate-700/60 text-slate-300 border-slate-600', en: order.status.replace(/_/g, ' '), th: order.status.replace(/_/g, ' ') };
     const shortId = order.id.slice(0, 8).toUpperCase();
+    const shipBy = shipByLabel(order.createdAt, order.status, isThai);
     const isSeller = role === 'seller';
     const payout = order.totalAmount - order.platformFee;
     const buyerTotal = order.totalAmount + order.shippingFee;
@@ -111,8 +154,8 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     };
 
     const L = isThai
-        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์' }
-        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show' };
+        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า' }
+        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.' };
 
     return (
         <div className={shellClass}>
@@ -182,8 +225,22 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                     )}
                 </div>
 
+                {/* Ship-by date. A buyer who has just paid wants one thing: when
+                    does it move. Derived from the order's own created_at plus
+                    the handling window the Product JSON-LD already publishes
+                    (1-2 days), so the page and the structured data cannot
+                    disagree. Hidden once it has actually shipped, when the
+                    tracking below is the better answer. */}
+                {shipBy && !order.tracking && (
+                    <div className="glass rounded-2xl border border-white/10 p-5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{L.shipBy}</p>
+                        <p className="text-sm font-bold text-white">{shipBy}</p>
+                        <p className="text-[11px] text-slate-500 mt-1">{L.shipByHint}</p>
+                    </div>
+                )}
+
                 {/* Tracking */}
-                {order.tracking && (
+                {order.tracking ? (
                     <div className="glass rounded-2xl border border-white/10 p-5 flex items-center justify-between gap-4">
                         <div className="min-w-0">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{L.tracking}</p>
@@ -199,6 +256,14 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                                 {L.track} ↗
                             </a>
                         )}
+                    </div>
+                ) : (
+                    // Placeholder rather than nothing. An absent tracking block
+                    // reads as "this order has no tracking"; a waiting one says
+                    // the number is coming and where it will appear.
+                    <div className="glass rounded-2xl border border-dashed border-white/10 p-5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{L.tracking}</p>
+                        <p className="text-sm text-slate-400">{L.trackingPending}</p>
                     </div>
                 )}
 

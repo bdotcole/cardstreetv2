@@ -167,10 +167,18 @@ export default function DesktopCartDrawer() {
         }
     };
 
-    const handlePaymentSuccess = () => {
+    const handlePaymentSuccess = (details: { orderId?: string; processing?: boolean }) => {
         clear();
         close();
         showToast(t('desktop.cart.toastPaymentReceived'), 'success');
+        // The order itself, not the list — status, ship-by date and where
+        // tracking will appear. ?confirming=1 covers the PromptPay window where
+        // the row still reads pending_payment (see the mobile shell for the
+        // full reasoning). Falls back to the list when no id came back.
+        if (details?.orderId) {
+            router.push(`/orders/${details.orderId}${details.processing ? '?confirming=1' : ''}`);
+            return;
+        }
         router.push('/orders');
     };
 

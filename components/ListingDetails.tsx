@@ -5,6 +5,7 @@ import ReportModal from './ReportModal';
 import PriceHistoryChart from './PriceHistoryChart';
 import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import ShippingNote from '@/components/ShippingNote';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import OfferModal from './OfferModal';
@@ -269,6 +270,10 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
                                     {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
                                 </p>
+                                {/* Shipping, before checkout rather than at the
+                                    payment screen. On a cheap card it is most of
+                                    what the buyer pays. */}
+                                <ShippingNote className="mt-1.5" />
                             </div>
                             <div className="text-right">
                                 <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">

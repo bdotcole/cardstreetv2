@@ -9,7 +9,10 @@ interface CartDrawerProps {
     onClose: () => void;
     cart: CartItem[];
     onRemoveItem: (id: string) => void;
-    onCheckout: (shippingFee: number) => void;
+    /** `sellerId` narrows checkout to one seller's items — a TH PaymentIntent
+     *  belongs to a single connected account, so a mixed cart cannot go through
+     *  in one charge. Omitted for a single-seller cart. */
+    onCheckout: (shippingFee: number, sellerId?: string) => void;
     currencySymbol: string;
     exchangeRate?: number;
 }
@@ -26,6 +29,18 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     const { t } = useTranslation();
     const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
+
+    // Seller groups, in first-added order so the list does not reshuffle as
+    // items come and go.
+    const bySeller = useMemo(() => {
+        const groups = new Map<string, { sellerId: string; sellerName: string; items: typeof cart }>();
+        for (const item of cart) {
+            const id = item.sellerId || 'unknown';
+            if (!groups.has(id)) groups.set(id, { sellerId: id, sellerName: item.sellerName || '', items: [] });
+            groups.get(id)!.items.push(item);
+        }
+        return [...groups.values()];
+    }, [cart]);
 
     // Prices and shipping quotes are THB; convert for display only — checkout
     // still receives the raw THB shipping fee.
@@ -96,7 +111,30 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                             <p className="text-xs font-black uppercase tracking-widest">{t('cart.empty')}</p>
                         </div>
                     ) : (
-                        cart.map((item) => (
+                        bySeller.map(({ sellerId, sellerName, items }) => (
+                        <div key={sellerId} className="space-y-3">
+                            {/* Grouped by seller because the CHARGE is grouped by
+                                seller: shipping is billed once per seller_id, and
+                                a TH cart can only check out one seller at a time
+                                (a direct-charge PaymentIntent belongs to exactly
+                                one connected account). That constraint used to
+                                surface as a 400 at checkout; here it is just how
+                                the cart reads. */}
+                            {bySeller.length > 1 && (
+                                <div className="flex items-center justify-between gap-2 px-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 truncate">
+                                        {sellerName || t('cart.title')}
+                                    </p>
+                                    <span className="text-[10px] font-bold text-slate-600 shrink-0">{items.length}</span>
+                                </div>
+                            )}
+                            {/* The incentive, stated where it can act on the
+                                decision: one more card from THIS seller adds no
+                                shipping at all. */}
+                            <p className="text-[10px] text-brand-green font-bold px-1">
+                                {t('shipping.sameSellerFree')} {formatDisplayPrice(shippingFee / Math.max(1, bySeller.length))}
+                            </p>
+                            {items.map((item) => (
                             <div key={item.id} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
                                 <div className="w-16 h-20 bg-brand-darker rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
                                     <img src={getThumbnailUrl(item.card.images?.small || item.card.imageUrl)} loading="lazy" decoding="async" className="w-full h-full object-contain" alt={item.card.name} />
@@ -113,7 +151,23 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                     <i className="fa-solid fa-trash-can text-xs"></i>
                                 </button>
                             </div>
+                            ))}
+                            {bySeller.length > 1 && (
+                                <button
+                                    onClick={() => onCheckout(shippingFee, sellerId)}
+                                    disabled={isCalculatingShipping}
+                                    className="w-full h-11 rounded-xl bg-white/5 border border-brand-green/30 text-brand-green font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    {t('shipping.checkoutSeller')} {sellerName}
+                                </button>
+                            )}
+                        </div>
                         ))
+                    )}
+                    {bySeller.length > 1 && (
+                        <p className="text-[10px] text-amber-300/80 font-bold px-1 pt-2">
+                            {t('shipping.oneSellerAtATime')}
+                        </p>
                     )}
                 </div>
 

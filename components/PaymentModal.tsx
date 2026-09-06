@@ -68,7 +68,7 @@ interface PaymentModalProps {
      * from the offer server-side. The client never sends the offer price.
      */
     acceptedOfferId?: string;
-    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
 }
 
@@ -94,7 +94,7 @@ const PaymentElementForm: React.FC<{
     apiEndpoint?: string;
     extraData?: any;
     acceptedOfferId?: string;
-    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
     /** Fired once orders are created + inventory reserved (before the charge),
@@ -138,6 +138,8 @@ const PaymentElementForm: React.FC<{
     // retrying their own purchase. Reset naturally when Elements remounts (amount
     // /currency/account change) or the modal reopens.
     const retryRef = useRef<{ transferGroup?: string; clientSecret: string | null } | null>(null);
+    // First order id from /api/orders/checkout, for the post-payment redirect.
+    const firstOrderIdRef = useRef<string | undefined>(undefined);
 
     const handlePay = async () => {
         if (!stripe || !elements) {
@@ -203,6 +205,10 @@ const PaymentElementForm: React.FC<{
                     return;
                 }
                 transferGroup = orderData.transferGroup;
+                // Keep the first order id: after payment the buyer is sent to
+                // its order page, and this is the only point where the id is in
+                // hand on the client.
+                firstOrderIdRef.current = Array.isArray(orderData.orderIds) ? orderData.orderIds[0] : undefined;
                 // Orders now exist at `pending_payment` and the listings are
                 // reserved (`sold`). Remember the group so a retry reuses it, and
                 // tell the modal so it can release them if the buyer abandons.
@@ -311,11 +317,14 @@ const PaymentElementForm: React.FC<{
                     content_type: 'product',
                     num_items: items.length,
                 });
-                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current });
             } else if (status === 'processing') {
                 // PromptPay (and other async methods): the buyer has authorized;
                 // funds settle shortly and the webhook fulfills on succeeded.
-                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
+                // `processing` is passed through so the order page can say
+                // "confirming payment" rather than "awaiting payment" — the
+                // buyer has paid and their banking app says so.
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current, processing: true });
             } else {
                 onPaymentFailed('Payment not completed: ' + (status || 'unknown'));
             }

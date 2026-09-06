@@ -12,6 +12,8 @@ import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import OfferModal from '@/components/OfferModal';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import ShippingNote from '@/components/ShippingNote';
+import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
 import { formatTHB } from '@/lib/currency';
@@ -385,6 +387,8 @@ function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing
                         </p>
                     )}
                 </div>
+                {/* Cheap cards only — same threshold and reason as the mobile grid. */}
+                {showShippingNoteOnTile(listing.price) && <ShippingNote variant="short" className="block" />}
                 <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
                     <span className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden shrink-0">
                         {listing.seller?.avatar_url && (

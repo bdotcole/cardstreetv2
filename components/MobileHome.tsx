@@ -643,6 +643,16 @@ export default function HomePage() {
     // PaymentModal forwards it to /api/orders/checkout (server reads the
     // discounted price from the offer authoritatively). Null for normal buys.
     const [acceptedOfferId, setAcceptedOfferId] = useState<string | null>(null);
+    // Set when checking out one seller from a mixed cart (see handleCheckout).
+    // null = the whole cart.
+    const [checkoutSellerId, setCheckoutSellerId] = useState<string | null>(null);
+    // What the payment modal is actually charging for. A Buy Now / pay-offer
+    // flow replaces the cart outright, so those are unaffected; only a mixed
+    // cart narrows.
+    const checkoutItems = useMemo(
+        () => (checkoutSellerId ? cart.filter((i) => i.sellerId === checkoutSellerId) : cart),
+        [cart, checkoutSellerId],
+    );
     // Purchases are Thailand-only for now (shipping isn't configured elsewhere).
     // Warm the geo lookup on mount so the checkout gate is instant; the popup
     // below explains the restriction when a non-TH buyer tries to check out.
@@ -1173,7 +1183,14 @@ export default function HomePage() {
         }
     };
 
-    const handleCheckout = async () => {
+    /**
+     * `sellerId` checks out one seller's items from a mixed cart. A TH
+     * PaymentIntent is a direct charge on exactly one connected account, so
+     * /api/orders/checkout rejects a multi-seller cart with a 400 — this makes
+     * that a choice the buyer makes in the cart rather than an error they meet
+     * after committing. The other seller's items stay in the cart.
+     */
+    const handleCheckout = async (_shippingFee?: number, sellerId?: string) => {
         if (!(await ensureCanPurchase())) return;
 
         // Buyers must be authenticated — the /api/orders/checkout route requires
@@ -1186,14 +1203,22 @@ export default function HomePage() {
         if (!(await ensureBuyerProfileComplete({ type: 'checkout' }))) return;
 
         setIsCartOpen(false);
+
+        // Narrow to one seller when asked. Held in state rather than mutating
+        // the cart: the buyer's other items must survive this purchase, and a
+        // cancelled checkout has to leave the cart exactly as it was.
+        const payingItems = sellerId ? cart.filter((i) => i.sellerId === sellerId) : cart;
+        if (payingItems.length === 0) return;
+        setCheckoutSellerId(sellerId ?? null);
+
         // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
         // profile gates and the payment modal actually opens.
         trackMetaEvent('InitiateCheckout', {
-            value: cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
+            value: payingItems.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
             currency,
-            content_ids: cart.map(i => i.cardId || i.id).filter(Boolean),
+            content_ids: payingItems.map(i => i.cardId || i.id).filter(Boolean),
             content_type: 'product',
-            num_items: cart.length,
+            num_items: payingItems.length,
         });
         setIsPaymentModalOpen(true);
     };
@@ -1380,11 +1405,18 @@ export default function HomePage() {
         paymentMethod: string;
         paymentId: string;
         transferGroup?: string;
+        orderId?: string;
+        processing?: boolean;
     }) => {
         if (!user) return;
 
         setIsPaymentModalOpen(false);
-        setCart([]);
+        // Clear only what was actually paid for. A per-seller checkout out of a
+        // mixed cart leaves the other seller's items exactly where the buyer
+        // left them — emptying the whole cart here would silently discard cards
+        // they never bought and never removed.
+        setCart((prev) => (checkoutSellerId ? prev.filter((i) => i.sellerId !== checkoutSellerId) : []));
+        setCheckoutSellerId(null);
         // An offer purchase clears that offer from the actionable count, so drop
         // the badge cache instead of letting it sit stale for its TTL.
         if (acceptedOfferId) notifyOffersChanged();
@@ -1394,6 +1426,23 @@ export default function HomePage() {
         fetchGlobalListings();
         refreshCollections();
 
+        // Land on the order, not back on the marketplace. A buyer who has just
+        // paid — especially by PromptPay, where the charge settles after they
+        // leave the modal — needs to see status, a ship-by date and where
+        // tracking will appear. Dropping them on the grid with a toast gave a
+        // first-time buyer no evidence their money did anything.
+        //
+        // ?confirming=1 for the PromptPay case: the order is still
+        // pending_payment for a few seconds while the webhook lands, and
+        // "Awaiting payment" would read as failure to someone whose banking app
+        // just said success.
+        if (_details.orderId) {
+            const q = _details.processing ? '?confirming=1' : '';
+            // Full navigation, not a router push: /orders/<id> is a server page
+            // outside this shell, and it must render with the session cookie.
+            window.location.assign(`/orders/${_details.orderId}${q}`);
+            return;
+        }
         showToast(t('toast.paymentSuccess'), 'success');
     };
 
@@ -2724,11 +2773,11 @@ export default function HomePage() {
 
                 <PaymentModal
                     isOpen={isPaymentModalOpen}
-                    onClose={() => { setIsPaymentModalOpen(false); setAcceptedOfferId(null); }}
-                    amount={cart.reduce((s, i) => s + i.price, 0)}
+                    onClose={() => { setIsPaymentModalOpen(false); setAcceptedOfferId(null); setCheckoutSellerId(null); }}
+                    amount={checkoutItems.reduce((s, i) => s + i.price, 0)}
                     currency={currency}
                     exchangeRate={exchangeRate}
-                    items={cart}
+                    items={checkoutItems}
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
                     acceptedOfferId={acceptedOfferId ?? undefined}
