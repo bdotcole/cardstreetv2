@@ -9,7 +9,11 @@ import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile,
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS } from '@/constants';
 import LanguagePicker from '@/components/LanguagePicker';
 import RewardsChip from '@/components/rewards/RewardsChip';
-import RewardsHub from '@/components/rewards/RewardsHub';
+// Code-split: the shell used to statically import every tab and modal, so a
+// first open parsed the partner portal, rewards hub, buylist, and live chooser
+// for users who never touch them. Only Explore, Marketplace, Vault, Profile,
+// AddCard, and CardDetails stay in the initial bundle.
+const RewardsHub = dynamic(() => import('@/components/rewards/RewardsHub'), { ssr: false });
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import Explore from '@/components/Explore';
 import Marketplace from '@/components/Marketplace';
@@ -27,7 +31,7 @@ import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
-import OfferModal from '@/components/OfferModal';
+const OfferModal = dynamic(() => import('@/components/OfferModal'), { ssr: false });
 
 // Lazy-loaded — these carry heavy deps (Stripe Elements, camera plugin) we
 // don't need until the user actually opens checkout or the scanner.
@@ -62,14 +66,14 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
-import LiveShopChooser from '@/components/live/LiveShopChooser';
+const LiveShopChooser = dynamic(() => import('@/components/live/LiveShopChooser'), { ssr: false });
 
-import PartnerPortal from '@/components/PartnerPortal';
-import PartnerRequest from '@/components/PartnerRequest';
-import PartnerFinishSetup from '@/components/PartnerFinishSetup';
-import SellerProfile from '@/components/SellerProfile';
-import BuylistRequest from '@/components/BuylistRequest';
-import SellPromptSheet from '@/components/SellPromptSheet';
+const PartnerPortal = dynamic(() => import('@/components/PartnerPortal'), { ssr: false });
+const PartnerRequest = dynamic(() => import('@/components/PartnerRequest'), { ssr: false });
+const PartnerFinishSetup = dynamic(() => import('@/components/PartnerFinishSetup'), { ssr: false });
+const SellerProfile = dynamic(() => import('@/components/SellerProfile'), { ssr: false });
+const BuylistRequest = dynamic(() => import('@/components/BuylistRequest'), { ssr: false });
+const SellPromptSheet = dynamic(() => import('@/components/SellPromptSheet'), { ssr: false });
 import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
 import { resolveSellerState, sellerStateCopy, type StripeConnectStatus } from '@/lib/sellerState';
 

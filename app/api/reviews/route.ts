@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPublicSellers } from '@/lib/publicProfiles'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 // POST /api/reviews -- the buyer reviews a delivered or completed order on its own,
 // without re-confirming delivery. /api/orders/complete still accepts a review at
@@ -14,6 +15,9 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const rl = await checkRateLimit(`review:${user.id}:1d`, { windowSeconds: 86400, max: 20 })
+    if (!rl.allowed) return NextResponse.json({ error: 'Too many reviews today' }, { status: 429 })
 
     const body = await request.json().catch(() => ({}))
     const orderId = typeof body?.orderId === 'string' ? body.orderId : ''

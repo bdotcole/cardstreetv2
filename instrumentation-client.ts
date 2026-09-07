@@ -44,12 +44,21 @@ if (dsn) {
         ],
         integrations: [
             Sentry.browserTracingIntegration(),
-            Sentry.replayIntegration({
-                maskAllText: true,
-                blockAllMedia: true,
-            }),
         ],
     });
+
+    // Session replay only where there is a session to replay: the app shell at
+    // "/". The SEO pages (/card, /sets, the game landings) are served to phones
+    // straight from search and were carrying ~530 KB of replay recorder in the
+    // root bundle for sessions that almost never trigger it. Loaded lazily from
+    // Sentry's CDN so it never sits in the initial bundle at all.
+    if (typeof window !== 'undefined' && window.location.pathname === '/') {
+        Sentry.lazyLoadIntegration('replayIntegration')
+            .then((replayIntegration) => {
+                Sentry.addIntegration(replayIntegration({ maskAllText: true, blockAllMedia: true }));
+            })
+            .catch(() => { /* replay is a diagnostic nicety, not a dependency */ });
+    }
 }
 
 // Surfaces client-side router transition errors in Sentry. Required hook

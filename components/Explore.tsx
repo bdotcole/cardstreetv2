@@ -294,6 +294,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   // Sort cards based on option
   const sortedCards = useMemo(() => {
     const sorted = [...cards];
+    // Search results arrive ranked by relevance (pokemonService scoring: exact
+    // name, popularity, live listings). The default number sort belongs to set
+    // browsing and would bury the best match under lower collector numbers.
+    if (hasSearchResults && sortOption === 'number') return sorted;
     const getCardNum = (c: Card) => parseInt(c.number.split('/')[0].replace(/[^0-9]/g, '')) || 999999;
     switch (sortOption) {
       case 'priceHigh': return sorted.sort((a, b) => (b.marketPrice || 0) - (a.marketPrice || 0));
@@ -306,7 +310,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       });
       default: return sorted.sort((a, b) => getCardNum(a) - getCardNum(b));
     }
-  }, [cards, sortOption]);
+  }, [cards, sortOption, hasSearchResults]);
 
   // Virtualizer setup
   const rowVirtualizer = useVirtualizer({

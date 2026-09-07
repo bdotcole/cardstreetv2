@@ -7,6 +7,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
+import { pokemonService } from '@/services/pokemonService';
 import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -158,6 +159,21 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   // listings is sealed. 'Live' is the third section and is a navigation, not a
   // listing query — it only appears when the shell passes onLive (beta grant).
   const [section, setSection] = useState<'singles' | 'sealed'>('singles');
+
+  // Demand capture on a dead end: when a search finds no listings, show the
+  // catalog cards it matched so the buyer can open one, wishlist it (which now
+  // alerts them when a seller lists it), or ask for it. Before this, "Signal
+  // Lost" plus a reset button was the whole answer and the intent evaporated.
+  const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
+  useEffect(() => {
+    const q = debouncedSearch.trim();
+    if (q.length < 3 || section === 'sealed') { setCatalogMatches([]); return; }
+    let cancelled = false;
+    pokemonService.searchCards(q, false, undefined, 'all')
+      .then((cards) => { if (!cancelled) setCatalogMatches(cards.slice(0, 3)); })
+      .catch(() => { if (!cancelled) setCatalogMatches([]); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch, section]);
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -513,6 +529,37 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <p className="text-slate-500 text-xs">
                 {section === 'sealed' ? t('marketplace.sealedEmpty') : t('marketplace.emptyBody')}
               </p>
+              {catalogMatches.length > 0 && section !== 'sealed' && (
+                <div className="mt-6 text-left max-w-sm mx-auto">
+                  <p className={`text-[10px] text-slate-400 font-black mb-1 ${isThai ? '' : 'uppercase tracking-[0.2em]'}`}>
+                    {t('searchFallback.title').replace('{q}', debouncedSearch.trim())}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-3">{t('searchFallback.hint')}</p>
+                  <div className="space-y-2">
+                    {catalogMatches.map((card) => (
+                      <button
+                        key={card.id}
+                        onClick={() => onSelectCard(card)}
+                        className="w-full flex items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 active:scale-[0.99] transition-all text-left"
+                      >
+                        <span className="w-10 h-14 rounded-md overflow-hidden bg-brand-darker flex-shrink-0">
+                          {card.images?.small && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={getThumbnailUrl(card.images.small)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-white text-sm font-bold truncate">{card.name}</span>
+                          <span className="block text-slate-500 text-[11px] truncate">
+                            {card.set}{card.marketPrice ? ` · ฿${Math.round(card.marketPrice).toLocaleString()}` : ''}
+                          </span>
+                        </span>
+                        <span className={`text-brand-cyan text-[10px] font-black ${isThai ? '' : 'uppercase tracking-widest'}`}>{t('searchFallback.viewCard')}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"

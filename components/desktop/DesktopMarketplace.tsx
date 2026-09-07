@@ -5,7 +5,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
-import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
+import { pokemonService } from '@/services/pokemonService';
+import type { Card } from '@/types';
+import { getOptimizedImageUrl, getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
@@ -110,6 +112,20 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
+
+    // Demand capture on a dead end: a /?q= search with no listings shows the
+    // catalog cards it matched, each linking to its card page where the
+    // visitor can wishlist it (alerted when a seller lists) or sell their own.
+    const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
+    useEffect(() => {
+        const term = q.trim();
+        if (term.length < 3) { setCatalogMatches([]); return; }
+        let cancelled = false;
+        pokemonService.searchCards(term, false, undefined, 'all')
+            .then((cards) => { if (!cancelled) setCatalogMatches(cards.slice(0, 4)); })
+            .catch(() => { if (!cancelled) setCatalogMatches([]); });
+        return () => { cancelled = true; };
+    }, [q]);
 
     useEffect(() => {
         let cancelled = false;
@@ -250,6 +266,35 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     </div>
                     <h2 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.noListingsTitle')}</h2>
                     <p className="text-slate-500 text-sm">{t('desktop.noListingsDesc')}</p>
+                    {catalogMatches.length > 0 && (
+                        <div className="mt-8 text-left max-w-md mx-auto">
+                            <p className="text-slate-300 text-sm font-bold mb-1">{t('searchFallback.title').replace('{q}', q.trim())}</p>
+                            <p className="text-slate-500 text-xs mb-3">{t('searchFallback.hint')}</p>
+                            <div className="space-y-2">
+                                {catalogMatches.map((card) => (
+                                    <Link
+                                        key={card.id}
+                                        href={`${pathPrefix}/card/${card.id}`}
+                                        className="flex items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                                    >
+                                        <span className="w-10 h-14 rounded-md overflow-hidden bg-brand-darker flex-shrink-0">
+                                            {card.images?.small && (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={getThumbnailUrl(card.images.small)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                            )}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-white text-sm font-bold truncate">{card.name}</span>
+                                            <span className="block text-slate-500 text-[11px] truncate">
+                                                {card.set}{card.marketPrice ? ` · ${formatTHB(card.marketPrice)}` : ''}
+                                            </span>
+                                        </span>
+                                        <span className="text-brand-cyan text-[10px] font-black uppercase tracking-widest">{t('searchFallback.viewCard')}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <>

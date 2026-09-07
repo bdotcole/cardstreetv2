@@ -325,8 +325,16 @@ export const pokemonService = {
 
             // 1. Fetch all set names to extract set from query
             if (!allSetsDbCache) {
-                const { data } = await supabase.from('pokemon_sets').select('id, name');
-                allSetsDbCache = data || [];
+                // Page past PostgREST's 1,000-row default: the table holds ~1,364
+                // sets, and an unpaged fetch silently dropped an arbitrary ~364 of
+                // them from set-code matching for the whole session.
+                const all: { id: string; name: string }[] = [];
+                for (let from = 0; ; from += 1000) {
+                    const { data } = await supabase.from('pokemon_sets').select('id, name').order('id').range(from, from + 999);
+                    all.push(...(data || []));
+                    if (!data || data.length < 1000) break;
+                }
+                allSetsDbCache = all;
             }
             
             const matchedSetIds: string[] = [];
@@ -355,9 +363,11 @@ export const pokemonService = {
                         break;
                     }
                     
-                    // Substring match with word boundary on Set Name
+                    // Substring match with word boundary on Set Name. JavaScript's
+                    // \b only knows [A-Za-z0-9_], so a Thai set name could never
+                    // match; use a Unicode letter/number boundary instead.
                     const escapedSetName = setNameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const nameRegex = new RegExp(`\\b${escapedSetName}\\b`, 'i');
+                    const nameRegex = new RegExp(`(?<![\\p{L}\\p{N}])${escapedSetName}(?![\\p{L}\\p{N}])`, 'iu');
                     if (nameRegex.test(cleanQuery)) {
                         matchedSetIds.push(set.id);
                         queryWithoutSet = cleanQuery.replace(nameRegex, '').trim();
@@ -455,7 +465,9 @@ export const pokemonService = {
                 return { rows: Array.from(seen.values()), error: seen.size === 0 ? results[0].error : null };
             };
 
-            let { rows: cards, error } = await runFetches(orGroups, true);
+            const firstPass = await runFetches(orGroups, true);
+            let cards = firstPass.rows;
+            const error = firstPass.error;
 
             // A narrowed pass can zero out on a false positive: a matched "set"
             // can be a common word doubling as a set name ("Dragon" is Pokemon
@@ -475,16 +487,35 @@ export const pokemonService = {
                 return [];
             }
 
-            // Get search popularity data
+            // Typo tolerance: when the exact substring pass finds almost nothing,
+            // ask pg_trgm for the nearest names (search_cards_fuzzy, migration
+            // 20260907) and fetch those rows through the same scoped query so
+            // embeds and mapping stay identical. Fails soft while the RPC is not
+            // installed. "charizrd", double spaces, and Thai spelling variants
+            // used to dead-end here.
+            if (cards.length < 3 && effectiveNameQuery.length >= 4) {
+                const { data: fuzzy } = await supabase.rpc('search_cards_fuzzy', { p_query: effectiveNameQuery, p_limit: 30 });
+                const have = new Set(cards.map(c => c.id));
+                const fuzzyIds = ((fuzzy || []) as { id: string }[]).map(r => r.id).filter(id => !have.has(id));
+                if (fuzzyIds.length > 0) {
+                    const { data: fuzzyRows } = await newScopedQuery().in('id', fuzzyIds).limit(30);
+                    if (fuzzyRows && fuzzyRows.length) cards = cards.concat(fuzzyRows);
+                }
+            }
+
+            // Search popularity plus live inventory for the candidate set. The
+            // inventory lookup is what lets a print that is actually for sale
+            // outrank its unpurchasable siblings (and survive the top-30 cut).
             const cardIds = (cards || []).map(c => c.id);
-            const { data: popularityData } = await supabase
-                .from('search_popularity')
-                .select('card_id, search_count')
-                .in('card_id', cardIds);
+            const [{ data: popularityData }, { data: listedRows }] = await Promise.all([
+                supabase.from('search_popularity').select('card_id, search_count').in('card_id', cardIds),
+                supabase.from('listings').select('card_id').eq('status', 'active').in('card_id', cardIds),
+            ]);
 
             const popularityMap = new Map(
                 (popularityData || []).map(p => [p.card_id, p.search_count])
             );
+            const listedSet = new Set(((listedRows || []) as { card_id: string }[]).map(r => r.card_id));
 
             // Score a card against a query string; shared by the main pass and
             // the cross-language alias pass below.
@@ -538,6 +569,9 @@ export const pokemonService = {
                 const searchCount = popularityMap.get(card.id) || 0;
                 const popularityBoost = Math.min(50, Math.floor(searchCount / 10)); // Max +50 points
                 score += popularityBoost;
+
+                // A print with a live listing is the one the searcher can act on.
+                if (listedSet.has(card.id)) score += 25;
 
                 // Pokemon-specific ranking boosts only apply to Pokemon rows.
                 if ((searchAllGames ? card.game : game) === 'pokemon') {
@@ -624,7 +658,10 @@ export const pokemonService = {
             // keystroke-search doesn't fan out 10 writes site-wide at scale.
             if (topResults.length > 0) {
                 topResults.slice(0, 3).forEach(card => {
-                    void supabase.rpc('increment_search_popularity', { p_card_id: card.id });
+                    // supabase-js builders only send the request when awaited or
+                    // .then()-ed; `void` discarded the thenable unexecuted, so the
+                    // popularity table stayed at zero rows for months.
+                    supabase.rpc('increment_search_popularity', { p_card_id: card.id }).then(() => undefined, () => undefined);
                 });
             }
 

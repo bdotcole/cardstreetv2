@@ -126,14 +126,48 @@ interface ScanDiag {
   };
 }
 
+// Hard deadline per Gemini call. Without one, a hung request held the scan open
+// for the route's full 300 s: 4% of scans ran past 30 s and the worst took 272 s,
+// which is what dragged the average from a ~6 s median to 10-14 s. On timeout the
+// call throws (not retried) and the tier falls through to the next one.
+const GEMINI_CALL_TIMEOUT_MS = 12_000;
+
+// Deadline plumbing shared by every scan call. Do NOT add thinkingConfig
+// { thinkingBudget: 0 } here: it was measured on 2026-09-07 (8 random Thai cards,
+// same prompt, same images) and Flash with thinking off returned Gemini 504
+// timeouts on 7 of 8 calls at ~10 s and got the one answer wrong, while the
+// default scored 7/8 language, 7/8 number, 4/8 set at a 3.9 s median. The
+// tail this deadline cuts is the occasional hung request, not the thinking.
+export function geminiScanConfig(_modelName: string, signal: AbortSignal): Record<string, unknown> {
+  return {
+    abortSignal: signal,
+    httpOptions: { timeout: GEMINI_CALL_TIMEOUT_MS },
+  };
+}
+
 // Retry a Gemini call once on retryable failures (rate limit, transient 5xx,
 // network). A 429 means "wait a moment", not "give up" — before this existed,
-// transient Gemini failures cascaded into the paid Google Lens fallback.
-async function geminiWithRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
+// transient Gemini failures cascaded into the paid Google Lens fallback. Each
+// attempt runs under its own GEMINI_CALL_TIMEOUT_MS abort signal.
+async function geminiWithRetry<T>(label: string, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const attempt = async () => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), GEMINI_CALL_TIMEOUT_MS);
+    try {
+      return await call(ac.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   try {
-    return await call();
+    return await attempt();
   } catch (e: any) {
     const msg = String(e?.message ?? e);
+    const aborted = e?.name === 'AbortError' || /abort/i.test(msg);
+    if (aborted) {
+      console.warn(`[ScannerService] ${label} timed out after ${GEMINI_CALL_TIMEOUT_MS} ms, falling through`);
+      throw new Error(`${label} timed out after ${GEMINI_CALL_TIMEOUT_MS} ms`);
+    }
     const status = typeof e?.status === 'number' ? e.status : undefined;
     const retryable =
       status === 429 ||
@@ -142,7 +176,7 @@ async function geminiWithRetry<T>(label: string, call: () => Promise<T>): Promis
     if (!retryable) throw e;
     console.warn(`[ScannerService] ${label} retryable failure, retrying once:`, msg);
     await new Promise((r) => setTimeout(r, 800));
-    return call();
+    return attempt();
   }
 }
 
@@ -759,7 +793,7 @@ export const scannerService = {
     }
 
     try {
-      const response = await geminiWithRetry('Flash extraction', () => ai.models.generateContent({
+      const response = await geminiWithRetry('Flash extraction', (signal) => ai.models.generateContent({
         // Flash (not Pro). Diagnostic on 10 random Thai cards: Flash hit 10/10 on
         // language, 10/10 on card number, 5/10 on set code (the misses are OCR
         // confusion of "8s" with "bs"/"B5" — handled by tier 1c which uses the
@@ -795,6 +829,7 @@ Return JSON only. Keep values terse — single short string per field.`,
           },
         ],
         config: {
+          ...geminiScanConfig('gemini-2.5-flash', signal),
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
@@ -867,7 +902,7 @@ Return JSON only. Keep values terse — single short string per field.`,
 
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
-    const response = await geminiWithRetry('Flash image scan', () => ai.models.generateContent({
+    const response = await geminiWithRetry('Flash image scan', (signal) => ai.models.generateContent({
       model: modelName,
       contents: [
         {
@@ -887,6 +922,7 @@ CRITICAL INSTRUCTIONS:
         }
       ],
       config: {
+        ...geminiScanConfig(modelName, signal),
         responseMimeType: "application/json",
         responseSchema: scanResultSchema(),
       }
@@ -899,7 +935,7 @@ CRITICAL INSTRUCTIONS:
     const ai = getAi();
     if (!ai) throw new Error("Gemini API key not configured");
 
-    const response = await geminiWithRetry('Flash text scan', () => ai.models.generateContent({
+    const response = await geminiWithRetry('Flash text scan', (signal) => ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
@@ -913,6 +949,7 @@ CRITICAL INSTRUCTIONS:
         }
       ],
       config: {
+        ...geminiScanConfig('gemini-2.5-flash', signal),
         responseMimeType: "application/json",
         responseSchema: scanResultSchema(),
       }

@@ -11,6 +11,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // duplicate same-day rows are harmless.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// One sequential query per collector: at a few thousand collectors this ran past
+// the default function limit and, because the insert came last, lost the whole
+// day. Now it inserts as it goes and stops cleanly at the time budget.
+export const maxDuration = 300;
+const TIME_BUDGET_MS = 250_000;
+const INSERT_BATCH = 200;
 
 interface SnapshotRow {
     user_id: string;
@@ -43,12 +49,23 @@ export async function GET(request: NextRequest) {
         }
 
         const timestamp = new Date().toISOString();
-        const rows: SnapshotRow[] = [];
+        const started = Date.now();
+        let rows: SnapshotRow[] = [];
+        let inserted = 0;
         let errors = 0;
+        let truncated = false;
+        const flush = async () => {
+            if (rows.length === 0) return;
+            const { error: insertErr } = await admin.from('portfolio_snapshots').insert(rows);
+            if (insertErr) throw insertErr;
+            inserted += rows.length;
+            rows = [];
+        };
 
         // Aggregate per user so each item query stays well under the 1k-row default cap
         // (a single global select would silently truncate on large collections).
         for (const [userId, collectionIds] of collectionsByUser) {
+            if (Date.now() - started > TIME_BUDGET_MS) { truncated = true; break; }
             const { data: items, error: itemsErr } = await admin
                 .from('collection_items')
                 .select('quantity, card_data->marketPrice')
@@ -76,18 +93,16 @@ export async function GET(request: NextRequest) {
                     item_count: itemCount,
                     timestamp,
                 });
+                if (rows.length >= INSERT_BATCH) await flush();
             }
         }
-
-        if (rows.length > 0) {
-            const { error: insertErr } = await admin.from('portfolio_snapshots').insert(rows);
-            if (insertErr) throw insertErr;
-        }
+        await flush();
 
         return NextResponse.json({
             success: true,
-            snapshotsCreated: rows.length,
+            snapshotsCreated: inserted,
             errors,
+            truncated,
             timestamp,
         });
     } catch (error: any) {

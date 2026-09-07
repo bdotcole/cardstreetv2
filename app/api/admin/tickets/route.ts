@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
+import { checkRateLimit } from '@/lib/rateLimit'
 import { NextResponse } from 'next/server'
 
 // GET /api/admin/tickets — admin only
@@ -40,6 +41,12 @@ export async function POST(request: Request) {
     const { data: { user }, error: authErr } = await cookieSupabase.auth.getUser()
     if (authErr || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Ticket creation pages the founder; one account must not be able to flood it.
+    const rl = await checkRateLimit(`ticket:${user.id}:1d`, { windowSeconds: 86400, max: 5 })
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many tickets today. Reply on an existing ticket instead.' }, { status: 429 })
     }
 
     const body = await request.json().catch(() => ({}))

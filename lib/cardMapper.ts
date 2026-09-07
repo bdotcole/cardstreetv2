@@ -130,6 +130,23 @@ export function pickDisplayMarketValue(marketValues: any): any | null {
   return rows[0] ?? null;
 }
 
+// The one place a catalog row becomes a THB market price. Used by the mapper
+// below and by app/api/cron/refresh-listing-snapshots, which rewrites the price
+// frozen into each listing's card snapshot so deal badges track the live market.
+// A row is any object carrying `market_values` (per-condition rows) and either
+// `raw_data.tcgplayer` or a projected top-level `tcgplayer` slice.
+export function computeMarketThb(supabaseCard: any): { marketThb: number; lastUpdated: string } {
+  const rawData = supabaseCard.raw_data || {};
+  const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
+  const marketValueData = pickDisplayMarketValue(supabaseCard.market_values);
+  if (marketValueData && marketValueData.market_avg > 0) {
+    let avg = Number(marketValueData.market_avg);
+    if (marketValueData.currency === 'USD') avg = avg * EXCHANGE_RATE;
+    return { marketThb: avg, lastUpdated: marketValueData.last_updated || '' };
+  }
+  return { marketThb: Math.round(tcgplayerMarketUsd(tcgData) * EXCHANGE_RATE), lastUpdated: '' };
+}
+
 export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // Pokemon-specific display rules (Thai rarity codes, Thai set-name aliases) must
   // not touch other games. They are also implicitly language-gated, but gate on
@@ -141,19 +158,7 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // whole raw_data blob, so the slice arrives as a top-level key.
   const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
 
-  const marketValueData = pickDisplayMarketValue(supabaseCard.market_values);
-
-  let marketThb = 0;
-  let lastUpdated = '';
-  if (marketValueData && marketValueData.market_avg > 0) {
-    let avg = marketValueData.market_avg;
-    if (marketValueData.currency === 'USD') avg = avg * EXCHANGE_RATE;
-    marketThb = avg;
-    lastUpdated = marketValueData.last_updated;
-  } else {
-    const marketUsd = tcgplayerMarketUsd(tcgData);
-    marketThb = Math.round(marketUsd * EXCHANGE_RATE);
-  }
+  const { marketThb, lastUpdated } = computeMarketThb(supabaseCard);
 
   let imageUrl = '';
   let imageSmall = '';

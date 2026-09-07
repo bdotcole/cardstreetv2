@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/rateLimit'
 import { NextResponse } from 'next/server'
 
 // POST /api/tickets/[id]/messages — user replies on their own ticket.
@@ -24,6 +25,10 @@ export async function POST(
     }
     if (message.length > 5000) {
         return NextResponse.json({ error: 'message too long' }, { status: 400 })
+    }
+    const rl = await checkRateLimit(`ticketmsg:${user.id}:1h`, { windowSeconds: 3600, max: 30 })
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many messages. Please wait a while.' }, { status: 429 })
     }
 
     const supabase = createAdminClient()

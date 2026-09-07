@@ -67,6 +67,14 @@
             "schedule": "45 3 * * *"
         },
         {
+            "path": "/api/cron/refresh-listing-snapshots",
+            "schedule": "15 4 * * *"
+        },
+        {
+            "path": "/api/cron/ship-reminders",
+            "schedule": "0 */6 * * *"
+        },
+        {
             "path": "/api/cron/recompute-internal-prices",
             "schedule": "0 2 * * 1"
         },

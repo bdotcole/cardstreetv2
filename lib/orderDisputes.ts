@@ -45,3 +45,18 @@ export function canReportOrder(
 export function canReviewOrder(order: { status: string }): boolean {
     return REVIEWABLE_STATUSES.includes(order.status);
 }
+
+/**
+ * Seller handling window, in days. Matches the Product JSON-LD's handlingTime
+ * (minValue 1, maxValue 2) on every card page, so the promise a buyer read in a
+ * search result, the ship-by date on the order page, and the seller's reminders
+ * all quote the same number.
+ */
+export const HANDLING_DAYS = 2;
+
+/** The date a paid order should have left the seller, or null for an unparseable timestamp. */
+export function shipByDate(createdAt: string | null | undefined): Date | null {
+    const t = createdAt ? Date.parse(createdAt) : NaN;
+    if (!Number.isFinite(t)) return null;
+    return new Date(t + HANDLING_DAYS * 864e5);
+}

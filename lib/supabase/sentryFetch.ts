@@ -41,6 +41,15 @@ const isConsumedAuthLink = (urlStr: string, status: number, body: unknown): bool
 const isClientOffline = (): boolean =>
     typeof navigator !== 'undefined' && navigator.onLine === false;
 
+// Ordinary "no such row / no such object" answers, not faults. PostgREST returns
+// 406 (PGRST116) when .single() finds zero rows, which several profile and
+// listing lookups do on purpose on every page load, and Storage returns 404 for
+// an image that was never uploaded. These were three of the Sentry envelopes on
+// a cold homepage load and buried real errors under quota noise.
+const isExpectedDataMiss = (url: string, status: number): boolean =>
+    (url.includes('/rest/v1/') && status === 406) ||
+    (url.includes('/storage/v1/') && (status === 404 || status === 400));
+
 export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     try {
         const response = await fetch(input, init);
@@ -48,7 +57,7 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
         if (!response.ok) {
             const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
             
-            if (urlStr.includes('.supabase.co') && !isExpectedAuthControlFlow(urlStr, response.status)) {
+            if (urlStr.includes('.supabase.co') && !isExpectedAuthControlFlow(urlStr, response.status) && !isExpectedDataMiss(urlStr, response.status)) {
                 const clonedResp = response.clone();
                 try {
                     const errorData = await clonedResp.json();

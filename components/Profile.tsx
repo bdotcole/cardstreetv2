@@ -28,7 +28,7 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { groupByTransferGroup } from '@/lib/orderGroups';
-import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
@@ -2008,6 +2008,19 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
                           {t('profile.labelBeingPrepared')}
                         </div>
                       )}
+                      {/* The handling promise the buyer already read on the card
+                          page; turns red once it has passed. Reminders go out
+                          at 24h and 48h (app/api/cron/ship-reminders). */}
+                      {!isBreakOrder && !isDeliveredCard && ['paid', 'label_generated', 'processing'].includes(shipment.status) && (() => {
+                        const due = shipByDate(shipment.created_at);
+                        if (!due) return null;
+                        const overdue = due.getTime() < Date.now();
+                        return (
+                          <p className={`text-xs font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                            {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' })}
+                          </p>
+                        );
+                      })()}
                       {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
                         <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
                           {t('profile.manualLabelRequired')}

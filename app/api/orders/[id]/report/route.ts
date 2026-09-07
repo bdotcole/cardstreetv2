@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendOrderDisputeAlert } from '@/lib/courier';
 import { DISPUTE_REASONS, REPORT_WINDOW_DAYS, canReportOrder, type DisputeReason } from '@/lib/orderDisputes';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 /**
  * POST /api/orders/[id]/report -- the buyer's "report a problem" path behind the
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const rl = await checkRateLimit(`report:${user.id}:1d`, { windowSeconds: 86400, max: 10 });
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many reports today', code: 'RATE_LIMITED' }, { status: 429 });
     }
 
     const body = await request.json().catch(() => ({}));

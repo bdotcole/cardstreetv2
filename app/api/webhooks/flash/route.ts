@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { verifyWebhookSignature, mapFlashStateToStatus } from '@/lib/flashExpress'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 /**
  * Flash Express Webhook Receiver
@@ -48,6 +49,32 @@ export async function POST(request: NextRequest) {
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
+
+        // Replay guard. Flash's signature covers only (mchId, nonceStr), so a
+        // captured delivery could be resent with a different pno and state and
+        // still verify. A nonce is accepted once: after a delivery has been fully
+        // processed its nonce is recorded (see the success return below) and any
+        // later delivery carrying it is acknowledged with 200, so Flash does not
+        // retry, but changes nothing. Recording happens only on success, so a
+        // legitimate Flash retry after one of our 500s is not locked out.
+        const nonce = typeof payload.nonceStr === 'string' ? payload.nonceStr.trim() : ''
+        const nonceKey = nonce ? `flash:nonce:${nonce}` : null
+        if (nonceKey) {
+            const { data: seen } = await supabase
+                .from('rate_limits')
+                .select('count, window_start')
+                .eq('key', nonceKey)
+                .maybeSingle()
+            const fresh = seen?.window_start ? Date.now() - Date.parse(seen.window_start) < 86400e3 : false
+            if (seen && fresh && Number(seen.count) > 0) {
+                console.warn('[FlashWebhook] Replayed nonce ignored:', nonce)
+                Sentry.captureMessage(`Flash webhook replay ignored (nonce ${nonce})`, { level: 'warning' })
+                return NextResponse.json({ errorCode: '1', state: 'success' })
+            }
+        }
+        const rememberNonce = async () => {
+            if (nonceKey) await checkRateLimit(nonceKey, { windowSeconds: 86400, max: Number.MAX_SAFE_INTEGER })
+        }
 
         // The event rides in `data` — an object when the body was JSON, a
         // JSON string when it was form-encoded — or in a `dataJson` string.
@@ -230,6 +257,7 @@ export async function POST(request: NextRequest) {
         const freightOrder = orders.find(o => Number(o.shipping_fee || 0) > 0) ?? orders[0]
         await reconcileFreight(supabase, freightOrder, data)
 
+        await rememberNonce()
         return NextResponse.json({ errorCode: '1', state: 'success' })
 
     } catch (error: any) {

@@ -20,7 +20,9 @@ export async function POST(req: Request) {
 
   // Each grade is a paid Gemini vision call. Premium-gated but otherwise
   // uncapped — bound per user so one subscriber can't run up unbounded spend.
-  const rl = await checkRateLimit(`grade:${user.id}:1d`, { windowSeconds: 86400, max: 20 });
+  // Fail closed: this is a paid Gemini vision call, so a limiter outage must not
+  // silently remove the cap (the scan route's global window does the same).
+  const rl = await checkRateLimit(`grade:${user.id}:1d`, { windowSeconds: 86400, max: 20, failClosed: true });
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Daily grading limit reached. Please try again tomorrow.' },

@@ -1739,6 +1739,13 @@
         "guarantee": "CardStreet Guarantee: if it does not arrive or is not as described, we make it right.",
         "windowNote": "You can report a problem up to 7 days after delivery.",
         "cancel": "Cancel",
-        "sending": "Sending…"
+        "sending": "Sending…",
+        "shipBy": "Ship by",
+        "overdue": "Overdue since"
+    },
+    "searchFallback": {
+        "title": "No listings for “{q}” yet",
+        "hint": "These cards are in the catalog. Open one to wishlist it and get told when a seller lists it, or to ask for it.",
+        "viewCard": "Open card"
     }
 }

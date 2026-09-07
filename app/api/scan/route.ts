@@ -25,9 +25,20 @@ export async function POST(req: Request) {
         // this unauthenticated, paid endpoint. Generous vs real traffic; tune via
         // SCAN_GLOBAL_MAX_PER_MIN.
         const globalMax = Number(process.env.SCAN_GLOBAL_MAX_PER_MIN) || 300;
+        // Per-user windows for signed-in scanners. Thai carriers put many
+        // subscribers behind shared CGNAT egress IPs, so a per-IP window alone
+        // rate-limited real users when a few of them scanned at once. Anonymous
+        // scans keep the per-IP window. The session is resolved here (it was
+        // resolved after the limiter before) and reused for attribution below.
+        let sessionUserId: string | null = null;
+        try {
+            const { data: { user } } = await (await createServerClient()).auth.getUser();
+            sessionUserId = user?.id ?? null;
+        } catch { /* anonymous scan */ }
+        const subject = sessionUserId ? `u:${sessionUserId}` : ip;
         const [minute, day, global] = await Promise.all([
-            checkRateLimit(`scan:${ip}:1m`, { windowSeconds: 60, max: 15 }),
-            checkRateLimit(`scan:${ip}:1d`, { windowSeconds: 86400, max: 500 }),
+            checkRateLimit(`scan:${subject}:1m`, { windowSeconds: 60, max: 15 }),
+            checkRateLimit(`scan:${subject}:1d`, { windowSeconds: 86400, max: sessionUserId ? 500 : 300 }),
             checkRateLimit('scan:global:1m', { windowSeconds: 60, max: globalMax, failClosed: true }),
         ]);
         if (!minute.allowed || !day.allowed || !global.allowed) {
@@ -47,11 +58,7 @@ export async function POST(req: Request) {
         // cookie session if one rode along; anonymous scans keep working
         // exactly as before. The client can never claim an identity — any
         // body-supplied userId is overwritten here.
-        payload.userId = null;
-        try {
-            const { data: { user } } = await (await createServerClient()).auth.getUser();
-            payload.userId = user?.id ?? null;
-        } catch { /* anonymous scan */ }
+        payload.userId = sessionUserId;
 
         const result = await scannerService.scanCard(payload);
         return NextResponse.json(result);

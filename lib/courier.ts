@@ -2767,6 +2767,106 @@ export async function sendOrderDisputeAlert(report: {
     }
 }
 
+// ─── Seller ship-by reminder (app/api/cron/ship-reminders) ───────────────────
+
+/**
+ * Nudges a seller whose paid parcel has not moved. Stage 1 at 24h ("ship by
+ * <date>"), stage 2 at 48h ("overdue"), stage 3 at 72h (same message; the founder
+ * is paged separately). Push first, email fallback, bilingual inline copy like the
+ * other nudges; deep-links to the order page where the label lives.
+ */
+export async function sendShipReminderNotification(
+    sellerId: string,
+    order: { orderId: string; itemName: string; itemCount: number; hoursSincePaid: number; stage: number; shipByIso: string | null; handlingDays: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantPush = !!fcmToken && prefs.label_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.label_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const shortId = order.orderId.slice(0, 8).toUpperCase();
+    const what = order.itemName || (order.itemCount > 1 ? `${order.itemCount} items` : 'your card');
+    const shipBy = order.shipByIso
+        ? new Date(order.shipByIso).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' })
+        : null;
+    const overdue = order.stage >= 2;
+    const title = overdue
+        ? `คำสั่งซื้อ #${shortId} เลยกำหนดส่งแล้ว · Order #${shortId} is overdue`
+        : `อย่าลืมส่ง #${shortId} · Ship order #${shortId}`;
+    const body = overdue
+        ? `ผู้ซื้อจ่ายเงินมา ${order.hoursSincePaid} ชม.แล้ว กรุณาส่ง ${what} วันนี้ · Paid ${order.hoursSincePaid}h ago. Please ship ${what} today.`
+        : `ผู้ซื้อจ่ายเงินแล้ว กรุณาส่ง ${what} ภายใน ${shipBy ?? `${order.handlingDays} วัน`} · Paid. Please ship ${what} by ${shipBy ?? `${order.handlingDays} days`}.`;
+    const url = `${appBaseUrl()}/orders/${order.orderId}?utm_source=courier&utm_medium=${wantPush ? 'push' : 'email'}&utm_campaign=ship_reminder_${order.stage}`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: sellerId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'ship_reminder', orderId: order.orderId, stage: order.stage },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: sellerId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: { label: 'เปิดคำสั่งซื้อ · Open the order', url },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] ship reminder to ${sellerId} for ${order.orderId} failed:`, error);
+        return false;
+    }
+}
+
+/** Pages the founder when a paid parcel has not moved for 72 hours. */
+export async function sendUnshippedOrderAlert(alert: {
+    orderId: string; shortId: string; seller: string; buyer: string; hoursSincePaid: number; itemName: string;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) return;
+    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+    const lines = [
+        `Order: #${alert.shortId} (${alert.orderId})`,
+        alert.itemName ? `Item: ${alert.itemName}` : null,
+        `Seller: ${alert.seller}`,
+        `Buyer: ${alert.buyer}`,
+        `Paid: ${alert.hoursSincePaid} hours ago, still not shipped (two seller reminders sent)`,
+        '',
+        `Order: ${appBaseUrl()}/orders/${alert.orderId}`,
+    ].filter((l) => l !== null) as string[];
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `Unshipped order #${alert.shortId}: ${alert.hoursSincePaid}h since payment`,
+                    body: `A paid order has not moved for three days. The buyer can report it under the guarantee; you may want to reach the seller first.\n\n${lines.join('\n')}`,
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'unshipped_order', orderId: alert.orderId },
+            },
+        });
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending unshipped-order alert for #${alert.shortId}:`, error);
+    }
+}
+
 // ─── Applicant receipt: breaker application confirmation ─────────────────────
 
 /**

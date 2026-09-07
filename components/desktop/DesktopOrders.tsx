@@ -11,7 +11,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
-import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 
@@ -500,6 +500,18 @@ export default function DesktopOrders() {
                                         </div>
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
+                                            {/* The handling promise the buyer already read on the card
+                                                page; overdue once it has passed. */}
+                                            {!isDelivered && !isBreakOrder && ['paid', 'label_generated', 'processing'].includes(order.status) && (() => {
+                                                const due = shipByDate(order.created_at);
+                                                if (!due) return null;
+                                                const overdue = due.getTime() < Date.now();
+                                                return (
+                                                    <span className={`text-[11px] font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                                                        {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                    </span>
+                                                );
+                                            })()}
                                             <StatusChip status={isDelivered ? 'delivered' : order.status} />
                                             <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
                                             {isDelivered ? (
