@@ -24,8 +24,19 @@ interface TicketMessage {
     created_at: string
 }
 
+interface DisputeInfo {
+    id: string
+    status: string
+    total_amount: number
+    dispute_reason: string | null
+    dispute_details: string | null
+    dispute_opened_at: string | null
+    dispute_outcome: string | null
+    dispute_resolved_at: string | null
+}
+
 const STATUS_OPTIONS = ['All', 'Open', 'In Progress', 'Resolved']
-const CATEGORY_OPTIONS = ['All', 'Technical', 'Billing', 'Card Valuation', 'General']
+const CATEGORY_OPTIONS = ['All', 'Order', 'Technical', 'Billing', 'Card Valuation', 'General']
 
 const STATUS_COLORS: Record<string, string> = {
     'Open': 'bg-brand-red/20 text-brand-red border-brand-red/30',
@@ -34,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
+    Order: 'fa-solid fa-box-open',
     Technical: 'fa-solid fa-screwdriver-wrench',
     Billing: 'fa-solid fa-credit-card',
     'Card Valuation': 'fa-solid fa-scale-balanced',
@@ -52,6 +64,41 @@ export default function TicketsPage() {
     const [replyText, setReplyText] = useState('')
     const [replyStatus, setReplyStatus] = useState('')
     const [saving, setSaving] = useState(false)
+    // Buyer problem report linked to the selected ticket, if any.
+    const [dispute, setDispute] = useState<DisputeInfo | null>(null)
+    const [resolving, setResolving] = useState<string | null>(null)
+
+    const resolveDispute = async (outcome: 'refunded' | 'rejected' | 'resolved') => {
+        if (!dispute || !selected) return
+        const labels = { refunded: 'refund the buyer (mark cancelled)', rejected: 'reject the report', resolved: 'mark resolved' }
+        if (!window.confirm(`This will ${labels[outcome]} and close the ticket. Continue?`)) return
+        setResolving(outcome)
+        try {
+            const res = await fetch(`/api/admin/orders/${dispute.id}/dispute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ outcome, note: replyText.trim() }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                window.alert(data.error || `Server returned ${res.status}`)
+                return
+            }
+            setDispute(prev => prev ? { ...prev, status: data.status, dispute_outcome: outcome, dispute_resolved_at: new Date().toISOString() } : prev)
+            setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'Resolved' } : t))
+            setSelected(prev => prev ? { ...prev, status: 'Resolved' } : prev)
+            setReplyStatus('Resolved')
+            setReplyText('')
+            // Re-pull the thread so the closing reply shows.
+            const fresh = await fetch(`/api/admin/tickets/${selected.id}`)
+            if (fresh.ok) {
+                const d = await fresh.json()
+                setThread(d.messages ?? [])
+            }
+        } finally {
+            setResolving(null)
+        }
+    }
 
     const fetchTickets = useCallback(async () => {
         setLoading(true)
@@ -75,12 +122,14 @@ export default function TicketsPage() {
         setReplyText('')
         setReplyStatus(ticket.status)
         setThread([])
+        setDispute(null)
         setThreadLoading(true)
         try {
             const res = await fetch(`/api/admin/tickets/${ticket.id}`)
             if (res.ok) {
                 const data = await res.json()
                 setThread(data.messages ?? [])
+                setDispute(data.dispute ?? null)
             }
         } finally {
             setThreadLoading(false)
@@ -201,6 +250,63 @@ export default function TicketsPage() {
                                 {' · '}{new Date(selected.created_at).toLocaleString()}
                             </p>
                         </div>
+
+                        {/* Buyer problem report: the order this ticket put on hold, and
+                            the three ways to close it. The refund itself happens in the
+                            Stripe dashboard (or from CardStreet funds); this records the
+                            outcome, restores or cancels the order, and closes the ticket
+                            with the reply text above as the buyer-facing answer. */}
+                        {dispute && (
+                            <div className="rounded-xl border border-brand-red/30 bg-brand-red/5 p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-[10px] font-bold uppercase text-rose-300">
+                                        Problem report · order #{dispute.id.slice(0, 8).toUpperCase()}
+                                    </p>
+                                    <a href={`/orders/${dispute.id}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-brand-cyan hover:underline">
+                                        Open order ↗
+                                    </a>
+                                </div>
+                                <p className="text-sm text-slate-300">
+                                    ฿{Math.round(Number(dispute.total_amount) || 0).toLocaleString()} · {dispute.dispute_reason ?? 'reason not recorded'} · status <span className="font-mono">{dispute.status}</span>
+                                </p>
+                                {dispute.dispute_details && (
+                                    <p className="text-xs text-slate-400 whitespace-pre-wrap">{dispute.dispute_details}</p>
+                                )}
+                                {dispute.dispute_outcome ? (
+                                    <p className="text-xs text-emerald-300">
+                                        Closed: {dispute.dispute_outcome}
+                                        {dispute.dispute_resolved_at ? ` · ${new Date(dispute.dispute_resolved_at).toLocaleString()}` : ''}
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => resolveDispute('refunded')}
+                                            disabled={!!resolving}
+                                            className="px-3 py-2 rounded-lg bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs font-bold hover:bg-rose-500/30 disabled:opacity-50"
+                                        >
+                                            {resolving === 'refunded' ? 'Working…' : 'Refunded the buyer → cancel order'}
+                                        </button>
+                                        <button
+                                            onClick={() => resolveDispute('resolved')}
+                                            disabled={!!resolving}
+                                            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10 disabled:opacity-50"
+                                        >
+                                            {resolving === 'resolved' ? 'Working…' : 'Resolved another way → keep order'}
+                                        </button>
+                                        <button
+                                            onClick={() => resolveDispute('rejected')}
+                                            disabled={!!resolving}
+                                            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 text-xs font-bold hover:bg-white/10 disabled:opacity-50"
+                                        >
+                                            {resolving === 'rejected' ? 'Working…' : 'Reject report'}
+                                        </button>
+                                    </div>
+                                )}
+                                <p className="text-[10px] text-slate-500">
+                                    Type the reply the buyer should see below first; closing sends it and marks the ticket Resolved.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Conversation thread */}
                         <div className="space-y-3">

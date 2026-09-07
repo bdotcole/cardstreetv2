@@ -11,6 +11,9 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
+import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
+import ReportProblemSheet from '@/components/ReportProblemSheet';
 
 // OBO best-offer is dark-launched behind this flag; the Offers tab is hidden
 // entirely when off.
@@ -23,6 +26,10 @@ interface OrderRow {
     status: string;
     created_at: string;
     total_amount: number;
+    delivered_at?: string | null;
+    completed_at?: string | null;
+    // The buyer's review of this order (one per order), from /api/profile/orders.
+    review?: OrderReview | null;
     // One row per listing; a multi-item checkout shares one transfer_group
     // (one payment, one parcel). Tabs render one row per group.
     transfer_group?: string | null;
@@ -151,6 +158,10 @@ export default function DesktopOrders() {
     const [reviewScore, setReviewScore] = useState(5);
     const [reviewComment, setReviewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
+    // Stand-alone review (an order that completed on its own) and the
+    // report-a-problem sheet, both keyed on the group's primary order.
+    const [reviewSheetOrder, setReviewSheetOrder] = useState<OrderRow | null>(null);
+    const [reportSheetOrder, setReportSheetOrder] = useState<OrderRow | null>(null);
 
     // Viewing purchases self-heals stale statuses: /api/orders/track polls
     // Flash and advances the order server-side (webhooks can drop, the
@@ -415,6 +426,37 @@ export default function DesktopOrders() {
                                                         {t('desktop.orders.confirmDelivery')}
                                                     </button>
                                                 )}
+                                                {/* Review and report live here so a buyer whose order
+                                                    completed on its own still has both paths. */}
+                                                {canReviewOrder(order) && order.status !== 'disputed' && (
+                                                    order.review ? (
+                                                        <button
+                                                            onClick={() => setReviewSheetOrder(order)}
+                                                            className="text-amber-300 text-xs font-bold hover:underline"
+                                                            title={t('orderActions.editReview')}
+                                                        >
+                                                            {'★'.repeat(order.review.rating)} · {t('orderActions.editReview')}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setReviewSheetOrder(order)}
+                                                            className="border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                        >
+                                                            {t('orderActions.reviewSeller')}
+                                                        </button>
+                                                    )
+                                                )}
+                                                {order.status !== 'disputed' && canReportOrder(order) && (
+                                                    <button
+                                                        onClick={() => setReportSheetOrder(order)}
+                                                        className="text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
+                                                    >
+                                                        {t('orderActions.reportProblem')}
+                                                    </button>
+                                                )}
+                                                {order.status === 'disputed' && (
+                                                    <span className="text-[11px] text-rose-300 max-w-[220px]">{t('orderActions.disputeOpen')}</span>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -591,6 +633,30 @@ export default function DesktopOrders() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {reviewSheetOrder && (
+                <ReviewSheet
+                    orderId={reviewSheetOrder.id}
+                    initial={reviewSheetOrder.review ?? null}
+                    onClose={() => setReviewSheetOrder(null)}
+                    onSaved={(r) => {
+                        setOrders((prev) => prev.map((o) => o.id === reviewSheetOrder.id ? { ...o, review: r } : o));
+                        setReviewSheetOrder(null);
+                        showToast(t('orderActions.reviewSaved'), 'success');
+                    }}
+                />
+            )}
+            {reportSheetOrder && (
+                <ReportProblemSheet
+                    orderId={reportSheetOrder.id}
+                    onClose={() => setReportSheetOrder(null)}
+                    onReported={() => {
+                        setReportSheetOrder(null);
+                        showToast(t('orderActions.reportSent'), 'success');
+                        fetchTab('purchases');
+                    }}
+                />
             )}
         </div>
     );

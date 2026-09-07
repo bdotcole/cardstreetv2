@@ -41,16 +41,23 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     // session client by RLS, so the card snapshot would come back null otherwise
     // (same reason app/api/profile/orders uses the admin client).
     const admin = createAdminClient();
+    // `*` rather than a column list: the dispute columns arrive with migration
+    // 20260907_order_disputes.sql and a named select would 42703 before it runs.
     const { data: order } = await admin
         .from('orders')
         .select(`
-            id, status, total_amount, platform_fee, shipping_fee, created_at, completed_at, break_spot_id,
+            *,
             listing:listings(card_data, condition, is_graded, grading_company, grade, price),
             shipping_labels(tracking_number, carrier_name, courier_tracking_url, status)
         `)
         .eq('id', id)
         .single();
     if (!order) notFound();
+
+    // The buyer's review of this order, if any (one per order).
+    const { data: reviewRow } = role === 'buyer'
+        ? await admin.from('reviews').select('rating, comment').eq('order_id', id).maybeSingle()
+        : { data: null };
 
     const listing = (order.listing ?? null) as any;
     const card = (listing?.card_data ?? {}) as any;
@@ -77,6 +84,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         shippingFee: Number(order.shipping_fee) || 0,
         createdAt: order.created_at,
         completedAt: order.completed_at ?? null,
+        deliveredAt: (order as any).delivered_at ?? null,
+        review: reviewRow ? { rating: Number(reviewRow.rating), comment: reviewRow.comment ?? null } : null,
+        disputeReason: (order as any).dispute_reason ?? null,
+        disputeOutcome: (order as any).dispute_outcome ?? null,
         isBreakOrder,
         card: {
             name: isBreakOrder

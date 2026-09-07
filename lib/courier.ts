@@ -2706,6 +2706,67 @@ export async function sendBreakerApplicationAlert(application: {
     }
 }
 
+// ─── Founder alert: buyer reported a problem with an order ───────────────────
+
+/**
+ * Sent from /api/orders/[id]/report the moment a buyer opens a problem report.
+ * The order is already 'disputed' and the ticket already filed when this runs;
+ * this is the page to the founder, who decides the outcome under the CardStreet
+ * Guarantee (refund from platform funds, ban if warranted). English-only,
+ * internal. Best-effort, never throws.
+ */
+export async function sendOrderDisputeAlert(report: {
+    orderId: string;
+    shortId: string;
+    reason: string;
+    details: string;
+    itemName: string;
+    amountThb: number;
+    buyer: string;
+    seller: string;
+    ticketId: string | null;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping order-dispute alert'); return; }
+
+    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+
+    const openedAt = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
+    });
+    const lines = [
+        `Order: #${report.shortId} (${report.orderId})`,
+        report.itemName ? `Item: ${report.itemName}` : null,
+        `Amount: ฿${Math.round(report.amountThb).toLocaleString()}`,
+        `Buyer: ${report.buyer}`,
+        `Seller: ${report.seller}`,
+        `Reason: ${report.reason}`,
+        report.details ? `Details: ${report.details}` : null,
+        `Opened: ${openedAt} (Bangkok)`,
+        '',
+        `Ticket: ${appBaseUrl()}/admin/tickets`,
+        `Order: ${appBaseUrl()}/orders/${report.orderId}`,
+    ].filter((l) => l !== null) as string[];
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `Problem report on order #${report.shortId}: ${report.reason}`,
+                    body: `A buyer reported a problem. The order is on hold as 'disputed' until you resolve the ticket.\n\n${lines.join('\n')}`,
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'order_dispute', orderId: report.orderId, ticketId: report.ticketId ?? '' },
+            },
+        });
+        console.log(`[Courier] ✅ Order-dispute alert sent for #${report.shortId} → ${to}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending order-dispute alert for #${report.shortId}:`, error);
+    }
+}
+
 // ─── Applicant receipt: breaker application confirmation ─────────────────────
 
 /**

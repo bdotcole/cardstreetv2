@@ -1714,5 +1714,31 @@
         "perSellerNote": "Shipping is charged once per seller.",
         "checkoutSeller": "Checkout with",
         "oneSellerAtATime": "One seller at a time — each ships separately."
+    },
+    "orderActions": {
+        "reviewSeller": "Review seller",
+        "editReview": "Edit review",
+        "yourReview": "Your review",
+        "reviewTitle": "Rate this seller",
+        "reviewIntro": "How were the card and the packaging? Your review appears on the seller's page.",
+        "submitReview": "Submit review",
+        "reviewSaved": "Thanks, your review is saved",
+        "reportProblem": "Report a problem",
+        "reportTitle": "Report a problem with this order",
+        "reportIntro": "Every seller is identity-verified. Tell us what went wrong and we will sort it out under the CardStreet Guarantee.",
+        "reasonLabel": "What happened?",
+        "reasonNotReceived": "I did not receive it",
+        "reasonNotAsDescribed": "Not as described",
+        "reasonDamaged": "Arrived damaged",
+        "reasonOther": "Something else",
+        "detailsLabel": "Details (optional)",
+        "detailsPlaceholder": "What did you receive, and what did you expect?",
+        "submitReport": "Send report",
+        "reportSent": "Report sent. The order is on hold while we look into it.",
+        "disputeOpen": "Under review by CardStreet. We will reply in your support inbox.",
+        "guarantee": "CardStreet Guarantee: if it does not arrive or is not as described, we make it right.",
+        "windowNote": "You can report a problem up to 7 days after delivery.",
+        "cancel": "Cancel",
+        "sending": "Sending…"
     }
 }

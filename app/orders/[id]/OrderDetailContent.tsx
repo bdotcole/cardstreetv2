@@ -2,8 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
+import ReportProblemSheet from '@/components/ReportProblemSheet';
 
 export interface OrderDetailData {
     id: string;
@@ -13,6 +17,11 @@ export interface OrderDetailData {
     shippingFee: number;
     createdAt: string;
     completedAt: string | null;
+    deliveredAt?: string | null;
+    // Buyer-side: the buyer's own review of this order, and the open report.
+    review?: OrderReview | null;
+    disputeReason?: string | null;
+    disputeOutcome?: string | null;
     // Live-break spot order: no per-order label exists (parcels consolidate at
     // stream settle), and card.name may be empty when the break join failed.
     isBreakOrder?: boolean;
@@ -84,9 +93,19 @@ function shipByLabel(createdAt: string, status: string, isThai: boolean): string
 const shellClass = 'min-h-screen bg-brand-darker text-white p-6 pb-24';
 
 export default function OrderDetailContent({ order, role, orderId, signedOut }: Props) {
-    const { isThai } = useTranslation();
+    const { isThai, t } = useTranslation();
+    const router = useRouter();
     const [labelBusy, setLabelBusy] = useState(false);
     const [labelError, setLabelError] = useState<string | null>(null);
+    // Buyer actions on the order page: confirm delivery, review the seller,
+    // report a problem. The review is kept locally after saving so the page
+    // reflects it without a round trip.
+    const [review, setReview] = useState<OrderReview | null>(order?.review ?? null);
+    const [reviewOpen, setReviewOpen] = useState(false);
+    const [reportOpen, setReportOpen] = useState(false);
+    const [reported, setReported] = useState(false);
+    const [confirmBusy, setConfirmBusy] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
     // Read in an effect, not during render: this page is server-rendered and a
     // window read at render time would not match on hydration.
     const [confirming, setConfirming] = useState(false);
@@ -154,8 +173,39 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     };
 
     const L = isThai
-        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า' }
-        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.' };
+        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า', confirmDelivery: 'ยืนยันว่าได้รับพัสดุแล้ว', confirming: 'กำลังยืนยัน…' }
+        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.', confirmDelivery: 'Confirm I received it', confirming: 'Confirming…' };
+
+    const isBuyer = role === 'buyer';
+    const effectiveForActions = reported ? 'disputed' : order.status;
+    const showConfirm = isBuyer && ['shipped', 'out_for_delivery', 'delivered'].includes(effectiveForActions);
+    const showReview = isBuyer && canReviewOrder({ status: effectiveForActions });
+    const showReport = isBuyer && effectiveForActions !== 'disputed'
+        && canReportOrder({ status: effectiveForActions, delivered_at: order.deliveredAt ?? null, completed_at: order.completedAt });
+    const isDisputed = effectiveForActions === 'disputed';
+
+    const confirmDelivery = async () => {
+        if (confirmBusy) return;
+        setConfirmBusy(true);
+        setActionError(null);
+        try {
+            const res = await fetch('/api/orders/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ orderId }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || `Server returned ${res.status}`);
+            // Completed now; the review prompt opens straight away.
+            setReviewOpen(true);
+            router.refresh();
+        } catch (e: any) {
+            setActionError(e?.message || 'Network error');
+        } finally {
+            setConfirmBusy(false);
+        }
+    };
 
     return (
         <div className={shellClass}>
@@ -289,6 +339,59 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         </button>
                     )}
                     {labelError && <p className="text-xs text-rose-300 text-center">{labelError}</p>}
+
+                    {/* Buyer: confirm, review, report. The report window and the
+                        review gate live in lib/orderDisputes so this page, the
+                        mobile Track Orders panel, and desktop Orders agree. */}
+                    {isDisputed && (
+                        <div className="glass rounded-2xl border border-brand-red/30 bg-brand-red/5 p-4 text-sm text-rose-200">
+                            <p className="font-bold">{t('orderActions.disputeOpen')}</p>
+                            <p className="text-[11px] text-rose-200/70 mt-1">{t('orderActions.guarantee')}</p>
+                        </div>
+                    )}
+                    {showConfirm && (
+                        <button
+                            onClick={confirmDelivery}
+                            disabled={confirmBusy}
+                            className="w-full bg-brand-cyan text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60"
+                        >
+                            {confirmBusy ? L.confirming : L.confirmDelivery}
+                        </button>
+                    )}
+                    {showReview && (
+                        review ? (
+                            <div className="glass rounded-2xl border border-white/10 p-4 flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t('orderActions.yourReview')}</p>
+                                    <p className="text-amber-400 text-sm mt-1" aria-label={`${review.rating}/5`}>
+                                        {'★'.repeat(review.rating)}<span className="text-slate-700">{'★'.repeat(5 - review.rating)}</span>
+                                    </p>
+                                </div>
+                                <button onClick={() => setReviewOpen(true)} className="text-brand-cyan font-black uppercase text-[10px] tracking-widest hover:underline">
+                                    {t('orderActions.editReview')}
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setReviewOpen(true)}
+                                className="w-full glass border border-amber-500/30 text-amber-300 font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all"
+                            >
+                                <i className="fa-solid fa-star mr-2"></i>{t('orderActions.reviewSeller')}
+                            </button>
+                        )
+                    )}
+                    {showReport && (
+                        <button
+                            onClick={() => setReportOpen(true)}
+                            className="w-full text-center text-slate-400 hover:text-rose-300 text-xs font-bold uppercase tracking-wider py-2 transition-colors"
+                        >
+                            {t('orderActions.reportProblem')}
+                        </button>
+                    )}
+                    {isBuyer && !isDisputed && (
+                        <p className="text-[11px] text-slate-500 text-center">{t('orderActions.guarantee')}</p>
+                    )}
+                    {actionError && <p className="text-xs text-rose-300 text-center">{actionError}</p>}
                     <Link
                         href="/orders"
                         className="block w-full text-center glass border border-white/10 text-slate-200 font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all"
@@ -297,6 +400,22 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                     </Link>
                 </div>
             </div>
+
+            {reviewOpen && (
+                <ReviewSheet
+                    orderId={orderId}
+                    initial={review}
+                    onClose={() => setReviewOpen(false)}
+                    onSaved={(r) => { setReview(r); setReviewOpen(false); }}
+                />
+            )}
+            {reportOpen && (
+                <ReportProblemSheet
+                    orderId={orderId}
+                    onClose={() => setReportOpen(false)}
+                    onReported={() => { setReported(true); setReportOpen(false); router.refresh(); }}
+                />
+            )}
         </div>
     );
 }

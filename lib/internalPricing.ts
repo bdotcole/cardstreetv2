@@ -163,6 +163,21 @@ export async function recordInternalSales(
 
     if (isSealed) {
       await supabase.rpc('recompute_thai_sealed_price', { p_sealed_id: cardId });
+    } else if (language === 'th' && condition === 'Raw_NM') {
+      // Thai singles follow the founder's rule (apply_thai_price_rule, migration
+      // 20260907): 60% of the confident English twin, overridden by realized sales
+      // (one sale at or above base, or the average of three or more below it).
+      // The rule writes nothing for a card with no qualifying twin; only then does
+      // the generic first-sale recompute apply.
+      const { data, error } = await supabase.rpc('apply_thai_price_rule', { p_card_id: cardId });
+      const written = !error && Array.isArray(data) ? Number((data[0] as { written?: number } | undefined)?.written ?? 0) : 0;
+      if (error || written === 0) {
+        await supabase.rpc('recompute_internal_price', {
+          p_card_id: cardId,
+          p_language: language,
+          p_condition: condition,
+        });
+      }
     } else {
       await supabase.rpc('recompute_internal_price', {
         p_card_id: cardId,

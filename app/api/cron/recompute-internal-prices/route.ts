@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
     const started = Date.now();
-    const summary = { keys: 0, singles: 0, sealed: 0, errors: 0 };
+    const summary = { keys: 0, singles: 0, sealed: 0, thaiRule: 0, errors: 0 };
 
     const { data: keys, error } = await supabase.rpc('list_internal_price_keys');
     if (error) {
@@ -42,6 +42,22 @@ export async function GET(request: NextRequest) {
             if (k.is_sealed) {
                 await supabase.rpc('recompute_thai_sealed_price', { p_sealed_id: k.card_id });
                 summary.sealed++;
+            } else if (k.language === 'th' && k.condition === 'Raw_NM') {
+                // Thai Raw_NM keys belong to apply_thai_price_rule (needs 3 sales below
+                // base or 1 above); the generic recompute would flip them on a single
+                // sale. Fall back to it only when the card has no qualifying twin.
+                const { data, error } = await supabase.rpc('apply_thai_price_rule', { p_card_id: k.card_id });
+                const written = !error && Array.isArray(data) ? Number((data[0] as { written?: number } | undefined)?.written ?? 0) : 0;
+                if (error || written === 0) {
+                    await supabase.rpc('recompute_internal_price', {
+                        p_card_id: k.card_id,
+                        p_language: k.language,
+                        p_condition: k.condition,
+                    });
+                    summary.singles++;
+                } else {
+                    summary.thaiRule++;
+                }
             } else {
                 await supabase.rpc('recompute_internal_price', {
                     p_card_id: k.card_id,

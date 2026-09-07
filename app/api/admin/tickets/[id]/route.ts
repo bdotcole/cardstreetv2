@@ -37,7 +37,15 @@ export async function GET(
         .eq('ticket_id', id)
         .order('created_at', { ascending: true })
 
-    return NextResponse.json({ ticket, messages: messages ?? [] })
+    // A buyer problem report links its order here (20260907_order_disputes.sql).
+    // Fails soft to null before that migration; the pane then shows no dispute panel.
+    const { data: disputeRow } = await supabase
+        .from('orders')
+        .select('id, status, total_amount, dispute_reason, dispute_details, dispute_opened_at, dispute_outcome, dispute_resolved_at')
+        .eq('dispute_ticket_id', id)
+        .maybeSingle()
+
+    return NextResponse.json({ ticket, messages: messages ?? [], dispute: disputeRow ?? null })
 }
 
 // PATCH /api/admin/tickets/[id] — update status and/or send an admin reply.

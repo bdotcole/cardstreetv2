@@ -63,6 +63,10 @@
             "schedule": "*/30 * * * *"
         },
         {
+            "path": "/api/cron/recompute-thai-prices",
+            "schedule": "45 3 * * *"
+        },
+        {
             "path": "/api/cron/recompute-internal-prices",
             "schedule": "0 2 * * 1"
         },

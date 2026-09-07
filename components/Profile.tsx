@@ -28,6 +28,9 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { groupByTransferGroup } from '@/lib/orderGroups';
+import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import ReviewSheet from '@/components/ReviewSheet';
+import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import AttributionSurvey from '@/components/AttributionSurvey';
 import SellerChecklist from '@/components/SellerChecklist';
@@ -126,6 +129,10 @@ interface Order {
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
+  delivered_at?: string | null;
+  completed_at?: string | null;
+  // The buyer's review of this order (one per order), from /api/profile/orders.
+  review?: { rating: number; comment: string | null } | null;
   // One row per listing; a multi-item checkout shares one transfer_group
   // (one payment, one parcel). The panels render one card per group.
   transfer_group?: string | null;
@@ -350,6 +357,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
   // multi-item purchase arrives as one parcel), so the modal holds every
   // order id in the group; the review itself rides only the first.
   const [reviewModalOrderIds, setReviewModalOrderIds] = useState<string[] | null>(null);
+  // Stand-alone review (an order that completed on its own) and the
+  // report-a-problem sheet, both keyed on the group's primary order.
+  const [reviewSheetOrder, setReviewSheetOrder] = useState<Order | null>(null);
+  const [reportSheetOrder, setReportSheetOrder] = useState<Order | null>(null);
   // Seller-side delivery tracking. Holds the order id whose tracking timeline
   // is open in the full-screen tracking modal — reached from a pending
   // shipment card or from the "Track Order" affordance on the label-saved
@@ -1660,6 +1671,37 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
                           {isThai ? 'ยืนยันการรับพัสดุและรีวิว' : 'Confirm Delivery & Review'}
                         </button>
                       )}
+
+                      {/* Review and report live here too, so an order that completed
+                          on its own (the 48h auto-release) still has both paths. */}
+                      {canReviewOrder(order) && order.status !== 'disputed' && (
+                        order.review ? (
+                          <button
+                            onClick={() => setReviewSheetOrder(order)}
+                            className="w-full mt-2 text-left text-amber-300 text-xs font-bold"
+                          >
+                            {t('orderActions.yourReview')}: {'★'.repeat(order.review.rating)} · {t('orderActions.editReview')}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setReviewSheetOrder(order)}
+                            className="w-full h-10 mt-2 border border-amber-500/40 text-amber-300 font-bold rounded-xl text-xs uppercase hover:bg-amber-500/10 transition-colors"
+                          >
+                            <Star className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                            {t('orderActions.reviewSeller')}
+                          </button>
+                        )
+                      )}
+                      {order.status === 'disputed' ? (
+                        <p className="text-xs text-rose-300 mt-2">{t('orderActions.disputeOpen')}</p>
+                      ) : canReportOrder(order) && (
+                        <button
+                          onClick={() => setReportSheetOrder(order)}
+                          className="w-full mt-1 py-1 text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase transition-colors"
+                        >
+                          {t('orderActions.reportProblem')}
+                        </button>
+                      )}
                     </div>
                     );
                   })
@@ -2329,6 +2371,30 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
           </motion.div>
         )}
       </AnimatePresence>
+
+      {reviewSheetOrder && (
+        <ReviewSheet
+          orderId={reviewSheetOrder.id}
+          initial={reviewSheetOrder.review ?? null}
+          onClose={() => setReviewSheetOrder(null)}
+          onSaved={(r) => {
+            setOrders(prev => prev.map(o => o.id === reviewSheetOrder.id ? { ...o, review: r } : o));
+            setReviewSheetOrder(null);
+            showToast(t('orderActions.reviewSaved'), 'success');
+          }}
+        />
+      )}
+      {reportSheetOrder && (
+        <ReportProblemSheet
+          orderId={reportSheetOrder.id}
+          onClose={() => setReportSheetOrder(null)}
+          onReported={() => {
+            setReportSheetOrder(null);
+            showToast(t('orderActions.reportSent'), 'success');
+            fetchOrders();
+          }}
+        />
+      )}
     </div>
   );
 };

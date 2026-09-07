@@ -1,6 +1,65 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPublicSellers } from '@/lib/publicProfiles'
+
+// POST /api/reviews -- the buyer reviews a delivered or completed order on its own,
+// without re-confirming delivery. /api/orders/complete still accepts a review at
+// confirmation time; this covers the orders that completed by themselves (the
+// 48h auto-release) or that the buyer confirmed without rating. One review per
+// order; posting again edits it. Same trigger recomputes the seller aggregate.
+export async function POST(request: NextRequest) {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json().catch(() => ({}))
+    const orderId = typeof body?.orderId === 'string' ? body.orderId : ''
+    const rating = Math.round(Number(body?.rating))
+    const comment = typeof body?.comment === 'string' ? body.comment.trim().slice(0, 2000) : ''
+    if (!orderId) return NextResponse.json({ error: 'orderId is required' }, { status: 400 })
+    if (!(rating >= 1 && rating <= 5)) return NextResponse.json({ error: 'rating must be 1 to 5' }, { status: 400 })
+
+    const admin = createAdminClient()
+    const { data: order } = await admin
+        .from('orders')
+        .select('id, buyer_id, seller_id, status, listing_id')
+        .eq('id', orderId)
+        .maybeSingle()
+    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    if (order.buyer_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!['delivered', 'completed'].includes(order.status)) {
+        return NextResponse.json({ error: 'You can review once the order is delivered', code: 'NOT_REVIEWABLE' }, { status: 400 })
+    }
+
+    let itemName: string | null = null
+    if (order.listing_id) {
+        const { data: listingRow } = await admin.from('listings').select('card_data').eq('id', order.listing_id).maybeSingle()
+        itemName = (listingRow?.card_data as { name?: string } | null)?.name ?? null
+    }
+
+    const { data: review, error } = await admin
+        .from('reviews')
+        .upsert(
+            {
+                order_id: orderId,
+                reviewer_id: user.id,
+                seller_id: order.seller_id,
+                rating,
+                comment: comment || null,
+                item_name: itemName,
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'order_id' },
+        )
+        .select('rating, comment')
+        .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ review })
+}
 
 // GET /api/reviews?seller_id=<uuid> — public list of a seller's reviews, newest
 // first, mapped into the client `Review` shape consumed by ReviewList. Every

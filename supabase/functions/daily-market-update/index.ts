@@ -349,26 +349,9 @@ serve(async (req) => {
             // Add delay between requests to avoid rate limits
             if (index > 0) await new Promise(resolve => setTimeout(resolve, 1500));
 
-            // Feature B: skip any Thai key already learned from a realized sale. The
-            // clobber-guard trigger would revert this branch's write anyway, but the
-            // founder's requirement is an explicit SKIP — and here it is load-bearing:
-            // this branch's Thai path derives an average-of-ALL-sold-listings price
-            // (a different, wrong number than the materialized recent-sales price),
-            // so recomputing/upserting it every run just churns last_updated.
-            if ((card.language || 'th') === 'th') {
-                const { data: learned } = await supabase
-                    .from('market_values')
-                    .select('source')
-                    .eq('card_id', card.id)
-                    .eq('language', card.language || 'th')
-                    .eq('condition', 'Raw_NM')
-                    .eq('source', 'cardstreet')
-                    .maybeSingle();
-                if (learned) {
-                    skipped++;
-                    continue;
-                }
-            }
+            // Thai keys are handled entirely by apply_thai_price_rule below, which
+            // already skips admin pins and recomputes learned ('cardstreet') rows
+            // under the founder's sale-override rule, so no pre-skip is needed here.
 
             try {
                 let calculatedPrice = 0;
@@ -400,120 +383,27 @@ serve(async (req) => {
                     }
 
                 } else {
-                    // Thai Card: First check Cardstreet internal sales.
-                    //
-                    // Admins may list below the public floor to seed the marketplace
-                    // (a 1-baht test listing), so a sub-floor sold listing is not a
-                    // market signal -- no ordinary seller can list that low. Excluded
-                    // here for the same reason recompute_internal_price() excludes it
-                    // (mirrors PUBLIC_MIN_LISTING_PRICE_THB in lib/pricingFloors.ts;
-                    // edge functions cannot import from the Next.js tree).
-                    const { data: soldListings } = await supabase
-                        .from('listings')
-                        .select('price')
-                        .eq('card_id', card.id)
-                        .eq('status', 'sold')
-                        .gte('price', PUBLIC_MIN_LISTING_PRICE_THB);
-
-                    if (soldListings && soldListings.length > 0) {
-                        const sum = soldListings.reduce((acc, curr) => acc + Number(curr.price), 0);
-                        calculatedPrice = sum / soldListings.length;
-                        pricingMethod = 'internal_sales';
-                        sourceLinks = ['Cardstreet Internal Sales'];
-                        currency = 'THB';
-                        console.log(`Price found for ${card.name} (Internal Sales): ${calculatedPrice.toFixed(2)} THB`);
+                    // Thai card: the founder's Thai pricing rule lives in the database
+                    // (apply_thai_price_rule, migration 20260907_thai_price_rule.sql):
+                    // 60% of the English twin at >= 99% mapping confidence, overridden
+                    // by realized in-app sales, admin pins untouched. This function no
+                    // longer derives Thai prices itself, no longer falls back to the
+                    // Japanese twin, and never writes the old 10-baht placeholder: a
+                    // Thai card with no qualifying twin stays unpriced rather than
+                    // showing a floor constant as its market price.
+                    const { data: ruleRows, error: ruleError } = await supabase.rpc('apply_thai_price_rule', { p_card_id: card.id });
+                    if (ruleError) {
+                        console.error(`Thai price rule failed for ${card.id}:`, ruleError);
+                        failed++;
+                        debugLog.push({ card: card.id, error: ruleError.message ?? String(ruleError) });
+                    } else if (Array.isArray(ruleRows) && Number(ruleRows[0]?.written ?? 0) > 0) {
+                        priced++;
+                        debugLog.push({ card: card.id, success: true, debug_api: { method: 'apply_thai_price_rule' } });
                     } else {
-                        // Thai Card: Check mapping fallback
-                        const { data: mapping } = await supabase
-                            .from('card_mappings')
-                            .select('card_id_en, card_id_jp')
-                            .eq('card_id_th', card.id)
-                            .single();
-
-                        if (mapping) {
-                            // 1. Try English Price (via mapping)
-                            if (mapping.card_id_en) {
-                                const { data: enMarketVal } = await supabase
-                                    .from('market_values')
-                                    .select('market_avg, currency')
-                                    .eq('card_id', mapping.card_id_en)
-                                    .single();
-
-                                if (enMarketVal && enMarketVal.market_avg > 0) {
-                                    let thbPrice = enMarketVal.market_avg * 0.55;
-                                    if (enMarketVal.currency === 'USD') thbPrice = thbPrice * 35.85;
-                                    calculatedPrice = Math.max(10, thbPrice); 
-                                    pricingMethod = 'en_mapped_db';
-                                    sourceLinks = ['Database English Match'];
-                                    console.log(`Price found for ${card.name} (DB EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
-                                } else {
-                                    const { data: enCard } = await supabase
-                                        .from('pokemon_cards')
-                                        .select('name, set_id, number')
-                                        .eq('id', mapping.card_id_en)
-                                        .single();
-    
-                                    if (enCard) {
-                                        // Just pass the strict integer portion to JustTCG
-                                        const cleanNum = enCard.number?.split('/')[0].replace(/[^0-9]/g, '');
-                                        // Pin the English twin's SET. Without it JustTCG matches on
-                                        // name+number alone and returns whatever print shares the
-                                        // name -- usually a vintage one -- so a Thai common could
-                                        // inherit a Base Set holo's price (measured 100x-700x over,
-                                        // e.g. SV6-th Chandelure at 714x). fetchJustTCGPrice treats
-                                        // targetSet strictly: no set match returns null and the card
-                                        // falls through to the floor rather than a fabricated price.
-                                        const justTcgPriceEn = await fetchJustTCGPrice(enCard.name, 'en', enCard.set_id, cleanNum);
-                                        
-                                        if (justTcgPriceEn && justTcgPriceEn > 0) {
-                                            calculatedPrice = justTcgPriceEn * 0.55 * 35.85; 
-                                            pricingMethod = 'en_mapped_api';
-                                            sourceLinks = ['JustTCG'];
-                                            console.log(`Price found for ${card.name} (API EN Mapped): ${calculatedPrice.toFixed(2)} THB`);
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 2. Fallback to Japanese Price
-                            if (calculatedPrice === 0 && mapping.card_id_jp) {
-                                const { data: jpMarketVal } = await supabase
-                                    .from('market_values')
-                                    .select('market_avg, currency')
-                                    .eq('card_id', mapping.card_id_jp)
-                                    .single();
-
-                                if (jpMarketVal && jpMarketVal.market_avg > 0) {
-                                    let thbPrice = jpMarketVal.market_avg * 0.8;
-                                    if (jpMarketVal.currency === 'JPY') thbPrice = thbPrice * 0.23;
-                                    else if (jpMarketVal.currency === 'USD') thbPrice = thbPrice * 35.85;
-                                    
-                                    calculatedPrice = Math.max(10, thbPrice);
-                                    pricingMethod = 'jp_mapped_db';
-                                    sourceLinks = ['Database JP Match'];
-                                    console.log(`Price found for ${card.name} (DB JP Mapped): ${calculatedPrice.toFixed(2)} THB`);
-                                } else {
-                                    const { data: jpCard } = await supabase
-                                        .from('pokemon_cards')
-                                        .select('name, set_id, number')
-                                        .eq('id', mapping.card_id_jp)
-                                        .single();
-
-                                    if (jpCard) {
-                                        const cleanNum = jpCard.number?.split('/')[0].replace(/[^0-9]/g, '');
-                                        // Same set-pinning fix as the English branch above.
-                                        const jpPrice = await fetchJustTCGPrice(jpCard.name, 'jp', jpCard.set_id, cleanNum);
-                                        if (jpPrice) {
-                                            calculatedPrice = Math.max(10, jpPrice * 0.8 * 0.23); 
-                                            pricingMethod = 'jp_mapped_api';
-                                            sourceLinks = ['JustTCG (JP)'];
-                                            console.log(`Price found for ${card.name} (API JP Mapped): ${calculatedPrice.toFixed(2)} THB`);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        skipped++;
+                        console.log(`No qualifying English twin for ${card.name} (${card.id}) -- left unpriced`);
                     }
+                    continue;
                 }
 
                 // 3. Apply Minimum Floor & Default
