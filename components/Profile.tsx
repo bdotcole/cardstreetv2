@@ -32,6 +32,7 @@ import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import AttributionSurvey from '@/components/AttributionSurvey';
 import SellerChecklist from '@/components/SellerChecklist';
 import { resolveSellerState, type SellerState } from '@/lib/sellerState';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { SELLER_REQUIRED_PROFILE_FIELDS } from '@/lib/profileValidation';
 
 interface ProfileProps {
@@ -1049,7 +1050,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
       items: [
         // Standalone route (not a slide panel) — premium features live at
         // /premium, /grade, /trade, /insights outside the tab shell.
-        { name: t('profile.cardstreetPro'), icon: Crown, action: () => { window.location.href = '/premium'; }, color: 'text-brand-cyan', special: true }
+        // Hidden while the plan is off (lib/entitlements.ts). Kept in the array
+        // shape rather than deleted so restoring it is one flag.
+        ...(CONSUMER_PRO_ENABLED
+            ? [{ name: t('profile.cardstreetPro'), icon: Crown, action: () => { window.location.href = '/premium'; }, color: 'text-brand-cyan', special: true }]
+            : [])
       ]
     }
   ];

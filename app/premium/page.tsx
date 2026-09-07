@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import React, { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import PremiumHub from '@/components/PremiumHub';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -28,6 +29,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     alternates: buildAlternates('/premium', pathLocale),
     openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/premium', pathLocale) },
+    // Noindex while the plan is withdrawn (lib/entitlements.ts
+    // CONSUMER_PRO_ENABLED). The page stays reachable — an existing subscriber
+    // needs Manage, and the app stores deep-link here — but it must not keep
+    // ranking as a marketed offer that cannot be bought. Restored to indexable
+    // by flipping that flag.
+    ...(CONSUMER_PRO_ENABLED ? {} : { robots: { index: false, follow: true } }),
   };
 }
 

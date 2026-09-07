@@ -287,9 +287,26 @@ export const CATALOG: readonly CatalogItemDef[] = [
     { key: 'seller_fee_50', coins: 6000, kind: 'voucher', redeemable: true, minLevel: 7, realCostSatang: 5000, voucher: { type: 'seller_fee', amountSatang: 5000, minOrderSatang: 0, validDays: 90 } },
     { key: 'voucher_60', coins: 7000, kind: 'voucher', redeemable: true, realCostSatang: 6000, voucher: { type: 'order', amountSatang: 6000, minOrderSatang: 60000, validDays: 60 } },
     { key: 'voucher_ship_100', coins: 11000, kind: 'voucher', redeemable: true, realCostSatang: 10000, voucher: { type: 'shipping', amountSatang: 10000, minOrderSatang: 100000, validDays: 90 } },
-    { key: 'voucher_150', coins: 16000, kind: 'voucher', redeemable: true, realCostSatang: 15000, voucher: { type: 'order', amountSatang: 15000, minOrderSatang: 120000, validDays: 90 } },
+    // NOT REDEEMABLE — the face value is unreachable, not merely generous.
+    // voucherDiscountSatang() clamps every voucher to the order's PLATFORM FEE,
+    // and at the standard 9% a voucher's own minimum order sets the ceiling:
+    //   voucher_150: ฿1,200 min -> ฿108 fee -> pays ฿108 of ฿150 (28% short)
+    //   voucher_400: ฿2,500 min -> ฿225 fee -> pays ฿225 of ฿400 (44% short)
+    // A buyer who saves 40,000 coins for a "฿400" voucher and is handed ฿225
+    // has been told a number the system was never able to honour. The smaller
+    // tiers are fine (voucher_25 at a ฿300 min clears its ฿27 fee), so this is
+    // the two large ones only.
+    //
+    // Off until non-admin GMV exists, because the fix is a pricing decision
+    // that needs real orders behind it: either raise the minimums so the fee
+    // covers the face, cut the face to what the fee affords, or let vouchers
+    // discount the item subtotal — the last one costs real margin and should
+    // not be chosen against a marketplace with 9 buyers. Flip `redeemable`
+    // back once that call is made.
+    { key: 'voucher_150', coins: 16000, kind: 'voucher', redeemable: false, realCostSatang: 15000, voucher: { type: 'order', amountSatang: 15000, minOrderSatang: 120000, validDays: 90 } },
     { key: 'seller_fee_150', coins: 16000, kind: 'voucher', redeemable: true, minLevel: 10, realCostSatang: 15000, voucher: { type: 'seller_fee', amountSatang: 15000, minOrderSatang: 0, validDays: 120 } },
-    { key: 'voucher_400', coins: 40000, kind: 'voucher', redeemable: true, realCostSatang: 40000, voucher: { type: 'order', amountSatang: 40000, minOrderSatang: 250000, validDays: 90 } },
+    // NOT REDEEMABLE — see the voucher_150 note above.
+    { key: 'voucher_400', coins: 40000, kind: 'voucher', redeemable: false, realCostSatang: 40000, voucher: { type: 'order', amountSatang: 40000, minOrderSatang: 250000, validDays: 90 } },
 ];
 
 export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =
@@ -375,6 +392,16 @@ export const MILESTONES: readonly MilestoneDef[] = [
 /** A buyer voucher is funded entirely from the platform fee: the discount can
  *  never exceed the cart's total fee, so the platform's take floors at zero
  *  and the seller's proceeds are untouched (TH direct charges). */
+/**
+ * NOTE, unresolved: this clamps EVERY voucher type to the platform fee,
+ * including `shipping` ones. /api/orders/checkout accepts 'order' and
+ * 'shipping' and runs both through here, so a "฿100 shipping voucher" does not
+ * discount shipping — it discounts the platform fee, capped at it. The numbers
+ * happen to land close for the two shipping SKUs (voucher_ship_40 clears its
+ * fee; voucher_ship_100 pays ฿90 of ฿100), so they are left redeemable, but
+ * the name promises the wrong thing and a buyer will eventually notice their
+ * shipping was still charged in full.
+ */
 export function voucherDiscountSatang(faceSatang: number, totalFeeSatang: number): number {
     return Math.max(0, Math.min(Math.round(faceSatang), Math.round(totalFeeSatang)));
 }

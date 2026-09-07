@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import ProInsights from '@/components/ProInsights';
 
 // Standalone route for Pro Insights (the advanced_market premium feature).
@@ -37,10 +38,19 @@ export default function InsightsPage() {
             </div>
             <h1 className="text-2xl font-black tracking-tight uppercase italic skew-x-[-10deg]">{t('pro.insightsTitle')}</h1>
             <p className="text-sm text-slate-400 mt-3 leading-relaxed">{t('pro.insights.upsellDesc')}</p>
-            <a href="/premium" className="mt-6 block rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 p-4 active:scale-95 transition-all">
-              <p className="text-[11px] text-brand-cyan font-black uppercase tracking-widest">{t('pro.title')}</p>
-              <p className="text-xs text-slate-300 mt-2 leading-snug">{t('pro.partOfPro')}</p>
-            </a>
+            {CONSUMER_PRO_ENABLED ? (
+              <a href="/premium" className="mt-6 block rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 p-4 active:scale-95 transition-all">
+                <p className="text-[11px] text-brand-cyan font-black uppercase tracking-widest">{t('pro.title')}</p>
+                <p className="text-xs text-slate-300 mt-2 leading-snug">{t('pro.partOfPro')}</p>
+              </a>
+            ) : (
+              /* Plan withdrawn — say so plainly rather than link to an offer
+                 that no longer exists (lib/entitlements.ts). */
+              <div className="mt-6 rounded-2xl bg-white/5 border border-white/10 p-4">
+                <p className="text-[11px] text-slate-400 font-black uppercase tracking-widest">{t('pro.unavailableTitle')}</p>
+                <p className="text-xs text-slate-500 mt-2 leading-snug">{t('pro.unavailableBody')}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

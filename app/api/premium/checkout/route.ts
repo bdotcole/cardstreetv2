@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getEntitlement } from '@/lib/premiumAuth';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/stripe';
 
 // POST /api/premium/checkout — start a CardStreet Pro subscription (web rail).
@@ -19,6 +20,19 @@ import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/str
 const PRICE_SATANG = Number(process.env.PREMIUM_PRICE_SATANG) || 14900;
 
 export async function POST() {
+  // The plan is withdrawn (lib/entitlements.ts CONSUMER_PRO_ENABLED). Enforced
+  // HERE and not only in the UI: hiding the button hides the offer from people
+  // who look at the screen, while this route would still happily create a live
+  // Stripe subscription for anyone who kept a tab open, replayed the request,
+  // or ran an older app build. A withdrawn plan has to be unsellable, not just
+  // unadvertised. Restoring the plan restores this route with it.
+  if (!CONSUMER_PRO_ENABLED) {
+    return NextResponse.json(
+      { error: 'CardStreet Pro is not available', code: 'PRO_UNAVAILABLE' },
+      { status: 403 },
+    );
+  }
+
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

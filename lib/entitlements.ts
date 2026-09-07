@@ -8,6 +8,32 @@
  * no Supabase / Next imports -- so it runs identically on both sides.
  */
 
+/**
+ * Is the consumer Pro plan on sale?
+ *
+ * OFF since 2026-09-07. ฿149/month, card-only, in a market that pays by
+ * PromptPay; zero subscribers ever; and until 41ab954 the billing granted
+ * nothing at all, so the first person to pay would have been charged and given
+ * no feature and no way to cancel. Two of the five perks have since become
+ * free (trade finder, wishlist alerts), leaving a plan that was never bought,
+ * has less in it than it did, and cannot be paid for the way this market pays.
+ *
+ * A SWITCH, NOT A DELETION. Everything underneath stays live and correct:
+ * FEATURE_TIERS, requirePremium/requireFeature, the Stripe webhooks,
+ * premiumEntitlement, the RevenueCat bridge. Admins still get every feature by
+ * role, an existing subscriber (there are none) would still be entitled and
+ * still able to manage their subscription, and turning the plan back on is
+ * this one line. Deleting the code would mean rebuilding and re-testing a
+ * payment integration to find out whether shops will pay for something —
+ * which is a question to ask before writing code, not after deleting it.
+ *
+ * What it hides: the price, the upgrade buttons, the nav and profile entries,
+ * and the upsell CTAs that pointed at a plan nobody could buy. What it does
+ * NOT hide: /premium itself, which stays reachable and noindexed so a
+ * subscriber or an app-store deep link still lands somewhere real.
+ */
+export const CONSUMER_PRO_ENABLED = false;
+
 export type PlanTier = 'free' | 'premium';
 
 export type PremiumFeature =

@@ -939,7 +939,11 @@
             "movers": "This Week's Movers",
             "upsellDesc": "Portfolio value history, cost basis and unrealized P/L, top holdings, allocation, and weekly movers — your collection as a portfolio."
         },
-        "freeForEveryone": "Free for everyone"
+        "freeForEveryone": "Free for everyone",
+        "closedTitle": "Not on sale right now",
+        "closedBody": "CardStreet Pro isn't available to buy at the moment. Everything below that's marked free stays free.",
+        "unavailableTitle": "Not available",
+        "unavailableBody": "This tool isn't available at the moment."
     },
     "live": {
         "chooser": {

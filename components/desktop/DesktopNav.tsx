@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import RewardsChip from '@/components/rewards/RewardsChip';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
@@ -257,7 +258,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
-                        ['/premium', t('desktop.navPro')],
+                        ...(CONSUMER_PRO_ENABLED ? [['/premium', t('desktop.navPro')]] : []),
                     ] as [string, string][]).map(([href, label]) => {
                         const current = normalizePath(pathname);
                         const active = current === href;
@@ -417,7 +418,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             ['/sets', t('desktop.navSets')],
                             ['/sell', t('desktop.navSell')],
                             ['/orders', t('desktop.navOrders')],
-                            ['/premium', t('desktop.navPro')],
+                            ...(CONSUMER_PRO_ENABLED ? [['/premium', t('desktop.navPro')]] : []),
                         ] as [string, string][]).map(([href, label]) => {
                             const current = normalizePath(pathname);
                             const active = current === href;

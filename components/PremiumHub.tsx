@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { usePremium } from '@/lib/hooks/usePremium';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import {
   loadNativeProOffer,
@@ -293,6 +294,15 @@ export default function PremiumHub({ variant = 'mobile' }: { variant?: 'mobile' 
                 {busy ? <i className="fa-solid fa-circle-notch animate-spin"></i> : t('pro.manage')}
               </button>
             )}
+          </div>
+        ) : !CONSUMER_PRO_ENABLED ? (
+          // Plan withdrawn (lib/entitlements.ts CONSUMER_PRO_ENABLED). The
+          // free features below still render — this page is now the only route
+          // into the trade finder — but there is nothing to buy, so no price
+          // and no upgrade button.
+          <div className="glass rounded-3xl border-white/10 p-6 text-center">
+            <p className="text-sm font-black text-white">{t('pro.closedTitle')}</p>
+            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{t('pro.closedBody')}</p>
           </div>
         ) : isNativeApp ? (
           iapOffer ? (
