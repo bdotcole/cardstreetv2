@@ -982,6 +982,270 @@ export const GUIDES: Guide[] = [
             ],
         },
     },
+    {
+        slug: 'old-pokemon-cards-worth-money-thai',
+        game: 'pokemon',
+        updated: '2026-09-01',
+        title: {
+            th: 'การ์ดโปเกมอนเก่าที่บ้าน มีค่าไหม — เช็คยังไงให้รู้จริง | CardStreet',
+            en: 'Are Old Pokémon Cards Worth Money? How to Actually Check | CardStreet',
+        },
+        description: {
+            th: 'เจอกล่องการ์ดโปเกมอนเก่าที่บ้าน แล้วมีค่าไหม ดูตัวเลขจริงจากแคตตาล็อกกว่า 7,700 ใบของชุดก่อนปี 2012 ว่าราคาอยู่ตรงไหน และวิธีเช็คทีละใบด้วยตัวเอง',
+            en: 'Found a box of old Pokémon cards? Here are the real numbers from 7,700+ priced cards in pre-2012 sets, what they actually sell for, and how to check yours one by one.',
+        },
+        h1: {
+            th: 'การ์ดโปเกมอนเก่าที่บ้าน มีค่าไหม',
+            en: 'Are your old Pokémon cards worth anything?',
+        },
+        body: {
+            th: [
+                'คำถามนี้มักเจอคำตอบสองแบบบนอินเทอร์เน็ตไทย แบบแรกคือพาดหัวว่าการ์ดใบหนึ่งขายได้ห้าร้อยกว่าล้านบาท แบบที่สองคือคนบอกว่าการ์ดเก่าไม่มีราคาหรอก ทั้งสองแบบไม่ช่วยคนที่กำลังถือกล่องการ์ดอยู่จริง ๆ',
+                'ตัวเลขจริงเป็นแบบนี้ จากการ์ดโปเกมอนในชุดที่ออกก่อนปี 2012 ที่มีราคาตลาดบน CardStreet ทั้งหมด 7,744 ใบ ราคากลางอยู่ที่ประมาณ 185 บาทต่อใบ ประมาณ 27 เปอร์เซ็นต์อยู่ต่ำกว่า 50 บาท อีกราว 24 เปอร์เซ็นต์อยู่ระหว่าง 50 ถึง 200 บาท ราว 25 เปอร์เซ็นต์อยู่ระหว่าง 200 ถึง 1,000 บาท และอีกประมาณ 23 เปอร์เซ็นต์อยู่เหนือ 1,000 บาทขึ้นไป',
+                'พูดง่าย ๆ คือ ประมาณหนึ่งในสี่ของการ์ดยุคเก่ามีราคาเกินพันบาท นั่นแปลว่าการ์ดเก่าคุ้มที่จะเช็คจริง ๆ ไม่ใช่ของไร้ค่าอย่างที่หลายคนคิด แต่ก็ไม่ได้แปลว่าคุณถือใบที่เป็นข่าวอยู่ ใบที่แพงระดับพาดหัวข่าวคือหนึ่งในหลายล้านใบทั่วโลก',
+                'เทียบให้เห็นภาพชัดขึ้น ถ้าดูทั้งแคตตาล็อกรวมการ์ดยุคใหม่ด้วย จะมีถึง 59 เปอร์เซ็นต์ที่ราคาต่ำกว่า 50 บาท ความต่างระหว่างสองตัวเลขนี้คืออายุของการ์ด ของเก่าที่รอดมาถึงวันนี้เหลือน้อยกว่า ราคาจึงสูงกว่าโดยเฉลี่ย',
+                'เช็คยังไง',
+                'อย่าเริ่มจากการค้นชื่อโปเกมอนอย่างเดียว เพราะโปเกมอนตัวเดียวกันถูกพิมพ์ซ้ำมาแล้วหลายสิบครั้งข้ามหลายชุด ราคาห่างกันได้เป็นร้อยเท่า สิ่งที่ต้องดูคือมุมล่างของการ์ด ตรงนั้นมีเลขการ์ดกับรหัสชุดอยู่ เช่น 4/102 คือใบที่สี่จากชุดที่มี 102 ใบ ใช้สองอย่างนี้ค้นหาจึงจะเจอใบที่ถูกต้อง',
+                'ถ้าไม่อยากพิมพ์ทีละใบ เปิดกล้องในแอป CardStreet แล้วส่องการ์ดได้เลย ระบบจะอ่านรหัสชุดกับเลขการ์ดให้เอง แล้วบอกราคาตลาดเป็นเงินบาททันที ใช้ได้กับการ์ดภาษาไทย ญี่ปุ่น และอังกฤษ',
+                'สภาพสำคัญกว่าที่คิด',
+                'ราคาที่เห็นบนหน้าการ์ดคือราคาของใบที่สภาพดี การ์ดที่มุมขาว ขอบมีรอย หรือผิวเป็นรอยขีด จะขายได้ต่ำกว่านั้นพอสมควร ก่อนตั้งราคาให้ส่องขอบและมุมทั้งสี่ในแสงธรรมชาติ แล้วประเมินตามจริง คนซื้อการ์ดเก่าดูจุดพวกนี้เป็นอย่างแรก',
+                'การ์ดที่เก็บไว้ในกล่องปิดและไม่โดนแดดมักอยู่ในสภาพดีกว่าที่เจ้าของคิด ส่วนการ์ดที่เคยเก็บในแฟ้มพลาสติกเก่าหรือโดนความชื้นมักแย่กว่าที่คิด',
+                'ถ้าเช็คแล้วอยากขายต่อ ลงขายบน CardStreet ได้เลย ราคาตลาดที่แสดงอยู่ใช้เป็นตัวตั้งได้ทันที และคนซื้อก็เห็นตัวเลขเดียวกัน จึงคุยกันบนพื้นฐานเดียวกันตั้งแต่ต้น',
+            ],
+            en: [
+                'Search this in Thai and you get two kinds of answer. One is a headline about a single card selling for hundreds of millions of baht. The other is someone insisting old cards are worthless. Neither helps the person actually holding a box.',
+                'Here are the real numbers. Across every pre-2012 Pokémon set in the CardStreet catalog — 7,744 cards with a market price — the median card is about THB 185. Roughly 27% sit under THB 50, about 24% fall between THB 50 and 200, about 25% between THB 200 and 1,000, and roughly 23% are above THB 1,000.',
+                'Put plainly: about one in four older cards is worth more than a thousand baht. Old cards are genuinely worth checking rather than throwing out — but that does not mean you are holding the card from the news. Those are one in many millions worldwide.',
+                'For contrast, across the whole catalog including modern sets, 59% of cards sit under THB 50. The difference between those two figures is age: fewer old cards survived, so what remains is worth more on average.',
+                'How to check',
+                'Do not search by the Pokémon name alone. The same Pokémon has been printed dozens of times across different sets, and prices between those printings can differ a hundredfold. Look at the bottom of the card for the collector number and set code — something like 4/102, meaning card four of a 102-card set. Those two things find the right card.',
+                'If you would rather not type each one, open the camera in the CardStreet app and point it at the card. It reads the set code and number itself and shows the market price in Thai baht. It works on Thai, Japanese and English cards.',
+                'Condition matters more than people expect',
+                'The price shown on a card page is for a card in good condition. Whitened corners, edge wear or surface scratches sell for meaningfully less. Before pricing anything, check the edges and all four corners in natural light and be honest about what you see — it is the first thing a buyer of old cards looks at.',
+                'Cards kept in a closed box away from sunlight are usually in better shape than their owner expects. Cards that lived in an old plastic folder or somewhere humid are usually worse.',
+                'If you decide to sell after checking, you can list on CardStreet directly. The displayed market price gives you a starting figure, and buyers see the same number, so both sides start from the same place.',
+            ],
+        },
+        faqs: [
+            {
+                q: { th: 'การ์ดโปเกมอนปี 2000 กว่า ๆ ขายได้ราคาไหม?', en: 'Are Pokémon cards from the 2000s worth selling?' },
+                a: {
+                    th: 'ส่วนใหญ่ได้ราคามากกว่าที่เจ้าของคาด จากข้อมูลบน CardStreet การ์ดในชุดก่อนปี 2012 มีราคากลางราว 185 บาทต่อใบ และประมาณหนึ่งในสี่มีราคาเกิน 1,000 บาท แต่ต้องเช็คทีละใบ เพราะในกองเดียวกันมีทั้งใบที่ราคาไม่ถึงห้าสิบบาทและใบที่เกินหลักพัน',
+                    en: 'Usually more than their owner expects. In the CardStreet catalog, pre-2012 sets have a median of about THB 185 per card and roughly a quarter are above THB 1,000. But you have to check card by card — the same box will hold cards worth under fifty baht and cards worth thousands.',
+                },
+            },
+            {
+                q: { th: 'ต้องส่งเกรดก่อนขายไหม?', en: 'Should I get cards graded before selling?' },
+                a: {
+                    th: 'ไม่จำเป็นสำหรับการ์ดส่วนใหญ่ ค่าส่งเกรดต่อใบมักสูงกว่ามูลค่าของการ์ดทั่วไป การส่งเกรดคุ้มเมื่อการ์ดมีราคาสูงอยู่แล้วและสภาพดีมากจริง ๆ ดูรายละเอียดได้ในหน้าราคาการ์ดเกรด',
+                    en: 'Not for most cards. Grading costs per card usually exceed what an ordinary card is worth. It pays off when a card is already valuable and genuinely in excellent condition — the graded prices page covers the details.',
+                },
+            },
+            {
+                q: { th: 'การ์ดที่มุมขาวนิดหน่อย ยังขายได้ไหม?', en: 'Can I still sell cards with slightly white corners?' },
+                a: {
+                    th: 'ขายได้ แต่ควรระบุสภาพให้ตรงและถ่ายรูปมุมทั้งสี่ให้เห็นชัด ผู้ซื้อการ์ดเก่าส่วนใหญ่รับสภาพที่ไม่สมบูรณ์ได้ถ้ารู้ล่วงหน้า สิ่งที่ทำให้ขายไม่ได้คือการบอกสภาพเกินจริงแล้วผู้ซื้อเจอของไม่ตรงปก',
+                    en: 'Yes, but state the condition accurately and photograph all four corners clearly. Most buyers of older cards accept imperfect condition when they know in advance. What kills a sale is overstating condition and the buyer receiving something that does not match.',
+                },
+            },
+        ],
+    },
+    {
+        slug: 'where-to-sell-pokemon-cards-thailand',
+        game: 'pokemon',
+        updated: '2026-09-01',
+        title: {
+            th: 'ขายการ์ดโปเกมอนที่ไหนดี — เทียบทุกช่องทางในไทย | CardStreet',
+            en: 'Where to Sell Pokémon Cards in Thailand — Every Option Compared | CardStreet',
+        },
+        description: {
+            th: 'เทียบช่องทางขายการ์ดโปเกมอนในไทยแบบตรงไปตรงมา ทั้งกลุ่ม Facebook ร้านรับซื้อ มาร์เก็ตเพลส และ CardStreet ว่าแต่ละทางได้ราคาเท่าไหร่ เร็วแค่ไหน และเสี่ยงตรงไหน',
+            en: 'An honest comparison of every way to sell Pokémon cards in Thailand — Facebook groups, shops that buy, general marketplaces and CardStreet — what each pays, how fast, and where the risk sits.',
+        },
+        h1: {
+            th: 'ขายการ์ดโปเกมอนที่ไหนดีในไทย',
+            en: 'Where to sell Pokémon cards in Thailand',
+        },
+        body: {
+            th: [
+                'คนขายการ์ดในไทยมีอยู่สี่ทางหลัก แต่ละทางแลกกันคนละอย่างระหว่างราคาที่ได้ ความเร็ว และความยุ่งยาก ไม่มีทางไหนดีที่สุดสำหรับทุกคน ขึ้นอยู่กับว่ากำลังขายอะไรและรีบแค่ไหน',
+                'ร้านรับซื้อ ได้เงินเร็วที่สุดแต่ราคาต่ำที่สุด',
+                'ร้านที่รับซื้อการ์ดต้องเอาไปขายต่อ จึงรับซื้อในราคาต่ำกว่าราคาตลาดพอสมควร ข้อดีคือจบในวันเดียว ได้เงินสด ไม่ต้องแพ็คของ ไม่ต้องคุยกับใครหลายคน เหมาะกับคนที่อยากปล่อยทั้งกองแล้วจบ ๆ ไป หรือการ์ดที่มูลค่าไม่สูงพอจะคุ้มกับการนั่งลงขายทีละใบ',
+                'กลุ่มซื้อขายใน Facebook ราคาดีแต่ต้องทำเองทุกอย่าง',
+                'ไม่มีค่าธรรมเนียม จึงได้ราคาเต็มที่สุด แลกมาด้วยการต้องโพสต์เอง ตอบแชทเอง ต่อราคาเอง แพ็คเอง และรับความเสี่ยงเรื่องการโอนเงินเอง คนที่ขายประจำและมีชื่อเสียงในกลุ่มอยู่แล้วมักได้ผลดี ส่วนคนใหม่ที่ยังไม่มีใครรู้จักมักขายยากกว่าที่คิด เพราะผู้ซื้อระวังตัว',
+                'มาร์เก็ตเพลสทั่วไป คนเห็นเยอะแต่ไม่ได้ทำมาเพื่อการ์ด',
+                'ข้อดีคือมีคนเข้าเยอะและมีระบบคืนเงิน ข้อเสียคือระบบไม่เข้าใจการ์ด ไม่มีการแยกสภาพ ไม่มีราคาตลาดอ้างอิง และการ์ดของคุณไปอยู่ปนกับสินค้าอีกล้านอย่าง คนที่ตั้งใจหาการ์ดใบนั้นจริง ๆ อาจไม่เจอ',
+                'CardStreet ตรงกลางระหว่างราคากับความปลอดภัย',
+                'ลงขายฟรี ตั้งราคาเองโดยดูราคาตลาดที่แสดงอยู่เป็นตัวตั้ง คนซื้อเห็นตัวเลขเดียวกันจึงไม่ต้องเถียงกันว่าราคาควรเป็นเท่าไหร่ ผู้ขายยืนยันตัวตน ชำระเงินผ่านระบบที่ปลอดภัย และจัดส่งผ่าน Flash Express พร้อมเลขติดตาม รายละเอียดค่าธรรมเนียมและรอบโอนเงินอยู่ในหน้าขายการ์ด',
+                'เลือกยังไง',
+                'ถ้าการ์ดทั้งกองรวมกันไม่ถึงหลักพัน ขายเหมาให้ร้านมักคุ้มเวลาที่สุด ถ้ามีใบที่ราคาหลักร้อยขึ้นไปหลายใบ การลงขายทีละใบมักได้เงินรวมมากกว่าอย่างชัดเจน และถ้ามีใบที่ราคาหลักพันขึ้นไป ควรขายผ่านช่องทางที่มีระบบคุ้มครองทั้งสองฝ่าย เพราะความเสี่ยงต่อครั้งสูงพอที่จะคุ้มกับค่าธรรมเนียม',
+                'ไม่ว่าจะเลือกทางไหน เช็คราคาตลาดก่อนเสมอ คนที่รู้ราคากลางของการ์ดตัวเองต่อรองได้ดีกว่าคนที่ไม่รู้เสมอ และการรู้ราคาก็ฟรี',
+            ],
+            en: [
+                'There are four main ways to sell cards in Thailand, and each trades something different between price, speed and effort. None is best for everyone — it depends on what you are selling and how quickly you want it gone.',
+                'Shops that buy: fastest money, lowest price',
+                'A shop buying your cards has to resell them, so it buys well below market. In exchange you are done the same day, in cash, with no packing and no negotiating with strangers. It suits someone who wants a whole box gone, or cards not valuable enough to justify listing individually.',
+                'Facebook groups: best price, all the work',
+                'No fees, so you keep the most — in exchange for posting, answering messages, haggling, packing and carrying the transfer risk yourself. Regular sellers with a reputation in the group do well. Newcomers often find it harder than expected, because buyers are cautious about people they do not know.',
+                'General marketplaces: lots of traffic, not built for cards',
+                'Plenty of eyeballs and a refund system. But the platform does not understand cards — no condition grading, no reference price, and your card sits among a million unrelated products, so the person actually hunting that card may never find it.',
+                'CardStreet: between price and safety',
+                'Listing is free, and you set your own price with the displayed market price as a starting point. Buyers see the same number, so nobody argues about what it should cost. Sellers are identity-verified, payment goes through secure checkout, and orders ship via Flash Express with tracking. Fees and payout timing are on the selling page.',
+                'How to choose',
+                'If the whole pile is worth under a few thousand baht, selling it to a shop in one go is usually the best use of your time. If you have several cards in the hundreds, listing individually usually nets clearly more. And if you have anything in the thousands, sell it somewhere both sides are protected — the per-transaction risk is high enough to justify a fee.',
+                'Whichever you choose, check the market price first. Someone who knows what their card is worth negotiates better than someone who does not, every time — and checking costs nothing.',
+            ],
+        },
+        faqs: [
+            {
+                q: { th: 'ขายให้ร้านกับลงขายเอง ต่างกันเท่าไหร่?', en: 'How much less does a shop pay than selling it yourself?' },
+                a: {
+                    th: 'ต่างกันตามร้านและตามการ์ด ร้านต้องเหลือกำไรตอนขายต่อ จึงรับซื้อต่ำกว่าราคาตลาดเสมอ วิธีที่ตรงที่สุดคือเช็คราคาตลาดของใบที่จะขายก่อน แล้วเอาตัวเลขที่ร้านเสนอมาเทียบ จะเห็นส่วนต่างชัดเจนและตัดสินใจได้ว่าคุ้มกับเวลาที่ประหยัดไปไหม',
+                    en: 'It varies by shop and by card — a shop has to leave room for its own margin, so it always buys under market. The clearest approach is to check the market price of what you are selling first, then compare the offer against it. That makes the gap visible and lets you judge whether it is worth the time it saves.',
+                },
+            },
+            {
+                q: { th: 'ลงขายบน CardStreet เสียค่าอะไรบ้าง?', en: 'What does it cost to list on CardStreet?' },
+                a: {
+                    th: 'ลงขายฟรี ไม่มีค่าลงประกาศ ค่าธรรมเนียมจะคิดเมื่อขายได้แล้วเท่านั้น รายละเอียดอัตราและรอบการโอนเงินอยู่ในหน้าขายการ์ด',
+                    en: 'Listing is free — there is no fee to post. A fee applies only when a card actually sells. The rates and payout timing are set out on the selling page.',
+                },
+            },
+            {
+                q: { th: 'ขายการ์ดต้องเป็นร้านหรือจดทะเบียนไหม?', en: 'Do I need to be a registered shop to sell?' },
+                a: {
+                    th: 'ไม่ต้อง คนทั่วไปที่มีการ์ดอยู่ที่บ้านก็ลงขายได้ ขั้นตอนคือสมัครเป็นผู้ขายและยืนยันตัวตนก่อน จากนั้นจึงลงการ์ดขายได้',
+                    en: 'No. Anyone with cards at home can list them. You register as a seller and verify your identity first, then you can list.',
+                },
+            },
+        ],
+    },
+    {
+        slug: 'sell-bulk-pokemon-cards-thailand',
+        game: 'pokemon',
+        updated: '2026-09-01',
+        title: {
+            th: 'ขายการ์ดโปเกมอนยกกอง เหมาทั้งกล่อง คุ้มไหม | CardStreet',
+            en: 'Selling Pokémon Cards in Bulk in Thailand — Is It Worth It? | CardStreet',
+        },
+        description: {
+            th: 'มีการ์ดโปเกมอนเป็นกองใหญ่แต่ไม่รู้จะเริ่มตรงไหน วิธีคัดว่าใบไหนควรลงขายแยกและใบไหนควรขายเหมา พร้อมตัวเลขจริงว่าการ์ดส่วนใหญ่ในตลาดราคาเท่าไหร่',
+            en: 'A big pile of Pokémon cards and no idea where to start? How to split what is worth listing individually from what should go as a lot, with real numbers on what most cards are actually worth.',
+        },
+        h1: {
+            th: 'ขายการ์ดโปเกมอนยกกอง คุ้มไหม',
+            en: 'Selling Pokémon cards in bulk',
+        },
+        body: {
+            th: [
+                'คนที่เพิ่งรื้อกล่องการ์ดเจอปัญหาเดียวกันเกือบทุกคน คือมีการ์ดหลายร้อยใบ ไม่รู้ว่าใบไหนมีค่า และไม่อยากนั่งเช็คทีละใบเป็นวัน ๆ ทางออกไม่ใช่เลือกอย่างใดอย่างหนึ่ง แต่คือแบ่งกองให้ถูก',
+                'ทำไมต้องแบ่ง',
+                'จากข้อมูลราคาบน CardStreet ทั้งแคตตาล็อกโปเกมอน ประมาณ 59 เปอร์เซ็นต์ของการ์ดมีราคาต่ำกว่า 50 บาท แปลว่าเกินครึ่งของกองที่คุณถืออยู่แทบไม่คุ้มค่าเวลาที่ใช้ถ่ายรูปและลงขายทีละใบ แต่ในกองเดียวกันนั้นก็มักมีอยู่ไม่กี่ใบที่ราคาสูงพอจะเปลี่ยนยอดรวมทั้งหมด',
+                'เป้าหมายจึงเป็นการหาไม่กี่ใบนั้นให้เจอ แล้วปล่อยที่เหลือแบบเหมา',
+                'คัดยังไงให้เร็ว',
+                'ไล่ดูสามอย่างก่อน หนึ่งคือการ์ดที่มีพื้นผิวมันวาวหรือลายฟอยล์ สองคือการ์ดที่มีข้อความพิเศษต่อท้ายชื่อ เช่น ex GX V หรือ VMAX สามคือการ์ดที่ภาพกินเต็มใบไม่มีกรอบ สามกลุ่มนี้คือที่ที่มูลค่ากระจุกอยู่เกือบทั้งหมด การ์ดธรรมดาที่ไม่เข้าสามข้อนี้ส่วนใหญ่อยู่ในกลุ่มต่ำกว่า 50 บาท',
+                'พอคัดออกมาได้แล้ว ค่อยเช็คราคาเฉพาะกองที่คัดไว้ จะใช้เวลาน้อยลงมาก ใช้กล้องในแอปสแกนทีละใบก็ได้ หรือค้นจากเลขการ์ดที่มุมล่างก็ได้',
+                'ที่เหลือทำยังไง',
+                'การ์ดกลุ่มที่ราคาต่ำมีสองทางหลัก ทางแรกคือขายเหมาให้ร้านหรือให้คนที่รับซื้อยกกอง ได้เงินไม่มากแต่จบเร็ว ทางที่สองคือรวมเป็นชุดที่มีธีมแล้วขายเป็นล็อต เช่น รวมเฉพาะโปเกมอนสายไฟ หรือรวมเฉพาะชุดเดียวกัน วิธีหลังมักได้ราคาดีกว่าการเทรวมมั่ว ๆ เพราะคนซื้อรู้ว่ากำลังซื้ออะไร',
+                'สิ่งที่ไม่ควรทำคือทิ้ง การ์ดที่ราคาต่ำต่อใบยังมีคนรับซื้อเป็นกองอยู่เสมอ โดยเฉพาะคนที่เพิ่งเริ่มเล่นและอยากได้การ์ดจำนวนมากในราคาถูก',
+                'ถ้าคัดแล้วเจอใบที่ราคาหลักร้อยขึ้นไป ใบพวกนั้นควรลงขายแยกเสมอ ส่วนต่างระหว่างการขายแยกกับการเทรวมไปในกองเหมามักมากกว่าค่าเวลาที่ใช้ไปหลายเท่า',
+            ],
+            en: [
+                'Everyone who digs out an old box hits the same problem: hundreds of cards, no idea which matter, and no appetite for checking each one for a day. The answer is not to pick one approach — it is to split the pile correctly.',
+                'Why split at all',
+                'Across the whole Pokémon catalog on CardStreet, about 59% of cards are priced under THB 50. So more than half of what you are holding is not worth the time it takes to photograph and list individually. But that same pile usually contains a handful of cards valuable enough to change the total on their own.',
+                'The job is to find those few, and move the rest as a lot.',
+                'How to sort quickly',
+                'Look for three things first. Cards with a shiny or foil surface. Cards with something appended to the name — ex, GX, V or VMAX. And cards where the artwork fills the whole card with no border. Almost all of the value sits in those three groups. Ordinary cards matching none of them mostly land in the under-THB-50 band.',
+                'Once you have pulled those out, only check prices on that smaller pile. Scan them with the camera in the app, or search the collector number from the bottom of the card.',
+                'What to do with the rest',
+                'Low-value cards have two sensible routes. Sell the lot to a shop or a bulk buyer — less money, but done quickly. Or group them into themed lots, all one type or all one set, and sell those. The second usually pays better than an unsorted heap, because the buyer can see what they are getting.',
+                'What you should not do is throw them away. There is always demand for cheap cards in quantity, especially from people just starting who want a lot of cards for very little.',
+                'And anything you pull out worth a few hundred baht or more should be listed on its own. The gap between listing it individually and burying it in a bulk lot is usually many times the time it costs you.',
+            ],
+        },
+        faqs: [
+            {
+                q: { th: 'การ์ดธรรมดาเป็นร้อยใบ ขายได้เท่าไหร่?', en: 'What is a few hundred ordinary cards worth?' },
+                a: {
+                    th: 'ขายเป็นกองมักได้ราคาต่อใบต่ำมาก เพราะการ์ดกลุ่มนี้มีอยู่ทั่วไป จากข้อมูลบน CardStreet ประมาณ 59 เปอร์เซ็นต์ของการ์ดโปเกมอนทั้งแคตตาล็อกราคาต่ำกว่า 50 บาทต่อใบอยู่แล้ว มูลค่ารวมจริง ๆ ของกองมักมาจากไม่กี่ใบที่คัดออกมาได้ ไม่ใช่จากจำนวนใบ',
+                    en: 'Sold as a heap, very little per card — these are common by definition. About 59% of Pokémon cards in the CardStreet catalog are already under THB 50 each. The real value of a pile almost always comes from the few cards you pull out of it, not from the count.',
+                },
+            },
+            {
+                q: { th: 'ต้องแยกการ์ดตามชุดก่อนขายไหม?', en: 'Should I sort by set before selling?' },
+                a: {
+                    th: 'ช่วยได้ถ้าจะขายเป็นล็อต เพราะล็อตที่มาจากชุดเดียวกันหรือธีมเดียวกันขายง่ายกว่าและได้ราคาดีกว่ากองที่คละมั่ว แต่ถ้าจะขายเหมาให้ร้านไปเลย ไม่ต้องเสียเวลาแยก ร้านคัดเองอยู่แล้ว',
+                    en: 'It helps if you are selling in lots — a lot from one set or with one theme sells faster and for more than an unsorted mix. If you are selling the whole thing to a shop, do not bother; they will sort it themselves.',
+                },
+            },
+        ],
+    },
+    {
+        slug: 'pokemon-cards-that-dont-sell',
+        game: 'pokemon',
+        updated: '2026-09-01',
+        title: {
+            th: 'การ์ดโปเกมอนแบบไหนขายยาก — รู้ก่อนจะได้ไม่เสียเวลา | CardStreet',
+            en: 'Which Pokémon Cards Are Hard to Sell — Know Before You List | CardStreet',
+        },
+        description: {
+            th: 'ไม่ใช่การ์ดทุกใบจะขายออก รู้ว่าการ์ดแบบไหนขายยากและเพราะอะไร จะได้ตั้งราคาให้ถูกและไม่เสียเวลาลงขายใบที่ไม่มีคนหา',
+            en: 'Not every card sells. Which Pokémon cards are hard to move and why — so you price realistically and do not waste time listing cards nobody is looking for.',
+        },
+        h1: {
+            th: 'การ์ดโปเกมอนแบบไหนที่ขายยาก',
+            en: 'Which Pokémon cards are hard to sell',
+        },
+        body: {
+            th: [
+                'บทความเรื่องขายการ์ดส่วนใหญ่บอกแต่ว่าใบไหนแพง น้อยคนที่บอกว่าใบไหนขายไม่ออก ซึ่งเป็นข้อมูลที่มีประโยชน์พอกัน เพราะช่วยให้ไม่เสียเวลาถ่ายรูปและลงขายใบที่ไม่มีใครตามหา',
+                'การ์ดพลังงานและการ์ดไอเทมทั่วไป',
+                'การ์ดกลุ่มนี้ถูกพิมพ์ซ้ำแทบทุกชุดและมีอยู่ในกล่องของทุกคน ราคาต่อใบจึงต่ำมากและแทบไม่มีใครค้นหาเป็นรายใบ ถ้าจะขายควรรวมเป็นชุดไปเลย ไม่ใช่ลงทีละใบ',
+                'การ์ดธรรมดาจากชุดใหม่ที่เพิ่งออก',
+                'ชุดที่เพิ่งวางขายมีของอยู่ในตลาดเยอะที่สุด การ์ดธรรมดาจากชุดนั้นจึงหาได้ง่ายมากและราคาต่ำ คนที่อยากได้มักได้จากการเปิดซองเองอยู่แล้ว รอสักระยะจนของในตลาดน้อยลงมักขายง่ายกว่า',
+                'การ์ดสภาพไม่ดีที่ตั้งราคาเท่าของสภาพดี',
+                'นี่คือสาเหตุที่พบบ่อยที่สุดของการ์ดที่ลงขายแล้วไม่มีคนซื้อ ราคาที่แสดงบนหน้าการ์ดคือราคาของใบสภาพดี ถ้าการ์ดมุมขาวหรือมีรอยแล้วตั้งราคาเท่ากัน ผู้ซื้อที่เทียบราคาเป็นจะข้ามไปหาใบอื่น ทางแก้ไม่ใช่ซ่อนสภาพ แต่คือลดราคาลงให้สมเหตุสมผลและถ่ายรูปให้ตรงจริง',
+                'การ์ดที่ตั้งราคาสูงกว่าราคาตลาดมาก',
+                'ผู้ซื้อบน CardStreet เห็นราคาตลาดของการ์ดใบนั้นอยู่ข้าง ๆ รายการขายเสมอ การตั้งราคาสูงกว่ามากจึงเห็นได้ทันทีและมักถูกข้ามไป ถ้าเชื่อว่าการ์ดใบนั้นควรได้มากกว่าราคากลาง เช่น เพราะสภาพดีเป็นพิเศษ ควรอธิบายไว้ในรายละเอียดให้ผู้ซื้อเข้าใจ',
+                'การ์ดปลอมและการ์ดที่ไม่ใช่ของลิขสิทธิ์',
+                'การ์ดแปลไทยที่ไม่ใช่ของทางการ การ์ดที่พิมพ์เอง และของปลอม ขายบนแพลตฟอร์มที่ตรวจสอบผู้ขายไม่ได้ และถึงขายได้ก็มักจบด้วยการถูกคืนของ ถ้าไม่แน่ใจว่าการ์ดในมือแท้หรือไม่ ให้เทียบกับใบแท้ที่มีอยู่ก่อน',
+                'แล้วอะไรที่ขายง่าย',
+                'ตรงข้ามกับทั้งหมดข้างบน คือการ์ดที่คนตามหาเป็นรายใบ สภาพตรงกับที่ระบุ รูปถ่ายจริงชัดทุกมุม และราคาอยู่ใกล้ราคาตลาด สามอย่างหลังคุณควบคุมได้ทั้งหมด ซึ่งเป็นเหตุผลว่าทำไมผู้ขายสองคนที่มีการ์ดใบเดียวกันจึงขายได้ไม่เท่ากัน',
+            ],
+            en: [
+                'Most articles about selling cards tell you which ones are expensive. Few tell you which ones will not move, which is just as useful — it saves you photographing and listing cards nobody is searching for.',
+                'Energy cards and ordinary trainer items',
+                'These are reprinted in nearly every set and sit in everyone\'s box. Per-card value is very low and almost nobody searches for them individually. If you sell them, sell them as a group rather than one at a time.',
+                'Common cards from a brand-new set',
+                'A set that just launched has the most product in circulation, so its commons are easy to find and cheap. Anyone who wants one probably pulled it themselves. Waiting until supply thins usually makes them easier to sell.',
+                'Damaged cards priced like clean ones',
+                'This is the single most common reason a listing sits unsold. The price on a card page is for a card in good condition. Price a card with whitened corners or scratches the same and any buyer who compares will move on. The fix is not to hide the condition — it is to price it honestly and photograph it accurately.',
+                'Cards priced well above market',
+                'Buyers on CardStreet see the market price next to every listing. A price far above it is immediately visible and usually skipped. If you believe a card deserves more — exceptional condition, say — explain why in the description so the buyer understands what they are paying for.',
+                'Counterfeits and unlicensed printings',
+                'Unofficial Thai-translated cards, home-printed cards and outright fakes cannot be sold on a platform that verifies its sellers, and where they do sell elsewhere they tend to come back as returns. If you are unsure whether something is genuine, compare it against a card you know is real first.',
+                'So what does sell easily',
+                'The opposite of all of the above: a card people search for by name, in the condition you said it was, with clear real photographs from every angle, priced near market. You control the last three completely — which is why two sellers holding the same card do not get the same result.',
+            ],
+        },
+        faqs: [
+            {
+                q: { th: 'ลงขายไปนานแล้วไม่มีคนซื้อ ควรทำยังไง?', en: 'My listing has sat for weeks — what should I do?' },
+                a: {
+                    th: 'ไล่ดูสามอย่างตามลำดับ หนึ่งคือราคาเทียบกับราคาตลาดที่แสดงอยู่ ห่างกันมากไปไหม สองคือรูปถ่าย เป็นรูปจริงครบทุกมุมหรือยัง สามคือสภาพที่ระบุตรงกับรูปไหม ส่วนใหญ่ปัญหาอยู่ที่ข้อแรก',
+                    en: 'Check three things in order. Is the price far from the market price shown beside it? Are the photos real and complete from every angle? Does the stated condition match what the photos show? Most of the time it is the first one.',
+                },
+            },
+            {
+                q: { th: 'การ์ดแปลไทยที่ซื้อจากตลาดนัด ขายต่อได้ไหม?', en: 'Can I resell unofficial Thai-translated cards?' },
+                a: {
+                    th: 'ไม่ได้ การ์ดแปลที่ไม่ใช่ของทางการไม่ใช่สินค้าลิขสิทธิ์และใช้แข่งขันไม่ได้ จึงไม่อยู่ในแคตตาล็อกและลงขายไม่ได้ การ์ดโปเกมอนภาษาไทยที่เป็นของทางการมีจริงและขายได้ปกติ สังเกตได้จากรหัสชุดที่มุมล่างของการ์ด',
+                    en: 'No. Unofficial translated cards are not licensed products and are not tournament legal, so they are not in the catalog and cannot be listed. Official Thai-language Pokémon cards do exist and sell normally — you can tell them apart by the set code at the bottom of the card.',
+                },
+            },
+        ],
+    },
 ];
 
 /** A guide by slug, or null. */
