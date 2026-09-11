@@ -1246,6 +1246,121 @@ export const GUIDES: Guide[] = [
             },
         ],
     },
+    {
+        slug: 'one-piece-card-prices-thai',
+        game: 'onepiece',
+        updated: '2026-09-11',
+        title: {
+            th: 'เช็คราคาการ์ดวันพีชยังไงให้ถูกใบ — คู่มือดูราคาฉบับคนไทย | CardStreet',
+            en: 'How to Check One Piece Card Prices in Thailand — The Full Guide | CardStreet',
+        },
+        h1: {
+            th: 'เช็คราคาการ์ดวันพีช ให้ตรงใบที่ถืออยู่',
+            en: 'How to check One Piece card prices — and get the right printing',
+        },
+        description: {
+            th: 'วิธีเช็คราคาการ์ดวันพีชให้ตรงใบ ทั้งฉบับอังกฤษและญี่ปุ่น พร้อมข้อมูลจริงจากการ์ด 6,377 ใบในระบบ ว่าการ์ดส่วนใหญ่ราคาเท่าไหร่ และใบแบบไหนที่ราคาขึ้นจริง',
+            en: 'How to check One Piece Card Game prices from Thailand, across the English and Japanese printings, with real figures from 6,377 cards — what most cards are actually worth and which ones carry the value.',
+        },
+        cards: [
+            { label: 'Monkey.D.Luffy (OP11-119, SEC alternate art)', id: 'op-op-11-op05-119' },
+            { label: 'Roronoa Zoro (PRB-01, manga art)', id: 'op-prb-01-op06-118' },
+            { label: 'Marshall.D.Teach (OP12-093, SP Gold)', id: 'op-op-12-op09-093' },
+            { label: 'Monkey.D.Dragon (EB-02, SPR)', id: 'op-eb-02-op07-001' },
+            { label: 'Nami (PRB-01, manga art)', id: 'op-prb-01-op01-016' },
+            { label: 'Portgas.D.Ace (PRB-01, manga art)', id: 'op-prb-01-op02-013' },
+        ],
+        body: {
+            th: [
+                'คำถามที่คนถือการ์ดวันพีชถามบ่อยที่สุดคือ "ใบนี้ราคาเท่าไหร่" แต่คำถามที่ต้องตอบให้ได้ก่อนคือ "ใบนี้คือใบไหน" การ์ดวันพีชใบเดียวกันมีได้หลายเวอร์ชัน ทั้งฉบับอังกฤษ ฉบับญี่ปุ่น ใบอาร์ตธรรมดา ใบอาร์ตพิเศษ และใบโปรโม ราคาต่างกันได้หลายสิบเท่า ถ้าเช็คผิดเวอร์ชัน ตัวเลขที่ได้ก็ไม่มีความหมาย',
+                'วิธีดูว่าถือใบไหนอยู่ใช้เวลาไม่ถึงนาที ที่มุมล่างของการ์ดจะมีรหัสแบบ OP05-119 หรือ ST01-006 ตัวอักษรข้างหน้าคือชุด ตัวเลขข้างหลังคือเลขใบในชุดนั้น ถ้าอยากรู้ว่ารหัส OP ST EB PRB ต่างกันยังไง เรามีบทความแยกเรื่องรหัสชุดไว้แล้ว ส่วนภาษาให้ดูจากตัวหนังสือบนการ์ดเอง ไม่ต้องเดาจากกล่องที่ซื้อมา',
+                'ในระบบของเรามีการ์ดวันพีชอยู่ 6,377 ใบ แบ่งเป็นฉบับภาษาอังกฤษ 3,225 ใบ และฉบับภาษาญี่ปุ่น 3,152 ใบ ทั้งสองฉบับเก็บราคาแยกกันคนละใบ ไม่ได้ใช้ราคาเดียวกันแล้วแปลงค่าเงิน เพราะตลาดของสองฉบับนี้เคลื่อนไหวไม่เหมือนกันจริง ๆ',
+                'เรื่องที่หลายคนไม่อยากได้ยินแต่ควรรู้ก่อน คือการ์ดวันพีชส่วนใหญ่ไม่ได้แพง จากการ์ด 6,052 ใบที่มีราคาตลาดในระบบ ค่ากลางอยู่ที่ 42 บาท และ 53.8% ของทั้งหมดอยู่ต่ำกว่า 50 บาท พูดง่าย ๆ คือถ้าเทกองการ์ดออกมาบนโต๊ะ ครึ่งหนึ่งของกองนั้นมูลค่าน้อยกว่าค่ากาแฟหนึ่งแก้ว',
+                'แต่อีกด้านหนึ่งก็จริงเหมือนกัน 5.6% ของการ์ดในระบบมีราคาเกิน 1,000 บาท และใบที่อยู่ในกลุ่ม 10% บนสุดเริ่มต้นราว ๆ 269 บาท ประเด็นจึงไม่ใช่ว่ากองการ์ดของคุณมีค่าหรือไม่มีค่า แต่คือคุณหาใบที่เป็น 5.6% นั้นเจอหรือเปล่า',
+                'ใบที่ราคาสูงในวันพีชมีรูปแบบชัดเจนกว่าเกมอื่น ถ้าไล่ดูการ์ดที่ราคาสูงที่สุดในระบบ เกือบทั้งหมดอยู่ในสองกลุ่ม กลุ่มแรกคือการ์ดโปรโมฉบับญี่ปุ่นที่แจกในงานแข่งหรือแถมมากับสินค้า กลุ่มที่สองคือใบอาร์ตพิเศษ ทั้ง SEC อาร์ตเต็มใบ ใบ SP ขอบทอง และใบลายมังงะจากชุด PRB ส่วนใบ SR หรือใบผู้นำที่เป็นอาร์ตปกติจากบูสเตอร์ทั่วไป ราคามักไม่ได้ต่างจากใบธรรมดามากอย่างที่หลายคนคิด',
+                'ตัวอย่างที่เห็นภาพชัดคือ Monkey.D.Luffy ใบ SEC จากชุด OP-11 กับ Roronoa Zoro ลายมังงะจากชุด PRB-01 สองใบนี้เป็นตัวละครที่ใครก็รู้จัก แต่สิ่งที่ทำให้ราคาต่างจากใบ Luffy หรือ Zoro ใบอื่นในชุดเดียวกันคืออาร์ตและเลขใบ ไม่ใช่ตัวละคร ก่อนจะดีใจว่าได้ Luffy ให้ดูเลขใบก่อนเสมอ',
+                'ราคาที่เห็นในแต่ละที่ไม่เท่ากันเป็นเรื่องปกติ และไม่ได้แปลว่าที่ไหนโกง ราคาที่ร้านตั้งขายคือราคาที่ผู้ขายอยากได้ ราคาที่ประกาศในกลุ่มเฟซบุ๊กคือราคาของคนที่อยากขายเร็ว ส่วนราคาตลาดที่เราแสดงคือค่าเฉลี่ยของการซื้อขายที่เกิดขึ้นจริง สามตัวเลขนี้มีประโยชน์คนละแบบ ถ้าจะขาย ให้ใช้ราคาตลาดเป็นฐานแล้วบวกลบตามสภาพการ์ดและความรีบ',
+                'สภาพการ์ดเปลี่ยนราคาได้มากกว่าที่คิด ราคาที่เราแสดงเป็นราคาของการ์ดสภาพดีที่ยังไม่ได้ส่งเกรด ถ้าการ์ดมีขอบขาว มุมงอ หรือรอยขีดกลางใบ ราคาจริงจะต่ำกว่านั้น ในทางกลับกัน การ์ดที่ส่งเกรดแล้วได้คะแนนสูงจะมีราคาคนละชุดกันไปเลย ซึ่งเราเก็บแยกไว้ต่างหากและไม่เอามาปนกับราคาปกติ',
+                'ราคาการ์ดวันพีชขยับเร็วกว่าเกมอื่นที่เราเก็บข้อมูล เพราะชุดใหม่ออกถี่และมีการ์ดที่ถูกปรับสถานะในสนามแข่งอยู่เรื่อย ๆ ราคาในระบบของเราอัปเดตทุกวัน และมากกว่า 99% ของข้อมูลราคาการ์ดวันพีชถูกรีเฟรชภายใน 30 วันที่ผ่านมา ถ้าเห็นราคาจากบทความที่เขียนไว้เมื่อปีก่อน ให้ถือเป็นแค่ตัวเลขอ้างอิงคร่าว ๆ เท่านั้น',
+                'วิธีเช็คที่เร็วที่สุดคือพิมพ์ชื่อการ์ดตามด้วยเลขใบในช่องค้นหา เช่น Luffy OP05-119 ระบบจะค้นทั้งฉบับอังกฤษและญี่ปุ่นพร้อมกัน แล้วเลือกใบที่รหัสตรงกับที่ถืออยู่ ถ้าอ่านชื่อการ์ดไม่ออกเพราะเป็นฉบับญี่ปุ่น เปิดกล้องสแกนได้เลย ระบบจะระบุใบให้เอง',
+                'ถ้ามีการ์ดหลายสิบใบและไม่อยากเช็คทีละใบ ให้เริ่มจากคัดเฉพาะใบที่มีโอกาสมีราคา คือใบอาร์ตเต็มใบ ใบขอบทอง ใบลายมังงะ ใบโปรโม และใบผู้นำจากชุดเก่า ที่เหลือค่อยเช็คทีหลังหรือขายรวมเป็นกอง วิธีคัดกองแบบละเอียดเราเขียนไว้ในบทความเรื่องการขายการ์ดยกกอง',
+                'สุดท้าย ถ้าเช็คราคาแล้วอยากขายจริง ราคาตลาดคือจุดเริ่มต้นของการตั้งราคา ไม่ใช่ราคาที่จะได้แน่นอน การ์ดที่มีคนตามหาจะขายได้ใกล้ราคาตลาด ส่วนการ์ดที่มีคนขายพร้อมกันเยอะจะต้องตั้งต่ำกว่านั้นถึงจะขายออก เรื่องนี้มีผลกับการ์ดวันพีชเป็นพิเศษ เพราะชุดใหม่ออกเร็วและของใหม่เข้าตลาดตลอดเวลา',
+            ],
+            en: [
+                'The question everyone with a One Piece binder asks is "what is this worth". The question that has to be answered first is "which card is this". The same character exists as an English printing, a Japanese printing, a base art, an alternate art and a promo, and the gap between them runs to dozens of times. Look up the wrong version and the number means nothing.',
+                'Identifying the printing takes under a minute. The code in the lower corner — OP05-119, ST01-006 — gives you the set and the number within it. Our separate guide covers what OP, ST, EB and PRB mean. For the language, read the card itself rather than assuming from the box it came in.',
+                'We hold 6,377 One Piece cards: 3,225 English and 3,152 Japanese. The two are priced as separate cards, not one price with a currency conversion, because the two markets genuinely move differently.',
+                'The part nobody wants to hear first: most One Piece cards are not expensive. Across the 6,052 cards carrying a market price, the median is THB 42 and 53.8% sit under THB 50. Tip a binder onto a table and half of it is worth less than a coffee.',
+                'The other half of that is equally true. 5.6% of the catalog is worth over THB 1,000, and the top tenth starts around THB 269. The question is not whether your pile has value — it is whether you can find the 5.6%.',
+                'Where the value sits is more predictable in One Piece than in most games. Sort the catalog by price and almost everything at the top falls into two groups: Japanese promos handed out at events or bundled with merchandise, and alternate arts — full-art SECs, gold-bordered SPs, and the manga-art cards from the PRB sets. Standard-art SRs and Leaders pulled from ordinary boosters usually sit far closer to bulk than people expect.',
+                "Monkey.D.Luffy's SEC from OP-11 and the manga-art Roronoa Zoro from PRB-01 make the point. Both are characters everyone knows, but what separates them from the other Luffy and Zoro cards in the same set is the art and the number, not the character. Check the card number before celebrating.",
+                'Prices differing between places is normal, not evidence that someone is cheating. A shop price is what a seller wants. A Facebook group price is what someone wants for a fast sale. The market price we show is an average of transactions that actually happened. All three are useful for different things; if you are selling, start from the market price and adjust for condition and how quickly you need the money.',
+                'Condition moves the number more than people expect. What we display is the price of a good, ungraded copy. Whitened edges, a bent corner or a scratch across the art all sit below it. Graded copies run on an entirely separate scale, which we store separately and never mix into the raw price.',
+                'One Piece prices move faster than the other games we track — sets arrive frequently and the competitive list keeps changing. Our figures update daily, and over 99% of One Piece price rows were refreshed within the last 30 days. Treat a price quoted in an article written last year as a rough landmark, nothing more.',
+                'The fastest lookup is the card name plus its number — "Luffy OP05-119" — which searches the English and Japanese printings at once. Pick the one whose code matches your card. If you cannot read the name because it is a Japanese printing, use the camera scanner instead.',
+                'With dozens of cards, do not check them one at a time. Pull out the ones that could carry value — full arts, gold borders, manga arts, promos and older Leader cards — and check those first; the rest can be sold as a lot. Our bulk-selling guide covers how to split a pile properly.',
+                'Finally, if you check a price intending to sell, the market price is where pricing starts, not what you are guaranteed. Cards people are hunting sell near it; cards with many sellers need to sit under it. That matters more in One Piece than elsewhere, because new supply arrives constantly.',
+            ],
+        },
+        faqs: [
+            {
+                q: { th: 'เช็คราคาการ์ดวันพีชฟรีได้ที่ไหน?', en: 'Where can I check One Piece card prices for free?' },
+                a: {
+                    th: 'เช็คได้ฟรีบน CardStreet ทั้งฉบับอังกฤษและญี่ปุ่น ครอบคลุมการ์ด 6,377 ใบ ดูราคาได้โดยไม่ต้องสมัครสมาชิก ค้นด้วยชื่อการ์ดพร้อมเลขใบ หรือใช้กล้องสแกน',
+                    en: 'Free on CardStreet, covering 6,377 cards across the English and Japanese printings, with no account needed to see a price. Search by name plus card number, or scan the card with your camera.',
+                },
+            },
+            {
+                q: { th: 'การ์ดวันพีชส่วนใหญ่ราคาเท่าไหร่?', en: 'What is a typical One Piece card worth?' },
+                a: {
+                    th: 'ค่ากลางอยู่ที่ประมาณ 42 บาท และ 53.8% ของการ์ดในระบบต่ำกว่า 50 บาท มีเพียง 5.6% ที่เกิน 1,000 บาท (ข้อมูลวันที่ 11 กันยายน 2026)',
+                    en: 'The median is around THB 42 and 53.8% of the catalog sits under THB 50. Only 5.6% clears THB 1,000 (measured 2026-09-11).',
+                },
+            },
+            {
+                q: { th: 'การ์ดวันพีชใบไหนที่ราคาสูง?', en: 'Which One Piece cards actually carry value?' },
+                a: {
+                    th: 'การ์ดโปรโมฉบับญี่ปุ่น และใบอาร์ตพิเศษ ทั้ง SEC อาร์ตเต็มใบ ใบ SP ขอบทอง และใบลายมังงะจากชุด PRB ส่วนใบ SR อาร์ตปกติมักไม่ต่างจากใบทั่วไปมากนัก',
+                    en: 'Japanese promos and alternate arts — full-art SECs, gold-bordered SPs and PRB manga arts. Standard-art SRs are usually much closer to bulk.',
+                },
+            },
+            {
+                q: { th: 'ทำไมราคาการ์ดใบเดียวกันในแต่ละที่ไม่เท่ากัน?', en: 'Why do prices differ between sites?' },
+                a: {
+                    th: 'ราคาร้านคือราคาที่ผู้ขายตั้ง ราคาในกลุ่มเฟซบุ๊กคือราคาขายเร็ว ส่วนราคาตลาดคือค่าเฉลี่ยจากการซื้อขายที่เกิดขึ้นจริง เป็นคนละตัวเลขที่ใช้คนละแบบ',
+                    en: 'A shop price is an asking price, a Facebook price is a quick-sale price, and a market price is an average of completed sales. Three different numbers with three different uses.',
+                },
+            },
+            {
+                q: { th: 'ราคาที่แสดงเป็นราคาการ์ดสภาพไหน?', en: 'What condition does the displayed price assume?' },
+                a: {
+                    th: 'เป็นราคาการ์ดสภาพดีที่ยังไม่ได้ส่งเกรด การ์ดที่มีตำหนิจะต่ำกว่านั้น ส่วนการ์ดที่ส่งเกรดแล้วเราเก็บราคาแยกไว้ต่างหาก',
+                    en: 'A good ungraded copy. Damaged cards sit below it; graded copies are stored and shown separately.',
+                },
+            },
+            {
+                q: { th: 'ราคาการ์ดวันพีชอัปเดตบ่อยแค่ไหน?', en: 'How often do the prices update?' },
+                a: {
+                    th: 'อัปเดตทุกวัน ปัจจุบันมากกว่า 99% ของข้อมูลราคาการ์ดวันพีชถูกรีเฟรชภายใน 30 วันล่าสุด',
+                    en: 'Daily. As of now, over 99% of One Piece price rows were refreshed within the last 30 days.',
+                },
+            },
+            {
+                q: { th: 'มีการ์ดวันพีชฉบับภาษาไทยไหม?', en: 'Is there a Thai-language One Piece printing?' },
+                a: {
+                    th: 'ไม่มี ต้องเลือกระหว่างฉบับอังกฤษกับญี่ปุ่น รายละเอียดว่าควรเลือกฉบับไหนอยู่ในบทความเปรียบเทียบสองฉบับ',
+                    en: 'No — the choice is between English and Japanese. Our English-vs-Japanese guide covers which suits you.',
+                },
+            },
+            {
+                q: { th: 'มีการ์ดเยอะมาก ควรเริ่มเช็คใบไหนก่อน?', en: 'I have hundreds of cards — where do I start?' },
+                a: {
+                    th: 'เริ่มจากใบอาร์ตเต็มใบ ใบขอบทอง ใบลายมังงะ ใบโปรโม และใบผู้นำจากชุดเก่า ที่เหลือขายรวมเป็นกองได้',
+                    en: 'Start with full arts, gold borders, manga arts, promos and older Leader cards. The rest can go as a lot.',
+                },
+            },
+        ],
+    },
 ];
 
 /** A guide by slug, or null. */

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 import FaqList from '@/components/FaqList';
 
 interface PageStrings {
@@ -70,6 +71,7 @@ export default function FaqPageContent({ prefix }: { prefix: '' | '/en' }) {
           >
             {t.emailSupport}
           </a>
+          <CommercialLinks prefix={prefix} current="/faq" />
         </div>
       </div>
     </div>

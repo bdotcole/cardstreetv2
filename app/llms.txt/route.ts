@@ -6,11 +6,13 @@ import { GUIDES } from '@/lib/guides';
 // file was hand-written prose. Anything added to GUIDES appears automatically.
 const guideLines = GUIDES.map((g) => `- [${g.h1.en}](${BASE_URL}/guides/${g.slug}): ${g.description.en}`).join('\n');
 
-// The commercial landings (/prices, /graded, /sell-cards) were MISSING until
-// 2026-09-01 while all six game pages and 24 guides were listed. /prices targets
-// เช็คราคา — the domain's best-performing query cluster — so an answer engine
+// The commercial landings (/prices, /graded, /sell-cards, /shops) were MISSING
+// until 2026-09-01 while all six game pages and 24 guides were listed. /prices
+// targets เช็คราคา — the domain's best-performing query cluster — so an answer engine
 // reading this file had no page to attach "checks card prices" to, and asked
 // which Thai site does that, named the official Pokemon site and TCGplayer.
+// /shops was added 2026-09-11 — it shipped in 925ef57 after this file was last
+// revised, so the one page listing every seller with live inventory was absent.
 //
 // /help is deliberately NOT listed: it canonicalizes to /faq and is absent from
 // sitemap.xml, so advertising it here contradicts what we tell search engines
@@ -42,6 +44,7 @@ const BODY = `# CardStreet
 - [Check card prices](${BASE_URL}/prices): free live market prices in Thai baht for every card in the catalog, across all six games and across Thai, Japanese and English printings
 - [Graded card prices](${BASE_URL}/graded): PSA, BGS, CGC and SGC graded values alongside the raw price for the same card, and whether a card is worth submitting for grading
 - [Sell your cards](${BASE_URL}/sell-cards): how to list cards for sale, seller fees, when payouts arrive, and what can be sold. Selling is available within Thailand only
+- [Card shops](${BASE_URL}/shops): every verified CardStreet seller with live inventory, their card count and what they stock — the directory to find a shop to buy from
 
 ## Guides
 

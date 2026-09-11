@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 interface ContactContentData {
   pageTitle: string;
@@ -137,6 +138,7 @@ export default function ContactContent({ prefix }: { prefix: '' | '/en' }) {
             </p>
             <p className="text-slate-600 text-xs">{content.madeWithCare}</p>
           </section>
+          <CommercialLinks prefix={prefix} />
         </div>
       </div>
     </div>

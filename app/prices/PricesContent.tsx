@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 // Bilingual copy lives in this module rather than lib/locales/*.json because it
 // is page-prose, not reusable UI strings, and it has to stay readable as a whole
@@ -34,9 +35,6 @@ interface Strings {
   ctaSets: string;
   browseTitle: string;
   games: { href: string; label: string }[];
-  gradedLink: string;
-  sellLink: string;
-  faqLink: string;
 }
 
 const EN: Strings = {
@@ -150,9 +148,6 @@ const EN: Strings = {
     { href: '/en/lorcana', label: 'Disney Lorcana' },
     { href: '/en/riftbound', label: 'Riftbound' },
   ],
-  gradedLink: 'Graded card prices',
-  sellLink: 'Sell your cards',
-  faqLink: 'Frequently asked questions',
 };
 
 const TH: Strings = {
@@ -262,9 +257,6 @@ const TH: Strings = {
     { href: '/lorcana', label: 'การ์ด Disney Lorcana' },
     { href: '/riftbound', label: 'การ์ด Riftbound' },
   ],
-  gradedLink: 'ราคาการ์ดเกรด',
-  sellLink: 'ขายการ์ดของคุณ',
-  faqLink: 'คำถามที่พบบ่อย',
 };
 
 // `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
@@ -374,17 +366,7 @@ export default function PricesContent({ prefix }: { prefix: string }) {
             </Link>
           ))}
         </div>
-        <div className="flex flex-wrap gap-4">
-          <Link href={`${prefix}/graded`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.gradedLink}
-          </Link>
-          <Link href={`${prefix}/sell-cards`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.sellLink}
-          </Link>
-          <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.faqLink}
-          </Link>
-        </div>
+        <CommercialLinks prefix={prefix} current="/prices" />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 // Single-sourced with the HowTo JSON-LD in page.tsx. See howToSteps.ts for why
 // it is a separate module and not an export from this one.
 import { GRADED_HOWTO } from './howToSteps';
@@ -51,7 +52,6 @@ interface Strings {
   more: Section[];
   ctaPrices: string;
   ctaSell: string;
-  faqLink: string;
 }
 
 const EN: Strings = {
@@ -134,7 +134,6 @@ const EN: Strings = {
   ],
   ctaPrices: 'Check card prices',
   ctaSell: 'List a graded card',
-  faqLink: 'Frequently asked questions',
 };
 
 const TH: Strings = {
@@ -217,7 +216,6 @@ const TH: Strings = {
   ],
   ctaPrices: 'เช็คราคาการ์ด',
   ctaSell: 'ลงขายการ์ดเกรด',
-  faqLink: 'คำถามที่พบบ่อย',
 };
 
 // `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
@@ -350,9 +348,7 @@ export default function GradedContent({ prefix }: { prefix: string }) {
           ))}
         </ul>
 
-        <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
-          {t.faqLink}
-        </Link>
+        <CommercialLinks prefix={prefix} current="/graded" />
       </div>
     </div>
   );

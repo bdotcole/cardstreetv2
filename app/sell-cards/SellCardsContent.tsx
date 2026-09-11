@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 // Single-sourced with the HowTo JSON-LD in page.tsx. See howToSteps.ts for why
 // it is a separate module and not an export from this one.
 import { SELL_HOWTO } from './howToSteps';
@@ -52,8 +53,6 @@ interface Strings {
   region: string;
   ctaStart: string;
   ctaPrices: string;
-  gradedLink: string;
-  faqLink: string;
 }
 
 const EN: Strings = {
@@ -116,8 +115,6 @@ const EN: Strings = {
     'CardStreet currently supports sellers based in Thailand, because payouts and shipping are tied to Thai bank accounts and Flash Express. Browsing, scanning and collection tracking work from anywhere.',
   ctaStart: 'Start listing',
   ctaPrices: 'Check card prices first',
-  gradedLink: 'Graded card prices',
-  faqLink: 'Frequently asked questions',
 };
 
 const TH: Strings = {
@@ -180,8 +177,6 @@ const TH: Strings = {
     'ตอนนี้ CardStreet รองรับผู้ขายที่อยู่ในประเทศไทยเท่านั้น เพราะระบบรับเงินและระบบจัดส่งผูกกับบัญชีธนาคารไทยและ Flash Express ส่วนการเลือกดูการ์ด สแกนการ์ด และเก็บคอลเลกชัน ใช้งานได้จากทุกประเทศ',
   ctaStart: 'เริ่มลงขาย',
   ctaPrices: 'เช็คราคาการ์ดก่อนตั้งราคา',
-  gradedLink: 'ราคาการ์ดเกรด',
-  faqLink: 'คำถามที่พบบ่อย',
 };
 
 // `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
@@ -301,14 +296,7 @@ export default function SellCardsContent({ prefix }: { prefix: string }) {
         <h2 className="text-lg font-black uppercase tracking-tight mb-3">{t.regionTitle}</h2>
         <p className="text-sm text-slate-300 leading-relaxed mb-12">{t.region}</p>
 
-        <div className="flex flex-wrap gap-4">
-          <Link href={`${prefix}/graded`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.gradedLink}
-          </Link>
-          <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.faqLink}
-          </Link>
-        </div>
+        <CommercialLinks prefix={prefix} current="/sell-cards" />
       </div>
     </div>
   );

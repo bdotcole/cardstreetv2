@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 interface PrivacyListItem {
   label?: string;
@@ -165,6 +166,7 @@ export default function PrivacyContent({ prefix }: { prefix: '' | '/en' }) {
               {section.body && <p>{section.body}</p>}
             </section>
           ))}
+          <CommercialLinks prefix={prefix} />
         </div>
       </div>
     </div>

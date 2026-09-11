@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 interface TermsBlock {
   label?: string;
@@ -220,6 +221,7 @@ export default function TermsContent({ prefix }: { prefix: '' | '/en' }) {
               )}
             </section>
           ))}
+          <CommercialLinks prefix={prefix} />
         </div>
       </div>
     </div>
