@@ -21,25 +21,16 @@ interface StatCard {
 const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
 
 /**
- * Seller ids belonging to staff.
+ * Every paid order counts, whoever sold it.
  *
- * Admins list at ฿1 to seed the marketplace, and those seeded sales dominate
- * every headline: of ~฿1,094 GMV ever recorded, ~฿964 is admin self-dealing.
- * A dashboard that counts them answers "did we sell to ourselves", which is
- * the one question nobody needs answered — and it hid the real number (~฿130
- * across a handful of orders) behind a figure 8x larger.
- *
- * Returned as a list rather than filtered in SQL because PostgREST cannot
- * express "seller's profile role != admin" as a join filter on orders.
+ * This used to exclude any seller whose profile role is 'admin' as "seeded",
+ * which swept up Ari_shop — a real shop shipping real cards to real buyers —
+ * and reported 1 order / 130 baht against an actual 21 orders / ~1,095 baht.
+ * There is no seller filter here now. Cancellations are the only exclusion.
  */
-async function getStaffSellerIds(supabase: ReturnType<typeof createAdminClient>): Promise<string[]> {
-    const { data } = await supabase.from('profiles').select('id').eq('role', 'admin')
-    return (data ?? []).map((r) => r.id as string)
-}
 
 async function getOverviewStats() {
     const supabase = createAdminClient()
-    const staffSellerIds = await getStaffSellerIds(supabase)
 
     const [usersRes, collectionsRes, listingsRes, ticketsRes, reportsRes, requestsRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
@@ -52,30 +43,19 @@ async function getOverviewStats() {
 
     // Paid-order count + GMV. total_amount is the item value in baht (shipping
     // fee is a separate column). Paged because a single select caps at 1000 rows.
-    // Real GMV excludes staff sellers (see getStaffSellerIds). Both figures are
-    // kept: `paidOrders`/`gmvBaht` are what the business actually did, and the
-    // seeded totals are reported beside them so the seeding is still visible
-    // rather than silently deleted.
     const PAGE = 1000
     let paidOrders = 0
     let gmvBaht = 0
-    let seededOrders = 0
-    let seededGmvBaht = 0
     for (let from = 0; ; from += PAGE) {
         const { data } = await supabase
             .from('orders')
-            .select('total_amount, seller_id')
+            .select('total_amount')
             .in('status', PAID_ORDER_STATUSES)
             .range(from, from + PAGE - 1)
         for (const row of data ?? []) {
             const amount = Number(row.total_amount) || 0
-            if (staffSellerIds.includes(row.seller_id as string)) {
-                seededOrders++
-                seededGmvBaht += amount
-            } else {
-                paidOrders++
-                gmvBaht += amount
-            }
+            paidOrders++
+            gmvBaht += amount
         }
         if (!data || data.length < PAGE) break
     }
@@ -86,8 +66,6 @@ async function getOverviewStats() {
         activeListings: listingsRes.count ?? 0,
         paidOrders,
         gmvBaht,
-        seededOrders,
-        seededGmvBaht,
         openTickets: ticketsRes.count ?? 0,
         openReports: reportsRes.count ?? 0,
         openCardRequests: requestsRes.count ?? 0,
@@ -117,11 +95,9 @@ async function getTopPartners() {
 
 async function getRecentSales() {
     const supabase = createAdminClient()
-    // Staff sellers excluded here too — a "Recent sales" list of ฿1 seed
-    // orders is the same misreading as the GMV tile, just harder to notice.
-    // Over-fetched then filtered: PostgREST cannot express "seller's role is
-    // not admin" as a filter on orders.
-    const staffSellerIds = await getStaffSellerIds(supabase)
+    // No seller filter: a real shop run by an admin is still a real sale, and
+    // dropping those left this list all but empty. The 10 most recent paid
+    // orders are the 10 most recent paid orders.
     const { data } = await supabase
         .from('orders')
         .select(`
@@ -132,8 +108,8 @@ async function getRecentSales() {
         `)
         .in('status', PAID_ORDER_STATUSES)
         .order('created_at', { ascending: false })
-        .limit(50)
-    return (data ?? []).filter((o) => !staffSellerIds.includes(o.seller_id as string)).slice(0, 10)
+        .limit(10)
+    return data ?? []
 }
 
 async function getRecentOffers() {
@@ -296,8 +272,8 @@ export default async function AdminOverviewPage() {
         { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts' },
         { label: 'Collections', value: stats.collectionItems.toLocaleString(), icon: 'fa-solid fa-layer-group', color: 'text-brand-purple', sub: 'Cards in collections' },
         { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace' },
-        { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: `Real buyers · +${stats.seededOrders} seeded` },
-        { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: `Excl. staff sellers · +฿${Math.round(stats.seededGmvBaht).toLocaleString()} seeded` },
+        { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid, excl. cancelled' },
+        { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'All paid orders' },
         { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention' },
         { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review' },
         { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests' },
