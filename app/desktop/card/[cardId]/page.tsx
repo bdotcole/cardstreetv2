@@ -46,9 +46,17 @@ function thb(amount: number): string {
  * getSetSiblings hands every card in a set the same twelve tiles, so citing
  * siblings[0] and [1] everywhere would print one identical sentence across the
  * whole set - the templated-text problem this summary exists to avoid.
+ *
+ * Same-NAME siblings are excluded even though getSetSiblings has already
+ * excluded this id: 297 of the ~5.7k unpriced Thai cards share a name with a
+ * priced row in their own set (a second printing at a different number), and
+ * citing one would read "this card has no price, but other cards like <itself>
+ * cost X".
  */
-function priceReference(cardId: string, siblings: SiblingCard[]): SiblingCard[] {
-    const priced = siblings.filter((s) => !s.fromOtherSet && (s.marketPrice || 0) > 0);
+function priceReference(cardId: string, cardName: string, siblings: SiblingCard[]): SiblingCard[] {
+    const priced = siblings.filter(
+        (s) => !s.fromOtherSet && (s.marketPrice || 0) > 0 && s.name !== cardName,
+    );
     if (priced.length < 2) return priced;
     let h = 0;
     for (let i = 0; i < cardId.length; i++) h = (h * 31 + cardId.charCodeAt(i)) >>> 0;
@@ -102,7 +110,7 @@ function buildCardSummary(
             // No catalog price and nothing listed. The Thai catalog has ~5.5k
             // cards in this state (no English twin the pricing rule can derive
             // from), so this branch is load-bearing, not an edge case.
-            const ref = priceReference(card.id, siblings);
+            const ref = priceReference(card.id, card.name, siblings);
             state = ref.length
                 ? ` No market price is on file for it yet. Other cards from ${set || 'the same set'} do have one - ${ref.map((r) => `${r.name} at ${thb(r.marketPrice || 0)}`).join(' and ')} - and you can be alerted the moment a seller lists this card.`
                 : ' Track its market price and get alerted when a seller lists one on CardStreet.';
@@ -127,7 +135,7 @@ function buildCardSummary(
     } else if (count) {
         state = ` ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
     } else {
-        const ref = priceReference(card.id, siblings);
+        const ref = priceReference(card.id, card.name, siblings);
         state = ref.length
             ? ` ยังไม่มีราคาตลาดอ้างอิงสำหรับใบนี้ แต่การ์ดใบอื่นในชุด${set ? ` ${set}` : 'เดียวกัน'} มีราคาแล้ว เช่น ${ref.map((r) => `${r.name} ${thb(r.marketPrice || 0)}`).join(' และ ')} กดติดตามไว้เพื่อรับแจ้งเตือนทันทีที่มีผู้ขายลงการ์ดใบนี้`
             : ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน CardStreet';
