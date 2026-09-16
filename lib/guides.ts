@@ -1361,6 +1361,151 @@ export const GUIDES: Guide[] = [
             },
         ],
     },
+    // The only guide aimed at a measured drop-off rather than a search query.
+    //
+    // Funnel, measured 2026-09-11: 1,148 profiles -> 155 start Stripe onboarding ->
+    // 51 finish -> 22 of those have ever listed. 104 people are stalled mid-
+    // verification and 50 of them already hold cards in their in-app collection.
+    // They met Thai KYC without knowing what it would ask for, and stopped.
+    //
+    // Email is exhausted as a lever: 100 of the 104 sit at the 3-touch nudge cap.
+    // Across the other 29 guides, "Stripe" appeared 0 times, บัตรประชาชน 0,
+    // บัญชีธนาคาร 0; ยืนยันตัวตน appeared 7 times and every one was buyer-facing
+    // reassurance. Nothing on the site told a seller what the form wants.
+    //
+    // CLAIMS ARE CODE-BACKED, and two of them are the reason this sat as a draft
+    // until the founder approved it:
+    //   - "CardStreet does not store your ID" — onboarding is Stripe-HOSTED
+    //     (accountLinks.create in app/api/stripe/connect/start); no route or
+    //     component of ours reads or persists an ID number, laser code or selfie.
+    //   - "we withhold no tax" — there is no withholding logic anywhere in the
+    //     codebase; checkout deducts application_fee_amount and nothing else.
+    // Fees are read from lib/partnerTiers.ts (9% non-partner, 5% at partner level
+    // 1 falling to 2%). Draft-first listings are lib/draftListings.ts. No payout
+    // TIMING is stated anywhere: on TH direct charges Stripe's own automatic
+    // schedule decides, so the copy says the payment provider decides.
+    {
+        slug: 'seller-verification-thailand',
+        game: 'pokemon',
+        title: {
+            th: 'ยืนยันตัวตนผู้ขาย CardStreet ต้องใช้อะไรบ้าง | CardStreet',
+            en: 'Seller verification on CardStreet: what you need | CardStreet',
+        },
+        description: {
+            th: 'รวมทุกอย่างที่ต้องเตรียมก่อนยืนยันตัวตนเพื่อขายการ์ดบน CardStreet — บัตรประชาชน รหัสเลเซอร์ เซลฟี่ และบัญชีธนาคาร พร้อมคำอธิบายว่าทำไมกฎหมายไทยถึงบังคับ',
+            en: 'Everything to have ready before verifying your identity to sell cards on CardStreet — Thai ID, laser code, selfie and bank account — and why Thai law requires it.',
+        },
+        h1: {
+            th: 'ยืนยันตัวตนผู้ขาย: ต้องใช้อะไรบ้าง และทำไมถึงต้องทำ',
+            en: 'Seller verification: what you need, and why',
+        },
+        updated: '2026-09-16',
+        body: {
+            th: [
+                'ถ้าคุณกดสมัครเป็นผู้ขายแล้วเจอหน้าฟอร์มยืนยันตัวตน แล้วปิดทิ้งไป — คุณไม่ได้เป็นคนเดียว ผู้ขายส่วนใหญ่ที่หยุดกลางทางไม่ได้เปลี่ยนใจ แต่เจอฟอร์มที่ไม่รู้ว่าจะต้องใช้อะไรบ้าง หน้านี้บอกล่วงหน้าทั้งหมด ใช้เวลาเตรียมของประมาณ 2 นาที และกรอกจริงอีกไม่ถึง 5 นาที',
+                'สิ่งที่ต้องเตรียม',
+                'บัตรประชาชนไทย — ต้องใช้เลขบัตร 13 หลัก และรหัสเลเซอร์หลังบัตร (ตัวอักษรผสมตัวเลข ขึ้นต้นด้วย JT, ME หรือ JC อยู่ด้านหลังบัตร มุมขวาบน) คนส่วนใหญ่สะดุดตรงนี้เพราะไม่เคยต้องใช้มาก่อน หยิบบัตรมาวางข้างตัวก่อนเริ่มกรอก',
+                'วัน เดือน ปีเกิด และที่อยู่ตามทะเบียนบ้าน — ถ้าคุณกรอกที่อยู่ในโปรไฟล์ CardStreet ไว้แล้ว ระบบจะเติมให้อัตโนมัติ ไม่ต้องพิมพ์ซ้ำ',
+                'รูปเซลฟี่ยืนยันตัวตน — ขั้นตอนนี้จะให้คุณถ่ายรูปหน้าตัวเองสดๆ ผ่านกล้อง ไม่ใช่อัปโหลดรูปเก่า ทำบนมือถือง่ายที่สุด และข้ามไม่ได้',
+                'บัญชีธนาคารไทยในชื่อคุณเอง — สำหรับรับเงินที่ขายได้ ต้องเป็นชื่อเดียวกับที่ยืนยันตัวตน',
+                'ทำไมต้องใช้เยอะขนาดนี้',
+                'เพราะบนระบบของไทย ผู้ขายคือผู้รับเงินโดยตรง เงินของผู้ซื้อเข้าบัญชีร้านของคุณ ไม่ได้ผ่านกระเป๋ากลางของ CardStreet ก่อน โครงสร้างแบบนี้กฎหมายไทยกำหนดให้ต้องรู้จักตัวตนผู้รับเงินก่อน — เป็นมาตรฐานเดียวกับที่ธนาคารและผู้ให้บริการชำระเงินทุกเจ้าในไทยต้องทำ ไม่ใช่กฎที่ CardStreet ตั้งขึ้นเอง และเราลดจำนวนช่องที่คุณต้องกรอกเองไม่ได้',
+                'ข้อดีของโครงสร้างนี้คือเงินเข้าบัญชีคุณโดยตรง ไม่ต้องรอเบิกจากกระเป๋ากลาง และ CardStreet ไม่มีทางถือเงินคุณค้างไว้',
+                'ยังไม่พร้อมยืนยันตัวตน? ลงการ์ดไว้ก่อนได้',
+                'คุณลงการ์ดได้ทันทีโดยยังไม่ต้องยืนยันตัวตนเสร็จ การ์ดจะถูกบันทึกเป็นแบบร่าง — เห็นเฉพาะคุณคนเดียว และจะขึ้นขายอัตโนมัติทันทีที่การยืนยันตัวตนผ่าน ไม่ต้องกลับมาลงใหม่ วิธีนี้เหมาะกับคนที่อยากดูก่อนว่าการ์ดในมือราคาเท่าไหร่ก่อนตัดสินใจ',
+                'ผ่านแล้วเกิดอะไรขึ้น',
+                'ร้านของคุณจะขึ้นในหน้ารวมร้านค้าและในหน้าการ์ดแต่ละใบที่คุณลงขาย ผู้ซื้อจ่ายได้ทั้งบัตรเครดิตและพร้อมเพย์ เงินเข้าบัญชีร้านของคุณตอนที่ผู้ซื้อจ่าย และโอนเข้าบัญชีธนาคารตามรอบอัตโนมัติของผู้ให้บริการชำระเงิน',
+                'ค่าธรรมเนียมของ CardStreet คือ 9% ของยอดขายสำหรับผู้ขายทั่วไป และลดเหลือเริ่มต้นที่ 5% สำหรับพาร์ตเนอร์ ค่าธรรมเนียมการรูดบัตรของผู้ให้บริการชำระเงินหักจากยอดที่เข้าบัญชีร้านตามปกติ ผู้ซื้อไม่ได้ถูกบวกเพิ่ม',
+                'ถ้าติดตรงไหน',
+                'ฟอร์มยืนยันตัวตนกลับมาทำต่อได้ตลอด ข้อมูลที่กรอกไว้แล้วไม่หาย เข้าที่หน้าโปรไฟล์ แล้วไปที่หัวข้อการรับเงิน กดทำต่อได้เลย ถ้ายังติด ทักหาเราได้ที่หน้าติดต่อ',
+            ],
+            en: [
+                'If you started seller signup, met the identity form and closed it — you are not unusual. Most sellers who stop have not changed their minds; they hit a form without knowing what it would ask for. This page tells you everything in advance. About two minutes to gather, under five to fill in.',
+                'What to have ready',
+                'Your Thai national ID card — you need the 13-digit number and the laser code on the back (letters and digits beginning JT, ME or JC, top-right on the reverse). This is where most people stop, because it is a field they have never been asked for before. Have the card next to you before you start.',
+                'Date of birth and registered address — if your CardStreet profile already has an address, it is filled in for you.',
+                'A verification selfie — a live photo through your camera, not an uploaded file. Easiest on a phone, and it cannot be skipped.',
+                'A Thai bank account in your own name — for receiving your sales. It must match the verified identity.',
+                'Why it asks for so much',
+                'On the Thai platform, the seller receives the money directly. A buyer’s payment lands in your own merchant balance rather than passing through a CardStreet wallet first. Thai law requires the recipient of funds to be identified before that can happen — the same standard every bank and payment provider in Thailand works to. It is not a CardStreet rule, and we cannot reduce the number of fields.',
+                'The upside of that structure is that your money is yours immediately. There is no CardStreet wallet to withdraw from, and no way for us to sit on your balance.',
+                'Not ready to verify? List anyway',
+                'You can list cards before verification is finished. They are saved as drafts — visible only to you — and go live automatically the moment verification passes. Nothing to re-enter. This suits anyone who wants to see what their cards are worth before committing.',
+                'What happens once you pass',
+                'Your shop appears in the shop directory and on every card page you list. Buyers can pay by card or PromptPay. Money reaches your merchant balance when the buyer pays, and moves to your bank on the payment provider’s automatic schedule.',
+                'CardStreet’s fee is 9% of the sale for standard sellers, dropping to 5% and below for partners. The payment provider’s processing fee comes out of your balance as normal; buyers are never charged extra for it.',
+                'If you get stuck',
+                'The form can be resumed at any time and keeps what you have already entered. Open your profile, go to the payouts section, and continue. If you are still stuck, use the contact page.',
+            ],
+        },
+        faqs: [
+            {
+                q: {
+                    th: 'รหัสเลเซอร์หลังบัตรประชาชนคืออะไร หาจากตรงไหน?',
+                    en: 'What is the laser code on a Thai ID card, and where is it?',
+                },
+                a: {
+                    th: 'เป็นรหัส 12 หลักที่ผสมตัวอักษรกับตัวเลข ขึ้นต้นด้วย JT, ME หรือ JC อยู่ด้านหลังบัตรประชาชนมุมขวาบน ใช้ยืนยันว่าบัตรใบนั้นเป็นใบจริงที่ออกล่าสุด ไม่ใช่เลข 13 หลักด้านหน้าบัตร',
+                    en: 'A 12-character code mixing letters and digits, beginning JT, ME or JC, printed top-right on the back of the card. It confirms the card is the current genuine issue. It is not the 13-digit number on the front.',
+                },
+            },
+            {
+                q: { th: 'ข้ามขั้นตอนถ่ายเซลฟี่ได้ไหม?', en: 'Can I skip the selfie step?' },
+                a: {
+                    th: 'ไม่ได้ ขั้นตอนนี้เป็นเงื่อนไขของการเปิดให้ร้านรับเงินได้ ไม่ใช่แค่เงื่อนไขตอนถอนเงิน จึงข้ามหรือทำทีหลังไม่ได้ แนะนำให้ทำบนมือถือเพราะใช้กล้องหน้าได้เลย',
+                    en: 'No. It is a condition of your shop being able to accept money at all, not just of withdrawing it, so it cannot be deferred. A phone is easiest, since it uses the front camera directly.',
+                },
+            },
+            {
+                q: {
+                    th: 'ต้องจดทะเบียนบริษัทหรือมีหน้าร้านจริงไหม?',
+                    en: 'Do I need a registered company or a physical shop?',
+                },
+                a: {
+                    th: 'ไม่ต้อง สมัครในนามบุคคลธรรมดาได้ ไม่ต้องมีเว็บไซต์ และไม่ต้องมีหน้าร้าน',
+                    en: 'No. You can register as an individual, with no website and no storefront.',
+                },
+            },
+            {
+                q: {
+                    th: 'ยังยืนยันตัวตนไม่เสร็จ ลงการ์ดได้ไหม?',
+                    en: 'Can I list cards before verification is complete?',
+                },
+                a: {
+                    th: 'ได้ การ์ดจะถูกเก็บเป็นแบบร่างที่เห็นเฉพาะคุณ และขึ้นขายอัตโนมัติเมื่อการยืนยันตัวตนผ่าน ไม่ต้องกลับมาลงใหม่',
+                    en: 'Yes. They are saved as drafts only you can see, and publish automatically when verification passes.',
+                },
+            },
+            {
+                q: { th: 'CardStreet เก็บบัตรประชาชนของฉันไว้ไหม?', en: 'Does CardStreet store my ID card?' },
+                a: {
+                    th: 'ไม่ ข้อมูลยืนยันตัวตนส่งตรงไปที่ผู้ให้บริการชำระเงินซึ่งเป็นผู้ตรวจสอบ CardStreet เห็นเพียงสถานะว่าผ่านหรือยังไม่ผ่าน',
+                    en: 'No. Verification details go directly to the payment provider that performs the check. CardStreet only sees whether you have passed.',
+                },
+            },
+            {
+                q: { th: 'เงินที่ขายได้เข้าเมื่อไหร่?', en: 'When do I get paid?' },
+                a: {
+                    th: 'เงินเข้าบัญชีร้านของคุณตอนที่ผู้ซื้อจ่าย แล้วโอนเข้าบัญชีธนาคารตามรอบอัตโนมัติของผู้ให้บริการชำระเงินสำหรับบัญชีในประเทศไทย',
+                    en: 'Funds reach your merchant balance when the buyer pays, then transfer to your bank on the payment provider’s automatic schedule for Thai accounts.',
+                },
+            },
+            {
+                q: { th: 'ยืนยันตัวตนแล้วนานไหมกว่าจะขายได้?', en: 'How long after verifying can I sell?' },
+                a: {
+                    th: 'ถ้าข้อมูลครบ ร้านจะเปิดรับเงินได้ทันทีหลังยืนยันเสร็จ กรณีที่ต้องตรวจเพิ่มเติม หน้าการรับเงินจะแจ้งว่ายังขาดอะไร',
+                    en: 'If your details are complete, your shop can accept payments as soon as verification finishes. If anything further is needed, the payouts page shows exactly what is missing.',
+                },
+            },
+            {
+                q: { th: 'ขายการ์ดต้องเสียภาษีไหม?', en: 'Do I pay tax on card sales?' },
+                a: {
+                    th: 'รายได้จากการขายเป็นรายได้ของคุณตามกฎหมาย CardStreet ไม่ได้หักภาษี ณ ที่จ่ายให้ ถ้ายอดขายของคุณสูง ควรปรึกษาผู้เชี่ยวชาญด้านภาษี',
+                    en: 'Sales income is yours and is taxable as such; CardStreet does not withhold anything. Consult a tax professional if your volume is significant.',
+                },
+            },
+        ],
+    },
 ];
 
 /** A guide by slug, or null. */

@@ -6,7 +6,7 @@ import { getCardPageData, getSetSiblings } from '@/lib/desktopCardData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
-import type { Card } from '@/types';
+import type { Card, SiblingCard } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
 // Locale is resolved by middleware and passed via the x-cs-lang header (Thai is
@@ -39,6 +39,24 @@ function thb(amount: number): string {
 }
 
 /**
+ * Two priced cards from the SAME set, used to give an unpriced card page
+ * something concrete to say.
+ *
+ * Offset by the card's own id rather than always taking the top of the list:
+ * getSetSiblings hands every card in a set the same twelve tiles, so citing
+ * siblings[0] and [1] everywhere would print one identical sentence across the
+ * whole set - the templated-text problem this summary exists to avoid.
+ */
+function priceReference(cardId: string, siblings: SiblingCard[]): SiblingCard[] {
+    const priced = siblings.filter((s) => !s.fromOtherSet && (s.marketPrice || 0) > 0);
+    if (priced.length < 2) return priced;
+    let h = 0;
+    for (let i = 0; i < cardId.length; i++) h = (h * 31 + cardId.charCodeAt(i)) >>> 0;
+    const start = h % priced.length;
+    return [priced[start], priced[(start + 1) % priced.length]];
+}
+
+/**
  * One or two sentences of real prose for the card page, which otherwise ships
  * a heading and a price panel with no indexable sentence on it.
  *
@@ -49,7 +67,12 @@ function thb(amount: number): string {
  *
  * Prices are a server-render snapshot; the panel below stays live.
  */
-function buildCardSummary(card: Card, listings: MarketplaceListing[], lang: 'EN' | 'TH'): string {
+function buildCardSummary(
+    card: Card,
+    listings: MarketplaceListing[],
+    lang: 'EN' | 'TH',
+    siblings: SiblingCard[] = [],
+): string {
     const market = card.marketPrice && card.marketPrice > 0 ? thb(card.marketPrice) : null;
     const count = listings.length;
     const floor = count ? thb(Math.min(...listings.map((l) => l.price))) : null;
@@ -76,7 +99,13 @@ function buildCardSummary(card: Card, listings: MarketplaceListing[], lang: 'EN'
         } else if (count) {
             state = ` ${count} ${count === 1 ? 'listing starts' : 'listings start'} at ${floor} from verified sellers with nationwide delivery in Thailand.`;
         } else {
-            state = ' Track its market price and get alerted when a seller lists one on CardStreet.';
+            // No catalog price and nothing listed. The Thai catalog has ~5.5k
+            // cards in this state (no English twin the pricing rule can derive
+            // from), so this branch is load-bearing, not an edge case.
+            const ref = priceReference(card.id, siblings);
+            state = ref.length
+                ? ` No market price is on file for it yet. Other cards from ${set || 'the same set'} do have one - ${ref.map((r) => `${r.name} at ${thb(r.marketPrice || 0)}`).join(' and ')} - and you can be alerted the moment a seller lists this card.`
+                : ' Track its market price and get alerted when a seller lists one on CardStreet.';
         }
         return what + state;
     }
@@ -98,7 +127,10 @@ function buildCardSummary(card: Card, listings: MarketplaceListing[], lang: 'EN'
     } else if (count) {
         state = ` ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
     } else {
-        state = ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน CardStreet';
+        const ref = priceReference(card.id, siblings);
+        state = ref.length
+            ? ` ยังไม่มีราคาตลาดอ้างอิงสำหรับใบนี้ แต่การ์ดใบอื่นในชุด${set ? ` ${set}` : 'เดียวกัน'} มีราคาแล้ว เช่น ${ref.map((r) => `${r.name} ${thb(r.marketPrice || 0)}`).join(' และ ')} กดติดตามไว้เพื่อรับแจ้งเตือนทันทีที่มีผู้ขายลงการ์ดใบนี้`
+            : ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน CardStreet';
     }
     return what + state;
 }
@@ -117,14 +149,28 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
     // Thai leads with ราคา: price-check is the intent that actually converts here
     // ("เช็คราคาการ์ดโปเกม่อน" is the site's best-ranking query), and branching by
     // locale also stops the bare and /en variants emitting one identical title.
+    //
+    // BUT only when there is a price to show. ~5.5k Thai cards have no market
+    // value and no listing - the 60%-of-English pricing rule cannot derive one
+    // without a confident English twin - and a title reading "ราคา <card>" over a
+    // page with no price is a promise the page breaks. Those fall back to การ์ด,
+    // which still carries the noun Thai buyers search on.
+    const hasPrice = low > 0;
     const title =
         lang === 'EN'
             ? `${card.name}${line ? ` — ${line}` : ''} | CardStreet`
-            : `ราคา ${card.name}${line ? ` — ${line}` : ''} | CardStreet`;
+            : `${hasPrice ? 'ราคา' : 'การ์ด'} ${card.name}${line ? ` — ${line}` : ''} | CardStreet`;
+    // The trailing claim follows the same rule: "live market prices" / "ราคาตลาด
+    // เรียลไทม์" is true of the site but not of a card that has none, and the
+    // description is what the searcher reads before deciding to click.
     const description =
         lang === 'EN'
-            ? `Buy ${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet${priceTxt ? ` starting at ${priceTxt}` : ''}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
-            : `ซื้อ ${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet${priceTxt ? ` เริ่มต้น ${priceTxt}` : ''} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`;
+            ? hasPrice
+                ? `Buy ${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet starting at ${priceTxt}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
+                : `${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet. See what else in the set is worth, and get alerted when a verified seller lists this card.`
+            : hasPrice
+              ? `ซื้อ ${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet เริ่มต้น ${priceTxt} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`
+              : `${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet ดูราคาการ์ดใบอื่นในชุดเดียวกัน และรับแจ้งเตือนเมื่อมีผู้ขายที่ยืนยันตัวตนแล้วลงการ์ดใบนี้`;
 
     const ogImage = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
 
@@ -227,10 +273,11 @@ export default async function DesktopCardPage({ params }: { params: Promise<{ ca
 
     const pathLocale = await requestPathLocale();
     const productJsonLd = buildProductJsonLd(card, listings, pathLocale);
-    const summary = buildCardSummary(card, listings, await resolveLang());
     // Server-rendered so the sibling links are in the initial HTML and crawlable.
     // Sealed products have no set_id and get an empty list, which renders nothing.
+    // Fetched BEFORE the summary, which cites them when the card has no price.
     const siblings = await getSetSiblings(setId, cardId);
+    const summary = buildCardSummary(card, listings, await resolveLang(), siblings);
 
     return (
         <>
