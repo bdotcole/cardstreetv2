@@ -241,14 +241,37 @@ Deno.serve(async (req) => {
       // frozen for over a month while the cron still reported success (measured
       // 2026-08-02: 1 of the 40 newest YGO sets refreshed, the other 39 stuck at
       // 2026-06-29). Ordering the tail stalest-first is self-balancing: pricing a
-      // set stamps last_updated = now, which drops it to the back of the queue,
-      // so every set rotates in instead of the same head repeating.
+      // set stamps last_updated = now on the rows that matched, which drops it to
+      // the back of the queue, so every set rotates in instead of the same head
+      // repeating. (Rows that did NOT match keep their old stamp — that is the
+      // wrinkle the next paragraph exists to handle, and it is why the tail is
+      // ordered by how MANY rows are stale rather than by how old the oldest is.)
       //
-      // The staleness probe reads the oldest Raw_NM rows for this game and takes
-      // the order in which their sets first appear. Ties (a bulk backfill stamps
-      // thousands of rows at the same instant) break arbitrarily, but progress is
-      // still monotonic — a set that gets priced leaves the stale pool for good.
-      const staleRank = new Map<string, number>();
+      // The staleness probe reads the oldest Raw_NM rows for this game and counts
+      // HOW MANY each set holds. Sets with the most stale rows go first.
+      //
+      // COUNT, NOT THE OLDEST ROW'S RANK. Ordering by the position of a set's single
+      // oldest row — what this did until 2026-09-16 — assumed "a set that gets priced
+      // leaves the stale pool for good". That is false for any row JustTCG will never
+      // match: the matcher refuses ambiguous cards by design (see _shared/cardMatch.ts),
+      // and a refused row is never rewritten, so its timestamp is frozen forever. One
+      // such row pinned its whole set to the head of the queue for good, and the run
+      // re-priced that set every single night to chase a row that cannot move.
+      //
+      // Measured on live Yu-Gi-Oh EN, 2026-09-16: SEVEN of the top TEN sets had been
+      // priced the previous night and were back at the head on the strength of 1-48
+      // frozen rows (ygo-dr2 ranked 3rd on ONE row; ygo-gfp2 1st on five rows last
+      // written 96 days earlier). Meanwhile 270 of 350 sets had gone 30+ days without
+      // a visit and 19,884 of 25,683 rows were stale, while the cron reported success
+      // nightly. Counting instead of ranking sinks a frozen-row set to its true weight
+      // (5 rows scores 5) and floats genuinely unvisited sets (200-270 rows) to the
+      // top. Simulated over 14 nights at the observed throughput: 8.4x more stale rows
+      // refreshed, 53 sets reached instead of 27.
+      //
+      // Self-balancing either way: pricing a set empties its stale rows, dropping its
+      // count to (at most) its frozen residue, so it falls behind sets that still hold
+      // real backlog. Ties break arbitrarily and harmlessly.
+      const staleRows = new Map<string, number>();
       for (let p = 0; p < STALE_PROBE_PAGES; p++) {
         const { data: probe, error: probeErr } = await supabase
           .from('market_values')
@@ -262,7 +285,7 @@ Deno.serve(async (req) => {
         if (!probe?.length) break;
         for (const r of probe) {
           const sid = (r as any).pokemon_cards?.set_id;
-          if (sid && !staleRank.has(sid)) staleRank.set(sid, staleRank.size);
+          if (sid) staleRows.set(sid, (staleRows.get(sid) ?? 0) + 1);
         }
         if (probe.length < STALE_PROBE_PAGE) break;
       }
@@ -310,12 +333,17 @@ Deno.serve(async (req) => {
         if (neverPriced(a)) return createdMs(b) - createdMs(a);
         if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
         if (isNew(a)) return createdMs(b) - createdMs(a);
-        const ra = staleRank.has(a.id) ? staleRank.get(a.id)! : Number.MAX_SAFE_INTEGER;
-        const rb = staleRank.has(b.id) ? staleRank.get(b.id)! : Number.MAX_SAFE_INTEGER;
-        return ra !== rb ? ra - rb : createdMs(b) - createdMs(a);
+        // Most stale rows first. A set with none in the probe window scores 0 and
+        // sorts last, which is correct — it is the freshest thing we have.
+        const ca = staleRows.get(a.id) ?? 0;
+        const cb = staleRows.get(b.id) ?? 0;
+        return ca !== cb ? cb - ca : createdMs(b) - createdMs(a);
       });
       const zeroCoverage = orderedSets.filter(neverPriced).length;
-      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRank.size} ranked stale, head=${orderedSets.slice(0, 5).map((s) => s.id).join(',')}`);
+      // head carries each set's stale-row count, so a regression to the frozen-row
+      // starvation is visible in the logs as a head full of low counts.
+      const staleBacklog = [...staleRows.values()].reduce((a, n) => a + n, 0);
+      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0})`).join(',')}`);
 
       // JustTCG sets for this game (one call), build resolver
       let jtcgSets: any[] = [];
