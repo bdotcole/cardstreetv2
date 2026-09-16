@@ -14,10 +14,14 @@
 import {
     AccessToken,
     EgressClient,
+    EgressStatus,
     EncodedFileOutput,
     EncodedFileType,
+    EncodingOptionsPreset,
     RoomServiceClient,
     S3Upload,
+    StreamOutput,
+    StreamProtocol,
 } from 'livekit-server-sdk';
 
 export type CameraSlot = 'main' | 'table';
@@ -94,58 +98,174 @@ export async function mintPublisherToken(
 }
 
 /**
- * Start a room-composite egress recording all publishers (the 30-day VOD is
- * the dispute-evidence trail next to break_opened_at). Best-effort by design:
- * recording is evidence, not a dependency of broadcasting, so a missing egress
- * storage config or a LiveKit error logs and returns null — go-live proceeds.
+ * Room-composite egress for a show: ONE egress that records the 30-day VOD
+ * (file output, when the S3/R2 env is set) AND pushes the same composite to
+ * the seller's social channels (RTMP stream outputs — Facebook Live, YouTube,
+ * TikTok, Instagram Live Producer...). One egress, not one per output: it is
+ * billed per minute of egress, so multistreaming to five channels costs the
+ * same as recording alone.
+ *
+ * With a template base URL the composite is OUR page (app/live/overlay) —
+ * the two camera feeds plus the CardStreet call-to-action (cardstreet.app/watch
+ * + QR + the lot on the block) burned into every frame, which is how a viewer
+ * on Facebook finds their way to the checkout. Without one LiveKit's built-in
+ * grid layout renders the feeds bare. `orientation` sizes the canvas:
+ * portrait (1080x1920) is phone-native for TikTok / Instagram / Facebook
+ * mobile, landscape (1920x1080) suits YouTube on a TV.
+ *
+ * Best-effort by design: recording/streaming is not a dependency of
+ * broadcasting, so a missing storage config with no destinations skips
+ * quietly, and a LiveKit error logs and returns null — go-live proceeds.
+ * Stream URLs carry the seller's stream keys: never logged.
  */
-export async function startRoomRecording(room: string): Promise<string | null> {
+export interface RoomEgressOptions {
+    /** Full RTMP(S) URLs including stream keys. */
+    rtmpUrls?: string[];
+    orientation?: 'portrait' | 'landscape';
+    /** Absolute https URL of the overlay template; null/undefined = built-in grid. */
+    templateBaseUrl?: string | null;
+}
+
+function s3FileOutput(room: string): EncodedFileOutput | null {
+    const bucket = process.env.LIVEKIT_EGRESS_S3_BUCKET;
+    const accessKey = process.env.LIVEKIT_EGRESS_S3_ACCESS_KEY;
+    const secret = process.env.LIVEKIT_EGRESS_S3_SECRET;
+    if (!bucket || !accessKey || !secret) return null;
+    return new EncodedFileOutput({
+        fileType: EncodedFileType.MP4,
+        filepath: `live-vods/${room}/{time}.mp4`,
+        output: {
+            case: 's3',
+            value: new S3Upload({
+                bucket,
+                accessKey,
+                secret,
+                // Cloudflare R2 (and most S3-compatible stores) reject an
+                // empty region and expect the literal 'auto'. Real AWS keeps
+                // whatever is configured, where the region is part of
+                // addressing.
+                region:
+                    process.env.LIVEKIT_EGRESS_S3_REGION ||
+                    (process.env.LIVEKIT_EGRESS_S3_ENDPOINT ? 'auto' : ''),
+                endpoint: process.env.LIVEKIT_EGRESS_S3_ENDPOINT || '',
+                // R2 does not implement per-object ACLs; forcing path-style
+                // addressing keeps the upload URL shape it expects (bucket in
+                // the path, not the host).
+                forcePathStyle: true,
+            }),
+        },
+    });
+}
+
+function presetFor(orientation: 'portrait' | 'landscape'): EncodingOptionsPreset {
+    return orientation === 'portrait'
+        ? EncodingOptionsPreset.PORTRAIT_H264_1080P_30
+        : EncodingOptionsPreset.H264_1080P_30;
+}
+
+export async function startRoomEgress(
+    room: string,
+    opts: RoomEgressOptions = {},
+): Promise<string | null> {
     try {
         const { url, apiKey, apiSecret } = getLiveKitConfig();
 
-        const bucket = process.env.LIVEKIT_EGRESS_S3_BUCKET;
-        const accessKey = process.env.LIVEKIT_EGRESS_S3_ACCESS_KEY;
-        const secret = process.env.LIVEKIT_EGRESS_S3_SECRET;
-        if (!bucket || !accessKey || !secret) {
-            console.warn('[LiveKit] egress S3 env not configured — skipping VOD recording');
+        const file = s3FileOutput(room);
+        const rtmpUrls = (opts.rtmpUrls ?? []).filter((u) => typeof u === 'string' && u.length > 0);
+        const stream =
+            rtmpUrls.length > 0
+                ? new StreamOutput({ protocol: StreamProtocol.RTMP, urls: rtmpUrls })
+                : null;
+        if (!file && !stream) {
+            console.warn(
+                '[LiveKit] egress S3 env not configured and no stream destinations — skipping egress',
+            );
             return null;
         }
 
+        const orientation = opts.orientation === 'landscape' ? 'landscape' : 'portrait';
         const egress = new EgressClient(httpHost(url), apiKey, apiSecret);
         const info = await egress.startRoomCompositeEgress(
             room,
-            {
-                file: new EncodedFileOutput({
-                    fileType: EncodedFileType.MP4,
-                    filepath: `live-vods/${room}/{time}.mp4`,
-                    output: {
-                        case: 's3',
-                        value: new S3Upload({
-                            bucket,
-                            accessKey,
-                            secret,
-                            // Cloudflare R2 (and most S3-compatible stores)
-                            // reject an empty region and expect the literal
-                            // 'auto'. Real AWS keeps whatever is configured,
-                            // where the region is part of addressing.
-                            region:
-                                process.env.LIVEKIT_EGRESS_S3_REGION ||
-                                (process.env.LIVEKIT_EGRESS_S3_ENDPOINT ? 'auto' : ''),
-                            endpoint: process.env.LIVEKIT_EGRESS_S3_ENDPOINT || '',
-                            // R2 does not implement per-object ACLs; forcing
-                            // path-style addressing keeps the upload URL shape
-                            // it expects (bucket in the path, not the host).
-                            forcePathStyle: true,
-                        }),
-                    },
-                }),
-            },
-            // Grid shows both camera slots side by side in the recording.
-            { layout: 'grid' },
+            { ...(file ? { file } : {}), ...(stream ? { stream } : {}) },
+            opts.templateBaseUrl
+                ? {
+                      // Our template reads the orientation off the layout
+                      // param; the canvas size comes from the preset.
+                      layout: orientation,
+                      customBaseUrl: opts.templateBaseUrl,
+                      encodingOptions: presetFor(orientation),
+                  }
+                : {
+                      // Grid shows both camera slots side by side.
+                      layout: 'grid',
+                      encodingOptions: presetFor(orientation),
+                  },
+        );
+        console.log(
+            `[LiveKit] egress started for ${room}: file=${file ? 'yes' : 'no'} streams=${rtmpUrls.length} template=${opts.templateBaseUrl ? 'overlay' : 'grid'} ${orientation}`,
         );
         return info.egressId || null;
     } catch (err) {
-        console.error('[LiveKit] startRoomRecording failed (non-fatal):', err);
+        console.error('[LiveKit] startRoomEgress failed (non-fatal):', err);
+        return null;
+    }
+}
+
+const RTMP_URL_IN_TEXT = /rtmps?:\/\/\S+/gi;
+
+/**
+ * Add / remove RTMP outputs on a RUNNING egress — the console's mid-show
+ * "start on Facebook" / "stop on YouTube". Returns a message (never the URL)
+ * on failure so the console can say why.
+ */
+export async function updateEgressStreamUrls(
+    egressId: string,
+    addUrls: string[],
+    removeUrls: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+        const { url, apiKey, apiSecret } = getLiveKitConfig();
+        const egress = new EgressClient(httpHost(url), apiKey, apiSecret);
+        await egress.updateStream(egressId, addUrls, removeUrls);
+        return { ok: true };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // LiveKit echoes the offending URL (key included) in some errors.
+        const safe = message.replace(RTMP_URL_IN_TEXT, '<rtmp url>');
+        console.error('[LiveKit] updateEgressStreamUrls failed:', safe);
+        return { ok: false, error: safe };
+    }
+}
+
+export interface EgressSnapshot {
+    status: EgressStatus;
+    /** STARTING or ACTIVE — outputs can still be added. */
+    active: boolean;
+    streamResults: { url: string; status: number; error: string }[];
+}
+
+/** Current state of one egress, or null when LiveKit can't answer (or it's gone). */
+export async function getEgressSnapshot(egressId: string): Promise<EgressSnapshot | null> {
+    try {
+        const { url, apiKey, apiSecret } = getLiveKitConfig();
+        const egress = new EgressClient(httpHost(url), apiKey, apiSecret);
+        const list = await egress.listEgress({ egressId });
+        const info = list.find((e) => e.egressId === egressId) ?? list[0];
+        if (!info) return null;
+        return {
+            status: info.status,
+            active:
+                info.status === EgressStatus.EGRESS_STARTING ||
+                info.status === EgressStatus.EGRESS_ACTIVE,
+            streamResults: (info.streamResults ?? []).map((s) => ({
+                url: s.url,
+                status: s.status as number,
+                error: s.error ?? '',
+            })),
+        };
+    } catch (err) {
+        console.error('[LiveKit] getEgressSnapshot failed:', err);
         return null;
     }
 }

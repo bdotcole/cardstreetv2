@@ -24,6 +24,7 @@ import { WebhookReceiver } from 'livekit-server-sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordViewerPeak } from '@/lib/liveBreaks';
+import { syncSimulcastTargetsFromEgress } from '@/lib/streamDestinations';
 import { awardEvent, awardFirst } from '@/lib/rewards';
 import { EARN } from '@/lib/rewardTiers';
 
@@ -197,6 +198,33 @@ export async function POST(req: Request) {
                 } catch { /* fail-soft */ }
             }
             return NextResponse.json({ ok: true });
+        }
+
+        // Multistream outputs: egress_updated and egress_ended both carry
+        // the per-output results (ACTIVE / FINISHED / FAILED + error), which
+        // is how the console learns "Facebook: live" or why YouTube dropped.
+        // Those results carry the seller's stream KEYS in their URLs, so
+        // they are matched by hash and never logged.
+        if (
+            (event.event === 'egress_updated' || event.event === 'egress_ended') &&
+            event.egressInfo
+        ) {
+            const roomName = event.egressInfo.roomName || event.room?.name;
+            if (roomName?.startsWith('stream_')) {
+                try {
+                    await syncSimulcastTargetsFromEgress(
+                        roomName.slice('stream_'.length),
+                        (event.egressInfo.streamResults ?? []).map((s) => ({
+                            url: s.url,
+                            status: s.status as number,
+                            error: s.error,
+                        })),
+                        event.event === 'egress_ended',
+                    );
+                } catch (err) {
+                    console.warn('[LiveKit/Webhook] simulcast sync failed (non-fatal):', err);
+                }
+            }
         }
 
         // Only the terminal egress event carries a finished file.

@@ -51,6 +51,7 @@ import RankChip from '@/components/rewards/rankChip';
 import { ChatBody, EMOTE_PACKS, EmoteIcon } from '@/components/rewards/emotes';
 import { CHAT_COLORS } from '@/lib/rewardTiers';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
+import { trackLiveEvent } from '@/lib/liveEvents';
 
 // Stripe Elements only loads when a checkout actually opens.
 const SpotPaymentSheet = dynamic(() => import('@/components/live/SpotPaymentSheet'), { ssr: false });
@@ -299,6 +300,13 @@ export default function LiveViewerClient() {
                 }
                 setMyUserId(userRes.data.user?.id ?? null);
                 setPageState('ready');
+                // The top of the paid-social funnel: a landing on this page
+                // (ViewContent for Meta, live_view for GA) — see lib/liveEvents.
+                trackLiveEvent('live_view', {
+                    streamId,
+                    status: detail.stream?.status,
+                    signed_in: !!userRes.data.user,
+                });
             } catch {
                 if (!cancelled) setPageState('denied');
             }
@@ -2092,9 +2100,25 @@ export default function LiveViewerClient() {
                             : t('live.viewer.notStarted') || "The show hasn't started yet"}
                     </p>
                     {stream.status === 'ended' && (
-                        <p className="text-xs text-slate-500 mt-1">
-                            {t('live.viewer.endedDesc') || 'Thanks for watching'}
-                        </p>
+                        <>
+                            <p className="text-xs text-slate-500 mt-1">
+                                {t('live.viewer.endedDesc') || 'Thanks for watching'}
+                            </p>
+                            {/* Shared links and social captions outlive the show
+                                — send the late arrival to the next one instead
+                                of a dead end. */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push('/live');
+                                }}
+                                className={`mt-4 px-5 h-10 rounded-xl bg-brand-cyan text-brand-darker text-xs font-black uppercase active:scale-95 transition-all ${
+                                    isThai ? 'tracking-normal' : 'tracking-widest'
+                                }`}
+                            >
+                                {t('live.viewer.seeUpcoming') || 'See upcoming shows'}
+                            </button>
+                        </>
                     )}
                 </div>
             ) : feedCount === 0 ? (
@@ -2525,6 +2549,12 @@ export default function LiveViewerClient() {
                     onClose={() => setPaymentOpen(false)}
                     onSuccess={() => {
                         // Board flips via Realtime when finalize lands.
+                        trackLiveEvent('live_spot_purchase', {
+                            streamId,
+                            status: stream.status,
+                            valueThb: payableSpots.reduce((sum, s) => sum + s.priceSatang, 0) / 100,
+                            numItems: payableSpots.length,
+                        });
                     }}
                     onReleased={() => {
                         setPaymentOpen(false);
@@ -2729,6 +2759,12 @@ export default function LiveViewerClient() {
                 spots={payableSpots}
                 onClose={() => setPaymentOpen(false)}
                 onSuccess={() => {
+                    trackLiveEvent('live_spot_purchase', {
+                        streamId,
+                        status: stream.status,
+                        valueThb: payableSpots.reduce((sum, s) => sum + s.priceSatang, 0) / 100,
+                        numItems: payableSpots.length,
+                    });
                     // Board flips via Realtime when finalize lands; nothing to
                     // patch locally beyond letting the sheet show its success.
                 }}

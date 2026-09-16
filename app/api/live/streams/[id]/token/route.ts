@@ -29,6 +29,17 @@ import { randomUUID } from 'crypto';
 import { broadcastStreamEvent, recordViewerPeak, requireBroadcaster, resolvePublicViewer } from '@/lib/liveBreaks';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { mintPublisherToken, mintViewerToken, roomNameForStream } from '@/lib/livekit';
+import { checkRateLimit, requestIp } from '@/lib/rateLimit';
+
+// Viewer mints are unauthenticated (watching is public) and each one costs a
+// LiveKit control-plane call plus a viewer_peak write, so a single client
+// hammering this route was both a LiveKit participant-minute spend vector and
+// the thing inflating viewer_peak with reconnect churn. The viewer's own
+// reconnect loop backs off to one attempt per 15s, so a real viewer never
+// gets near this ceiling; fail-open on a limiter outage (default) because a
+// broken limiter must not lock the audience out of a show.
+const VIEWER_TOKEN_WINDOW_SECONDS = 60;
+const VIEWER_TOKEN_MAX_PER_WINDOW = 40;
 
 export async function POST(
     req: Request,
@@ -89,6 +100,17 @@ export async function POST(
             // evicts an existing participant when a second one joins with the
             // same identity, so a shared 'guest' would have every anonymous
             // viewer kicking the previous one out of the room.
+            const { allowed } = await checkRateLimit(`live-token:${requestIp(req)}`, {
+                windowSeconds: VIEWER_TOKEN_WINDOW_SECONDS,
+                max: VIEWER_TOKEN_MAX_PER_WINDOW,
+            });
+            if (!allowed) {
+                return NextResponse.json(
+                    { error: 'Too many connection attempts — try again in a minute', code: 'RATE_LIMITED' },
+                    { status: 429 },
+                );
+            }
+
             const ctx = await resolvePublicViewer(id);
             if (ctx instanceof NextResponse) return ctx;
             const { user, stream } = ctx;

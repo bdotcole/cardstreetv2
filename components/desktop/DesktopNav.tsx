@@ -10,6 +10,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import { isEntryPointHidden } from '@/lib/betaFeatures';
 import RewardsChip from '@/components/rewards/RewardsChip';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
@@ -254,7 +255,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                 <nav className="hidden lg:flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
                         ['/', t('desktop.navMarketplace')],
-                        ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                        ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
@@ -414,7 +415,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     <nav className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-col text-sm font-bold">
                         {([
                             ['/', t('desktop.navMarketplace')],
-                            ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                            ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                             ['/sets', t('desktop.navSets')],
                             ['/sell', t('desktop.navSell')],
                             ['/orders', t('desktop.navOrders')],

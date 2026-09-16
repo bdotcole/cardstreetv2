@@ -58,18 +58,40 @@ export const GA_FEATURES: readonly BetaFeature[] = ['live_streams', 'rewards'];
  * name from GA_FEATURES (which only revokes the blanket grant): a listed
  * feature has no entry point anywhere and every server gate refuses it.
  *
- * - live_streams / live_broadcast (2026-09-04 founder call: hold off on breaks).
- *   The whole Live section is hidden, so the Shop tab opens straight on the
- *   Marketplace instead of the Live-vs-Marketplace chooser.
- *
- * Re-enabling is deleting the entry -- no migration, no per-user grant edits,
- * and the DB kill-switch rows stay exactly as they were.
+ * - live_streams / live_broadcast were listed here 2026-09-04 (founder call:
+ *   hold off on breaks) and REMOVED 2026-09-16 for the multistream test show:
+ *   the social -> website funnel needs /live/[id] publicly viewable, which
+ *   these gates refuse. Re-hiding the Live section is adding them back --
+ *   no migration, no per-user grant edits, and the DB kill-switch rows stay
+ *   exactly as they were.
  */
-export const DISABLED_FEATURES: readonly BetaFeature[] = ['live_streams', 'live_broadcast'];
+export const DISABLED_FEATURES: readonly BetaFeature[] = [];
 
 /** Is this feature switched off in code, ahead of any grant or DB lookup? */
 export function isFeatureDisabledInCode(feature: BetaFeature): boolean {
   return (DISABLED_FEATURES as readonly string[]).includes(feature);
+}
+
+/**
+ * Features that WORK but have no door in the app chrome: reachable by URL
+ * (share links, cardstreet.app/watch, the broadcaster console, the APIs) yet
+ * absent from the mobile Shop chooser and the desktop nav. Weaker than
+ * DISABLED_FEATURES, which refuses every server gate too.
+ *
+ * - live_streams (2026-09-16 founder call: "push it but keep it hidden until
+ *   show day"). The multistream funnel needs the public show pages live for
+ *   the social rehearsal and for ads, while regular users should not find
+ *   an empty Live section in the meantime. Show day = delete the entry and
+ *   push; Vercel deploys in a few minutes.
+ *
+ * Client surfaces read this through isEntryPointHidden() next to hasBeta();
+ * lib/betaAuth.ts never consults it, so nothing server-side changes.
+ */
+export const HIDDEN_ENTRY_POINTS: readonly BetaFeature[] = ['live_streams'];
+
+/** Should the app chrome hide this feature's entry points even when the user has access? */
+export function isEntryPointHidden(feature: BetaFeature): boolean {
+  return (HIDDEN_ENTRY_POINTS as readonly string[]).includes(feature);
 }
 
 export function isBetaFeature(value: unknown): value is BetaFeature {

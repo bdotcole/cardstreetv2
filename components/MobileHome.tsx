@@ -66,6 +66,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import { isEntryPointHidden } from '@/lib/betaFeatures';
 const LiveShopChooser = dynamic(() => import('@/components/live/LiveShopChooser'), { ssr: false });
 
 const PartnerPortal = dynamic(() => import('@/components/PartnerPortal'), { ssr: false });
@@ -157,7 +158,10 @@ export default function HomePage() {
     // from /live remounts the shell and lands on the chooser again.
     const { hasBeta: hasLiveBeta } = useBetaFeatures();
     const [shopChooserDismissed, setShopChooserDismissed] = useState(false);
-    const showShopChooser = hasLiveBeta('live_streams') && !shopChooserDismissed;
+    // Hidden entry point (lib/betaFeatures HIDDEN_ENTRY_POINTS): Shop opens
+    // straight on the Marketplace while Live has no door, even for admins.
+    const showShopChooser =
+        hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') && !shopChooserDismissed;
 
     // Picking Marketplace pushes a history entry so the phone's BACK gesture
     // (or button) returns to the chooser instead of leaving the Shop tab — the

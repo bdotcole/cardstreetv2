@@ -8,6 +8,12 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
 import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import MusicPanel from '@/components/live/MusicPanel';
+import MultistreamPanel, {
+    DEFAULT_EGRESS_PREFS,
+    loadEgressPrefs,
+    saveEgressPrefs,
+    type EgressPrefs,
+} from '@/components/live/MultistreamPanel';
 import VodReview from '@/components/live/VodReview';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
@@ -217,6 +223,16 @@ export default function BroadcastConsolePage() {
     const [chat, setChat] = useState<LiveChatMessage[]>([]);
 
     const [goingLive, setGoingLive] = useState(false);
+    // Multistream egress preferences (canvas orientation + branded overlay),
+    // a per-device convenience sent with go-live — see MultistreamPanel.
+    const [egressPrefs, setEgressPrefs] = useState<EgressPrefs>(DEFAULT_EGRESS_PREFS);
+    useEffect(() => {
+        setEgressPrefs(loadEgressPrefs());
+    }, []);
+    const updateEgressPrefs = useCallback((next: EgressPrefs) => {
+        setEgressPrefs(next);
+        saveEgressPrefs(next);
+    }, []);
     const [confirm, setConfirm] = useState<ConfirmState | null>(null);
     const [confirmBusy, setConfirmBusy] = useState(false);
     const [hitText, setHitText] = useState('');
@@ -905,13 +921,30 @@ export default function BroadcastConsolePage() {
         if (goingLive) return;
         setGoingLive(true);
         try {
-            const res = await fetch(`/api/live/streams/${streamId}/go-live`, { method: 'POST' });
+            const res = await fetch(`/api/live/streams/${streamId}/go-live`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orientation: egressPrefs.orientation,
+                    overlay: egressPrefs.overlay,
+                }),
+            });
             const data = await res.json();
             if (!res.ok || !data.success) {
                 showToast(data.error || t('live.console.goLiveError') || 'Could not go live', 'error');
                 return;
             }
             setStream((prev) => (prev ? { ...prev, status: 'live' } : prev));
+            // Multistream feedback: which social destinations rode along on the
+            // egress. Their connecting/live state follows in the panel.
+            if (!data.alreadyLive && Array.isArray(data.simulcast) && data.simulcast.length > 0) {
+                showToast(
+                    `${t('live.console.multistream.pushingTo') || 'Pushing to'} ${data.simulcast
+                        .map((s: { label: string }) => s.label)
+                        .join(', ')}`,
+                    'success',
+                );
+            }
             // Idempotent when the console staged pre-live: this device is
             // already in the room per its mode, so go-live was just the
             // status flip + recording start — reconnecting here would tear
@@ -942,7 +975,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setGoingLive(false);
         }
-    }, [goingLive, streamId, cameraMode, connected, localVideo, stageCameras, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
+    }, [goingLive, streamId, cameraMode, connected, localVideo, egressPrefs, stageCameras, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
 
     const goLive = useCallback(() => {
         // Displacement guard: the show is live but not from this session, and
@@ -1904,6 +1937,22 @@ export default function BroadcastConsolePage() {
                         )}
                     </div>
                 </div>
+
+                {/* Multistream: social destinations + the branded overlay the
+                    egress composes. Set up before go-live (keys, on/off,
+                    orientation); mid-show it shows per-channel status and
+                    start/stop. */}
+                {!isEnded && (
+                    <div className="mb-4">
+                        <MultistreamPanel
+                            streamId={streamId}
+                            isLive={isLive}
+                            visibility={stream.visibility}
+                            prefs={egressPrefs}
+                            onPrefsChange={updateEgressPrefs}
+                        />
+                    </div>
+                )}
 
                 {/* Background music — visible whenever the show is not over, so the
                     playlist can be cued during staging before going live. */}

@@ -17,8 +17,9 @@ import { NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isMissingTableError, requireBroadcaster } from '@/lib/liveBreaks';
-import { mintPublisherToken, roomNameForStream, startRoomRecording } from '@/lib/livekit';
+import { mintPublisherToken, roomNameForStream, startRoomEgress } from '@/lib/livekit';
 import { sendShowEmailBlast, sendShowLiveNotification, sendShowLivePushBlast } from '@/lib/courier';
+import { overlayTemplateUrl, recordSimulcastTargets, resolveEnabledTargets } from '@/lib/streamDestinations';
 
 // The after() fan-out sends ~1k Courier messages in chunks (push blast +
 // email blast) — well past a default function window.
@@ -124,7 +125,7 @@ async function notifyReminderSubscribers(
 }
 
 export async function POST(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ id: string }> },
 ) {
     try {
@@ -132,6 +133,14 @@ export async function POST(
         const ctx = await requireBroadcaster(id);
         if (ctx instanceof NextResponse) return ctx;
         const { user, stream } = ctx;
+
+        // Egress preferences from the console's Multistream panel. Optional
+        // — an empty body keeps the defaults (portrait canvas, branded
+        // overlay on).
+        const body = await req.json().catch(() => ({}));
+        const orientation: 'portrait' | 'landscape' =
+            body?.orientation === 'landscape' ? 'landscape' : 'portrait';
+        const overlay = body?.overlay !== false;
 
         const admin = createAdminClient();
         const room = stream.livekit_room || roomNameForStream(stream.id);
@@ -183,12 +192,26 @@ export async function POST(
             );
         }
 
-        const egressId = await startRoomRecording(room);
+        // Multistream: the seller's enabled social destinations ride the SAME
+        // egress as the VOD. Keys are decrypted here (server-only) into full
+        // RTMP URLs for LiveKit; what those viewers see is the branded
+        // overlay template (lib/livekit.ts startRoomEgress).
+        const targets = await resolveEnabledTargets(user.id);
+        const egressId = await startRoomEgress(room, {
+            rtmpUrls: targets.map((t) => t.url),
+            orientation,
+            templateBaseUrl: overlay ? overlayTemplateUrl() : null,
+        });
         if (egressId) {
             await admin
                 .from('streams')
                 .update({ livekit_egress_id: egressId })
                 .eq('id', stream.id);
+            await recordSimulcastTargets(stream.id, targets);
+        } else if (targets.length > 0) {
+            console.warn(
+                `[Live/GoLive] ${targets.length} destination(s) enabled but the egress did not start for ${stream.id}`,
+            );
         }
 
         // After the flip only — never on the reconnect path above, so a
@@ -235,6 +258,15 @@ export async function POST(
             url: process.env.LIVEKIT_URL || null,
             cameraSlot: 'main',
             egressId,
+            // What the console shows as "pushing to": the destinations that
+            // rode along. Their live/failed state arrives via the simulcast
+            // status route as LiveKit reports it.
+            simulcast: targets.map((t) => ({
+                destinationId: t.destination.id,
+                platform: t.destination.platform,
+                label: t.destination.label,
+            })),
+            egressStarted: !!egressId,
         });
     } catch (err: any) {
         console.error('[Live/GoLive] error:', err);
