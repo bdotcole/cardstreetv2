@@ -30,6 +30,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
 
+    // Identical copies (same card, price, condition — sibling listings, see
+    // lib/listingSiblings.ts) read as one line with a count. Each still holds
+    // its own listing id underneath, so removing "one" drops a single id.
+    const groupLines = (items: CartItem[]) => {
+        const lines = new Map<string, { item: CartItem; ids: string[] }>();
+        for (const item of items) {
+            const key = `${item.cardId}|${item.price}|${item.condition}`;
+            const line = lines.get(key);
+            if (line) line.ids.push(item.id);
+            else lines.set(key, { item, ids: [item.id] });
+        }
+        return [...lines.values()];
+    };
+
     // Seller groups, in first-added order so the list does not reshuffle as
     // items come and go.
     const bySeller = useMemo(() => {
@@ -134,18 +148,33 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                             <p className="text-[10px] text-brand-green font-bold px-1">
                                 {t('shipping.sameSellerFree')} {formatDisplayPrice(shippingFee / Math.max(1, bySeller.length))}
                             </p>
-                            {items.map((item) => (
-                            <div key={item.id} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
+                            {groupLines(items).map(({ item, ids }) => (
+                            <div key={ids[0]} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
                                 <div className="w-16 h-20 bg-brand-darker rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
                                     <img src={getThumbnailUrl(item.card.images?.small || item.card.imageUrl)} loading="lazy" decoding="async" className="w-full h-full object-contain" alt={item.card.name} />
                                 </div>
                                 <div className="flex-1 min-w-0 py-1">
                                     <h4 className="text-white text-sm font-bold truncate pr-6">{item.card.name}</h4>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{translateCondition(item.condition)} • {item.sellerName}</p>
-                                    <p className="text-brand-cyan font-black">{formatDisplayPrice(item.price)}</p>
+                                    {ids.length > 1 ? (
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-brand-cyan font-black">{formatDisplayPrice(item.price * ids.length)}</p>
+                                            <p className="text-[10px] text-slate-500 font-bold">{formatDisplayPrice(item.price)} × {ids.length}</p>
+                                            <button
+                                                onClick={() => onRemoveItem(ids[ids.length - 1])}
+                                                aria-label={t('cart.removeOne')}
+                                                title={t('cart.removeOne')}
+                                                className="w-6 h-6 rounded-md bg-white/5 border border-white/10 text-slate-300 text-xs font-black active:scale-95 transition-all"
+                                            >
+                                                −
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-brand-cyan font-black">{formatDisplayPrice(item.price)}</p>
+                                    )}
                                 </div>
                                 <button
-                                    onClick={() => onRemoveItem(item.id)}
+                                    onClick={() => ids.forEach((id) => onRemoveItem(id))}
                                     className="absolute top-2 right-2 text-slate-600 hover:text-brand-red transition-colors p-1"
                                 >
                                     <i className="fa-solid fa-trash-can text-xs"></i>

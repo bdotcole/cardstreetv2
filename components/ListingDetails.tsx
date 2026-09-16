@@ -60,10 +60,14 @@ interface ListingDetailsProps {
         is_graded?: boolean;
         grading_company?: string | null;
         grade?: number | null;
+        // Identical copies from this seller (lib/listingSiblings.ts). Above 1 the
+        // sheet shows a quantity stepper and passes the chosen count along.
+        units?: number;
+        siblingIds?: string[];
     };
     onClose: () => void;
-    onBuyNow: () => void;
-    onAddToCart: () => void;
+    onBuyNow: (quantity: number) => void;
+    onAddToCart: (quantity: number) => void;
     onSellerClick: (seller: any) => void;
     currency?: string;
     exchangeRate?: number;
@@ -94,6 +98,10 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     // offers on mount and flipped optimistically after a successful submit so
     // the button reflects the 409-OFFER_ALREADY_LIVE state without a refetch.
     const [hasPendingOffer, setHasPendingOffer] = useState(false);
+    // Copies the buyer can take from this seller in one go. The stepper only
+    // renders past 1, so a single-copy listing reads exactly as before.
+    const units = Math.max(1, listing.units ?? 1);
+    const [quantity, setQuantity] = useState(1);
 
     // OBO "Make an offer": only when the feature flag is on, the listing accepts
     // offers, and the viewer is not the seller.
@@ -361,20 +369,52 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         </button>
                     )
                 )}
+                {units > 1 && (
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('cart.quantity')}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">{t('cart.available').replace('{n}', String(units))}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                                disabled={quantity <= 1}
+                                aria-label="-"
+                                className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                            >
+                                −
+                            </button>
+                            <span className="w-8 text-center text-white font-black tabular-nums text-lg">{quantity}</span>
+                            <button
+                                type="button"
+                                onClick={() => setQuantity((q) => Math.min(units, q + 1))}
+                                disabled={quantity >= units}
+                                aria-label="+"
+                                className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                            >
+                                +
+                            </button>
+                        </div>
+                        <p className="text-sm font-black text-brand-cyan whitespace-nowrap">
+                            {currencySymbol}{Math.round(listing.price * quantity * exchangeRate).toLocaleString()}
+                        </p>
+                    </div>
+                )}
                 <div className="flex gap-3">
                     <button
-                        onClick={onAddToCart}
+                        onClick={() => onAddToCart(quantity)}
                         className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
                     >
                         <i className="fa-solid fa-cart-plus text-brand-cyan group-hover:scale-110 transition-transform text-lg"></i>
                         {isThai ? 'เพิ่มลงรถเข็น' : 'Add to Cart'}
                     </button>
                     <button
-                        // Call with no args — passing the bare handler hands the
-                        // click event to handleBuyNow as its `listingArg`, which
-                        // then builds a garbage cart (NaN total) and crashes the
-                        // payment modal. The shell reads `selectedListing` instead.
-                        onClick={() => onBuyNow()}
+                        // Pass only the quantity — handing the click event to
+                        // handleBuyNow as its `listingArg` builds a garbage cart
+                        // (NaN total) and crashes the payment modal. The shell
+                        // reads `selectedListing` for the listing itself.
+                        onClick={() => onBuyNow(quantity)}
                         className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
                     >
                         {isThai ? 'ซื้อเลย' : 'Buy Now'}

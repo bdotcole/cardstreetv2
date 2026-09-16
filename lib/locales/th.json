@@ -338,7 +338,11 @@
         "title": "รถเข็น",
         "empty": "ตะกร้าว่างเปล่า",
         "price": "ราคา",
-        "checkout": "ชำระเงิน"
+        "checkout": "ชำระเงิน",
+        "available": "มี {n} ชิ้น",
+        "quantity": "จำนวน",
+        "removeOne": "ลด 1 ชิ้น",
+        "each": "ต่อชิ้น"
     },
     "purchaseRegion": {
         "title": "ใช้ได้เฉพาะในประเทศไทย",

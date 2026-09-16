@@ -338,7 +338,11 @@
         "title": "Cart",
         "empty": "Cart is Empty",
         "price": "Total",
-        "checkout": "Checkout"
+        "checkout": "Checkout",
+        "available": "{n} available",
+        "quantity": "Quantity",
+        "removeOne": "Remove one",
+        "each": "each"
     },
     "purchaseRegion": {
         "title": "Available in Thailand only",

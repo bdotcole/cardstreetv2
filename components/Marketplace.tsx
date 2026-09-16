@@ -12,6 +12,7 @@ import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
 
@@ -203,11 +204,13 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       offset: currentOffset,
     });
 
+    // Identical copies (createListing's quantity) fold into one tile carrying a
+    // unit count; hasMore still reads the raw page size.
     if (reset) {
-      setListings(data);
+      setListings(groupSiblingListings(data));
       setOffset(PAGE_SIZE);
     } else {
-      setListings(prev => [...prev, ...data]);
+      setListings(prev => groupSiblingListings([...prev, ...data]));
       setOffset(prev => prev + PAGE_SIZE);
     }
     setHasMore(data.length === PAGE_SIZE);
@@ -440,6 +443,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       </span>
                     )}
                   </div>
+                  {listingUnits(listing) > 1 && (
+                    <span
+                      title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                      className="absolute bottom-1.5 left-1.5 z-10 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-black/60 text-white border border-white/10 backdrop-blur-sm"
+                    >
+                      ×{listingUnits(listing)}
+                    </span>
+                  )}
                   {isSnipeListing(listing.price) && (
                     <SnipeBadge className="absolute -bottom-3 right-1.5 z-10 h-12 w-auto" />
                   )}

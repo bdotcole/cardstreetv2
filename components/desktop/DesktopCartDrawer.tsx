@@ -17,6 +17,7 @@ import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ThaiAddressFields from '@/components/ThaiAddressFields';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import type { CartItem } from '@/types';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
@@ -67,6 +68,19 @@ export default function DesktopCartDrawer() {
     const [regionBlocked, setRegionBlocked] = useState(false);
 
     const subtotal = items.reduce((sum, i) => sum + i.price, 0);
+
+    // Identical copies (sibling listings, lib/listingSiblings.ts) read as one
+    // line with a count; each keeps its own listing id underneath.
+    const lines = (() => {
+        const map = new Map<string, { item: CartItem; ids: string[] }>();
+        for (const item of items) {
+            const key = `${item.cardId}|${item.price}|${item.condition}`;
+            const line = map.get(key);
+            if (line) line.ids.push(item.id);
+            else map.set(key, { item, ids: [item.id] });
+        }
+        return [...map.values()];
+    })();
 
     const close = () => {
         setPhase('cart');
@@ -263,8 +277,8 @@ export default function DesktopCartDrawer() {
                         ) : (
                             <>
                                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-                                    {items.map((item) => (
-                                        <div key={item.id} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                                    {lines.map(({ item, ids }) => (
+                                        <div key={ids[0]} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3">
                                             <span className="w-12 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
@@ -279,10 +293,25 @@ export default function DesktopCartDrawer() {
                                                 <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide truncate">
                                                     {item.condition} · {item.sellerName}
                                                 </p>
-                                                <p className="text-sm font-black text-brand-cyan mt-0.5">{formatTHB(item.price)}</p>
+                                                {ids.length > 1 ? (
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <p className="text-sm font-black text-brand-cyan">{formatTHB(item.price * ids.length)}</p>
+                                                        <p className="text-[11px] text-slate-500 font-bold">{formatTHB(item.price)} × {ids.length}</p>
+                                                        <button
+                                                            onClick={() => removeItem(ids[ids.length - 1])}
+                                                            aria-label={t('cart.removeOne')}
+                                                            title={t('cart.removeOne')}
+                                                            className="w-6 h-6 rounded-md bg-white/5 border border-white/10 text-slate-300 text-xs font-black hover:bg-white/10 transition-colors"
+                                                        >
+                                                            −
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm font-black text-brand-cyan mt-0.5">{formatTHB(item.price)}</p>
+                                                )}
                                             </div>
                                             <button
-                                                onClick={() => removeItem(item.id)}
+                                                onClick={() => ids.forEach((id) => removeItem(id))}
                                                 className="w-8 h-8 rounded-lg bg-white/5 hover:bg-brand-red/20 text-slate-500 hover:text-rose-300 transition-colors shrink-0"
                                                 aria-label={`Remove ${item.card.name}`}
                                             >

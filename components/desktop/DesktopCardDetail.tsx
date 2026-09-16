@@ -9,6 +9,7 @@ import { marketplaceService, MarketplaceListing } from '@/services/marketplaceSe
 import { getOptimizedImageUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { Card, SiblingCard } from '@/types';
 import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarketplace';
+import { groupSiblingListings, listingUnits, pickSiblingIds } from '@/lib/listingSiblings';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -91,7 +92,11 @@ export default function DesktopCardDetail({
 }) {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
-    const { addItem, user } = useDesktopCart();
+    const { addItem, user, items: cartItems } = useDesktopCart();
+    // Each Add to Cart click takes the next copy of a multi-unit listing that
+    // is not in the cart yet; with every copy taken the button rests.
+    const nextUnitId = (listing: MarketplaceListing): string | undefined =>
+        pickSiblingIds(listing, 1, cartItems.map((i) => i.id))[0];
     const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const { collections, addCollection, addCardToCollection } = useUserCollections();
@@ -264,7 +269,9 @@ export default function DesktopCardDetail({
     const gradedEstimateShown = gradedPrices.some((g) => g.source === 'thai_estimate');
 
     const visibleListings = useMemo(() => {
-        let arr = listings;
+        // Identical copies from one seller collapse into a single row with a
+        // unit count (lib/listingSiblings.ts).
+        let arr = groupSiblingListings(listings);
         if (showFilter && condFilter === 'raw') arr = arr.filter((l) => !l.is_graded);
         else if (showFilter && condFilter === 'graded') arr = arr.filter((l) => l.is_graded);
         const sorted = [...arr];
@@ -662,6 +669,11 @@ export default function DesktopCardDetail({
                                             {/* Price */}
                                             <div className="text-right shrink-0">
                                                 <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
+                                                {listingUnits(listing) > 1 && (
+                                                    <span className="block text-[10px] text-slate-400 font-bold whitespace-nowrap">
+                                                        {t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Actions */}
@@ -686,8 +698,12 @@ export default function DesktopCardDetail({
                                                     )
                                                 )}
                                                 <button
-                                                    onClick={() => addItem(listingToCartItem(listing))}
-                                                    className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                    onClick={() => {
+                                                        const id = nextUnitId(listing);
+                                                        if (id) addItem({ ...listingToCartItem(listing), id });
+                                                    }}
+                                                    disabled={!nextUnitId(listing)}
+                                                    className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     {t('desktop.card.addToCart')}
                                                 </button>
@@ -832,7 +848,8 @@ export default function DesktopCardDetail({
                             <span className="text-2xl font-black text-brand-cyan">{formatTHB(photoListing.price)}</span>
                             <button
                                 onClick={() => {
-                                    addItem(listingToCartItem(photoListing));
+                                    const id = nextUnitId(photoListing);
+                                    if (id) addItem({ ...listingToCartItem(photoListing), id });
                                     setPhotoListing(null);
                                 }}
                                 className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-5 py-2.5 rounded-lg transition-colors"

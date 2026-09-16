@@ -18,6 +18,7 @@ import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
+import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import { formatTHB } from '@/lib/currency';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
@@ -141,7 +142,9 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             })
             .then((rows) => {
                 if (cancelled) return;
-                setListings(rows);
+                // Identical copies fold into one tile with a unit count
+                // (lib/listingSiblings.ts); hasMore reads the raw page size.
+                setListings(groupSiblingListings(rows));
                 setHasMore(rows.length === PAGE_SIZE);
             })
             .finally(() => {
@@ -167,8 +170,8 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             // Offset pagination over a live list: a listing created mid-browse
             // shifts the pages, so drop anything already rendered.
             setListings((prev) => {
-                const seen = new Set(prev.map((l) => l.id));
-                return [...prev, ...rows.filter((r) => !seen.has(r.id))];
+                const seen = new Set(prev.flatMap((l) => l.siblingIds ?? [l.id]));
+                return groupSiblingListings([...prev, ...rows.filter((r) => !seen.has(r.id))]);
             });
             setHasMore(rows.length === PAGE_SIZE);
         } finally {
@@ -407,6 +410,14 @@ function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing
                     {dealPct !== null && (
                         <span className={`absolute left-2 bg-brand-green text-brand-darker text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-black/40 ${slabbed ? 'top-16' : 'top-2'}`}>
                             -{dealPct}%
+                        </span>
+                    )}
+                    {listingUnits(listing) > 1 && (
+                        <span
+                            title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                            className="absolute bottom-2 left-2 z-10 text-[10px] font-black px-2 py-0.5 rounded-md bg-black/60 text-white border border-white/10 backdrop-blur-sm"
+                        >
+                            ×{listingUnits(listing)}
                         </span>
                     )}
                 </div>

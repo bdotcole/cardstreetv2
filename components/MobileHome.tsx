@@ -40,6 +40,7 @@ const WebLiveScanner = dynamic(() => import('@/components/WebLiveScanner'), { ss
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
+import { pickSiblingIds } from '@/lib/listingSiblings';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -109,7 +110,7 @@ type PendingAuthAction =
     | { type: 'wishlist'; card: Card }
     | { type: 'vault'; card: Card; collectionId?: string }
     | { type: 'checkout'; items: CartItem[] }
-    | { type: 'buyNow'; listing?: MarketplaceListing };
+    | { type: 'buyNow'; listing?: MarketplaceListing; quantity?: number };
 
 // A purchase tap that hit the shipping-profile gate. The CheckoutAddressSheet
 // collects the missing address/phone inline and this records which entry point
@@ -118,7 +119,7 @@ type PendingAuthAction =
 // even after the ListingDetails modal behind the sheet is gone.
 type AddressGateResume =
     | { type: 'checkout' }
-    | { type: 'buyNow'; listing: MarketplaceListing }
+    | { type: 'buyNow'; listing: MarketplaceListing; quantity?: number }
     | { type: 'payOffer'; offer: Offer };
 
 // Layout effect that is safe to reference from SSR'd client components —
@@ -1104,21 +1105,25 @@ export default function HomePage() {
         }
     };
 
-    const handleAddToCart = (item: CartItem) => {
+    // Several units of one listing arrive together (each its own listing id,
+    // see lib/listingSiblings.ts): one state update, one cart open, one event.
+    const handleAddToCartMany = (items: CartItem[]) => {
+        if (items.length === 0) return;
         setCart(prev => {
-            if (prev.find(i => i.id === item.id)) return prev; // No duplicates
-            return [...prev, item];
+            const seen = new Set(prev.map(i => i.id));
+            return [...prev, ...items.filter(i => !seen.has(i.id))]; // No duplicates
         });
         setIsCartOpen(true);
         // Meta AddToCart (value in the user's display currency, matching the
         // PaymentModal/Purchase convention).
         trackMetaEvent('AddToCart', {
-            value: item.price * (currency === 'THB' ? 1 : exchangeRate),
+            value: items.reduce((sum, i) => sum + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
             currency,
-            content_ids: [item.cardId || item.id].filter(Boolean),
+            content_ids: [items[0].cardId || items[0].id].filter(Boolean),
             content_type: 'product',
         });
     };
+    const handleAddToCart = (item: CartItem) => handleAddToCartMany([item]);
 
     const handleRemoveFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
@@ -1302,21 +1307,23 @@ export default function HomePage() {
     // while the listing modal is still open behind the auth gate), or from a
     // marketplace grid tile (listing passed in, so it survives the auth resume
     // even though no ListingDetails modal is open).
-    const handleBuyNow = async (listingArg?: MarketplaceListing) => {
+    const handleBuyNow = async (listingArg?: MarketplaceListing, quantity = 1) => {
         const listing = listingArg ?? selectedListing;
         if (!listing) return;
         if (!(await ensureCanPurchase())) return;
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg }, 'signup')) return;
-        if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing }))) return;
-        setCart([{
-            id: listing.id,
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg, quantity }, 'signup')) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing, quantity }))) return;
+        // One cart line per unit — each is its own listing row, so checkout's
+        // per-row reservation is untouched (lib/listingSiblings.ts).
+        setCart(pickSiblingIds(listing, Math.max(1, quantity)).map((id) => ({
+            id,
             cardId: listing.card_id,
             card: listing.card_data,
             price: listing.price, // Store base price for now
             sellerId: listing.seller_id,
             sellerName: listing.seller?.display_name || 'Unknown',
             condition: listing.condition
-        }]);
+        })));
         setSelectedListing(null);
         setIsPaymentModalOpen(true);
     };
@@ -1332,7 +1339,7 @@ export default function HomePage() {
         if (gate.resume.type === 'checkout') {
             void handleCheckout();
         } else if (gate.resume.type === 'buyNow') {
-            void handleBuyNow(gate.resume.listing);
+            void handleBuyNow(gate.resume.listing, gate.resume.quantity);
         } else {
             void handlePayOffer({ offer: gate.resume.offer });
         }
@@ -1381,7 +1388,7 @@ export default function HomePage() {
             });
             void handleCheckout();
         } else if (pending.type === 'buyNow') {
-            void handleBuyNow(pending.listing);
+            void handleBuyNow(pending.listing, pending.quantity);
         }
         // Handlers are re-created every render and the pending ref is one-shot,
         // so only the wake-up-relevant deps are listed.
@@ -2687,17 +2694,18 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
-                        onBuyNow={handleBuyNow}
-                        onAddToCart={() => {
-                            handleAddToCart({
-                                id: selectedListing.id,
+                        onBuyNow={(quantity) => handleBuyNow(undefined, quantity)}
+                        onAddToCart={(quantity) => {
+                            const ids = pickSiblingIds(selectedListing, quantity, cart.map((i) => i.id));
+                            handleAddToCartMany(ids.map((id) => ({
+                                id,
                                 cardId: selectedListing.card_id,
                                 card: selectedListing.card_data,
                                 price: selectedListing.price,
                                 sellerId: selectedListing.seller_id,
                                 sellerName: selectedListing.seller?.display_name || 'Unknown',
                                 condition: selectedListing.condition
-                            });
+                            })));
                             setSelectedListing(null);
                         }}
                         onSellerClick={(seller) => {
