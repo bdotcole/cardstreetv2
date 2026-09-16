@@ -177,6 +177,66 @@ const SET_INTROS: Record<string, SetIntro> = {
     en: 'Marvel’s Spider-Man is Magic: The Gathering’s Marvel crossover set and one of the most talked-about releases in years. The Soul Stone leads it — its rarest treatment trades in the millions of baht — followed by Spectacular Spider-Man and the double-faced Mythics Eddie Brock // Venom, Lethal Protector and Peter Parker // Amazing Spider-Man. Players also chase commons like Thwip!. Check the price of every card in the set, then buy or sell authentic copies with sellers in Thailand.',
   },
 
+  // Batch 4 — the AS-era Thai Sun & Moon sets (2019-2020). Twelve set pages that
+  // had no prose at all, and the largest Thai-language block still without any.
+  // Thailand shipped each of these as a PAIR (ชุด A / ชุด B) on one release date,
+  // which is the detail collectors actually search on, so every blurb names its twin.
+  //
+  // Chase cards are the SR/HR (and, where the set has them, CHR/TR/Shining) rows
+  // verified against pokemon_cards on 2026-09-16. English names come from
+  // english_name on those same rows. Set names stay Thai in the English copy:
+  // pokemon_sets carries no English name for any AS set.
+  //
+  // DEPENDS ON the 0.98 Thai price re-run: at the 0.99 bar these sets are 60%
+  // priced and the "check every price" promise is false. After it they are 98%.
+  as1a: {
+    th: 'เฟิร์สอิมแพค ชุด A (AS1a) คือชุดการ์ดโปเกมอนภาษาไทยยุคซันมูนที่เปิดตัวพร้อมกับ ชุด B ในปี 2019 และเป็นจุดเริ่มต้นของการสะสมการ์ดไทยสำหรับหลายคน ใบชูโรงคือ ลิซาร์ดอนGX ทั้งแบบ SR และ HR ตามด้วย โฮโอGX และ เกียราดอสGX ชุดนี้เลิกผลิตไปแล้ว ราคาจึงขยับตามของที่เหลือในตลาด เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบในชุด แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทยได้ที่นี่',
+    en: 'เฟิร์สอิมแพค ชุด A (AS1a) is a Thai-language Sun & Moon set released in 2019 alongside its twin, ชุด B, and it is where a lot of Thai collections started. Charizard-GX leads it in both SR and HR treatments, followed by Ho-Oh-GX and Gyarados-GX. The set is long out of print, so prices move with what is left in circulation. Check the latest price for every card in the set, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as1b: {
+    th: 'เฟิร์สอิมแพค ชุด B (AS1b) คือชุดคู่แฝดของ ชุด A ในยุคซันมูน วางจำหน่ายพร้อมกันเมื่อปี 2019 แต่รายชื่อการ์ดคนละชุดกัน ใบที่นักสะสมไทยตามหามากที่สุดคือสายอีวุยอย่าง แบล็กกีGX และ เอฟีGX ตามด้วย ดาร์กไรGX และ เมทากรอสGX แบบ SR/HR ชุดนี้เลิกผลิตแล้วเช่นกัน เช็คราคาการ์ดโปเกม่อนแต่ละใบก่อนซื้อ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ในหน้านี้',
+    en: 'เฟิร์สอิมแพค ชุด B (AS1b) is the twin of ชุด A from the Sun & Moon era — same 2019 release date, a different card list. The Eeveelutions carry it for Thai collectors: Umbreon-GX and Espeon-GX, with Darkrai-GX and Metagross-GX close behind in their SR and HR treatments. It is also out of print. Check the price of each card before you buy, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as2a: {
+    th: 'ปลุกตำนาน ชุด A (AS2a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2019 ที่พิเศษตรงมีการ์ด "ชายนิ่ง" อยู่ในชุดด้วย ซึ่งเป็นแบบที่หายากและเป็นที่ต้องการเป็นพิเศษ ใบชูโรงฝั่ง GX คือ โซโรอาร์คGX และ ลูกาลูกันGX ตามด้วย ไรชูGX และ มาร์ชาโดว์GX เช็คราคาการ์ดโปเกม่อนได้ครบทุกใบทั้งแบบธรรมดาและแบบ SR/HR แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทยได้เลย',
+    en: 'ปลุกตำนาน ชุด A (AS2a) is a 2019 Thai-language set that stands out for including Shining cards — a scarce treatment collectors pay up for. On the GX side, Zoroark-GX and Lycanroc-GX lead, with Raichu-GX and Marshadow-GX behind them. Check prices across the whole set, base rarities and SR/HR alike, then buy or sell authentic cards with sellers all over Thailand.',
+  },
+  as2b: {
+    th: 'ปลุกตำนาน ชุด B (AS2b) ออกพร้อม ชุด A ในปี 2019 และมีการ์ดชายนิ่งเป็นจุดขายเหมือนกัน ใบที่คนตามหามากที่สุดคือ มิวทูGX รองลงมาคือ กาโอกาเอ็นGX เซอไนท์GX และ เอ็นเตGX ทั้งเวอร์ชัน SR และ HR ชุดนี้ไม่มีการผลิตเพิ่มแล้ว ราคาจึงอิงกับของมือสองในตลาดล้วน ๆ เช็คราคาการ์ดโปเกมอนทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วได้ที่นี่',
+    en: 'ปลุกตำนาน ชุด B (AS2b) shipped alongside ชุด A in 2019 and carries Shining cards of its own. Mewtwo-GX is the most hunted card in it, followed by Incineroar-GX, Gardevoir-GX and Entei-GX in their SR and HR versions. Nothing is being printed any more, so the price is whatever the secondary market says it is. Check prices card by card, then buy or sell authentic copies with identity-verified sellers.',
+  },
+  as3a: {
+    th: 'เงาอำพราง ชุด A (AS3a) เป็นชุดการ์ดโปเกมอนภาษาไทยปลายปี 2019 ที่รวมการ์ด GX ยอดนิยมไว้หลายใบ นำโดย เก็คโคกะGX และ ลูคาริโอGX ส่วนสายอีวุยมี ลีเฟียGX กับ กราเซียGX ที่ยังมีคนตามเก็บอยู่เสมอ ทั้งคู่มีทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้ในหน้าเดียว',
+    en: 'เงาอำพราง ชุด A (AS3a) is a late-2019 Thai-language set with a deep GX lineup, led by Greninja-GX and Lucario-GX. On the Eeveelution side, Leafeon-GX and Glaceon-GX still have a steady following, both in SR and HR. Check the latest price for every card and buy or sell authentic copies with sellers in Thailand, all on one page.',
+  },
+  as3b: {
+    th: 'เงาอำพราง ชุด B (AS3b) คือชุดคู่ของ AS3a วางจำหน่ายวันเดียวกันในปี 2019 จุดเด่นคือการ์ดสายมังกรและสายตำนาน ใบที่ราคาน่าสนใจที่สุดคือ ดีอัลกาGX ตามด้วย ไคริวGX โบมันเดอร์GX และ เซอเนียสGX ทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกมอนทีละใบก่อนตัดสินใจ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'เงาอำพราง ชุด B (AS3b) is the companion to AS3a, released the same day in 2019, and it leans on dragons and legendaries. Dialga-GX is the one to watch on price, with Dragonite-GX, Salamence-GX and Xerneas-GX behind it in SR and HR. Check each card price before you commit, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as4a: {
+    th: 'เทพเวหา ชุด A (AS4a) คือชุดการ์ดโปเกมอนภาษาไทยส่งท้ายปี 2019 ใบเด่นของชุดคือ เซครอมGX และ อีเวลทอลGX ส่วน เซราโอราGX กับ ดาเทนกุGX ก็เป็นใบที่สายสะสมตามหาในเวอร์ชัน SR และ HR ชุดนี้หมดจากแผงไปนานแล้ว ราคาขึ้นกับสภาพการ์ดเป็นหลัก เช็คราคาการ์ดโปเกม่อนตามสภาพได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'เทพเวหา ชุด A (AS4a) closed out 2019 for Thai-language Pokemon cards. Zekrom-GX and Yveltal-GX headline it, with Zeraora-GX and Shiftry-GX chased in their SR and HR treatments. It left shelves a long time ago, so condition drives the price more than anything. Check prices by condition across the set, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as4b: {
+    th: 'เทพเวหา ชุด B (AS4b) ออกคู่กับ ชุด A ในปี 2019 และเน้นการ์ดโปเกมอนในตำนาน ใบชูโรงคือ เรชิรัมGX และ พัลเกียGX ตามด้วย ฟรีเซอร์GX และ บาชาโมGX ทั้งแบบ SR และ HR สำหรับคนที่กำลังไล่เก็บให้ครบชุด เช็คราคาการ์ดโปเกมอนได้ทุกใบในหน้านี้ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'เทพเวหา ชุด B (AS4b) launched next to ชุด A in 2019 with a legendary-heavy list. Reshiram-GX and Palkia-GX lead, followed by Articuno-GX and Blaziken-GX in SR and HR. If you are working toward a complete set, every card price is on this page — then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as5a: {
+    th: 'ดับเบิ้ลเบิร์ส ชุด A (AS5a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2020 ยุคการ์ดคู่ ที่โปเกม่อนสองตัวมาอยู่บนใบเดียวกัน ใบที่ดังที่สุดคือ พิคาชู & เซครอมGX ตามด้วย เซเลบี & ฟุชิกิบานะGX และ เก็คโคกะ & โซโรอาร์คGX ส่วนสายเดี่ยวมี คาเม็กซ์GX นอกจากนี้ยังมีการ์ดเทรนเนอร์แบบ TR ที่หายากในชุดด้วย เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทย',
+    en: 'ดับเบิ้ลเบิร์ส ชุด A (AS5a) is a 2020 Thai-language set from the era of paired cards, where two Pokemon share one card. Pikachu & Zekrom-GX is the famous one, with Celebi & Venusaur-GX and Greninja & Zoroark-GX right behind, plus Blastoise-GX among the singles. The set also carries scarce TR trainer cards. Check the latest price for every card, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as5b: {
+    th: 'ดับเบิ้ลเบิร์ส ชุด B (AS5b) ออกพร้อม ชุด A ในปี 2020 และเป็นชุดที่รวมการ์ดคู่ระดับตำนานเอาไว้เยอะที่สุดชุดหนึ่ง นำโดย เรชิรัม & ลิซาร์ดอนGX ตามด้วย เก็งกา & มิมิคคิวGX เซอไนท์ & นิมเฟียGX และ ลูคาริโอ & เมลเมทัลGX ทั้งเวอร์ชัน SR และ HR รวมถึงการ์ดเทรนเนอร์แบบ TR เช็คราคาการ์ดโปเกมอนทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'ดับเบิ้ลเบิร์ส ชุด B (AS5b) arrived with ชุด A in 2020 and packs one of the strongest paired-card lists of the era. Reshiram & Charizard-GX leads, followed by Gengar & Mimikyu-GX, Gardevoir & Sylveon-GX and Lucario & Melmetal-GX in SR and HR, alongside TR trainer cards. Check prices card by card, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as6a: {
+    th: 'ศึกตำนาน ชุด A (AS6a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2020 ที่มีการ์ดแบบ CHR ซึ่งเป็นอาร์ตพิเศษที่นักสะสมชอบเป็นพิเศษ เช่น มิมิคคิว ส่วนใบชูโรงของชุดคือ มิวทู & มิวGX ตามด้วย รัฟเฟรเซียGX และ ลาทิโอสGX ในเวอร์ชัน SR และ HR เช็คราคาการ์ดโปเกม่อนได้ครบทั้งชุด แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้ในหน้านี้',
+    en: 'ศึกตำนาน ชุด A (AS6a) is a 2020 Thai-language set that introduced CHR cards — the special-art treatment collectors single out, Mimikyu among them. Mewtwo & Mew-GX heads the set, with Vileplume-GX and Latios-GX behind it in SR and HR. Check prices across the full set, then buy or sell authentic cards with sellers in Thailand.',
+  },
+  as6b: {
+    th: 'ศึกตำนาน ชุด B (AS6b) ปิดท้ายยุคซันมูนของการ์ดโปเกมอนภาษาไทยในปี 2020 จุดเด่นคือการ์ด CHR อาร์ตพิเศษอย่าง พิคาชู ที่ยังเป็นที่ต้องการจนถึงวันนี้ ฝั่งการ์ดคู่มี เรชิรัม & เซครอมGX และ คาเม็กซ์ & โพจจามะGX ส่วนสายเดี่ยวมี อุลกามอธGX ทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'ศึกตำนาน ชุด B (AS6b) closed the Sun & Moon era for Thai-language Pokemon cards in 2020. Its CHR special-art cards — Pikachu chief among them — are still in demand. On the paired side there is Reshiram & Zekrom-GX and Blastoise & Piplup-GX, with Volcarona-GX among the singles, all in SR and HR. Check the latest price for every card, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
 };
 
 /** Intro copy for a set page, or null when the set has none. */
