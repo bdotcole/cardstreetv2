@@ -2470,7 +2470,7 @@ export default function HomePage() {
                                 // Only behind the beta grant, so the Live
                                 // section never appears for users who cannot
                                 // reach live shows.
-                                onLive={hasLiveBeta('live_streams') ? () => { window.location.assign('/live'); } : undefined}
+                                onLive={hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') ? () => { window.location.assign('/live'); } : undefined}
                                 onSelectCard={setSelectedCard}
                                 onSelectListing={setSelectedListing}
                                 onSellerClick={(seller) => {
