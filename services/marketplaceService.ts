@@ -75,6 +75,11 @@ export interface MarketplaceListing {
     sold_at?: string;
     updated_at: string;
     seller?: SellerProfile;
+    // Set by lib/listingSiblings.ts:groupSiblingListings on a representative row:
+    // how many identical copies (same seller/card/condition/price) are live, and
+    // their listing ids. Absent on rows that were never grouped.
+    units?: number;
+    siblingIds?: string[];
 }
 
 export type ListingSort = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
@@ -307,14 +312,17 @@ export const marketplaceService = {
                 status: asDraft ? 'draft' : 'active',
             };
 
-            // Returns the FIRST row; the caller only needs one representative
-            // listing (for the toast and the vault item's listed state).
-            const { data, error } = await supabase
+            // The caller only needs one representative row (toast + the vault
+            // item's listed state), but it must be read from the FULL
+            // representation: PostgREST ignores `limit` on an INSERT, so a
+            // `.limit(1).single()` here 406'd (PGRST116) on every multi-copy
+            // insert and rolled the whole thing back — "Failed to publish
+            // listing" for any quantity above 1 (fixed 2026-09-16).
+            const { data: inserted, error } = await supabase
                 .from('listings')
                 .insert(Array.from({ length: copies }, () => row))
-                .select()
-                .limit(1)
-                .single();
+                .select();
+            const data = inserted?.[0] ?? null;
 
             if (error) {
                 // Pre-migration fail-soft: until 20260730_draft_listings.sql
@@ -329,6 +337,7 @@ export const marketplaceService = {
                 }
                 throw error;
             }
+            if (!data) throw new Error('Listing insert returned no rows');
 
             // Only a real publish counts, not a draft: the listing_publish
             // reward trigger fires on status='active', so counting drafts here
@@ -550,25 +559,33 @@ export const marketplaceService = {
      * Update the price of the signed-in user's active listing for a given
      * card. Same id-less matching as cancelListingForCard: the mobile Vault
      * only knows card_id (+ condition), not the listing id.
+     *
+     * Every copy at that condition moves together. createListing's `quantity`
+     * inserts N sibling rows and the Vault shows them as one "N unit(s)"
+     * entry, so repricing a single row would silently leave the other copies
+     * at the old ask.
      */
     async updateListingPriceForCard(cardId: string, condition: string | undefined, price: number): Promise<boolean> {
+        // Mirror the bounds enforced by /api/listings' zod schema.
+        if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+            throw new Error('Invalid listing price');
+        }
         const supabase = createClient();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Must be signed in to update a listing');
+            const targets = await ownListingIdsForCard(supabase, cardId, condition);
+            if (targets.length === 0) return false;
 
-            const { data: listings, error: fetchError } = await supabase
+            const { data, error } = await supabase
                 .from('listings')
-                .select('id, condition')
-                .eq('seller_id', user.id)
-                .eq('card_id', cardId)
-                .in('status', ['active', 'draft']);
+                .update({ price })
+                .in('id', targets)
+                // Drafts are price-editable too — only sold/cancelled rows
+                // report false so callers reconcile stale UI.
+                .in('status', ['active', 'draft'])
+                .select('id');
 
-            if (fetchError) throw fetchError;
-            if (!listings || listings.length === 0) return false;
-
-            const target = listings.find(l => l.condition === condition) || listings[0];
-            return await this.updateListingPrice(target.id, price);
+            if (error) throw error;
+            return (data?.length ?? 0) > 0;
         } catch (error) {
             console.error('Error updating listing price for card:', error);
             throw error;
@@ -602,30 +619,21 @@ export const marketplaceService = {
      * listings on card_id (+ condition), exactly as `useUserCollections`
      * does on load. So removal matches the same way: prefer an exact
      * condition match, otherwise cancel the first active listing for the card.
-     * Returns false when no active listing is found (already removed/sold).
+     * Every sibling copy at that condition is cancelled together (one Vault
+     * entry, one "Remove"). Returns false when no active listing is found
+     * (already removed/sold).
      */
     async cancelListingForCard(cardId: string, condition?: string): Promise<boolean> {
         const supabase = createClient();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Must be signed in to remove a listing');
-
-            const { data: listings, error: fetchError } = await supabase
-                .from('listings')
-                .select('id, condition')
-                .eq('seller_id', user.id)
-                .eq('card_id', cardId)
-                .in('status', ['active', 'draft']);
-
-            if (fetchError) throw fetchError;
-            if (!listings || listings.length === 0) return false;
-
-            const target = listings.find(l => l.condition === condition) || listings[0];
+            const targets = await ownListingIdsForCard(supabase, cardId, condition);
+            if (targets.length === 0) return false;
 
             const { error } = await supabase
                 .from('listings')
                 .update({ status: 'cancelled' })
-                .eq('id', target.id);
+                .in('id', targets)
+                .in('status', ['active', 'draft']);
 
             if (error) throw error;
             return true;
@@ -635,3 +643,32 @@ export const marketplaceService = {
         }
     }
 };
+
+/**
+ * Ids of the signed-in seller's live (active/draft) listings for a card:
+ * every row at `condition` when any exist there, else every row sharing the
+ * condition of the oldest live row (the pre-quantity fallback, widened to
+ * its siblings). Throws when signed out.
+ */
+async function ownListingIdsForCard(
+    supabase: ReturnType<typeof createClient>,
+    cardId: string,
+    condition: string | undefined,
+): Promise<string[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Must be signed in to manage a listing');
+
+    const { data: listings, error } = await supabase
+        .from('listings')
+        .select('id, condition')
+        .eq('seller_id', user.id)
+        .eq('card_id', cardId)
+        .in('status', ['active', 'draft'])
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    if (!listings || listings.length === 0) return [];
+
+    const exact = listings.filter(l => l.condition === condition);
+    const cond = exact.length ? condition : listings[0].condition;
+    return listings.filter(l => l.condition === cond).map(l => l.id);
+}
