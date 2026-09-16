@@ -427,7 +427,11 @@ async function runSealed(cfg, products, idx, dry, limit) {
       set_id: setId,
       name: p['product-name'],
       product_type: type,
-      image_url: null, // CSV carries no image; JSON product endpoint can backfill later
+      // No image_url here ON PURPOSE. The CSV carries none, and this upsert
+      // conflicts on id: writing `image_url: null` re-blanked ~2,400 working
+      // (mirrored, background-stripped) images on the 2026-09-14 re-run.
+      // Leaving the key out lets existing rows keep theirs; new rows default
+      // to null and get filled by pricecharting-images.mjs + the mirror cron.
       pricecharting_id: String(p.id),
       console_name: p['console-name'],
       loose_price: usd(p['loose-price']),
