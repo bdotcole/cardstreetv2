@@ -1069,6 +1069,14 @@ export default function HomePage() {
                 purchasePrice: card.marketPrice
             });
 
+            // Confirm at the top of the screen. On Explore nothing else
+            // changes after an add (we deliberately stay on the set), and a
+            // sealed product's detail sheet stays open, so without this the
+            // tap looked like it did nothing. The item name covers cards and
+            // sealed products alike.
+            const itemName = card.name?.trim();
+            showToast(itemName ? `${itemName} · ${t('toast.vaultAdded')}` : t('toast.vaultAdded'), 'success');
+
             // Vaulting a just-scanned card is the strongest "the scan was right"
             // signal — feed it to the learned-phash index.
             const lastScan = lastScanRef.current;

@@ -1694,6 +1694,7 @@
     "toast": {
         "wishlistFailed": "Failed to update wishlist",
         "vaultAddFailed": "Failed to add card to collection",
+        "vaultAdded": "Added to your vault",
         "paymentSuccess": "Payment successful — thank you for your purchase!",
         "authLinkUsed": "That link was already used or expired. Try signing in, or resend the email from the sign-in screen.",
         "emailConfirmed": "Email confirmed — you're signed in!",
