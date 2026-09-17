@@ -59,12 +59,39 @@ export type CameraSlot = 'main' | 'table';
  * The resolution is an `ideal` constraint, so a capable device may still
  * deliver more and the ladder below adapts to whatever actually arrives.
  */
-function captureOptionsFor(facingMode: 'user' | 'environment'): VideoCaptureOptions {
-
+function captureOptionsFor(
+    facingMode: 'user' | 'environment',
+    deviceId?: string | null,
+): VideoCaptureOptions {
+    // An explicit device wins OUTRIGHT rather than joining facingMode. On a
+    // desktop facingMode is close to meaningless — external webcams report no
+    // facing at all — so sending both constraints together only invites an
+    // OverconstrainedError for no gain. On a phone nothing passes a deviceId
+    // and facingMode keeps being the right abstraction.
     return {
-        facingMode,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode }),
         resolution: VideoPresets.h720.resolution,
     };
+}
+
+/**
+ * Cameras this browser can offer, or [] when enumeration is unavailable.
+ *
+ * NOTE: labels are EMPTY until camera permission has been granted at least
+ * once — the spec hides them from unprivileged pages. Callers that want a
+ * readable picker must enumerate again after a successful capture, which is
+ * why the console re-lists on preview start and on 'devicechange'.
+ */
+export async function listVideoInputs(): Promise<MediaDeviceInfo[]> {
+    try {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+            return [];
+        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter((d) => d.kind === 'videoinput');
+    } catch {
+        return [];
+    }
 }
 
 /**
@@ -98,21 +125,38 @@ const AUDIO_CAPTURE: AudioCaptureOptions = {
 async function captureTracks(opts: {
     facingMode: 'user' | 'environment';
     audio: boolean;
+    deviceId?: string | null;
 }): Promise<{ tracks: LocalTrack[]; audioDropped: boolean }> {
-    const video = captureOptionsFor(opts.facingMode);
-    if (!opts.audio) {
-        return { tracks: await createLocalTracks({ audio: false, video }), audioDropped: false };
+    const attempt = async (
+        video: VideoCaptureOptions,
+    ): Promise<{ tracks: LocalTrack[]; audioDropped: boolean }> => {
+        if (!opts.audio) {
+            return { tracks: await createLocalTracks({ audio: false, video }), audioDropped: false };
+        }
+        try {
+            return {
+                tracks: await createLocalTracks({ audio: AUDIO_CAPTURE, video }),
+                audioDropped: false,
+            };
+        } catch (err) {
+            const tracks = await createLocalTracks({ audio: false, video });
+            console.warn('[LiveKit] mic capture failed — broadcasting video-only', err);
+            return { tracks, audioDropped: true };
+        }
+    };
+
+    // A remembered camera can be gone by showtime: unplugged, or claimed by
+    // the Zoom call the breaker forgot to quit. `exact` makes that an
+    // OverconstrainedError, so fall back to the facing-direction default
+    // rather than leaving the broadcaster with no picture at all.
+    if (opts.deviceId) {
+        try {
+            return await attempt(captureOptionsFor(opts.facingMode, opts.deviceId));
+        } catch (err) {
+            console.warn('[LiveKit] saved camera unavailable — falling back to the default', err);
+        }
     }
-    try {
-        return {
-            tracks: await createLocalTracks({ audio: AUDIO_CAPTURE, video }),
-            audioDropped: false,
-        };
-    } catch (err) {
-        const tracks = await createLocalTracks({ audio: false, video });
-        console.warn('[LiveKit] mic capture failed — broadcasting video-only', err);
-        return { tracks, audioDropped: true };
-    }
+    return attempt(captureOptionsFor(opts.facingMode));
 }
 
 /**
@@ -230,6 +274,9 @@ export function useLiveKitRoom() {
 
     const previewTracksRef = useRef<LocalTrack[]>([]);
     const previewFacingRef = useRef<'user' | 'environment' | null>(null);
+    // Which device the preview actually opened, so publishCamera only adopts
+    // a preview that matches the camera now being asked for.
+    const previewDeviceRef = useRef<string | null>(null);
     /**
      * The mic was asked for and refused, but the camera came up — this device
      * is capturing video-only (see captureTracks). Latches until the next
@@ -385,7 +432,7 @@ export function useLiveKitRoom() {
      * camera.
      */
     const startPreview = useCallback(
-        async (opts: { facingMode: 'user' | 'environment'; audio: boolean }) => {
+        async (opts: { facingMode: 'user' | 'environment'; audio: boolean; deviceId?: string | null }) => {
             if (previewInFlightRef.current) return;
             if (previewTracksRef.current.length > 0 || roomRef.current) return;
             previewInFlightRef.current = true;
@@ -402,6 +449,7 @@ export function useLiveKitRoom() {
                 }
                 previewTracksRef.current = tracks;
                 previewFacingRef.current = opts.facingMode;
+                previewDeviceRef.current = opts.deviceId ?? null;
                 const video =
                     (tracks.find((t) => t.kind === Track.Kind.Video) as
                         | LocalVideoTrack
@@ -424,6 +472,7 @@ export function useLiveKitRoom() {
         }
         previewTracksRef.current = [];
         previewFacingRef.current = null;
+        previewDeviceRef.current = null;
         // Only clear the on-screen video when it was the preview's — a
         // published camera keeps rendering through room teardown paths.
         if (!roomRef.current) setLocalVideo(null);
@@ -438,17 +487,34 @@ export function useLiveKitRoom() {
      * re-open the device; otherwise the preview is stopped first.
      */
     const publishCamera = useCallback(
-        async (opts: { facingMode: 'user' | 'environment'; audio: boolean }) => {
+        async (opts: { facingMode: 'user' | 'environment'; audio: boolean; deviceId?: string | null }) => {
             const room = roomRef.current;
             if (!room) throw new Error('Room is not connected');
+
+            // Switching cameras re-enters here while a camera is already
+            // publishing. Retire it first: two camera tracks in one room would
+            // leave viewers watching whichever the layout happened to pick.
+            for (const pub of room.localParticipant.videoTrackPublications.values()) {
+                const existing = pub.track;
+                if (!existing) continue;
+                try {
+                    room.localParticipant.unpublishTrack(existing);
+                    existing.stop();
+                } catch {
+                    // Already gone.
+                }
+            }
+
             let tracks: LocalTrack[];
             if (
                 previewTracksRef.current.length > 0 &&
-                previewFacingRef.current === opts.facingMode
+                previewFacingRef.current === opts.facingMode &&
+                previewDeviceRef.current === (opts.deviceId ?? null)
             ) {
                 tracks = previewTracksRef.current;
                 previewTracksRef.current = [];
                 previewFacingRef.current = null;
+                previewDeviceRef.current = null;
                 if (!opts.audio) {
                     tracks = tracks.filter((t) => {
                         if (t.kind === Track.Kind.Audio) {
