@@ -39,6 +39,7 @@ import {
     formatSatang,
     isHoldLapsed,
     isNativeShell,
+    isPhoneLikeDevice,
     MIN_CHARGE_SATANG,
     nameInitials,
     pollTotalVotes,
@@ -151,16 +152,6 @@ function facingForMode(mode: 'main' | 'table'): 'user' | 'environment' {
  * cards. Desktops default to the classic face-cam console. UA first; the
  * coarse-pointer + narrow-viewport check catches UA-less browsers.
  */
-function isPhoneLikeDevice(): boolean {
-    if (typeof window === 'undefined') return false;
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
-    return (
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(pointer: coarse)').matches &&
-        window.innerWidth < 900
-    );
-}
-
 /** Map a getUserMedia failure to a message the seller can act on. */
 function classifyCameraError(err: unknown): CameraIssue {
     const name = (err as { name?: string } | null)?.name ?? '';

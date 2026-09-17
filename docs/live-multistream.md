@@ -53,6 +53,30 @@ egress-minutes as recording alone.
 7. Go live in the console. The toast lists the channels it is pushing to; the panel shows per-channel status and lets you Stop / Start any of them mid-show.
 8. **Show day: unhide the Live section.** Remove `'live_streams'` from `HIDDEN_ENTRY_POINTS` in `lib/betaFeatures.ts` and push to main; the Shop chooser and the desktop "Live" item reappear once Vercel deploys (a few minutes). Until then everything works by link only: `/live/<id>`, `/live`, `/watch`, the console at `/live/broadcast/<id>`, and Profile > Live shows for broadcasters.
 
+## Show audio (music + desktop capture)
+
+The console's **Music** panel feeds a single extra audio track alongside the
+mic, mixed from two optional sources:
+
+- **Library** — files in the public `live-music` bucket (the bucket is empty
+  until you put something in it). YouTube's own Audio Library
+  (studio.youtube.com -> Audio Library) is free, downloadable and licensed for
+  broadcast, which makes it the easiest legitimate filler.
+- **Desktop audio** — `getDisplayMedia`: share a tab or the whole screen with
+  the audio box ticked and whatever your machine is playing goes into the
+  stream. **Desktop browser only** (the button hides itself in the app WebView,
+  on phones and in Safari), so a phone-run show cannot use it.
+
+Both mix into one published track with independent volume sliders. The capture
+branch is deliberately not monitored locally: you already hear that sound, and
+routing system audio back to your speakers would feed the next capture buffer
+and howl.
+
+> **Copyright.** Facebook and TikTok fingerprint live audio. Commercial music
+> (YouTube Music, Spotify, a CD rip) can mute the stream mid-show or cost the
+> account its LIVE access. Desktop capture makes it *possible* to broadcast
+> anything; it does not make it licensed.
+
 ## Limitations to know
 
 - **Social comments are not mirrored into CardStreet chat** (that needs each platform's comment API — not built). Keep the Facebook/TikTok app open on a second phone, or read them out.

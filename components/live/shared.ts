@@ -387,6 +387,22 @@ export function formatCountdown(msLeft: number): string {
 }
 
 /**
+ * Phone-shaped device? UA first (the reliable signal for the three names that
+ * matter here), then a coarse pointer on a narrow viewport for everything
+ * that lies about its UA. Used to pick the console's default camera mode and
+ * to keep desktop-only capture APIs off phones — see MusicPanel.
+ */
+export function isPhoneLikeDevice(): boolean {
+    if (typeof window === 'undefined') return false;
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
+    return (
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches &&
+        window.innerWidth < 900
+    );
+}
+
+/**
  * The Capacitor shells mark themselves two ways: the CardStreetApp UA marker
  * (Android ships it; iOS from 1.0.4) and the injected Capacitor bridge (all
  * shells, including the pre-marker iOS binary). Same belt-and-suspenders
