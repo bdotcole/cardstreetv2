@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { Card } from '../types';
 import PriceHistoryChart from './PriceHistoryChart';
@@ -139,7 +140,19 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   // Prioritize hires images if available
   const displayImageUrl = card.imageUrl;
 
-  return (
+  // Portal target is document.body, which only exists after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  // Portaled to document.body. The Vault opens this overlay from inside the
+  // mobile shell's <main>, which is its own stacking context (z-10) with the
+  // bottom tab bar as a z-40 sibling, so rendered in place the tab bar always
+  // painted over the action bar (Add to Vault / Shop Now were untappable on a
+  // 640px phone). The shell's own mount sits after the nav and never had the
+  // problem; the portal makes every mount behave like that one. Same trap as
+  // AuthModal (fdc92af), SellerInfoModal (ca123e0) and ListingForm (33034b5).
+  return createPortal(
     <div className="fixed inset-0 z-50 max-w-[480px] mx-auto flex flex-col bg-brand-darker animate-slideUp">
       {/* Header with Wishlist Toggle */}
       <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
@@ -395,7 +408,8 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 
