@@ -2268,7 +2268,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 40px)' }}>
+              {/* 120px like the other Profile panels: this page renders inside
+                  the shell's <main>, so the bottom tab bar overlaps its last
+                  ~80px and the timeline's final entry needs room to scroll
+                  clear of it. */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
                 {!trackingOrder ? (
                   <div className="flex flex-col items-center justify-center gap-3 text-slate-400 py-16 text-center">
                     <Package className="w-10 h-10 text-slate-700" />

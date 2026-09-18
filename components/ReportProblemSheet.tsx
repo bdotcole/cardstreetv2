@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import BodyPortal from './BodyPortal';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { DISPUTE_REASONS, DISPUTE_REASON_KEYS, type DisputeReason } from '@/lib/orderDisputes';
 
@@ -43,7 +44,8 @@ export default function ReportProblemSheet({ orderId, onClose, onReported }: {
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm">
+        <BodyPortal>
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
             <div className="w-full max-w-sm glass rounded-3xl p-6 border border-white/10 relative overflow-hidden bg-slate-900">
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-rose-500 to-amber-500"></div>
                 <div className="flex justify-between items-start mb-3">
@@ -90,5 +92,6 @@ export default function ReportProblemSheet({ orderId, onClose, onReported }: {
                 <p className="text-[11px] text-slate-500 mt-3 text-center">{t('orderActions.guarantee')}</p>
             </div>
         </div>
+        </BodyPortal>
     );
 }

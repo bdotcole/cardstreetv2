@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import BodyPortal from './BodyPortal';
 import { Card, CardCondition, UserCollectionItem } from '@/types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
@@ -75,6 +76,7 @@ export default function BulkListSheet({
     const total = rows.reduce((sum, r) => sum + r.price, 0);
 
     return (
+        <BodyPortal>
         <div className="fixed inset-0 z-[95] flex items-end justify-center" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel}></div>
             <div
@@ -197,5 +199,6 @@ export default function BulkListSheet({
                 </div>
             </div>
         </div>
+        </BodyPortal>
     );
 }

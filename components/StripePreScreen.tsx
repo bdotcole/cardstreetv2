@@ -18,6 +18,7 @@
  */
 
 import React from 'react';
+import BodyPortal from './BodyPortal';
 import { CreditCard, ExternalLink, IdCard, Loader2, MapPin, Phone, ScanFace, Shield, X } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
@@ -39,15 +40,17 @@ export default function StripePreScreen({ onCancel, onContinue, loading }: Strip
     ];
 
     return (
+        <BodyPortal>
         <div
             className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="stripe-prescreen-title"
             onClick={onCancel}
         >
             <div
-                className="bg-brand-darker border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl"
+                className="bg-brand-darker border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-start justify-between gap-3">
@@ -104,5 +107,6 @@ export default function StripePreScreen({ onCancel, onContinue, loading }: Strip
                 </div>
             </div>
         </div>
+        </BodyPortal>
     );
 }
