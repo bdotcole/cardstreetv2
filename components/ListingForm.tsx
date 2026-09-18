@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
@@ -82,6 +83,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     try { localStorage.setItem(SELLER_INFO_ACK_KEY, '1'); } catch { /* ignore */ }
     setShowSellerInfo(false);
   };
+
+  // Portal target is document.body, which only exists after mount. See the
+  // note above the return for why the form is portaled at all.
+  const [mounted, setMounted] = useState(false);
+  React.useEffect(() => setMounted(true), []);
 
   const isSubmittingRef = useRef(false);
   const frontFileInputRef = useRef<HTMLInputElement>(null);
@@ -265,21 +271,37 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!mounted) return null;
+
+  // Portaled to document.body. The mobile shell's <main> is its own stacking
+  // context (z-10) with the bottom tab bar as a z-40 sibling, so a modal
+  // rendered in place always paints beneath the tab bar no matter its own
+  // z-index; the old pb-40 on the scroll body only papered over that. The
+  // portal escapes the shell's safe-area padding, so the insets are
+  // re-applied here. Same trap as AuthModal (fdc92af) and SellerInfoModal.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+      }}
+    >
       <SellerInfoModal isOpen={showSellerInfo} onClose={dismissSellerInfo} />
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
+      {/* dvh, not vh: on mobile browsers 100vh is the URL-bar-hidden height.
+          The header never shrinks; only the body scrolls, capped to the panel. */}
+      <div className="relative w-full max-w-md max-h-[90dvh] flex flex-col bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
         {/* Header */}
-        <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center">
+        <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center flex-shrink-0">
           <h3 className="text-white font-black italic skew-x-[-5deg] text-lg uppercase">{isThai ? 'รายการขาย' : 'List for Sale'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[80vh] pb-40">
+        <div className="p-6 pb-8 overflow-y-auto overscroll-contain min-h-0">
           {/* Card Preview */}
           <div className="flex gap-4 mb-6">
             <div className="w-20 h-28 bg-brand-darker rounded-lg border border-white/10 overflow-hidden flex-shrink-0">
@@ -595,7 +617,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
