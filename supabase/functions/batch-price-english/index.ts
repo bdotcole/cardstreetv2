@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { buildMatcher } from '../_shared/cardMatch.ts'
+import { hotSetIds } from '../_shared/hotSets.ts'
 
 // =====================================================================
 // batch-price-english Edge Function (JustTCG)
@@ -100,11 +101,12 @@ Deno.serve(async (req) => {
             } else {
                 const { data, error } = await supabase
                     .from('pokemon_sets')
-                    .select('id')
+                    .select('id, release_date')
                     .eq('game', 'pokemon')
                     .eq('language', 'en');
                 if (error) throw new Error(`DB query failed: ${error.message}`);
                 dbSetIds = (data ?? []).map((r: any) => r.id);
+                const hotIds = hotSetIds(data ?? []);
 
                 // Stalest-first ordering (the same fix batch-price-games got in
                 // v11): never-priced sets lead, then sets ordered by their oldest
@@ -161,6 +163,16 @@ Deno.serve(async (req) => {
                 } catch (e) {
                     console.warn('stalest-first probe failed; using default order:', (e as Error).message);
                 }
+
+                // Hot sets go in front of EVERYTHING, including the never-priced
+                // bucket: a newly released set is priced every night until the next
+                // one ships (see _shared/hotSets.ts for why created_at/staleness
+                // cannot express that). Applied outside the try so a failed probe
+                // still honours it. A handful of sets at ~3 calls each, so it never
+                // crowds the rotation.
+                const hot = new Set(hotIds);
+                dbSetIds = [...hotIds, ...dbSetIds.filter((id) => !hot.has(id))];
+                console.log(`[${jobId}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
             }
             console.log(`[${jobId}] ${dbSetIds.length} English sets to price`);
 
@@ -194,8 +206,10 @@ Deno.serve(async (req) => {
             //
             // So a single night was never going to cover the catalog; what matters
             // is that the ~60 slots go to the sets that need them. That is the
-            // stalest-first ordering above, and pricing a set stamps it fresh and
-            // drops it to the back, so the queue rotates instead of starving.
+            // hot-set head + stalest-first ordering above: newly released sets
+            // take the first few slots every night, and for the rest pricing a
+            // set stamps it fresh and drops it to the back, so the queue rotates
+            // instead of starving.
             // Raising this number does not buy coverage -- the clock still stops
             // the run at the same place.
             const MAX_API_CALLS = 250;

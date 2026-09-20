@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { buildMatcher } from '../_shared/cardMatch.ts'
+import { hotSetIds } from '../_shared/hotSets.ts'
 
 // =====================================================================
 // batch-price-games Edge Function (JustTCG)
@@ -228,12 +229,14 @@ Deno.serve(async (req) => {
 
       const { data: ourSets, error: setErr } = await supabase
         .from('pokemon_sets')
-        .select('id, name, created_at')
+        .select('id, name, created_at, release_date')
         .eq('game', grp.game)
         .eq('language', grp.cardLang === 'ja' ? 'ja' : 'en');
       if (setErr) { console.error(`[${grp.game}] set query: ${setErr.message}`); continue; }
 
-      // Set order: recently-ingested head, then STALEST-FIRST tail.
+      // Set order: HOT head (newly RELEASED — priced every night until the next set
+      // ships, see _shared/hotSets.ts), then never-priced, then recently-ingested,
+      // then STALEST-FIRST tail.
       //
       // A plain created_at DESC ordering starves games with more sets than the
       // MAX_API_CALLS budget can cover. Yu-Gi-Oh has ~636 set rows against a
@@ -328,7 +331,18 @@ Deno.serve(async (req) => {
 
       const createdMs = (s: any) => Date.parse(s.created_at ?? '') || 0;
       const isNew = (s: any) => Date.now() - createdMs(s) < NEW_SET_WINDOW_MS;
+      // Hot = newly released, keyed on release_date rather than created_at: the
+      // isNew head below expires NEW_SET_WINDOW_MS after INGEST, which for a set
+      // ingested on launch day is while it is still the current set and its prices
+      // are still settling. Hot sets outrank even the never-priced bucket — a few
+      // sets at ~3 calls each, and no price at all on the current set is the worst
+      // outcome of all. hotRank preserves newest-first within the head.
+      const hotIds = hotSetIds(ourSets ?? []);
+      const hotRank = new Map(hotIds.map((id, i) => [id, i]));
+      const isHot = (s: any) => hotRank.has(s.id);
       const orderedSets = [...(ourSets ?? [])].sort((a, b) => {
+        if (isHot(a) !== isHot(b)) return isHot(a) ? -1 : 1;
+        if (isHot(a)) return hotRank.get(a.id)! - hotRank.get(b.id)!;
         if (neverPriced(a) !== neverPriced(b)) return neverPriced(a) ? -1 : 1;
         if (neverPriced(a)) return createdMs(b) - createdMs(a);
         if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
@@ -343,6 +357,7 @@ Deno.serve(async (req) => {
       // head carries each set's stale-row count, so a regression to the frozen-row
       // starvation is visible in the logs as a head full of low counts.
       const staleBacklog = [...staleRows.values()].reduce((a, n) => a + n, 0);
+      console.log(`[${grp.game}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
       console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0})`).join(',')}`);
 
       // JustTCG sets for this game (one call), build resolver
@@ -357,7 +372,9 @@ Deno.serve(async (req) => {
         // this, a 426-set backlog (Yu-Gi-Oh's, 2026-08-13) would consume every run
         // for days and let live prices go stale — and any set that resolves upstream
         // but yields no usable price would sit at the head burning calls nightly.
-        if (neverPriced(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
+        // Hot sets are exempt: they sit at the head, so the budget is never hit
+        // by the time they run, and a never-priced hot set must not be skipped.
+        if (neverPriced(set) && !isHot(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
 
         let slug: string | undefined;
         if (grp.matchById) {
