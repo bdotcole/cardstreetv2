@@ -6,6 +6,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import type { Stripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { trackMetaEvent } from '@/lib/metaEvents';
+import { trackPurchase } from '@/lib/commerceEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
 
 // Publishable key, region-aware to match the dual-platform server setup.
@@ -317,6 +318,7 @@ const PaymentElementForm: React.FC<{
                     content_type: 'product',
                     num_items: items.length,
                 });
+                trackPurchase({ transactionId: paymentIntent!.id, valueThb: amountThb, items, paymentMethod: method, paymentStatus: 'succeeded' });
                 onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current });
             } else if (status === 'processing') {
                 // PromptPay (and other async methods): the buyer has authorized;
@@ -324,6 +326,9 @@ const PaymentElementForm: React.FC<{
                 // `processing` is passed through so the order page can say
                 // "confirming payment" rather than "awaiting payment" — the
                 // buyer has paid and their banking app says so.
+                // GA4 purchase fires here too (unlike Meta) — see
+                // lib/commerceEvents.ts for why PromptPay must not be dropped.
+                trackPurchase({ transactionId: paymentIntent!.id, valueThb: amountThb, items, paymentMethod: method, paymentStatus: 'processing' });
                 onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current, processing: true });
             } else {
                 onPaymentFailed('Payment not completed: ' + (status || 'unknown'));

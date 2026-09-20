@@ -57,6 +57,7 @@ import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { sendScanFeedback } from '@/lib/scanFeedback';
 import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
+import { trackAddToCart, trackBeginCheckout } from '@/lib/commerceEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -1130,6 +1131,7 @@ export default function HomePage() {
             content_ids: [items[0].cardId || items[0].id].filter(Boolean),
             content_type: 'product',
         });
+        trackAddToCart(items, currency, exchangeRate);
     };
     const handleAddToCart = (item: CartItem) => handleAddToCartMany([item]);
 
@@ -1241,6 +1243,7 @@ export default function HomePage() {
             content_type: 'product',
             num_items: payingItems.length,
         });
+        trackBeginCheckout(payingItems, currency, exchangeRate);
         setIsPaymentModalOpen(true);
     };
 

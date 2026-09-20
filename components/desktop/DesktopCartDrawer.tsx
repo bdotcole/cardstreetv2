@@ -20,6 +20,7 @@ import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import type { CartItem } from '@/types';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { isValidThaiPhone } from '@/lib/utils/phone';
+import { trackBeginCheckout } from '@/lib/commerceEvents';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -118,6 +119,9 @@ export default function DesktopCartDrawer() {
             // Also require a valid TH phone (not just non-empty) so a junk value
             // can't slip past to Flash — mirrors the /api/orders/checkout gate.
             if (completeness.complete && isValidThaiPhone(profile?.phone_number)) {
+                // Same moment as the mobile InitiateCheckout: every gate
+                // cleared and the payment phase actually opens.
+                trackBeginCheckout(items, 'THB', 1);
                 setPhase('payment');
             } else {
                 setAddressForm({
