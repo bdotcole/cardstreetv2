@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
             const ids = Array.from(new Set(chunk.map((l: any) => l.card_id as string)));
             const { data: cards, error: cardsError } = await admin
                 .from('pokemon_cards')
-                .select('id, tcgplayer:raw_data->tcgplayer, market_values(condition, market_avg, currency, last_updated)')
+                .select('id, language, tcgplayer:raw_data->tcgplayer, market_values(condition, language, market_avg, currency, last_updated)')
                 .in('id', ids);
             if (cardsError) { summary.errors++; continue; }
             const byId = new Map((cards || []).map((c: any) => [c.id, c]));

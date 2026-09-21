@@ -534,7 +534,7 @@ export const scannerService = {
     if (!numeratorRaw) return null;
 
     const numberOr = `number.eq.${numeratorRaw},number.eq.${numeratorStripped},number.ilike.${numeratorRaw}/%,number.ilike.${numeratorStripped}/%`;
-    const select = '*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+    const select = '*, market_values(condition, language, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
 
     // Set-id matching, in order of decreasing precision. For Pokémon the printed code IS
     // the set_id ("MA3", "swsh3"); other games prefix it ("mtg-big", "ygo-bach"), so the
@@ -578,7 +578,7 @@ export const scannerService = {
 
     let q = supabase
       .from('pokemon_cards')
-      .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .select('*, market_values(condition, language, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .or(`name.ilike.%${cleanName}%,english_name.ilike.%${cleanName}%`)
       .eq('language', catalogLanguage(language) ?? language);
     if (game) q = q.eq('game', game);
@@ -618,7 +618,7 @@ export const scannerService = {
 
     let q = supabase
       .from('pokemon_cards')
-      .select('*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
+      .select('*, market_values(condition, language, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)')
       .eq('language', catalogLanguage(language) ?? language)
       .or(
         `number.eq.${numerator},number.eq.${stripped},number.ilike.${numerator}/%,number.ilike.${stripped}/%`,

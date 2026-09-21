@@ -225,7 +225,7 @@ async function getWishlistBoard() {
         const slice = ids.slice(i, i + CHUNK)
         const { data: cards } = await supabase
             .from('pokemon_cards')
-            .select('id, name, english_name, set_id, number, rarity, language, game, image_small, image_large, tcgplayer:raw_data->tcgplayer, types:raw_data->types, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
+            .select('id, name, english_name, set_id, number, rarity, language, game, image_small, image_large, tcgplayer:raw_data->tcgplayer, types:raw_data->types, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)')
             .in('id', slice)
         for (const r of (cards ?? []) as any[]) catalog.set(r.id, r)
 

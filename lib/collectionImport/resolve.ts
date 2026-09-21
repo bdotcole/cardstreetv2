@@ -21,7 +21,7 @@ const GRADED_CONDITION = /^(PSA|BGS|CGC|SGC|ARS|TAG)\s+(\d+(?:\.\d)?)$/i;
 // Same projection the scanner's deterministic lookup uses — the mapper needs the
 // market_values rows (all conditions, for both ungraded display and graded tiers)
 // and the set join. `*` carries raw_data for the embedded-price fallback.
-const SELECT = '*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+const SELECT = '*, market_values(condition, language, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
 
 interface GradedInput {
   isGraded: boolean;

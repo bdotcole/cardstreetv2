@@ -28,7 +28,7 @@ const PAGE = 1000;
 // Same columns the card page selects so mapSupabaseCardToInternal derives the exact
 // headline market price the UI shows (raw_data->tcgplayer is the price fallback).
 const CATALOG_SELECT =
-    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)';
+    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)';
 
 interface SnapshotRow {
     subject_id: string;

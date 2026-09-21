@@ -14,7 +14,7 @@ import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 export const runtime = 'nodejs';
 
 const MAX_ROWS = 1000;
-const CARD_SELECT = '*, market_values(condition, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
+const CARD_SELECT = '*, market_values(condition, language, market_avg, currency, last_updated), pokemon_sets(name, printed_total, total)';
 const GRADED_KEYS = ['is_graded', 'grading_company', 'grade'] as const;
 
 function chunk<T>(arr: T[], size: number): T[][] {

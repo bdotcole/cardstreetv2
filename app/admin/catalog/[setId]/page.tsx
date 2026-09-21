@@ -45,8 +45,8 @@ function rowToThb(row: MarketRow | null): number | null {
 }
 
 // The single price the card page shows: pickDisplayMarketValue's chosen ungraded row.
-function displayThb(card: CardRow): number | null {
-    return rowToThb(pickDisplayMarketValue(card.market_values) as MarketRow | null)
+function displayThb(card: CardRow, setLanguage?: string | null): number | null {
+    return rowToThb(pickDisplayMarketValue(card.market_values, setLanguage) as MarketRow | null)
 }
 
 function fmtThb(n: number | null): string {
@@ -244,10 +244,10 @@ export default function SetCardManagerPage() {
                                     title="Edit market price"
                                     className="mt-1.5 w-full flex items-center gap-1.5 text-left group/price"
                                 >
-                                    <span className={`text-sm font-black tabular-nums ${displayThb(card) == null ? 'text-slate-600' : 'text-brand-green'}`}>
-                                        {fmtThb(displayThb(card))}
+                                    <span className={`text-sm font-black tabular-nums ${displayThb(card, set?.language) == null ? 'text-slate-600' : 'text-brand-green'}`}>
+                                        {fmtThb(displayThb(card, set?.language))}
                                     </span>
-                                    {pickDisplayMarketValue(card.market_values)?.source === 'admin' && (
+                                    {pickDisplayMarketValue(card.market_values, set?.language)?.source === 'admin' && (
                                         <i className="fa-solid fa-thumbtack text-[9px] text-brand-cyan" title="Admin-set price" />
                                     )}
                                     <i className="fa-solid fa-pen text-[9px] text-slate-600 group-hover/price:text-brand-cyan transition-colors ml-auto" />
@@ -333,8 +333,8 @@ function PriceEditorModal({
     onSaved: (cardId: string, rows: MarketRow[]) => void
 }) {
     const displayRow = useMemo(
-        () => pickDisplayMarketValue(card.market_values) as MarketRow | null,
-        [card.market_values],
+        () => pickDisplayMarketValue(card.market_values, setLanguage) as MarketRow | null,
+        [card.market_values, setLanguage],
     )
     // Pin the exact key the card page renders: the display row's condition/language
     // when one exists, else a sensible default so a priceless card can be given one.

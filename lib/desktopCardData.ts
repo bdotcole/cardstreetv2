@@ -21,7 +21,7 @@ const LISTING_SELECT = `
 // freshness (and the breadcrumb set_id). Mirrors the client fetch in
 // DesktopCardDetail and marketplaceService's catalog fallback.
 const CATALOG_SELECT =
-    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)';
+    'id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)';
 
 /** Tiles rendered in the "more from this set" block. */
 const SIBLING_COUNT = 12;
