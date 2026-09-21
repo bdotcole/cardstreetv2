@@ -10,6 +10,7 @@ import InviteCard from '@/components/rewards/InviteCard';
 import AvatarFrame from '@/components/rewards/AvatarFrame';
 import BadgePill from '@/components/rewards/BadgePill';
 import RankChip from '@/components/rewards/rankChip';
+import { EMOTE_PACKS, EmoteIcon } from '@/components/rewards/emotes';
 
 /** Shop sections, in ladder order: free-to-us cosmetics first, then perks,
  *  then the money-backed vouchers at the top of the ladder. */
@@ -18,6 +19,20 @@ const SHOP_GROUPS: readonly { kind: 'cosmetic' | 'perk' | 'voucher'; labelKey: s
     { kind: 'perk', labelKey: 'rewards.groupPerks' },
     { kind: 'voucher', labelKey: 'rewards.groupVouchers' },
 ];
+
+/** Icon disc for every shop card that is not a frame or an emote pack, so no
+ *  tile is blank. Keyed by item, with a per-voucher-type fallback below. */
+const SHOP_ICONS: Record<string, { icon: string; className: string }> = {
+    streak_freeze: { icon: 'fa-snowflake', className: 'bg-cyan-400/15 text-cyan-300' },
+    listing_boost: { icon: 'fa-arrow-trend-up', className: 'bg-violet-400/15 text-violet-300' },
+    pro_trial_7d: { icon: 'fa-gem', className: 'bg-fuchsia-400/15 text-fuchsia-300' },
+};
+const VOUCHER_ICONS: Record<string, { icon: string; className: string }> = {
+    order: { icon: 'fa-ticket', className: 'bg-amber-400/15 text-amber-300' },
+    shipping: { icon: 'fa-truck-fast', className: 'bg-amber-400/15 text-amber-300' },
+    seller_fee: { icon: 'fa-percent', className: 'bg-emerald-400/15 text-emerald-300' },
+};
+const DEFAULT_ICON = { icon: 'fa-gift', className: 'bg-white/5 text-slate-300' };
 
 /**
  * The Rewards Hub — Whatnot-style rewards sheet opened from the header coin
@@ -69,7 +84,12 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
             if (data?.claimed) {
                 const extra = data.milestoneCoins > 0 ? ` +${data.milestoneCoins}` : '';
                 const levelUp = data.leveledUp ? ` · ${t('rewards.levelUp')} ${data.level}` : '';
-                showFlash(`${t('rewards.checkinDone')} +${data.coins}${extra} ${t('rewards.coins')}${levelUp}`);
+                // Say when a missed day was covered, so a spent freeze never
+                // disappears silently.
+                const saved = (data.freezesUsed ?? 0) > 0 || data.freezeUsed
+                    ? ` · ${t('rewards.freezeUsed')}${(data.freezesUsed ?? 0) > 1 ? ` x${data.freezesUsed}` : ''}`
+                    : data.freeRepairUsed ? ` · ${t('rewards.repairUsed')}` : '';
+                showFlash(`${t('rewards.checkinDone')} +${data.coins}${extra} ${t('rewards.coins')}${levelUp}${saved}`);
             } else if (data?.reason === 'already_claimed') {
                 showFlash(t('rewards.alreadyClaimed'));
             }
@@ -231,6 +251,19 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={summary.avatarUrl} alt="" className="w-full h-full object-cover" />
         : <i className="fa-solid fa-user text-slate-500 text-lg" aria-hidden="true"></i>;
+
+    // The pack an emote early-unlock would open right now — the same pick the
+    // redeem route makes (lowest pack still above your level, never legend).
+    // Falls back to the top purchasable pack purely as the card's picture.
+    const ownedEmotePacks = new Set(
+        owned
+            .filter((o) => o.key === 'emote_early_unlock')
+            .map((o) => (o.meta as { pack?: string } | null)?.pack)
+            .filter((p): p is string => typeof p === 'string'),
+    );
+    const nextEmotePack = EMOTE_PACKS.find(
+        (p) => p.key !== 'legend' && p.minLevel > summary.level && !ownedEmotePacks.has(p.key),
+    ) ?? EMOTE_PACKS[EMOTE_PACKS.length - 2];
 
     return (
         <AnimatePresence>
@@ -712,6 +745,37 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                         <AvatarFrame frame={item.key} size={56}>{avatarNode}</AvatarFrame>
                                                     </div>
                                                 )}
+                                                {/* Emote unlock: the four emotes of the pack it opens. */}
+                                                {item.key === 'emote_early_unlock' && (
+                                                    <div className="flex flex-col items-center gap-1 py-1.5">
+                                                        <div className="flex items-center gap-1.5 h-9">
+                                                            {nextEmotePack.emotes.map((e) => (
+                                                                <EmoteIcon key={e} emote={e} className="w-8 h-8" />
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
+                                                            {t(`rewards.emotePack.${nextEmotePack.key}`)} · Lv {nextEmotePack.minLevel}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {/* Everything else: an icon disc; freezes show how many you hold. */}
+                                                {!isFrame && item.key !== 'emote_early_unlock' && (() => {
+                                                    const disc = SHOP_ICONS[item.key]
+                                                        ?? (item.voucher ? VOUCHER_ICONS[item.voucher.type] : undefined)
+                                                        ?? DEFAULT_ICON;
+                                                    return (
+                                                        <div className="flex justify-center py-1.5">
+                                                            <span className={`relative w-14 h-14 rounded-full flex items-center justify-center ${disc.className}`}>
+                                                                <i className={`fa-solid ${disc.icon} text-xl`} aria-hidden="true"></i>
+                                                                {item.key === 'streak_freeze' && summary.freezes > 0 && (
+                                                                    <span className="absolute -bottom-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-cyan-400 text-brand-darker text-[10px] font-black flex items-center justify-center tabular-nums">
+                                                                        x{summary.freezes}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 <div className="flex items-center justify-between gap-2 mt-auto">
                                                     <span className="flex items-center gap-1.5">
                                                         <i className="fa-solid fa-coins text-amber-400 text-[10px]"></i>

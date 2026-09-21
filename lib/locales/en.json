@@ -1508,6 +1508,8 @@
         "claimCheckin": "Claim",
         "comeBackTomorrow": "Come back tomorrow",
         "checkinDone": "Checked in!",
+        "freezeUsed": "Streak freeze used",
+        "repairUsed": "Streak repaired for free",
         "alreadyClaimed": "Already claimed today",
         "streakDays": "day streak",
         "levelUp": "Level up! Now level",

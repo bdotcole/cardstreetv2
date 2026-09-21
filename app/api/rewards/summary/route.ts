@@ -75,7 +75,9 @@ export async function GET() {
         const claimedToday = lastCheckin === today;
 
         // The calendar cell today's claim did (or would) land on. Mirrors
-        // claim_daily_checkin's gap logic without consuming anything.
+        // claim_daily_checkin's gap logic (20260921: the free repair covers
+        // the first missed day, one held freeze covers each further one)
+        // without consuming anything.
         let prospectiveStreak = 1;
         if (claimedToday) {
             prospectiveStreak = streak;
@@ -83,8 +85,9 @@ export async function GET() {
             const gapDays = Math.round(
                 (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${lastCheckin}T00:00:00Z`)) / 86400000,
             );
-            if (gapDays === 1) prospectiveStreak = streak + 1;
-            else if (gapDays === 2 && (!rw?.free_repair_used || (rw?.streak_freezes ?? 0) > 0)) prospectiveStreak = streak + 1;
+            const missed = gapDays - 1;
+            const cover = (rw?.free_repair_used ? 0 : 1) + (rw?.streak_freezes ?? 0);
+            if (missed <= cover) prospectiveStreak = streak + 1;
         }
         const cycleDay = ((Math.max(1, prospectiveStreak) - 1) % 7) + 1;
 

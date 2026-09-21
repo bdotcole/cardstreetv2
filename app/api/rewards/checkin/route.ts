@@ -46,6 +46,8 @@ export async function POST() {
             milestoneCoins: Number(row.milestone_coins ?? 0),
             freeRepairUsed: row.free_repair_used === true,
             freezeUsed: row.freeze_used === true,
+            // 20260921: freezes now cover consecutive missed days, one each.
+            freezesUsed: Number(row.freezes_used ?? (row.freeze_used === true ? 1 : 0)),
             leveledUp: row.leveled_up === true,
             level: Number(row.level ?? 1),
             coinBalance: Number(row.coin_balance ?? 0),
