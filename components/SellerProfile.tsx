@@ -8,6 +8,8 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import GradedSlabFrame from './GradedSlabFrame';
 import RankChip from './rewards/rankChip';
+import AvatarFrame from './rewards/AvatarFrame';
+import BadgePill from './rewards/BadgePill';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
@@ -48,6 +50,9 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
     };
     const displayedBadges = publicSeller?.displayed_badges ?? seller.badges ?? [];
     const rewardLevel = publicSeller?.reward_level ?? null;
+    const wornFrame = publicSeller?.equipped_frame && FRAME_STYLES[publicSeller.equipped_frame]
+        ? publicSeller.equipped_frame
+        : null;
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -73,12 +78,15 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
             <div className="px-6 mt-6 text-center space-y-4 relative z-10">
                 <div className="relative mx-auto w-24 h-24">
                     {/* Equipped Collector Pass frame replaces the default ring. */}
-                    <div className={`w-24 h-24 rounded-full p-1 ${
-                        (publicSeller?.equipped_frame && FRAME_STYLES[publicSeller.equipped_frame])
-                            || 'bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow'
-                    }`}>
-                        <img src={seller.avatar} className="w-full h-full rounded-full object-cover border-4 border-brand-darker" alt={seller.name} />
-                    </div>
+                    <AvatarFrame
+                        frame={wornFrame}
+                        size={96}
+                        ringWidth={wornFrame ? undefined : 4}
+                        gap={3}
+                        fallbackRing="bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow"
+                    >
+                        <img src={seller.avatar} className="w-full h-full object-cover" alt={seller.name} />
+                    </AvatarFrame>
                 </div>
 
                 <div>
@@ -93,9 +101,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                 </span>
                             )}
                             {displayedBadges.map(badge => (
-                                <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                    {badgeLabel(badge)}
-                                </span>
+                                <BadgePill key={badge} badge={badge} label={badgeLabel(badge)} />
                             ))}
                         </div>
                     )}

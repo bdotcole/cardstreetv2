@@ -12,6 +12,7 @@ import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { isEntryPointHidden } from '@/lib/betaFeatures';
 import RewardsChip from '@/components/rewards/RewardsChip';
+import AvatarFrame from '@/components/rewards/AvatarFrame';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
@@ -318,14 +319,15 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             onClick={() => setMenuOpen((open) => !open)}
                             className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 rounded-xl pl-1.5 pr-3 py-1.5 transition-colors"
                         >
-                            <span className="w-7 h-7 rounded-full bg-slate-700 overflow-hidden flex items-center justify-center text-[11px] font-black text-white">
+                            {/* Worn Collector Pass frame at nav scale: 2px ring, no glow. */}
+                            <AvatarFrame frame={rewards?.equippedFrame} size={28} ringWidth={2} gap={1} noGlow className="text-[11px] font-black text-white">
                                 {avatarUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     displayName.charAt(0).toUpperCase()
                                 )}
-                            </span>
+                            </AvatarFrame>
                             <span className="text-sm font-bold text-white max-w-[140px] truncate">{displayName}</span>
                             <i className="fa-solid fa-chevron-down text-[10px] text-slate-500"></i>
                         </button>

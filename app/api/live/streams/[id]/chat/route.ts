@@ -193,29 +193,14 @@ export async function GET(
                     .map((m) => m.sender_id as string),
             )];
             if (senderIds.length > 0) {
-                type DisplayRow = { id: string; reward_level: number | null; equipped_chat_color?: string | null };
-                // Two-step: the chat-color column arrives with the store
-                // migration; retry level-only so a half-applied schema still
-                // renders chips.
-                let rows: DisplayRow[] | null = null;
-                const first = await admin
+                type DisplayRow = { id: string; reward_level: number | null };
+                const { data: rows } = await admin
                     .from('public_profiles')
-                    .select('id, reward_level, equipped_chat_color')
+                    .select('id, reward_level')
                     .in('id', senderIds);
-                if (first.data) {
-                    rows = first.data as DisplayRow[];
-                } else {
-                    const second = await admin
-                        .from('public_profiles')
-                        .select('id, reward_level')
-                        .in('id', senderIds);
-                    rows = (second.data as DisplayRow[] | null) ?? null;
-                }
-                const byId = new Map((rows ?? []).map((r) => [r.id, r]));
+                const byId = new Map(((rows ?? []) as DisplayRow[]).map((r) => [r.id, r]));
                 for (const m of ordered) {
-                    const row = byId.get(m.sender_id as string);
-                    m.sender_level = row?.reward_level ?? null;
-                    m.sender_chat_color = row?.equipped_chat_color ?? null;
+                    m.sender_level = byId.get(m.sender_id as string)?.reward_level ?? null;
                 }
             }
         } catch { /* chips just don't render */ }

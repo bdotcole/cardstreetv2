@@ -52,7 +52,9 @@ export interface RewardsSummary {
     badges: string[];
     displayedBadges: string[];
     equippedFrame: string | null;
-    equippedChatColor: string | null;
+    /** Showcase preview: the seller page's photo and name. */
+    avatarUrl: string | null;
+    displayName: string | null;
     vouchersEnabled: boolean;
 }
 

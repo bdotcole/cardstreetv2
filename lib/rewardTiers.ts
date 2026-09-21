@@ -249,18 +249,14 @@ export interface CatalogItemDef {
 export const CATALOG: readonly CatalogItemDef[] = [
     // ---- Cosmetics: zero marginal cost, so they carry the low/mid range and
     // give every balance something to aim at without touching the budget.
+    // Chat name colours were removed 2026-09-20 (founder call): the frame is
+    // the one cosmetic worth showing off, and a coloured name in chat read as
+    // noise. Nobody had redeemed one, so nothing needed refunding.
     { key: 'streak_freeze', coins: 150, kind: 'cosmetic', redeemable: true },
-    { key: 'chat_color_cyan', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
-    { key: 'chat_color_mint', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
-    { key: 'chat_color_sky', coins: 250, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
     { key: 'frame_neon', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
-    { key: 'chat_color_crimson', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 6, oncePerAccount: true },
-    { key: 'chat_color_amber', coins: 350, kind: 'cosmetic', redeemable: true, minLevel: 6, oncePerAccount: true },
     { key: 'frame_sakura', coins: 400, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
     { key: 'frame_forest', coins: 400, kind: 'cosmetic', redeemable: true, minLevel: 2, oncePerAccount: true },
     { key: 'emote_early_unlock', coins: 400, kind: 'cosmetic', redeemable: true },
-    { key: 'chat_color_ice', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 9, oncePerAccount: true },
-    { key: 'chat_color_toxic', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 9, oncePerAccount: true },
     { key: 'frame_holo', coins: 500, kind: 'cosmetic', redeemable: true, minLevel: 3, oncePerAccount: true },
     { key: 'frame_sunset', coins: 650, kind: 'cosmetic', redeemable: true, minLevel: 4, oncePerAccount: true },
     { key: 'frame_rainbow', coins: 800, kind: 'cosmetic', redeemable: true, minLevel: 5, oncePerAccount: true },
@@ -268,8 +264,6 @@ export const CATALOG: readonly CatalogItemDef[] = [
     { key: 'frame_ember', coins: 1300, kind: 'cosmetic', redeemable: true, minLevel: 8, oncePerAccount: true },
     { key: 'frame_glacier', coins: 1300, kind: 'cosmetic', redeemable: true, minLevel: 8, oncePerAccount: true },
     { key: 'frame_gold', coins: 1800, kind: 'cosmetic', redeemable: true, minLevel: 10, oncePerAccount: true },
-    // Unlocks every chat colour incl. rainbow, which no single-colour SKU sells.
-    { key: 'chat_name_color', coins: 2200, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
     { key: 'frame_prism', coins: 2600, kind: 'cosmetic', redeemable: true, minLevel: 13, oncePerAccount: true },
     { key: 'frame_void', coins: 4000, kind: 'cosmetic', redeemable: true, minLevel: 16, oncePerAccount: true },
     { key: 'frame_crown', coins: 8000, kind: 'cosmetic', redeemable: true, minLevel: 20, oncePerAccount: true },
@@ -312,46 +306,45 @@ export const CATALOG: readonly CatalogItemDef[] = [
 export const CATALOG_BY_KEY: Record<string, CatalogItemDef> =
     Object.fromEntries(CATALOG.map((i) => [i.key, i]));
 
-/** Frame item keys -> avatar-ring gradient classes (rendered as the ring
- *  behind the avatar on profile + seller pages). */
-export const FRAME_STYLES: Record<string, string> = {
-    // Entry tier
-    frame_neon: 'bg-gradient-to-br from-cyan-400 via-teal-300 to-emerald-400',
-    frame_sakura: 'bg-gradient-to-br from-pink-200 via-rose-300 to-fuchsia-400',
-    frame_forest: 'bg-gradient-to-br from-lime-300 via-emerald-400 to-teal-600',
-    // Mid tier
-    frame_holo: 'bg-gradient-to-br from-cyan-300 via-sky-400 to-blue-600',
-    frame_sunset: 'bg-gradient-to-br from-orange-300 via-rose-400 to-purple-500',
-    frame_rainbow: 'bg-gradient-to-br from-rose-400 via-amber-300 to-indigo-400',
-    frame_abyss: 'bg-gradient-to-br from-indigo-400 via-violet-600 to-slate-900',
-    // High tier
-    frame_ember: 'bg-gradient-to-br from-amber-300 via-orange-500 to-red-600',
-    frame_glacier: 'bg-gradient-to-br from-slate-100 via-cyan-200 to-sky-500',
-    frame_gold: 'bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600',
-    // Prestige - deep level gates, the long-haul chase
-    frame_prism: 'bg-gradient-to-br from-fuchsia-400 via-cyan-300 to-amber-300',
-    frame_void: 'bg-gradient-to-br from-slate-900 via-purple-800 to-slate-950',
-    frame_crown: 'bg-gradient-to-br from-yellow-200 via-amber-400 to-rose-500',
+/** One redeemable frame's look. components/rewards/AvatarFrame.tsx paints the
+ *  ring as its own element behind the photo, so `spin` turns only the
+ *  gradient and never the face inside it. */
+export interface FrameStyle {
+    /** Tailwind classes for the ring fill: a linear gradient on the entry
+     *  tier, seamless multi-stop conic gradients (first stop == last) above. */
+    ring: string;
+    /** Ring width in px at full size. */
+    width: number;
+    /** Outer glow (box-shadow classes); dense surfaces such as the nav omit it. */
+    glow?: string;
+    /** Slowly rotate the ring (animate-frame-spin in globals.css). */
+    spin?: boolean;
+}
+
+/** Frame item keys -> ring style. Worn on the seller page (both shells), the
+ *  own profile header, the desktop nav avatar and previewed in the shop. */
+export const FRAME_STYLES: Record<string, FrameStyle> = {
+    // Entry tier: a clean 3px gradient ring with a soft glow.
+    frame_neon: { ring: 'bg-gradient-to-br from-cyan-400 via-teal-300 to-emerald-400', width: 3, glow: 'shadow-[0_0_14px_rgba(34,211,238,0.45)]' },
+    frame_sakura: { ring: 'bg-gradient-to-br from-pink-200 via-rose-300 to-fuchsia-400', width: 3, glow: 'shadow-[0_0_14px_rgba(244,114,182,0.4)]' },
+    frame_forest: { ring: 'bg-gradient-to-br from-lime-300 via-emerald-400 to-teal-600', width: 3, glow: 'shadow-[0_0_14px_rgba(52,211,153,0.4)]' },
+    // Mid tier: 4px conic rings; holo and rainbow sweep like foil.
+    frame_holo: { ring: 'bg-[conic-gradient(from_0deg,#67e8f9,#c4b5fd,#f9a8d4,#fde68a,#86efac,#67e8f9)]', width: 4, glow: 'shadow-[0_0_16px_rgba(103,232,249,0.45)]', spin: true },
+    frame_sunset: { ring: 'bg-[conic-gradient(from_180deg,#fdba74,#fb7185,#a855f7,#fb7185,#fdba74)]', width: 4, glow: 'shadow-[0_0_16px_rgba(251,113,133,0.45)]' },
+    frame_rainbow: { ring: 'bg-[conic-gradient(from_0deg,#f43f5e,#f59e0b,#84cc16,#06b6d4,#8b5cf6,#f43f5e)]', width: 4, glow: 'shadow-[0_0_16px_rgba(139,92,246,0.4)]', spin: true },
+    frame_abyss: { ring: 'bg-[conic-gradient(from_200deg,#312e81,#7c3aed,#0f172a,#7c3aed,#312e81)]', width: 4, glow: 'shadow-[0_0_16px_rgba(124,58,237,0.5)]' },
+    // High tier: heavier glow; ember burns its way around the ring.
+    frame_ember: { ring: 'bg-[conic-gradient(from_0deg,#fde047,#f97316,#dc2626,#7f1d1d,#f97316,#fde047)]', width: 4, glow: 'shadow-[0_0_18px_rgba(249,115,22,0.55)]', spin: true },
+    frame_glacier: { ring: 'bg-[conic-gradient(from_90deg,#f8fafc,#a5f3fc,#0ea5e9,#a5f3fc,#f8fafc)]', width: 4, glow: 'shadow-[0_0_18px_rgba(14,165,233,0.45)]' },
+    frame_gold: { ring: 'bg-[conic-gradient(from_0deg,#fef3c7,#f59e0b,#b45309,#fbbf24,#fef3c7)]', width: 4, glow: 'shadow-[0_0_18px_rgba(245,158,11,0.55)]' },
+    // Prestige: 5px, always turning, the brightest glow - the long-haul chase.
+    frame_prism: { ring: 'bg-[conic-gradient(from_0deg,#e879f9,#67e8f9,#fde68a,#e879f9)]', width: 5, glow: 'shadow-[0_0_22px_rgba(232,121,249,0.55)]', spin: true },
+    frame_void: { ring: 'bg-[conic-gradient(from_0deg,#020617,#6d28d9,#020617,#4c1d95,#020617)]', width: 5, glow: 'shadow-[0_0_22px_rgba(109,40,217,0.6)]', spin: true },
+    frame_crown: { ring: 'bg-[conic-gradient(from_0deg,#fef08a,#f59e0b,#fb7185,#f59e0b,#fef08a)]', width: 5, glow: 'shadow-[0_0_22px_rgba(251,191,36,0.65)]', spin: true },
 };
 
-/** Chat name colors (chat_name_color owners pick one; validated server-side
- *  at equip). 'rainbow' is a gradient-text class stack. */
-export const CHAT_COLORS: Record<string, string> = {
-    gold: 'text-amber-300',
-    pink: 'text-pink-400',
-    lime: 'text-lime-300',
-    violet: 'text-violet-300',
-    cyan: 'text-cyan-300',
-    mint: 'text-emerald-300',
-    sky: 'text-sky-300',
-    crimson: 'text-red-400',
-    amber: 'text-amber-400',
-    ice: 'text-slate-200',
-    toxic: 'text-lime-400',
-    // Bundle-only: never sold as a single colour, so it stays the tell of a
-    // full unlock.
-    rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300 bg-clip-text text-transparent',
-};
+/** Badges a profile can showcase at once (mirrored by the equip route). */
+export const MAX_DISPLAYED_BADGES = 3;
 
 // ---------------------------------------------------------------------------
 // Milestone badges — mirrors grant_reward_milestones() in the 20260829

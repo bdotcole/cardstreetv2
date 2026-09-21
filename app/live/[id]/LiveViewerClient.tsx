@@ -49,7 +49,6 @@ import type { StickerKey } from '@/components/live/stickers';
 import type { PayableSpot } from '@/components/live/SpotPaymentSheet';
 import RankChip from '@/components/rewards/rankChip';
 import { ChatBody, EMOTE_PACKS, EmoteIcon } from '@/components/rewards/emotes';
-import { CHAT_COLORS } from '@/lib/rewardTiers';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { trackLiveEvent } from '@/lib/liveEvents';
 
@@ -1585,8 +1584,6 @@ export default function LiveViewerClient() {
             }
             const senderProfile = profiles.get(m.sender_id);
             const senderLevel = senderProfile?.reward_level ?? m.sender_level ?? null;
-            const colorKey = senderProfile?.equipped_chat_color ?? m.sender_chat_color ?? null;
-            const nameClass = (colorKey && CHAT_COLORS[colorKey]) || 'text-brand-cyan';
             return (
                 <p
                     key={m.id}
@@ -1596,7 +1593,7 @@ export default function LiveViewerClient() {
                     {typeof senderLevel === 'number' && (
                         <RankChip level={senderLevel} className="mr-1" />
                     )}
-                    <span className={`font-black mr-1.5 ${nameClass}`}>
+                    <span className="font-black mr-1.5 text-brand-cyan">
                         {displayName(m.sender_id, m.sender)}
                     </span>
                     <span className="text-white"><ChatBody body={m.body} /></span>

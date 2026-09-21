@@ -13,6 +13,8 @@ import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
 import CurrencySwitcher from './CurrencySwitcher';
 import RankChip from './rewards/rankChip';
+import AvatarFrame from './rewards/AvatarFrame';
+import { FRAME_STYLES } from '@/lib/rewardTiers';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
@@ -43,6 +45,9 @@ interface ProfileProps {
   // Collector Pass level from the shell's rewards summary (null while the
   // system is dark or the user is signed out) — renders the header rank chip.
   rewardsLevel?: number | null;
+  // Equipped Collector Pass frame key — worn around the header avatar so the
+  // owner sees exactly what the seller page shows.
+  rewardsFrame?: string | null;
   onNavigatePartner?: () => void;
   onGuestLogin?: () => void;
   // Notifies the parent shell whether a slide-in sub-panel is open, so the
@@ -304,7 +309,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -1169,11 +1174,18 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, onNavigatePartner
             {/* Profile Header */}
             <div className="text-center pb-4">
               <div className="relative w-24 h-24 mx-auto mb-5">
-                <div className="w-24 h-24 rounded-[2.8rem] glass flex items-center justify-center p-1.5 border border-brand-cyan/20 group overflow-hidden shadow-2xl">
-                  <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
-                    <img src={avatarOverride || user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+                {rewardsFrame && FRAME_STYLES[rewardsFrame] ? (
+                  /* A worn frame is round everywhere else, so it is round here too. */
+                  <AvatarFrame frame={rewardsFrame} size={96} gap={3}>
+                    <img src={avatarOverride || user.avatar} className="w-full h-full object-cover" alt={user.name} />
+                  </AvatarFrame>
+                ) : (
+                  <div className="w-24 h-24 rounded-[2.8rem] glass flex items-center justify-center p-1.5 border border-brand-cyan/20 group overflow-hidden shadow-2xl">
+                    <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
+                      <img src={avatarOverride || user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+                    </div>
                   </div>
-                </div>
+                )}
                 {user.provider !== 'guest' && (
                   <>
                     <button

@@ -6,7 +6,9 @@ import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
 import RankChip from '@/components/rewards/rankChip';
-import { bandForLevel, FRAME_STYLES } from '@/lib/rewardTiers';
+import AvatarFrame from '@/components/rewards/AvatarFrame';
+import BadgePill, { badgeLabel } from '@/components/rewards/BadgePill';
+import { bandForLevel } from '@/lib/rewardTiers';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
     return (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH';
@@ -82,20 +84,15 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
             </nav>
 
             <header className="flex items-center gap-4 mt-6">
-                <span className={`w-16 h-16 rounded-full shrink-0 ${
-                    (seller.equipped_frame && FRAME_STYLES[seller.equipped_frame])
-                        ? `p-[3px] ${FRAME_STYLES[seller.equipped_frame]}`
-                        : ''
-                }`}>
-                    <span className="w-full h-full rounded-full bg-slate-700 overflow-hidden border border-white/10 flex items-center justify-center text-xl font-black text-white">
-                        {seller.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={seller.avatar_url} alt={name} className="w-full h-full object-cover rounded-full" />
-                        ) : (
-                            name.charAt(0).toUpperCase()
-                        )}
-                    </span>
-                </span>
+                {/* Equipped Collector Pass frame wraps the avatar; no frame = plain disc. */}
+                <AvatarFrame frame={seller.equipped_frame} size={64} className="text-xl font-black text-white">
+                    {seller.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={seller.avatar_url} alt={name} className="w-full h-full object-cover" />
+                    ) : (
+                        name.charAt(0).toUpperCase()
+                    )}
+                </AvatarFrame>
                 <div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-2xl font-black text-white">{name}</h1>
@@ -111,6 +108,9 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                                 label={lang === 'EN' ? bandForLevel(seller.reward_level).name : bandForLevel(seller.reward_level).nameTh}
                             />
                         )}
+                        {(seller.displayed_badges ?? []).map((badge) => (
+                            <BadgePill key={badge} badge={badge} label={badgeLabel(badge, lang)} />
+                        ))}
                     </div>
                     <p className="text-sm text-slate-400 mt-1">
                         {`${listings.length} ${lang === 'EN' ? 'listings' : 'รายการ'}`}

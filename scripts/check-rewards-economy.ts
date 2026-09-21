@@ -8,7 +8,7 @@
  * for more than one satang, because settlementCoins' anti-wash-trading caps
  * are computed against that peg.
  */
-import { CATALOG, CHAT_COLORS, FRAME_STYLES, CHECKIN_CALENDAR, QUEST_COINS, settlementCoins } from '../lib/rewardTiers';
+import { CATALOG, FRAME_STYLES, CHECKIN_CALENDAR, QUEST_COINS, settlementCoins } from '../lib/rewardTiers';
 import en from '../lib/locales/en.json';
 import th from '../lib/locales/th.json';
 
@@ -39,18 +39,18 @@ for (const item of CATALOG) {
     if (item.key.startsWith('frame_') && !(item.key in FRAME_STYLES)) {
         fail(`frame SKU has no FRAME_STYLES entry: ${item.key}`);
     }
-    if (item.key.startsWith('chat_color_')) {
-        const colour = item.key.slice('chat_color_'.length);
-        if (!(colour in CHAT_COLORS)) fail(`colour SKU maps to unknown colour: ${item.key}`);
-    }
 }
-for (const frame of Object.keys(FRAME_STYLES)) {
+for (const [frame, style] of Object.entries(FRAME_STYLES)) {
     if (!keys.includes(frame)) fail(`FRAME_STYLES entry is not purchasable: ${frame}`);
+    if (!style.ring || !(style.width > 0)) fail(`FRAME_STYLES entry has no ring to paint: ${frame}`);
 }
-if (CATALOG.some((i) => i.key === 'chat_color_rainbow')) {
-    fail('rainbow must stay bundle-only (no solo SKU)');
+// Chat name colours were removed 2026-09-20 (founder call) — the frame is the
+// one cosmetic worth showing off. Nothing renders a name colour any more, so a
+// re-added SKU would sell an invisible item.
+if (keys.some((k) => k.startsWith('chat_color') || k === 'chat_name_color')) {
+    fail('chat name colour SKUs were removed; nothing renders them');
 } else {
-    ok('rainbow is bundle-only');
+    ok('no chat name colour SKUs');
 }
 
 console.log('\nShop grouping (the hub renders one section per kind)');

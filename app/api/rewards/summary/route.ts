@@ -49,7 +49,7 @@ export async function GET() {
         await awardFirst(admin, user.id, 'first_account');
         const { data: prof } = await admin
             .from('profiles')
-            .select('username, avatar_url')
+            .select('username, avatar_url, display_name')
             .eq('id', user.id)
             .maybeSingle();
         if (prof?.username && prof?.avatar_url) {
@@ -175,7 +175,15 @@ export async function GET() {
             badges: badgeRows.map((b) => b.ref_id),
             displayedBadges: Array.isArray(rw?.displayed_badges) ? rw.displayed_badges : [],
             equippedFrame: typeof rw?.equipped_frame === 'string' ? rw.equipped_frame : null,
-            equippedChatColor: typeof rw?.equipped_chat_color === 'string' ? rw.equipped_chat_color : null,
+            // Showcase preview: the same photo and name the seller page shows,
+            // so "equip" in the hub is a true before/after.
+            avatarUrl: (typeof prof?.avatar_url === 'string' && prof.avatar_url)
+                || (user.user_metadata?.avatar_url as string | undefined)
+                || null,
+            displayName: (typeof prof?.display_name === 'string' && prof.display_name)
+                || (user.user_metadata?.display_name as string | undefined)
+                || prof?.username
+                || null,
             vouchersEnabled: vouchersEnabled === true,
         }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (err) {

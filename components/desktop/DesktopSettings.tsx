@@ -10,6 +10,9 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import AuthModal from '@/components/AuthModal';
 import ThaiAddressFields from '@/components/ThaiAddressFields';
 import AttributionSurvey from '@/components/AttributionSurvey';
+import AvatarFrame from '@/components/rewards/AvatarFrame';
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
+import { FRAME_STYLES } from '@/lib/rewardTiers';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
 type Tab = 'profile' | 'preferences';
@@ -85,6 +88,9 @@ export default function DesktopSettings() {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
     const { user, authChecked } = useDesktopCart();
+    // Collector Pass state (shared cache with the nav chip and the hub host):
+    // the worn frame around the avatar, and whether the showcase row shows.
+    const { summary: rewards } = useRewardsSummary(!!user);
     const [authOpen, setAuthOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -287,16 +293,28 @@ export default function DesktopSettings() {
                 <div className="h-64 rounded-2xl bg-white/5 animate-pulse mt-8"></div>
             ) : tab === 'profile' ? (
                 <div className="mt-8 space-y-6">
-                    {/* Avatar */}
+                    {/* Avatar — round inside a worn Collector Pass frame, the
+                        squircle otherwise. */}
                     <div className="flex items-center gap-5">
-                        <span className="w-20 h-20 rounded-2xl bg-slate-800 overflow-hidden flex items-center justify-center text-2xl font-black text-white">
-                            {avatarUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                                (form.display_name || email).charAt(0).toUpperCase()
-                            )}
-                        </span>
+                        {rewards?.equippedFrame && FRAME_STYLES[rewards.equippedFrame] ? (
+                            <AvatarFrame frame={rewards.equippedFrame} size={80} gap={3} className="text-2xl font-black text-white">
+                                {avatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    (form.display_name || email).charAt(0).toUpperCase()
+                                )}
+                            </AvatarFrame>
+                        ) : (
+                            <span className="w-20 h-20 rounded-2xl bg-slate-800 overflow-hidden flex items-center justify-center text-2xl font-black text-white">
+                                {avatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    (form.display_name || email).charAt(0).toUpperCase()
+                                )}
+                            </span>
+                        )}
                         <div>
                             <button
                                 onClick={() => avatarInputRef.current?.click()}
@@ -312,6 +330,25 @@ export default function DesktopSettings() {
                             <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} />
                         </div>
                     </div>
+
+                    {/* Showcase hand-off: the frame + badge picker lives in the
+                        Rewards Hub (mounted by DesktopRewardsHost in the layout),
+                        so this row only opens it. Hidden while rewards are dark. */}
+                    {rewards && (
+                        <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-3">
+                            <div className="min-w-0">
+                                <p className="text-white text-sm font-bold">{t('desktop.settings.showcaseTitle')}</p>
+                                <p className="text-slate-400 text-xs mt-0.5">{t('desktop.settings.showcaseDesc')}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new Event('cs:openRewards'))}
+                                className="shrink-0 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+                            >
+                                <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-400"></i>{t('desktop.settings.customize')}
+                            </button>
+                        </div>
+                    )}
 
                     <Field label={t('desktop.settings.displayName')}>
                         <input value={form.display_name} onChange={(e) => setField('display_name', e.target.value)} className={inputCls} placeholder={t('desktop.settings.displayName')} />

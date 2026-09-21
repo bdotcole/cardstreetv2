@@ -36,13 +36,12 @@ export interface PublicSeller {
     reward_level?: number | null;
     displayed_badges?: string[] | null;
     equipped_frame?: string | null;
-    equipped_chat_color?: string | null;
 }
 
 const PUBLIC_SELLER_COLUMNS_LEGACY =
     'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, is_official';
 const PUBLIC_SELLER_COLUMNS =
-    `${PUBLIC_SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame, equipped_chat_color`;
+    `${PUBLIC_SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame`;
 
 // Set after the first "column does not exist" failure so every later fetch
 // goes straight to the legacy list. PostgREST rejects the WHOLE select when

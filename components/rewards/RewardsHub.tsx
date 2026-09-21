@@ -4,26 +4,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
-import { CATALOG, CHAT_COLORS, CHECKIN_CALENDAR, FRAME_STYLES, QUEST_COINS, bandForLevel, levelProgress } from '@/lib/rewardTiers';
+import { CATALOG, CHECKIN_CALENDAR, FRAME_STYLES, MAX_DISPLAYED_BADGES, QUEST_COINS, bandForLevel, levelProgress } from '@/lib/rewardTiers';
 import type { RewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import InviteCard from '@/components/rewards/InviteCard';
-
-/** Opaque swatch fills for the name-color picker (CHAT_COLORS are text
- *  classes, unusable as swatch backgrounds). */
-const COLOR_SWATCH: Record<string, string> = {
-    gold: 'bg-amber-400',
-    pink: 'bg-pink-400',
-    lime: 'bg-lime-400',
-    violet: 'bg-violet-400',
-    cyan: 'bg-cyan-400',
-    mint: 'bg-emerald-400',
-    sky: 'bg-sky-400',
-    crimson: 'bg-red-500',
-    amber: 'bg-amber-500',
-    ice: 'bg-slate-200',
-    toxic: 'bg-lime-500',
-    rainbow: 'bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-300',
-};
+import AvatarFrame from '@/components/rewards/AvatarFrame';
+import BadgePill from '@/components/rewards/BadgePill';
+import RankChip from '@/components/rewards/rankChip';
 
 /** Shop sections, in ladder order: free-to-us cosmetics first, then perks,
  *  then the money-backed vouchers at the top of the ladder. */
@@ -33,14 +19,13 @@ const SHOP_GROUPS: readonly { kind: 'cosmetic' | 'perk' | 'voucher'; labelKey: s
     { kind: 'voucher', labelKey: 'rewards.groupVouchers' },
 ];
 
-const COLOR_SKU_PREFIX = 'chat_color_';
-
 /**
  * The Rewards Hub — Whatnot-style rewards sheet opened from the header coin
  * chip (and the Profile menu row via the 'cs:openRewards' window event).
  * Three tabs: Overview (coin balance, level bar, 7-day check-in calendar,
- * streak), Challenges (daily quests + Collector's Journey), Shop (coin store —
- * display-only until the redemption rail ships).
+ * streak, and the Showcase — the frame + badge picker, the one place on BOTH
+ * shells where cosmetics are equipped), Challenges (daily quests +
+ * Collector's Journey), Shop (coin store).
  *
  * Sheet chrome follows components/live/SpotPaymentSheet.tsx (framer spring,
  * items-end on phone / centered on desktop). z-[210] so it also opens above
@@ -194,7 +179,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
         }
     }, [boardBusy]);
 
-    const equip = useCallback(async (payload: { frame?: string | null; chatColor?: string | null }) => {
+    const equip = useCallback(async (payload: { frame?: string | null; badges?: string[] }) => {
         if (busyKey) return;
         setBusyKey('equip');
         try {
@@ -224,6 +209,28 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
     const prog = levelProgress(summary.xp);
     const band = bandForLevel(summary.level);
     const doneThrough = summary.checkinClaimedToday ? summary.cycleDay : summary.cycleDay - 1;
+
+    // Showcase derivations. A frame is wearable only when a redeemed
+    // reward_items row exists (the equip route re-checks ownership).
+    const ownedFrames = Object.keys(FRAME_STYLES).filter((key) => owned.some((o) => o.key === key));
+    const earnedBadges = summary.badges ?? [];
+    const displayedBadges = summary.displayedBadges ?? [];
+    const badgeName = (key: string) => {
+        const lk = `rewards.badge.${key}`;
+        const v = t(lk);
+        return v === lk ? key.replace(/_/g, ' ') : v;
+    };
+    const toggleBadge = (key: string) => {
+        const on = displayedBadges.includes(key);
+        if (!on && displayedBadges.length >= MAX_DISPLAYED_BADGES) return;
+        void equip({ badges: on ? displayedBadges.filter((b) => b !== key) : [...displayedBadges, key] });
+    };
+    // The same photo the seller page shows, so every frame preview is a true
+    // before/after rather than a colour bar.
+    const avatarNode = summary.avatarUrl
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={summary.avatarUrl} alt="" className="w-full h-full object-cover" />
+        : <i className="fa-solid fa-user text-slate-500 text-lg" aria-hidden="true"></i>;
 
     return (
         <AnimatePresence>
@@ -384,6 +391,98 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                 ? t('rewards.comeBackTomorrow')
                                                 : `${t('rewards.claimCheckin')} +${CHECKIN_CALENDAR[summary.cycleDay - 1] ?? 5}`}
                                     </button>
+                                </div>
+
+                                {/* Showcase: what other collectors see on the seller
+                                    page. Frames and badges are picked HERE for both
+                                    shells — the hub is the one rewards surface that
+                                    mounts on desktop and mobile alike. */}
+                                <div>
+                                    <h4 className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 px-1">{t('rewards.showcaseTitle')}</h4>
+                                    <div className="glass rounded-2xl border border-white/5 p-4 space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <AvatarFrame frame={summary.equippedFrame} size={72}>{avatarNode}</AvatarFrame>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-white text-sm font-black truncate">{summary.displayName || t('rewards.boardYou')}</p>
+                                                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                                    <RankChip level={summary.level} variant="page" label={isThai ? band.nameTh : band.name} />
+                                                    {displayedBadges.map((b) => (
+                                                        <BadgePill key={b} badge={b} label={badgeName(b)} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wide mb-2">{t('rewards.showcaseFrames')}</p>
+                                            {ownedFrames.length === 0 ? (
+                                                <button
+                                                    onClick={() => setTab('shop')}
+                                                    className="text-brand-cyan text-[11px] font-bold text-left"
+                                                >
+                                                    {t('rewards.showcaseNoFrames')}
+                                                    <i className="fa-solid fa-arrow-right text-[9px] ml-1.5"></i>
+                                                </button>
+                                            ) : (
+                                                <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
+                                                    <button
+                                                        onClick={() => void equip({ frame: null })}
+                                                        disabled={busyKey !== null}
+                                                        aria-label={t('rewards.frameNone')}
+                                                        title={t('rewards.frameNone')}
+                                                        className={`shrink-0 rounded-full p-0.5 transition-opacity ${
+                                                            summary.equippedFrame === null ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-100'
+                                                        }`}
+                                                    >
+                                                        <AvatarFrame size={44} noGlow>{avatarNode}</AvatarFrame>
+                                                    </button>
+                                                    {ownedFrames.map((key) => (
+                                                        <button
+                                                            key={key}
+                                                            onClick={() => void equip({ frame: key })}
+                                                            disabled={busyKey !== null}
+                                                            aria-label={t(`rewards.item.${key}`)}
+                                                            title={t(`rewards.item.${key}`)}
+                                                            className={`shrink-0 rounded-full p-0.5 transition-opacity ${
+                                                                summary.equippedFrame === key ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'
+                                                            }`}
+                                                        >
+                                                            <AvatarFrame frame={key} size={44} noGlow>{avatarNode}</AvatarFrame>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wide mb-2">{t('rewards.showcaseBadges')}</p>
+                                            {earnedBadges.length === 0 ? (
+                                                <p className="text-slate-500 text-[11px] font-semibold">{t('rewards.showcaseNoBadges')}</p>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {earnedBadges.map((b) => {
+                                                        const on = displayedBadges.includes(b);
+                                                        const full = !on && displayedBadges.length >= MAX_DISPLAYED_BADGES;
+                                                        return (
+                                                            <button
+                                                                key={b}
+                                                                onClick={() => toggleBadge(b)}
+                                                                disabled={busyKey !== null || full}
+                                                                aria-pressed={on}
+                                                                className={`rounded-full transition-opacity ${
+                                                                    on ? 'ring-2 ring-white/80' : full ? 'opacity-35' : 'opacity-60 hover:opacity-100'
+                                                                }`}
+                                                            >
+                                                                <BadgePill badge={b} label={badgeName(b)} size="md" />
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <p className="text-slate-500 text-[10px] font-semibold">{t('rewards.showcaseHint')}</p>
+                                    </div>
                                 </div>
 
                                 {/* Invite a friend. In Overview rather than
@@ -592,9 +691,6 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                         const canBuy = available && !levelLocked && !isOwnedOnce && !freezeCapped
                                             && summary.coins >= item.coins;
                                         const isFrame = item.key in FRAME_STYLES;
-                                        const soloColor = item.key.startsWith(COLOR_SKU_PREFIX)
-                                            ? item.key.slice(COLOR_SKU_PREFIX.length)
-                                            : null;
                                         return (
                                             <div key={item.key} className="glass rounded-2xl border border-white/5 p-3.5 flex flex-col gap-2">
                                                 <div className="flex items-start justify-between gap-2">
@@ -610,11 +706,11 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                         </span>
                                                     )}
                                                 </div>
+                                                {/* The frame on YOUR avatar, not a colour bar. */}
                                                 {isFrame && (
-                                                    <div className={`h-6 rounded-lg ${FRAME_STYLES[item.key]}`} />
-                                                )}
-                                                {soloColor && (
-                                                    <div className={`h-6 rounded-lg ${COLOR_SWATCH[soloColor] ?? 'bg-slate-500'}`} />
+                                                    <div className="flex justify-center py-1.5">
+                                                        <AvatarFrame frame={item.key} size={56}>{avatarNode}</AvatarFrame>
+                                                    </div>
                                                 )}
                                                 <div className="flex items-center justify-between gap-2 mt-auto">
                                                     <span className="flex items-center gap-1.5">
@@ -632,18 +728,6 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                             }`}
                                                         >
                                                             {summary.equippedFrame === item.key ? t('rewards.equipped') : t('rewards.equip')}
-                                                        </button>
-                                                    ) : isOwnedOnce && soloColor ? (
-                                                        <button
-                                                            onClick={() => void equip({ chatColor: summary.equippedChatColor === soloColor ? null : soloColor })}
-                                                            disabled={busyKey !== null}
-                                                            className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase transition-colors ${
-                                                                summary.equippedChatColor === soloColor
-                                                                    ? 'bg-brand-cyan text-brand-darker'
-                                                                    : 'bg-white/10 text-slate-300'
-                                                            }`}
-                                                        >
-                                                            {summary.equippedChatColor === soloColor ? t('rewards.equipped') : t('rewards.equip')}
                                                         </button>
                                                     ) : isOwnedOnce ? (
                                                         <span className="text-[9px] font-black uppercase text-brand-cyan">{t('rewards.owned')}</span>
@@ -669,22 +753,6 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                         </button>
                                                     ) : null}
                                                 </div>
-                                                {/* Owned name color: swatch picker */}
-                                                {item.key === 'chat_name_color' && isOwnedOnce && (
-                                                    <div className="flex gap-1.5 pt-1">
-                                                        {Object.keys(CHAT_COLORS).map((c) => (
-                                                            <button
-                                                                key={c}
-                                                                onClick={() => void equip({ chatColor: summary.equippedChatColor === c ? null : c })}
-                                                                disabled={busyKey !== null}
-                                                                aria-label={c}
-                                                                className={`w-6 h-6 rounded-full border-2 ${
-                                                                    summary.equippedChatColor === c ? 'border-white' : 'border-transparent'
-                                                                } ${COLOR_SWATCH[c] ?? 'bg-slate-500'}`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
                                         );
                                         })}

@@ -1,14 +1,14 @@
 /**
- * POST /api/rewards/equip — set displayed cosmetics: { frame?, chatColor?,
- * badges? }. null clears; every value is validated against actual ownership
- * (reward_items for frames/colors, ledger 'badge' rows for badges) before the
+ * POST /api/rewards/equip — set displayed cosmetics: { frame?, badges? }.
+ * null clears the frame; every value is validated against actual ownership
+ * (reward_items for frames, ledger 'badge' rows for badges) before the
  * service-role write, so nothing display-side is client-grantable.
  */
 
 import { NextResponse } from 'next/server';
 import { requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { CHAT_COLORS, FRAME_STYLES } from '@/lib/rewardTiers';
+import { FRAME_STYLES, MAX_DISPLAYED_BADGES } from '@/lib/rewardTiers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,33 +44,14 @@ export async function POST(req: Request) {
             }
         }
 
-        if ('chatColor' in body) {
-            const color = body.chatColor;
-            if (color === null) {
-                update.equipped_chat_color = null;
-            } else if (typeof color === 'string' && color in CHAT_COLORS) {
-                // Either the all-colours bundle or the single-colour SKU for
-                // this exact colour. 'rainbow' has no single-colour SKU, so it
-                // stays bundle-only by construction.
-                const { data } = await admin
-                    .from('reward_items')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .in('item_key', ['chat_name_color', `chat_color_${color}`])
-                    .eq('status', 'active')
-                    .limit(1);
-                if (!data || data.length === 0) {
-                    return NextResponse.json({ ok: false, reason: 'not_owned' }, { status: 403 });
-                }
-                update.equipped_chat_color = color;
-            } else {
-                return NextResponse.json({ ok: false, reason: 'bad_color' }, { status: 400 });
-            }
-        }
-
         if ('badges' in body) {
             const badges = body.badges;
-            if (!Array.isArray(badges) || badges.length > 3 || badges.some((b) => typeof b !== 'string')) {
+            if (
+                !Array.isArray(badges)
+                || badges.length > MAX_DISPLAYED_BADGES
+                || badges.some((b) => typeof b !== 'string')
+                || new Set(badges).size !== badges.length
+            ) {
                 return NextResponse.json({ ok: false, reason: 'bad_badges' }, { status: 400 });
             }
             if (badges.length > 0) {
