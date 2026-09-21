@@ -191,7 +191,14 @@ export function buildMatcher(ourCards: CatalogCard[], allJustTcgCards: JustTcgCa
   const push = (m: Map<string, CatalogCard[]>, k: string, c: CatalogCard) => {
     if (!k) return;
     const a = m.get(k);
-    if (a) a.push(c); else m.set(k, [c]);
+    if (!a) { m.set(k, [c]); return; }
+    // One row must never sit in a bucket twice. It did whenever english_name
+    // duplicated name: rule 1 then saw `named.length > 1`, the number tie-break
+    // found the same card twice, and the match was REFUSED — every card in the
+    // set went silently unpriced (me05.5 held launch prices ~16x market for
+    // five days this way, 2026-09-21). Keyed on id rather than object identity
+    // so a caller passing two objects for one row is covered too.
+    if (!a.some((x) => x.id === c.id)) a.push(c);
   };
 
   for (const c of ourCards) {
