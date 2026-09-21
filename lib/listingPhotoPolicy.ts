@@ -7,27 +7,35 @@
  * is worth — and that is most of a collection. A seller with 60 bulk cards to
  * move faced 120 photographs, which is why they moved none of them.
  *
- * The threshold is a judgement, not a derivation: high enough to cover the
- * long tail of commons and playables, low enough that anything a buyer would
- * think twice about still needs a real photo. Raise it only with evidence from
- * dispute rates.
+ * The threshold is a judgement, not a derivation: it covers the long tail of
+ * commons and cheap playables and nothing a buyer would think twice about.
+ * It started at ฿300 and was cut to ฿100 on 2026-09-21 — the founder's call:
+ * above pocket money, buyers should see the actual card. Raise it only with
+ * evidence from dispute rates.
  *
  * Condition is the second gate. Catalog art shows a mint card, so it can only
  * stand in for a card the seller is describing as near-mint — using it for a
  * played card would be a picture that contradicts the listing.
  *
- * Pure module: the listing form, the bulk lister and the server all read it.
+ * Sealed products never qualify. A packshot proves nothing about the box in
+ * the seller's hands (reseals, dents, missing shrink, region), and sealed is
+ * where the money is — a 20-copy booster-box listing on a stock render was
+ * exactly the case that got the loophole closed.
+ *
+ * Pure module: the listing form and the bulk lister both read it.
  */
 
 import { CardCondition } from '@/types';
 
-/** At or below this asking price, catalog art may stand in for photos. */
-export const CATALOG_ART_MAX_PRICE_THB = 300;
+/**
+ * From this asking price upward, real photos are required. Strictly below it,
+ * catalog art may stand in for a near-mint single.
+ */
+export const PHOTOS_REQUIRED_FROM_THB = 100;
 
 export function catalogArtAllowed(price: number | null | undefined, condition: string): boolean {
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return false;
-    if (price > CATALOG_ART_MAX_PRICE_THB) return false;
-    // Sealed products are identical by definition — the packshot IS the item.
-    if (condition === CardCondition.Sealed) return true;
+    if (price >= PHOTOS_REQUIRED_FROM_THB) return false;
+    if (condition === CardCondition.Sealed) return false;
     return condition === CardCondition.NM;
 }

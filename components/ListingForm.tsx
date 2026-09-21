@@ -7,7 +7,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { minListingPriceThb } from '@/lib/pricingFloors';
 import { clampRecommendation, evaluatePrice, isUsableMarketValue } from '@/lib/listingPriceGuidance';
-import { CATALOG_ART_MAX_PRICE_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
+import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
 import { marketplaceService } from '@/services/marketplaceService';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
@@ -183,8 +183,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     // Sealed products need one photo of the item; the second angle is optional.
     // Raw cards still require both faces for condition assessment — UNLESS the
     // card is cheap and near-mint enough for the catalog image to stand in
-    // (lib/listingPhotoPolicy.ts). Two photographs per 40-baht common is why
-    // bulk never gets listed.
+    // (lib/listingPhotoPolicy.ts; never for sealed). Two photographs per
+    // 40-baht common is why bulk never gets listed.
     if (!useCatalogArt && (!frontImageBlob || (!isSealed && !backImageBlob))) {
       setError(isThai
         ? (isSealed ? 'กรุณาอัปโหลดรูปถ่ายสินค้า' : 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด')
@@ -491,7 +491,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               </div>
             )}
 
-            {/* Photos. Required, except for cheap near-mint cards where the
+            {/* Photos. Required, except for cheap near-mint singles where the
                 catalog image may stand in — see lib/listingPhotoPolicy.ts. */}
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
@@ -526,8 +526,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                   />
                   <p className="text-[11px] text-slate-400 leading-snug">
                     {isThai
-                      ? `ใช้รูปแคตตาล็อกได้เพราะราคาไม่เกิน ฿${CATALOG_ART_MAX_PRICE_THB} และสภาพ NM`
-                      : `Catalog image is allowed here: near-mint and at or under ฿${CATALOG_ART_MAX_PRICE_THB}.`}
+                      ? `ใช้รูปแคตตาล็อกได้เพราะราคาต่ำกว่า ฿${PHOTOS_REQUIRED_FROM_THB} และสภาพ NM`
+                      : `Catalog image is allowed here: near-mint and under ฿${PHOTOS_REQUIRED_FROM_THB}.`}
                   </p>
                 </div>
               ) : (

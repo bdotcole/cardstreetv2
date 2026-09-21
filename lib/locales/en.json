@@ -1772,8 +1772,8 @@
     },
     "listingPhotos": {
         "useCatalogArt": "Use the catalog image",
-        "useCatalogArtHint": "Allowed for near-mint cards up to ฿300. Above that, buyers need to see the actual card.",
-        "photosRequired": "Photos of the actual card are required above ฿300 or below near-mint.",
+        "useCatalogArtHint": "Allowed for near-mint singles under ฿100. Anything else, including sealed products, needs photos of the actual item.",
+        "photosRequired": "Photos of the actual item are required at ฿100 and above, below near-mint, or for sealed products.",
         "quantity": "How many copies?",
         "quantityHint": "Creates one listing per copy, so each can sell separately."
     },

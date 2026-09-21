@@ -7,7 +7,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 import { evaluatePrice, suggestedSellPrice } from '@/lib/listingPriceGuidance';
-import { CATALOG_ART_MAX_PRICE_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
+import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
 
 /**
  * List several vault cards in one pass.
@@ -123,8 +123,8 @@ export default function BulkListSheet({
                                 {catalogArtOkForAll
                                     ? t('listingPhotos.useCatalogArtHint')
                                     : isThai
-                                        ? `มีบางใบเกิน ฿${CATALOG_ART_MAX_PRICE_THB} หรือสภาพต่ำกว่า NM — ต้องลงขายทีละใบพร้อมรูปจริง`
-                                        : `Some of these are over ฿${CATALOG_ART_MAX_PRICE_THB} or below near-mint — list those individually with real photos.`}
+                                        ? `มีบางใบราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป หรือสภาพต่ำกว่า NM — ต้องลงขายทีละใบพร้อมรูปจริง`
+                                        : `Some of these are ฿${PHOTOS_REQUIRED_FROM_THB} or more, or below near-mint — list those individually with real photos.`}
                             </span>
                         </span>
                     </label>
