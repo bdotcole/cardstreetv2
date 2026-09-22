@@ -11,16 +11,19 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
  *
  * The figure is the real floor, not a marketing one — see lib/shippingDisplay.
  */
-export default function ShippingNote({ variant = 'full', className = '' }: {
+export default function ShippingNote({ variant = 'full', tone = 'muted', className = '' }: {
     /** 'full' for a listing detail; 'short' for a grid tile, where the line
      *  competes with the price for the same few pixels. */
     variant?: 'full' | 'short';
+    /** 'light' when the short line sits on a dark image gradient, where the
+     *  muted grey falls below readable contrast. */
+    tone?: 'muted' | 'light';
     className?: string;
 }) {
     const { t } = useTranslation();
     if (variant === 'short') {
         return (
-            <span className={`text-[9px] text-slate-500 font-bold ${className}`}>
+            <span className={`text-[9px] font-bold ${tone === 'light' ? 'text-slate-300' : 'text-slate-500'} ${className}`}>
                 {t('shipping.noteShort')}
             </span>
         );

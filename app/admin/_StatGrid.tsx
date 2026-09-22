@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 export type DeltaWindowKey = 'h24' | 'd7' | 'd30'
 export type Deltas = Record<DeltaWindowKey, number>
@@ -15,6 +16,9 @@ export interface StatCardData {
     deltas: Deltas
     /** Prefix for the delta figure only, e.g. the baht sign on GMV. */
     deltaPrefix?: string
+    /** The admin section that works this queue. Tiles without one (GMV,
+     *  collections) have no page to open and stay plain. */
+    href?: string
 }
 
 const WINDOWS: { key: DeltaWindowKey; label: string; since: string }[] = [
@@ -69,8 +73,11 @@ export default function StatGrid({ cards }: { cards: StatCardData[] }) {
                 {cards.map((card) => {
                     const delta = card.deltas?.[range] ?? 0
                     const figure = `${card.deltaPrefix ?? ''}${Math.round(delta).toLocaleString()}`
-                    return (
-                        <div key={card.label} className="glass rounded-2xl p-5 border border-white/10 relative overflow-hidden group hover:border-white/20 transition-all">
+                    const tileClass = `glass rounded-2xl p-5 border border-white/10 relative overflow-hidden group transition-all block ${
+                        card.href ? 'hover:border-brand-cyan/40 hover:bg-white/[0.03] active:scale-[0.99]' : 'hover:border-white/20'
+                    }`
+                    const body = (
+                        <>
                             <div className="absolute bottom-3 right-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
                                 <i className={`${card.icon} text-3xl ${card.color}`} />
                             </div>
@@ -84,7 +91,25 @@ export default function StatGrid({ cards }: { cards: StatCardData[] }) {
                             </div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 pr-14">{card.label}</p>
                             <p className={`text-3xl font-black ${card.color}`}>{card.value}</p>
-                            {card.sub && <p className="text-[10px] text-slate-600 mt-1 font-semibold">{card.sub}</p>}
+                            {card.sub && (
+                                <p className="text-[10px] text-slate-600 mt-1 font-semibold flex items-center gap-1.5">
+                                    {card.sub}
+                                    {card.href && (
+                                        <i className="fa-solid fa-arrow-right text-[9px] group-hover:text-brand-cyan group-hover:translate-x-0.5 transition-all" />
+                                    )}
+                                </p>
+                            )}
+                        </>
+                    )
+                    // A tile with a destination is a real link, so middle-click,
+                    // keyboard focus and the status-bar URL all work for free.
+                    return card.href ? (
+                        <Link key={card.label} href={card.href} className={tileClass}>
+                            {body}
+                        </Link>
+                    ) : (
+                        <div key={card.label} className={tileClass}>
+                            {body}
                         </div>
                     )
                 })}

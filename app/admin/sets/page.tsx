@@ -371,7 +371,7 @@ function CardRequestsPanel({ supabase }: { supabase: any }) {
     const openCount = requests.filter((r) => r.status === 'Open').length
 
     return (
-        <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+        <div id="card-requests" className="glass rounded-2xl border border-white/10 overflow-hidden scroll-mt-28">
             <div
                 className="p-5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
                 onClick={() => setExpanded((v) => !v)}

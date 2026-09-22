@@ -396,6 +396,11 @@ const Marketplace: React.FC<MarketplaceProps> = ({
             // shows "PSA 10", so the condition badge is dropped and the deal
             // badge drops below the label.
             const slabbed = !!listing.is_graded && !!listing.grading_company;
+            // 3-column tiles are image-first: the price rides the bottom edge
+            // of the art and the details strip keeps only what has no other
+            // home. With six rows of chrome under a ~110px-wide thumbnail the
+            // strip was as tall as the card itself.
+            const compact = gridCols === 3;
             // Show "Make Offer" only on offer-accepting listings, and only to a
             // signed-in buyer who isn't the seller. Everyone else (incl. guests
             // and the flag-off case) gets "Buy Now".
@@ -442,8 +447,36 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                         {conditionBadgeLabel(listing)}
                       </span>
                     )}
+                    {/* Compact price strip over the card's text box (never its
+                        artwork). Pointer events pass through so the tap still
+                        opens the listing. */}
+                    {compact && (
+                      <div className="absolute inset-x-0 bottom-0 z-10 px-1.5 pb-1.5 pt-7 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+                        <div className="flex items-baseline gap-1 min-w-0">
+                          <span className="text-[13px] font-black text-brand-cyan leading-none whitespace-nowrap">
+                            {formatPrice(listing.price)}
+                          </span>
+                          {dealPct !== null && (
+                            <span className="text-[8px] text-slate-400 font-bold line-through truncate">
+                              {formatPrice(listing.card_data.marketPrice)}
+                            </span>
+                          )}
+                          {listingUnits(listing) > 1 && (
+                            <span
+                              title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                              className="ml-auto text-[8px] font-black px-1 py-px rounded bg-white/15 text-white whitespace-nowrap"
+                            >
+                              ×{listingUnits(listing)}
+                            </span>
+                          )}
+                        </div>
+                        {showShippingNoteOnTile(listing.price) && (
+                          <ShippingNote variant="short" tone="light" className="block leading-none mt-1" />
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {listingUnits(listing) > 1 && (
+                  {!compact && listingUnits(listing) > 1 && (
                     <span
                       title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
                       className="absolute bottom-1.5 left-1.5 z-10 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-black/60 text-white border border-white/10 backdrop-blur-sm"
@@ -457,34 +490,39 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Card Details */}
-                <div className="p-2 flex flex-col flex-1 min-w-0">
-                  <h3 className="text-white font-bold text-xs truncate">{listing.card_data.name}</h3>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">{listing.card_data.set}</p>
+                <div className={`${compact ? 'p-1.5' : 'p-2'} flex flex-col flex-1 min-w-0`}>
+                  <h3 className={`text-white font-bold truncate ${compact ? 'text-[11px] leading-tight' : 'text-xs'}`}>{listing.card_data.name}</h3>
+                  <p className={`text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5 ${compact ? 'text-[8px] leading-tight' : 'text-[9px]'}`}>{listing.card_data.set}</p>
 
-                  {/* Price — asking price with the market price struck through beside it */}
-                  <div className="flex items-baseline gap-1.5 mt-auto pt-1.5 min-w-0">
-                    <p className="text-base font-black text-brand-cyan leading-none whitespace-nowrap">
-                      {formatPrice(listing.price)}
-                    </p>
-                    {dealPct !== null && (
-                      <p className="text-[9px] text-slate-500 font-bold line-through truncate">
-                        {formatPrice(listing.card_data.marketPrice)}
-                      </p>
-                    )}
-                  </div>
-                  {/* Cheap cards only: below ฿200 the shipping is a large share
-                      of the total and finding it at the payment screen is a
-                      bait. Above that it is noise on a tile. */}
-                  {showShippingNoteOnTile(listing.price) && (
-                    <ShippingNote variant="short" className="block mt-0.5" />
+                  {/* Comfortable grid only: the compact grid shows these on the art */}
+                  {!compact && (
+                    <>
+                      {/* Price — asking price with the market price struck through beside it */}
+                      <div className="flex items-baseline gap-1.5 mt-auto pt-1.5 min-w-0">
+                        <p className="text-base font-black text-brand-cyan leading-none whitespace-nowrap">
+                          {formatPrice(listing.price)}
+                        </p>
+                        {dealPct !== null && (
+                          <p className="text-[9px] text-slate-500 font-bold line-through truncate">
+                            {formatPrice(listing.card_data.marketPrice)}
+                          </p>
+                        )}
+                      </div>
+                      {/* Cheap cards only: below ฿200 the shipping is a large share
+                          of the total and finding it at the payment screen is a
+                          bait. Above that it is noise on a tile. */}
+                      {showShippingNoteOnTile(listing.price) && (
+                        <ShippingNote variant="short" className="block mt-0.5" />
+                      )}
+                    </>
                   )}
 
                   {/* Seller */}
                   <div
                     onClick={(e) => { e.stopPropagation(); if (listing.seller) onSellerClick(listing.seller); }}
-                    className="flex items-center gap-1 mt-1.5 cursor-pointer hover:bg-white/5 rounded-md p-0.5 -m-0.5 transition-colors"
+                    className={`flex items-center gap-1 cursor-pointer hover:bg-white/5 rounded-md p-0.5 -m-0.5 transition-colors ${compact ? 'mt-auto pt-1' : 'mt-1.5'}`}
                   >
-                    <div className="w-3.5 h-3.5 rounded-full bg-slate-700 overflow-hidden flex-shrink-0">
+                    <div className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} rounded-full bg-slate-700 overflow-hidden flex-shrink-0`}>
                       {listing.seller?.avatar_url && (
                         <img
                           src={listing.seller.avatar_url}
@@ -512,19 +550,19 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                   {showMakeOffer ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); onMakeOffer?.(listing); }}
-                      className="mt-2 w-full h-8 rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      className={`${compact ? 'mt-1.5 h-7 text-[9px]' : 'mt-2 h-8 text-[10px]'} w-full rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all`}
                       aria-label={`Make an offer on ${listing.card_data.name}`}
                     >
-                      {gridCols === 2 && <i className="fa-solid fa-hand-holding-dollar"></i>}
+                      {!compact && <i className="fa-solid fa-hand-holding-dollar"></i>}
                       {t('offer.makeOffer')}
                     </button>
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); onBuyNow?.(listing); }}
-                      className="mt-2 w-full h-8 rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all"
+                      className={`${compact ? 'mt-1.5 h-7 text-[9px]' : 'mt-2 h-8 text-[10px]'} w-full rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all`}
                       aria-label={`Buy ${listing.card_data.name} now`}
                     >
-                      {gridCols === 2 && <i className="fa-solid fa-bolt"></i>}
+                      {!compact && <i className="fa-solid fa-bolt"></i>}
                       {t('marketplace.buyNow')}
                     </button>
                   )}

@@ -326,9 +326,9 @@ export default async function AdminOverviewPage() {
         { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace', deltas: stats.listingGrowth },
         { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid, excl. cancelled', deltas: stats.orderGrowth },
         { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'All paid orders', deltas: stats.gmvGrowth, deltaPrefix: '฿' },
-        { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention', deltas: stats.ticketGrowth },
-        { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review', deltas: stats.reportGrowth },
-        { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests', deltas: stats.requestGrowth },
+        { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention', deltas: stats.ticketGrowth, href: '/admin/tickets' },
+        { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review', deltas: stats.reportGrowth, href: '/admin/reports' },
+        { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests', deltas: stats.requestGrowth, href: '/admin/sets#card-requests' },
     ]
 
     return (
