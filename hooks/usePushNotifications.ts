@@ -31,7 +31,9 @@ function routeNotificationTap(data: unknown) {
     // Retention pushes. Both are inert without a destination: a nudge that
     // opens the homepage is the same bug the stream branch above was added to
     // fix (~667 pushes that all landed nowhere).
-    if (type === 'streak_at_risk') {
+    // rewards_launch = the one-off Rewards launch blast (2026-09-22);
+    // same destination as the streak nudge, the hub itself.
+    if (type === 'streak_at_risk' || type === 'rewards_launch') {
         // The Rewards Hub is a shell overlay, not a route — ask the mounted
         // shell to open it, and only hard-navigate if nothing consumed the
         // event (cold start from a killed app, or a non-SPA page).
