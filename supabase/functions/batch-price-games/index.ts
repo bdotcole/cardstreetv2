@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { buildMatcher } from '../_shared/cardMatch.ts'
 import { hotSetIds } from '../_shared/hotSets.ts'
+import { buildSlugIndex, resolveSetSlug } from '../_shared/setSlug.ts'
 
 // =====================================================================
 // batch-price-games Edge Function (JustTCG)
@@ -77,18 +78,24 @@ const JP_SLUG_OVERRIDES: Record<string, string> = {
   PMCG1: 'expansion-pack-pokemon-japan', PMCG2: 'pokemon-jungle-pokemon-japan', PMCG3: 'mystery-of-the-fossils-pokemon-japan', PMCG4: 'rocket-gang-pokemon-japan', PMCG5: 'leaders-stadium-pokemon-japan', PMCG6: 'challenge-from-the-darkness-pokemon-japan',
 };
 
-// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id).
-// byName below is an exact normalized-name lookup, so any spelling gap between our
-// catalog source and JustTCG leaves the set permanently unpriced rather than fuzzy-
-// matched. mtg-hoc: Scryfall calls it "The Hobbit Eternal", JustTCG "The Hobbit:
-// Eternal-Legal" — normalizing to "the hobbit eternal" vs "the hobbit eternal legal".
+// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id), for
+// the differences that are ARBITRARY rather than mechanical. The mechanical ones —
+// prefix/suffix inversion, dropped "(POR)"/"(TCG)" markers, a leading "The" — are
+// handled generically by _shared/setSlug.ts, which is why this table does not need a
+// line per Yu-Gi-Oh Structure Deck. An entry here always wins over that resolver, so
+// anything pinned by hand stays pinned. A set that resolves to nothing can never be
+// priced, so the run now logs every one of them.
+// mtg-hoc: Scryfall calls it "The Hobbit Eternal", JustTCG "The Hobbit: Eternal-Legal".
 const NAME_SLUG_OVERRIDES: Record<string, string> = {
   'lorcana-8': 'reign-of-jafar-disney-lorcana',
   'mtg-hoc': 'the-hobbit-eternal-legal-magic-the-gathering',
+  // Scryfall spins The Big Score out as its own set; JustTCG keeps it under its parent.
+  'mtg-big': 'outlaws-of-thunder-junction-the-big-score-magic-the-gathering',
 
   // MTG Commander and Art Series products. Scryfall names them "<Set> Commander" /
-  // "<Set> Art Series"; JustTCG names them "Commander: <Set>" / "Art Series: <Set>",
-  // so norm() never lines the two up and every one of these would sit unpriced.
+  // "<Set> Art Series"; JustTCG names them "Commander: <Set>" / "Art Series: <Set>".
+  // setSlug.ts now inverts that automatically, but these stay pinned: they were
+  // verified by hand, and a pin cannot drift if upstream adds a colliding name.
   'mtg-onc': 'commander-phyrexia-all-will-be-one-magic-the-gathering',
   'mtg-moc': 'commander-march-of-the-machine-magic-the-gathering',
   'mtg-ltc': 'commander-the-lord-of-the-rings-tales-of-middle-earth-magic-the-gathering',
@@ -141,17 +148,28 @@ const NAME_SLUG_OVERRIDES: Record<string, string> = {
   // from 1 for different art. Mapping both invites the number-collision misprice.
 };
 
-// Set-name key for resolving JustTCG set slugs. Card-level matching lives in
+// Set-name resolution lives in _shared/setSlug.ts. Card-level matching lives in
 // _shared/cardMatch.ts — the old numOf() that reduced "319z"/"R05b"/"OP01-078" to a
 // bare integer is gone; collapsing those suffixes is what mispriced parallels.
-const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-async function jtcgFetch(path: string) {
-  const r = await fetch(`${JUSTTCG_BASE}${path}`, {
-    headers: { 'x-api-key': JUSTTCG_API_KEY, 'Content-Type': 'application/json' },
-  });
-  if (!r.ok) throw new Error(`JustTCG ${r.status}: ${await r.text()}`);
-  return r.json();
+// `retries` is opt-in per call site. Paging a set is already safe to abandon (the
+// next run picks the set up again), but the per-game /sets listing is not: losing it
+// loses the night, so that one call asks for retries.
+async function jtcgFetch(path: string, retries = 0) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(`${JUSTTCG_BASE}${path}`, {
+        headers: { 'x-api-key': JUSTTCG_API_KEY, 'Content-Type': 'application/json' },
+      });
+      if (!r.ok) throw new Error(`JustTCG ${r.status}: ${await r.text()}`);
+      return await r.json();
+    } catch (e) {
+      if (attempt >= retries) throw e;
+      // Linear, not exponential: DELAY_MS already keeps us under 50 req/min, so a
+      // couple of extra seconds is enough to clear a rate-limit window.
+      await new Promise((r) => setTimeout(r, DELAY_MS * (attempt + 2)));
+    }
+  }
 }
 
 function bestNmVariant(jCard: any): any | null {
@@ -360,11 +378,31 @@ Deno.serve(async (req) => {
       console.log(`[${grp.game}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
       console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0})`).join(',')}`);
 
-      // JustTCG sets for this game (one call), build resolver
+      // JustTCG sets for this game (one call), build resolver.
+      // This ONE call gates the entire night for this game: with no listing nothing
+      // resolves, every set is skipped, and the cron still records success. A single
+      // transient 429/5xx therefore used to cost a whole night silently. Retried now.
       let jtcgSets: any[] = [];
-      try { jtcgSets = ((await jtcgFetch(`/sets?game=${grp.justtcgGame}`)).data) ?? []; apiCalls++; }
-      catch (e) { console.error(`[${grp.game}] /sets: ${(e as Error).message}`); continue; }
-      const byName = new Map(jtcgSets.map((s: any) => [norm(s.name), s.id]));
+      try { jtcgSets = ((await jtcgFetch(`/sets?game=${grp.justtcgGame}`, 2)).data) ?? []; apiCalls++; }
+      catch (e) { console.error(`[${grp.game}] /sets FAILED - skipping game for tonight: ${(e as Error).message}`); continue; }
+      const slugIndex = buildSlugIndex(jtcgSets as { id: string; name: string }[]);
+      const resolveFor = (set: { id: string; name: string }): string | undefined =>
+        grp.matchById
+          ? (JP_SLUG_OVERRIDES[set.id]
+              ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id)
+          // Exact name first, then the mechanical rewrites in _shared/setSlug.ts.
+          // NAME_SLUG_OVERRIDES still wins over both.
+          : resolveSetSlug(set, slugIndex, NAME_SLUG_OVERRIDES);
+
+      // A set that resolves to no slug is not stale, it is UNREACHABLE: it can never
+      // be priced, however long it waits, and the loop skips it without an API call
+      // or a log line. That silence hid 341 of Yu-Gi-Oh's 644 sets until 2026-09-22.
+      // Name them once per run so the next naming drift shows up in the logs instead
+      // of quietly parking a few hundred sets.
+      const unresolved = orderedSets.filter((s) => !resolveFor(s)).map((s) => s.id);
+      if (unresolved.length) {
+        console.warn(`[${grp.game}] ${unresolved.length}/${orderedSets.length} sets resolve to NO JustTCG slug and can never be priced: ${unresolved.slice(0, 40).join(', ')}${unresolved.length > 40 ? ` ...+${unresolved.length - 40}` : ''}`);
+      }
 
       for (const set of orderedSets) {
         if (apiCalls >= MAX_API_CALLS) break;
@@ -376,16 +414,16 @@ Deno.serve(async (req) => {
         // by the time they run, and a never-priced hot set must not be skipped.
         if (neverPriced(set) && !isHot(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
 
-        let slug: string | undefined;
-        if (grp.matchById) {
-          slug = JP_SLUG_OVERRIDES[set.id]
-            ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id;
-        } else {
-          // LorcanaJSON names set 8 "The Reign of Jafar"; JustTCG drops the "The".
-          slug = NAME_SLUG_OVERRIDES[set.id] ?? byName.get(norm(set.name));
-        }
+        const slug = resolveFor(set);
         if (!slug) continue;
 
+        // One set must not be able to end the night. Everything below — the matcher,
+        // the history parse, the upserts — runs against whatever upstream returns, and
+        // an unguarded throw here rejected run() and silently abandoned every set still
+        // queued behind this one, leaving the cron reporting success. Isolate per set
+        // and carry on; the abandoned set keeps its stale rows and comes back up the
+        // rotation tomorrow.
+        try {
         // our cards for this set
         const { data: ourCards } = await supabase
           .from('pokemon_cards')
@@ -485,6 +523,9 @@ Deno.serve(async (req) => {
           if (snapErr) { console.error(`[${set.id}] snapshots: ${snapErr.message}`); break; }
         }
         console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced, ${snapshotRows.length} history pts, ${unmatched}/${jtcgSingles.length} upstream cards unmatched (api=${apiCalls})`);
+        } catch (e) {
+          console.error(`[${grp.game}] ${set.id} THREW, continuing with the rest: ${(e as Error).message}`);
+        }
       }
     }
     console.log(`[${jobId}] DONE api_calls=${apiCalls} priced=${totalPriced}`);
