@@ -326,7 +326,20 @@ Deno.serve(async (req) => {
                         });
 
                         const bestVariant = sortedVariants[0] ?? (jCard.variants ?? [])[0];
-                        const price = bestVariant?.avgPrice || bestVariant?.price || 0;
+                        // `price` is the LIVE market price (TCGplayer's Market Price, what a
+                        // buyer sees). `avgPrice` is JustTCG's rolling mean, and reading it
+                        // first meant we published a lagging average as the market value.
+                        // On a settled set the two agree and it never showed: me05 Pitch Black
+                        // measured 2026-09-22 had ZERO cards where avgPrice exceeded price by
+                        // 2x, and the whole set summed 1.03x. On a set that is still moving it
+                        // is badly wrong, because a new set collapses after launch week --
+                        // me05.5 (released 2026-09-16) had 78 of 163 cards over 2x and summed
+                        // 1.79x, with Pikachu 023/128 stored at $12.87 against a live $1.88
+                        // after a 96% seven-day drop.
+                        // avgPrice stays as the variant-SELECTION signal above (avgPrice > 0
+                        // still means "this printing actually trades"); it just no longer
+                        // decides the number we publish.
+                        const price = bestVariant?.price || bestVariant?.avgPrice || 0;
                         if (price <= 0) continue;
 
                         // Same variant the headline price comes from, so the series

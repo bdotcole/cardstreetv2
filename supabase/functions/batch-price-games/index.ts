@@ -429,7 +429,10 @@ Deno.serve(async (req) => {
             if (!hit) { unmatched++; continue; }
             const our = hit.card;
             const variant = bestNmVariant(jc);
-            const price = variant?.avgPrice || variant?.price || 0;
+            // Live market price, not JustTCG's rolling mean — same fix as
+            // batch-price-english; see the comment there for the measurements.
+            // avgPrice remains the variant-selection signal inside bestNmVariant.
+            const price = variant?.price || variant?.avgPrice || 0;
             if (price <= 0) continue;
             // Same variant the headline price comes from, so the series joins the
             // live "Now" point without a seam. Keyed like the price-snapshots cron:
