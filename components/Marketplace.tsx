@@ -259,7 +259,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
+      <div className="flex-shrink-0 px-3 pt-3 pb-2 space-y-4 bg-brand-darker">
         <div>
           <div className="flex justify-between items-end mb-2">
             <div>
@@ -371,7 +371,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
           {/* Applied filters — removable without reopening the sheet */}
           {activeFilterCount > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto -mx-6 px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="flex items-center gap-2 overflow-x-auto -mx-3 px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {selectedGame !== 'all' && (
                 <AppliedChip label={getGame(selectedGame).shortName} onRemove={() => setSelectedGame('all')} />
               )}
@@ -387,8 +387,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       </div>
 
       {/* Scrollable Listings Grid */}
-      <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
-        <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-3'}`}>
+      <div className="flex-1 overflow-y-auto px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
+        <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-1.5' : 'grid-cols-2 gap-3'}`}>
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
             const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);

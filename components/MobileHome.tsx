@@ -2473,7 +2473,10 @@ export default function HomePage() {
                         </div>
                     )}
 
-                    <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6 pb-24' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
+                    {/* Marketplace and Explore scroll their own panes and pad them
+                        to clear the tab bar, so no bottom padding here: any left a
+                        dead strip between the last row and the nav. */}
+                    <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
                         {/* Home Tab Removed - Default is Marketplace */}
                         {activeTab === 'explore' && (
                             <Explore
