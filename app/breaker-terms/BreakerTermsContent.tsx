@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
@@ -484,6 +485,7 @@ export default function BreakerTermsContent({ prefix }: { prefix: '' | '/en' }) 
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">
             {content.pageTitle}
           </h1>
+          <LocaleSwitchLink prefix={prefix} path="/breaker-terms" />
         </div>
 
         <div className="space-y-8 text-sm text-slate-300 leading-relaxed">

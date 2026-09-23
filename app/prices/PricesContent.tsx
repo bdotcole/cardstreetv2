@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import CommercialLinks from '@/components/CommercialLinks';
 
@@ -279,6 +280,7 @@ export default function PricesContent({ prefix }: { prefix: string }) {
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t.h1}</h1>
+          <LocaleSwitchLink prefix={prefix} path="/prices" />
         </div>
 
         <p className="text-sm text-slate-300 leading-relaxed mb-4">{t.intro1}</p>

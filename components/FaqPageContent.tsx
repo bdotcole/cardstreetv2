@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import CommercialLinks from '@/components/CommercialLinks';
 import FaqList from '@/components/FaqList';
@@ -51,6 +52,7 @@ export default function FaqPageContent({ prefix }: { prefix: '' | '/en' }) {
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t.pageTitle}</h1>
+          <LocaleSwitchLink prefix={prefix} path="/faq" />
         </div>
 
         <p className="text-sm text-slate-300 leading-relaxed mb-10">
