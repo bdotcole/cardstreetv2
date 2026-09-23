@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import DesktopCardDetail from '@/components/desktop/DesktopCardDetail';
 import { getCardPageData, getSetSiblings } from '@/lib/desktopCardData';
+import { resolveCardAlias } from '@/lib/cardAliases';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getOptimizedImageUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
@@ -277,7 +278,15 @@ function buildProductJsonLd(card: Card, listings: MarketplaceListing[], pathLoca
 export default async function DesktopCardPage({ params }: { params: Promise<{ cardId: string }> }) {
     const { cardId } = await params;
     const { card, listings, setId } = await getCardPageData(cardId);
-    if (!card) notFound();
+    if (!card) {
+        // Catalog dedupes and re-keys left Google holding ids that moved rather
+        // than vanished (see lib/cardAliasCandidates.ts). Send those to the live
+        // page with a permanent redirect - on the URL variant the request came in
+        // on, so /en stays /en - and only 404 when nothing claims the id.
+        const canonical = await resolveCardAlias(cardId);
+        if (canonical) permanentRedirect(`${localePrefix(await requestPathLocale())}/card/${canonical}`);
+        notFound();
+    }
 
     const pathLocale = await requestPathLocale();
     const productJsonLd = buildProductJsonLd(card, listings, pathLocale);
