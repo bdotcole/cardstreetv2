@@ -65,11 +65,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     
     const [shippingFee, setShippingFee] = useState<number>(0);
     const [isCalculatingShipping, setIsCalculatingShipping] = useState<boolean>(false);
+    // Whether the fee above is a real quote. /api/shipping/calculate needs a
+    // signed-in buyer WITH a saved postcode, and most buyers reach the cart
+    // before either is true (401 / 400 "Buyer address incomplete"). That
+    // failure used to be swallowed to the console, leaving shippingFee at its
+    // 0 initial value — so the drawer advertised "Shipping 0" and a total that
+    // omitted 40-90 baht of real freight, which the buyer then met for the
+    // first time in the payment modal. Say "calculated at checkout" instead.
+    const [shippingKnown, setShippingKnown] = useState<boolean>(false);
 
     useEffect(() => {
         const fetchShipping = async () => {
             if (!isOpen || cart.length === 0) {
                 setShippingFee(0);
+                setShippingKnown(false);
                 return;
             }
             setIsCalculatingShipping(true);
@@ -82,11 +91,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 const data = await res.json();
                 if (data.success) {
                     setShippingFee(data.totalShippingFee || 0);
+                    setShippingKnown(true);
                 } else {
-                    console.error('Failed to calculate shipping:', data.error);
+                    // Expected for a signed-out or address-less buyer, so this
+                    // is not an error — we simply cannot quote the route yet.
+                    setShippingFee(0);
+                    setShippingKnown(false);
                 }
             } catch (err) {
                 console.error('Shipping calc error:', err);
+                setShippingFee(0);
+                setShippingKnown(false);
             } finally {
                 setIsCalculatingShipping(false);
             }
@@ -146,7 +161,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                 decision: one more card from THIS seller adds no
                                 shipping at all. */}
                             <p className="text-[10px] text-brand-green font-bold px-1">
-                                {t('shipping.sameSellerFree')} {formatDisplayPrice(shippingFee / Math.max(1, bySeller.length))}
+                                {t('shipping.sameSellerFree')}
+                                {shippingKnown ? ' ' + formatDisplayPrice(shippingFee / Math.max(1, bySeller.length)) : ''}
                             </p>
                             {groupLines(items).map(({ item, ids }) => (
                             <div key={ids[0]} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
@@ -208,21 +224,45 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
                     <div className="flex justify-between items-end mb-4">
                         <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Shipping</span>
-                        <span className="text-sm font-black text-brand-cyan">
-                            {isCalculatingShipping ? '...' : formatDisplayPrice(shippingFee)}
+                        <span className={'font-black text-brand-cyan ' + (shippingKnown ? 'text-sm' : 'text-[11px]')}>
+                            {isCalculatingShipping
+                                ? '...'
+                                : shippingKnown
+                                    ? formatDisplayPrice(shippingFee)
+                                    : t('shipping.unknownShort')}
                         </span>
                     </div>
-                    <div className="flex justify-between items-end mb-4 pt-2 border-t border-white/10">
+                    <div className="flex justify-between items-end mb-1 pt-2 border-t border-white/10">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{t('cart.price')}</span>
-                        <span className="text-2xl font-black text-white">{formatDisplayPrice(total + shippingFee)}</span>
+                        <span className="text-2xl font-black text-white">
+                            {formatDisplayPrice(total + (shippingKnown ? shippingFee : 0))}
+                            {!shippingKnown && !isCalculatingShipping && (
+                                <span className="text-[11px] font-bold text-slate-500 ml-1">{t('shipping.plusShipping')}</span>
+                            )}
+                        </span>
                     </div>
-                    <button
-                        onClick={() => onCheckout(shippingFee)}
-                        disabled={cart.length === 0 || isCalculatingShipping}
-                        className="w-full h-14 bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 hover:bg-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {t('cart.checkout')} <i className="fa-solid fa-arrow-right"></i>
-                    </button>
+                    {!shippingKnown && !isCalculatingShipping && (
+                        <p className="text-[10px] text-slate-500 leading-snug text-right mb-3">{t('shipping.unknownNote')}</p>
+                    )}
+                    <div className={shippingKnown || isCalculatingShipping ? 'mt-3' : ''}>
+                        {/* A mixed cart cannot go through as one charge (a TH
+                            direct-charge PaymentIntent belongs to exactly one
+                            connected account). The per-seller buttons above are
+                            the way through; this one used to stay enabled and
+                            submit the whole cart, so the buyer only learned
+                            that from a 400 AFTER entering payment details. */}
+                        <button
+                            onClick={() => onCheckout(shippingFee)}
+                            disabled={cart.length === 0 || isCalculatingShipping || bySeller.length > 1}
+                            className="w-full h-14 bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 hover:bg-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {bySeller.length > 1 ? (
+                                <span className="text-[10px] tracking-widest">{t('cart.chooseSeller')}</span>
+                            ) : (
+                                <>{t('cart.checkout')} <i className="fa-solid fa-arrow-right"></i></>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

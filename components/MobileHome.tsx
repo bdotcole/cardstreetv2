@@ -110,7 +110,11 @@ const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
 type PendingAuthAction =
     | { type: 'wishlist'; card: Card }
     | { type: 'vault'; card: Card; collectionId?: string }
-    | { type: 'checkout'; items: CartItem[] }
+    // sellerId carries WHICH seller's items the buyer chose to check out. A
+    // mixed cart can only go through one seller at a time, so resuming a
+    // per-seller checkout without it would submit the whole cart and earn the
+    // multi-seller 400 the per-seller button exists to avoid.
+    | { type: 'checkout'; items: CartItem[]; sellerId?: string }
     | { type: 'buyNow'; listing?: MarketplaceListing; quantity?: number };
 
 // A purchase tap that hit the shipping-profile gate. The CheckoutAddressSheet
@@ -119,7 +123,9 @@ type PendingAuthAction =
 // the Profile tab. buyNow carries the resolved listing so the resume works
 // even after the ListingDetails modal behind the sheet is gone.
 type AddressGateResume =
-    | { type: 'checkout' }
+    // Same reason as PendingAuthAction above: the chosen seller has to survive
+    // the address sheet, or the resumed checkout reverts to the whole cart.
+    | { type: 'checkout'; sellerId?: string }
     | { type: 'buyNow'; listing: MarketplaceListing; quantity?: number }
     | { type: 'payOffer'; offer: Offer };
 
@@ -1221,9 +1227,9 @@ export default function HomePage() {
         // with a generic "missing required fields" message that's hard to debug.
         // The cart items ride along on the pending action because the per-user
         // cart hydration wipes the in-memory signed-out cart at sign-in.
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart })) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart, sellerId })) return;
 
-        if (!(await ensureBuyerProfileComplete({ type: 'checkout' }))) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'checkout', sellerId }))) return;
 
         setIsCartOpen(false);
 
@@ -1348,7 +1354,7 @@ export default function HomePage() {
         setAddressGate(null);
         if (!gate) return;
         if (gate.resume.type === 'checkout') {
-            void handleCheckout();
+            void handleCheckout(undefined, gate.resume.sellerId);
         } else if (gate.resume.type === 'buyNow') {
             void handleBuyNow(gate.resume.listing, gate.resume.quantity);
         } else {
@@ -1397,7 +1403,7 @@ export default function HomePage() {
                 }
                 return merged;
             });
-            void handleCheckout();
+            void handleCheckout(undefined, pending.sellerId);
         } else if (pending.type === 'buyNow') {
             void handleBuyNow(pending.listing, pending.quantity);
         }

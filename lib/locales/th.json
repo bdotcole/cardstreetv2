@@ -342,7 +342,8 @@
         "available": "มี {n} ชิ้น",
         "quantity": "จำนวน",
         "removeOne": "ลด 1 ชิ้น",
-        "each": "ต่อชิ้น"
+        "each": "ต่อชิ้น",
+        "chooseSeller": "เลือกผู้ขายด้านบน"
     },
     "purchaseRegion": {
         "title": "ใช้ได้เฉพาะในประเทศไทย",
@@ -1787,7 +1788,10 @@
         "sameSellerFree": "เพิ่มการ์ดจากผู้ขายคนนี้ได้อีก ค่าส่งเท่าเดิม",
         "perSellerNote": "ค่าส่งคิดครั้งเดียวต่อผู้ขายหนึ่งราย",
         "checkoutSeller": "ชำระเงินกับ",
-        "oneSellerAtATime": "ชำระเงินทีละผู้ขาย เพราะจัดส่งแยกกัน"
+        "oneSellerAtATime": "ชำระเงินทีละผู้ขาย เพราะจัดส่งแยกกัน",
+        "unknownShort": "คำนวณตอนชำระเงิน",
+        "unknownNote": "ค่าส่งจะคิดเมื่อกรอกที่อยู่จัดส่ง",
+        "plusShipping": "+ ค่าส่ง"
     },
     "orderActions": {
         "reviewSeller": "รีวิวผู้ขาย",

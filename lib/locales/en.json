@@ -342,7 +342,8 @@
         "available": "{n} available",
         "quantity": "Quantity",
         "removeOne": "Remove one",
-        "each": "each"
+        "each": "each",
+        "chooseSeller": "Pick a seller above"
     },
     "purchaseRegion": {
         "title": "Available in Thailand only",
@@ -1787,7 +1788,10 @@
         "sameSellerFree": "Add more from this seller — shipping stays",
         "perSellerNote": "Shipping is charged once per seller.",
         "checkoutSeller": "Checkout with",
-        "oneSellerAtATime": "One seller at a time — each ships separately."
+        "oneSellerAtATime": "One seller at a time — each ships separately.",
+        "unknownShort": "Calculated at checkout",
+        "unknownNote": "Shipping is added once you enter your delivery address.",
+        "plusShipping": "+ shipping"
     },
     "orderActions": {
         "reviewSeller": "Review seller",
