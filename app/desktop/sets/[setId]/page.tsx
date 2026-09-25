@@ -7,6 +7,7 @@ import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_UR
 import { getSetLogoUrl } from '@/lib/imageUtils';
 import { getGameLabel, thaiCardNoun } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
+import { setTitleName, withEnglishLanguage, withThaiLanguage } from '@/lib/setCodes';
 import { buildSetSummary } from '@/lib/setSummary';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
 import LandingCtaRow from '@/components/desktop/LandingCtaRow';
@@ -32,14 +33,18 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
     const lang = await resolveLang();
     const count = cards.length || set.printed_total || set.total || 0;
     const game = gameLabel(set.game, lang);
+    // Code + language keep twin sets (OP-01 in English and Japanese, MA6 and M6a)
+    // from sharing a title. Sets with neither — English Pokemon, MTG, Lorcana,
+    // Riftbound — render exactly as before.
+    const named = setTitleName(set);
     const title =
         lang === 'EN'
-            ? `${set.name} — ${game} Cards & Prices | CardStreet`
-            : `${set.name} — ${thaiCardNoun(set.game)} เช็คราคาและรายการขาย | CardStreet`;
+            ? `${named} — ${withEnglishLanguage(game, set.language)} Cards & Prices | CardStreet`
+            : `${named} — ${withThaiLanguage(thaiCardNoun(set.game), set.language)} เช็คราคาและรายการขาย | CardStreet`;
     const description =
         lang === 'EN'
-            ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
-            : `เลือกชมการ์ด ${set.name} (${game}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน CardStreet จัดส่งทั่วไทย`;
+            ? `Browse all ${count} ${named} ${withEnglishLanguage(game, set.language)} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
+            : `เลือกชมการ์ด ${named} (${withThaiLanguage(game, set.language)}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน CardStreet จัดส่งทั่วไทย`;
 
     const ogImage = set.logo_url ? getSetLogoUrl(set.logo_url, 600, 85) : undefined;
 
