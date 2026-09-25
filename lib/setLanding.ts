@@ -23,6 +23,14 @@ const SET_INTROS: Record<string, SetIntro> = {
     th: 'เงามืดคุกคาม (MA5) คือชุดการ์ดโปเกมอนภาษาไทยยุคเมก้าที่นักสะสมจับตามองมากที่สุดชุดหนึ่ง โดยมีเมก้าดาร์กไรex เป็นการ์ดตัวท็อปของชุดที่ใคร ๆ ก็ตามหา ทั้งเวอร์ชัน SR, SAR และ MUR เช็คราคาล่าสุดได้ครบทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้เลยบน CardStreet',
     en: 'เงามืดคุกคาม (MA5) is one of the most closely watched Thai-language sets of the Mega era, headlined by Mega Darkrai ex across its SR, SAR, and MUR treatments. Check live prices for every card in the set and buy or sell authentic copies with sellers across Thailand on CardStreet.',
   },
+  // MA6 verified 2026-09-25: 181 of 200 priced (the rest are mostly basic energies),
+  // so no "every card" claim. Chase cards are the top Raw_NM prices that day, all
+  // numbered past the printed 130; the rarity column is null for this set, so the
+  // copy names cards rather than rarity tiers.
+  ma6: {
+    th: 'MA6 30th CELEBRATION คือชุดการ์ดโปเกมอนภาษาไทยฉลองครบรอบ 30 ปีของโปเกมอนเทรดดิ้งการ์ดเกม วางจำหน่ายในไทยเมื่อกันยายน 2026 โดยหยิบการ์ดดังจากหลายยุคกลับมาไว้ในชุดเดียว ทั้งการ์ด LEGEND, GX และไชนิง ใบที่นักสะสมตามล่ามากที่สุดอยู่ในช่วงเลขเกิน 130 อย่าง ลูเกีย, ลิซาร์ดอน, คอยคิง, มิวex และพิคาชูex ชุดเพิ่งออกใหม่ ราคาจึงยังขยับทุกวัน เช็คราคาการ์ดโปเกม่อนชุด MA6 ล่าสุดก่อนซื้อหรือขาย แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทยได้ที่นี่',
+    en: 'MA6 30th CELEBRATION is the Thai-language set marking thirty years of the Pokemon Trading Card Game, released in Thailand in September 2026. It brings famous cards from across the history of the game back into one set, LEGEND, GX and Shining cards among them. The most hunted cards sit in the numbers past 130: Lugia, Charizard, Magikarp, Mew ex and Pikachu ex. The set is brand new, so prices are still moving daily. Check the latest MA6 prices before you buy or sell, then trade authentic copies with identity-verified sellers across Thailand.',
+  },
   ma3: {
     th: 'วิวัฒนาการเมก้า ดรีมex (MA3) เป็นชุดใหญ่ของการ์ดโปเกมอนภาษาไทย ที่รวมการ์ดหายากระดับ AR, SAR และซีเคร็ตแรร์เอาไว้ครบ ใบชูโรงอย่างเมก้าลิซาร์ดอน Xex คือเป้าหมายอันดับต้น ๆ ของนักล่าการ์ดสายเมก้า อยากรู้ว่าใบไหนราคาเท่าไหร่ เช็คราคาตลาดแล้วเลือกซื้อ-ขายการ์ดของแท้จากผู้ขายทั่วไทยได้ในหน้านี้เลย',
     en: 'Mega Evolution Dream ex (MA3) is one of the biggest Thai-language sets, packed with AR, SAR, and secret rare cards. Mega Charizard X ex sits at the top of most want lists. Browse live market prices for the full set and buy or sell authentic copies from sellers all over Thailand on this page.',
