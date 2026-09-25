@@ -644,6 +644,11 @@ const Vault: React.FC<VaultProps> = ({
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                         <span className="text-[8px] text-amber-400 font-black uppercase tracking-widest">{isThai ? 'ฉบับร่าง — รอตั้งค่าการรับเงิน' : 'Draft — finish payout setup'}</span>
                       </>
+                    ) : item.listingStatus === 'paused' ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                        <span className="text-[8px] text-slate-400 font-black uppercase tracking-widest">{isThai ? 'หยุดชั่วคราว — ร้านปิดอยู่' : 'Paused — shop is closed'}</span>
+                      </>
                     ) : (
                       <>
                         <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>

@@ -21,6 +21,9 @@ export interface SellerInfo {
     reward_level?: number | null;
     displayed_badges?: string[] | null;
     equipped_frame?: string | null;
+    // Vacation mode (20260925 migration). Read by a separate fail-soft query
+    // so a missing column can never knock out the seller header.
+    shop_paused_at?: string | null;
 }
 
 const LISTING_SELECT = `
@@ -54,6 +57,19 @@ export const getSellerPageData = cache(
                 .maybeSingle<SellerInfo>());
         }
         if (!seller) return { seller: null, listings: [] };
+
+        // Vacation mode flag, kept out of the main select: PostgREST rejects a
+        // whole select over one unknown column, and this one is cosmetic.
+        try {
+            const { data: pauseRow } = await supabase
+                .from('public_profiles')
+                .select('shop_paused_at')
+                .eq('id', seller.id)
+                .maybeSingle<{ shop_paused_at: string | null }>();
+            seller.shop_paused_at = pauseRow?.shop_paused_at ?? null;
+        } catch {
+            seller.shop_paused_at = null;
+        }
 
         const { data: rows } = await supabase
             .from('listings')

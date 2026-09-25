@@ -25,11 +25,12 @@ interface ListingRow {
     }
 }
 
-const STATUS_TABS = ['active', 'draft', 'sold', 'cancelled', 'removed', 'all'] as const
+const STATUS_TABS = ['active', 'draft', 'paused', 'sold', 'cancelled', 'removed', 'all'] as const
 
 const STATUS_COLORS: Record<string, string> = {
     active: 'bg-brand-green/20 text-brand-green border-brand-green/30',
     draft: 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30',
+    paused: 'bg-slate-500/20 text-slate-300 border-slate-400/30',
     sold: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     cancelled: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     removed: 'bg-brand-red/20 text-brand-red border-brand-red/30',

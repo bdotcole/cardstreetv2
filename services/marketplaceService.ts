@@ -70,7 +70,9 @@ export interface MarketplaceListing {
     // hides it from everyone else) and auto-published when details_submitted
     // flips true. Never surfaces on any buyer-facing query, which all filter
     // status = 'active'.
-    status: 'active' | 'sold' | 'cancelled' | 'draft';
+    // 'paused': the seller paused their whole shop (Profile > Seller Account).
+    // Same owner-only visibility as a draft; restored to 'active' on reopen.
+    status: 'active' | 'sold' | 'cancelled' | 'draft' | 'paused';
     created_at: string;
     sold_at?: string;
     updated_at: string;
@@ -514,7 +516,7 @@ export const marketplaceService = {
                 // Drafts are the seller's own pre-Stripe listings — they
                 // belong on the "my listings" surface (with a Draft badge),
                 // else the seller re-lists the card and duplicates it.
-                .in('status', ['active', 'draft'])
+                .in('status', ['active', 'draft', 'paused'])
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
@@ -544,7 +546,7 @@ export const marketplaceService = {
                 .eq('id', listingId)
                 // Drafts are price-editable too — only sold/cancelled rows
                 // report false so callers reconcile stale UI.
-                .in('status', ['active', 'draft'])
+                .in('status', ['active', 'draft', 'paused'])
                 .select('id');
 
             if (error) throw error;
@@ -581,7 +583,7 @@ export const marketplaceService = {
                 .in('id', targets)
                 // Drafts are price-editable too — only sold/cancelled rows
                 // report false so callers reconcile stale UI.
-                .in('status', ['active', 'draft'])
+                .in('status', ['active', 'draft', 'paused'])
                 .select('id');
 
             if (error) throw error;
@@ -633,7 +635,7 @@ export const marketplaceService = {
                 .from('listings')
                 .update({ status: 'cancelled' })
                 .in('id', targets)
-                .in('status', ['active', 'draft']);
+                .in('status', ['active', 'draft', 'paused']);
 
             if (error) throw error;
             return true;
@@ -663,7 +665,7 @@ async function ownListingIdsForCard(
         .select('id, condition')
         .eq('seller_id', user.id)
         .eq('card_id', cardId)
-        .in('status', ['active', 'draft'])
+        .in('status', ['active', 'draft', 'paused'])
         .order('created_at', { ascending: true });
     if (error) throw error;
     if (!listings || listings.length === 0) return [];

@@ -711,6 +711,16 @@ export default function HomePage() {
         return () => window.removeEventListener('cs:openRewards', onOpenRewards);
     }, [refreshRewards]);
 
+    // Shop pause / reopen (Profile > Seller Account) flips every listing's
+    // status server-side; the vault's "Live on Market" badges are derived from
+    // those rows, so refetch them rather than showing stale state until the
+    // next cold load.
+    useEffect(() => {
+        const onShopPauseChanged = () => { void refreshCollections(); };
+        window.addEventListener('cs:shopPauseChanged', onShopPauseChanged);
+        return () => window.removeEventListener('cs:shopPauseChanged', onShopPauseChanged);
+    }, [refreshCollections]);
+
     const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
     // In-checkout shipping-details gate (see AddressGateResume above).
     const [addressGate, setAddressGate] = useState<{
@@ -1837,7 +1847,7 @@ export default function HomePage() {
                 await updateCollectionItem(row.colId, row.item.id, {
                     isListing: true,
                     listingPrice: row.price,
-                    listingStatus: listing?.status === 'draft' ? 'draft' : 'active',
+                    listingStatus: listing?.status === 'draft' ? 'draft' : listing?.status === 'paused' ? 'paused' : 'active',
                 });
             } catch (error) {
                 console.error('[BulkList] failed for', row.card.id, error);
@@ -1873,6 +1883,9 @@ export default function HomePage() {
                 quantity: listingData.quantity,
             });
             const isDraft = created?.status === 'draft';
+            // A listing created while the shop is paused comes back 'paused'
+            // (the DB trigger holds it); the vault must not badge it as live.
+            const isPaused = created?.status === 'paused';
 
             // 2. Refresh global marketplace listings
             await fetchGlobalListings();
@@ -1881,7 +1894,7 @@ export default function HomePage() {
             await updateCollectionItem(listingTarget.colId, listingTarget.item.id, {
                 isListing: true,
                 listingPrice: listingData.price,
-                listingStatus: isDraft ? 'draft' : 'active',
+                listingStatus: isDraft ? 'draft' : isPaused ? 'paused' : 'active',
                 // condition: listingData.condition, (avoid overwriting base item stats if we only want the listing to hold them)
                 // isGraded: listingData.is_graded,
             });

@@ -48,6 +48,8 @@ import {
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
     SELLER_UNVERIFIED_TOAST,
     SELLER_UNVERIFIED_ERROR_CODE,
+    SELLER_PAUSED_TOAST,
+    SELLER_PAUSED_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 
@@ -187,6 +189,15 @@ export async function POST(req: Request) {
         }
         if (listings.length !== listingIds.length) {
             return NextResponse.json({ error: 'One or more listings no longer exist' }, { status: 400 });
+        }
+        // Seller paused their shop (vacation mode) after the buyer carted this
+        // listing: say so, rather than "no longer available", so the buyer
+        // knows to come back instead of assuming the card sold.
+        if (listings.some(l => l.status === 'paused')) {
+            return NextResponse.json(
+                { error: SELLER_PAUSED_TOAST, code: SELLER_PAUSED_ERROR_CODE },
+                { status: 409 },
+            );
         }
         if (listings.some(l => l.status !== 'active')) {
             return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });

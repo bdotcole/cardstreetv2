@@ -176,3 +176,12 @@ export const BUYER_PROFILE_INCOMPLETE_ERROR_CODE = 'BUYER_PROFILE_INCOMPLETE';
 export const SELLER_UNVERIFIED_ERROR_CODE = 'SELLER_UNVERIFIED';
 export const SELLER_UNVERIFIED_TOAST =
     'This seller is still finishing payment setup and cannot accept orders yet. Please check back soon.';
+
+// ── Buyer-facing block: the seller paused their shop (vacation mode). Their
+// listings sit at status='paused' (see 20260925_seller_shop_pause.sql), so a
+// cart that still holds one — added before the pause — fails the "active"
+// check at checkout. This message replaces the generic "no longer available"
+// so the buyer knows the card is coming back rather than gone.
+export const SELLER_PAUSED_ERROR_CODE = 'SELLER_PAUSED';
+export const SELLER_PAUSED_TOAST =
+    "This seller's shop is paused right now. Their listings will be available again when the shop reopens.";

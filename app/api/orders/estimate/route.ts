@@ -29,6 +29,8 @@ import {
     checkBuyerProfileComplete,
     BUYER_PROFILE_INCOMPLETE_TOAST,
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+    SELLER_PAUSED_TOAST,
+    SELLER_PAUSED_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -123,6 +125,14 @@ export async function POST(req: Request) {
 
         if (!listings || listings.length !== items.length) {
             return NextResponse.json({ error: 'One or more listings no longer exist' }, { status: 400 });
+        }
+        // Seller paused their shop (vacation mode): tell the buyer the card is
+        // coming back rather than gone. Mirrors /api/orders/checkout.
+        if (listings.some(l => l.status === 'paused')) {
+            return NextResponse.json(
+                { error: SELLER_PAUSED_TOAST, code: SELLER_PAUSED_ERROR_CODE },
+                { status: 409 },
+            );
         }
         if (listings.some(l => l.status !== 'active')) {
             return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });

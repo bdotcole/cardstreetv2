@@ -17,6 +17,7 @@ import SellerStateBanner from '@/components/SellerStateBanner';
 import SellerChecklist from '@/components/SellerChecklist';
 import MostWantedList from '@/components/MostWantedList';
 import { resolveSellerState, needsPayoutActionInState } from '@/lib/sellerState';
+import ShopPauseSection from '@/components/ShopPauseSection';
 import StripePreScreen from '@/components/StripePreScreen';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
@@ -411,6 +412,11 @@ export default function DesktopSell() {
                 <MostWantedList onSelect={(cardId) => { window.location.href = `/card/${cardId}`; }} />
             </div>
 
+            {/* Vacation mode: pause/reopen the whole shop. Refetch the list on
+                flip so the Paused badges below track the new status. Hidden
+                until its migration runs. */}
+            {user && <ShopPauseSection className="mt-12 max-w-2xl" onChanged={refreshMyListings} />}
+
             <h2 className="text-sm font-black text-white uppercase tracking-widest mt-12 mb-4">
                 {t('desktop.sell.yourListings')} <span className="text-slate-500">({myListings.length})</span>
             </h2>
@@ -439,6 +445,11 @@ export default function DesktopSell() {
                                         {listing.status === 'draft' && (
                                             <span className="ml-2 align-middle inline-block bg-amber-400/15 border border-amber-400/40 text-amber-300 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">
                                                 {t('desktop.sell.draftBadge')}
+                                            </span>
+                                        )}
+                                        {listing.status === 'paused' && (
+                                            <span className="ml-2 align-middle inline-block bg-slate-500/15 border border-slate-400/40 text-slate-300 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">
+                                                {t('desktop.sell.pausedBadge')}
                                             </span>
                                         )}
                                     </p>

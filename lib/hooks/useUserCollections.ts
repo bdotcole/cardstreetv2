@@ -83,7 +83,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
                     .from('listings')
                     .select('*')
                     .eq('seller_id', user.id)
-                    .in('status', ['active', 'draft']),
+                    .in('status', ['active', 'draft', 'paused']),
             ]);
             const { data: listingsData, error: listingsError } = listingsResult;
 

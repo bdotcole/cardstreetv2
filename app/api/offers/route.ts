@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
     if (listingErr || !listing) {
         return NextResponse.json({ error: 'Listing not found' }, { status: 400 });
     }
+    if (listing.status === 'paused') {
+        return NextResponse.json({ error: "This seller's shop is paused right now. Try again when it reopens." }, { status: 400 });
+    }
     if (listing.status !== 'active') {
         return NextResponse.json({ error: 'Listing is no longer available' }, { status: 400 });
     }

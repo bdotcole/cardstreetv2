@@ -34,12 +34,25 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
     // rather than threaded through the listing embed so the page is correct
     // no matter which surface navigated to it. Fail-soft: no row, no chrome.
     const [publicSeller, setPublicSeller] = useState<PublicSeller | null>(null);
+    // Vacation mode (20260925 migration): a paused shop has no active
+    // listings, and an empty grid reads as a dead shop unless we say why.
+    // Separate fail-soft select so a missing column can't break the page.
+    const [shopPaused, setShopPaused] = useState(false);
     useEffect(() => {
         if (!seller?.id) return;
         let cancelled = false;
-        fetchPublicSellers(createClient(), [seller.id]).then((map) => {
+        const supabase = createClient();
+        fetchPublicSellers(supabase, [seller.id]).then((map) => {
             if (!cancelled) setPublicSeller(map.get(seller.id) ?? null);
         });
+        supabase
+            .from('public_profiles')
+            .select('shop_paused_at')
+            .eq('id', seller.id)
+            .maybeSingle()
+            .then(({ data }) => {
+                if (!cancelled) setShopPaused(!!(data as { shop_paused_at?: string | null } | null)?.shop_paused_at);
+            }, () => { /* column may not exist yet */ });
         return () => { cancelled = true; };
     }, [seller?.id]);
 
@@ -154,11 +167,19 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
 
             {/* Content */}
             <div className="p-6 min-h-[300px]">
+                {activeTab === 'shop' && shopPaused && (
+                    <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center">
+                        <p className="font-bold text-sm text-amber-300">{t('seller.shopPausedTitle')}</p>
+                        <p className="text-slate-400 text-xs mt-0.5 leading-snug">{t('seller.shopPausedBody')}</p>
+                    </div>
+                )}
                 {activeTab === 'shop' && (
                     listings.length === 0 ? (
-                        <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
-                            {t('seller.noListings')}
-                        </div>
+                        !shopPaused && (
+                            <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
+                                {t('seller.noListings')}
+                            </div>
+                        )
                     ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {listings.map(listing => {

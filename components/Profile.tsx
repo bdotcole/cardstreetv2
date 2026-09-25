@@ -19,6 +19,7 @@ import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
 import StripeConnectSection from './StripeConnectSection';
+import ShopPauseSection from './ShopPauseSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import ThaiAddressFields from './ThaiAddressFields';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
@@ -1031,12 +1032,6 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       ]
     },
     {
-      title: t('profile.securityNotifications'),
-      items: [
-        { name: t('profile.settings'), icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
-      ]
-    },
-    {
       title: t('profile.ordersSales'),
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
@@ -1053,6 +1048,14 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
         { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
         { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
+      ]
+    },
+    // Settings sits directly above Support: the day-to-day sections (account,
+    // orders, sales) come first, the rarely-touched ones last.
+    {
+      title: t('profile.securityNotifications'),
+      items: [
+        { name: t('profile.settings'), icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
       ]
     },
     {
@@ -1076,10 +1079,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
   ];
 
   const isPartner = user?.isPartner || profileData?.role === 'partner' || !!profileData?.partner_joined_at;
-  // Operations slots in just before Support + Pro (the last two sections);
+  // Operations slots in just before Settings + Support + Pro (the last three
+  // sections), so Settings stays directly above Support for partners too;
   // index computed rather than hardcoded because the Rewards section above is
   // conditional and would shift a fixed slice point.
-  const opsInsertAt = baseMenuSections.length - 2;
+  const opsInsertAt = baseMenuSections.length - 3;
   const menuSections = isPartner ? [
     ...baseMenuSections.slice(0, opsInsertAt),
     {
@@ -2103,6 +2107,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
               </div>
 
               <StripeConnectSection />
+
+              {/* Vacation mode: pause the whole shop (hides + blocks every
+                  listing) and reopen it later. Hidden until its migration runs. */}
+              <ShopPauseSection />
             </div>
           </motion.div>
         )}

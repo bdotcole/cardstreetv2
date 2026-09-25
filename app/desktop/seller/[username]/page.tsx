@@ -121,8 +121,19 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                 </div>
             </header>
 
+            {/* Vacation mode: the seller paused their shop, so their listings
+                are hidden. Say so, or an empty grid reads as a dead shop. */}
+            {seller.shop_paused_at && (
+                <div className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4">
+                    <p className="font-bold text-sm text-amber-300">{lang === 'EN' ? 'This shop is paused right now' : 'ร้านค้านี้หยุดชั่วคราว'}</p>
+                    <p className="text-slate-400 text-xs mt-0.5 leading-snug">{lang === 'EN' ? 'The seller is away. Their listings will be back when the shop reopens.' : 'ผู้ขายไม่อยู่ในขณะนี้ รายการขายจะกลับมาเมื่อร้านเปิดอีกครั้ง'}</p>
+                </div>
+            )}
+
             {listings.length === 0 ? (
-                <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'This seller has no active listings right now.' : 'ผู้ขายรายนี้ยังไม่มีรายการขายในขณะนี้'}</p>
+                !seller.shop_paused_at && (
+                    <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'This seller has no active listings right now.' : 'ผู้ขายรายนี้ยังไม่มีรายการขายในขณะนี้'}</p>
+                )
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
                     {listings.map((listing) => (

@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/adminAuth'
 import { NextResponse } from 'next/server'
 
 const PAGE_SIZE = 50
-const STATUS_FILTERS = ['active', 'draft', 'sold', 'cancelled', 'removed', 'all']
+const STATUS_FILTERS = ['active', 'draft', 'paused', 'sold', 'cancelled', 'removed', 'all']
 
 // GET /api/admin/listings — moderation browser over all listings.
 // ?status=active|draft|sold|cancelled|removed|all  (default active)
