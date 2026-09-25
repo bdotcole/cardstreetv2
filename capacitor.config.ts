@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.cardstreet.tcg',
-  appName: 'CardStreet',
+  appName: 'Cardstreet',
   webDir: 'out',
 
   // Marks every WebView request as coming from the native app so middleware

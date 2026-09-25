@@ -314,7 +314,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                           <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
                           <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">
                             {graded.source === 'app_sale'
-                              ? (isThai ? 'ขายบนแอป' : 'Sold on CardStreet')
+                              ? (isThai ? 'ขายบนแอป' : 'Sold on Cardstreet')
                               : graded.source === 'thai_estimate'
                                 ? (isThai ? 'ประมาณจากอังกฤษ ×60%' : 'Est. (EN ×60%)')
                                 : (isThai ? 'ราคาตลาด' : 'Market')}

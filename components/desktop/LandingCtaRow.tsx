@@ -67,7 +67,7 @@ export default function LandingCtaRow({
             <div className="rounded-2xl border border-brand-cyan/20 bg-brand-cyan/[0.06] p-5">
                 <i className="fa-solid fa-mobile-screen text-brand-cyan"></i>
                 <span className="block mt-3 text-sm font-black text-white">
-                    {isThai ? 'โหลดแอป CardStreet' : 'Get the app'}
+                    {isThai ? 'โหลดแอป Cardstreet' : 'Get the app'}
                 </span>
                 <span className="block mt-1 text-xs text-slate-400 leading-relaxed">
                     {isThai

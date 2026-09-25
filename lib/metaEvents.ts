@@ -2,7 +2,7 @@
 
 // Meta (Facebook) app-event tracking, unified across web and the native iOS app.
 //
-// CardStreet's UI is a remote WebView, so conversion events (ViewContent,
+// Cardstreet's UI is a remote WebView, so conversion events (ViewContent,
 // AddToCart, InitiateCheckout, Purchase, Search) all originate in this web
 // layer. `trackMetaEvent` fans each event out to:
 //

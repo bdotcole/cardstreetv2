@@ -28,7 +28,7 @@ import {
  *
  * What it draws: the broadcaster's two feeds in the broadcaster's own framing
  * (same CroppedTrackVideo + streams.layout as the viewer, so what the seller
- * frames is what every surface shows) with the CardStreet call-to-action
+ * frames is what every surface shows) with the Cardstreet call-to-action
  * burned in — cardstreet.app/watch as text AND as a QR, the lot on the block
  * with price and spots left, the pinned message, and the last few chat lines.
  * That overlay is the whole point of multistreaming: a viewer on Facebook has
@@ -349,7 +349,7 @@ export default function LiveOverlayTemplatePage() {
             {feedCount === 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center">
                     <p className="text-white/40 font-black uppercase tracking-[0.3em]" style={{ fontSize: '2.2vmin' }}>
-                        {isLive ? 'LIVE' : 'CardStreet Live'}
+                        {isLive ? 'LIVE' : 'Cardstreet Live'}
                     </p>
                 </div>
             ) : feedCount === 1 ? (
@@ -537,7 +537,7 @@ export default function LiveOverlayTemplatePage() {
             <div className="absolute flex items-center justify-between" style={{ top: '2.5%', left: '4%', right: '4%' }}>
                 {livePill}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="CardStreet" className="rounded-xl" style={{ height: layout === 'portrait' ? '5vh' : '7vh' }} />
+                <img src="/logo.png" alt="Cardstreet" className="rounded-xl" style={{ height: layout === 'portrait' ? '5vh' : '7vh' }} />
             </div>
 
             {layout === 'portrait' ? (

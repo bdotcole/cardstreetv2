@@ -10,20 +10,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(BASE_URL),
     title: isThai
-      ? 'ติดต่อเรา — ฝ่ายซัพพอร์ต CardStreet'
-      : 'Contact Us — CardStreet TCG Marketplace',
+      ? 'ติดต่อเรา — ฝ่ายซัพพอร์ต Cardstreet'
+      : 'Contact Us — Cardstreet TCG Marketplace',
     description: isThai
-      ? 'ติดต่อทีมซัพพอร์ต CardStreet เรื่องคำสั่งซื้อ บัญชี รายการขาย และข้อพิพาท ตอบกลับทางอีเมลภายใน 1–2 วันทำการ รองรับทั้งภาษาไทยและอังกฤษ'
-      : 'Contact the CardStreet support team for help with orders, accounts, listings, and disputes. Email support in English and Thai, with replies within 1–2 business days.',
+      ? 'ติดต่อทีมซัพพอร์ต Cardstreet เรื่องคำสั่งซื้อ บัญชี รายการขาย และข้อพิพาท ตอบกลับทางอีเมลภายใน 1–2 วันทำการ รองรับทั้งภาษาไทยและอังกฤษ'
+      : 'Contact the Cardstreet support team for help with orders, accounts, listings, and disputes. Email support in English and Thai, with replies within 1–2 business days.',
     alternates: buildAlternates('/contact', pathLocale),
     openGraph: {
         images: DEFAULT_OG_IMAGE,
-      title: isThai ? 'ติดต่อ CardStreet' : 'Contact CardStreet',
+      title: isThai ? 'ติดต่อ Cardstreet' : 'Contact Cardstreet',
       description: isThai
-        ? 'ติดต่อทีมซัพพอร์ต CardStreet เรื่องคำสั่งซื้อ บัญชี รายการขาย และข้อพิพาทในประเทศไทย'
-        : 'Reach the CardStreet support team for help with orders, accounts, listings, and disputes in Thailand.',
+        ? 'ติดต่อทีมซัพพอร์ต Cardstreet เรื่องคำสั่งซื้อ บัญชี รายการขาย และข้อพิพาทในประเทศไทย'
+        : 'Reach the Cardstreet support team for help with orders, accounts, listings, and disputes in Thailand.',
       type: 'website',
-      siteName: 'CardStreet',
+      siteName: 'Cardstreet',
       url: localizedUrl('/contact', pathLocale),
     },
   };

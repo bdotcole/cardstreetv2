@@ -68,15 +68,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
     const { id } = await params;
     const clip = await loadClip(id);
-    if (!clip) return { title: 'คลิป | CardStreet' };
-    const show = clip.streams?.title ?? 'CardStreet Live';
+    if (!clip) return { title: 'คลิป | Cardstreet' };
+    const show = clip.streams?.title ?? 'Cardstreet Live';
     const seller = clip.streams?.profiles?.display_name;
     const title = clip.title ? `${clip.title} — ${show}` : `คลิปจาก ${show}`;
     return {
-        title: `${title} | CardStreet`,
+        title: `${title} | Cardstreet`,
         description: seller
-            ? `ไฮไลต์จากไลฟ์เปิดการ์ดของ ${seller} — ดูคลิปบน CardStreet`
-            : 'ไฮไลต์จากไลฟ์เปิดการ์ดบน CardStreet',
+            ? `ไฮไลต์จากไลฟ์เปิดการ์ดของ ${seller} — ดูคลิปบน Cardstreet`
+            : 'ไฮไลต์จากไลฟ์เปิดการ์ดบน Cardstreet',
         openGraph: {
             title,
             images: clip.streams?.cover_image_url ? [clip.streams.cover_image_url] : undefined,
@@ -108,7 +108,7 @@ export default async function ClipPage({ params }: { params: Promise<{ id: strin
     const src = clip.vod_url ?? clip.streams?.vod_url ?? null;
     const expired =
         !!clip.streams?.vod_expires_at && Date.parse(clip.streams.vod_expires_at) < Date.now();
-    const show = clip.streams?.title ?? 'CardStreet Live';
+    const show = clip.streams?.title ?? 'Cardstreet Live';
     const seller = clip.streams?.profiles?.display_name;
 
     return (

@@ -57,21 +57,21 @@ interface Strings {
 }
 
 const EN: Strings = {
-  h1: 'Sell Your Cards on CardStreet',
+  h1: 'Sell Your Cards on Cardstreet',
   intro: [
-    'If you have cards you no longer play, or duplicates from opening boxes, CardStreet lets you list them for free — no listing fees, no monthly charges. You pay a fee only when a card actually sells.',
+    'If you have cards you no longer play, or duplicates from opening boxes, Cardstreet lets you list them for free — no listing fees, no monthly charges. You pay a fee only when a card actually sells.',
     'You can sell Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound, as singles or sealed product. The current market price for each card sits next to the price field while you list, so you are not guessing what to charge.',
   ],
   costTitle: 'What it costs',
   costLead: 'Two things come out of a sale, and both are stated here:',
   costs: [
     {
-      t: 'The CardStreet fee — 9% of the item price',
-      d: 'Nothing is charged on shipping. CardStreet Pro subscribers and Partner sellers pay 5%, dropping as low as 2% at the top partner tiers.',
+      t: 'The Cardstreet fee — 9% of the item price',
+      d: 'Nothing is charged on shipping. Cardstreet Pro subscribers and Partner sellers pay 5%, dropping as low as 2% at the top partner tiers.',
     },
     {
       t: 'Stripe’s payment processing fee — 1.6% plus tax',
-      d: 'Deducted from your payout. That one goes to Stripe, not to CardStreet.',
+      d: 'Deducted from your payout. That one goes to Stripe, not to Cardstreet.',
     },
   ],
   costAfter: 'No listing fees, no monthly charges, and if a card doesn’t sell it costs you nothing.',
@@ -84,12 +84,12 @@ const EN: Strings = {
   steps: SELL_HOWTO.en.steps,
   priceTitle: 'How to price a card so it actually sells',
   price: [
-    'The market price on CardStreet is a reference, not a rule. You can list above or below it — just know why you are. A card in better-than-usual condition, with clear photos of the actual card, or one that is genuinely hard to find in Thailand, will support a higher price. Listing high simply to make more usually ends with the card sitting there.',
+    'The market price on Cardstreet is a reference, not a rule. You can list above or below it — just know why you are. A card in better-than-usual condition, with clear photos of the actual card, or one that is genuinely hard to find in Thailand, will support a higher price. Listing high simply to make more usually ends with the card sitting there.',
     'The thing new sellers miss most often: the market price you see is for a Near Mint copy. A card with whitened edges, soft corners or surface marks should be priced below it and described honestly. Overstating condition leads to disputes after the sale, and those cost both sides far more time than the extra baht was worth.',
     'Before you set a price, open that card’s page and see how many copies are already listed and at what price. When several are listed, buyers sort by price almost every time. When none are, you have more freedom — but the market price is still the number to anchor to.',
   ],
   condTitle: 'Picking the right condition',
-  condLead: 'CardStreet uses the same condition scale as the international card market. Getting it right up front beats being challenged later:',
+  condLead: 'Cardstreet uses the same condition scale as the international card market. Getting it right up front beats being challenged later:',
   conds: [
     { t: 'Mint (M)', d: 'As it came out of the pack — no flaw even under a light. Very few cards genuinely qualify.' },
     { t: 'Near Mint (NM)', d: 'Looks new at a glance; maybe a tiny edge or corner flaw up close. This is the most traded condition, and the one the market price refers to.' },
@@ -105,35 +105,35 @@ const EN: Strings = {
     { t: 'Using a stock image instead of the actual card', d: 'Collectors look at photos to judge condition, not to find out what the card looks like. Real photos of the front and back answer more questions than a paragraph of description.' },
     { t: 'Not finishing Stripe verification', d: 'You can list before it is done, but until it is finished the money cannot reach you. Getting it out of the way before anything sells is far less stressful.' },
     { t: 'Packing in a plain envelope', d: 'A card should always go in a sleeve plus a rigid backer or a padded mailer. A few baht of packaging is cheaper than a card that arrives bent — every time.' },
-    { t: 'Forgetting there are two fees', d: 'What reaches your account is the item price less the CardStreet fee and less Stripe’s processing fee. Both are stated at the top of this page. Factor them in when you set the price.' },
+    { t: 'Forgetting there are two fees', d: 'What reaches your account is the item price less the Cardstreet fee and less Stripe’s processing fee. Both are stated at the top of this page. Factor them in when you set the price.' },
     { t: 'Setting a price once and leaving it', d: 'Market prices move daily. A card priced two months ago may now be well above or below the market. Come back and review your own listings periodically.' },
   ],
   whatTitle: 'What you can sell',
   what:
-    'Anything in the CardStreet catalog — Pokémon (Thai, English and Japanese printings), Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound — as singles, sealed product, or graded cards from PSA, BGS, CGC or TAG, which render with the slab frame and the grading company’s logo so buyers can see exactly what they’re getting.',
+    'Anything in the Cardstreet catalog — Pokémon (Thai, English and Japanese printings), Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound — as singles, sealed product, or graded cards from PSA, BGS, CGC or TAG, which render with the slab frame and the grading company’s logo so buyers can see exactly what they’re getting.',
   regionTitle: 'Selling is Thailand-only for now',
   region:
-    'CardStreet currently supports sellers based in Thailand, because payouts and shipping are tied to Thai bank accounts and Flash Express. Browsing, scanning and collection tracking work from anywhere.',
+    'Cardstreet currently supports sellers based in Thailand, because payouts and shipping are tied to Thai bank accounts and Flash Express. Browsing, scanning and collection tracking work from anywhere.',
   ctaStart: 'Start listing',
   ctaPrices: 'Check card prices first',
 };
 
 const TH: Strings = {
-  h1: 'ขายการ์ดสะสมบน CardStreet',
+  h1: 'ขายการ์ดสะสมบน Cardstreet',
   intro: [
-    'ถ้าคุณมีการ์ดที่ไม่ได้เล่นแล้ว หรือได้การ์ดซ้ำจากการเปิดกล่อง CardStreet ให้คุณลงขายได้ฟรี ไม่มีค่าลงประกาศ และไม่มีค่าบริการรายเดือน คุณจะเสียค่าธรรมเนียมก็ต่อเมื่อการ์ดขายได้จริงเท่านั้น',
+    'ถ้าคุณมีการ์ดที่ไม่ได้เล่นแล้ว หรือได้การ์ดซ้ำจากการเปิดกล่อง Cardstreet ให้คุณลงขายได้ฟรี ไม่มีค่าลงประกาศ และไม่มีค่าบริการรายเดือน คุณจะเสียค่าธรรมเนียมก็ต่อเมื่อการ์ดขายได้จริงเท่านั้น',
     'ลงขายได้ทั้งการ์ดโปเกม่อน ยูกิโอ วันพีช Magic: The Gathering, Disney Lorcana และ Riftbound ทั้งการ์ดเดี่ยวและสินค้าซีล ระบบมีราคาตลาดล่าสุดของการ์ดใบนั้นให้ดูระหว่างตั้งราคา คุณจึงไม่ต้องเดาว่าควรตั้งเท่าไหร่',
   ],
   costTitle: 'ค่าธรรมเนียมเท่าไหร่',
   costLead: 'มีสองส่วนที่หักจากยอดขาย และเราบอกทั้งสองส่วนตรงนี้เลย:',
   costs: [
     {
-      t: 'ค่าธรรมเนียม CardStreet — 9% ของราคาการ์ด',
-      d: 'ไม่คิดค่าธรรมเนียมจากค่าจัดส่ง สมาชิก CardStreet Pro และผู้ขายระดับพาร์ทเนอร์เสีย 5% และลดลงได้ถึง 2% ตามระดับพาร์ทเนอร์',
+      t: 'ค่าธรรมเนียม Cardstreet — 9% ของราคาการ์ด',
+      d: 'ไม่คิดค่าธรรมเนียมจากค่าจัดส่ง สมาชิก Cardstreet Pro และผู้ขายระดับพาร์ทเนอร์เสีย 5% และลดลงได้ถึง 2% ตามระดับพาร์ทเนอร์',
     },
     {
       t: 'ค่าธรรมเนียมการชำระเงินของ Stripe — 1.6% บวกภาษี',
-      d: 'หักจากยอดที่โอนเข้าบัญชีคุณ ส่วนนี้เป็นของ Stripe ไม่ใช่ของ CardStreet',
+      d: 'หักจากยอดที่โอนเข้าบัญชีคุณ ส่วนนี้เป็นของ Stripe ไม่ใช่ของ Cardstreet',
     },
   ],
   costAfter: 'ไม่มีค่าลงประกาศ ไม่มีค่าบริการรายเดือน และถ้าการ์ดไม่ขาย คุณไม่เสียอะไรเลย',
@@ -146,12 +146,12 @@ const TH: Strings = {
   steps: SELL_HOWTO.th.steps,
   priceTitle: 'ตั้งราคายังไงให้ขายได้',
   price: [
-    'ราคาตลาดบน CardStreet เป็นตัวอ้างอิง ไม่ใช่ราคาบังคับ คุณตั้งสูงกว่าหรือต่ำกว่าก็ได้ แต่ควรรู้ว่ากำลังตั้งต่างจากตลาดเพราะอะไร การ์ดสภาพดีกว่าปกติ มีรูปถ่ายจริงชัดเจน หรือเป็นใบที่หายากในไทย เป็นเหตุผลที่ตั้งสูงกว่าได้จริง ส่วนการตั้งสูงกว่าเพราะอยากได้กำไรมากขึ้นเฉย ๆ มักจบลงที่การ์ดค้างอยู่นาน',
+    'ราคาตลาดบน Cardstreet เป็นตัวอ้างอิง ไม่ใช่ราคาบังคับ คุณตั้งสูงกว่าหรือต่ำกว่าก็ได้ แต่ควรรู้ว่ากำลังตั้งต่างจากตลาดเพราะอะไร การ์ดสภาพดีกว่าปกติ มีรูปถ่ายจริงชัดเจน หรือเป็นใบที่หายากในไทย เป็นเหตุผลที่ตั้งสูงกว่าได้จริง ส่วนการตั้งสูงกว่าเพราะอยากได้กำไรมากขึ้นเฉย ๆ มักจบลงที่การ์ดค้างอยู่นาน',
     'สิ่งที่คนขายมือใหม่มองข้ามบ่อยที่สุดคือ ราคาตลาดที่เห็นเป็นราคาของการ์ดสภาพ Near Mint การ์ดที่มีขอบขาว มุมทู่ หรือรอยบนผิว ควรตั้งต่ำกว่านั้นและระบุสภาพตามจริง การระบุสภาพเกินจริงทำให้เกิดข้อโต้แย้งหลังขาย ซึ่งเสียเวลาทั้งสองฝ่ายมากกว่าส่วนต่างราคาที่ได้เพิ่ม',
     'ก่อนตั้งราคา ลองเปิดหน้าการ์ดใบนั้นดูว่ามีคนลงขายอยู่กี่ใบและราคาเท่าไหร่ ถ้ามีหลายใบ ผู้ซื้อจะเรียงตามราคาเกือบทุกครั้ง ถ้ายังไม่มีใครลงขายเลย คุณมีอิสระในการตั้งราคามากกว่า แต่ก็ควรอิงราคาตลาดไว้เป็นหลักอยู่ดี',
   ],
   condTitle: 'เลือกสภาพการ์ดให้ตรง',
-  condLead: 'CardStreet ใช้มาตรฐานสภาพเดียวกับตลาดการ์ดสากล เลือกให้ตรงตั้งแต่แรกดีกว่าถูกทักทีหลัง:',
+  condLead: 'Cardstreet ใช้มาตรฐานสภาพเดียวกับตลาดการ์ดสากล เลือกให้ตรงตั้งแต่แรกดีกว่าถูกทักทีหลัง:',
   conds: [
     { t: 'Mint (M)', d: 'สภาพเหมือนเพิ่งแกะจากซอง ไม่มีตำหนิใด ๆ แม้ส่องไฟ ใบที่เข้าข่ายจริงมีน้อยมาก' },
     { t: 'Near Mint (NM)', d: 'ดูเผิน ๆ เหมือนใหม่ อาจมีตำหนิเล็กน้อยมากที่ขอบหรือมุมเมื่อส่องดูใกล้ ๆ เป็นสภาพที่ซื้อขายกันมากที่สุด และเป็นสภาพที่ราคาตลาดอ้างอิง' },
@@ -167,15 +167,15 @@ const TH: Strings = {
     { t: 'ใช้รูปจากอินเทอร์เน็ตแทนรูปการ์ดจริง', d: 'ผู้ซื้อการ์ดสะสมดูรูปเพื่อตรวจสภาพ ไม่ใช่เพื่อดูว่าการ์ดหน้าตาเป็นยังไง ประกาศที่ใช้รูปจริงทั้งด้านหน้าและด้านหลังตอบคำถามได้มากกว่าคำบรรยายทั้งย่อหน้า' },
     { t: 'ยังไม่ยืนยันตัวตนกับ Stripe ให้เสร็จ', d: 'ลงขายได้ก่อนก็จริง แต่ถ้ายังยืนยันไม่เสร็จ เงินจะยังไม่เข้าบัญชีคุณ ทำให้จบตั้งแต่ตอนที่ยังไม่มีคนซื้อจะสบายใจกว่ามาก' },
     { t: 'แพ็คด้วยซองธรรมดา', d: 'การ์ดควรอยู่ในซองใสและกระดาษแข็งหรือซองกันกระแทกเสมอ ค่าซองไม่กี่บาทถูกกว่าการ์ดที่งอระหว่างทางเสมอ' },
-    { t: 'ลืมว่ามีค่าธรรมเนียมสองส่วน', d: 'ยอดที่เข้าบัญชีคือราคาการ์ดหักค่าธรรมเนียม CardStreet และหักค่าธรรมเนียมการชำระเงินของ Stripe ทั้งสองส่วนระบุไว้ด้านบนของหน้านี้แล้ว คิดเผื่อไว้ตั้งแต่ตอนตั้งราคา' },
+    { t: 'ลืมว่ามีค่าธรรมเนียมสองส่วน', d: 'ยอดที่เข้าบัญชีคือราคาการ์ดหักค่าธรรมเนียม Cardstreet และหักค่าธรรมเนียมการชำระเงินของ Stripe ทั้งสองส่วนระบุไว้ด้านบนของหน้านี้แล้ว คิดเผื่อไว้ตั้งแต่ตอนตั้งราคา' },
     { t: 'ตั้งราคาครั้งเดียวแล้วปล่อยทิ้งไว้', d: 'ราคาตลาดเปลี่ยนทุกวัน การ์ดที่ตั้งไว้เมื่อสองเดือนก่อนอาจแพงหรือถูกกว่าตลาดไปมากแล้ว กลับมาดูประกาศของตัวเองเป็นระยะ' },
   ],
   whatTitle: 'ขายอะไรได้บ้าง',
   what:
-    'ลงขายได้ทุกเกมในแคตตาล็อกของ CardStreet — โปเกม่อน (ทั้งภาษาไทย อังกฤษ และญี่ปุ่น) ยูกิโอ วันพีช Magic: The Gathering, Disney Lorcana และ Riftbound ทั้งการ์ดเดี่ยว สินค้าซีล และการ์ดที่ผ่านการเกรดจาก PSA, BGS, CGC หรือ TAG ซึ่งระบบจะแสดงกรอบตลับและโลโก้บริษัทเกรดให้ผู้ซื้อเห็นชัด',
+    'ลงขายได้ทุกเกมในแคตตาล็อกของ Cardstreet — โปเกม่อน (ทั้งภาษาไทย อังกฤษ และญี่ปุ่น) ยูกิโอ วันพีช Magic: The Gathering, Disney Lorcana และ Riftbound ทั้งการ์ดเดี่ยว สินค้าซีล และการ์ดที่ผ่านการเกรดจาก PSA, BGS, CGC หรือ TAG ซึ่งระบบจะแสดงกรอบตลับและโลโก้บริษัทเกรดให้ผู้ซื้อเห็นชัด',
   regionTitle: 'ขายได้เฉพาะในประเทศไทย',
   region:
-    'ตอนนี้ CardStreet รองรับผู้ขายที่อยู่ในประเทศไทยเท่านั้น เพราะระบบรับเงินและระบบจัดส่งผูกกับบัญชีธนาคารไทยและ Flash Express ส่วนการเลือกดูการ์ด สแกนการ์ด และเก็บคอลเลกชัน ใช้งานได้จากทุกประเทศ',
+    'ตอนนี้ Cardstreet รองรับผู้ขายที่อยู่ในประเทศไทยเท่านั้น เพราะระบบรับเงินและระบบจัดส่งผูกกับบัญชีธนาคารไทยและ Flash Express ส่วนการเลือกดูการ์ด สแกนการ์ด และเก็บคอลเลกชัน ใช้งานได้จากทุกประเทศ',
   ctaStart: 'เริ่มลงขาย',
   ctaPrices: 'เช็คราคาการ์ดก่อนตั้งราคา',
 };

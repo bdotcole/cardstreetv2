@@ -18,8 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
     const lang = (await headers()).get('x-cs-lang') === 'EN' ? 'EN' : 'TH'
     const title =
         lang === 'EN'
-            ? 'CardStreet — Buy & Sell Pokémon, One Piece, Yu-Gi-Oh & MTG Cards in Thailand'
-            : 'CardStreet — ตลาดซื้อขายการ์ดโปเกมอน วันพีช ยูกิ MTG ในไทย'
+            ? 'Cardstreet — Buy & Sell Pokémon, One Piece, Yu-Gi-Oh & MTG Cards in Thailand'
+            : 'Cardstreet — ตลาดซื้อขายการ์ดโปเกมอน วันพีช ยูกิ MTG ในไทย'
     const description =
         lang === 'EN'
             ? 'Buy, sell, and collect Pokémon, One Piece, Yu-Gi-Oh!, Magic: The Gathering, Lorcana, and Riftbound cards in Thailand. AI card scanning, live market prices, verified sellers, nationwide shipping.'
@@ -51,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
         // og:image / twitter:image are auto-populated from app/opengraph-image.tsx.
         openGraph: {
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             // Follow the URL variant being served — a bare-path og:url on an /en
             // render is a stray canonical hint back at the Thai URL.
             url: localizedUrl('/', await requestPathLocale()),
@@ -122,7 +122,7 @@ export default async function RootLayout({
                 {/* Sitewide Organization + WebSite graph. The SearchAction target is
                     the marketplace's /?q= listings search (see DesktopNav) — it makes
                     the site eligible for the Google sitelinks search box and gives AI
-                    answer engines a machine-readable identity for CardStreet. */}
+                    answer engines a machine-readable identity for Cardstreet. */}
                 <script
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{
@@ -132,14 +132,37 @@ export default async function RootLayout({
                                 {
                                     '@type': 'Organization',
                                     '@id': 'https://cardstreet.app/#organization',
-                                    name: 'CardStreet',
+                                    name: 'Cardstreet',
                                     url: 'https://cardstreet.app',
                                     logo: 'https://cardstreet.app/logo.png',
+                                    // Same-entity profiles. Google's Knowledge Graph and the answer
+                                    // engines reconcile 'Cardstreet' across sources by exact-name matches
+                                    // plus these links; without them the store listings and socials are
+                                    // unrelated pages that happen to share a word. Directory profiles
+                                    // (Crunchbase, Product Hunt, AlternativeTo, Wikidata) join this list
+                                    // as they are created (2026-09-25).
+                                    sameAs: [
+                                        'https://www.facebook.com/cardstreetapp',
+                                        'https://www.instagram.com/cardstreet_/',
+                                        'https://www.tiktok.com/@cardstreet_',
+                                        'https://www.youtube.com/@CardstreetYT',
+                                        'https://apps.apple.com/us/app/cardstreet-tcg-marketplace/id6776266347',
+                                        'https://play.google.com/store/apps/details?id=com.cardstreet.tcg',
+                                    ],
+                                    foundingDate: '2026-06',
+                                    founder: [
+                                        { '@type': 'Person', name: 'Brandon Cole', jobTitle: 'CEO' },
+                                        { '@type': 'Person', name: 'Arisa Rukhajee', jobTitle: 'CCO' },
+                                    ],
+                                    location: [
+                                        { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: 'Chiang Mai', addressCountry: 'TH' } },
+                                        { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: 'Columbus', addressRegion: 'OH', addressCountry: 'US' } },
+                                    ],
                                 },
                                 {
                                     '@type': 'WebSite',
                                     '@id': 'https://cardstreet.app/#website',
-                                    name: 'CardStreet',
+                                    name: 'Cardstreet',
                                     url: 'https://cardstreet.app',
                                     inLanguage: ['th', 'en'],
                                     publisher: { '@id': 'https://cardstreet.app/#organization' },

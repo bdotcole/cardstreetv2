@@ -69,7 +69,7 @@ export default function InviteCard() {
         // the whole point is getting the link into LINE); clipboard otherwise.
         try {
             if (typeof navigator !== 'undefined' && navigator.share) {
-                await navigator.share({ url: data.link, title: 'CardStreet' });
+                await navigator.share({ url: data.link, title: 'Cardstreet' });
                 return;
             }
         } catch {
@@ -96,7 +96,7 @@ export default function InviteCard() {
             <div className="glass rounded-2xl border border-white/5 p-4 space-y-3">
                 <p className="text-xs text-slate-300 leading-relaxed">
                     {isThai
-                        ? `ชวนเพื่อนมาใช้ CardStreet รับ ${signupXp} XP เมื่อเพื่อนสมัคร และอีก ${convertedCoins} เหรียญเมื่อเพื่อนซื้อขายสำเร็จครั้งแรก`
+                        ? `ชวนเพื่อนมาใช้ Cardstreet รับ ${signupXp} XP เมื่อเพื่อนสมัคร และอีก ${convertedCoins} เหรียญเมื่อเพื่อนซื้อขายสำเร็จครั้งแรก`
                         : `Invite a friend: ${signupXp} XP when they sign up, plus ${convertedCoins} coins once their first order settles.`}
                 </p>
                 {firstBonus && (

@@ -24,7 +24,7 @@ import PriceHistoryChart from '@/components/PriceHistoryChart';
 // OBO best-offer is dark-launched behind this flag; nothing renders when off.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
-// Real graded market prices for a card (PriceCharting market + actual CardStreet
+// Real graded market prices for a card (PriceCharting market + actual Cardstreet
 // sales), served by /api/cards/[cardId]/graded-prices. Prices are already in THB.
 interface GradedPrice {
     company: string;   // PSA | BGS | CGC | SGC | ARS

@@ -1111,7 +1111,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
             </div>
             <div className="space-y-2 px-4">
               <h2 className="text-3xl font-black text-white tracking-tight uppercase leading-tight italic skew-x-[-10deg]">
-                {t('profile.joinCardStreet')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">CardStreet</span>
+                {t('profile.joinCardStreet')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">Cardstreet</span>
               </h2>
               <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-[280px] mx-auto">
                 {t('profile.createAccountDesc')}
@@ -2158,7 +2158,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
               </div>
 
               <div className="text-center pt-8">
-                <p className="text-slate-600 text-xs">CardStreet TCG v1.0.0</p>
+                <p className="text-slate-600 text-xs">Cardstreet TCG v1.0.0</p>
                 <p className="text-slate-700 text-[10px] mt-1">Made with ❤️ in Thailand</p>
               </div>
             </div>

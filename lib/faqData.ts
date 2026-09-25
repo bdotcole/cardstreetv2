@@ -1,4 +1,4 @@
-// Single source of truth for CardStreet's FAQ content.
+// Single source of truth for Cardstreet's FAQ content.
 //
 // Consumed by:
 //   - app/faq/page.tsx                       public, SEO/GEO-optimized page + FAQPage JSON-LD
@@ -10,7 +10,7 @@
 // answer engines (GEO). Keep answers self-contained and factual — an answer is
 // often quoted by an LLM without the surrounding question, so each one should
 // read as a standalone, citable statement and name the relevant entities
-// (CardStreet, the game, Thailand, Flash Express, PromptPay, PSA/BGS/CGC).
+// (Cardstreet, the game, Thailand, Flash Express, PromptPay, PSA/BGS/CGC).
 
 export interface FaqItem {
   q: string;
@@ -31,30 +31,30 @@ export interface FaqCategory {
 const FAQ_EN: FaqCategory[] = [
   {
     id: 'about',
-    title: 'About CardStreet',
+    title: 'About Cardstreet',
     icon: 'fa-solid fa-circle-info',
     items: [
       {
-        q: 'What is CardStreet?',
-        a: 'CardStreet is an online marketplace for trading card games, built for collectors and players in Thailand. You can buy and sell Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana, and Riftbound cards, scan a card to identify it instantly, and track live market values — all in one app. Every purchase is protected, and payment and shipping are handled end to end.',
+        q: 'What is Cardstreet?',
+        a: 'Cardstreet is an online marketplace for trading card games, built for collectors and players in Thailand. You can buy and sell Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana, and Riftbound cards, scan a card to identify it instantly, and track live market values — all in one app. Every purchase is protected, and payment and shipping are handled end to end.',
         featured: true,
       },
       {
-        q: 'Which trading card games can I buy and sell on CardStreet?',
-        a: 'CardStreet supports Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, the One Piece Card Game, Disney Lorcana, and Riftbound (the League of Legends TCG), with more games being added. The Pokémon catalog covers English, Thai, and Japanese printings, so you can collect across regions in one place.',
+        q: 'Which trading card games can I buy and sell on Cardstreet?',
+        a: 'Cardstreet supports Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, the One Piece Card Game, Disney Lorcana, and Riftbound (the League of Legends TCG), with more games being added. The Pokémon catalog covers English, Thai, and Japanese printings, so you can collect across regions in one place.',
         featured: true,
       },
       {
-        q: 'Is CardStreet available in Thailand?',
-        a: 'Yes. CardStreet is built specifically for the Thai market. Listings are priced in Thai baht (฿), checkout supports Thai payment methods including credit and debit cards and PromptPay, and orders ship nationwide within Thailand via Flash Express.',
+        q: 'Is Cardstreet available in Thailand?',
+        a: 'Yes. Cardstreet is built specifically for the Thai market. Listings are priced in Thai baht (฿), checkout supports Thai payment methods including credit and debit cards and PromptPay, and orders ship nationwide within Thailand via Flash Express.',
       },
       {
-        q: 'Is CardStreet free to use?',
+        q: 'Is Cardstreet free to use?',
         a: 'Browsing, searching, scanning cards, and buying are free — buyers pay only the item price plus shipping. Sellers pay a transaction fee only when a card actually sells (9%, or as low as 5% for Partner sellers). There are no listing fees and no monthly charges.',
       },
       {
-        q: 'Is there a CardStreet mobile app?',
-        a: 'Yes. CardStreet works in any web browser and is available as a native app for iPhone (on the App Store) and Android, so you can scan, buy, and sell from your phone. Your account and collection stay in sync across web and mobile.',
+        q: 'Is there a Cardstreet mobile app?',
+        a: 'Yes. Cardstreet works in any web browser and is available as a native app for iPhone (on the App Store) and Android, so you can scan, buy, and sell from your phone. Your account and collection stay in sync across web and mobile.',
       },
     ],
   },
@@ -69,13 +69,13 @@ const FAQ_EN: FaqCategory[] = [
     icon: 'fa-solid fa-tag',
     items: [
       {
-        q: 'How do I check a Pokémon card price on CardStreet?',
+        q: 'How do I check a Pokémon card price on Cardstreet?',
         a: 'Search the card name or its collector number and open the card page. You will see the latest market price in Thai baht, a price history chart, and any live listings for that exact card. If you have the card in hand, scan it with your phone camera to jump straight to its price. No account and no payment required.',
         featured: true,
       },
       {
-        q: 'Where do CardStreet card prices come from?',
-        a: 'CardStreet market prices are midpoint averages of recent real transactions, not the prices sellers are asking. English and Japanese cards reference global markets and are converted to Thai baht; Thai-language cards are priced from the domestic Thai market, because they trade separately. Prices refresh daily.',
+        q: 'Where do Cardstreet card prices come from?',
+        a: 'Cardstreet market prices are midpoint averages of recent real transactions, not the prices sellers are asking. English and Japanese cards reference global markets and are converted to Thai baht; Thai-language cards are priced from the domestic Thai market, because they trade separately. Prices refresh daily.',
       },
       {
         q: "Can I see a card's price history?",
@@ -87,11 +87,11 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'How much more is a PSA graded card worth?',
-        a: 'A graded card usually sells for more than the same card raw, and the gap widens at higher grades. CardStreet card pages show prices broken out by grading company and grade — PSA, BGS, CGC, and TAG — next to the raw price, so you can compare them on one screen.',
+        a: 'A graded card usually sells for more than the same card raw, and the gap widens at higher grades. Cardstreet card pages show prices broken out by grading company and grade — PSA, BGS, CGC, and TAG — next to the raw price, so you can compare them on one screen.',
       },
       {
         q: 'Is the market price what a card actually sells for?',
-        a: 'The market price is a reference midpoint based on completed sales. Use it as a starting point for pricing or negotiating; what a card actually fetches depends on its condition, its language, and demand at that moment. If you want to sell at market, you can list the card on CardStreet — listing is free, and you pay a fee only when it sells.',
+        a: 'The market price is a reference midpoint based on completed sales. Use it as a starting point for pricing or negotiating; what a card actually fetches depends on its condition, its language, and demand at that moment. If you want to sell at market, you can list the card on Cardstreet — listing is free, and you pay a fee only when it sells.',
       },
     ],
   },
@@ -101,18 +101,18 @@ const FAQ_EN: FaqCategory[] = [
     icon: 'fa-solid fa-cart-shopping',
     items: [
       {
-        q: 'How do I buy a card on CardStreet?',
+        q: 'How do I buy a card on Cardstreet?',
         a: 'Search or browse the marketplace, open a listing, and add it to your cart. At checkout you pay securely by card or PromptPay. Your payment is protected and only released to the seller after your order is delivered.',
         featured: true,
       },
       {
-        q: 'Is it safe to buy cards on CardStreet?',
+        q: 'Is it safe to buy cards on Cardstreet?',
         a: 'Yes. Every order is covered by buyer protection: your payment is held and only released to the seller after the card is delivered. If an item arrives damaged, counterfeit, or not as described, contact support@thailandtcg.com with your order number and photos before the protection window closes and we will help mediate.',
         featured: true,
       },
       {
         q: 'What payment methods can I use?',
-        a: 'At checkout you can pay with major credit and debit cards or with PromptPay. All payments are processed securely through Stripe, and CardStreet never stores your card details.',
+        a: 'At checkout you can pay with major credit and debit cards or with PromptPay. All payments are processed securely through Stripe, and Cardstreet never stores your card details.',
       },
       {
         q: 'Why can I only buy from one seller per order?',
@@ -120,7 +120,7 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'Can I buy graded cards?',
-        a: 'Yes. CardStreet lists raw (ungraded) cards as well as professionally graded cards from PSA, BGS, CGC, and TAG. Graded listings show the grading company and grade so you know exactly what you are buying.',
+        a: 'Yes. Cardstreet lists raw (ungraded) cards as well as professionally graded cards from PSA, BGS, CGC, and TAG. Graded listings show the grading company and grade so you know exactly what you are buying.',
       },
     ],
   },
@@ -130,7 +130,7 @@ const FAQ_EN: FaqCategory[] = [
     icon: 'fa-solid fa-tag',
     items: [
       {
-        q: 'How do I sell trading cards on CardStreet?',
+        q: 'How do I sell trading cards on Cardstreet?',
         a: 'List a card from your collection, set its condition and price, and publish. When a buyer pays, ship the card with the prepaid Flash Express label and mark it sent. Once the order is delivered, your payout is released.',
         featured: true,
       },
@@ -163,8 +163,8 @@ const FAQ_EN: FaqCategory[] = [
         a: 'Yes. After the scanner identifies a card, you see its details and current market value alongside active listings on the marketplace. It is a fast way to price a card before you buy, sell, or trade.',
       },
       {
-        q: 'Does CardStreet support Thai and Japanese cards?',
-        a: 'Yes. CardStreet has a dedicated Thai-language Pokémon catalog alongside English and Japanese printings, with localized set names and pricing — something most international card apps do not offer.',
+        q: 'Does Cardstreet support Thai and Japanese cards?',
+        a: 'Yes. Cardstreet has a dedicated Thai-language Pokémon catalog alongside English and Japanese printings, with localized set names and pricing — something most international card apps do not offer.',
       },
       {
         q: 'The scanner identified the wrong card. What can I do?',
@@ -197,12 +197,12 @@ const FAQ_EN: FaqCategory[] = [
     icon: 'fa-solid fa-shield-halved',
     items: [
       {
-        q: 'How do I create a CardStreet account?',
+        q: 'How do I create a Cardstreet account?',
         a: 'Tap sign up and register with your email. A verified account lets you buy, track orders, build a collection, and start selling once you complete seller onboarding.',
       },
       {
-        q: 'Are the cards on CardStreet authentic?',
-        a: 'CardStreet strictly prohibits proxy, reproduction, fake, and counterfeit cards, and sellers who list them face immediate suspension. Combined with buyer protection on every order, this keeps the marketplace trustworthy.',
+        q: 'Are the cards on Cardstreet authentic?',
+        a: 'Cardstreet strictly prohibits proxy, reproduction, fake, and counterfeit cards, and sellers who list them face immediate suspension. Combined with buyer protection on every order, this keeps the marketplace trustworthy.',
       },
       {
         q: 'How do I change my details or delete my account?',
@@ -215,30 +215,30 @@ const FAQ_EN: FaqCategory[] = [
 const FAQ_TH: FaqCategory[] = [
   {
     id: 'about',
-    title: 'เกี่ยวกับ CardStreet',
+    title: 'เกี่ยวกับ Cardstreet',
     icon: 'fa-solid fa-circle-info',
     items: [
       {
-        q: 'CardStreet คืออะไร?',
-        a: 'CardStreet คือมาร์เก็ตเพลสออนไลน์สำหรับเกมการ์ดสะสม ออกแบบมาเพื่อนักสะสมและผู้เล่นในประเทศไทย คุณสามารถซื้อขายการ์ด Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana และ Riftbound สแกนการ์ดเพื่อระบุชนิดได้ทันที และดูมูลค่าตลาดแบบเรียลไทม์ ครบในแอปเดียว ทุกการสั่งซื้อได้รับการคุ้มครอง พร้อมระบบชำระเงินและจัดส่งครบวงจร',
+        q: 'Cardstreet คืออะไร?',
+        a: 'Cardstreet คือมาร์เก็ตเพลสออนไลน์สำหรับเกมการ์ดสะสม ออกแบบมาเพื่อนักสะสมและผู้เล่นในประเทศไทย คุณสามารถซื้อขายการ์ด Pokémon, Magic: The Gathering, Yu-Gi-Oh!, One Piece, Disney Lorcana และ Riftbound สแกนการ์ดเพื่อระบุชนิดได้ทันที และดูมูลค่าตลาดแบบเรียลไทม์ ครบในแอปเดียว ทุกการสั่งซื้อได้รับการคุ้มครอง พร้อมระบบชำระเงินและจัดส่งครบวงจร',
         featured: true,
       },
       {
-        q: 'ซื้อขายเกมการ์ดอะไรได้บ้างบน CardStreet?',
-        a: 'CardStreet รองรับ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Disney Lorcana และ Riftbound (การ์ดเกม League of Legends) และกำลังเพิ่มเกมอื่น ๆ อย่างต่อเนื่อง แคตตาล็อก Pokémon มีทั้งฉบับภาษาอังกฤษ ไทย และญี่ปุ่น คุณจึงสะสมข้ามภูมิภาคได้ในที่เดียว',
+        q: 'ซื้อขายเกมการ์ดอะไรได้บ้างบน Cardstreet?',
+        a: 'Cardstreet รองรับ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, One Piece Card Game, Disney Lorcana และ Riftbound (การ์ดเกม League of Legends) และกำลังเพิ่มเกมอื่น ๆ อย่างต่อเนื่อง แคตตาล็อก Pokémon มีทั้งฉบับภาษาอังกฤษ ไทย และญี่ปุ่น คุณจึงสะสมข้ามภูมิภาคได้ในที่เดียว',
         featured: true,
       },
       {
-        q: 'CardStreet ให้บริการในประเทศไทยหรือไม่?',
-        a: 'ใช่ CardStreet สร้างขึ้นสำหรับตลาดไทยโดยเฉพาะ ราคาบนรายการขายเป็นเงินบาท (฿) การชำระเงินรองรับวิธีการของไทยทั้งบัตรเครดิตและเดบิตและพร้อมเพย์ (PromptPay) และจัดส่งทั่วประเทศผ่าน Flash Express',
+        q: 'Cardstreet ให้บริการในประเทศไทยหรือไม่?',
+        a: 'ใช่ Cardstreet สร้างขึ้นสำหรับตลาดไทยโดยเฉพาะ ราคาบนรายการขายเป็นเงินบาท (฿) การชำระเงินรองรับวิธีการของไทยทั้งบัตรเครดิตและเดบิตและพร้อมเพย์ (PromptPay) และจัดส่งทั่วประเทศผ่าน Flash Express',
       },
       {
-        q: 'ใช้งาน CardStreet ฟรีหรือไม่?',
+        q: 'ใช้งาน Cardstreet ฟรีหรือไม่?',
         a: 'การเลือกดู ค้นหา สแกนการ์ด และการซื้อ ใช้งานได้ฟรี ผู้ซื้อจ่ายเพียงค่าสินค้าบวกค่าจัดส่ง ส่วนผู้ขายจะเสียค่าธรรมเนียมเฉพาะเมื่อขายได้จริง (9% หรือต่ำสุด 5% สำหรับผู้ขายระดับพาร์ทเนอร์) ไม่มีค่าลงประกาศและไม่มีค่าบริการรายเดือน',
       },
       {
-        q: 'CardStreet มีแอปบนมือถือไหม?',
-        a: 'มี CardStreet ใช้งานได้ผ่านเว็บเบราว์เซอร์ และมีแอปสำหรับ iPhone (บน App Store) และ Android ให้คุณสแกน ซื้อ และขายได้จากมือถือ ข้อมูลบัญชีและคอลเลกชันของคุณซิงค์กันทั้งบนเว็บและมือถือ',
+        q: 'Cardstreet มีแอปบนมือถือไหม?',
+        a: 'มี Cardstreet ใช้งานได้ผ่านเว็บเบราว์เซอร์ และมีแอปสำหรับ iPhone (บน App Store) และ Android ให้คุณสแกน ซื้อ และขายได้จากมือถือ ข้อมูลบัญชีและคอลเลกชันของคุณซิงค์กันทั้งบนเว็บและมือถือ',
       },
     ],
   },
@@ -253,13 +253,13 @@ const FAQ_TH: FaqCategory[] = [
     icon: 'fa-solid fa-tag',
     items: [
       {
-        q: 'วิธีเช็คราคาการ์ดโปเกม่อนบน CardStreet ทำอย่างไร?',
+        q: 'วิธีเช็คราคาการ์ดโปเกม่อนบน Cardstreet ทำอย่างไร?',
         a: 'ค้นหาชื่อการ์ดหรือเลขการ์ดในช่องค้นหา แล้วเปิดหน้าการ์ดใบนั้น คุณจะเห็นราคาตลาดล่าสุดเป็นเงินบาท พร้อมกราฟราคาย้อนหลังและรายการขายจริงที่มีอยู่ตอนนี้ ถ้ามีการ์ดอยู่ในมือ กดสแกนด้วยกล้องมือถือก็ข้ามไปหน้าราคาของใบนั้นได้ทันที ไม่ต้องสมัครสมาชิกและไม่มีค่าใช้จ่าย',
         featured: true,
       },
       {
-        q: 'ราคาการ์ดบน CardStreet มาจากไหน?',
-        a: 'ราคาตลาดบน CardStreet คำนวณจากค่ากลางของการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาที่ผู้ขายตั้งไว้ การ์ดภาษาอังกฤษและภาษาญี่ปุ่นอ้างอิงตลาดต่างประเทศแล้วแปลงเป็นเงินบาท ส่วนการ์ดภาษาไทยใช้ราคาจากตลาดในประเทศ เพราะซื้อขายกันคนละตลาด ราคาทั้งหมดอัปเดตทุกวัน',
+        q: 'ราคาการ์ดบน Cardstreet มาจากไหน?',
+        a: 'ราคาตลาดบน Cardstreet คำนวณจากค่ากลางของการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาที่ผู้ขายตั้งไว้ การ์ดภาษาอังกฤษและภาษาญี่ปุ่นอ้างอิงตลาดต่างประเทศแล้วแปลงเป็นเงินบาท ส่วนการ์ดภาษาไทยใช้ราคาจากตลาดในประเทศ เพราะซื้อขายกันคนละตลาด ราคาทั้งหมดอัปเดตทุกวัน',
       },
       {
         q: 'เช็คราคาการ์ดย้อนหลังได้ไหม?',
@@ -267,15 +267,15 @@ const FAQ_TH: FaqCategory[] = [
       },
       {
         q: 'เช็คราคาการ์ดเกมอื่นนอกจากโปเกม่อนได้ไหม?',
-        a: 'ได้ CardStreet เช็คราคาได้ทั้ง Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana และ Riftbound ในเว็บเดียว การ์ดโปเกม่อนครอบคลุมทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น โดยแยกราคาตามภาษา เพราะการ์ดคนละภาษามีมูลค่าต่างกัน',
+        a: 'ได้ Cardstreet เช็คราคาได้ทั้ง Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana และ Riftbound ในเว็บเดียว การ์ดโปเกม่อนครอบคลุมทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น โดยแยกราคาตามภาษา เพราะการ์ดคนละภาษามีมูลค่าต่างกัน',
       },
       {
         q: 'การ์ดเกรด PSA ราคาต่างจากการ์ดธรรมดาอย่างไร?',
-        a: 'การ์ดที่ผ่านการเกรดแล้วมักมีราคาสูงกว่าการ์ดใบเดียวกันแบบไม่เกรด และยิ่งเกรดสูงยิ่งต่างมาก หน้าการ์ดบน CardStreet จึงแสดงราคาแยกตามบริษัทและระดับเกรด ทั้ง PSA, BGS, CGC และ TAG ควบคู่กับราคาการ์ดแบบไม่เกรด ให้เทียบได้ในหน้าเดียว',
+        a: 'การ์ดที่ผ่านการเกรดแล้วมักมีราคาสูงกว่าการ์ดใบเดียวกันแบบไม่เกรด และยิ่งเกรดสูงยิ่งต่างมาก หน้าการ์ดบน Cardstreet จึงแสดงราคาแยกตามบริษัทและระดับเกรด ทั้ง PSA, BGS, CGC และ TAG ควบคู่กับราคาการ์ดแบบไม่เกรด ให้เทียบได้ในหน้าเดียว',
       },
       {
-        q: 'ราคาที่เห็นบน CardStreet คือราคาที่ขายได้จริงหรือไม่?',
-        a: 'ราคาตลาดคือค่ากลางอ้างอิงจากการซื้อขายจริงที่ผ่านมา ใช้เป็นจุดตั้งต้นในการตั้งราคาหรือต่อรอง แต่ราคาที่ขายได้จริงขึ้นอยู่กับสภาพการ์ด ภาษา และความต้องการในตอนนั้น ถ้าอยากขายตามราคาตลาด ลงประกาศขายบน CardStreet ได้เลย ฟรีไม่มีค่าลงประกาศ จ่ายค่าธรรมเนียมเฉพาะตอนขายได้',
+        q: 'ราคาที่เห็นบน Cardstreet คือราคาที่ขายได้จริงหรือไม่?',
+        a: 'ราคาตลาดคือค่ากลางอ้างอิงจากการซื้อขายจริงที่ผ่านมา ใช้เป็นจุดตั้งต้นในการตั้งราคาหรือต่อรอง แต่ราคาที่ขายได้จริงขึ้นอยู่กับสภาพการ์ด ภาษา และความต้องการในตอนนั้น ถ้าอยากขายตามราคาตลาด ลงประกาศขายบน Cardstreet ได้เลย ฟรีไม่มีค่าลงประกาศ จ่ายค่าธรรมเนียมเฉพาะตอนขายได้',
       },
     ],
   },
@@ -285,18 +285,18 @@ const FAQ_TH: FaqCategory[] = [
     icon: 'fa-solid fa-cart-shopping',
     items: [
       {
-        q: 'ซื้อการ์ดบน CardStreet อย่างไร?',
+        q: 'ซื้อการ์ดบน Cardstreet อย่างไร?',
         a: 'ค้นหาหรือเลือกดูในมาร์เก็ตเพลส เปิดรายการขายแล้วเพิ่มลงตะกร้า เมื่อชำระเงินคุณจ่ายอย่างปลอดภัยด้วยบัตรหรือพร้อมเพย์ เงินของคุณจะได้รับการคุ้มครองและโอนให้ผู้ขายหลังจากคำสั่งซื้อถูกจัดส่งถึงแล้วเท่านั้น',
         featured: true,
       },
       {
-        q: 'ซื้อการ์ดบน CardStreet ปลอดภัยไหม?',
+        q: 'ซื้อการ์ดบน Cardstreet ปลอดภัยไหม?',
         a: 'ปลอดภัย ทุกคำสั่งซื้อมีการคุ้มครองผู้ซื้อ เงินของคุณจะถูกพักไว้และโอนให้ผู้ขายหลังการ์ดถึงมือคุณแล้วเท่านั้น หากสินค้าที่ได้รับเสียหาย เป็นของปลอม หรือไม่ตรงตามคำอธิบาย ให้ติดต่อ support@thailandtcg.com พร้อมหมายเลขคำสั่งซื้อและรูปถ่ายก่อนหมดระยะเวลาคุ้มครอง แล้วเราจะช่วยไกล่เกลี่ยให้',
         featured: true,
       },
       {
         q: 'ชำระเงินด้วยวิธีใดได้บ้าง?',
-        a: 'ที่หน้าชำระเงินคุณจ่ายได้ด้วยบัตรเครดิตและเดบิตหลัก ๆ หรือพร้อมเพย์ การชำระเงินทั้งหมดประมวลผลอย่างปลอดภัยผ่าน Stripe และ CardStreet ไม่เก็บข้อมูลบัตรของคุณ',
+        a: 'ที่หน้าชำระเงินคุณจ่ายได้ด้วยบัตรเครดิตและเดบิตหลัก ๆ หรือพร้อมเพย์ การชำระเงินทั้งหมดประมวลผลอย่างปลอดภัยผ่าน Stripe และ Cardstreet ไม่เก็บข้อมูลบัตรของคุณ',
       },
       {
         q: 'ทำไมจึงซื้อจากผู้ขายได้เพียงรายเดียวต่อหนึ่งคำสั่งซื้อ?',
@@ -304,7 +304,7 @@ const FAQ_TH: FaqCategory[] = [
       },
       {
         q: 'ซื้อการ์ดเกรดได้ไหม?',
-        a: 'ได้ CardStreet มีทั้งการ์ดแบบ raw (ไม่เกรด) และการ์ดที่ผ่านการประเมินจาก PSA, BGS, CGC และ TAG รายการการ์ดเกรดจะแสดงบริษัทผู้ประเมินและเกรด คุณจึงรู้แน่ชัดว่ากำลังซื้ออะไร',
+        a: 'ได้ Cardstreet มีทั้งการ์ดแบบ raw (ไม่เกรด) และการ์ดที่ผ่านการประเมินจาก PSA, BGS, CGC และ TAG รายการการ์ดเกรดจะแสดงบริษัทผู้ประเมินและเกรด คุณจึงรู้แน่ชัดว่ากำลังซื้ออะไร',
       },
     ],
   },
@@ -314,7 +314,7 @@ const FAQ_TH: FaqCategory[] = [
     icon: 'fa-solid fa-tag',
     items: [
       {
-        q: 'ขายการ์ดบน CardStreet อย่างไร?',
+        q: 'ขายการ์ดบน Cardstreet อย่างไร?',
         a: 'ลงขายการ์ดจากคอลเลกชันของคุณ กำหนดสภาพและราคา แล้วเผยแพร่ เมื่อผู้ซื้อชำระเงิน ให้จัดส่งการ์ดด้วยใบจัดส่ง Flash Express ที่ชำระล่วงหน้าแล้วกดยืนยันการจัดส่ง เมื่อคำสั่งซื้อถึงปลายทาง เงินของคุณจะถูกปล่อยให้',
         featured: true,
       },
@@ -347,8 +347,8 @@ const FAQ_TH: FaqCategory[] = [
         a: 'ได้ หลังจากสแกนระบุการ์ดแล้ว คุณจะเห็นรายละเอียดและมูลค่าตลาดปัจจุบัน พร้อมรายการขายที่กำลังเปิดอยู่ในมาร์เก็ตเพลส เป็นวิธีที่รวดเร็วในการเช็คราคาก่อนซื้อ ขาย หรือแลกเปลี่ยน',
       },
       {
-        q: 'CardStreet รองรับการ์ดภาษาไทยและญี่ปุ่นไหม?',
-        a: 'รองรับ CardStreet มีแคตตาล็อก Pokémon ภาษาไทยโดยเฉพาะ ควบคู่กับฉบับภาษาอังกฤษและญี่ปุ่น พร้อมชื่อชุดและราคาในแบบท้องถิ่น ซึ่งเป็นสิ่งที่แอปการ์ดต่างประเทศส่วนใหญ่ไม่มี',
+        q: 'Cardstreet รองรับการ์ดภาษาไทยและญี่ปุ่นไหม?',
+        a: 'รองรับ Cardstreet มีแคตตาล็อก Pokémon ภาษาไทยโดยเฉพาะ ควบคู่กับฉบับภาษาอังกฤษและญี่ปุ่น พร้อมชื่อชุดและราคาในแบบท้องถิ่น ซึ่งเป็นสิ่งที่แอปการ์ดต่างประเทศส่วนใหญ่ไม่มี',
       },
       {
         q: 'ระบบสแกนระบุการ์ดผิด ต้องทำอย่างไร?',
@@ -381,12 +381,12 @@ const FAQ_TH: FaqCategory[] = [
     icon: 'fa-solid fa-shield-halved',
     items: [
       {
-        q: 'สมัครบัญชี CardStreet อย่างไร?',
+        q: 'สมัครบัญชี Cardstreet อย่างไร?',
         a: 'แตะสมัครสมาชิกแล้วลงทะเบียนด้วยอีเมล บัญชีที่ยืนยันแล้วช่วยให้คุณซื้อ ติดตามคำสั่งซื้อ สร้างคอลเลกชัน และเริ่มขายได้เมื่อทำขั้นตอนผู้ขายเสร็จ',
       },
       {
-        q: 'การ์ดบน CardStreet เป็นของแท้ไหม?',
-        a: 'CardStreet ห้ามการ์ดพร็อกซี ของทำซ้ำ ของเลียนแบบ และของปลอมโดยเด็ดขาด ผู้ขายที่ลงขายสินค้าเหล่านี้จะถูกระงับบัญชีทันที เมื่อรวมกับการคุ้มครองผู้ซื้อในทุกคำสั่งซื้อ จึงทำให้มาร์เก็ตเพลสน่าเชื่อถือ',
+        q: 'การ์ดบน Cardstreet เป็นของแท้ไหม?',
+        a: 'Cardstreet ห้ามการ์ดพร็อกซี ของทำซ้ำ ของเลียนแบบ และของปลอมโดยเด็ดขาด ผู้ขายที่ลงขายสินค้าเหล่านี้จะถูกระงับบัญชีทันที เมื่อรวมกับการคุ้มครองผู้ซื้อในทุกคำสั่งซื้อ จึงทำให้มาร์เก็ตเพลสน่าเชื่อถือ',
       },
       {
         q: 'เปลี่ยนข้อมูลหรือลบบัญชีอย่างไร?',
@@ -413,7 +413,7 @@ export function getFeaturedFaqs(isThai: boolean): FaqItem[] {
  * The catalog must match the URL variant being served, not the visitor's UI
  * language: answer engines quote structured data verbatim, so the Thai
  * canonical page has to expose the Thai answers or every citable sentence
- * about CardStreet ends up in English on a Thai-targeted URL.
+ * about Cardstreet ends up in English on a Thai-targeted URL.
  */
 export function buildFaqJsonLd(isThai = false): Record<string, unknown> {
   return {

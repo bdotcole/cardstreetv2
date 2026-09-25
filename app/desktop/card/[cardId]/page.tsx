@@ -114,7 +114,7 @@ function buildCardSummary(
             const ref = priceReference(card.id, card.name, siblings);
             state = ref.length
                 ? ` No market price is on file for it yet. Other cards from ${set || 'the same set'} do have one - ${ref.map((r) => `${r.name} at ${thb(r.marketPrice || 0)}`).join(' and ')} - and you can be alerted the moment a seller lists this card.`
-                : ' Track its market price and get alerted when a seller lists one on CardStreet.';
+                : ' Track its market price and get alerted when a seller lists one on Cardstreet.';
         }
         return what + state;
     }
@@ -130,16 +130,16 @@ function buildCardSummary(
 
     let state: string;
     if (market && count) {
-        state = ` ราคาตลาดล่าสุดอยู่ที่ ${market} ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
+        state = ` ราคาตลาดล่าสุดอยู่ที่ ${market} ขณะนี้มี ${count} รายการขายบน Cardstreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
     } else if (market) {
         state = ` ราคาตลาดล่าสุดอยู่ที่ ${market} ขณะนี้ยังไม่มีผู้ขายลงการ์ดใบนี้ กดถูกใจไว้เพื่อรับแจ้งเตือนเมื่อมีรายการขายใหม่`;
     } else if (count) {
-        state = ` ขณะนี้มี ${count} รายการขายบน CardStreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
+        state = ` ขณะนี้มี ${count} รายการขายบน Cardstreet เริ่มต้นที่ ${floor} จากผู้ขายที่ยืนยันตัวตนแล้ว จัดส่งทั่วไทย`;
     } else {
         const ref = priceReference(card.id, card.name, siblings);
         state = ref.length
             ? ` ยังไม่มีราคาตลาดอ้างอิงสำหรับใบนี้ แต่การ์ดใบอื่นในชุด${set ? ` ${set}` : 'เดียวกัน'} มีราคาแล้ว เช่น ${ref.map((r) => `${r.name} ${thb(r.marketPrice || 0)}`).join(' และ ')} กดติดตามไว้เพื่อรับแจ้งเตือนทันทีที่มีผู้ขายลงการ์ดใบนี้`
-            : ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน CardStreet';
+            : ' เช็คราคาตลาดและรับแจ้งเตือนเมื่อมีผู้ขายลงการ์ดใบนี้ได้บน Cardstreet';
     }
     return what + state;
 }
@@ -148,7 +148,7 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
     const { cardId } = await params;
     const { card, listings } = await getCardPageData(cardId);
     if (!card) {
-        return { title: 'Card not found | CardStreet', robots: { index: false, follow: false } };
+        return { title: 'Card not found | Cardstreet', robots: { index: false, follow: false } };
     }
 
     const lang = await resolveLang();
@@ -167,19 +167,19 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
     const hasPrice = low > 0;
     const title =
         lang === 'EN'
-            ? `${card.name}${line ? ` — ${line}` : ''} | CardStreet`
-            : `${hasPrice ? 'ราคา' : 'การ์ด'} ${card.name}${line ? ` — ${line}` : ''} | CardStreet`;
+            ? `${card.name}${line ? ` — ${line}` : ''} | Cardstreet`
+            : `${hasPrice ? 'ราคา' : 'การ์ด'} ${card.name}${line ? ` — ${line}` : ''} | Cardstreet`;
     // The trailing claim follows the same rule: "live market prices" / "ราคาตลาด
     // เรียลไทม์" is true of the site but not of a card that has none, and the
     // description is what the searcher reads before deciding to click.
     const description =
         lang === 'EN'
             ? hasPrice
-                ? `Buy ${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet starting at ${priceTxt}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
-                : `${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on CardStreet. See what else in the set is worth, and get alerted when a verified seller lists this card.`
+                ? `Buy ${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on Cardstreet starting at ${priceTxt}. Live market prices, verified sellers, and nationwide shipping in Thailand.`
+                : `${card.name}${setName(card) ? ` from ${setName(card)}` : ''} on Cardstreet. See what else in the set is worth, and get alerted when a verified seller lists this card.`
             : hasPrice
-              ? `ซื้อ ${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet เริ่มต้น ${priceTxt} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`
-              : `${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน CardStreet ดูราคาการ์ดใบอื่นในชุดเดียวกัน และรับแจ้งเตือนเมื่อมีผู้ขายที่ยืนยันตัวตนแล้วลงการ์ดใบนี้`;
+              ? `ซื้อ ${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน Cardstreet เริ่มต้น ${priceTxt} ราคาตลาดเรียลไทม์ ผู้ขายที่ยืนยันแล้ว จัดส่งทั่วไทย`
+              : `${card.name}${setName(card) ? ` ชุด ${setName(card)}` : ''} บน Cardstreet ดูราคาการ์ดใบอื่นในชุดเดียวกัน และรับแจ้งเตือนเมื่อมีผู้ขายที่ยืนยันตัวตนแล้วลงการ์ดใบนี้`;
 
     const ogImage = getOptimizedImageUrl(card.images?.large || card.imageUrl || card.images?.small, 600, 85);
 
@@ -193,7 +193,7 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/card/${cardId}`, pathLocale),
             images: ogImage ? [{ url: ogImage }] : undefined,
         },
@@ -208,7 +208,7 @@ export async function generateMetadata({ params }: { params: Promise<{ cardId: s
 // base rate (the ฿40 intra-city floor buyers start from) and its real handling
 // (seller dispatch, 1-2 days) / transit (1-3 days nationwide) windows. These
 // are the structured-data floor for rich results, not the amount charged.
-// CardStreet has no change-of-mind returns; damaged / not-as-described cases
+// Cardstreet has no change-of-mind returns; damaged / not-as-described cases
 // are mediated refunds under buyer protection, which is dispute resolution,
 // not a merchant return policy — so returns are declared not permitted.
 const OFFER_SHIPPING_DETAILS = {
@@ -245,7 +245,7 @@ function buildProductJsonLd(card: Card, listings: MarketplaceListing[], pathLoca
         // Follows the URL variant being served so the /en page's Product node
         // does not point at the Thai canonical.
         url: localizedUrl(`/card/${card.id}`, pathLocale),
-        description: `${card.name} trading card${line ? ` (${line})` : ''}. Buy and sell on CardStreet with live market prices, verified sellers, and nationwide delivery in Thailand.`,
+        description: `${card.name} trading card${line ? ` (${line})` : ''}. Buy and sell on Cardstreet with live market prices, verified sellers, and nationwide delivery in Thailand.`,
         category: 'Trading Card',
         ...(image ? { image: [image] } : {}),
         brand: { '@type': 'Brand', name: getGame(card.game).name },

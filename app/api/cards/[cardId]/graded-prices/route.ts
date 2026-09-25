@@ -5,12 +5,12 @@ import { EXCHANGE_RATES } from '@/constants';
 // Graded market prices for a single card.
 //
 // Sources, in precedence order per grade tier:
-//   1. app_sale     — an actual graded sale on CardStreet (official; overrides all).
+//   1. app_sale     — an actual graded sale on Cardstreet (official; overrides all).
 //   2. market       — PriceCharting graded price (stored in market_values with a
 //                     "PSA 10"-style condition, in USD).
 //   3. thai_estimate — Thai Pokemon cards have no PriceCharting graded data, so we
 //                     show 60% of the English-equivalent card's graded price until a
-//                     real CardStreet sale exists for that card+grade.
+//                     real Cardstreet sale exists for that card+grade.
 // A grade tier with none of the above is omitted (the UI renders blank, not a guess).
 //
 // Prices are returned in THB. PriceCharting/market_values rows are USD and converted.

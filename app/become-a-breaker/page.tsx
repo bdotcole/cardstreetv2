@@ -44,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl('/become-a-breaker', pathLocale),
             locale: isThai ? 'th_TH' : 'en_US',
         },
@@ -94,7 +94,7 @@ function buildJsonLd(pathLocale: 'th' | 'en') {
             {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                    { '@type': 'ListItem', position: 1, name: 'CardStreet', item: BASE_URL },
+                    { '@type': 'ListItem', position: 1, name: 'Cardstreet', item: BASE_URL },
                     {
                         '@type': 'ListItem',
                         position: 2,
@@ -116,8 +116,8 @@ function buildJsonLd(pathLocale: 'th' | 'en') {
                     '@type': 'Thing',
                     name: 'Cardstreet Live',
                     description: isThai
-                        ? 'ไลฟ์เปิดการ์ด TCG บนมาร์เก็ตเพลส CardStreet'
-                        : 'Live TCG breaks on the CardStreet marketplace',
+                        ? 'ไลฟ์เปิดการ์ด TCG บนมาร์เก็ตเพลส Cardstreet'
+                        : 'Live TCG breaks on the Cardstreet marketplace',
                 },
             },
         ],

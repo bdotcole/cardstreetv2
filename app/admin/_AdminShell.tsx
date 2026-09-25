@@ -46,7 +46,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                         <i className="fa-solid fa-shield-halved text-sm text-white" />
                     </div>
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-brand-cyan italic">CardStreet</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-brand-cyan italic">Cardstreet</p>
                         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Admin Console</p>
                     </div>
                 </div>

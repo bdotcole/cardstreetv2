@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * "Add a card to bid" — saves a card on the CardStreet platform (TH) customer
+ * "Add a card to bid" — saves a card on the Cardstreet platform (TH) customer
  * via a SetupIntent so live wins can be charged off-session. Card-only:
  * PromptPay can't be charged off-session, so live bidding requires a card.
  *

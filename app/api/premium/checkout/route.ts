@@ -4,7 +4,7 @@ import { getEntitlement } from '@/lib/premiumAuth';
 import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/stripe';
 
-// POST /api/premium/checkout — start a CardStreet Pro subscription (web rail).
+// POST /api/premium/checkout — start a Cardstreet Pro subscription (web rail).
 //
 // Runs on the TH PLATFORM account (plain platform revenue), completely apart
 // from the marketplace's Connect direct-charge flow — premium never touches a
@@ -28,7 +28,7 @@ export async function POST() {
   // unadvertised. Restoring the plan restores this route with it.
   if (!CONSUMER_PRO_ENABLED) {
     return NextResponse.json(
-      { error: 'CardStreet Pro is not available', code: 'PRO_UNAVAILABLE' },
+      { error: 'Cardstreet Pro is not available', code: 'PRO_UNAVAILABLE' },
       { status: 403 },
     );
   }
@@ -44,7 +44,7 @@ export async function POST() {
   // Double-subscribing through a second Checkout would double-charge -- and
   // admins (Pro by role) have nothing to buy.
   if ((await getEntitlement(user.id)).premium) {
-    return NextResponse.json({ error: 'You already have CardStreet Pro', code: 'ALREADY_PREMIUM' }, { status: 400 });
+    return NextResponse.json({ error: 'You already have Cardstreet Pro', code: 'ALREADY_PREMIUM' }, { status: 400 });
   }
 
   try {
@@ -63,7 +63,7 @@ export async function POST() {
             unit_amount: PRICE_SATANG,
             recurring: { interval: 'month' },
             product_data: {
-              name: 'CardStreet Pro',
+              name: 'Cardstreet Pro',
               description: 'AI card grading, Trade Finder, and Pro portfolio insights',
             },
           },

@@ -10,20 +10,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(BASE_URL),
     title: isThai
-      ? 'นโยบายความเป็นส่วนตัว | CardStreet'
-      : 'Privacy Policy — CardStreet TCG Marketplace',
+      ? 'นโยบายความเป็นส่วนตัว | Cardstreet'
+      : 'Privacy Policy — Cardstreet TCG Marketplace',
     description: isThai
-      ? 'CardStreet เก็บ ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณอย่างไร — บัญชีผู้ใช้ การชำระเงินผ่าน Stripe การยืนยันตัวตนผู้ขาย การแบ่งปันข้อมูลกับบุคคลที่สาม และสิทธิของคุณ'
-      : 'How CardStreet collects, uses, and protects your personal data — accounts, payments via Stripe, seller verification, third-party sharing, and your privacy rights.',
+      ? 'Cardstreet เก็บ ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณอย่างไร — บัญชีผู้ใช้ การชำระเงินผ่าน Stripe การยืนยันตัวตนผู้ขาย การแบ่งปันข้อมูลกับบุคคลที่สาม และสิทธิของคุณ'
+      : 'How Cardstreet collects, uses, and protects your personal data — accounts, payments via Stripe, seller verification, third-party sharing, and your privacy rights.',
     alternates: buildAlternates('/privacy', pathLocale),
     openGraph: {
         images: DEFAULT_OG_IMAGE,
-      title: isThai ? 'นโยบายความเป็นส่วนตัวของ CardStreet' : 'CardStreet Privacy Policy',
+      title: isThai ? 'นโยบายความเป็นส่วนตัวของ Cardstreet' : 'Cardstreet Privacy Policy',
       description: isThai
-        ? 'CardStreet เก็บ ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณอย่างไร'
-        : 'How CardStreet collects, uses, and protects your personal data.',
+        ? 'Cardstreet เก็บ ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณอย่างไร'
+        : 'How Cardstreet collects, uses, and protects your personal data.',
       type: 'website',
-      siteName: 'CardStreet',
+      siteName: 'Cardstreet',
       url: localizedUrl('/privacy', pathLocale),
     },
   };

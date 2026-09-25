@@ -446,7 +446,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, contextMessage, 
                         <i className="fa-solid fa-cards text-2xl text-brand-darker"></i>
                     </div>
                     <h2 className="text-2xl font-black text-white italic skew-x-[-5deg] text-center">
-                        {t('auth.welcomeTitle')} <span className="text-brand-cyan">CardStreet</span>
+                        {t('auth.welcomeTitle')} <span className="text-brand-cyan">Cardstreet</span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-2 font-medium text-center max-w-sm mx-auto">
                         {mode === 'verify'

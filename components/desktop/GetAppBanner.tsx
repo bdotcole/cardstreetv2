@@ -62,7 +62,7 @@ export default function GetAppBanner() {
                 <i className="fa-solid fa-mobile-screen text-brand-cyan text-sm shrink-0"></i>
                 <p className="flex-1 min-w-0 text-[11px] leading-snug text-slate-300">
                     <span className="font-bold text-white">
-                        {isThai ? 'สแกนการ์ดด้วยแอป CardStreet' : 'Scan cards with the CardStreet app'}
+                        {isThai ? 'สแกนการ์ดด้วยแอป Cardstreet' : 'Scan cards with the Cardstreet app'}
                     </span>
                     <span className="block text-slate-400">
                         {isThai ? 'เช็คราคา เก็บคอลเลกชัน แจ้งเตือนเมื่อมีการ์ดที่คุณตามหา' : 'Check prices, track your collection, get alerts on cards you want.'}

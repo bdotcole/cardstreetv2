@@ -328,7 +328,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
  * Postmark provider override — Courier's project here is configured against
  * Postmark, whose attachment schema is { Name, Content, ContentType } inside
  * an `Attachments` array. The email body always links to the seller's
- * CardStreet dashboard as a backup so the message is useful even if the
+ * Cardstreet dashboard as a backup so the message is useful even if the
  * recipient's mail client strips the attachment (or for the push channel
  * where attachments don't apply).
  */
@@ -695,14 +695,14 @@ export async function sendCardRequestFulfilledNotification(
     const extra = details.note?.trim() ? ` ${details.note.trim()}` : '';
 
     try {
-        const title = `${card} is now on CardStreet`;
+        const title = `${card} is now on Cardstreet`;
         await courier.send.message({
             message: {
                 to: recipient,
                 content: emailPlusPushContent({
                     title,
                     emailParagraphs: [
-                        { text: `Good news — "${card}" has been added to the CardStreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.` },
+                        { text: `Good news — "${card}" has been added to the Cardstreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.` },
                         { text: `การ์ดที่คุณขอ "${card}" ถูกเพิ่มเข้าแคตตาล็อกแล้ว — ค้นหาในแอปเพื่อเพิ่มเข้าคอลเลกชันหรือหาซื้อในตลาด`, muted: true },
                     ],
                     pushBody: 'การ์ดที่คุณขอถูกเพิ่มแล้ว — ค้นหาในแอปได้เลย · Search the app to collect or buy it.',
@@ -758,7 +758,7 @@ function appBaseUrl(): string {
 // ─── Internal ops alert: welcome-package partner activated their account ─────
 
 /**
- * Notifies the CardStreet team when a cold-provisioned partner activates the
+ * Notifies the Cardstreet team when a cold-provisioned partner activates the
  * account from their mailed welcome package — i.e. they signed in with the
  * username + temp password printed in their letter and finished setup (real
  * email, phone, new password) via /api/partner/complete-onboarding.
@@ -806,7 +806,7 @@ export async function sendPartnerActivatedNotification(partner: {
                 content: {
                     title: `New partner activated: ${partner.shopName}`,
                     body:
-                        'A welcome-package partner just activated their CardStreet account ' +
+                        'A welcome-package partner just activated their Cardstreet account ' +
                         '(signed in with their mailed credentials and set a new password).\n\n' +
                         lines.join('\n'),
                 },
@@ -1005,12 +1005,12 @@ function stripeNudgeCopy(
         'account number ready and it takes about 2 minutes.';
 
     const titles = [
-        'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your CardStreet payout setup',
-        'การ์ดของคุณยังรอลงขายอยู่ — Your CardStreet listings are waiting',
+        'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your Cardstreet payout setup',
+        'การ์ดของคุณยังรอลงขายอยู่ — Your Cardstreet listings are waiting',
         'เตือนครั้งสุดท้าย: ตั้งค่าการรับเงินให้เสร็จ — Last reminder: finish your payout setup',
     ];
     const thBodies = [
-        'คุณเริ่มตั้งค่าการรับเงินบน CardStreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
+        'คุณเริ่มตั้งค่าการรับเงินบน Cardstreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
             'เหลืออีกเพียงไม่กี่ขั้นตอนก็พร้อมลงขายการ์ด และรับเงินเข้าบัญชีธนาคารของคุณโดยตรง',
         'คุณยังตั้งค่าการรับเงินไม่เสร็จ จึงยังลงขายการ์ดไม่ได้ ' +
             'ทำให้เสร็จวันนี้แล้วเริ่มขายได้เลย',
@@ -1018,7 +1018,7 @@ function stripeNudgeCopy(
             'ทำให้เสร็จเมื่อไหร่ก็เริ่มลงขายการ์ดและรับเงินได้ทันที',
     ];
     const enBodies = [
-        'You started setting up payouts on CardStreet but didn\'t finish — only a few ' +
+        'You started setting up payouts on Cardstreet but didn\'t finish — only a few ' +
             'steps remain before you can list cards for sale and get paid directly to your bank account.',
         'Your payout setup is still unfinished, so you can\'t list cards yet. ' +
             'Finish it today and you can start selling right away.',
@@ -1531,7 +1531,7 @@ export async function sendAbandonedCheckoutNudge(
 }
 
 /**
- * CardStreet Pro perk: tells a wishlister that a card on their wishlist was
+ * Cardstreet Pro perk: tells a wishlister that a card on their wishlist was
  * just listed for sale. Entitlement filtering and dedupe happen in the caller
  * (lib/wishlistAlerts.ts) -- this only handles prefs, channels, and the send.
  *
@@ -1675,8 +1675,8 @@ export async function sendShowLiveNotification(
                 {
                     text:
                         show.reason === 'reminder'
-                            ? `${show.title} — the show you asked to be reminded about — is live on CardStreet right now.`
-                            : `${show.title} — the show you reserved a spot in — is live on CardStreet right now.`,
+                            ? `${show.title} — the show you asked to be reminded about — is live on Cardstreet right now.`
+                            : `${show.title} — the show you reserved a spot in — is live on Cardstreet right now.`,
                 },
                 {
                     text:
@@ -1752,7 +1752,7 @@ export async function sendShowStartingSoonNotification(
         message.content = emailPlusPushContent({
             title,
             emailParagraphs: [
-                { text: `${show.title} — the show you asked to be reminded about — starts in about ${show.minutes} minutes on CardStreet.` },
+                { text: `${show.title} — the show you asked to be reminded about — starts in about ${show.minutes} minutes on Cardstreet.` },
                 { text: `ไลฟ์ ${show.title} ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่มในอีกประมาณ ${show.minutes} นาที`, muted: true },
             ],
             cta: { label: 'Watch now / ดูไลฟ์เลย', url: showUrl },
@@ -1977,13 +1977,13 @@ export async function sendShowEmailBlast(
     // truncate in inbox list views, so a title-first subject shows only the
     // cut-off title and none of the "live ... 20:30" part (seen on the
     // 2026-08-22 announce). "(Bangkok time)" stays in the body where space
-    // is free; the sender name already says CardStreet.
+    // is free; the sender name already says Cardstreet.
     const subjectWhen = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
     const subject =
         kind === 'announce'
             ? subjectWhen
                 ? `Live ${subjectWhen} — ${show.title}`
-                : `Coming soon on CardStreet — ${show.title}`
+                : `Coming soon on Cardstreet — ${show.title}`
             : `LIVE now — ${show.title}`;
     // Built per recipient, because the unsubscribe link is signed for one
     // user. This is promotional mail going to the whole base — without a way
@@ -1998,8 +1998,8 @@ export async function sendShowEmailBlast(
                 type: 'text',
                 content:
                     kind === 'announce'
-                        ? `${show.title} goes live on CardStreet ${show.startsAtLabel || 'soon'}. Open the show page and tap "Get notified" so you don't miss the start.`
-                        : `${show.title} is live on CardStreet right now — come watch the break and grab a spot.`,
+                        ? `${show.title} goes live on Cardstreet ${show.startsAtLabel || 'soon'}. Open the show page and tap "Get notified" so you don't miss the start.`
+                        : `${show.title} is live on Cardstreet right now — come watch the break and grab a spot.`,
             },
             {
                 type: 'text',
@@ -2222,8 +2222,8 @@ export async function sendOfferReceivedNotification(recipientId: string, details
         pushType: 'offer_received',
         inline: (priceLabel, cardName) => ({
             subject: `New offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
-            bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline.`,
-            bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
+            bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open Cardstreet to accept, counter, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด Cardstreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
             push: 'แตะเพื่อตอบรับ ต่อรอง หรือปฏิเสธ · Tap to accept, counter, or decline.',
         }),
@@ -2261,7 +2261,7 @@ export async function sendOfferRejectedNotification(offerorId: string, details: 
         inline: (priceLabel, cardName) => ({
             subject: `Offer declined — ${cardName}`,
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. You can make a new offer anytime.`,
-            bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
+            bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ Cardstreet`,
             cta: 'Browse · เลือกซื้อ',
             push: 'ลองเสนอราคาใหม่ได้ทุกเมื่อ · You can make a new offer anytime.',
         }),
@@ -2277,8 +2277,8 @@ export async function sendOfferCounteredNotification(offerorId: string, details:
         pushType: 'offer_countered',
         inline: (priceLabel, cardName) => ({
             subject: `Counter offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
-            bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline.`,
-            bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
+            bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open Cardstreet to accept, counter back, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด Cardstreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
             push: 'แตะเพื่อตอบรับหรือต่อรองกลับ · Tap to accept or counter back.',
         }),
@@ -2295,7 +2295,7 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
         inline: (priceLabel, cardName) => ({
             subject: `Offer expired — ${cardName}`,
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
-            bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
+            bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด Cardstreet เพื่อดูรายการอื่น`,
             cta: 'Browse · เลือกซื้อ',
             push: 'ข้อเสนอหมดอายุหรือสินค้าถูกขายแล้ว · It expired or the listing sold.',
         }),
@@ -2334,7 +2334,7 @@ export async function sendOfferPaymentReminderNotification(
 // ─── Internal ops alert: new breaker application ─────────────────────────────
 
 /**
- * Notifies the CardStreet team when someone applies at /become-a-breaker.
+ * Notifies the Cardstreet team when someone applies at /become-a-breaker.
  *
  * Internal ops alert, so it follows sendPartnerActivatedNotification rather
  * than the customer-facing sends above: a single inbox
@@ -2451,10 +2451,10 @@ export async function sendWeeklyDigestNotification(
         : '';
 
     const title = digest.wishlistMatches > 0
-        ? `${matchLineTh || matchLineEn} · CardStreet`
-        : `${moverLineTh || moverLineEn} · CardStreet`;
+        ? `${matchLineTh || matchLineEn} · Cardstreet`
+        : `${moverLineTh || moverLineEn} · Cardstreet`;
     const body = [matchLineEn, moverLineEn].filter(Boolean).join(' · ')
-        || 'Your weekly CardStreet summary.';
+        || 'Your weekly Cardstreet summary.';
 
     try {
         if (wantPush) {
@@ -2486,7 +2486,7 @@ export async function sendWeeklyDigestNotification(
                             : []),
                     ],
                     cta: {
-                        label: 'เปิด CardStreet · Open CardStreet',
+                        label: 'เปิด Cardstreet · Open Cardstreet',
                         url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=weekly_digest`,
                     },
                     pushBody: body,
@@ -2678,7 +2678,7 @@ export async function sendBreakerApplicationAlert(application: {
         `Breaking experience: ${ADMIN_LABELS.experience[application.breakingExperience as keyof typeof ADMIN_LABELS.experience] ?? application.breakingExperience}`,
         `Availability: ${application.availability}`,
         `Applied in: ${application.locale === 'th' ? 'Thai' : 'English'}`,
-        `CardStreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
+        `Cardstreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
         `Campaign: ${campaign}`,
         `Submitted: ${submittedAt} (Bangkok)`,
         '',
@@ -2711,7 +2711,7 @@ export async function sendBreakerApplicationAlert(application: {
 /**
  * Sent from /api/orders/[id]/report the moment a buyer opens a problem report.
  * The order is already 'disputed' and the ticket already filed when this runs;
- * this is the page to the founder, who decides the outcome under the CardStreet
+ * this is the page to the founder, who decides the outcome under the Cardstreet
  * Guarantee (refund from platform funds, ban if warranted). English-only,
  * internal. Best-effort, never throws.
  */
@@ -2881,7 +2881,7 @@ export async function sendUnshippedOrderAlert(alert: {
  * dashboard work. Set COURIER_BREAKER_CONFIRMATION_TEMPLATE_ID to switch — the
  * `data` block below already carries the merge fields a template would read.
  *
- * Most applicants have no CardStreet account, so this addresses a raw email
+ * Most applicants have no Cardstreet account, so this addresses a raw email
  * rather than a userId: no notification_preferences row to consult and no push
  * channel. That also means there is no unsubscribe state to honour — which is
  * fine for a transactional receipt of an action they just took, and is the

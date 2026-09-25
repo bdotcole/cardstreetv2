@@ -20,8 +20,8 @@ export interface SetIntro {
 
 const SET_INTROS: Record<string, SetIntro> = {
   ma5: {
-    th: 'เงามืดคุกคาม (MA5) คือชุดการ์ดโปเกมอนภาษาไทยยุคเมก้าที่นักสะสมจับตามองมากที่สุดชุดหนึ่ง โดยมีเมก้าดาร์กไรex เป็นการ์ดตัวท็อปของชุดที่ใคร ๆ ก็ตามหา ทั้งเวอร์ชัน SR, SAR และ MUR เช็คราคาล่าสุดได้ครบทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้เลยบน CardStreet',
-    en: 'เงามืดคุกคาม (MA5) is one of the most closely watched Thai-language sets of the Mega era, headlined by Mega Darkrai ex across its SR, SAR, and MUR treatments. Check live prices for every card in the set and buy or sell authentic copies with sellers across Thailand on CardStreet.',
+    th: 'เงามืดคุกคาม (MA5) คือชุดการ์ดโปเกมอนภาษาไทยยุคเมก้าที่นักสะสมจับตามองมากที่สุดชุดหนึ่ง โดยมีเมก้าดาร์กไรex เป็นการ์ดตัวท็อปของชุดที่ใคร ๆ ก็ตามหา ทั้งเวอร์ชัน SR, SAR และ MUR เช็คราคาล่าสุดได้ครบทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้เลยบน Cardstreet',
+    en: 'เงามืดคุกคาม (MA5) is one of the most closely watched Thai-language sets of the Mega era, headlined by Mega Darkrai ex across its SR, SAR, and MUR treatments. Check live prices for every card in the set and buy or sell authentic copies with sellers across Thailand on Cardstreet.',
   },
   // MA6 verified 2026-09-25: 181 of 200 priced (the rest are mostly basic energies),
   // so no "every card" claim. Chase cards are the top Raw_NM prices that day, all

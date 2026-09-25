@@ -19,7 +19,7 @@ import { GRADED_HOWTO } from './howToSteps';
 //     so it sells the pricing data and the tools and invites sellers instead.
 //   - No TAG prices. TAG renders in the slab frame and is in the graded-prices
 //     regex, but PriceCharting carries no TAG data, so no TAG price exists.
-//   - No grading submission service. CardStreet does not submit cards to PSA and
+//   - No grading submission service. Cardstreet does not submit cards to PSA and
 //     never has; the ส่งเกรด intent is answered informationally, not sold.
 //   - Not every grade 1-10. Only the tiers listed below have real data.
 
@@ -58,15 +58,15 @@ interface Strings {
 const EN: Strings = {
   h1: 'Graded Card Prices — PSA, BGS, CGC and SGC',
   intro: [
-    'A graded copy of a card and a raw one are worth very different amounts — often several times apart. CardStreet tracks graded prices separately from raw ones: over 230,000 graded prices across PSA, BGS, CGC and SGC, updated daily and always shown in Thai baht.',
-    'Open any card page on CardStreet and scroll to the graded prices section to see every tier we hold real data for. Tiers we have no data for are left blank rather than guessed.',
+    'A graded copy of a card and a raw one are worth very different amounts — often several times apart. Cardstreet tracks graded prices separately from raw ones: over 230,000 graded prices across PSA, BGS, CGC and SGC, updated daily and always shown in Thai baht.',
+    'Open any card page on Cardstreet and scroll to the graded prices section to see every tier we hold real data for. Tiers we have no data for are left blank rather than guessed.',
   ],
   howToTitle: GRADED_HOWTO.en.title,
   howTo: GRADED_HOWTO.en.steps,
   worthTitle: 'Is this card worth grading?',
   worth: [
     'Three numbers answer it. First, what the raw card is worth today. Second, what the same card is worth in the grade you think it would get. Third, what submitting actually costs you — the grading fee, shipping both ways, and an agent’s cut if you use one. If the gap between the second number and the first is not clearly larger than the third, it is not worth submitting yet.',
-    'Two of those three are already on CardStreet. Open the card’s page and compare the raw price against the graded prices section. The cost of submitting has to come from the grading company or the agent you plan to use — they charge differently and the amounts change.',
+    'Two of those three are already on Cardstreet. Open the card’s page and compare the raw price against the graded prices section. The cost of submitting has to come from the grading company or the agent you plan to use — they charge differently and the amounts change.',
     'The common mistake is running the numbers on the grade you are hoping for rather than the grade you are likely to get. On many cards the gap between the top grade and the one below it is large, and coming in a single grade under can wipe out the whole case for submitting. If you are unsure what condition a card is really in, the AI grade estimate is a way to filter before you spend anything.',
   ],
   companiesTitle: 'PSA, BGS, CGC, SGC and TAG — what is different',
@@ -79,7 +79,7 @@ const EN: Strings = {
     { t: 'TAG', d: 'Grades using an automated system and publishes detailed sub-scores. Increasingly of interest to Pokémon collectors.' },
   ],
   companiesAfter:
-    'CardStreet renders cards from all of these with their slab frame and company logo, but our price data covers only the tiers listed above. TAG has no market price data.',
+    'Cardstreet renders cards from all of these with their slab frame and company logo, but our price data covers only the tiers listed above. TAG has no market price data.',
   mistakesTitle: 'Mistakes before you submit',
   mistakes: [
     { t: 'Submitting a card that is not valuable enough', d: 'If the gap between the raw price and the graded price is smaller than what submitting costs, the result is a slabbed card at a loss. Check both prices on the card page first, every time.' },
@@ -92,12 +92,12 @@ const EN: Strings = {
   tiersLead: 'Coverage is currently the top tiers of each company — the ones that actually trade:',
   tiers: ['PSA 10 and PSA 9', 'BGS 10 and BGS 9.5', 'CGC 10', 'SGC 10'],
   tiersAfter:
-    'Lower tiers have no reliable pricing yet, so we show nothing rather than a made-up number. TAG slabs display correctly on CardStreet, but there is no market price data for TAG grades.',
+    'Lower tiers have no reliable pricing yet, so we show nothing rather than a made-up number. TAG slabs display correctly on Cardstreet, but there is no market price data for TAG grades.',
   sourcesTitle: 'Where graded prices come from',
   sourcesLead: 'Three sources, in order of authority:',
   sources: [
     {
-      t: 'Real sales on CardStreet',
+      t: 'Real sales on Cardstreet',
       d: 'If that card in that grade has actually sold on the platform, that price wins.',
     },
     {
@@ -106,7 +106,7 @@ const EN: Strings = {
     },
     {
       t: 'An estimate for Thai cards',
-      d: 'Thai-language Pokémon cards have no international graded pricing, so we show 60% of the English-equivalent graded price, and switch to the real figure the moment that Thai card sells in that grade on CardStreet.',
+      d: 'Thai-language Pokémon cards have no international graded pricing, so we show 60% of the English-equivalent graded price, and switch to the real figure the moment that Thai card sells in that grade on Cardstreet.',
     },
   ],
   sourcesAfter: 'A tier with none of the three is left blank.',
@@ -114,8 +114,8 @@ const EN: Strings = {
     {
       title: 'Estimate a grade with AI before you pay to submit',
       body: [
-        'Before paying submission fees, most people want to know whether a card has a shot at a high grade. CardStreet’s AI grading tool estimates one from a photo, looking at corners, edges, surface and centering.',
-        'The result is an estimate, not an official grade, and carries no weight with PSA, BGS, CGC or TAG. Use it to decide which cards are worth submitting first. It is a CardStreet Pro feature.',
+        'Before paying submission fees, most people want to know whether a card has a shot at a high grade. Cardstreet’s AI grading tool estimates one from a photo, looking at corners, edges, surface and centering.',
+        'The result is an estimate, not an official grade, and carries no weight with PSA, BGS, CGC or TAG. Use it to decide which cards are worth submitting first. It is a Cardstreet Pro feature.',
       ],
     },
     {
@@ -123,13 +123,13 @@ const EN: Strings = {
       body: [
         'Grading means sending a card to a third-party company that checks its condition and authenticity, then seals it in a plastic slab with a score from 1 to 10. The companies Thai collectors deal with most are PSA, BGS, CGC and TAG.',
         'It is worth doing when the card is valuable enough that the price difference covers submission and shipping. Cards in excellent condition with a shot at a 9 or better are usually the ones that pay off; low-value cards usually are not.',
-        'CardStreet does not offer a grading submission service. We are a marketplace and a pricing source — submitting is done directly with those companies or with a Thai submission agent.',
+        'Cardstreet does not offer a grading submission service. We are a marketplace and a pricing source — submitting is done directly with those companies or with a Thai submission agent.',
       ],
     },
     {
-      title: 'Selling graded cards on CardStreet',
+      title: 'Selling graded cards on Cardstreet',
       body: [
-        'If you already own graded cards and want to sell, you can list them. CardStreet renders the slab frame and the grading company’s logo so buyers can see exactly what they are getting, and the market price for that grade sits alongside as a reference while you price it. Sellers pay a fee only when a card sells, buyers pay by card or PromptPay, and orders ship nationwide with Flash Express.',
+        'If you already own graded cards and want to sell, you can list them. Cardstreet renders the slab frame and the grading company’s logo so buyers can see exactly what they are getting, and the market price for that grade sits alongside as a reference while you price it. Sellers pay a fee only when a card sells, buyers pay by card or PromptPay, and orders ship nationwide with Flash Express.',
       ],
     },
   ],
@@ -140,15 +140,15 @@ const EN: Strings = {
 const TH: Strings = {
   h1: 'ราคาการ์ดเกรด — PSA, BGS, CGC และ SGC',
   intro: [
-    'การ์ดใบเดียวกันที่ผ่านการเกรดแล้วกับการ์ดดิบมีมูลค่าต่างกันมาก บางใบต่างกันหลายเท่า CardStreet จึงเก็บราคาการ์ดเกรดแยกจากราคาการ์ดดิบ รวมกว่า 230,000 รายการจากบริษัทเกรดหลัก ทั้ง PSA, BGS, CGC และ SGC อัปเดตทุกวันและแสดงเป็นเงินบาทเสมอ',
-    'เปิดหน้าการ์ดใบไหนก็ได้บน CardStreet แล้วเลื่อนดูส่วนราคาการ์ดเกรด จะเห็นราคาของแต่ละระดับที่มีข้อมูลจริง ระดับไหนที่ยังไม่มีข้อมูล เราจะเว้นว่างไว้ ไม่เดาราคาให้',
+    'การ์ดใบเดียวกันที่ผ่านการเกรดแล้วกับการ์ดดิบมีมูลค่าต่างกันมาก บางใบต่างกันหลายเท่า Cardstreet จึงเก็บราคาการ์ดเกรดแยกจากราคาการ์ดดิบ รวมกว่า 230,000 รายการจากบริษัทเกรดหลัก ทั้ง PSA, BGS, CGC และ SGC อัปเดตทุกวันและแสดงเป็นเงินบาทเสมอ',
+    'เปิดหน้าการ์ดใบไหนก็ได้บน Cardstreet แล้วเลื่อนดูส่วนราคาการ์ดเกรด จะเห็นราคาของแต่ละระดับที่มีข้อมูลจริง ระดับไหนที่ยังไม่มีข้อมูล เราจะเว้นว่างไว้ ไม่เดาราคาให้',
   ],
   howToTitle: GRADED_HOWTO.th.title,
   howTo: GRADED_HOWTO.th.steps,
   worthTitle: 'การ์ดใบนี้คุ้มส่งเกรดไหม',
   worth: [
     'คำถามนี้ตอบได้ด้วยเลขสามตัว หนึ่งคือราคาการ์ดดิบใบนั้นตอนนี้ สองคือราคาของใบเดียวกันในเกรดที่คุณคิดว่าจะได้ และสามคือค่าใช้จ่ายรวมในการส่งเกรด ทั้งค่าบริการ ค่าส่งไปกลับ และค่าตัวแทนถ้าใช้ ถ้าส่วนต่างระหว่างเลขตัวที่สองกับตัวที่หนึ่งไม่มากกว่าเลขตัวที่สามอย่างชัดเจน การส่งเกรดก็ยังไม่คุ้ม',
-    'สองในสามตัวนั้นอยู่บน CardStreet แล้ว เปิดหน้าการ์ดใบนั้นแล้วเทียบราคาดิบกับราคาในส่วนราคาการ์ดเกรดได้ทันที ส่วนค่าใช้จ่ายในการส่งเกรดต้องดูจากบริษัทเกรดหรือตัวแทนที่คุณจะใช้ เพราะแต่ละที่คิดไม่เท่ากันและเปลี่ยนเป็นระยะ',
+    'สองในสามตัวนั้นอยู่บน Cardstreet แล้ว เปิดหน้าการ์ดใบนั้นแล้วเทียบราคาดิบกับราคาในส่วนราคาการ์ดเกรดได้ทันที ส่วนค่าใช้จ่ายในการส่งเกรดต้องดูจากบริษัทเกรดหรือตัวแทนที่คุณจะใช้ เพราะแต่ละที่คิดไม่เท่ากันและเปลี่ยนเป็นระยะ',
     'จุดที่คนพลาดบ่อยคือคิดจากเกรดที่หวังไว้ ไม่ใช่เกรดที่น่าจะได้จริง ส่วนต่างราคาระหว่างเกรดสูงสุดกับเกรดรองลงมาห่างกันมากในการ์ดหลายใบ การ์ดที่ได้ต่ำกว่าที่หวังหนึ่งขั้นอาจทำให้ทั้งการส่งเกรดไม่คุ้มเลย ถ้าไม่แน่ใจว่าการ์ดอยู่ในสภาพระดับไหน เครื่องมือประเมินเกรดด้วย AI ช่วยคัดเบื้องต้นได้ก่อนจ่ายจริง',
   ],
   companiesTitle: 'PSA, BGS, CGC, SGC และ TAG ต่างกันยังไง',
@@ -161,7 +161,7 @@ const TH: Strings = {
     { t: 'TAG', d: 'ใช้การให้คะแนนด้วยระบบอัตโนมัติและแสดงรายละเอียดคะแนนย่อยอย่างละเอียด กำลังได้รับความสนใจเพิ่มขึ้นในกลุ่มนักสะสมการ์ดโปเกมอน' },
   ],
   companiesAfter:
-    'CardStreet แสดงการ์ดจากทุกบริษัทข้างต้นพร้อมกรอบตลับและโลโก้ แต่ข้อมูลราคาที่เรามีครอบคลุมเฉพาะระดับที่ระบุไว้ด้านบนของหน้านี้ ส่วน TAG ยังไม่มีข้อมูลราคาตลาด',
+    'Cardstreet แสดงการ์ดจากทุกบริษัทข้างต้นพร้อมกรอบตลับและโลโก้ แต่ข้อมูลราคาที่เรามีครอบคลุมเฉพาะระดับที่ระบุไว้ด้านบนของหน้านี้ ส่วน TAG ยังไม่มีข้อมูลราคาตลาด',
   mistakesTitle: 'ข้อผิดพลาดก่อนส่งเกรด',
   mistakes: [
     { t: 'ส่งเกรดการ์ดที่ราคายังไม่สูงพอ', d: 'ถ้าส่วนต่างระหว่างราคาดิบกับราคาเกรดน้อยกว่าค่าใช้จ่ายในการส่ง ผลที่ได้คือการ์ดในตลับที่ขาดทุน ตรวจสองราคานี้บนหน้าการ์ดก่อนเสมอ' },
@@ -170,16 +170,16 @@ const TH: Strings = {
     { t: 'ส่งทีละใบ', d: 'ค่าส่งไปกลับคิดต่อรอบ ไม่ใช่ต่อใบ การรวบหลายใบส่งครั้งเดียวมักลดต้นทุนต่อใบลงได้มาก' },
     { t: 'คิดว่าเกรดแล้วราคาจะขึ้นเสมอ', d: 'การเกรดยืนยันสภาพและความแท้ แต่ไม่ได้เพิ่มมูลค่าให้การ์ดที่ตลาดไม่ได้ต้องการอยู่แล้ว การ์ดทั่วไปที่เกรดสูงก็ยังเป็นการ์ดทั่วไป' },
   ],
-  tiersTitle: 'ระดับเกรดที่มีราคาบน CardStreet',
+  tiersTitle: 'ระดับเกรดที่มีราคาบน Cardstreet',
   tiersLead: 'ตอนนี้ข้อมูลราคาครอบคลุมระดับบนของแต่ละบริษัท ซึ่งเป็นระดับที่ซื้อขายกันมากที่สุด:',
   tiers: ['PSA 10 และ PSA 9', 'BGS 10 และ BGS 9.5', 'CGC 10', 'SGC 10'],
   tiersAfter:
-    'ระดับอื่นยังไม่มีข้อมูลราคาที่เชื่อถือได้ เราจึงไม่แสดง แทนที่จะใส่ตัวเลขที่เดาเอา ส่วน TAG นั้น CardStreet รองรับการแสดงผลการ์ด TAG แล้ว แต่ยังไม่มีข้อมูลราคาตลาดสำหรับเกรดนี้',
+    'ระดับอื่นยังไม่มีข้อมูลราคาที่เชื่อถือได้ เราจึงไม่แสดง แทนที่จะใส่ตัวเลขที่เดาเอา ส่วน TAG นั้น Cardstreet รองรับการแสดงผลการ์ด TAG แล้ว แต่ยังไม่มีข้อมูลราคาตลาดสำหรับเกรดนี้',
   sourcesTitle: 'ราคาการ์ดเกรดมาจากไหน',
   sourcesLead: 'ราคามาจากสามแหล่ง เรียงตามลำดับความน่าเชื่อถือ:',
   sources: [
     {
-      t: 'การซื้อขายจริงบน CardStreet',
+      t: 'การซื้อขายจริงบน Cardstreet',
       d: 'ถ้าการ์ดใบนั้นในเกรดนั้นเคยขายจริงบนแพลตฟอร์ม ราคานั้นมาก่อนเสมอ',
     },
     {
@@ -188,7 +188,7 @@ const TH: Strings = {
     },
     {
       t: 'ราคาประเมินสำหรับการ์ดไทย',
-      d: 'การ์ดโปเกมอนภาษาไทยยังไม่มีข้อมูลราคาเกรดในตลาดสากล เราจึงแสดงเป็นค่าประมาณที่ 60% ของราคาการ์ดภาษาอังกฤษใบเทียบเท่า และจะเปลี่ยนเป็นราคาจริงทันทีที่มีการซื้อขายการ์ดไทยใบนั้นในเกรดนั้นบน CardStreet',
+      d: 'การ์ดโปเกมอนภาษาไทยยังไม่มีข้อมูลราคาเกรดในตลาดสากล เราจึงแสดงเป็นค่าประมาณที่ 60% ของราคาการ์ดภาษาอังกฤษใบเทียบเท่า และจะเปลี่ยนเป็นราคาจริงทันทีที่มีการซื้อขายการ์ดไทยใบนั้นในเกรดนั้นบน Cardstreet',
     },
   ],
   sourcesAfter: 'ระดับเกรดที่ไม่มีข้อมูลจากทั้งสามแหล่งจะถูกเว้นว่าง',
@@ -196,8 +196,8 @@ const TH: Strings = {
     {
       title: 'ประเมินเกรดการ์ดด้วย AI ก่อนตัดสินใจส่งเกรด',
       body: [
-        'ก่อนจ่ายค่าส่งเกรด หลายคนอยากรู้ก่อนว่าการ์ดใบนี้มีโอกาสได้เกรดสูงแค่ไหน CardStreet มีเครื่องมือประเมินเกรดด้วย AI ให้ถ่ายรูปการ์ดแล้วดูค่าประเมินจากสภาพที่เห็นในภาพ ทั้งมุม ขอบ ผิวการ์ด และการเข้าศูนย์ของภาพพิมพ์',
-        'ค่าที่ได้เป็นการประเมินเบื้องต้นเท่านั้น ไม่ใช่เกรดอย่างเป็นทางการ และไม่มีผลผูกพันกับผลการตัดสินของ PSA, BGS, CGC หรือ TAG ใช้เพื่อช่วยคัดว่าใบไหนน่าส่งเกรดก่อน เครื่องมือนี้เป็นฟีเจอร์สำหรับสมาชิก CardStreet Pro',
+        'ก่อนจ่ายค่าส่งเกรด หลายคนอยากรู้ก่อนว่าการ์ดใบนี้มีโอกาสได้เกรดสูงแค่ไหน Cardstreet มีเครื่องมือประเมินเกรดด้วย AI ให้ถ่ายรูปการ์ดแล้วดูค่าประเมินจากสภาพที่เห็นในภาพ ทั้งมุม ขอบ ผิวการ์ด และการเข้าศูนย์ของภาพพิมพ์',
+        'ค่าที่ได้เป็นการประเมินเบื้องต้นเท่านั้น ไม่ใช่เกรดอย่างเป็นทางการ และไม่มีผลผูกพันกับผลการตัดสินของ PSA, BGS, CGC หรือ TAG ใช้เพื่อช่วยคัดว่าใบไหนน่าส่งเกรดก่อน เครื่องมือนี้เป็นฟีเจอร์สำหรับสมาชิก Cardstreet Pro',
       ],
     },
     {
@@ -205,11 +205,11 @@ const TH: Strings = {
       body: [
         'การเกรดคือการส่งการ์ดไปให้บริษัทภายนอกตรวจสภาพและความแท้ แล้วซีลไว้ในตลับพลาสติกพร้อมคะแนนตั้งแต่ 1 ถึง 10 บริษัทที่นักสะสมไทยรู้จักมากที่สุดคือ PSA, BGS, CGC และ TAG',
         'การเกรดมีประโยชน์เมื่อการ์ดมีมูลค่าสูงพอที่ส่วนต่างราคาจะคุ้มค่าส่งและค่าบริการ การ์ดสภาพดีมากที่มีโอกาสได้ 9 ขึ้นไปมักคุ้มที่สุด ส่วนการ์ดราคาไม่สูงมักไม่คุ้ม',
-        'CardStreet ไม่ได้ให้บริการส่งเกรด เราเป็นตลาดซื้อขายและแหล่งข้อมูลราคา การส่งเกรดต้องติดต่อบริษัทเหล่านั้นหรือตัวแทนรับส่งเกรดในไทยโดยตรง',
+        'Cardstreet ไม่ได้ให้บริการส่งเกรด เราเป็นตลาดซื้อขายและแหล่งข้อมูลราคา การส่งเกรดต้องติดต่อบริษัทเหล่านั้นหรือตัวแทนรับส่งเกรดในไทยโดยตรง',
       ],
     },
     {
-      title: 'ขายการ์ดเกรดบน CardStreet',
+      title: 'ขายการ์ดเกรดบน Cardstreet',
       body: [
         'ถ้าคุณมีการ์ดเกรดอยู่แล้วและอยากขาย ลงประกาศได้เลย ระบบแสดงการ์ดพร้อมกรอบตลับและโลโก้บริษัทเกรดให้ผู้ซื้อเห็นชัด และมีราคาตลาดของเกรดนั้นเป็นตัวอ้างอิงระหว่างตั้งราคา ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ชำระผ่านบัตรหรือพร้อมเพย์ จัดส่งทั่วประเทศผ่าน Flash Express',
       ],

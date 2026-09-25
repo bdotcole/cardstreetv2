@@ -16,8 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
     const pathLocale = await requestPathLocale();
     const isThai = pathLocale !== 'en';
     const title = isThai
-        ? 'คู่มือและบทความการ์ดสะสม — เช็คราคา ดูของแท้ ระดับความหายาก | CardStreet'
-        : 'Trading Card Guides — Prices, Authenticity and Rarity | CardStreet';
+        ? 'คู่มือและบทความการ์ดสะสม — เช็คราคา ดูของแท้ ระดับความหายาก | Cardstreet'
+        : 'Trading Card Guides — Prices, Authenticity and Rarity | Cardstreet';
     const description = isThai
         ? 'บทความภาษาไทยสำหรับนักสะสมการ์ด ทั้งวิธีเช็คราคา ดูการ์ดปลอม ระดับความหายาก และซื้อขายในไทยอย่างปลอดภัย'
         : 'Guides for card collectors in Thailand: how to check prices, spot fakes, read rarity tiers, and buy and sell safely.';
@@ -30,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl('/guides', pathLocale),
             images: [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630 }],
         },
@@ -50,7 +50,7 @@ export default async function GuidesIndexPage() {
             {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                    { '@type': 'ListItem', position: 1, name: 'CardStreet', item: BASE_URL },
+                    { '@type': 'ListItem', position: 1, name: 'Cardstreet', item: BASE_URL },
                     { '@type': 'ListItem', position: 2, name: isThai ? 'คู่มือ' : 'Guides', item: localizedUrl('/guides', pathLocale) },
                 ],
             },
@@ -78,7 +78,7 @@ export default async function GuidesIndexPage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">Cardstreet</Link>
                 <span className="mx-2">/</span>
                 <span className="text-slate-300">{isThai ? 'คู่มือ' : 'Guides'}</span>
             </nav>

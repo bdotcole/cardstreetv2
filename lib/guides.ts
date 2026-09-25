@@ -8,7 +8,7 @@ import type { GameId } from '@/lib/games';
 //
 // WHAT THESE ARE NOT: a clone of their eighteen. Six of theirs are pure gameplay (how to play,
 // ink colours, keywords, deck building, meta, starter decks) where we have nothing to add. These
-// six were chosen only where CardStreet holds something a Lorcana-only shop structurally cannot:
+// six were chosen only where Cardstreet holds something a Lorcana-only shop structurally cannot:
 // live prices across the catalog, a real marketplace with verified sellers, grading, and every
 // game's catalog rather than one.
 //
@@ -60,8 +60,8 @@ export const GUIDES: Guide[] = [
             { label: "Winnie the Pooh - Hunny Wizard (Enchanted)", id: 'lorcana-2145' },
         ],
         title: {
-            th: 'การ์ด Lorcana แพงที่สุด มีใบไหนบ้าง และเช็คราคายังไงให้ทันตลาด | CardStreet',
-            en: 'The Most Valuable Disney Lorcana Cards, and How to Check Prices That Stay Current | CardStreet',
+            th: 'การ์ด Lorcana แพงที่สุด มีใบไหนบ้าง และเช็คราคายังไงให้ทันตลาด | Cardstreet',
+            en: 'The Most Valuable Disney Lorcana Cards, and How to Check Prices That Stay Current | Cardstreet',
         },
         description: {
             th: 'รวมการ์ด Disney Lorcana ที่ราคาสูงที่สุด ทั้งระดับ Iconic และ Enchanted พร้อมวิธีเช็คราคาตลาดล่าสุดเป็นเงินบาทแบบไม่ต้องเชื่อตัวเลขในบทความเก่า',
@@ -77,7 +77,7 @@ export const GUIDES: Guide[] = [
                 'สิ่งที่ไม่เปลี่ยนคือใบไหนอยู่ระดับบนของตลาด การ์ดที่ราคาสูงสุดของ Lorcana เกือบทั้งหมดอยู่ในระดับ Iconic ซึ่งเป็นระดับที่หายากที่สุดของเกม ทั้งแคตตาล็อกมีเพียงสิบใบเท่านั้น',
                 'ใบที่นักสะสมไทยตามหามากที่สุดได้แก่ Buzz Lightyear - Jungle Ranger, Mickey Mouse - Brave Little Prince, Minnie Mouse - Sweetheart Princess, Belle & Beast - Certain as the Sun, Merida - Formidable Archer, Lilo & Stitch - Fun-Loving Friends และ Ariel - Ethereal Voice',
                 'ถัดลงมาคือระดับ Enchanted ที่มีอยู่ราวสองร้อยกว่าใบทั้งเกม ใบเด่นอย่าง Winnie the Pooh - Hunny Wizard ก็ยืนราคาสูงมาตลอด',
-                'แล้วราคาจริงวันนี้เท่าไหร่ เปิดหน้าการ์ดใบนั้นบน CardStreet ได้เลย ทุกใบมีราคาตลาดเป็นเงินบาท พร้อมวันที่อัปเดตล่าสุดและกราฟราคาย้อนหลัง ไม่ต้องเชื่อตัวเลขในบทความที่เขียนไว้เมื่อไหร่ก็ไม่รู้ แคตตาล็อก Lorcana ของเรามีกว่าสามพันใบ และมีราคาให้เช็คได้ถึง 99% ของทั้งหมด',
+                'แล้วราคาจริงวันนี้เท่าไหร่ เปิดหน้าการ์ดใบนั้นบน Cardstreet ได้เลย ทุกใบมีราคาตลาดเป็นเงินบาท พร้อมวันที่อัปเดตล่าสุดและกราฟราคาย้อนหลัง ไม่ต้องเชื่อตัวเลขในบทความที่เขียนไว้เมื่อไหร่ก็ไม่รู้ แคตตาล็อก Lorcana ของเรามีกว่าสามพันใบ และมีราคาให้เช็คได้ถึง 99% ของทั้งหมด',
                 'เคล็ดลับสำหรับคนที่เพิ่งเปิดกล่อง ให้ดูที่ระดับความหายากมุมล่างของการ์ดก่อน ถ้าไม่ใช่ Iconic, Enchanted, Legendary หรือ Epic โอกาสที่จะเป็นใบราคาหลักพันขึ้นไปมีน้อย แต่ก็ควรเช็คทีละใบอยู่ดี เพราะการ์ดที่ใช้ในเด็คยอดนิยมบางใบก็มีราคาเกินระดับความหายากของมัน',
             ],
             en: [
@@ -85,7 +85,7 @@ export const GUIDES: Guide[] = [
                 'What does not change is which cards sit at the top of the market. Almost all of Lorcana’s highest-value cards are Iconic, the game’s scarcest tier, and there are only ten in the entire catalog.',
                 'The ones Thai collectors chase hardest: Buzz Lightyear - Jungle Ranger, Mickey Mouse - Brave Little Prince, Minnie Mouse - Sweetheart Princess, Belle & Beast - Certain as the Sun, Merida - Formidable Archer, Lilo & Stitch - Fun-Loving Friends, and Ariel - Ethereal Voice.',
                 'Below them sit the Enchanted cards, a couple of hundred across the game, where standouts like Winnie the Pooh - Hunny Wizard have held strong prices throughout.',
-                'So what is it worth today? Open that card’s page on CardStreet. Every card carries a market price in Thai baht, the date it was last updated, and a price history chart, so there is no need to trust a figure typed into an article at some unknown point in the past. Our Lorcana catalog runs to over three thousand cards with prices on 99% of them.',
+                'So what is it worth today? Open that card’s page on Cardstreet. Every card carries a market price in Thai baht, the date it was last updated, and a price history chart, so there is no need to trust a figure typed into an article at some unknown point in the past. Our Lorcana catalog runs to over three thousand cards with prices on 99% of them.',
                 'If you have just opened a box, check the rarity mark first. If it is not Iconic, Enchanted, Legendary or Epic, the odds of a high-value card are slim, though it is still worth checking each one, because cards that see heavy competitive play sometimes outrun their rarity.',
             ],
         },
@@ -96,13 +96,13 @@ export const GUIDES: Guide[] = [
         updated: '2026-08-30',
         faqs: [
             { q: { th: "ซื้อการ์ด Lorcana ในไทยที่ไหนถูกที่สุด", en: "Where are Lorcana cards cheapest in Thailand?" },
-              a: { th: "กลุ่มซื้อขายบนโซเชียลมักได้ราคาดีที่สุดเพราะซื้อตรงจากนักสะสม แต่ไม่มีตัวกลางคุ้มครอง ถ้าต้องการราคาที่เทียบกับราคากลางได้และมีระบบคุ้มครองผู้ซื้อ ให้ใช้มาร์เก็ตเพลสเฉพาะการ์ดอย่าง CardStreet ซึ่งแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้งไว้", en: "Social buy-sell groups are usually cheapest, since you buy straight from collectors, but there is no intermediary protecting you. For a price you can compare against the market rate with buyer protection, use a card-specific marketplace like CardStreet, which shows the market price next to each asking price." } },
+              a: { th: "กลุ่มซื้อขายบนโซเชียลมักได้ราคาดีที่สุดเพราะซื้อตรงจากนักสะสม แต่ไม่มีตัวกลางคุ้มครอง ถ้าต้องการราคาที่เทียบกับราคากลางได้และมีระบบคุ้มครองผู้ซื้อ ให้ใช้มาร์เก็ตเพลสเฉพาะการ์ดอย่าง Cardstreet ซึ่งแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้งไว้", en: "Social buy-sell groups are usually cheapest, since you buy straight from collectors, but there is no intermediary protecting you. For a price you can compare against the market rate with buyer protection, use a card-specific marketplace like Cardstreet, which shows the market price next to each asking price." } },
             { q: { th: "การ์ด Lorcana มีฉบับภาษาไทยไหม", en: "Is there a Thai-language Lorcana release?" },
               a: { th: "ยังไม่มี ของที่หาซื้อได้ในไทยทั้งหมดเป็นฉบับภาษาอังกฤษที่นำเข้ามา ร้านที่สต็อกครบจึงมีไม่มาก และราคาขยับตามค่าเงินกับรอบการนำเข้า", en: "No. Everything sold in Thailand is the imported English edition, so few shops carry a full range and prices move with exchange rates and import cycles." } },
         ],
         title: {
-            th: 'ซื้อการ์ด Disney Lorcana ที่ไหนดีในไทย เทียบทุกช่องทาง | CardStreet',
-            en: 'Where to Buy Disney Lorcana Cards in Thailand, Every Option Compared | CardStreet',
+            th: 'ซื้อการ์ด Disney Lorcana ที่ไหนดีในไทย เทียบทุกช่องทาง | Cardstreet',
+            en: 'Where to Buy Disney Lorcana Cards in Thailand, Every Option Compared | Cardstreet',
         },
         description: {
             th: 'เทียบช่องทางซื้อการ์ด Disney Lorcana ในไทย ทั้งร้านหน้าร้าน กลุ่มโซเชียล มาร์เก็ตเพลสทั่วไป และมาร์เก็ตเพลสเฉพาะการ์ด ข้อดีข้อเสียและความเสี่ยงของแต่ละทาง',
@@ -118,7 +118,7 @@ export const GUIDES: Guide[] = [
                 'ร้านการ์ดหน้าร้าน ได้เห็นของจริงก่อนจ่าย เหมาะกับคนที่อยากได้ทันทีและไม่อยากเสี่ยง แต่ร้านที่สต็อก Lorcana ครบมีไม่มาก และมักไม่มีใบเดี่ยวหายากให้เลือก',
                 'กลุ่มซื้อขายบนโซเชียล ราคามักดีที่สุดเพราะซื้อตรงจากนักสะสม แต่ไม่มีตัวกลาง ถ้าโอนแล้วไม่ได้ของหรือได้ของไม่ตรงสภาพที่ตกลง ก็ต้องตามเอง และหลายครั้งไม่มีราคากลางให้อ้างอิงว่าที่เสนอมาถูกหรือแพง',
                 'มาร์เก็ตเพลสทั่วไป มีของเยอะ แต่คนขายส่วนใหญ่ไม่ได้เชี่ยวชาญการ์ด รายละเอียดสภาพการ์ดมักไม่ครบ และแทบไม่มีราคาตลาดให้เทียบ',
-                'CardStreet ออกแบบมาสำหรับกรณีนี้โดยเฉพาะ ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้งไว้ จึงรู้ทันทีว่าที่เห็นอยู่คุ้มหรือไม่ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ จ่ายผ่านบัตรหรือพร้อมเพย์ และจัดส่งทั่วประเทศ ถ้ายังไม่มีใบที่ต้องการวางขาย กดติดตามไว้ได้ ระบบจะแจ้งเตือนทันทีที่มีคนลงขาย',
+                'Cardstreet ออกแบบมาสำหรับกรณีนี้โดยเฉพาะ ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้งไว้ จึงรู้ทันทีว่าที่เห็นอยู่คุ้มหรือไม่ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ จ่ายผ่านบัตรหรือพร้อมเพย์ และจัดส่งทั่วประเทศ ถ้ายังไม่มีใบที่ต้องการวางขาย กดติดตามไว้ได้ ระบบจะแจ้งเตือนทันทีที่มีคนลงขาย',
                 'สรุปสั้น ๆ อยากได้เร็วที่สุดไปหน้าร้าน อยากได้ถูกที่สุดและรับความเสี่ยงได้ไปกลุ่มโซเชียล อยากได้ราคาที่เทียบได้จริงพร้อมความคุ้มครอง ใช้มาร์เก็ตเพลสที่ทำเรื่องการ์ดโดยเฉพาะ',
             ],
             en: [
@@ -126,7 +126,7 @@ export const GUIDES: Guide[] = [
                 'Physical card shops let you see the card before paying, which is good if you want it today and want no risk. But few shops carry deep Lorcana stock, and rare singles are usually not on the shelf.',
                 'Social buy-sell groups often have the best prices, because you are buying straight from collectors. There is no intermediary though: if the money goes and the card does not arrive, or arrives in worse condition than agreed, that is yours to chase. There is also rarely a reference price to tell you whether the asking price is fair.',
                 'General marketplaces have volume, but most sellers are not card specialists, condition detail is thin, and there is almost never a market price to compare against.',
-                'CardStreet is built for exactly this gap. Every card page shows the market price next to the seller’s asking price, so you know immediately whether a deal is good. Sellers are identity-verified, every order carries buyer protection, payment works by card or PromptPay, and shipping is nationwide. If nobody has listed the card you want, add it to your wishlist and you will be alerted the moment someone does.',
+                'Cardstreet is built for exactly this gap. Every card page shows the market price next to the seller’s asking price, so you know immediately whether a deal is good. Sellers are identity-verified, every order carries buyer protection, payment works by card or PromptPay, and shipping is nationwide. If nobody has listed the card you want, add it to your wishlist and you will be alerted the moment someone does.',
                 'Short version: fastest is a shop, cheapest is a social group if you accept the risk, and best price-with-protection is a marketplace built for cards.',
             ],
         },
@@ -136,8 +136,8 @@ export const GUIDES: Guide[] = [
         game: 'lorcana',
         updated: '2026-08-30',
         title: {
-            th: 'ระดับความหายากการ์ด Lorcana ทั้ง 9 ระดับ ใบไหนมีค่าจริง | CardStreet',
-            en: 'All 9 Disney Lorcana Rarity Tiers, and Which Ones Hold Value | CardStreet',
+            th: 'ระดับความหายากการ์ด Lorcana ทั้ง 9 ระดับ ใบไหนมีค่าจริง | Cardstreet',
+            en: 'All 9 Disney Lorcana Rarity Tiers, and Which Ones Hold Value | Cardstreet',
         },
         description: {
             th: 'อธิบายระดับความหายากของการ์ด Disney Lorcana ครบทั้งเก้าระดับ ตั้งแต่ Common ถึง Iconic พร้อมกับดักที่นักสะสมมือใหม่มักพลาด เพราะการ์ดชื่อเดียวกันมีได้หลายระดับ',
@@ -171,8 +171,8 @@ export const GUIDES: Guide[] = [
         game: 'lorcana',
         updated: '2026-08-30',
         title: {
-            th: 'การ์ด Lorcana ปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | CardStreet',
-            en: 'How to Spot Fake Disney Lorcana Cards Before You Pay | CardStreet',
+            th: 'การ์ด Lorcana ปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | Cardstreet',
+            en: 'How to Spot Fake Disney Lorcana Cards Before You Pay | Cardstreet',
         },
         description: {
             th: 'วิธีตรวจการ์ด Disney Lorcana ปลอมด้วยตัวเอง ทั้งเนื้อการ์ด งานพิมพ์ สี ขอบ และสัญญาณเตือนที่จับได้บ่อยที่สุดคือราคาที่ดีเกินจริง',
@@ -190,7 +190,7 @@ export const GUIDES: Guide[] = [
                 'สีและโทน เทียบกับภาพการ์ดใบเดียวกันจากแคตตาล็อกที่เชื่อถือได้ ของปลอมมักเพี้ยนไปทางเข้มหรือซีดกว่า',
                 'ขอบและความหนา การ์ดแท้ตัดขอบเรียบ ความหนาเท่ากันทั้งใบ ถ้ามองด้านข้างแล้วเห็นชั้นไม่เท่ากันให้ระวัง',
                 'ราคาที่ดีเกินจริง ข้อนี้จับได้บ่อยที่สุด ถ้าใบที่ราคาตลาดอยู่หลักหมื่นถูกเสนอมาในราคาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี',
-                'ข้อสุดท้ายคือเหตุผลที่การรู้ราคากลางสำคัญกว่าที่คิด บน CardStreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุด จึงเทียบได้ทันทีว่าข้อเสนอที่เห็นสมเหตุสมผลไหม และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ ถ้าของไม่ตรงตามที่ระบุไว้ก็มีขั้นตอนรองรับ ไม่ต้องไปตามเอง',
+                'ข้อสุดท้ายคือเหตุผลที่การรู้ราคากลางสำคัญกว่าที่คิด บน Cardstreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุด จึงเทียบได้ทันทีว่าข้อเสนอที่เห็นสมเหตุสมผลไหม และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ ถ้าของไม่ตรงตามที่ระบุไว้ก็มีขั้นตอนรองรับ ไม่ต้องไปตามเอง',
             ],
             en: [
                 'As prices rise, counterfeits follow, and since every Lorcana card in Thailand is imported, buyers start at an information disadvantage. Here is what you can check yourself.',
@@ -199,7 +199,7 @@ export const GUIDES: Guide[] = [
                 'Colour and tone. Compare against the same card’s image in a catalog you trust. Fakes commonly run darker or washed out.',
                 'Edges and thickness. Real cards are cut cleanly and are uniformly thick. If the layers look uneven from the side, be careful.',
                 'A price that is too good. This is the one that catches most fakes. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning, not luck.',
-                'That last point is why knowing the going rate matters more than people expect. Every card page on CardStreet shows the current market price, so you can sanity-check an offer immediately. And buying through the platform means the seller is identity-verified and the order carries buyer protection, so if the card is not as described there is a process, rather than you chasing it alone.',
+                'That last point is why knowing the going rate matters more than people expect. Every card page on Cardstreet shows the current market price, so you can sanity-check an offer immediately. And buying through the platform means the seller is identity-verified and the order carries buyer protection, so if the card is not as described there is a process, rather than you chasing it alone.',
             ],
         },
     },
@@ -216,8 +216,8 @@ export const GUIDES: Guide[] = [
             { label: "Belle & Beast - Certain as the Sun (Super Rare #132)", id: 'lorcana-3103' },
         ],
         title: {
-            th: 'การ์ด Lorcana Enchanted กับใบธรรมดา ราคาต่างกันกี่เท่า | CardStreet',
-            en: 'Enchanted vs Regular Lorcana Cards, How Big Is the Price Gap | CardStreet',
+            th: 'การ์ด Lorcana Enchanted กับใบธรรมดา ราคาต่างกันกี่เท่า | Cardstreet',
+            en: 'Enchanted vs Regular Lorcana Cards, How Big Is the Price Gap | Cardstreet',
         },
         description: {
             th: 'การ์ด Lorcana ชื่อเดียวกันถูกพิมพ์หลายเวอร์ชัน และราคาต่างกันเป็นหลักพันเท่า ดูตัวอย่างจริงจากแคตตาล็อก และวิธีเลือกเวอร์ชันให้ตรงกับใบที่ถืออยู่',
@@ -235,7 +235,7 @@ export const GUIDES: Guide[] = [
                 'Buzz Lightyear - Jungle Ranger มีทั้งเวอร์ชัน Iconic และเวอร์ชัน Legendary ส่วน Belle & Beast - Certain as the Sun มีทั้งเวอร์ชัน Iconic และเวอร์ชัน Super Rare',
                 'ทั้งสามคู่นี้คือการ์ดชื่อเดียวกันทั้งหมด แต่ราคาต่างกันเป็นหลักพันเท่า',
                 'สิ่งที่ต้องระวังคือเวลาเห็นคนโพสต์ขายการ์ดชื่อหนึ่งในกลุ่ม แล้วราคาดูสูงหรือต่ำผิดปกติ ให้ถามเลขการ์ดก่อนเสมอ เพราะราคาที่คุยกันอยู่อาจเป็นคนละใบกันโดยสิ้นเชิง',
-                'วิธีเช็คให้ชัวร์คือเปิดหน้าการ์ดบน CardStreet แล้วเลือกเวอร์ชันให้ตรงกับเลขการ์ดที่อยู่มุมล่าง ราคาตลาดที่เห็นจะเป็นของเวอร์ชันนั้นโดยเฉพาะ ไม่ใช่ราคาเฉลี่ยรวมของทุกเวอร์ชัน',
+                'วิธีเช็คให้ชัวร์คือเปิดหน้าการ์ดบน Cardstreet แล้วเลือกเวอร์ชันให้ตรงกับเลขการ์ดที่อยู่มุมล่าง ราคาตลาดที่เห็นจะเป็นของเวอร์ชันนั้นโดยเฉพาะ ไม่ใช่ราคาเฉลี่ยรวมของทุกเวอร์ชัน',
             ],
             en: [
                 'The most common question from people starting a Lorcana collection: if I pull the Enchanted version of a card, how different is it from the regular one? The short answer is that they are barely comparable, and here are examples from a real catalog rather than a general impression.',
@@ -244,7 +244,7 @@ export const GUIDES: Guide[] = [
                 'Buzz Lightyear - Jungle Ranger exists as both Iconic and Legendary, and Belle & Beast - Certain as the Sun exists as both Iconic and Super Rare.',
                 'In all three cases the card name is identical and the prices differ by a factor in the thousands.',
                 'The practical risk: when someone posts a card for sale in a group and the price looks unusually high or low, ask for the collector number first. You may be discussing two entirely different cards.',
-                'To be certain, open the card page on CardStreet and pick the version matching the number in the bottom corner. The market price shown is for that specific version, not a blended average across all of them.',
+                'To be certain, open the card page on Cardstreet and pick the version matching the number in the bottom corner. The market price shown is for that specific version, not a blended average across all of them.',
             ],
         },
     },
@@ -259,8 +259,8 @@ export const GUIDES: Guide[] = [
               a: { th: "การ์ดโปเกม่อน มีทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น คนซื้อคนขายเยอะที่สุด และมีชุดภาษาไทยที่หาซื้อได้ในประเทศโดยตรง", en: "Pokemon, by a wide margin. It exists in Thai, English and Japanese, has the most buyers and sellers, and has Thai-language sets sold domestically." } },
         ],
         title: {
-            th: 'Disney Lorcana เทียบกับการ์ดโปเกม่อนและ Magic เริ่มเกมไหนดี | CardStreet',
-            en: 'Disney Lorcana vs Pokemon and Magic, Which Should You Start Collecting | CardStreet',
+            th: 'Disney Lorcana เทียบกับการ์ดโปเกม่อนและ Magic เริ่มเกมไหนดี | Cardstreet',
+            en: 'Disney Lorcana vs Pokemon and Magic, Which Should You Start Collecting | Cardstreet',
         },
         description: {
             th: 'เทียบ Disney Lorcana กับการ์ดโปเกม่อนและ Magic: The Gathering ทั้งเรื่องตัวละคร สภาพคล่องในตลาดไทย ความลึกของเกม และข้อควรรู้เฉพาะของ Lorcana ที่ยังไม่มีฉบับภาษาไทย',
@@ -272,7 +272,7 @@ export const GUIDES: Guide[] = [
         },
         body: {
             th: [
-                'คำถามนี้ตอบยากเวลาไปถามร้านที่ขายเกมเดียว เพราะคำตอบมักจะเป็นเกมนั้นเสมอ CardStreet มีแคตตาล็อกครบทั้ง Lorcana, การ์ดโปเกม่อน, วันพีช, ยูกิโอ, เมจิก และ Riftbound เราจึงไม่มีเหตุผลต้องเชียร์เกมใดเป็นพิเศษ',
+                'คำถามนี้ตอบยากเวลาไปถามร้านที่ขายเกมเดียว เพราะคำตอบมักจะเป็นเกมนั้นเสมอ Cardstreet มีแคตตาล็อกครบทั้ง Lorcana, การ์ดโปเกม่อน, วันพีช, ยูกิโอ, เมจิก และ Riftbound เราจึงไม่มีเหตุผลต้องเชียร์เกมใดเป็นพิเศษ',
                 'ถ้าสนใจตัวละครที่รู้จักอยู่แล้ว Lorcana ได้เปรียบชัดเจน ตัวละครดิสนีย์เป็นสิ่งที่คนไทยโตมาด้วย ทำให้เริ่มสะสมได้โดยไม่ต้องเรียนรู้จักรวาลใหม่ทั้งหมด และงานอาร์ตระดับ Enchanted กับ Iconic ก็สวยพอที่จะเก็บโดยไม่ต้องเล่นเกมเลย',
                 'ถ้าสนใจสภาพคล่อง การ์ดโปเกม่อนยังนำอยู่มากในไทย มีทั้งฉบับภาษาไทย อังกฤษ และญี่ปุ่น คนซื้อคนขายเยอะที่สุด ขายต่อง่ายที่สุด และมีชุดภาษาไทยที่หาซื้อได้ในประเทศโดยตรง',
                 'ถ้าสนใจความลึกของเกม Magic: The Gathering มีอายุยาวนานที่สุดและระบบซับซ้อนที่สุด เหมาะกับคนที่อยากเล่นจริงจังมากกว่าสะสมอย่างเดียว',
@@ -280,7 +280,7 @@ export const GUIDES: Guide[] = [
                 'ทางที่ปลอดภัยที่สุดสำหรับคนเพิ่งเริ่มคือเลือกจากตัวละครที่ชอบก่อน แล้วค่อยดูราคาตลาดของใบที่อยากได้จริง ๆ ก่อนตัดสินใจ ทั้งสามเกมเช็คราคาได้ในที่เดียวกัน',
             ],
             en: [
-                'This is a hard question to ask a shop that sells one game, because the answer is always that game. CardStreet carries Lorcana, Pokemon, One Piece, Yu-Gi-Oh, Magic and Riftbound, so we have no reason to push any of them.',
+                'This is a hard question to ask a shop that sells one game, because the answer is always that game. Cardstreet carries Lorcana, Pokemon, One Piece, Yu-Gi-Oh, Magic and Riftbound, so we have no reason to push any of them.',
                 'If you care about characters you already know, Lorcana has the clear edge. Disney characters are something most people in Thailand grew up with, so you can start collecting without learning an entire new universe first, and the Enchanted and Iconic artwork is good enough to collect without ever playing the game.',
                 'If you care about liquidity, Pokemon still leads in Thailand by a wide margin. It exists in Thai, English and Japanese, has the most buyers and sellers, is the easiest to resell, and has Thai sets you can buy domestically.',
                 'If you care about game depth, Magic: The Gathering is the oldest and most mechanically complex, and suits people who want to play seriously rather than only collect.',
@@ -294,8 +294,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-08-30',
         title: {
-            th: 'การ์ดโปเกม่อนไทย ญี่ปุ่น อังกฤษ ต่างกันยังไง และราคาต่างกันแค่ไหน | CardStreet',
-            en: 'Thai vs Japanese vs English Pokemon Cards, and Why the Prices Differ | CardStreet',
+            th: 'การ์ดโปเกม่อนไทย ญี่ปุ่น อังกฤษ ต่างกันยังไง และราคาต่างกันแค่ไหน | Cardstreet',
+            en: 'Thai vs Japanese vs English Pokemon Cards, and Why the Prices Differ | Cardstreet',
         },
         description: {
             th: 'การ์ดโปเกม่อนใบเดียวกันในภาษาไทย ญี่ปุ่น และอังกฤษ คือคนละใบในสายตาตลาด และราคาก็ต่างกันจริง อธิบายว่าต่างกันตรงไหน และควรเทียบราคาแบบไหนถึงจะไม่พลาด',
@@ -312,7 +312,7 @@ export const GUIDES: Guide[] = [
                 'ในทางปฏิบัติ การ์ดฉบับภาษาไทยมักซื้อขายกันต่ำกว่าใบแฝดภาษาญี่ปุ่นที่เลขเดียวกันอย่างเห็นได้ชัด นี่คือสิ่งที่เห็นได้จากข้อมูลราคาจริง ไม่ใช่ความรู้สึก และเป็นข้อมูลที่หาจากเว็บทั่วไปไม่ค่อยได้ เพราะเว็บส่วนใหญ่ไม่ได้เก็บราคาการ์ดไทยแยกไว้ต่างหาก',
                 'ข้อผิดพลาดที่ทำให้เสียเงินบ่อยที่สุดคือ เห็นราคาการ์ดใบหนึ่งจากเว็บต่างประเทศแล้วเอามาอ้างอิงกับการ์ดไทยที่ถืออยู่ ราคาที่เห็นนั้นเป็นของฉบับภาษาอังกฤษหรือญี่ปุ่น ซึ่งคนละใบกับที่มีอยู่จริง',
                 'วิธีที่ถูกต้องคือดูสามอย่างบนการ์ดก่อนเสมอ หนึ่ง ภาษาที่พิมพ์บนตัวการ์ด สอง รหัสชุดที่มุมล่าง เช่น MA5 หรือ SV8a ซึ่งบอกได้ทันทีว่าเป็นชุดไทยหรือชุดญี่ปุ่น และสาม เลขการ์ดในชุด แล้วค่อยเปิดหน้าการ์ดที่ตรงทั้งสามอย่าง',
-                'CardStreet เก็บราคาของทั้งสามภาษาแยกกัน มีชุดภาษาไทยเก้าสิบกว่าชุด ชุดญี่ปุ่นเก้าสิบชุด และชุดภาษาอังกฤษอีกร้อยสี่สิบกว่าชุด ราคาที่แสดงจึงเป็นของใบที่ถืออยู่จริง ไม่ใช่ราคาเฉลี่ยข้ามภาษา',
+                'Cardstreet เก็บราคาของทั้งสามภาษาแยกกัน มีชุดภาษาไทยเก้าสิบกว่าชุด ชุดญี่ปุ่นเก้าสิบชุด และชุดภาษาอังกฤษอีกร้อยสี่สิบกว่าชุด ราคาที่แสดงจึงเป็นของใบที่ถืออยู่จริง ไม่ใช่ราคาเฉลี่ยข้ามภาษา',
             ],
             en: [
                 'The first question most collectors in Thailand hit: is the same card worth the same in Thai, Japanese and English? It is not, and the gap is not small.',
@@ -320,7 +320,7 @@ export const GUIDES: Guide[] = [
                 'In practice, Thai prints trade noticeably below their Japanese twins at the same collector number. That comes out of real price data rather than impression, and it is hard to find elsewhere, because most sites do not track Thai cards as their own market at all.',
                 'The most expensive mistake is taking a price from an overseas site and applying it to the Thai card in your hand. That figure belongs to the English or Japanese print, which is a different card.',
                 'The right method is to check three things on the card first: the language it is printed in, the set code in the bottom corner (MA5 or SV8a tells you immediately whether it is a Thai or Japanese set), and the collector number. Then open the card page that matches all three.',
-                'CardStreet prices all three separately, with over ninety Thai sets, ninety Japanese sets and more than a hundred and forty English ones. The price you see belongs to the card you actually hold, not a blended average across languages.',
+                'Cardstreet prices all three separately, with over ninety Thai sets, ninety Japanese sets and more than a hundred and forty English ones. The price you see belongs to the card you actually hold, not a blended average across languages.',
             ],
         },
     },
@@ -329,8 +329,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-08-30',
         title: {
-            th: 'รหัสความหายากการ์ดโปเกม่อน SR SAR AR UR HR อ่านยังไง | CardStreet',
-            en: 'Pokemon Card Rarity Codes Explained: SR, SAR, AR, UR, HR | CardStreet',
+            th: 'รหัสความหายากการ์ดโปเกม่อน SR SAR AR UR HR อ่านยังไง | Cardstreet',
+            en: 'Pokemon Card Rarity Codes Explained: SR, SAR, AR, UR, HR | Cardstreet',
         },
         description: {
             th: 'อธิบายรหัสความหายากบนการ์ดโปเกม่อนไทยและญี่ปุ่น ทั้ง C U R RR AR SR SAR UR HR และ ACE ว่าแต่ละตัวหมายถึงอะไร และตัวไหนคือกลุ่มที่ราคาสูงจริง',
@@ -376,8 +376,8 @@ export const GUIDES: Guide[] = [
             { label: "พิคาชูex (SAR)", id: 'MA4-173-th' },
         ],
         title: {
-            th: 'การ์ดโปเกม่อนภาษาไทยใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet',
-            en: 'The Most Valuable Thai-Language Pokemon Cards | CardStreet',
+            th: 'การ์ดโปเกม่อนภาษาไทยใบไหนแพงที่สุด และเช็คราคายังไง | Cardstreet',
+            en: 'The Most Valuable Thai-Language Pokemon Cards | Cardstreet',
         },
         description: {
             th: 'รวมการ์ดโปเกม่อนภาษาไทยที่ราคาสูงที่สุด จากชุด MA, SV และยุค AS พร้อมวิธีเช็คราคาตลาดล่าสุดของใบที่ถืออยู่จริง',
@@ -411,8 +411,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-08-30',
         title: {
-            th: 'การ์ดโปเกม่อนปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | CardStreet',
-            en: 'How to Spot Fake Pokemon Cards Before You Pay | CardStreet',
+            th: 'การ์ดโปเกม่อนปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | Cardstreet',
+            en: 'How to Spot Fake Pokemon Cards Before You Pay | Cardstreet',
         },
         description: {
             th: 'วิธีตรวจการ์ดโปเกม่อนปลอมด้วยตัวเอง ทั้งเนื้อการ์ด งานพิมพ์ ตัวหนังสือ ขอบ และสัญญาณเตือนที่จับได้บ่อยที่สุด พร้อมข้อควรระวังเฉพาะการ์ดภาษาไทย',
@@ -430,7 +430,7 @@ export const GUIDES: Guide[] = [
                 'สีและความอิ่มตัว ของปลอมมักสีจัดเกินไปหรือซีดกว่าปกติ เทียบกับภาพการ์ดใบเดียวกันจากแคตตาล็อกที่เชื่อถือได้จะเห็นชัด',
                 'ผิวสัมผัสและขอบ การ์ดแท้ตัดขอบเรียบสม่ำเสมอ ผิวมีลายพื้นผิวละเอียด ถ้าลูบแล้วลื่นเกินไปหรือขอบหยาบให้ระวัง',
                 'สำหรับการ์ดภาษาไทยโดยเฉพาะ ให้ดูรหัสชุดที่มุมล่างว่าตรงกับชุดที่มีอยู่จริงหรือไม่ เช่น MA1 ถึง MA5 หรือ SV ชุดต่าง ๆ ของปลอมหลายใบใช้รหัสที่ไม่มีอยู่จริง หรือเอาภาพจากชุดญี่ปุ่นมาใส่รหัสไทย',
-                'ข้อสุดท้ายที่จับได้บ่อยที่สุดคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี เพราะแบบนี้การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน CardStreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุด และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ ถ้าของไม่ตรงตามที่ระบุก็มีขั้นตอนรองรับ',
+                'ข้อสุดท้ายที่จับได้บ่อยที่สุดคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี เพราะแบบนี้การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน Cardstreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุด และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ ถ้าของไม่ตรงตามที่ระบุก็มีขั้นตอนรองรับ',
             ],
             en: [
                 'Pokemon is the most counterfeited trading card game there is, because it has the most players and the highest prices. Here is what you can check yourself.',
@@ -439,7 +439,7 @@ export const GUIDES: Guide[] = [
                 'Colour and saturation. Counterfeits usually run either oversaturated or washed out. Comparing against the same card in a catalog you trust makes it obvious.',
                 'Texture and edges. Genuine cards are cut cleanly and evenly and have a fine surface texture. Too slick to the touch, or rough edges, is a warning.',
                 'Specific to Thai cards: check that the set code in the bottom corner is a set that actually exists, such as MA1 through MA5 or the SV sets. Many fakes carry codes that were never printed, or use Japanese set artwork under a Thai code.',
-                'The tell that catches the most fakes is still the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. That is why knowing the going rate is the best counterfeit defence there is. Every card page on CardStreet shows the current market price, and buying through the platform means the seller is identity-verified with buyer protection on the order.',
+                'The tell that catches the most fakes is still the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. That is why knowing the going rate is the best counterfeit defence there is. Every card page on Cardstreet shows the current market price, and buying through the platform means the seller is identity-verified with buyer protection on the order.',
             ],
         },
     },
@@ -448,8 +448,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-08-30',
         title: {
-            th: 'ชุดการ์ดโปเกม่อนไทยมีอะไรบ้าง รหัส MA SV AS อ่านยังไง | CardStreet',
-            en: 'Thai Pokemon Sets Explained: What MA, SV and AS Set Codes Mean | CardStreet',
+            th: 'ชุดการ์ดโปเกม่อนไทยมีอะไรบ้าง รหัส MA SV AS อ่านยังไง | Cardstreet',
+            en: 'Thai Pokemon Sets Explained: What MA, SV and AS Set Codes Mean | Cardstreet',
         },
         description: {
             th: 'อธิบายรหัสชุดการ์ดโปเกม่อนภาษาไทย ทั้งยุค AS ยุค SV และยุคเมก้า MA ว่าแต่ละรหัสคือชุดไหน และใช้ดูอะไรได้บ้างเวลาเช็คราคา',
@@ -466,7 +466,7 @@ export const GUIDES: Guide[] = [
                 'ยุคถัดมาคือรหัสขึ้นต้นด้วย SV ซึ่งมาจากยุค Scarlet และ Violet เช่น ไชนีเทรเชอร์ex โปเกมอนการ์ด 151 เทศกาลเทรัสตัลex และการผงาดของผู้ไร้พ่าย เป็นกลุ่มที่มีจำนวนชุดมากที่สุด',
                 'ยุคล่าสุดคือรหัสขึ้นต้นด้วย MA ซึ่งเป็นยุคเมก้า ไล่ตั้งแต่วิวัฒนาการเมก้า อัคคีสีคราม วิวัฒนาการเมก้า ดรีมex วอยด์บลาสต์ ไปจนถึงเงามืดคุกคาม นอกจากนี้ยังมีรหัสขึ้นต้นด้วย MAT ซึ่งเป็นแท็กติกเด็คของยุคเดียวกัน',
                 'จุดที่ต้องระวังคือรหัสชุดของไทยกับญี่ปุ่นบางชุดใช้ตัวเดียวกัน เพราะการ์ดไทยพิมพ์ตามชุดญี่ปุ่นแบบหนึ่งต่อหนึ่ง เวลาเช็คราคาจึงต้องดูภาษาบนการ์ดควบคู่ไปด้วยเสมอ ไม่งั้นจะได้ราคาของฉบับญี่ปุ่นมาแทน',
-                'CardStreet มีชุดการ์ดโปเกม่อนภาษาไทยเก้าสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูราคาทีละใบได้ หรือพิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาเพื่อไปที่ใบนั้นโดยตรง',
+                'Cardstreet มีชุดการ์ดโปเกม่อนภาษาไทยเก้าสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูราคาทีละใบได้ หรือพิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาเพื่อไปที่ใบนั้นโดยตรง',
             ],
             en: [
                 'The set code printed in the bottom corner is the single most useful piece of information on a card. It tells you the language, the era, and it is the fastest way to reach the right card page.',
@@ -474,7 +474,7 @@ export const GUIDES: Guide[] = [
                 'Next come the SV codes, from the Scarlet and Violet era, covering sets like ไชนีเทรเชอร์ex, Pokemon Card 151, เทศกาลเทรัสตัลex and การผงาดของผู้ไร้พ่าย. This is the largest group by number of sets.',
                 'The current era uses MA codes, the Mega era, running from วิวัฒนาการเมก้า through อัคคีสีคราม, วิวัฒนาการเมก้า ดรีมex and วอยด์บลาสต์ to เงามืดคุกคาม. You will also see MAT codes, which are the tactics decks from the same era.',
                 'The catch is that some Thai and Japanese sets share a code, because Thai cards are printed from the Japanese sets one-to-one. When checking a price you must read the language on the card as well, or you will end up looking at the Japanese print instead.',
-                'CardStreet carries over ninety Thai-language Pokemon sets. Open a set page to browse it card by card, or type the set code and collector number into search to go straight to one.',
+                'Cardstreet carries over ninety Thai-language Pokemon sets. Open a set page to browse it card by card, or type the set code and collector number into search to go straight to one.',
             ],
         },
     },
@@ -491,8 +491,8 @@ export const GUIDES: Guide[] = [
               a: { th: "ได้ แต่ไม่ใช่จากร้านที่ขายของใหม่ ชุดยุคซันมูน AS1a ถึง AS6b เลิกพิมพ์ไปแล้ว ของที่หมุนเวียนอยู่มาจากคนเก็บกับร้านมือสอง ราคาจึงขึ้นกับของที่เหลือในตลาดมากกว่าราคาป้ายตอนวางขาย", en: "Yes, but not from shops selling sealed new product. The Sun & Moon-era Thai sets AS1a to AS6b are out of print, so what circulates comes from collectors and second-hand shops, and the price follows what is left in circulation rather than any original retail price." } },
         ],
         title: {
-            th: "ซื้อการ์ดโปเกมอนที่ไหนดี ในไทย เทียบทุกช่องทาง | CardStreet",
-            en: "Where to Buy Pokemon Cards in Thailand: Every Channel Compared | CardStreet",
+            th: "ซื้อการ์ดโปเกมอนที่ไหนดี ในไทย เทียบทุกช่องทาง | Cardstreet",
+            en: "Where to Buy Pokemon Cards in Thailand: Every Channel Compared | Cardstreet",
         },
         description: {
             th: "เทียบช่องทางซื้อการ์ดโปเกมอนในไทย ทั้งร้านการ์ด มาร์เก็ตเพลสทั่วไป กลุ่มซื้อขาย และมาร์เก็ตเพลสเฉพาะการ์ด ทั้งเรื่องราคา ความเสี่ยง และการเช็คราคาการ์ดโปเกม่อนก่อนซื้อ",
@@ -512,10 +512,10 @@ export const GUIDES: Guide[] = [
                 "กลุ่มซื้อขายในโซเชียล",
                 "ราคามักดีที่สุดเพราะคุยกันตรง ไม่มีค่าธรรมเนียมกลาง แต่ความเสี่ยงสูงสุดเช่นกัน ต้องโอนก่อนได้ของ ไม่มีคนกลาง และถ้าไม่รู้ราคากลางของใบนั้นก็ไม่มีทางรู้ว่าที่เสนอมาถูกหรือแพง",
                 "มาร์เก็ตเพลสเฉพาะการ์ด",
-                "จัดของเป็นรายใบตามชุดและเลขการ์ด จึงเทียบได้ว่าใบที่ดูอยู่คือเวอร์ชันไหนจริง ๆ นี่คือกลุ่มที่ CardStreet อยู่ ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้ง ผู้ขายยืนยันตัวตนแล้วทุกคน ทุกออเดอร์มีระบบคุ้มครองผู้ซื้อ จ่ายด้วยบัตรหรือพร้อมเพย์ และส่งในประเทศด้วย Flash Express",
+                "จัดของเป็นรายใบตามชุดและเลขการ์ด จึงเทียบได้ว่าใบที่ดูอยู่คือเวอร์ชันไหนจริง ๆ นี่คือกลุ่มที่ Cardstreet อยู่ ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้ง ผู้ขายยืนยันตัวตนแล้วทุกคน ทุกออเดอร์มีระบบคุ้มครองผู้ซื้อ จ่ายด้วยบัตรหรือพร้อมเพย์ และส่งในประเทศด้วย Flash Express",
                 "เช็คราคาก่อนเสมอ ไม่ว่าจะซื้อทางไหน",
                 "ข้อผิดพลาดที่แพงที่สุดของมือใหม่ไม่ใช่การเลือกช่องทางผิด แต่คือไม่รู้ว่าการ์ดใบนั้นควรอยู่ที่ราคาเท่าไหร่ การ์ดชื่อเดียวกันมีได้หลายเวอร์ชัน ทั้งแบบธรรมดา SR HR และภาษาที่ต่างกัน ซึ่งราคาห่างกันได้หลายสิบเท่า",
-                "แคตตาล็อกโปเกมอนของ CardStreet มีการ์ดภาษาไทย 12,259 ใบจาก 96 ชุด ภาษาญี่ปุ่น 9,953 ใบ และภาษาอังกฤษ 20,352 ใบ แต่ละใบมีหน้าของตัวเองพร้อมราคาเป็นเงินบาท เปิดดูได้ฟรีไม่ต้องสมัคร ใช้เป็นราคากลางก่อนตัดสินใจได้ทุกช่องทาง แม้จะไม่ได้ซื้อกับเราก็ตาม",
+                "แคตตาล็อกโปเกมอนของ Cardstreet มีการ์ดภาษาไทย 12,259 ใบจาก 96 ชุด ภาษาญี่ปุ่น 9,953 ใบ และภาษาอังกฤษ 20,352 ใบ แต่ละใบมีหน้าของตัวเองพร้อมราคาเป็นเงินบาท เปิดดูได้ฟรีไม่ต้องสมัคร ใช้เป็นราคากลางก่อนตัดสินใจได้ทุกช่องทาง แม้จะไม่ได้ซื้อกับเราก็ตาม",
                 "สรุปสั้น ๆ อยากได้ของใหม่วันนี้ให้ไปร้าน อยากได้ใบเดี่ยวเจาะจงให้หาในมาร์เก็ตเพลสเฉพาะการ์ด อยากได้ราคาถูกที่สุดและรับความเสี่ยงเองได้ก็กลุ่มซื้อขาย แต่ไม่ว่าทางไหน เช็คราคาการ์ดโปเกม่อนใบนั้นก่อนจ่ายเสมอ",
             ],
             en: [
@@ -527,10 +527,10 @@ export const GUIDES: Guide[] = [
                 "Social buy-sell groups",
                 "Often the best prices, because you deal directly and nobody takes a cut. Also the highest risk: you transfer first, there is no intermediary, and without a reference price for that exact card there is no way to judge whether an offer is good.",
                 "Card-specific marketplaces",
-                "These organise inventory card by card, by set and number, so you can tell which version you are actually looking at. This is where CardStreet sits. Every card page shows the market price next to the seller's asking price, sellers are identity-verified, every order carries buyer protection, payment is by card or PromptPay, and shipping is domestic via Flash Express.",
+                "These organise inventory card by card, by set and number, so you can tell which version you are actually looking at. This is where Cardstreet sits. Every card page shows the market price next to the seller's asking price, sellers are identity-verified, every order carries buyer protection, payment is by card or PromptPay, and shipping is domestic via Flash Express.",
                 "Check the price first, whichever route you take",
                 "The expensive beginner mistake is not picking the wrong channel — it is not knowing what the card should cost. One card name can exist as a base print, an SR, an HR, and in three languages, and those can be tens of times apart in value.",
-                "CardStreet's Pokemon catalog covers 12,259 Thai cards across 96 sets, 9,953 Japanese and 20,352 English, each with its own page and a price in Thai baht. It is free to read without an account, so it works as a reference before you buy anywhere — including somewhere other than here.",
+                "Cardstreet's Pokemon catalog covers 12,259 Thai cards across 96 sets, 9,953 Japanese and 20,352 English, each with its own page and a price in Thai baht. It is free to read without an account, so it works as a reference before you buy anywhere — including somewhere other than here.",
                 "Short version: sealed product today, go to a shop. A specific single, use a card-specific marketplace. Cheapest price and you can carry the risk yourself, the buy-sell groups. Whichever you choose, check that exact card's price before you pay.",
             ],
         },
@@ -546,8 +546,8 @@ export const GUIDES: Guide[] = [
               a: { th: "ไม่เท่า ทั้งที่ใช้รหัสการ์ดเดียวกัน เช่น OP05-006 สองฉบับเป็นคนละตลาดและบางใบราคาต่างกันมาก เช็คราคาให้ตรงกับฉบับภาษาที่ถืออยู่เสมอ", en: "No — even though they share codes like OP05-006, the two editions are separate markets and some cards differ widely. Always check the price of the language edition you actually hold." } },
         ],
         title: {
-            th: 'การ์ดวันพีชภาษาอังกฤษกับภาษาญี่ปุ่น เลือกเก็บแบบไหนดี | CardStreet',
-            en: 'One Piece Card Game: English or Japanese, Which Should You Collect | CardStreet',
+            th: 'การ์ดวันพีชภาษาอังกฤษกับภาษาญี่ปุ่น เลือกเก็บแบบไหนดี | Cardstreet',
+            en: 'One Piece Card Game: English or Japanese, Which Should You Collect | Cardstreet',
         },
         description: {
             th: 'การ์ดวันพีชไม่มีฉบับภาษาไทย คนไทยจึงต้องเลือกระหว่างฉบับภาษาอังกฤษกับภาษาญี่ปุ่น เทียบให้ครบทั้งราคา ความหาง่าย เลขการ์ด และการขายต่อ',
@@ -563,7 +563,7 @@ export const GUIDES: Guide[] = [
                 'ฉบับภาษาญี่ปุ่นออกก่อนเสมอ ชุดใหม่จะมาถึงมือคนเก็บสายญี่ปุ่นก่อนสายอังกฤษหลายเดือน ใครอยากได้การ์ดใหม่ก่อนใครมักเลือกทางนี้ ราคากล่องมักถูกกว่าเมื่อเทียบใบต่อใบ แต่ต้องสั่งนำเข้าและรอ',
                 'ฉบับภาษาอังกฤษหาซื้อในไทยง่ายกว่า ร้านการ์ดในประเทศสต็อกไว้มากกว่า และถ้าจะขายต่อในกลุ่มคนไทยก็มักมีคนซื้อกว้างกว่า เพราะอ่านข้อความบนการ์ดได้โดยตรง',
                 'เรื่องเลขการ์ดเป็นจุดที่หลายคนเข้าใจผิด ทั้งสองฉบับใช้รหัสเดียวกัน เช่น OP05-006 หรือ ST18-002 ทำให้ดูเหมือนเป็นใบเดียวกัน แต่ราคาตลาดของสองฉบับไม่เท่ากัน และบางใบต่างกันมาก การเอาราคาฝั่งหนึ่งมาอ้างกับอีกฝั่งจึงพลาดได้ง่าย',
-                'สิ่งที่ควรทำก่อนซื้อหรือขายทุกครั้งคือ ดูภาษาบนตัวการ์ดก่อน แล้วเปิดหน้าการ์ดของฉบับนั้นโดยเฉพาะ CardStreet เก็บราคาของทั้งสองฉบับแยกกัน มีชุดภาษาอังกฤษห้าสิบแปดชุดและชุดภาษาญี่ปุ่นห้าสิบห้าชุดในแคตตาล็อก',
+                'สิ่งที่ควรทำก่อนซื้อหรือขายทุกครั้งคือ ดูภาษาบนตัวการ์ดก่อน แล้วเปิดหน้าการ์ดของฉบับนั้นโดยเฉพาะ Cardstreet เก็บราคาของทั้งสองฉบับแยกกัน มีชุดภาษาอังกฤษห้าสิบแปดชุดและชุดภาษาญี่ปุ่นห้าสิบห้าชุดในแคตตาล็อก',
                 'สรุปสำหรับคนเพิ่งเริ่ม ถ้าอยากเล่นกับคนไทยและขายต่อง่าย เลือกภาษาอังกฤษ ถ้าเน้นสะสมงานอาร์ตและอยากได้ชุดใหม่ก่อน เลือกภาษาญี่ปุ่น และไม่ว่าจะสายไหน ให้เทียบราคาของฉบับที่ถืออยู่จริงเสมอ',
             ],
             en: [
@@ -571,7 +571,7 @@ export const GUIDES: Guide[] = [
                 'Japanese releases come first. New sets reach Japanese-track collectors months ahead of English, so anyone who wants cards early tends to go that way. Boxes are often cheaper per card, but they have to be imported and waited for.',
                 'English is easier to buy in Thailand. Local card shops stock more of it, and reselling within Thai groups usually reaches a wider audience, because buyers can read the card text directly.',
                 'Card numbering is where people get caught out. Both editions use the same codes — OP05-006, ST18-002 — which makes them look like the same card. Their market prices are not the same, and for some cards the gap is wide. Quoting a price from one edition against the other is an easy way to lose money.',
-                'So before buying or selling, read the language on the card first, then open the page for that specific edition. CardStreet prices both separately, with fifty-eight English sets and fifty-five Japanese sets in the catalog.',
+                'So before buying or selling, read the language on the card first, then open the page for that specific edition. Cardstreet prices both separately, with fifty-eight English sets and fifty-five Japanese sets in the catalog.',
                 'For beginners: if you want to play with people in Thailand and resell easily, take English. If you are collecting for the art and want new sets first, take Japanese. Either way, always compare against the edition you actually hold.',
             ],
         },
@@ -581,8 +581,8 @@ export const GUIDES: Guide[] = [
         game: 'onepiece',
         updated: '2026-08-30',
         title: {
-            th: 'รหัสชุดการ์ดวันพีช OP ST EB PRB อ่านยังไง | CardStreet',
-            en: 'One Piece Set Codes Explained: OP, ST, EB and PRB | CardStreet',
+            th: 'รหัสชุดการ์ดวันพีช OP ST EB PRB อ่านยังไง | Cardstreet',
+            en: 'One Piece Set Codes Explained: OP, ST, EB and PRB | Cardstreet',
         },
         description: {
             th: 'อธิบายรหัสชุดการ์ดวันพีชที่พิมพ์อยู่บนการ์ด ทั้ง OP, ST, EB และ PRB ว่าแต่ละแบบคือชุดประเภทไหน และใช้หาราคาการ์ดใบที่ถืออยู่ยังไง',
@@ -600,7 +600,7 @@ export const GUIDES: Guide[] = [
                 'นอกจากนี้ยังมีการ์ดโปรโมชันที่แจกตามงานแข่งหรือแถมกับสินค้า กลุ่มนี้บางใบเป็นการ์ดที่ราคาสูงที่สุดในเกม โดยเฉพาะใบที่มีเลขซีเรียลกำกับ',
                 'ตัวเลขสองหลักหลังตัวอักษรคือลำดับของชุด และตัวเลขสามหลักหลังขีดคือเลขการ์ดในชุดนั้น ดังนั้น OP05-006 หมายถึงการ์ดใบที่ 6 ของบูสเตอร์หลักชุดที่ 5',
                 'ข้อควรระวังคือรหัสเดียวกันใช้ทั้งฉบับภาษาอังกฤษและภาษาญี่ปุ่น การ์ดคนละภาษาที่รหัสตรงกันคือคนละใบในตลาดและราคาไม่เท่ากัน เวลาเช็คราคาจึงต้องดูภาษาบนการ์ดควบคู่กับรหัสเสมอ',
-                'CardStreet มีชุดการ์ดวันพีชรวมกันร้อยกว่าชุดทั้งสองภาษา พิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาก็ไปที่ใบนั้นได้โดยตรง',
+                'Cardstreet มีชุดการ์ดวันพีชรวมกันร้อยกว่าชุดทั้งสองภาษา พิมพ์รหัสชุดกับเลขการ์ดในช่องค้นหาก็ไปที่ใบนั้นได้โดยตรง',
             ],
             en: [
                 'Every One Piece card carries a printed code such as OP05-006 or ST18-002. Learning to read it tells you what kind of product the card came from and gets you to the right card page much faster.',
@@ -609,7 +609,7 @@ export const GUIDES: Guide[] = [
                 'Separately there are promotional cards handed out at events or bundled with products. Some of these are the most valuable cards in the game, particularly the serial-numbered ones.',
                 'The two digits after the letters are the set number, and the three digits after the dash are the card number within it. So OP05-006 is card 6 of the fifth main booster.',
                 'The catch: the same code is used for both the English and Japanese editions. Cards sharing a code across languages are different cards to the market and are not worth the same, so always read the language alongside the code when checking a price.',
-                'CardStreet carries over a hundred One Piece sets across both languages. Type the set code and card number into search to go straight to a card.',
+                'Cardstreet carries over a hundred One Piece sets across both languages. Type the set code and card number into search to go straight to a card.',
             ],
         },
     },
@@ -618,8 +618,8 @@ export const GUIDES: Guide[] = [
         game: 'onepiece',
         updated: '2026-08-30',
         title: {
-            th: 'ระดับความหายากการ์ดวันพีช C UC R SR SEC L คืออะไร | CardStreet',
-            en: 'One Piece Card Rarities Explained: C, UC, R, SR, SEC and L | CardStreet',
+            th: 'ระดับความหายากการ์ดวันพีช C UC R SR SEC L คืออะไร | Cardstreet',
+            en: 'One Piece Card Rarities Explained: C, UC, R, SR, SEC and L | Cardstreet',
         },
         description: {
             th: 'อธิบายระดับความหายากของการ์ดวันพีช ทั้ง C UC R SR SEC และการ์ด Leader ว่าแต่ละระดับคืออะไร ระดับไหนคือกลุ่มที่ราคาสูง และทำไมการ์ดโปรโมบางใบถึงแพงกว่าทุกระดับ',
@@ -655,8 +655,8 @@ export const GUIDES: Guide[] = [
         game: 'onepiece',
         updated: '2026-08-30',
         title: {
-            th: 'การ์ดวันพีชปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | CardStreet',
-            en: 'How to Spot Fake One Piece Cards Before You Pay | CardStreet',
+            th: 'การ์ดวันพีชปลอม ดูยังไง วิธีเช็คก่อนโอนเงิน | Cardstreet',
+            en: 'How to Spot Fake One Piece Cards Before You Pay | Cardstreet',
         },
         description: {
             th: 'วิธีตรวจการ์ดวันพีชปลอมด้วยตัวเอง ทั้งเนื้อการ์ด งานพิมพ์ สี ขอบ และข้อควรระวังเฉพาะการ์ดนำเข้า เพราะการ์ดวันพีชในไทยเป็นของนำเข้าทั้งหมด',
@@ -674,7 +674,7 @@ export const GUIDES: Guide[] = [
                 'สีและฟอยล์ การ์ดอาร์ตพิเศษของวันพีชมีลวดลายฟอยล์ที่สะท้อนแสงเป็นแบบเฉพาะ ของปลอมมักสะท้อนแบบแบน ๆ ทั้งใบ หรือสีจัดเกินจริง เอียงดูใต้แสงจะเห็นต่างชัด',
                 'ขอบและมุม การ์ดแท้ตัดขอบเรียบ มุมโค้งเท่ากันทั้งสี่มุม ถ้าขอบหยาบหรือมุมไม่เท่ากันให้ระวัง',
                 'รหัสชุดกับภาษา ตรวจว่ารหัสบนการ์ดเป็นชุดที่มีอยู่จริง และตรงกับภาษาที่พิมพ์บนการ์ด ของปลอมหลายใบเอาอาร์ตของฉบับหนึ่งไปใส่รหัสของอีกฉบับ',
-                'สุดท้ายคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน CardStreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุดแยกตามภาษา และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ',
+                'สุดท้ายคือราคา ถ้าใบที่ราคาตลาดหลักหมื่นถูกเสนอมาหลักพัน นั่นคือสัญญาณเตือน ไม่ใช่โชคดี การรู้ราคากลางจึงเป็นเครื่องมือกันของปลอมที่ดีที่สุด บน Cardstreet ทุกหน้าการ์ดแสดงราคาตลาดล่าสุดแยกตามภาษา และถ้าซื้อผ่านระบบ ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อ',
             ],
             en: [
                 'Every One Piece card in Thailand is imported — there is no Thai edition — so buyers start at an information disadvantage, and counterfeits follow the prices up. Here is what you can check yourself.',
@@ -683,7 +683,7 @@ export const GUIDES: Guide[] = [
                 'Colour and foil. One Piece special-art cards use a distinctive foil pattern that catches light in a particular way. Counterfeits often reflect flatly across the whole card, or run oversaturated. Tilting under a light shows it up.',
                 'Edges and corners. Real cards are cut cleanly with all four corners rounded identically. Rough edges or uneven corners are a warning.',
                 "Set code against language. Check that the code is a set that exists and matches the language printed on the card. Many fakes put one edition's artwork under the other edition's code.",
-                'And finally the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. Knowing the going rate is the best counterfeit defence there is. Every card page on CardStreet shows the current market price per language edition, and buying through the platform means an identity-verified seller and buyer protection on the order.',
+                'And finally the price. If a card with a market price in the tens of thousands is offered for a few thousand, that is a warning rather than luck. Knowing the going rate is the best counterfeit defence there is. Every card page on Cardstreet shows the current market price per language edition, and buying through the platform means an identity-verified seller and buyer protection on the order.',
             ],
         },
     },
@@ -692,8 +692,8 @@ export const GUIDES: Guide[] = [
         game: 'mtg',
         updated: '2026-08-30',
         title: {
-            th: "การ์ดเมจิกใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | CardStreet",
-            en: "One Magic Card, Many Printings: Why the Prices Differ | CardStreet",
+            th: "การ์ดเมจิกใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | Cardstreet",
+            en: "One Magic Card, Many Printings: Why the Prices Differ | Cardstreet",
         },
         description: {
             th: "การ์ด Magic: The Gathering ใบเดียวกันถูกพิมพ์ซ้ำข้ามหลายชุดหลายปี แต่ละเวอร์ชันราคาไม่เท่ากัน อธิบายวิธีดูว่าใบที่ถืออยู่คือเวอร์ชันไหน และเทียบราคาให้ตรง",
@@ -710,7 +710,7 @@ export const GUIDES: Guide[] = [
                 "สิ่งที่ทำให้ราคาต่างกันมีสามอย่างหลัก อย่างแรกคือชุดที่มา ชุดเก่าหรือชุดที่พิมพ์น้อยย่อมแพงกว่าชุดที่เพิ่งออก อย่างที่สองคือแบบฟอยล์หรือไม่ฟอยล์ ซึ่งเป็นคนละราคากันเสมอ และอย่างที่สามคือกรอบและอาร์ตพิเศษ เช่น เวอร์ชันอาร์ตขยายเต็มขอบหรือเวอร์ชันภาพพิเศษ ซึ่งมักแพงกว่าเวอร์ชันปกติของชุดเดียวกัน",
                 "วิธีดูว่าถือเวอร์ชันไหนอยู่ ให้ดูสัญลักษณ์ชุดที่กลางการ์ดด้านขวา ซึ่งบอกว่ามาจากชุดไหน และดูเลขการ์ดกับรหัสชุดที่แถบล่างสุดของการ์ด การ์ดสมัยใหม่พิมพ์ข้อมูลนี้ไว้ครบ",
                 "ข้อผิดพลาดที่แพงที่สุดคือเอาราคาของเวอร์ชันหนึ่งไปตั้งขายหรือไปต่อรองซื้ออีกเวอร์ชันหนึ่ง ทั้งที่ราคาห่างกันหลายเท่า",
-                "บน CardStreet การ์ดแต่ละเวอร์ชันมีหน้าของตัวเอง พร้อมราคาตลาดเป็นเงินบาท เลือกให้ตรงชุดและตรงแบบฟอยล์ แล้วราคาที่เห็นจะเป็นราคาของใบที่ถืออยู่จริง ไม่ใช่ค่าเฉลี่ยของทุกเวอร์ชันรวมกัน",
+                "บน Cardstreet การ์ดแต่ละเวอร์ชันมีหน้าของตัวเอง พร้อมราคาตลาดเป็นเงินบาท เลือกให้ตรงชุดและตรงแบบฟอยล์ แล้วราคาที่เห็นจะเป็นราคาของใบที่ถืออยู่จริง ไม่ใช่ค่าเฉลี่ยของทุกเวอร์ชันรวมกัน",
             ],
             en: [
                 "The thing that confuses new Magic players most is finding the same card name priced anywhere from pocket change to serious money. The answer is that they are not the same card.",
@@ -718,7 +718,7 @@ export const GUIDES: Guide[] = [
                 "Three things drive the difference. First, the set it came from — older or smaller print runs cost more than a recent release. Second, foil versus non-foil, which are always priced separately. Third, frame and special art treatments such as extended-art or showcase versions, which usually sell above the normal version from the same set.",
                 "To identify which printing you hold, look at the set symbol on the right-hand side of the card, which tells you the set, and read the collector number and set code in the bottom strip. Modern cards print all of it.",
                 "The expensive mistake is quoting one printing's price while buying or selling another, when they can be many times apart.",
-                "On CardStreet each printing has its own page with a market price in Thai baht. Match the set and the foil treatment, and the price you see belongs to the card you actually hold, not a blended average across every version.",
+                "On Cardstreet each printing has its own page with a market price in Thai baht. Match the set and the foil treatment, and the price you see belongs to the card you actually hold, not a blended average across every version.",
             ],
         },
     },
@@ -727,8 +727,8 @@ export const GUIDES: Guide[] = [
         game: 'mtg',
         updated: '2026-08-30',
         title: {
-            th: "ระดับความหายากการ์ดเมจิก Common Uncommon Rare Mythic | CardStreet",
-            en: "Magic: The Gathering Rarities Explained: Common to Mythic | CardStreet",
+            th: "ระดับความหายากการ์ดเมจิก Common Uncommon Rare Mythic | Cardstreet",
+            en: "Magic: The Gathering Rarities Explained: Common to Mythic | Cardstreet",
         },
         description: {
             th: "อธิบายระดับความหายากของการ์ด Magic: The Gathering ทั้งสี่ระดับ พร้อมเรื่องฟอยล์และอาร์ตพิเศษ ที่มีผลกับราคามากกว่าระดับความหายากในหลายกรณี",
@@ -745,7 +745,7 @@ export const GUIDES: Guide[] = [
                 "แต่จุดสำคัญของเมจิกคือ ระดับความหายากบอกราคาได้น้อยกว่าที่คนคิด การ์ด Common บางใบที่จำเป็นในรูปแบบการเล่นยอดนิยมมีราคาสูงกว่าการ์ด Mythic ที่ไม่มีใครใช้หลายเท่า ราคาของเมจิกขับเคลื่อนด้วยความต้องการในการเล่นและจำนวนที่พิมพ์ออกมา มากกว่าตัวสัญลักษณ์บนการ์ด",
                 "สิ่งที่มีผลกับราคาไม่แพ้กันคือแบบพิมพ์ การ์ดใบเดียวกันมักมีทั้งแบบธรรมดาและแบบฟอยล์ และในชุดสมัยใหม่ยังมีเวอร์ชันอาร์ตขยายหรืออาร์ตพิเศษเพิ่มเข้ามาอีก แต่ละแบบมีราคาของตัวเอง",
                 "เพราะแบบนี้ วิธีที่ใช้ได้จริงคือดูระดับความหายากเพื่อจัดกลุ่มคร่าว ๆ แล้วเปิดหน้าการ์ดของเวอร์ชันที่ถืออยู่เพื่อดูราคาจริง เพราะสองใบที่ระดับเดียวกันในชุดเดียวกันก็ราคาต่างกันได้มาก",
-                "CardStreet มีชุดการ์ดเมจิกเจ็ดสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูทีละใบ หรือค้นหาชื่อการ์ดเป็นภาษาอังกฤษเพื่อไปที่ใบนั้นโดยตรง",
+                "Cardstreet มีชุดการ์ดเมจิกเจ็ดสิบกว่าชุดในแคตตาล็อก เปิดหน้าชุดแล้วไล่ดูทีละใบ หรือค้นหาชื่อการ์ดเป็นภาษาอังกฤษเพื่อไปที่ใบนั้นโดยตรง",
             ],
             en: [
                 "Magic: The Gathering uses only four rarity tiers, far fewer than most card games. You read it from the colour of the set symbol on the right-hand side of the card.",
@@ -753,7 +753,7 @@ export const GUIDES: Guide[] = [
                 "The important part is that rarity predicts price less well in Magic than people expect. A Common that is essential to a popular format can be worth many times a Mythic nobody plays. Magic prices are driven by play demand and print run rather than the symbol on the card.",
                 "Treatment matters just as much. The same card usually exists in normal and foil, and modern sets add extended-art and showcase versions on top. Each has its own price.",
                 "So use rarity to place a card roughly, then open the page for the exact version you hold. Two cards at the same rarity in the same set can still be far apart.",
-                "CardStreet carries over seventy Magic sets. Browse a set page card by card, or search the card name in English to go straight to it.",
+                "Cardstreet carries over seventy Magic sets. Browse a set page card by card, or search the card name in English to go straight to it.",
             ],
         },
     },
@@ -768,8 +768,8 @@ export const GUIDES: Guide[] = [
               a: { th: "ไม่มี การ์ดเมจิกที่หมุนเวียนในไทยเป็นฉบับภาษาอังกฤษที่นำเข้ามาทั้งหมด เวลาเช็คราคาให้เทียบกับเวอร์ชันและชุดที่ตรงกับใบที่ถืออยู่เสมอ", en: "No. Magic cards circulating in Thailand are all the imported English printing. When checking a price, always compare against the exact set and treatment of the card you hold." } },
         ],
         title: {
-            th: "ซื้อการ์ดเมจิก Magic: The Gathering ในไทยที่ไหนดี | CardStreet",
-            en: "Where to Buy Magic: The Gathering Cards in Thailand | CardStreet",
+            th: "ซื้อการ์ดเมจิก Magic: The Gathering ในไทยที่ไหนดี | Cardstreet",
+            en: "Where to Buy Magic: The Gathering Cards in Thailand | Cardstreet",
         },
         description: {
             th: "เทียบช่องทางซื้อการ์ดเมจิกในไทย ทั้งร้านหน้าร้าน กลุ่มซื้อขาย และการสั่งจากต่างประเทศ พร้อมข้อดีข้อเสียเรื่องราคา เวลารอ และความเสี่ยง",
@@ -785,7 +785,7 @@ export const GUIDES: Guide[] = [
                 "ร้านการ์ดในประเทศ ได้ของทันทีและได้เห็นสภาพก่อนจ่าย เหมาะกับคนที่ต้องการการ์ดไปลงเด็คให้ทันสุดสัปดาห์นี้ ข้อจำกัดคือใบเดี่ยวที่หายากหรือเวอร์ชันเฉพาะมักไม่มีในสต็อก",
                 "สั่งจากเว็บต่างประเทศ ตัวเลือกเยอะที่สุดและบางใบราคาถูกกว่า แต่ต้องบวกค่าส่งระหว่างประเทศ รอหลายสัปดาห์ และมีความเสี่ยงเรื่องภาษีนำเข้ากับการ์ดเสียหายระหว่างทาง สำหรับการ์ดใบละไม่กี่ร้อยบาท ค่าส่งมักกินส่วนต่างจนไม่คุ้ม",
                 "ซื้อจากผู้เล่นในไทยด้วยกัน ได้ของเร็ว ไม่มีค่าส่งข้ามประเทศ และมักต่อรองได้ ข้อควรระวังคือต้องรู้ราคากลางก่อน ไม่งั้นไม่มีทางรู้ว่าที่เสนอมาถูกหรือแพง และถ้าไม่มีตัวกลางก็ต้องรับความเสี่ยงเอง",
-                "CardStreet อยู่ในกลุ่มสุดท้ายแต่แก้สองข้อเสียนั้น ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้ง จึงเทียบได้ทันที ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ จ่ายผ่านบัตรหรือพร้อมเพย์ และส่งภายในประเทศ ไม่ต้องรอของข้ามทวีป",
+                "Cardstreet อยู่ในกลุ่มสุดท้ายแต่แก้สองข้อเสียนั้น ทุกหน้าการ์ดแสดงราคาตลาดควบคู่กับราคาที่ผู้ขายตั้ง จึงเทียบได้ทันที ผู้ขายทุกคนยืนยันตัวตนแล้ว มีระบบคุ้มครองผู้ซื้อทุกออเดอร์ จ่ายผ่านบัตรหรือพร้อมเพย์ และส่งภายในประเทศ ไม่ต้องรอของข้ามทวีป",
                 "คำแนะนำสั้น ๆ ถ้าต้องใช้การ์ดสัปดาห์นี้ให้หาในประเทศ ถ้าเก็บของแพงหรือเวอร์ชันเฉพาะ ให้เทียบราคากลางก่อนเสมอไม่ว่าจะซื้อจากทางไหน",
             ],
             en: [
@@ -793,7 +793,7 @@ export const GUIDES: Guide[] = [
                 "Local card shops give you the card today and let you see its condition before paying. Good when you need something for a deck this weekend. The limit is that scarce singles and specific printings are usually not in stock.",
                 "Ordering from overseas sites offers the widest selection and sometimes lower prices, but adds international shipping, weeks of waiting, and the risk of import duty or damage in transit. For cards worth a few hundred baht, postage usually eats the saving.",
                 "Buying from other players in Thailand is fast, has no international shipping, and often leaves room to negotiate. The catch is that you need a reference price, or there is no way to judge an offer — and without an intermediary the risk is yours.",
-                "CardStreet sits in that last group but fixes both drawbacks. Every card page shows the market price next to the seller's asking price, so you can judge a deal immediately. Sellers are identity-verified, every order carries buyer protection, payment is by card or PromptPay, and shipping is domestic — no waiting on a parcel from another continent.",
+                "Cardstreet sits in that last group but fixes both drawbacks. Every card page shows the market price next to the seller's asking price, so you can judge a deal immediately. Sellers are identity-verified, every order carries buyer protection, payment is by card or PromptPay, and shipping is domestic — no waiting on a parcel from another continent.",
                 "Short version: if you need the card this week, buy locally. If you are buying something expensive or a specific printing, check the reference price first, whichever route you use.",
             ],
         },
@@ -803,8 +803,8 @@ export const GUIDES: Guide[] = [
         game: 'yugioh',
         updated: '2026-08-30',
         title: {
-            th: "การ์ดยูกิโอใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | CardStreet",
-            en: "One Yu-Gi-Oh Card, Many Printings: Why the Prices Differ | CardStreet",
+            th: "การ์ดยูกิโอใบเดียวกันมีหลายเวอร์ชัน ราคาต่างกันยังไง | Cardstreet",
+            en: "One Yu-Gi-Oh Card, Many Printings: Why the Prices Differ | Cardstreet",
         },
         description: {
             th: "การ์ดยูกิโอใบเดียวกันถูกพิมพ์ซ้ำข้ามหลายชุดในระดับความหายากที่ต่างกัน ราคาจึงห่างกันมาก อธิบายวิธีดูรหัสการ์ดเพื่อรู้ว่าถือเวอร์ชันไหนอยู่",
@@ -821,7 +821,7 @@ export const GUIDES: Guide[] = [
                 "สิ่งที่ทำให้ยูกิโอต่างจากเกมอื่นคือ การ์ดใบเดิมมักถูกพิมพ์ซ้ำในระดับความหายากที่ไม่เท่ากัน ใบเดียวกันอาจออกเป็น Common ในชุดหนึ่ง และเป็น Secret Rare ในอีกชุดหนึ่ง ราคาจึงห่างกันมหาศาลทั้งที่ข้อความบนการ์ดเหมือนกันทุกตัวอักษร",
                 "วิธีรู้ว่าถือเวอร์ชันไหน ให้ดูรหัสที่มุมล่างของการ์ด เป็นรูปแบบตัวอักษรของชุดตามด้วยเลขการ์ด รหัสนี้ระบุชุดที่การ์ดมาจากอย่างเจาะจง และเป็นข้อมูลที่ต้องใช้เวลาเทียบราคา",
                 "อีกจุดที่ต้องดูคือระดับความหายากที่พิมพ์ไว้และลักษณะของตัวหนังสือชื่อการ์ด เพราะระดับที่ต่างกันใช้สีและการสะท้อนแสงของชื่อการ์ดต่างกัน",
-                "บน CardStreet แต่ละเวอร์ชันมีหน้าของตัวเองพร้อมราคาตลาดเป็นเงินบาท แคตตาล็อกมีชุดยูกิโอรวมกันแปดร้อยกว่าชุด ทั้งฉบับภาษาอังกฤษและภาษาญี่ปุ่น เลือกให้ตรงรหัสชุดแล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
+                "บน Cardstreet แต่ละเวอร์ชันมีหน้าของตัวเองพร้อมราคาตลาดเป็นเงินบาท แคตตาล็อกมีชุดยูกิโอรวมกันแปดร้อยกว่าชุด ทั้งฉบับภาษาอังกฤษและภาษาญี่ปุ่น เลือกให้ตรงรหัสชุดแล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
             ],
             en: [
                 "Yu-Gi-Oh reprints its cards more heavily than almost any other game, which is why the same card name can appear online at prices a hundred times apart.",
@@ -829,7 +829,7 @@ export const GUIDES: Guide[] = [
                 "What makes Yu-Gi-Oh unusual is that the same card is reprinted at different rarities. One card can be a Common in one set and a Secret Rare in another, so the prices diverge enormously even though the text on the card is identical.",
                 "To identify your version, read the code in the bottom corner: the set's letter code followed by the card number. That code pins down exactly which set the card came from, and it is what you need in order to compare a price.",
                 "Also check the printed rarity and the treatment of the card name, since different rarities use different colouring and reflectivity on the name text.",
-                "On CardStreet each printing has its own page with a market price in Thai baht. The catalog carries over eight hundred Yu-Gi-Oh sets across the English and Japanese releases. Match the set code and the price you see belongs to the card in your hand.",
+                "On Cardstreet each printing has its own page with a market price in Thai baht. The catalog carries over eight hundred Yu-Gi-Oh sets across the English and Japanese releases. Match the set code and the price you see belongs to the card in your hand.",
             ],
         },
     },
@@ -838,8 +838,8 @@ export const GUIDES: Guide[] = [
         game: 'yugioh',
         updated: '2026-08-30',
         title: {
-            th: "ระดับความหายากการ์ดยูกิโอ Super Ultra Secret ต่างกันยังไง | CardStreet",
-            en: "Yu-Gi-Oh Rarities Explained: Super, Ultra, Secret and Beyond | CardStreet",
+            th: "ระดับความหายากการ์ดยูกิโอ Super Ultra Secret ต่างกันยังไง | Cardstreet",
+            en: "Yu-Gi-Oh Rarities Explained: Super, Ultra, Secret and Beyond | Cardstreet",
         },
         description: {
             th: "อธิบายระดับความหายากของการ์ดยูกิโอ ตั้งแต่ Common ไปจนถึง Secret Rare, Prismatic Secret Rare และ Starlight Rare พร้อมวิธีดูจากตัวหนังสือชื่อการ์ด",
@@ -881,8 +881,8 @@ export const GUIDES: Guide[] = [
               a: { th: "ถ้าตั้งใจลงแข่งในไทยหรือขายต่อในกลุ่มคนไทย ฝั่ง TCG ภาษาอังกฤษตรงกว่า ถ้าสะสมงานอาร์ตหรืออยากได้การ์ดใหม่ก่อน ฝั่ง OCG ภาษาญี่ปุ่นก็มีเสน่ห์ของมัน ราคาสองฝั่งไม่เท่ากัน เทียบให้ตรงฉบับเสมอ", en: "For local events and resale, the English TCG is the more direct route; for artwork and earlier releases, the Japanese OCG has its appeal. The two are priced separately, so always compare the right edition." } },
         ],
         title: {
-            th: "การ์ดยูกิโอ TCG กับ OCG ต่างกันยังไง เลือกเก็บแบบไหนดี | CardStreet",
-            en: "Yu-Gi-Oh TCG vs OCG: What Is the Difference, and Which to Collect | CardStreet",
+            th: "การ์ดยูกิโอ TCG กับ OCG ต่างกันยังไง เลือกเก็บแบบไหนดี | Cardstreet",
+            en: "Yu-Gi-Oh TCG vs OCG: What Is the Difference, and Which to Collect | Cardstreet",
         },
         description: {
             th: "การ์ดยูกิโอแบ่งเป็น TCG ฉบับภาษาอังกฤษ และ OCG ฉบับภาษาญี่ปุ่น สองฝั่งมีชุด กติกา และราคาต่างกัน อธิบายให้ครบก่อนตัดสินใจเก็บสายไหน",
@@ -899,7 +899,7 @@ export const GUIDES: Guide[] = [
                 "ขนาดของการ์ดก็ต่างกันเล็กน้อย การ์ด OCG เล็กกว่าการ์ด TCG จึงใช้ปะปนกันในเด็คเดียวไม่ได้ถ้าจะลงแข่งอย่างเป็นทางการ และต้องใช้ซองใส่คนละขนาด",
                 "ในแง่ราคา สองฝั่งเป็นคนละตลาดกันโดยสิ้นเชิง การ์ดใบเดียวกันในฝั่ง TCG กับ OCG ราคาไม่เท่ากันและบางใบต่างกันมาก การเอาราคาฝั่งหนึ่งไปอ้างกับอีกฝั่งจึงพลาดได้ง่าย",
                 "สำหรับคนไทยที่จะเริ่มเก็บ ถ้าตั้งใจจะลงแข่งในไทยหรือขายต่อในกลุ่มคนไทย ฝั่ง TCG ภาษาอังกฤษเป็นทางที่ตรงกว่า ถ้าเก็บเพื่อสะสมงานอาร์ตหรืออยากได้การ์ดใหม่ก่อน ฝั่ง OCG ก็มีเสน่ห์ของมัน",
-                "CardStreet มีทั้งสองฝั่งในแคตตาล็อกเดียวกัน ชุดภาษาอังกฤษหกร้อยกว่าชุดและชุดภาษาญี่ปุ่นอีกร้อยแปดสิบชุด ราคาแยกกันตามฉบับ จึงเทียบได้ตรงกับใบที่ถืออยู่จริง",
+                "Cardstreet มีทั้งสองฝั่งในแคตตาล็อกเดียวกัน ชุดภาษาอังกฤษหกร้อยกว่าชุดและชุดภาษาญี่ปุ่นอีกร้อยแปดสิบชุด ราคาแยกกันตามฉบับ จึงเทียบได้ตรงกับใบที่ถืออยู่จริง",
             ],
             en: [
                 "Yu-Gi-Oh splits into two clearly separate worlds. The TCG is the English-language release sold in Thailand and across most of the world; the OCG is the Japanese release sold in Japan and parts of Asia. There is no Thai-language edition of either.",
@@ -907,7 +907,7 @@ export const GUIDES: Guide[] = [
                 "The cards are even physically different sizes. OCG cards are slightly smaller than TCG cards, so they cannot be mixed in one deck for sanctioned play and need different sleeves.",
                 "On price they are completely separate markets. The same card in TCG and OCG is not worth the same, and for some cards the gap is wide, so quoting one side's price against the other is an easy mistake.",
                 "For collectors in Thailand: if you intend to play in local events or resell within Thai groups, the English TCG is the more direct route. If you are collecting for the artwork or want cards earlier, the OCG has its own appeal.",
-                "CardStreet carries both in one catalog — over six hundred English sets and a further one hundred and eighty Japanese ones — priced separately, so you can compare against the exact card you hold.",
+                "Cardstreet carries both in one catalog — over six hundred English sets and a further one hundred and eighty Japanese ones — priced separately, so you can compare against the exact card you hold.",
             ],
         },
     },
@@ -919,11 +919,11 @@ export const GUIDES: Guide[] = [
             { q: { th: "Riftbound มีการ์ดกี่ชุดแล้ว", en: "How many Riftbound sets are there?" },
               a: { th: "ห้าชุด ได้แก่ Origins, Origins: Proving Grounds, Spiritforged, Unleashed และล่าสุดคือ Vendetta รวมการ์ดพันกว่าใบ ซึ่งยังเล็กพอที่นักสะสมคนเดียวจะไล่เก็บครบชุดได้จริง", en: "Five: Origins, Origins: Proving Grounds, Spiritforged, Unleashed and most recently Vendetta — a little over a thousand cards in total, still small enough for one collector to realistically complete a set." } },
             { q: { th: "การ์ด Riftbound ใบไหนแพงที่สุด", en: "Which Riftbound cards are the most valuable?" },
-              a: { th: "เกือบทั้งหมดอยู่ในกลุ่ม Showcase โดยเฉพาะเวอร์ชัน Signature ราคายังขยับเร็วเพราะเกมยังใหม่ เช็คราคาตลาดล่าสุดได้ทุกใบบน CardStreet", en: "Almost all sit in the Showcase group, particularly the Signature versions. Prices still move quickly because the game is young — every card has a live market price on CardStreet." } },
+              a: { th: "เกือบทั้งหมดอยู่ในกลุ่ม Showcase โดยเฉพาะเวอร์ชัน Signature ราคายังขยับเร็วเพราะเกมยังใหม่ เช็คราคาตลาดล่าสุดได้ทุกใบบน Cardstreet", en: "Almost all sit in the Showcase group, particularly the Signature versions. Prices still move quickly because the game is young — every card has a live market price on Cardstreet." } },
         ],
         title: {
-            th: "Riftbound คือการ์ดเกมอะไร คนเล่น LoL เริ่มยังไง | CardStreet",
-            en: "What Is Riftbound? A Starting Guide for League of Legends Players | CardStreet",
+            th: "Riftbound คือการ์ดเกมอะไร คนเล่น LoL เริ่มยังไง | Cardstreet",
+            en: "What Is Riftbound? A Starting Guide for League of Legends Players | Cardstreet",
         },
         description: {
             th: "Riftbound คือการ์ดเกม LoL จาก Riot Games ที่เพิ่งเปิดตัว อธิบายว่ามีชุดอะไรบ้าง เริ่มเก็บยังไง และทำไมเกมที่ยังใหม่ถึงเป็นจังหวะที่ดีสำหรับนักสะสม",
@@ -941,7 +941,7 @@ export const GUIDES: Guide[] = [
                 "อีกข้อที่ต่างคือราคายังขยับเร็ว เกมที่เพิ่งเริ่มยังไม่มีราคานิ่ง การ์ดใบเดียวกันอาจขึ้นหรือลงหลายสิบเปอร์เซ็นต์ในไม่กี่เดือน ตามผลการแข่งและกระแสของตัวละคร ก่อนซื้อหรือขายจึงควรดูกราฟราคาย้อนหลังเสมอ ไม่ใช่แค่ราคาวันนี้",
                 "Riftbound ยังไม่มีฉบับภาษาไทย ของที่หมุนเวียนในประเทศเป็นฉบับภาษาอังกฤษที่นำเข้ามา ร้านที่สต็อกครบจึงยังมีไม่มาก",
                 "สำหรับคนเริ่มต้น แนะนำให้เริ่มจากแชมเปียนที่ตัวเองเล่นใน LoL อยู่แล้ว เพราะจะสนุกกว่าและตัดสินใจง่ายกว่า แล้วค่อยขยับไปดูการ์ดระดับ Showcase ที่เป็นงานอาร์ตพิเศษ",
-                "CardStreet มีการ์ด Riftbound ครบทั้งห้าชุดในแคตตาล็อก และมีราคาตลาดครบทุกใบ เช็คราคาได้ทุกใบเป็นเงินบาท แล้วซื้อ-ขายกับผู้ขายในไทยได้โดยไม่ต้องสั่งข้ามประเทศ",
+                "Cardstreet มีการ์ด Riftbound ครบทั้งห้าชุดในแคตตาล็อก และมีราคาตลาดครบทุกใบ เช็คราคาได้ทุกใบเป็นเงินบาท แล้วซื้อ-ขายกับผู้ขายในไทยได้โดยไม่ต้องสั่งข้ามประเทศ",
             ],
             en: [
                 "Riftbound is the official collectible card game of the League of Legends universe, made by Riot Games. If you already play LoL you already know almost every character in it — Jinx, Yasuo, Ahri, Lux, Darius, Viktor, Teemo and many more.",
@@ -950,7 +950,7 @@ export const GUIDES: Guide[] = [
                 "Prices also still move quickly. A young game has not settled, and a card can swing tens of percent in a few months on competitive results and champion popularity. Check the price history chart before buying or selling, not just today's number.",
                 "There is no Thai-language Riftbound release, so what circulates here is the imported English printing, and few shops carry a full range.",
                 "For beginners, start with the champions you already play in LoL. It is more enjoyable and the decisions are easier. From there, move on to the Showcase cards, which carry the special artwork.",
-                "CardStreet carries all five Riftbound sets, with a market price on every single card. Check any of them in Thai baht, then buy or sell with sellers inside Thailand rather than ordering from overseas.",
+                "Cardstreet carries all five Riftbound sets, with a market price on every single card. Check any of them in Thai baht, then buy or sell with sellers inside Thailand rather than ordering from overseas.",
             ],
         },
     },
@@ -959,8 +959,8 @@ export const GUIDES: Guide[] = [
         game: 'riftbound',
         updated: '2026-08-30',
         title: {
-            th: "ระดับความหายากการ์ด Riftbound และคำว่า Showcase Signature คืออะไร | CardStreet",
-            en: "Riftbound Rarities Explained: Epic, Showcase, Signature and Overnumbered | CardStreet",
+            th: "ระดับความหายากการ์ด Riftbound และคำว่า Showcase Signature คืออะไร | Cardstreet",
+            en: "Riftbound Rarities Explained: Epic, Showcase, Signature and Overnumbered | Cardstreet",
         },
         description: {
             th: "อธิบายระดับความหายากของการ์ด Riftbound ตั้งแต่ Common ถึง Epic และคำเฉพาะอย่าง Showcase, Signature, Alternate Art และ Overnumbered ที่ไม่มีในการ์ดเกมอื่น",
@@ -978,7 +978,7 @@ export const GUIDES: Guide[] = [
                 "ในกลุ่ม Showcase ยังมีคำกำกับย่อยที่ต้องรู้ Signature คือเวอร์ชันที่มีลายเซ็นของศิลปินหรือของตัวละครกำกับ เป็นกลุ่มที่ราคาสูงที่สุดในบรรดา Showcase ส่วน Ultimate เป็นอีกแบบพิเศษที่พบในการ์ดบางใบ",
                 "Alternate Art คือการ์ดใบเดิมที่ใช้ภาพต่างจากเวอร์ชันปกติ และ Overnumbered หมายถึงการ์ดที่เลขการ์ดเกินจำนวนของชุด เช่น การ์ดใบที่ 227 ในชุดที่มี 221 ใบ ซึ่งเป็นวิธีที่เกมนี้ใช้บอกว่าเป็นการ์ดพิเศษนอกชุดปกติ",
                 "จุดที่ต้องระวังคือ การ์ดตัวละครเดียวกันมีได้หลายเวอร์ชันในชุดเดียว ทั้งแบบปกติ แบบ Alternate Art และแบบ Showcase Signature ราคาต่างกันหลายสิบเท่า ดูเลขการ์ดที่มุมล่างเสมอ เพราะเลขคือสิ่งเดียวที่แยกเวอร์ชันได้แน่นอน",
-                "บน CardStreet การ์ด Riftbound ทุกใบมีราคาตลาด เลือกเวอร์ชันให้ตรงเลขการ์ด แล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
+                "บน Cardstreet การ์ด Riftbound ทุกใบมีราคาตลาด เลือกเวอร์ชันให้ตรงเลขการ์ด แล้วราคาที่เห็นจะเป็นของใบที่ถืออยู่จริง",
             ],
             en: [
                 "Riftbound uses rarity language that does not match other card games. Anyone arriving from Pokemon or Yu-Gi-Oh will meet several new terms, and some of them are not rarities at all but print treatments.",
@@ -987,7 +987,7 @@ export const GUIDES: Guide[] = [
                 "Within Showcase there are sub-labels worth knowing. Signature marks a version carrying a signature treatment and is the highest-priced group among Showcase cards. Ultimate is another special treatment found on certain cards.",
                 "Alternate Art is the same card with different artwork from the standard version. Overnumbered means a card whose collector number runs past the set's stated size — card 227 in a 221-card set, for instance — which is how this game marks a card as sitting outside the normal run.",
                 "The thing to watch: the same character can exist in several versions within one set — standard, Alternate Art, and Showcase Signature — with prices tens of times apart. Always read the collector number in the bottom corner, because the number is the only thing that reliably separates them.",
-                "Every Riftbound card on CardStreet carries a market price. Match the version by collector number and the price you see belongs to the card in your hand.",
+                "Every Riftbound card on Cardstreet carries a market price. Match the version by collector number and the price you see belongs to the card in your hand.",
             ],
         },
     },
@@ -1007,8 +1007,8 @@ export const GUIDES: Guide[] = [
             { label: "Ahri - Inquisitive (Overnumbered)", id: 'rb-spiritforged-227-221' },
         ],
         title: {
-            th: "การ์ด Riftbound ใบไหนแพงที่สุด และเช็คราคายังไง | CardStreet",
-            en: "The Most Valuable Riftbound Cards, and How to Check Prices | CardStreet",
+            th: "การ์ด Riftbound ใบไหนแพงที่สุด และเช็คราคายังไง | Cardstreet",
+            en: "The Most Valuable Riftbound Cards, and How to Check Prices | Cardstreet",
         },
         description: {
             th: "รวมการ์ด Riftbound ที่ราคาสูงที่สุด ทั้งกลุ่ม Showcase Signature และการ์ดพิเศษอย่าง Baron Nashor พร้อมวิธีเช็คราคาตลาดล่าสุดของใบที่ถืออยู่",
@@ -1026,7 +1026,7 @@ export const GUIDES: Guide[] = [
                 "ในชุด Spiritforged ก็มี Soraka - Wanderer เวอร์ชัน Signature และ Ahri - Inquisitive แบบ Overnumbered ที่เป็นเป้าหมายของคนไล่เก็บ",
                 "สิ่งที่ต้องเข้าใจกับเกมที่ยังใหม่คือ ราคายังไม่นิ่ง การ์ดที่แพงที่สุดวันนี้อาจไม่ใช่ใบเดิมในอีกหกเดือน เพราะชุดใหม่ออกถี่และผลการแข่งเปลี่ยนความต้องการได้เร็ว บทความที่ใส่ตัวเลขไว้จึงล้าสมัยเร็วเป็นพิเศษในเกมนี้",
                 "วิธีที่ใช้ได้จริงคือเปิดหน้าการ์ดใบนั้นแล้วดูราคาตลาดล่าสุดพร้อมกราฟย้อนหลัง เพื่อดูว่ากำลังขึ้นหรือลง ไม่ใช่ดูแค่ตัวเลขวันนี้",
-                "ข้อได้เปรียบของ Riftbound คือแคตตาล็อกยังเล็กพอที่จะมีราคาครบทุกใบ การ์ด Riftbound ทุกใบใน CardStreet มีราคาตลาดให้เช็ค ไม่มีใบไหนที่ต้องเดา",
+                "ข้อได้เปรียบของ Riftbound คือแคตตาล็อกยังเล็กพอที่จะมีราคาครบทุกใบ การ์ด Riftbound ทุกใบใน Cardstreet มีราคาตลาดให้เช็ค ไม่มีใบไหนที่ต้องเดา",
             ],
             en: [
                 "Riftbound is less than a year old, yet its top cards already reach the tens of thousands of baht, and almost all of them come from the Showcase group — particularly the Signature versions.",
@@ -1035,7 +1035,7 @@ export const GUIDES: Guide[] = [
                 "Spiritforged contributes Soraka - Wanderer in Signature and the Overnumbered Ahri - Inquisitive, both of which collectors chase.",
                 "The thing to understand about a young game is that prices have not settled. The most expensive card today may not be the same one in six months, because sets arrive frequently and competitive results move demand quickly. Articles with numbers in them go stale unusually fast here.",
                 "The method that works is to open the card page and read the current market price alongside the history chart, so you can see whether it is climbing or falling rather than just what it costs today.",
-                "Riftbound's advantage is that the catalog is still small enough to be priced completely. Every Riftbound card on CardStreet has a market price to check — none of them require guesswork.",
+                "Riftbound's advantage is that the catalog is still small enough to be priced completely. Every Riftbound card on Cardstreet has a market price to check — none of them require guesswork.",
             ],
         },
     },
@@ -1044,8 +1044,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-09-01',
         title: {
-            th: 'การ์ดโปเกมอนเก่าที่บ้าน มีค่าไหม — เช็คยังไงให้รู้จริง | CardStreet',
-            en: 'Are Old Pokémon Cards Worth Money? How to Actually Check | CardStreet',
+            th: 'การ์ดโปเกมอนเก่าที่บ้าน มีค่าไหม — เช็คยังไงให้รู้จริง | Cardstreet',
+            en: 'Are Old Pokémon Cards Worth Money? How to Actually Check | Cardstreet',
         },
         description: {
             th: 'เจอกล่องการ์ดโปเกมอนเก่าที่บ้าน แล้วมีค่าไหม ดูตัวเลขจริงจากแคตตาล็อกกว่า 7,700 ใบของชุดก่อนปี 2012 ว่าราคาอยู่ตรงไหน และวิธีเช็คทีละใบด้วยตัวเอง',
@@ -1058,37 +1058,37 @@ export const GUIDES: Guide[] = [
         body: {
             th: [
                 'คำถามนี้มักเจอคำตอบสองแบบบนอินเทอร์เน็ตไทย แบบแรกคือพาดหัวว่าการ์ดใบหนึ่งขายได้ห้าร้อยกว่าล้านบาท แบบที่สองคือคนบอกว่าการ์ดเก่าไม่มีราคาหรอก ทั้งสองแบบไม่ช่วยคนที่กำลังถือกล่องการ์ดอยู่จริง ๆ',
-                'ตัวเลขจริงเป็นแบบนี้ จากการ์ดโปเกมอนในชุดที่ออกก่อนปี 2012 ที่มีราคาตลาดบน CardStreet ทั้งหมด 7,744 ใบ ราคากลางอยู่ที่ประมาณ 185 บาทต่อใบ ประมาณ 27 เปอร์เซ็นต์อยู่ต่ำกว่า 50 บาท อีกราว 24 เปอร์เซ็นต์อยู่ระหว่าง 50 ถึง 200 บาท ราว 25 เปอร์เซ็นต์อยู่ระหว่าง 200 ถึง 1,000 บาท และอีกประมาณ 23 เปอร์เซ็นต์อยู่เหนือ 1,000 บาทขึ้นไป',
+                'ตัวเลขจริงเป็นแบบนี้ จากการ์ดโปเกมอนในชุดที่ออกก่อนปี 2012 ที่มีราคาตลาดบน Cardstreet ทั้งหมด 7,744 ใบ ราคากลางอยู่ที่ประมาณ 185 บาทต่อใบ ประมาณ 27 เปอร์เซ็นต์อยู่ต่ำกว่า 50 บาท อีกราว 24 เปอร์เซ็นต์อยู่ระหว่าง 50 ถึง 200 บาท ราว 25 เปอร์เซ็นต์อยู่ระหว่าง 200 ถึง 1,000 บาท และอีกประมาณ 23 เปอร์เซ็นต์อยู่เหนือ 1,000 บาทขึ้นไป',
                 'พูดง่าย ๆ คือ ประมาณหนึ่งในสี่ของการ์ดยุคเก่ามีราคาเกินพันบาท นั่นแปลว่าการ์ดเก่าคุ้มที่จะเช็คจริง ๆ ไม่ใช่ของไร้ค่าอย่างที่หลายคนคิด แต่ก็ไม่ได้แปลว่าคุณถือใบที่เป็นข่าวอยู่ ใบที่แพงระดับพาดหัวข่าวคือหนึ่งในหลายล้านใบทั่วโลก',
                 'เทียบให้เห็นภาพชัดขึ้น ถ้าดูทั้งแคตตาล็อกรวมการ์ดยุคใหม่ด้วย จะมีถึง 59 เปอร์เซ็นต์ที่ราคาต่ำกว่า 50 บาท ความต่างระหว่างสองตัวเลขนี้คืออายุของการ์ด ของเก่าที่รอดมาถึงวันนี้เหลือน้อยกว่า ราคาจึงสูงกว่าโดยเฉลี่ย',
                 'เช็คยังไง',
                 'อย่าเริ่มจากการค้นชื่อโปเกมอนอย่างเดียว เพราะโปเกมอนตัวเดียวกันถูกพิมพ์ซ้ำมาแล้วหลายสิบครั้งข้ามหลายชุด ราคาห่างกันได้เป็นร้อยเท่า สิ่งที่ต้องดูคือมุมล่างของการ์ด ตรงนั้นมีเลขการ์ดกับรหัสชุดอยู่ เช่น 4/102 คือใบที่สี่จากชุดที่มี 102 ใบ ใช้สองอย่างนี้ค้นหาจึงจะเจอใบที่ถูกต้อง',
-                'ถ้าไม่อยากพิมพ์ทีละใบ เปิดกล้องในแอป CardStreet แล้วส่องการ์ดได้เลย ระบบจะอ่านรหัสชุดกับเลขการ์ดให้เอง แล้วบอกราคาตลาดเป็นเงินบาททันที ใช้ได้กับการ์ดภาษาไทย ญี่ปุ่น และอังกฤษ',
+                'ถ้าไม่อยากพิมพ์ทีละใบ เปิดกล้องในแอป Cardstreet แล้วส่องการ์ดได้เลย ระบบจะอ่านรหัสชุดกับเลขการ์ดให้เอง แล้วบอกราคาตลาดเป็นเงินบาททันที ใช้ได้กับการ์ดภาษาไทย ญี่ปุ่น และอังกฤษ',
                 'สภาพสำคัญกว่าที่คิด',
                 'ราคาที่เห็นบนหน้าการ์ดคือราคาของใบที่สภาพดี การ์ดที่มุมขาว ขอบมีรอย หรือผิวเป็นรอยขีด จะขายได้ต่ำกว่านั้นพอสมควร ก่อนตั้งราคาให้ส่องขอบและมุมทั้งสี่ในแสงธรรมชาติ แล้วประเมินตามจริง คนซื้อการ์ดเก่าดูจุดพวกนี้เป็นอย่างแรก',
                 'การ์ดที่เก็บไว้ในกล่องปิดและไม่โดนแดดมักอยู่ในสภาพดีกว่าที่เจ้าของคิด ส่วนการ์ดที่เคยเก็บในแฟ้มพลาสติกเก่าหรือโดนความชื้นมักแย่กว่าที่คิด',
-                'ถ้าเช็คแล้วอยากขายต่อ ลงขายบน CardStreet ได้เลย ราคาตลาดที่แสดงอยู่ใช้เป็นตัวตั้งได้ทันที และคนซื้อก็เห็นตัวเลขเดียวกัน จึงคุยกันบนพื้นฐานเดียวกันตั้งแต่ต้น',
+                'ถ้าเช็คแล้วอยากขายต่อ ลงขายบน Cardstreet ได้เลย ราคาตลาดที่แสดงอยู่ใช้เป็นตัวตั้งได้ทันที และคนซื้อก็เห็นตัวเลขเดียวกัน จึงคุยกันบนพื้นฐานเดียวกันตั้งแต่ต้น',
             ],
             en: [
                 'Search this in Thai and you get two kinds of answer. One is a headline about a single card selling for hundreds of millions of baht. The other is someone insisting old cards are worthless. Neither helps the person actually holding a box.',
-                'Here are the real numbers. Across every pre-2012 Pokémon set in the CardStreet catalog — 7,744 cards with a market price — the median card is about THB 185. Roughly 27% sit under THB 50, about 24% fall between THB 50 and 200, about 25% between THB 200 and 1,000, and roughly 23% are above THB 1,000.',
+                'Here are the real numbers. Across every pre-2012 Pokémon set in the Cardstreet catalog — 7,744 cards with a market price — the median card is about THB 185. Roughly 27% sit under THB 50, about 24% fall between THB 50 and 200, about 25% between THB 200 and 1,000, and roughly 23% are above THB 1,000.',
                 'Put plainly: about one in four older cards is worth more than a thousand baht. Old cards are genuinely worth checking rather than throwing out — but that does not mean you are holding the card from the news. Those are one in many millions worldwide.',
                 'For contrast, across the whole catalog including modern sets, 59% of cards sit under THB 50. The difference between those two figures is age: fewer old cards survived, so what remains is worth more on average.',
                 'How to check',
                 'Do not search by the Pokémon name alone. The same Pokémon has been printed dozens of times across different sets, and prices between those printings can differ a hundredfold. Look at the bottom of the card for the collector number and set code — something like 4/102, meaning card four of a 102-card set. Those two things find the right card.',
-                'If you would rather not type each one, open the camera in the CardStreet app and point it at the card. It reads the set code and number itself and shows the market price in Thai baht. It works on Thai, Japanese and English cards.',
+                'If you would rather not type each one, open the camera in the Cardstreet app and point it at the card. It reads the set code and number itself and shows the market price in Thai baht. It works on Thai, Japanese and English cards.',
                 'Condition matters more than people expect',
                 'The price shown on a card page is for a card in good condition. Whitened corners, edge wear or surface scratches sell for meaningfully less. Before pricing anything, check the edges and all four corners in natural light and be honest about what you see — it is the first thing a buyer of old cards looks at.',
                 'Cards kept in a closed box away from sunlight are usually in better shape than their owner expects. Cards that lived in an old plastic folder or somewhere humid are usually worse.',
-                'If you decide to sell after checking, you can list on CardStreet directly. The displayed market price gives you a starting figure, and buyers see the same number, so both sides start from the same place.',
+                'If you decide to sell after checking, you can list on Cardstreet directly. The displayed market price gives you a starting figure, and buyers see the same number, so both sides start from the same place.',
             ],
         },
         faqs: [
             {
                 q: { th: 'การ์ดโปเกมอนปี 2000 กว่า ๆ ขายได้ราคาไหม?', en: 'Are Pokémon cards from the 2000s worth selling?' },
                 a: {
-                    th: 'ส่วนใหญ่ได้ราคามากกว่าที่เจ้าของคาด จากข้อมูลบน CardStreet การ์ดในชุดก่อนปี 2012 มีราคากลางราว 185 บาทต่อใบ และประมาณหนึ่งในสี่มีราคาเกิน 1,000 บาท แต่ต้องเช็คทีละใบ เพราะในกองเดียวกันมีทั้งใบที่ราคาไม่ถึงห้าสิบบาทและใบที่เกินหลักพัน',
-                    en: 'Usually more than their owner expects. In the CardStreet catalog, pre-2012 sets have a median of about THB 185 per card and roughly a quarter are above THB 1,000. But you have to check card by card — the same box will hold cards worth under fifty baht and cards worth thousands.',
+                    th: 'ส่วนใหญ่ได้ราคามากกว่าที่เจ้าของคาด จากข้อมูลบน Cardstreet การ์ดในชุดก่อนปี 2012 มีราคากลางราว 185 บาทต่อใบ และประมาณหนึ่งในสี่มีราคาเกิน 1,000 บาท แต่ต้องเช็คทีละใบ เพราะในกองเดียวกันมีทั้งใบที่ราคาไม่ถึงห้าสิบบาทและใบที่เกินหลักพัน',
+                    en: 'Usually more than their owner expects. In the Cardstreet catalog, pre-2012 sets have a median of about THB 185 per card and roughly a quarter are above THB 1,000. But you have to check card by card — the same box will hold cards worth under fifty baht and cards worth thousands.',
                 },
             },
             {
@@ -1112,12 +1112,12 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-09-01',
         title: {
-            th: 'ขายการ์ดโปเกมอนที่ไหนดี — เทียบทุกช่องทางในไทย | CardStreet',
-            en: 'Where to Sell Pokémon Cards in Thailand — Every Option Compared | CardStreet',
+            th: 'ขายการ์ดโปเกมอนที่ไหนดี — เทียบทุกช่องทางในไทย | Cardstreet',
+            en: 'Where to Sell Pokémon Cards in Thailand — Every Option Compared | Cardstreet',
         },
         description: {
-            th: 'เทียบช่องทางขายการ์ดโปเกมอนในไทยแบบตรงไปตรงมา ทั้งกลุ่ม Facebook ร้านรับซื้อ มาร์เก็ตเพลส และ CardStreet ว่าแต่ละทางได้ราคาเท่าไหร่ เร็วแค่ไหน และเสี่ยงตรงไหน',
-            en: 'An honest comparison of every way to sell Pokémon cards in Thailand — Facebook groups, shops that buy, general marketplaces and CardStreet — what each pays, how fast, and where the risk sits.',
+            th: 'เทียบช่องทางขายการ์ดโปเกมอนในไทยแบบตรงไปตรงมา ทั้งกลุ่ม Facebook ร้านรับซื้อ มาร์เก็ตเพลส และ Cardstreet ว่าแต่ละทางได้ราคาเท่าไหร่ เร็วแค่ไหน และเสี่ยงตรงไหน',
+            en: 'An honest comparison of every way to sell Pokémon cards in Thailand — Facebook groups, shops that buy, general marketplaces and Cardstreet — what each pays, how fast, and where the risk sits.',
         },
         h1: {
             th: 'ขายการ์ดโปเกมอนที่ไหนดีในไทย',
@@ -1132,7 +1132,7 @@ export const GUIDES: Guide[] = [
                 'ไม่มีค่าธรรมเนียม จึงได้ราคาเต็มที่สุด แลกมาด้วยการต้องโพสต์เอง ตอบแชทเอง ต่อราคาเอง แพ็คเอง และรับความเสี่ยงเรื่องการโอนเงินเอง คนที่ขายประจำและมีชื่อเสียงในกลุ่มอยู่แล้วมักได้ผลดี ส่วนคนใหม่ที่ยังไม่มีใครรู้จักมักขายยากกว่าที่คิด เพราะผู้ซื้อระวังตัว',
                 'มาร์เก็ตเพลสทั่วไป คนเห็นเยอะแต่ไม่ได้ทำมาเพื่อการ์ด',
                 'ข้อดีคือมีคนเข้าเยอะและมีระบบคืนเงิน ข้อเสียคือระบบไม่เข้าใจการ์ด ไม่มีการแยกสภาพ ไม่มีราคาตลาดอ้างอิง และการ์ดของคุณไปอยู่ปนกับสินค้าอีกล้านอย่าง คนที่ตั้งใจหาการ์ดใบนั้นจริง ๆ อาจไม่เจอ',
-                'CardStreet ตรงกลางระหว่างราคากับความปลอดภัย',
+                'Cardstreet ตรงกลางระหว่างราคากับความปลอดภัย',
                 'ลงขายฟรี ตั้งราคาเองโดยดูราคาตลาดที่แสดงอยู่เป็นตัวตั้ง คนซื้อเห็นตัวเลขเดียวกันจึงไม่ต้องเถียงกันว่าราคาควรเป็นเท่าไหร่ ผู้ขายยืนยันตัวตน ชำระเงินผ่านระบบที่ปลอดภัย และจัดส่งผ่าน Flash Express พร้อมเลขติดตาม รายละเอียดค่าธรรมเนียมและรอบโอนเงินอยู่ในหน้าขายการ์ด',
                 'เลือกยังไง',
                 'ถ้าการ์ดทั้งกองรวมกันไม่ถึงหลักพัน ขายเหมาให้ร้านมักคุ้มเวลาที่สุด ถ้ามีใบที่ราคาหลักร้อยขึ้นไปหลายใบ การลงขายทีละใบมักได้เงินรวมมากกว่าอย่างชัดเจน และถ้ามีใบที่ราคาหลักพันขึ้นไป ควรขายผ่านช่องทางที่มีระบบคุ้มครองทั้งสองฝ่าย เพราะความเสี่ยงต่อครั้งสูงพอที่จะคุ้มกับค่าธรรมเนียม',
@@ -1146,7 +1146,7 @@ export const GUIDES: Guide[] = [
                 'No fees, so you keep the most — in exchange for posting, answering messages, haggling, packing and carrying the transfer risk yourself. Regular sellers with a reputation in the group do well. Newcomers often find it harder than expected, because buyers are cautious about people they do not know.',
                 'General marketplaces: lots of traffic, not built for cards',
                 'Plenty of eyeballs and a refund system. But the platform does not understand cards — no condition grading, no reference price, and your card sits among a million unrelated products, so the person actually hunting that card may never find it.',
-                'CardStreet: between price and safety',
+                'Cardstreet: between price and safety',
                 'Listing is free, and you set your own price with the displayed market price as a starting point. Buyers see the same number, so nobody argues about what it should cost. Sellers are identity-verified, payment goes through secure checkout, and orders ship via Flash Express with tracking. Fees and payout timing are on the selling page.',
                 'How to choose',
                 'If the whole pile is worth under a few thousand baht, selling it to a shop in one go is usually the best use of your time. If you have several cards in the hundreds, listing individually usually nets clearly more. And if you have anything in the thousands, sell it somewhere both sides are protected — the per-transaction risk is high enough to justify a fee.',
@@ -1162,7 +1162,7 @@ export const GUIDES: Guide[] = [
                 },
             },
             {
-                q: { th: 'ลงขายบน CardStreet เสียค่าอะไรบ้าง?', en: 'What does it cost to list on CardStreet?' },
+                q: { th: 'ลงขายบน Cardstreet เสียค่าอะไรบ้าง?', en: 'What does it cost to list on Cardstreet?' },
                 a: {
                     th: 'ลงขายฟรี ไม่มีค่าลงประกาศ ค่าธรรมเนียมจะคิดเมื่อขายได้แล้วเท่านั้น รายละเอียดอัตราและรอบการโอนเงินอยู่ในหน้าขายการ์ด',
                     en: 'Listing is free — there is no fee to post. A fee applies only when a card actually sells. The rates and payout timing are set out on the selling page.',
@@ -1182,8 +1182,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-09-01',
         title: {
-            th: 'ขายการ์ดโปเกมอนยกกอง เหมาทั้งกล่อง คุ้มไหม | CardStreet',
-            en: 'Selling Pokémon Cards in Bulk in Thailand — Is It Worth It? | CardStreet',
+            th: 'ขายการ์ดโปเกมอนยกกอง เหมาทั้งกล่อง คุ้มไหม | Cardstreet',
+            en: 'Selling Pokémon Cards in Bulk in Thailand — Is It Worth It? | Cardstreet',
         },
         description: {
             th: 'มีการ์ดโปเกมอนเป็นกองใหญ่แต่ไม่รู้จะเริ่มตรงไหน วิธีคัดว่าใบไหนควรลงขายแยกและใบไหนควรขายเหมา พร้อมตัวเลขจริงว่าการ์ดส่วนใหญ่ในตลาดราคาเท่าไหร่',
@@ -1197,7 +1197,7 @@ export const GUIDES: Guide[] = [
             th: [
                 'คนที่เพิ่งรื้อกล่องการ์ดเจอปัญหาเดียวกันเกือบทุกคน คือมีการ์ดหลายร้อยใบ ไม่รู้ว่าใบไหนมีค่า และไม่อยากนั่งเช็คทีละใบเป็นวัน ๆ ทางออกไม่ใช่เลือกอย่างใดอย่างหนึ่ง แต่คือแบ่งกองให้ถูก',
                 'ทำไมต้องแบ่ง',
-                'จากข้อมูลราคาบน CardStreet ทั้งแคตตาล็อกโปเกมอน ประมาณ 59 เปอร์เซ็นต์ของการ์ดมีราคาต่ำกว่า 50 บาท แปลว่าเกินครึ่งของกองที่คุณถืออยู่แทบไม่คุ้มค่าเวลาที่ใช้ถ่ายรูปและลงขายทีละใบ แต่ในกองเดียวกันนั้นก็มักมีอยู่ไม่กี่ใบที่ราคาสูงพอจะเปลี่ยนยอดรวมทั้งหมด',
+                'จากข้อมูลราคาบน Cardstreet ทั้งแคตตาล็อกโปเกมอน ประมาณ 59 เปอร์เซ็นต์ของการ์ดมีราคาต่ำกว่า 50 บาท แปลว่าเกินครึ่งของกองที่คุณถืออยู่แทบไม่คุ้มค่าเวลาที่ใช้ถ่ายรูปและลงขายทีละใบ แต่ในกองเดียวกันนั้นก็มักมีอยู่ไม่กี่ใบที่ราคาสูงพอจะเปลี่ยนยอดรวมทั้งหมด',
                 'เป้าหมายจึงเป็นการหาไม่กี่ใบนั้นให้เจอ แล้วปล่อยที่เหลือแบบเหมา',
                 'คัดยังไงให้เร็ว',
                 'ไล่ดูสามอย่างก่อน หนึ่งคือการ์ดที่มีพื้นผิวมันวาวหรือลายฟอยล์ สองคือการ์ดที่มีข้อความพิเศษต่อท้ายชื่อ เช่น ex GX V หรือ VMAX สามคือการ์ดที่ภาพกินเต็มใบไม่มีกรอบ สามกลุ่มนี้คือที่ที่มูลค่ากระจุกอยู่เกือบทั้งหมด การ์ดธรรมดาที่ไม่เข้าสามข้อนี้ส่วนใหญ่อยู่ในกลุ่มต่ำกว่า 50 บาท',
@@ -1210,7 +1210,7 @@ export const GUIDES: Guide[] = [
             en: [
                 'Everyone who digs out an old box hits the same problem: hundreds of cards, no idea which matter, and no appetite for checking each one for a day. The answer is not to pick one approach — it is to split the pile correctly.',
                 'Why split at all',
-                'Across the whole Pokémon catalog on CardStreet, about 59% of cards are priced under THB 50. So more than half of what you are holding is not worth the time it takes to photograph and list individually. But that same pile usually contains a handful of cards valuable enough to change the total on their own.',
+                'Across the whole Pokémon catalog on Cardstreet, about 59% of cards are priced under THB 50. So more than half of what you are holding is not worth the time it takes to photograph and list individually. But that same pile usually contains a handful of cards valuable enough to change the total on their own.',
                 'The job is to find those few, and move the rest as a lot.',
                 'How to sort quickly',
                 'Look for three things first. Cards with a shiny or foil surface. Cards with something appended to the name — ex, GX, V or VMAX. And cards where the artwork fills the whole card with no border. Almost all of the value sits in those three groups. Ordinary cards matching none of them mostly land in the under-THB-50 band.',
@@ -1225,8 +1225,8 @@ export const GUIDES: Guide[] = [
             {
                 q: { th: 'การ์ดธรรมดาเป็นร้อยใบ ขายได้เท่าไหร่?', en: 'What is a few hundred ordinary cards worth?' },
                 a: {
-                    th: 'ขายเป็นกองมักได้ราคาต่อใบต่ำมาก เพราะการ์ดกลุ่มนี้มีอยู่ทั่วไป จากข้อมูลบน CardStreet ประมาณ 59 เปอร์เซ็นต์ของการ์ดโปเกมอนทั้งแคตตาล็อกราคาต่ำกว่า 50 บาทต่อใบอยู่แล้ว มูลค่ารวมจริง ๆ ของกองมักมาจากไม่กี่ใบที่คัดออกมาได้ ไม่ใช่จากจำนวนใบ',
-                    en: 'Sold as a heap, very little per card — these are common by definition. About 59% of Pokémon cards in the CardStreet catalog are already under THB 50 each. The real value of a pile almost always comes from the few cards you pull out of it, not from the count.',
+                    th: 'ขายเป็นกองมักได้ราคาต่อใบต่ำมาก เพราะการ์ดกลุ่มนี้มีอยู่ทั่วไป จากข้อมูลบน Cardstreet ประมาณ 59 เปอร์เซ็นต์ของการ์ดโปเกมอนทั้งแคตตาล็อกราคาต่ำกว่า 50 บาทต่อใบอยู่แล้ว มูลค่ารวมจริง ๆ ของกองมักมาจากไม่กี่ใบที่คัดออกมาได้ ไม่ใช่จากจำนวนใบ',
+                    en: 'Sold as a heap, very little per card — these are common by definition. About 59% of Pokémon cards in the Cardstreet catalog are already under THB 50 each. The real value of a pile almost always comes from the few cards you pull out of it, not from the count.',
                 },
             },
             {
@@ -1243,8 +1243,8 @@ export const GUIDES: Guide[] = [
         game: 'pokemon',
         updated: '2026-09-01',
         title: {
-            th: 'การ์ดโปเกมอนแบบไหนขายยาก — รู้ก่อนจะได้ไม่เสียเวลา | CardStreet',
-            en: 'Which Pokémon Cards Are Hard to Sell — Know Before You List | CardStreet',
+            th: 'การ์ดโปเกมอนแบบไหนขายยาก — รู้ก่อนจะได้ไม่เสียเวลา | Cardstreet',
+            en: 'Which Pokémon Cards Are Hard to Sell — Know Before You List | Cardstreet',
         },
         description: {
             th: 'ไม่ใช่การ์ดทุกใบจะขายออก รู้ว่าการ์ดแบบไหนขายยากและเพราะอะไร จะได้ตั้งราคาให้ถูกและไม่เสียเวลาลงขายใบที่ไม่มีคนหา',
@@ -1264,7 +1264,7 @@ export const GUIDES: Guide[] = [
                 'การ์ดสภาพไม่ดีที่ตั้งราคาเท่าของสภาพดี',
                 'นี่คือสาเหตุที่พบบ่อยที่สุดของการ์ดที่ลงขายแล้วไม่มีคนซื้อ ราคาที่แสดงบนหน้าการ์ดคือราคาของใบสภาพดี ถ้าการ์ดมุมขาวหรือมีรอยแล้วตั้งราคาเท่ากัน ผู้ซื้อที่เทียบราคาเป็นจะข้ามไปหาใบอื่น ทางแก้ไม่ใช่ซ่อนสภาพ แต่คือลดราคาลงให้สมเหตุสมผลและถ่ายรูปให้ตรงจริง',
                 'การ์ดที่ตั้งราคาสูงกว่าราคาตลาดมาก',
-                'ผู้ซื้อบน CardStreet เห็นราคาตลาดของการ์ดใบนั้นอยู่ข้าง ๆ รายการขายเสมอ การตั้งราคาสูงกว่ามากจึงเห็นได้ทันทีและมักถูกข้ามไป ถ้าเชื่อว่าการ์ดใบนั้นควรได้มากกว่าราคากลาง เช่น เพราะสภาพดีเป็นพิเศษ ควรอธิบายไว้ในรายละเอียดให้ผู้ซื้อเข้าใจ',
+                'ผู้ซื้อบน Cardstreet เห็นราคาตลาดของการ์ดใบนั้นอยู่ข้าง ๆ รายการขายเสมอ การตั้งราคาสูงกว่ามากจึงเห็นได้ทันทีและมักถูกข้ามไป ถ้าเชื่อว่าการ์ดใบนั้นควรได้มากกว่าราคากลาง เช่น เพราะสภาพดีเป็นพิเศษ ควรอธิบายไว้ในรายละเอียดให้ผู้ซื้อเข้าใจ',
                 'การ์ดปลอมและการ์ดที่ไม่ใช่ของลิขสิทธิ์',
                 'การ์ดแปลไทยที่ไม่ใช่ของทางการ การ์ดที่พิมพ์เอง และของปลอม ขายบนแพลตฟอร์มที่ตรวจสอบผู้ขายไม่ได้ และถึงขายได้ก็มักจบด้วยการถูกคืนของ ถ้าไม่แน่ใจว่าการ์ดในมือแท้หรือไม่ ให้เทียบกับใบแท้ที่มีอยู่ก่อน',
                 'แล้วอะไรที่ขายง่าย',
@@ -1279,7 +1279,7 @@ export const GUIDES: Guide[] = [
                 'Damaged cards priced like clean ones',
                 'This is the single most common reason a listing sits unsold. The price on a card page is for a card in good condition. Price a card with whitened corners or scratches the same and any buyer who compares will move on. The fix is not to hide the condition — it is to price it honestly and photograph it accurately.',
                 'Cards priced well above market',
-                'Buyers on CardStreet see the market price next to every listing. A price far above it is immediately visible and usually skipped. If you believe a card deserves more — exceptional condition, say — explain why in the description so the buyer understands what they are paying for.',
+                'Buyers on Cardstreet see the market price next to every listing. A price far above it is immediately visible and usually skipped. If you believe a card deserves more — exceptional condition, say — explain why in the description so the buyer understands what they are paying for.',
                 'Counterfeits and unlicensed printings',
                 'Unofficial Thai-translated cards, home-printed cards and outright fakes cannot be sold on a platform that verifies its sellers, and where they do sell elsewhere they tend to come back as returns. If you are unsure whether something is genuine, compare it against a card you know is real first.',
                 'So what does sell easily',
@@ -1308,8 +1308,8 @@ export const GUIDES: Guide[] = [
         game: 'onepiece',
         updated: '2026-09-11',
         title: {
-            th: 'เช็คราคาการ์ดวันพีชยังไงให้ถูกใบ — คู่มือดูราคาฉบับคนไทย | CardStreet',
-            en: 'How to Check One Piece Card Prices in Thailand — The Full Guide | CardStreet',
+            th: 'เช็คราคาการ์ดวันพีชยังไงให้ถูกใบ — คู่มือดูราคาฉบับคนไทย | Cardstreet',
+            en: 'How to Check One Piece Card Prices in Thailand — The Full Guide | Cardstreet',
         },
         h1: {
             th: 'เช็คราคาการ์ดวันพีช ให้ตรงใบที่ถืออยู่',
@@ -1363,8 +1363,8 @@ export const GUIDES: Guide[] = [
             {
                 q: { th: 'เช็คราคาการ์ดวันพีชฟรีได้ที่ไหน?', en: 'Where can I check One Piece card prices for free?' },
                 a: {
-                    th: 'เช็คได้ฟรีบน CardStreet ทั้งฉบับอังกฤษและญี่ปุ่น ครอบคลุมการ์ด 6,377 ใบ ดูราคาได้โดยไม่ต้องสมัครสมาชิก ค้นด้วยชื่อการ์ดพร้อมเลขใบ หรือใช้กล้องสแกน',
-                    en: 'Free on CardStreet, covering 6,377 cards across the English and Japanese printings, with no account needed to see a price. Search by name plus card number, or scan the card with your camera.',
+                    th: 'เช็คได้ฟรีบน Cardstreet ทั้งฉบับอังกฤษและญี่ปุ่น ครอบคลุมการ์ด 6,377 ใบ ดูราคาได้โดยไม่ต้องสมัครสมาชิก ค้นด้วยชื่อการ์ดพร้อมเลขใบ หรือใช้กล้องสแกน',
+                    en: 'Free on Cardstreet, covering 6,377 cards across the English and Japanese printings, with no account needed to see a price. Search by name plus card number, or scan the card with your camera.',
                 },
             },
             {
@@ -1432,7 +1432,7 @@ export const GUIDES: Guide[] = [
     //
     // CLAIMS ARE CODE-BACKED, and two of them are the reason this sat as a draft
     // until the founder approved it:
-    //   - "CardStreet does not store your ID" — onboarding is Stripe-HOSTED
+    //   - "Cardstreet does not store your ID" — onboarding is Stripe-HOSTED
     //     (accountLinks.create in app/api/stripe/connect/start); no route or
     //     component of ours reads or persists an ID number, laser code or selfie.
     //   - "we withhold no tax" — there is no withholding logic anywhere in the
@@ -1445,12 +1445,12 @@ export const GUIDES: Guide[] = [
         slug: 'seller-verification-thailand',
         game: 'pokemon',
         title: {
-            th: 'ยืนยันตัวตนผู้ขาย CardStreet ต้องใช้อะไรบ้าง | CardStreet',
-            en: 'Seller verification on CardStreet: what you need | CardStreet',
+            th: 'ยืนยันตัวตนผู้ขาย Cardstreet ต้องใช้อะไรบ้าง | Cardstreet',
+            en: 'Seller verification on Cardstreet: what you need | Cardstreet',
         },
         description: {
-            th: 'รวมทุกอย่างที่ต้องเตรียมก่อนยืนยันตัวตนเพื่อขายการ์ดบน CardStreet — บัตรประชาชน รหัสเลเซอร์ เซลฟี่ และบัญชีธนาคาร พร้อมคำอธิบายว่าทำไมกฎหมายไทยถึงบังคับ',
-            en: 'Everything to have ready before verifying your identity to sell cards on CardStreet — Thai ID, laser code, selfie and bank account — and why Thai law requires it.',
+            th: 'รวมทุกอย่างที่ต้องเตรียมก่อนยืนยันตัวตนเพื่อขายการ์ดบน Cardstreet — บัตรประชาชน รหัสเลเซอร์ เซลฟี่ และบัญชีธนาคาร พร้อมคำอธิบายว่าทำไมกฎหมายไทยถึงบังคับ',
+            en: 'Everything to have ready before verifying your identity to sell cards on Cardstreet — Thai ID, laser code, selfie and bank account — and why Thai law requires it.',
         },
         h1: {
             th: 'ยืนยันตัวตนผู้ขาย: ต้องใช้อะไรบ้าง และทำไมถึงต้องทำ',
@@ -1462,17 +1462,17 @@ export const GUIDES: Guide[] = [
                 'ถ้าคุณกดสมัครเป็นผู้ขายแล้วเจอหน้าฟอร์มยืนยันตัวตน แล้วปิดทิ้งไป — คุณไม่ได้เป็นคนเดียว ผู้ขายส่วนใหญ่ที่หยุดกลางทางไม่ได้เปลี่ยนใจ แต่เจอฟอร์มที่ไม่รู้ว่าจะต้องใช้อะไรบ้าง หน้านี้บอกล่วงหน้าทั้งหมด ใช้เวลาเตรียมของประมาณ 2 นาที และกรอกจริงอีกไม่ถึง 5 นาที',
                 'สิ่งที่ต้องเตรียม',
                 'บัตรประชาชนไทย — ต้องใช้เลขบัตร 13 หลัก และรหัสเลเซอร์หลังบัตร (ตัวอักษรผสมตัวเลข ขึ้นต้นด้วย JT, ME หรือ JC อยู่ด้านหลังบัตร มุมขวาบน) คนส่วนใหญ่สะดุดตรงนี้เพราะไม่เคยต้องใช้มาก่อน หยิบบัตรมาวางข้างตัวก่อนเริ่มกรอก',
-                'วัน เดือน ปีเกิด และที่อยู่ตามทะเบียนบ้าน — ถ้าคุณกรอกที่อยู่ในโปรไฟล์ CardStreet ไว้แล้ว ระบบจะเติมให้อัตโนมัติ ไม่ต้องพิมพ์ซ้ำ',
+                'วัน เดือน ปีเกิด และที่อยู่ตามทะเบียนบ้าน — ถ้าคุณกรอกที่อยู่ในโปรไฟล์ Cardstreet ไว้แล้ว ระบบจะเติมให้อัตโนมัติ ไม่ต้องพิมพ์ซ้ำ',
                 'รูปเซลฟี่ยืนยันตัวตน — ขั้นตอนนี้จะให้คุณถ่ายรูปหน้าตัวเองสดๆ ผ่านกล้อง ไม่ใช่อัปโหลดรูปเก่า ทำบนมือถือง่ายที่สุด และข้ามไม่ได้',
                 'บัญชีธนาคารไทยในชื่อคุณเอง — สำหรับรับเงินที่ขายได้ ต้องเป็นชื่อเดียวกับที่ยืนยันตัวตน',
                 'ทำไมต้องใช้เยอะขนาดนี้',
-                'เพราะบนระบบของไทย ผู้ขายคือผู้รับเงินโดยตรง เงินของผู้ซื้อเข้าบัญชีร้านของคุณ ไม่ได้ผ่านกระเป๋ากลางของ CardStreet ก่อน โครงสร้างแบบนี้กฎหมายไทยกำหนดให้ต้องรู้จักตัวตนผู้รับเงินก่อน — เป็นมาตรฐานเดียวกับที่ธนาคารและผู้ให้บริการชำระเงินทุกเจ้าในไทยต้องทำ ไม่ใช่กฎที่ CardStreet ตั้งขึ้นเอง และเราลดจำนวนช่องที่คุณต้องกรอกเองไม่ได้',
-                'ข้อดีของโครงสร้างนี้คือเงินเข้าบัญชีคุณโดยตรง ไม่ต้องรอเบิกจากกระเป๋ากลาง และ CardStreet ไม่มีทางถือเงินคุณค้างไว้',
+                'เพราะบนระบบของไทย ผู้ขายคือผู้รับเงินโดยตรง เงินของผู้ซื้อเข้าบัญชีร้านของคุณ ไม่ได้ผ่านกระเป๋ากลางของ Cardstreet ก่อน โครงสร้างแบบนี้กฎหมายไทยกำหนดให้ต้องรู้จักตัวตนผู้รับเงินก่อน — เป็นมาตรฐานเดียวกับที่ธนาคารและผู้ให้บริการชำระเงินทุกเจ้าในไทยต้องทำ ไม่ใช่กฎที่ Cardstreet ตั้งขึ้นเอง และเราลดจำนวนช่องที่คุณต้องกรอกเองไม่ได้',
+                'ข้อดีของโครงสร้างนี้คือเงินเข้าบัญชีคุณโดยตรง ไม่ต้องรอเบิกจากกระเป๋ากลาง และ Cardstreet ไม่มีทางถือเงินคุณค้างไว้',
                 'ยังไม่พร้อมยืนยันตัวตน? ลงการ์ดไว้ก่อนได้',
                 'คุณลงการ์ดได้ทันทีโดยยังไม่ต้องยืนยันตัวตนเสร็จ การ์ดจะถูกบันทึกเป็นแบบร่าง — เห็นเฉพาะคุณคนเดียว และจะขึ้นขายอัตโนมัติทันทีที่การยืนยันตัวตนผ่าน ไม่ต้องกลับมาลงใหม่ วิธีนี้เหมาะกับคนที่อยากดูก่อนว่าการ์ดในมือราคาเท่าไหร่ก่อนตัดสินใจ',
                 'ผ่านแล้วเกิดอะไรขึ้น',
                 'ร้านของคุณจะขึ้นในหน้ารวมร้านค้าและในหน้าการ์ดแต่ละใบที่คุณลงขาย ผู้ซื้อจ่ายได้ทั้งบัตรเครดิตและพร้อมเพย์ เงินเข้าบัญชีร้านของคุณตอนที่ผู้ซื้อจ่าย และโอนเข้าบัญชีธนาคารตามรอบอัตโนมัติของผู้ให้บริการชำระเงิน',
-                'ค่าธรรมเนียมของ CardStreet คือ 9% ของยอดขายสำหรับผู้ขายทั่วไป และลดเหลือเริ่มต้นที่ 5% สำหรับพาร์ตเนอร์ ค่าธรรมเนียมการรูดบัตรของผู้ให้บริการชำระเงินหักจากยอดที่เข้าบัญชีร้านตามปกติ ผู้ซื้อไม่ได้ถูกบวกเพิ่ม',
+                'ค่าธรรมเนียมของ Cardstreet คือ 9% ของยอดขายสำหรับผู้ขายทั่วไป และลดเหลือเริ่มต้นที่ 5% สำหรับพาร์ตเนอร์ ค่าธรรมเนียมการรูดบัตรของผู้ให้บริการชำระเงินหักจากยอดที่เข้าบัญชีร้านตามปกติ ผู้ซื้อไม่ได้ถูกบวกเพิ่ม',
                 'ถ้าติดตรงไหน',
                 'ฟอร์มยืนยันตัวตนกลับมาทำต่อได้ตลอด ข้อมูลที่กรอกไว้แล้วไม่หาย เข้าที่หน้าโปรไฟล์ แล้วไปที่หัวข้อการรับเงิน กดทำต่อได้เลย ถ้ายังติด ทักหาเราได้ที่หน้าติดต่อ',
             ],
@@ -1480,17 +1480,17 @@ export const GUIDES: Guide[] = [
                 'If you started seller signup, met the identity form and closed it — you are not unusual. Most sellers who stop have not changed their minds; they hit a form without knowing what it would ask for. This page tells you everything in advance. About two minutes to gather, under five to fill in.',
                 'What to have ready',
                 'Your Thai national ID card — you need the 13-digit number and the laser code on the back (letters and digits beginning JT, ME or JC, top-right on the reverse). This is where most people stop, because it is a field they have never been asked for before. Have the card next to you before you start.',
-                'Date of birth and registered address — if your CardStreet profile already has an address, it is filled in for you.',
+                'Date of birth and registered address — if your Cardstreet profile already has an address, it is filled in for you.',
                 'A verification selfie — a live photo through your camera, not an uploaded file. Easiest on a phone, and it cannot be skipped.',
                 'A Thai bank account in your own name — for receiving your sales. It must match the verified identity.',
                 'Why it asks for so much',
-                'On the Thai platform, the seller receives the money directly. A buyer’s payment lands in your own merchant balance rather than passing through a CardStreet wallet first. Thai law requires the recipient of funds to be identified before that can happen — the same standard every bank and payment provider in Thailand works to. It is not a CardStreet rule, and we cannot reduce the number of fields.',
-                'The upside of that structure is that your money is yours immediately. There is no CardStreet wallet to withdraw from, and no way for us to sit on your balance.',
+                'On the Thai platform, the seller receives the money directly. A buyer’s payment lands in your own merchant balance rather than passing through a Cardstreet wallet first. Thai law requires the recipient of funds to be identified before that can happen — the same standard every bank and payment provider in Thailand works to. It is not a Cardstreet rule, and we cannot reduce the number of fields.',
+                'The upside of that structure is that your money is yours immediately. There is no Cardstreet wallet to withdraw from, and no way for us to sit on your balance.',
                 'Not ready to verify? List anyway',
                 'You can list cards before verification is finished. They are saved as drafts — visible only to you — and go live automatically the moment verification passes. Nothing to re-enter. This suits anyone who wants to see what their cards are worth before committing.',
                 'What happens once you pass',
                 'Your shop appears in the shop directory and on every card page you list. Buyers can pay by card or PromptPay. Money reaches your merchant balance when the buyer pays, and moves to your bank on the payment provider’s automatic schedule.',
-                'CardStreet’s fee is 9% of the sale for standard sellers, dropping to 5% and below for partners. The payment provider’s processing fee comes out of your balance as normal; buyers are never charged extra for it.',
+                'Cardstreet’s fee is 9% of the sale for standard sellers, dropping to 5% and below for partners. The payment provider’s processing fee comes out of your balance as normal; buyers are never charged extra for it.',
                 'If you get stuck',
                 'The form can be resumed at any time and keeps what you have already entered. Open your profile, go to the payouts section, and continue. If you are still stuck, use the contact page.',
             ],
@@ -1534,10 +1534,10 @@ export const GUIDES: Guide[] = [
                 },
             },
             {
-                q: { th: 'CardStreet เก็บบัตรประชาชนของฉันไว้ไหม?', en: 'Does CardStreet store my ID card?' },
+                q: { th: 'Cardstreet เก็บบัตรประชาชนของฉันไว้ไหม?', en: 'Does Cardstreet store my ID card?' },
                 a: {
-                    th: 'ไม่ ข้อมูลยืนยันตัวตนส่งตรงไปที่ผู้ให้บริการชำระเงินซึ่งเป็นผู้ตรวจสอบ CardStreet เห็นเพียงสถานะว่าผ่านหรือยังไม่ผ่าน',
-                    en: 'No. Verification details go directly to the payment provider that performs the check. CardStreet only sees whether you have passed.',
+                    th: 'ไม่ ข้อมูลยืนยันตัวตนส่งตรงไปที่ผู้ให้บริการชำระเงินซึ่งเป็นผู้ตรวจสอบ Cardstreet เห็นเพียงสถานะว่าผ่านหรือยังไม่ผ่าน',
+                    en: 'No. Verification details go directly to the payment provider that performs the check. Cardstreet only sees whether you have passed.',
                 },
             },
             {
@@ -1557,8 +1557,8 @@ export const GUIDES: Guide[] = [
             {
                 q: { th: 'ขายการ์ดต้องเสียภาษีไหม?', en: 'Do I pay tax on card sales?' },
                 a: {
-                    th: 'รายได้จากการขายเป็นรายได้ของคุณตามกฎหมาย CardStreet ไม่ได้หักภาษี ณ ที่จ่ายให้ ถ้ายอดขายของคุณสูง ควรปรึกษาผู้เชี่ยวชาญด้านภาษี',
-                    en: 'Sales income is yours and is taxable as such; CardStreet does not withhold anything. Consult a tax professional if your volume is significant.',
+                    th: 'รายได้จากการขายเป็นรายได้ของคุณตามกฎหมาย Cardstreet ไม่ได้หักภาษี ณ ที่จ่ายให้ ถ้ายอดขายของคุณสูง ควรปรึกษาผู้เชี่ยวชาญด้านภาษี',
+                    en: 'Sales income is yours and is taxable as such; Cardstreet does not withhold anything. Consult a tax professional if your volume is significant.',
                 },
             },
         ],

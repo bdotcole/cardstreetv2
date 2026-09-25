@@ -12,7 +12,7 @@ import OrderDetailContent, { type OrderDetailData } from './OrderDetailContent';
 // /orders list does), so this renders the same for mobile and desktop instead
 // of going through the desktop/SPA split.
 export const metadata: Metadata = {
-    title: 'Order — CardStreet',
+    title: 'Order — Cardstreet',
     // Private, per-user content — never index.
     robots: { index: false, follow: false },
 };

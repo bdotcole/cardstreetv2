@@ -28,7 +28,7 @@ function gameLabel(game: string, lang: 'EN' | 'TH'): string {
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
     const { setId } = await params;
     const { set, cards } = await getSetPageData(setId);
-    if (!set) return { title: 'Set not found | CardStreet', robots: { index: false, follow: false } };
+    if (!set) return { title: 'Set not found | Cardstreet', robots: { index: false, follow: false } };
 
     const lang = await resolveLang();
     const count = cards.length || set.printed_total || set.total || 0;
@@ -39,12 +39,12 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
     const named = setTitleName(set);
     const title =
         lang === 'EN'
-            ? `${named} — ${withEnglishLanguage(game, set.language)} Cards & Prices | CardStreet`
-            : `${named} — ${withThaiLanguage(thaiCardNoun(set.game), set.language)} เช็คราคาและรายการขาย | CardStreet`;
+            ? `${named} — ${withEnglishLanguage(game, set.language)} Cards & Prices | Cardstreet`
+            : `${named} — ${withThaiLanguage(thaiCardNoun(set.game), set.language)} เช็คราคาและรายการขาย | Cardstreet`;
     const description =
         lang === 'EN'
-            ? `Browse all ${count} ${named} ${withEnglishLanguage(game, set.language)} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
-            : `เลือกชมการ์ด ${named} (${withThaiLanguage(game, set.language)}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน CardStreet จัดส่งทั่วไทย`;
+            ? `Browse all ${count} ${named} ${withEnglishLanguage(game, set.language)} cards with live market prices and listings from verified sellers. Buy and sell on Cardstreet with nationwide shipping in Thailand.`
+            : `เลือกชมการ์ด ${named} (${withThaiLanguage(game, set.language)}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน Cardstreet จัดส่งทั่วไทย`;
 
     const ogImage = set.logo_url ? getSetLogoUrl(set.logo_url, 600, 85) : undefined;
 
@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/sets/${setId}`, pathLocale),
             images: ogImage ? [{ url: ogImage }] : undefined,
         },

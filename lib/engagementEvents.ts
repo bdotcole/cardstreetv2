@@ -2,7 +2,7 @@
 
 /**
  * Engagement funnel events — the five actions that mean a user is actually
- * using CardStreet rather than just visiting it.
+ * using Cardstreet rather than just visiting it.
  *
  * WHY THESE FIVE, AND WHY THESE NAMES: the rewards ledger already records
  * exactly this set (scan_confirm, vault_add, wishlist_add, listing_publish and

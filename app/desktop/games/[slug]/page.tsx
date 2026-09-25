@@ -26,7 +26,7 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
     const landing = getGameLanding(slug);
-    if (!landing) return { title: 'Not found | CardStreet', robots: { index: false, follow: false } };
+    if (!landing) return { title: 'Not found | Cardstreet', robots: { index: false, follow: false } };
 
     // Metadata follows the URL variant, never the cs_lang cookie. The bare path
     // IS the Thai canonical, so an English-cookie visitor there must still get
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             title: landing.title[lang],
             description: landing.description[lang],
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/${landing.slug}`, pathLocale),
         },
     };
@@ -65,7 +65,7 @@ function buildJsonLd(
             {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                    { '@type': 'ListItem', position: 1, name: 'CardStreet', item: BASE_URL },
+                    { '@type': 'ListItem', position: 1, name: 'Cardstreet', item: BASE_URL },
                     { '@type': 'ListItem', position: 2, name: gameName, item: url },
                 ],
             },
@@ -141,7 +141,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
             />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">Cardstreet</Link>
                 <span className="mx-2">/</span>
                 <span className="text-slate-300">{game.name}</span>
             </nav>
@@ -275,7 +275,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
 
             <section className="mt-12">
                 <h2 className="text-sm font-black text-slate-400 uppercase tracking-wide mb-3">
-                    {isThai ? 'เกมการ์ดอื่น ๆ บน CardStreet' : 'Other card games on CardStreet'}
+                    {isThai ? 'เกมการ์ดอื่น ๆ บน Cardstreet' : 'Other card games on Cardstreet'}
                 </h2>
                 <div className="flex flex-wrap gap-2">
                     {GAME_LANDINGS.filter((g) => g.slug !== landing.slug).map((g) => (

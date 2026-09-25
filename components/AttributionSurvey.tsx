@@ -90,7 +90,7 @@ export default function AttributionSurvey() {
                 <>
                     <div className="flex items-start gap-3">
                         <p className="flex-1 text-xs font-bold text-white leading-relaxed">
-                            {isThai ? 'คุณรู้จัก CardStreet จากที่ไหน' : 'How did you hear about CardStreet?'}
+                            {isThai ? 'คุณรู้จัก Cardstreet จากที่ไหน' : 'How did you hear about Cardstreet?'}
                         </p>
                         <button
                             onClick={close}

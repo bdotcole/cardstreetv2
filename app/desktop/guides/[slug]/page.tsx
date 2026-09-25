@@ -23,7 +23,7 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
     const guide = getGuide(slug);
-    if (!guide) return { title: 'Not found | CardStreet', robots: { index: false, follow: false } };
+    if (!guide) return { title: 'Not found | Cardstreet', robots: { index: false, follow: false } };
 
     // Metadata follows the URL variant, never the cs_lang cookie — the bare path
     // IS the Thai canonical, so an English-cookie visitor there still gets Thai
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             title: guide.title[lang],
             description: guide.description[lang],
             type: 'article',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/guides/${guide.slug}`, pathLocale),
             images: [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630 }],
         },
@@ -55,7 +55,7 @@ function buildJsonLd(guide: NonNullable<ReturnType<typeof getGuide>>, gameName: 
             {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                    { '@type': 'ListItem', position: 1, name: 'CardStreet', item: BASE_URL },
+                    { '@type': 'ListItem', position: 1, name: 'Cardstreet', item: BASE_URL },
                     { '@type': 'ListItem', position: 2, name: gameName, item: localizedUrl(`/${guide.game}`, pathLocale) },
                     { '@type': 'ListItem', position: 3, name: guide.h1[isThai ? 'th' : 'en'], item: url },
                 ],
@@ -71,7 +71,7 @@ function buildJsonLd(guide: NonNullable<ReturnType<typeof getGuide>>, gameName: 
                 dateModified: guide.updated,
                 mainEntityOfPage: { '@type': 'WebPage', '@id': url },
                 isPartOf: { '@id': `${BASE_URL}/#website` },
-                publisher: { '@type': 'Organization', name: 'CardStreet', url: BASE_URL },
+                publisher: { '@type': 'Organization', name: 'Cardstreet', url: BASE_URL },
             },
             // FAQPage only where the guide carries visible Q&A — schema must
             // mirror on-page content, same rule as the game landings.
@@ -112,7 +112,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
             />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">Cardstreet</Link>
                 <span className="mx-2">/</span>
                 <Link href={`${prefix}/guides`} className="hover:text-slate-300 transition-colors">
                     {isThai ? 'คู่มือ' : 'Guides'}

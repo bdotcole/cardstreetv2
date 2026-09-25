@@ -1,4 +1,4 @@
-// Single source of truth for the trading-card games CardStreet supports.
+// Single source of truth for the trading-card games Cardstreet supports.
 //
 // Every game-aware surface (Marketplace filter, Explore dropdowns, Master Set
 // picker) reads from GAMES so adding/enabling a game is a one-line change here

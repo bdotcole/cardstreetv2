@@ -8,7 +8,7 @@ import { requireAdmin } from '@/lib/adminAuth';
  *
  * outcome:
  *   'refunded'  the buyer was made whole (the refund itself is issued in the Stripe
- *               dashboard on the seller's connected account, or paid from CardStreet
+ *               dashboard on the seller's connected account, or paid from Cardstreet
  *               funds); the order becomes 'cancelled' and an order_refunds row records it.
  *   'rejected'  the report did not hold; the order returns to the status it had
  *               before the report.
@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (outcome === 'refunded') {
         const { error: refundError } = await admin.from('order_refunds')
-            .insert({ order_id: id, note: note || 'Refunded under the CardStreet Guarantee', refunded_by: adminUser?.id ?? null });
+            .insert({ order_id: id, note: note || 'Refunded under the Cardstreet Guarantee', refunded_by: adminUser?.id ?? null });
         if (refundError) console.error('[Admin/Dispute] order_refunds insert failed:', refundError);
     }
 

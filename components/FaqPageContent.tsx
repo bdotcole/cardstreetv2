@@ -19,7 +19,7 @@ interface PageStrings {
 const EN: PageStrings = {
   pageTitle: 'Frequently Asked Questions',
   introBefore:
-    "Everything you need to know about buying, selling, scanning, and shipping trading cards on CardStreet. Can't find your answer? ",
+    "Everything you need to know about buying, selling, scanning, and shipping trading cards on Cardstreet. Can't find your answer? ",
   introLink: 'Contact us',
   introAfter: '.',
   stillStuck: 'Still have a question?',
@@ -29,7 +29,7 @@ const EN: PageStrings = {
 const TH: PageStrings = {
   pageTitle: 'คำถามที่พบบ่อย',
   introBefore:
-    'รวมทุกเรื่องที่ควรรู้เกี่ยวกับการซื้อ ขาย สแกน และจัดส่งการ์ดสะสมบน CardStreet หากหาคำตอบไม่เจอ ',
+    'รวมทุกเรื่องที่ควรรู้เกี่ยวกับการซื้อ ขาย สแกน และจัดส่งการ์ดสะสมบน Cardstreet หากหาคำตอบไม่เจอ ',
   introLink: 'ติดต่อเรา',
   introAfter: ' ได้เลย',
   stillStuck: 'ยังมีคำถามอยู่ใช่ไหม?',

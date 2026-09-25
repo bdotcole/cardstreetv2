@@ -114,25 +114,25 @@ export async function recoverShipmentForOrder(
     try {
         flashOrder = await createShipmentWithCityFallback({
             outTradeNo: order.id,
-            srcName: seller.display_name || 'CardStreet Seller',
+            srcName: seller.display_name || 'Cardstreet Seller',
             srcPhone: seller.phone_number || '0000000000',
             srcProvinceName: seller.province || 'กรุงเทพมหานคร',
             srcCityName: seller.state || seller.district || 'เขตบางรัก',
             srcDistrictName: seller.sub_district || seller.district || 'บางรัก',
             srcPostalCode: seller.postcode || '10500',
-            srcDetailAddress: seller.address || 'CardStreet Platform',
-            dstName: buyer.display_name || 'CardStreet Buyer',
+            srcDetailAddress: seller.address || 'Cardstreet Platform',
+            dstName: buyer.display_name || 'Cardstreet Buyer',
             dstPhone: buyer.phone_number || '0000000000',
             dstProvinceName: buyer.province || 'กรุงเทพมหานคร',
             dstCityName: buyer.state || buyer.district || 'เขตบางรัก',
             dstDistrictName: buyer.sub_district || buyer.district || 'บางรัก',
             dstPostalCode: buyer.postcode || '10500',
-            dstDetailAddress: buyer.address || 'CardStreet Platform',
+            dstDetailAddress: buyer.address || 'Cardstreet Platform',
             weight: estimateParcelWeightGramsForItems(parcelItems),
             ...estimateParcelDimsCmForItems(parcelItems),
             expressCategory: 1,
             articleCategory: 3,
-            remark: 'CardStreet TCG - Handle with care',
+            remark: 'Cardstreet TCG - Handle with care',
         });
     } catch (e: any) {
         return { ok: false, reason: 'flash_error', error: e?.message || 'Flash shipment creation failed' };

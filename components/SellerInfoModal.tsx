@@ -7,7 +7,7 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 /**
  * One-time explainer shown the first time a seller opens the listing form.
  * Spells out the money flow so a new seller isn't surprised at pickup:
- * the CardStreet fee, Stripe's processing fee, what the buyer is charged, and
+ * the Cardstreet fee, Stripe's processing fee, what the buyer is charged, and
  * the seller's own responsibility — they pay Flash for the shipment when it's
  * collected, funded by the shipping the buyer already paid. Bilingual via the
  * `sellerInfo.*` keys in lib/locales/{en,th}.json.

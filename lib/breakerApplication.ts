@@ -28,7 +28,7 @@ export const APPLICANT_TYPES = [
 ] as const;
 export type ApplicantType = (typeof APPLICANT_TYPES)[number];
 
-// Mirrors the six games CardStreet actually carries (lib/games.ts) plus a
+// Mirrors the six games Cardstreet actually carries (lib/games.ts) plus a
 // free-text escape hatch, so the option list can't advertise a game we don't
 // have a catalog for.
 export const BREAKER_GAMES = [

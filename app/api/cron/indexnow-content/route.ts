@@ -6,7 +6,7 @@
  * an obvious trigger. Guides and landing pages have no write event at all — they
  * ship in a deploy — so the six guides added in 4bd2481 had no way to reach
  * Bing except an organic crawl. Bing feeds ChatGPT's web answers, which is where
- * CardStreet has gone from zero mentions to being cited by URL, so waiting is
+ * Cardstreet has gone from zero mentions to being cited by URL, so waiting is
  * the expensive option.
  *
  * WHY A FRESHNESS WINDOW rather than submitting everything every week:

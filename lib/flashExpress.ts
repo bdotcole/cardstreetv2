@@ -236,7 +236,7 @@ async function makeFlashBinaryRequest(
 // ---------------------------------------------------------------------------
 
 export interface FlashOrderParams {
-    outTradeNo: string;       // CardStreet order ID
+    outTradeNo: string;       // Cardstreet order ID
     // Source (seller)
     srcName: string;
     srcPhone: string;
@@ -317,7 +317,7 @@ export async function createShipment(params: FlashOrderParams): Promise<FlashOrd
         height: String(Math.round(params.height || 1)),
         expressCategory: String(params.expressCategory || 1),
         articleCategory: String(params.articleCategory || 3), // 3 = valuables (trading cards)
-        codEnabled: '0',   // No COD — CardStreet uses Stripe prepayment
+        codEnabled: '0',   // No COD — Cardstreet uses Stripe prepayment
         insured: '0',
     };
 
@@ -776,7 +776,7 @@ export async function cancelOrder(pno: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Maps Flash Express state codes to CardStreet order/shipping statuses.
+ * Maps Flash Express state codes to Cardstreet order/shipping statuses.
  * Flash states from webhook/routes:
  *   1 = Picked Up
  *   2 = In Transit / Warehouse Scan

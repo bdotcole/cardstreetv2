@@ -57,7 +57,7 @@ export default function DesktopFooter({ pathPrefix = '' }: {
                     aria-label={language === 'TH' ? 'ดาวน์โหลดแอป' : 'Get the app'}
                 >
                     <span className="font-bold text-slate-400">
-                        {language === 'TH' ? 'โหลดแอป CardStreet' : 'Get the CardStreet app'}
+                        {language === 'TH' ? 'โหลดแอป Cardstreet' : 'Get the Cardstreet app'}
                     </span>
                     <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">
                         <i className="fa-brands fa-google-play mr-1.5"></i>Google Play
@@ -67,7 +67,7 @@ export default function DesktopFooter({ pathPrefix = '' }: {
                     </a>
                 </nav>
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p>© {new Date().getFullYear()} CardStreet TCG</p>
+                    <p>© {new Date().getFullYear()} Cardstreet TCG</p>
                     <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                         <Link href={`${pathPrefix}/faq`} className="hover:text-slate-300 transition-colors">{t('desktop.footerFaq')}</Link>
                         <Link href={`${pathPrefix}/help`} className="hover:text-slate-300 transition-colors">{t('desktop.footerHelp')}</Link>

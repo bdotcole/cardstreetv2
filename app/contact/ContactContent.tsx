@@ -26,7 +26,7 @@ interface ContactContentData {
 
 const EN: ContactContentData = {
   pageTitle: 'Contact Us',
-  intro: "Need help with an order, your account, or a listing? We're here for you. The fastest way to reach the CardStreet team is by email — we read every message.",
+  intro: "Need help with an order, your account, or a listing? We're here for you. The fastest way to reach the Cardstreet team is by email — we read every message.",
   emailSupportLabel: 'Email Support',
   sendEmailButton: 'Send us an email',
   responseTimeTitle: 'Response Time',
@@ -38,7 +38,7 @@ const EN: ContactContentData = {
   writeInTitle: 'When You Write In',
   writeInIntro: 'Including these details helps us help you faster:',
   writeInItems: [
-    'The email address on your CardStreet account',
+    'The email address on your Cardstreet account',
     'The order or listing number, if relevant',
     'A short description of the issue and any screenshots',
   ],
@@ -48,7 +48,7 @@ const EN: ContactContentData = {
 
 const TH: ContactContentData = {
   pageTitle: 'ติดต่อเรา',
-  intro: 'ต้องการความช่วยเหลือเกี่ยวกับคำสั่งซื้อ บัญชี หรือรายการขายของคุณ? เราพร้อมช่วยเสมอ ช่องทางที่เร็วที่สุดในการติดต่อทีม CardStreet คืออีเมล — เราอ่านทุกข้อความ',
+  intro: 'ต้องการความช่วยเหลือเกี่ยวกับคำสั่งซื้อ บัญชี หรือรายการขายของคุณ? เราพร้อมช่วยเสมอ ช่องทางที่เร็วที่สุดในการติดต่อทีม Cardstreet คืออีเมล — เราอ่านทุกข้อความ',
   emailSupportLabel: 'อีเมลซัพพอร์ต',
   sendEmailButton: 'ส่งอีเมลถึงเรา',
   responseTimeTitle: 'ระยะเวลาตอบกลับ',
@@ -60,7 +60,7 @@ const TH: ContactContentData = {
   writeInTitle: 'สิ่งที่ควรแจ้งเมื่อติดต่อ',
   writeInIntro: 'การแจ้งรายละเอียดเหล่านี้ช่วยให้เราช่วยคุณได้เร็วขึ้น:',
   writeInItems: [
-    'อีเมลที่ใช้กับบัญชี CardStreet ของคุณ',
+    'อีเมลที่ใช้กับบัญชี Cardstreet ของคุณ',
     'หมายเลขคำสั่งซื้อหรือรายการขาย (ถ้ามี)',
     'คำอธิบายปัญหาสั้น ๆ พร้อมภาพหน้าจอ (ถ้ามี)',
   ],

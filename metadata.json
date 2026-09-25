@@ -1,5 +1,5 @@
 {
-  "name": "CardStreet TCG",
+  "name": "Cardstreet TCG",
   "description": "The premier Thai Pokémon TCG marketplace. Buy, sell, and track your collection with street-smart analytics.",
   "requestFramePermissions": [
     "camera"

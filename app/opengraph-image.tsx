@@ -6,7 +6,7 @@ import { ImageResponse } from 'next/og'
 // Text is kept to the default-font glyph set (no accents / emoji) so it renders
 // cleanly without shipping a custom font.
 
-export const alt = 'CardStreet TCG - Thai Pokemon Card Marketplace'
+export const alt = 'Cardstreet TCG - Thai Pokemon Card Marketplace'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -51,7 +51,7 @@ export default function OpengraphImage() {
                             textTransform: 'uppercase',
                         }}
                     >
-                        CardStreet TCG
+                        Cardstreet TCG
                     </div>
                 </div>
                 <div

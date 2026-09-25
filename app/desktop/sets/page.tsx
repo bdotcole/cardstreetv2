@@ -10,18 +10,18 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 
 export async function generateMetadata(): Promise<Metadata> {
     const lang = await resolveLang();
-    const title = lang === 'EN' ? 'Browse Trading Card Sets | CardStreet' : 'เลือกชมชุดการ์ดทั้งหมด | CardStreet';
+    const title = lang === 'EN' ? 'Browse Trading Card Sets | Cardstreet' : 'เลือกชมชุดการ์ดทั้งหมด | Cardstreet';
     const description =
         lang === 'EN'
-            ? 'Browse every Pokémon, Yu-Gi-Oh!, Magic, One Piece, Riftbound, and Lorcana set on CardStreet. Live prices and listings for every card, with nationwide shipping in Thailand.'
-            : 'เลือกชมชุดการ์ดโปเกมอน ยูกิโอ เมจิก วันพีช Riftbound และ Lorcana ทั้งหมดบน CardStreet ราคาและรายการขายของทุกใบ จัดส่งทั่วไทย';
+            ? 'Browse every Pokémon, Yu-Gi-Oh!, Magic, One Piece, Riftbound, and Lorcana set on Cardstreet. Live prices and listings for every card, with nationwide shipping in Thailand.'
+            : 'เลือกชมชุดการ์ดโปเกมอน ยูกิโอ เมจิก วันพีช Riftbound และ Lorcana ทั้งหมดบน Cardstreet ราคาและรายการขายของทุกใบ จัดส่งทั่วไทย';
     const pathLocale = await requestPathLocale();
     return {
         metadataBase: new URL(BASE_URL),
         title,
         description,
         alternates: buildAlternates('/sets', pathLocale),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/sets', pathLocale), images: DEFAULT_OG_IMAGE },
+        openGraph: { title, description, type: 'website', siteName: 'Cardstreet', url: localizedUrl('/sets', pathLocale), images: DEFAULT_OG_IMAGE },
     };
 }
 

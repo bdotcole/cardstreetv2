@@ -217,7 +217,7 @@ export async function autoChargeAuctionWin(
                 // same win must reuse the SAME Stripe request, never mint a
                 // second charge for one hammer.
                 idempotencyKey: `auctionwin_${auction.id}`,
-                description: `CardStreet live auction win ${auction.id}`,
+                description: `Cardstreet live auction win ${auction.id}`,
                 metadata: {
                     cardstreet_order_id: order.id,
                     cardstreet_auction_id: auction.id,

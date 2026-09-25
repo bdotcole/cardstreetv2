@@ -30,11 +30,11 @@ export async function generateMetadata(): Promise<Metadata> {
     const pathLocale = await requestPathLocale();
     const isThai = pathLocale !== 'en';
     const title = isThai
-        ? 'ร้านขายการ์ดบน CardStreet — ผู้ขายยืนยันตัวตน ส่งทั่วไทย | CardStreet'
-        : 'Card Shops on CardStreet — Verified Sellers Across Thailand | CardStreet';
+        ? 'ร้านขายการ์ดบน Cardstreet — ผู้ขายยืนยันตัวตน ส่งทั่วไทย | Cardstreet'
+        : 'Card Shops on Cardstreet — Verified Sellers Across Thailand | Cardstreet';
     const description = isThai
-        ? 'รวมร้านขายการ์ดสะสมบน CardStreet ทั้งการ์ดโปเกมอน วันพีช ยูกิ Magic และ Lorcana ผู้ขายทุกร้านยืนยันตัวตนแล้ว ดูของที่มีขายจริงตอนนี้ เช็คราคาก่อนซื้อ ส่งทั่วไทย'
-        : 'Every shop selling trading cards on CardStreet — Pokémon, One Piece, Yu-Gi-Oh!, Magic and Lorcana. All sellers are identity-verified. See what is actually in stock right now, with market prices to compare against.';
+        ? 'รวมร้านขายการ์ดสะสมบน Cardstreet ทั้งการ์ดโปเกมอน วันพีช ยูกิ Magic และ Lorcana ผู้ขายทุกร้านยืนยันตัวตนแล้ว ดูของที่มีขายจริงตอนนี้ เช็คราคาก่อนซื้อ ส่งทั่วไทย'
+        : 'Every shop selling trading cards on Cardstreet — Pokémon, One Piece, Yu-Gi-Oh!, Magic and Lorcana. All sellers are identity-verified. See what is actually in stock right now, with market prices to compare against.';
     return {
         metadataBase: new URL(BASE_URL),
         title,
@@ -45,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl('/shops', pathLocale),
         },
     };
@@ -67,7 +67,7 @@ export default async function ShopsDirectoryPage() {
     const jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'ItemList',
-        name: isThai ? 'ร้านขายการ์ดบน CardStreet' : 'Card shops on CardStreet',
+        name: isThai ? 'ร้านขายการ์ดบน Cardstreet' : 'Card shops on Cardstreet',
         inLanguage: isThai ? 'th-TH' : 'en-TH',
         numberOfItems: shops.length,
         itemListElement: shops.slice(0, 100).map((s, i) => ({
@@ -86,14 +86,14 @@ export default async function ShopsDirectoryPage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">Cardstreet</Link>
                 <span className="mx-2">/</span>
                 <span className="text-slate-300">{isThai ? 'ร้านขายการ์ด' : 'Card shops'}</span>
             </nav>
 
             <header className="mb-6">
                 <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                    {isThai ? 'ร้านขายการ์ดบน CardStreet' : 'Card shops on CardStreet'}
+                    {isThai ? 'ร้านขายการ์ดบน Cardstreet' : 'Card shops on Cardstreet'}
                 </h1>
                 {shops.length > 0 && (
                     <p className="mt-2 text-sm text-slate-400 font-bold">
@@ -108,7 +108,7 @@ export default async function ShopsDirectoryPage() {
                 {isThai ? (
                     <>
                         <p>
-                            ทุกร้านในหน้านี้เป็นผู้ขายที่ยืนยันตัวตนกับ CardStreet แล้ว และรายการที่เห็นคือของที่มีขายจริงในตอนนี้ ไม่ใช่แคตตาล็อกเปล่า
+                            ทุกร้านในหน้านี้เป็นผู้ขายที่ยืนยันตัวตนกับ Cardstreet แล้ว และรายการที่เห็นคือของที่มีขายจริงในตอนนี้ ไม่ใช่แคตตาล็อกเปล่า
                             กดเข้าไปในร้านเพื่อดูว่าเขามีการ์ดใบไหนอยู่บ้าง พร้อมราคาและสภาพของแต่ละใบ
                         </p>
                         <p>
@@ -123,7 +123,7 @@ export default async function ShopsDirectoryPage() {
                 ) : (
                     <>
                         <p>
-                            Every shop here is an identity-verified CardStreet seller, and what you see is what is actually in stock
+                            Every shop here is an identity-verified Cardstreet seller, and what you see is what is actually in stock
                             right now rather than an empty catalog. Open a shop to see the cards they are holding, with the price and
                             condition of each one.
                         </p>

@@ -1,7 +1,7 @@
 /**
  * Region-aware Stripe clients.
  *
- * CardStreet runs two Stripe platforms under the same organization:
+ * Cardstreet runs two Stripe platforms under the same organization:
  *   - 'us' — US-entity Stripe account. Charges in USD by default; existing
  *     code paths that historically charged THB on this platform remain valid
  *     until callers migrate to the TH platform.
@@ -92,7 +92,7 @@ export function getWebhookSecretForRegion(region: StripeRegion): string {
  * As deployed on TH the two are the REVERSE of what the names suggest:
  * _TH holds the Connect-scoped destination's secret (marketplace
  * payment_intent.* + account.updated, we_1U2RyD…), and _TH_CONNECT holds the
- * platform-scoped one (CardStreet Pro billing: checkout.session.completed +
+ * platform-scoped one (Cardstreet Pro billing: checkout.session.completed +
  * customer.subscription.*, we_1U5MSc…). That arrangement is deliberate: the
  * Connect secret was already live in _TH, and swapping the two to match the
  * names would take marketplace payment verification down during the window

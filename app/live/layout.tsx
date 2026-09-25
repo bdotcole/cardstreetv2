@@ -14,7 +14,7 @@ import { isFeatureDisabledInCode } from '@/lib/betaFeatures';
 // a locale branch would silently always pick Thai anyway. Thai is the site
 // default. If /live is ever added to the matcher, branch it then.
 export const metadata: Metadata = {
-    title: 'ไลฟ์เปิดการ์ด | CardStreet',
+    title: 'ไลฟ์เปิดการ์ด | Cardstreet',
     robots: { index: false, follow: false },
 };
 

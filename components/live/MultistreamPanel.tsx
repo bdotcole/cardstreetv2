@@ -718,7 +718,7 @@ export default function MultistreamPanel({
                             <i className="fa-solid fa-circle-info mr-1"></i>
                             {visibility === 'public'
                                 ? t('live.console.multistream.publicNote') ||
-                                  'Public show: going live notifies every CardStreet user by push and email.'
+                                  'Public show: going live notifies every Cardstreet user by push and email.'
                                 : t('live.console.multistream.unlistedNote') ||
                                   'Unlisted show: no notifications — good for a rehearsal.'}
                             {' '}

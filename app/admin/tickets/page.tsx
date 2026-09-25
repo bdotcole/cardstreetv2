@@ -253,7 +253,7 @@ export default function TicketsPage() {
 
                         {/* Buyer problem report: the order this ticket put on hold, and
                             the three ways to close it. The refund itself happens in the
-                            Stripe dashboard (or from CardStreet funds); this records the
+                            Stripe dashboard (or from Cardstreet funds); this records the
                             outcome, restores or cancels the order, and closes the ticket
                             with the reply text above as the buyer-facing answer. */}
                         {dispute && (
@@ -324,7 +324,7 @@ export default function TicketsPage() {
                                 <>
                                     {thread.map(msg => msg.sender_role === 'admin' ? (
                                         <div key={msg.id} className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">CardStreet Team</p>
+                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">Cardstreet Team</p>
                                             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
                                             <p className="text-[10px] text-slate-600 mt-2">{new Date(msg.created_at).toLocaleString()}</p>
                                         </div>
@@ -340,7 +340,7 @@ export default function TicketsPage() {
                                         20260724 migration backfills it into the thread. */}
                                     {!hasAdminMessage && selected.admin_reply && (
                                         <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">CardStreet Team</p>
+                                            <p className="text-[10px] font-bold uppercase text-brand-cyan mb-2">Cardstreet Team</p>
                                             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selected.admin_reply}</p>
                                             {selected.replied_at && (
                                                 <p className="text-[10px] text-slate-600 mt-2">{new Date(selected.replied_at).toLocaleString()}</p>

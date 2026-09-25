@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
         return {
             id: r.id,
             reviewerId: '',
-            reviewerName: reviewer?.display_name || 'CardStreet buyer',
+            reviewerName: reviewer?.display_name || 'Cardstreet buyer',
             reviewerAvatar: reviewer?.avatar_url || '',
             rating: r.rating,
             comment: r.comment || '',

@@ -10,7 +10,7 @@ const COPY = {
     en: {
         titleLine1: 'Your Empire',
         titleLine2: 'Starts Here.',
-        subtitle: 'Bring the community together. Lower your fees. Become a Legend in the CardStreet ecosystem.',
+        subtitle: 'Bring the community together. Lower your fees. Become a Legend in the Cardstreet ecosystem.',
         lowerFees: 'Lower Fees',
         lowerFeesSub: 'Earn up to 2% fee rate',
         communityLeader: 'Community Leader',
@@ -20,7 +20,7 @@ const COPY = {
     th: {
         titleLine1: 'อาณาจักรของคุณ',
         titleLine2: 'เริ่มต้นที่นี่',
-        subtitle: 'ร่วมสร้างคอมมูนิตี้ให้เป็นหนึ่งเดียว รับค่าธรรมเนียมที่ถูกลง และร่วมเป็นตำนานบทใหม่ใน CardStreet',
+        subtitle: 'ร่วมสร้างคอมมูนิตี้ให้เป็นหนึ่งเดียว รับค่าธรรมเนียมที่ถูกลง และร่วมเป็นตำนานบทใหม่ใน Cardstreet',
         lowerFees: 'ค่าธรรมเนียมที่ถูกลง',
         lowerFeesSub: 'รับค่าธรรมเนียมพิเศษ ต่ำสุดเพียง 2%',
         communityLeader: 'ผู้นำคอมมูนิตี้',

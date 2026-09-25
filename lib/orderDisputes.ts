@@ -3,7 +3,7 @@
  * routes and the three Track Order surfaces (mobile Profile, desktop Orders, the
  * /orders/[id] page). Isomorphic on purpose: no server imports.
  *
- * The CardStreet Guarantee is a policy (identity-verified sellers, fast bans, the
+ * The Cardstreet Guarantee is a policy (identity-verified sellers, fast bans, the
  * buyer made whole from platform funds). This module is the path a buyer takes
  * to invoke it, and the window in which they can.
  */

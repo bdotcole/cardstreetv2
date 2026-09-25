@@ -447,23 +447,23 @@ export async function fulfillOrdersByTransferGroup(
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
 
             const src = {
-                name: sellerProfile?.display_name || 'CardStreet Seller',
+                name: sellerProfile?.display_name || 'Cardstreet Seller',
                 phone: sellerProfile?.phone_number || '0000000000',
                 provinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
                 cityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
                 districtName: sellerProfile?.sub_district || sellerProfile?.district || 'บางรัก',
                 postalCode: sellerProfile?.postcode || '10500',
-                detailAddress: sellerProfile?.address || 'CardStreet Platform',
+                detailAddress: sellerProfile?.address || 'Cardstreet Platform',
             };
 
             const dst = {
-                name: buyerProfile?.display_name || 'CardStreet Buyer',
+                name: buyerProfile?.display_name || 'Cardstreet Buyer',
                 phone: buyerProfile?.phone_number || '0000000000',
                 provinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
                 cityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
                 districtName: buyerProfile?.sub_district || buyerProfile?.district || 'บางรัก',
                 postalCode: buyerProfile?.postcode || '10500',
-                detailAddress: buyerProfile?.address || 'CardStreet Platform',
+                detailAddress: buyerProfile?.address || 'Cardstreet Platform',
             };
 
             try {
@@ -501,7 +501,7 @@ export async function fulfillOrdersByTransferGroup(
                     }))),
                     expressCategory: 1,
                     articleCategory: 3,
-                    remark: 'CardStreet TCG - Handle with care',
+                    remark: 'Cardstreet TCG - Handle with care',
                 });
 
                 result.trackingNumbers.push(flashOrder.pno);
@@ -579,7 +579,7 @@ export async function fulfillOrdersByTransferGroup(
                         srcPostalCode: src.postalCode,
                         srcDetailAddress: src.detailAddress,
                         estimateParcelNumber: 1,
-                        remark: 'CardStreet order pickup',
+                        remark: 'Cardstreet order pickup',
                     });
                     pickupId = String(pickup.ticketPickupId);
                     pickupStatus = 'scheduled';

@@ -1,4 +1,4 @@
-// Single source of truth for the markets (regions) CardStreet operates in.
+// Single source of truth for the markets (regions) Cardstreet operates in.
 //
 // The point of this file is to keep the four expansion axes *separate* instead
 // of conflating them the way the early TH-only code did:

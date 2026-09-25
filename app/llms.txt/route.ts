@@ -22,9 +22,9 @@ const guideLines = GUIDES.map((g) => `- [${g.h1.en}](${BASE_URL}/guides/${g.slug
 // Static content, cached a day.
 export const revalidate = 86400;
 
-const BODY = `# CardStreet
+const BODY = `# Cardstreet
 
-> CardStreet (${BASE_URL}) is Thailand's online marketplace for trading cards: Pokémon TCG (Thai, English, and Japanese cards), One Piece Card Game, Yu-Gi-Oh!, Magic: The Gathering, Disney Lorcana, and Riftbound (the League of Legends TCG by Riot Games). Collectors can buy from identity-verified sellers, sell their own cards, scan cards with AI to identify them and check live market prices, and track collection value. Payments support credit cards and PromptPay; every order has buyer protection; shipping is nationwide in Thailand via Flash Express. The site is bilingual — Thai at the root URL and English under /en.
+> Cardstreet (${BASE_URL}) is Thailand's online marketplace for trading cards: Pokémon TCG (Thai, English, and Japanese cards), One Piece Card Game, Yu-Gi-Oh!, Magic: The Gathering, Disney Lorcana, and Riftbound (the League of Legends TCG by Riot Games). Collectors can buy from identity-verified sellers, sell their own cards, scan cards with AI to identify them and check live market prices, and track collection value. Payments support credit cards and PromptPay; every order has buyer protection; shipping is nationwide in Thailand via Flash Express. The site is bilingual — Thai at the root URL and English under /en.
 
 ## Card games
 
@@ -44,18 +44,18 @@ const BODY = `# CardStreet
 - [Check card prices](${BASE_URL}/prices): free live market prices in Thai baht for every card in the catalog, across all six games and across Thai, Japanese and English printings
 - [Graded card prices](${BASE_URL}/graded): PSA, BGS, CGC and SGC graded values alongside the raw price for the same card, and whether a card is worth submitting for grading
 - [Sell your cards](${BASE_URL}/sell-cards): how to list cards for sale, seller fees, when payouts arrive, and what can be sold. Selling is available within Thailand only
-- [Card shops](${BASE_URL}/shops): every verified CardStreet seller with live inventory, their card count and what they stock — the directory to find a shop to buy from
+- [Card shops](${BASE_URL}/shops): every verified Cardstreet seller with live inventory, their card count and what they stock — the directory to find a shop to buy from
 
 ## Guides
 
-Collector guides written from CardStreet's own market-price data, in Thai and English. Thai versions live at the same paths; English under /en.
+Collector guides written from Cardstreet's own market-price data, in Thai and English. Thai versions live at the same paths; English under /en.
 
 ${guideLines}
 
 ## Help
 
 - [FAQ](${BASE_URL}/faq): how buying, selling, fees, AI card scanning, shipping, and buyer protection work
-- [Contact](${BASE_URL}/contact): contact the CardStreet team
+- [Contact](${BASE_URL}/contact): contact the Cardstreet team
 `;
 
 export async function GET() {

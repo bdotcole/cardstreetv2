@@ -20,22 +20,22 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL('https://cardstreet.app'),
     title: isThai
-      ? 'คำถามที่พบบ่อย — ซื้อขายการ์ดโปเกม่อน ยูกิ วันพีช | CardStreet'
-      : 'Frequently Asked Questions — CardStreet TCG Marketplace',
+      ? 'คำถามที่พบบ่อย — ซื้อขายการ์ดโปเกม่อน ยูกิ วันพีช | Cardstreet'
+      : 'Frequently Asked Questions — Cardstreet TCG Marketplace',
     description: isThai
-      ? 'คำตอบเรื่องการซื้อ ขาย สแกน และจัดส่งการ์ดโปเกม่อน Magic ยูกิโอ และวันพีช บน CardStreet ในประเทศไทย ทั้งการคุ้มครองผู้ซื้อ ค่าธรรมเนียม การรับเงิน พร้อมเพย์ และการ์ดเกรด'
-      : 'Answers about buying, selling, scanning, and shipping Pokémon, Magic, Yu-Gi-Oh, and One Piece trading cards on CardStreet in Thailand. Buyer protection, fees, payouts, PromptPay, and graded cards explained.',
+      ? 'คำตอบเรื่องการซื้อ ขาย สแกน และจัดส่งการ์ดโปเกม่อน Magic ยูกิโอ และวันพีช บน Cardstreet ในประเทศไทย ทั้งการคุ้มครองผู้ซื้อ ค่าธรรมเนียม การรับเงิน พร้อมเพย์ และการ์ดเกรด'
+      : 'Answers about buying, selling, scanning, and shipping Pokémon, Magic, Yu-Gi-Oh, and One Piece trading cards on Cardstreet in Thailand. Buyer protection, fees, payouts, PromptPay, and graded cards explained.',
     alternates: buildAlternates('/faq', pathLocale),
     openGraph: {
         images: DEFAULT_OG_IMAGE,
       title: isThai
-        ? 'คำถามที่พบบ่อย CardStreet — ซื้อ ขาย และสแกนการ์ดสะสมในไทย'
-        : 'CardStreet FAQ — Buying, Selling & Scanning Trading Cards in Thailand',
+        ? 'คำถามที่พบบ่อย Cardstreet — ซื้อ ขาย และสแกนการ์ดสะสมในไทย'
+        : 'Cardstreet FAQ — Buying, Selling & Scanning Trading Cards in Thailand',
       description: isThai
-        ? 'CardStreet ทำงานอย่างไร: การคุ้มครองผู้ซื้อ ค่าธรรมเนียมและการรับเงินของผู้ขาย การสแกนการ์ดด้วย AI ชำระผ่านพร้อมเพย์ และจัดส่งทั่วประเทศด้วย Flash Express'
-        : 'How CardStreet works: buyer protection, seller fees and payouts, AI card scanning, PromptPay checkout, and nationwide Flash Express shipping.',
+        ? 'Cardstreet ทำงานอย่างไร: การคุ้มครองผู้ซื้อ ค่าธรรมเนียมและการรับเงินของผู้ขาย การสแกนการ์ดด้วย AI ชำระผ่านพร้อมเพย์ และจัดส่งทั่วประเทศด้วย Flash Express'
+        : 'How Cardstreet works: buyer protection, seller fees and payouts, AI card scanning, PromptPay checkout, and nationwide Flash Express shipping.',
       type: 'website',
-      siteName: 'CardStreet',
+      siteName: 'Cardstreet',
       // og:url must agree with the canonical — a bare-path og:url on an /en
       // render is a stray canonical hint pointing back at the Thai URL.
       url: localizedUrl('/faq', pathLocale),

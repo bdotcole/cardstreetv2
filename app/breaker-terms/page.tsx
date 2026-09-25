@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const isThai = pathLocale === 'th';
 
     const title = isThai
-        ? 'ข้อกำหนดโปรแกรม Breaker | CardStreet Live'
+        ? 'ข้อกำหนดโปรแกรม Breaker | Cardstreet Live'
         : 'Breaker Program Terms | Cardstreet Live';
     const description = isThai
         ? 'ข้อกำหนดสำหรับ Cardstreet Breaker: คุณสมบัติผู้สมัคร การสุ่มที่ตรวจสอบได้ ค่าธรรมเนียมและการชำระเงิน การจัดส่งหลังจบไลฟ์ และการประพฤติตนระหว่างไลฟ์'
@@ -34,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl('/breaker-terms', pathLocale),
             locale: isThai ? 'th_TH' : 'en_US',
         },

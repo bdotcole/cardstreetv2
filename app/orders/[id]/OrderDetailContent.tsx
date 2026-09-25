@@ -125,14 +125,14 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                     <h1 className="text-xl font-black">{isThai ? 'เข้าสู่ระบบเพื่อดูคำสั่งซื้อนี้' : 'Sign in to view this order'}</h1>
                     <p className="text-sm text-slate-400">
                         {isThai
-                            ? 'คำสั่งซื้อนี้เป็นข้อมูลส่วนตัว กรุณาเข้าสู่ระบบด้วยบัญชี CardStreet ของคุณ แล้วเปิดลิงก์นี้อีกครั้ง'
-                            : 'This order is private. Sign in to your CardStreet account, then reopen this link.'}
+                            ? 'คำสั่งซื้อนี้เป็นข้อมูลส่วนตัว กรุณาเข้าสู่ระบบด้วยบัญชี Cardstreet ของคุณ แล้วเปิดลิงก์นี้อีกครั้ง'
+                            : 'This order is private. Sign in to your Cardstreet account, then reopen this link.'}
                     </p>
                     <Link
                         href="/"
                         className="inline-block bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider px-6 py-3 rounded-xl active:scale-[0.98] transition-all"
                     >
-                        {isThai ? 'ไปที่ CardStreet' : 'Go to CardStreet'}
+                        {isThai ? 'ไปที่ Cardstreet' : 'Go to Cardstreet'}
                     </Link>
                 </div>
             </div>

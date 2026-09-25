@@ -377,7 +377,7 @@ export async function handleStripeWebhook(
                 break;
             }
 
-            // ─── CardStreet Pro (premium subscription, platform account) ───
+            // ─── Cardstreet Pro (premium subscription, platform account) ───
             // These are PLATFORM events (no event.account) — premium billing
             // never touches a seller's connected account. Requires the TH
             // endpoint to subscribe to checkout.session.completed +

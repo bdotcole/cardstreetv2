@@ -78,7 +78,7 @@ function UnsubscribeInner() {
                             href="/"
                             className="block w-full h-12 leading-[3rem] bg-brand-cyan text-brand-darker font-black rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors"
                         >
-                            ไปที่ CardStreet · Open CardStreet
+                            ไปที่ Cardstreet · Open Cardstreet
                         </a>
                     </>
                 ) : state === 'done' ? (
@@ -102,7 +102,7 @@ function UnsubscribeInner() {
                             href="/"
                             className="block w-full h-12 leading-[3rem] bg-brand-cyan text-brand-darker font-black rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors"
                         >
-                            ไปที่ CardStreet · Open CardStreet
+                            ไปที่ Cardstreet · Open Cardstreet
                         </a>
                     </>
                 ) : (

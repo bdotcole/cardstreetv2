@@ -17,15 +17,15 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
     const { username } = await params;
     const { seller, listings } = await getSellerPageData(username);
-    if (!seller) return { title: 'Seller not found | CardStreet', robots: { index: false, follow: false } };
+    if (!seller) return { title: 'Seller not found | Cardstreet', robots: { index: false, follow: false } };
 
     const lang = await resolveLang();
     const name = seller.display_name || seller.username || 'Seller';
-    const title = lang === 'EN' ? `${name} — Seller Shop | CardStreet` : `${name} — ร้านค้าผู้ขาย | CardStreet`;
+    const title = lang === 'EN' ? `${name} — Seller Shop | Cardstreet` : `${name} — ร้านค้าผู้ขาย | Cardstreet`;
     const description =
         lang === 'EN'
-            ? `Browse ${listings.length} trading card${listings.length === 1 ? '' : 's'} for sale from ${name} on CardStreet. Verified seller, live prices, nationwide shipping in Thailand.`
-            : `เลือกชมการ์ด ${listings.length} รายการจาก ${name} บน CardStreet ผู้ขายที่ยืนยันแล้ว ราคาเรียลไทม์ จัดส่งทั่วไทย`;
+            ? `Browse ${listings.length} trading card${listings.length === 1 ? '' : 's'} for sale from ${name} on Cardstreet. Verified seller, live prices, nationwide shipping in Thailand.`
+            : `เลือกชมการ์ด ${listings.length} รายการจาก ${name} บน Cardstreet ผู้ขายที่ยืนยันแล้ว ราคาเรียลไทม์ จัดส่งทั่วไทย`;
 
     const pathLocale = await requestPathLocale();
     return {
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
         title,
         description,
         alternates: buildAlternates(`/seller/${username}`, pathLocale),
-        openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl(`/seller/${username}`, pathLocale) },
+        openGraph: { title, description, type: 'website', siteName: 'Cardstreet', url: localizedUrl(`/seller/${username}`, pathLocale) },
     };
 }
 
@@ -46,7 +46,7 @@ function buildSellerJsonLd(username: string, name: string, listingCount: number,
         name,
         url: `${BASE_URL}/seller/${username}`,
         parentOrganization: { '@id': `${BASE_URL}/#organization` },
-        description: `${name} sells trading cards on CardStreet, Thailand's trading card marketplace. ${listingCount} active listings.`,
+        description: `${name} sells trading cards on Cardstreet, Thailand's trading card marketplace. ${listingCount} active listings.`,
     };
     if (reviewCount && reviewCount > 0 && rating != null) {
         jsonLd.aggregateRating = {

@@ -5,7 +5,7 @@
  * /live/[id] and a paid spot.
  *
  * Why a separate module from lib/engagementEvents.ts: the live funnel is the
- * one CardStreet will BUY traffic for (Facebook / TikTok live-stream ads
+ * one Cardstreet will BUY traffic for (Facebook / TikTok live-stream ads
  * pointing at the website), and paid traffic is only tunable when the ad
  * platform can see the conversion. So every step here goes to GA4 AND the
  * Meta Pixel: `live_view` doubles as Meta's standard ViewContent and

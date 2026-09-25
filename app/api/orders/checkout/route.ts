@@ -306,7 +306,7 @@ export async function POST(req: Request) {
             }
             // Admins (house accounts) sell fee-free -- /api/checkout omits a
             // zero application_fee_amount, so Stripe sees no fee at all.
-            // CardStreet Pro subscribers get the 5% floor; a partner ladder
+            // Cardstreet Pro subscribers get the 5% floor; a partner ladder
             // already better than 5% still wins.
             if (profile.role === 'admin') {
                 feeMap.set(profile.id, 0);

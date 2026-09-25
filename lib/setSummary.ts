@@ -17,8 +17,8 @@
 // so none of it can rot the way a hardcoded count or price would - which is
 // exactly why lib/setLanding.ts deliberately carries neither. No extra queries.
 //
-// The price claim is scoped to OUR data ("ตามราคาตลาดล่าสุดบน CardStreet" /
-// "per the latest market data on CardStreet") rather than asserted as a fact
+// The price claim is scoped to OUR data ("ตามราคาตลาดล่าสุดบน Cardstreet" /
+// "per the latest market data on Cardstreet") rather than asserted as a fact
 // about the market. On ~1,000 pages that nobody proofreads before publish, the
 // only safe superlative is one about our own dataset, which stays true when a
 // row goes stale.
@@ -93,7 +93,7 @@ export function buildSetSummary(set: SetRow, cards: Card[], lang: 'EN' | 'TH'): 
             parts.push(
                 `ตอนนี้มีราคาตลาดในระบบแล้ว ${pricedCount} ใบ ` +
                     `ใบที่ราคาสูงที่สุดในชุดตอนนี้คือ ${cardLabel(top!)} ที่ ${baht(top!.marketPrice)} ` +
-                    `ตามราคาตลาดล่าสุดบน CardStreet`
+                    `ตามราคาตลาดล่าสุดบน Cardstreet`
             );
         }
         parts.push('เช็คราคาการ์ดรายใบ เทียบกับรายการขายจริงจากผู้ขายในไทย แล้วซื้อ-ขายการ์ดของแท้ได้ในหน้านี้');
@@ -109,7 +109,7 @@ export function buildSetSummary(set: SetRow, cards: Card[], lang: 'EN' | 'TH'): 
     if (canPrice) {
         parts.push(
             `${pricedCount} of them have a market price on file. The highest right now is ` +
-                `${cardLabel(top!)} at ${baht(top!.marketPrice)}, per the latest market data on CardStreet.`
+                `${cardLabel(top!)} at ${baht(top!.marketPrice)}, per the latest market data on Cardstreet.`
         );
     }
     parts.push(

@@ -350,7 +350,7 @@ function PriceEditorModal({
     const preview = card.image_small || card.image_large
     const sourceLabel =
         displayRow?.source === 'admin' ? 'Admin-set (pinned)'
-            : displayRow?.source === 'cardstreet' ? 'Learned from CardStreet sales'
+            : displayRow?.source === 'cardstreet' ? 'Learned from Cardstreet sales'
                 : displayRow ? 'Automatic (price feed)'
                     : 'No price on record'
 

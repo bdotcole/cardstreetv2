@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     // Only ever act on a session this route itself created.
     if (session.mode !== 'subscription' || session.metadata?.purpose !== 'cardstreet_premium') {
-      return NextResponse.json({ error: 'Not a CardStreet Pro checkout session' }, { status: 400 });
+      return NextResponse.json({ error: 'Not a Cardstreet Pro checkout session' }, { status: 400 });
     }
 
     // Authorization: the session must belong to the caller. Without this any

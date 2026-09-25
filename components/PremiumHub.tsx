@@ -15,7 +15,7 @@ import {
 } from '@/lib/revenuecat';
 
 /**
- * CardStreet Pro hub — what Pro includes, upgrade (web/Stripe), and manage.
+ * Cardstreet Pro hub — what Pro includes, upgrade (web/Stripe), and manage.
  * Rendered standalone by the mobile route (app/premium) and inside the desktop
  * shell (app/desktop/premium); `variant` controls the outer chrome only.
  *

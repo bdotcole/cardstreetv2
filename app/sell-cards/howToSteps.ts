@@ -24,7 +24,7 @@ export const SELL_HOWTO: Record<'th' | 'en', { title: string; steps: HowToStep[]
         steps: [
             {
                 t: 'สมัครบัญชีและยืนยันตัวตน',
-                d: 'CardStreet จ่ายเงินผ่าน Stripe จึงต้องยืนยันตัวตนกับ Stripe ก่อน ใช้บัตรประชาชนและบัญชีธนาคารไทย ขั้นตอนนี้ทำครั้งเดียว ใช้เวลาไม่กี่นาที และต้องทำให้เสร็จก่อนจึงจะรับเงินได้',
+                d: 'Cardstreet จ่ายเงินผ่าน Stripe จึงต้องยืนยันตัวตนกับ Stripe ก่อน ใช้บัตรประชาชนและบัญชีธนาคารไทย ขั้นตอนนี้ทำครั้งเดียว ใช้เวลาไม่กี่นาที และต้องทำให้เสร็จก่อนจึงจะรับเงินได้',
             },
             {
                 t: 'ลงขายการ์ด',
@@ -49,7 +49,7 @@ export const SELL_HOWTO: Record<'th' | 'en', { title: string; steps: HowToStep[]
         steps: [
             {
                 t: 'Create an account and verify your identity',
-                d: 'CardStreet pays out through Stripe, so Stripe needs to verify you — a Thai ID and bank account. It is a one-time step that takes a few minutes, and it has to be finished before you can be paid.',
+                d: 'Cardstreet pays out through Stripe, so Stripe needs to verify you — a Thai ID and bank account. It is a one-time step that takes a few minutes, and it has to be finished before you can be paid.',
             },
             {
                 t: 'List a card',

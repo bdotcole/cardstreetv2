@@ -7,7 +7,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 
 /**
  * POST /api/orders/[id]/report -- the buyer's "report a problem" path behind the
- * CardStreet Guarantee.
+ * Cardstreet Guarantee.
  *
  * What it does, in order:
  *   1. Files a support ticket (category 'Order') so the existing admin console and

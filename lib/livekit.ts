@@ -106,7 +106,7 @@ export async function mintPublisherToken(
  * same as recording alone.
  *
  * With a template base URL the composite is OUR page (app/live/overlay) —
- * the two camera feeds plus the CardStreet call-to-action (cardstreet.app/watch
+ * the two camera feeds plus the Cardstreet call-to-action (cardstreet.app/watch
  * + QR + the lot on the block) burned into every frame, which is how a viewer
  * on Facebook finds their way to the checkout. Without one LiveKit's built-in
  * grid layout renders the feeds bare. `orientation` sizes the canvas:

@@ -45,7 +45,7 @@ export default function StatGrid({ cards }: { cards: StatCardData[] }) {
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Admin Overview</h1>
-                    <p className="text-slate-500 text-sm mt-1">Welcome to the CardStreet Admin Console</p>
+                    <p className="text-slate-500 text-sm mt-1">Welcome to the Cardstreet Admin Console</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Growth</span>

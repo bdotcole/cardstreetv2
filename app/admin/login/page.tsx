@@ -44,7 +44,7 @@ function LoginContent() {
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-cyan to-blue-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-cyan/20">
                     <i className="fa-solid fa-shield-halved text-2xl text-white" />
                 </div>
-                <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic mb-1">CardStreet</p>
+                <p className="text-brand-cyan text-[10px] font-black uppercase tracking-[0.2em] italic mb-1">Cardstreet</p>
                 <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Admin Console</h1>
                 <p className="text-slate-500 text-sm mt-2">Sign in with your admin account to continue</p>
             </div>
@@ -84,7 +84,7 @@ function LoginContent() {
 
             <p className="text-center mt-6">
                 <Link href="/" className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
-                    ← Back to CardStreet
+                    ← Back to Cardstreet
                 </Link>
             </p>
         </div>

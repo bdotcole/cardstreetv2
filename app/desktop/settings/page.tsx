@@ -10,7 +10,7 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 
 export async function generateMetadata(): Promise<Metadata> {
     const lang = await resolveLang();
-    const title = lang === 'EN' ? 'Account Settings | CardStreet' : 'ตั้งค่าบัญชี | CardStreet';
+    const title = lang === 'EN' ? 'Account Settings | Cardstreet' : 'ตั้งค่าบัญชี | Cardstreet';
     return {
         metadataBase: new URL(BASE_URL),
         title,

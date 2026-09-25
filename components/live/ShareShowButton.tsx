@@ -40,16 +40,16 @@ import type { LiveStreamRow } from '@/components/live/shared';
 // Mirrors lib/locales/{en,th}.json live.share.* — the || fallbacks keep the
 // button functional if a key is ever dropped from the locale files.
 const MESSAGE_FALLBACKS: Record<string, string> = {
-    message: 'LIVE now: {title} — watch {seller} breaking on CardStreet',
-    messageNoSeller: 'LIVE now: {title} — watch live breaks on CardStreet',
-    scheduled: 'Going live {when}: {title} — {seller} on CardStreet',
-    scheduledNoSeller: 'Going live {when}: {title} — live breaks on CardStreet',
+    message: 'LIVE now: {title} — watch {seller} breaking on Cardstreet',
+    messageNoSeller: 'LIVE now: {title} — watch live breaks on Cardstreet',
+    scheduled: 'Going live {when}: {title} — {seller} on Cardstreet',
+    scheduledNoSeller: 'Going live {when}: {title} — live breaks on Cardstreet',
     scheduledPresale:
-        'Going live {when}: {title} — presale open, reserve your spot with {seller} on CardStreet',
+        'Going live {when}: {title} — presale open, reserve your spot with {seller} on Cardstreet',
     scheduledPresaleNoSeller:
-        'Going live {when}: {title} — presale open, reserve your spot on CardStreet',
-    ended: '{seller} streams live breaks on CardStreet — catch the next show',
-    endedNoSeller: 'Live breaks on CardStreet — catch the next show',
+        'Going live {when}: {title} — presale open, reserve your spot on Cardstreet',
+    ended: '{seller} streams live breaks on Cardstreet — catch the next show',
+    endedNoSeller: 'Live breaks on Cardstreet — catch the next show',
 };
 
 export function ShareShowButton({

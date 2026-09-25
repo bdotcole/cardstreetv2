@@ -10,7 +10,7 @@ import { BreakerApplicationSchema } from '@/lib/breakerApplication'
  * Public intake for the Cardstreet Live breaker program (/become-a-breaker).
  *
  * Unauthenticated by design — most of the target audience is currently selling
- * on Facebook/TikTok and has no CardStreet account yet. That makes this the
+ * on Facebook/TikTok and has no Cardstreet account yet. That makes this the
  * only anon-writable surface in the app, so the write goes through the
  * service-role client while the table itself has NO insert policy (see
  * supabase/migrations/20260809_breaker_applications.sql): nothing can write a

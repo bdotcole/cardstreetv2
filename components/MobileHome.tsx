@@ -137,7 +137,7 @@ const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffe
 // The shell fully remounts when the user comes back from the standalone
 // routes (/premium, /grade, /trade, /insights, Stripe redirects). Auth then
 // re-resolves asynchronously, which used to paint the signed-out "Join
-// CardStreet" profile for a few frames before the session came back. This
+// Cardstreet" profile for a few frames before the session came back. This
 // snapshot lets the remount paint signed-in immediately; onAuthStateChange
 // stays the source of truth and clears it when the session is really gone.
 // Guests are in-memory only and intentionally not snapshotted.
@@ -2404,14 +2404,14 @@ export default function HomePage() {
                         className="w-full px-6 py-3 flex justify-between items-center z-50 shrink-0 bg-brand-darker border-b border-white/5"
                     >
                         <div className="flex items-center">
-                            {/* CardStreet Logo */}
+                            {/* Cardstreet Logo */}
                             <button
                                 onClick={() => setActiveTab('marketplace')}
                                 className="relative w-[54px] h-[54px] flex-shrink-0 hover:scale-105 transition-transform"
                             >
                                 <Image
                                     src="/logo.png"
-                                    alt="CardStreet"
+                                    alt="Cardstreet"
                                     width={54}
                                     height={54}
                                     priority

@@ -28,8 +28,8 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
         metadataBase: new URL(BASE_URL),
         title: isThai
-            ? 'แอปเช็คราคาการ์ดโปเกม่อน ดิสนีย์ ยูกิ วันพีช — ราคาตลาดล่าสุด | CardStreet'
-            : 'Check Trading Card Prices in Thailand — Pokémon, Yu-Gi-Oh, One Piece | CardStreet',
+            ? 'แอปเช็คราคาการ์ดโปเกม่อน ดิสนีย์ ยูกิ วันพีช — ราคาตลาดล่าสุด | Cardstreet'
+            : 'Check Trading Card Prices in Thailand — Pokémon, Yu-Gi-Oh, One Piece | Cardstreet',
         description: isThai
             ? 'เช็คราคาการ์ดโปเกม่อน การ์ดดิสนีย์ ยูกิ วันพีช MTG และ Lorcana ฟรี ราคาตลาดกว่า 100,000 ใบ อัปเดตทุกวัน สแกนการ์ดด้วยกล้องเพื่อดูราคาได้ทันที ทั้งการ์ดภาษาไทย อังกฤษ และญี่ปุ่น'
             : 'Free market prices for over 100,000 trading cards — Pokémon, Yu-Gi-Oh!, One Piece, Magic, Lorcana and Riftbound. Updated daily, priced in Thai baht, with English, Thai and Japanese printings priced separately.',
@@ -37,13 +37,13 @@ export async function generateMetadata(): Promise<Metadata> {
         openGraph: {
             images: DEFAULT_OG_IMAGE,
             title: isThai
-                ? 'เช็คราคาการ์ดสะสม — ราคาตลาดล่าสุด ฟรี | CardStreet'
-                : 'Check Trading Card Prices — Free, Updated Daily | CardStreet',
+                ? 'เช็คราคาการ์ดสะสม — ราคาตลาดล่าสุด ฟรี | Cardstreet'
+                : 'Check Trading Card Prices — Free, Updated Daily | Cardstreet',
             description: isThai
                 ? 'ราคาตลาดของการ์ดสะสมกว่า 100,000 ใบ จาก 1,200 กว่าชุด อัปเดตทุกวัน แสดงเป็นเงินบาท'
                 : 'Market prices for over 100,000 cards across more than 1,200 sets, updated daily and shown in Thai baht.',
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl('/prices', pathLocale),
         },
     };
@@ -75,7 +75,7 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
               ['Identify the exact card', 'Start with the collector number in the bottom corner and the language on the card — the same card name can exist in several sets and several languages.'],
               ['Search by name', 'Type the card name in Thai, English or Japanese. Search covers every game and every language at once.'],
               ['Search by number', 'If you know the collector number, e.g. 087/198, type the card name followed by the number to jump straight to it.'],
-              ['Scan with your camera', 'Point your camera at the card and CardStreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.'],
+              ['Scan with your camera', 'Point your camera at the card and Cardstreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.'],
               ['Match the version before you trust the price', 'Check that the language, set, and version all match the copy you are actually holding.'],
               ['See price history', 'Every card page has a price chart covering the last 7, 30 and 90 days.'],
           ];
@@ -83,19 +83,19 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
     const faqs = isThai
         ? [
               [
-                  'ราคาการ์ดบน CardStreet มาจากไหน',
+                  'ราคาการ์ดบน Cardstreet มาจากไหน',
                   'ราคาที่แสดงคือราคาตลาด — ค่ากลางจากการซื้อขายจริงในช่วงล่าสุด ไม่ใช่ราคาตั้งขายที่สูงเกินจริง สำหรับการ์ดภาษาอังกฤษและญี่ปุ่น ราคาอ้างอิงจากตลาดสากลแล้วแปลงเป็นเงินบาท ส่วนการ์ดไทยใช้ราคาที่สะท้อนตลาดในประเทศ',
               ],
               [
                   'เช็คราคาการ์ดโปเกม่อนภาษาไทยได้ไหม',
-                  'ได้ การ์ดโปเกมอนภาษาไทยมีราคาแยกจากฉบับภาษาอังกฤษและญี่ปุ่น เพราะเป็นคนละตลาดกัน ชุด MA, SV และ AS ของไทยจึงมีราคาของตัวเองบน CardStreet ไม่ได้ใช้ราคาการ์ดอังกฤษมาทับ',
+                  'ได้ การ์ดโปเกมอนภาษาไทยมีราคาแยกจากฉบับภาษาอังกฤษและญี่ปุ่น เพราะเป็นคนละตลาดกัน ชุด MA, SV และ AS ของไทยจึงมีราคาของตัวเองบน Cardstreet ไม่ได้ใช้ราคาการ์ดอังกฤษมาทับ',
               ],
               [
                   'การ์ดที่ผ่านการเกรดมีราคาต่างจากการ์ดดิบหรือไม่',
-                  'ต่างกัน การ์ดที่ผ่านการเกรด (PSA, BGS, CGC, TAG) มีราคาแยกต่างหากจากการ์ดดิบบน CardStreet เพราะการ์ดเกรดสูงมักมีมูลค่าสูงกว่าการ์ดดิบหลายเท่า',
+                  'ต่างกัน การ์ดที่ผ่านการเกรด (PSA, BGS, CGC, TAG) มีราคาแยกต่างหากจากการ์ดดิบบน Cardstreet เพราะการ์ดเกรดสูงมักมีมูลค่าสูงกว่าการ์ดดิบหลายเท่า',
               ],
               [
-                  'เช็คราคาการ์ดบน CardStreet เสียเงินไหม',
+                  'เช็คราคาการ์ดบน Cardstreet เสียเงินไหม',
                   'ไม่เสีย การค้นหา การสแกน และการดูราคาตลาดใช้งานได้ฟรี ไม่ต้องสมัครสมาชิก ผู้ขายจะเสียค่าธรรมเนียมเฉพาะตอนที่ขายการ์ดได้จริงเท่านั้น',
               ],
               [
@@ -113,19 +113,19 @@ function buildJsonLd(isThai: boolean): Record<string, unknown>[] {
           ]
         : [
               [
-                  'Where do CardStreet card prices come from?',
+                  'Where do Cardstreet card prices come from?',
                   'The figure shown is the market price — a midpoint drawn from recent real sales, not an inflated asking price. English and Japanese cards reference international market data converted to baht; Thai cards use pricing that reflects the domestic market.',
               ],
               [
                   'Can I check prices for Thai-language Pokémon cards?',
-                  'Yes. Thai-language Pokémon cards are priced separately from their English and Japanese counterparts on CardStreet, because they trade in different markets. Thailand’s MA, SV and AS sets carry their own prices rather than inheriting English ones.',
+                  'Yes. Thai-language Pokémon cards are priced separately from their English and Japanese counterparts on Cardstreet, because they trade in different markets. Thailand’s MA, SV and AS sets carry their own prices rather than inheriting English ones.',
               ],
               [
                   'Are graded cards priced differently from raw cards?',
-                  'Yes. Graded cards (PSA, BGS, CGC, TAG) are priced separately from raw copies on CardStreet, since a high-grade slab is often worth several times the raw card.',
+                  'Yes. Graded cards (PSA, BGS, CGC, TAG) are priced separately from raw copies on Cardstreet, since a high-grade slab is often worth several times the raw card.',
               ],
               [
-                  'Does it cost anything to check card prices on CardStreet?',
+                  'Does it cost anything to check card prices on Cardstreet?',
                   'No. Searching, scanning, and viewing market prices are free and need no account. Sellers pay a fee only when a card actually sells.',
               ],
               [
