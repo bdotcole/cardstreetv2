@@ -1,6 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { attachSellers, fetchPublicSellers } from '@/lib/publicProfiles';
 import type { MarketplaceListing } from '@/services/marketplaceService';
@@ -57,6 +58,21 @@ export const getSellerPageData = cache(
                 .maybeSingle<SellerInfo>());
         }
         if (!seller) return { seller: null, listings: [] };
+
+        // A banned seller has no public shop: the page must 404 rather than
+        // render an empty storefront under their name. banned_at is not on the
+        // public_profiles view, so read it through the service-role client.
+        // Fails open only if the ban columns are missing (pre-migration).
+        try {
+            const { data: banRow } = await createAdminClient()
+                .from('profiles')
+                .select('banned_at')
+                .eq('id', seller.id)
+                .maybeSingle<{ banned_at: string | null }>();
+            if (banRow?.banned_at) return { seller: null, listings: [] };
+        } catch {
+            /* pre-migration: no ban columns, nothing to hide */
+        }
 
         // Vacation mode flag, kept out of the main select: PostgREST rejects a
         // whole select over one unknown column, and this one is cosmetic.
