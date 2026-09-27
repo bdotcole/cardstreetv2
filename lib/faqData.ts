@@ -50,7 +50,7 @@ const FAQ_EN: FaqCategory[] = [
       },
       {
         q: 'Is Cardstreet free to use?',
-        a: 'Browsing, searching, scanning cards, and buying are free — buyers pay only the item price plus shipping. Sellers pay a transaction fee only when a card actually sells (9%, or as low as 5% for Partner sellers). There are no listing fees and no monthly charges.',
+        a: 'Browsing, searching, scanning cards, and buying are free — buyers pay only the listed price, which already includes shipping. Sellers pay a transaction fee only when a card actually sells (9%, or as low as 5% for Partner sellers). There are no listing fees and no monthly charges.',
       },
       {
         q: 'Is there a Cardstreet mobile app?',
@@ -179,7 +179,7 @@ const FAQ_EN: FaqCategory[] = [
     items: [
       {
         q: 'How is shipping handled?',
-        a: 'Orders ship within Thailand through Flash Express. Sellers receive a prepaid label, and you can track every order from the order details screen.',
+        a: 'Every listing price already includes shipping, so the price you see is the price you pay. Orders ship within Thailand through Flash Express, sellers receive a label, and you can track every order from the order details screen.',
       },
       {
         q: 'How do I track my order?',
@@ -363,7 +363,7 @@ const FAQ_TH: FaqCategory[] = [
     items: [
       {
         q: 'การจัดส่งทำอย่างไร?',
-        a: 'คำสั่งซื้อจัดส่งภายในประเทศไทยผ่าน Flash Express ผู้ขายจะได้รับใบจัดส่งที่ชำระล่วงหน้า และคุณติดตามทุกคำสั่งซื้อได้จากหน้ารายละเอียดคำสั่งซื้อ',
+        a: 'ทุกราคาที่แสดงรวมค่าส่งแล้ว จ่ายเท่าที่เห็น ไม่มีค่าส่งเพิ่ม คำสั่งซื้อจัดส่งภายในประเทศไทยผ่าน Flash Express ผู้ขายจะได้รับใบจัดส่ง และคุณติดตามทุกคำสั่งซื้อได้จากหน้ารายละเอียดคำสั่งซื้อ',
       },
       {
         q: 'ติดตามคำสั่งซื้ออย่างไร?',

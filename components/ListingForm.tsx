@@ -345,6 +345,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                   placeholder={recommendedPrice > 0 ? `${t('listingPrice.useRecommended')}: ${recommendedPrice.toLocaleString()}` : '0.00'}
                 />
               </div>
+              {/* Buyers pay this number and nothing more: checkout adds no
+                  shipping line, so shipping has to be inside the price. */}
+              <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">{t('listingPrice.includeShipping')}</p>
 
               {/* Price guidance. Silent when the catalog's market value is the
                   10-baht placeholder daily-market-update writes for a card it

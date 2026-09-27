@@ -3,13 +3,13 @@
 import { useTranslation } from '@/lib/hooks/useTranslation';
 
 /**
- * "Shipping from ฿40 · Flash Express · 1-3 days".
+ * "Shipping included · Flash Express · 1-3 days".
  *
- * Shipping used to appear for the first time on the payment screen. On a ฿60
- * card that is most of what the buyer pays, revealed at the moment they are
- * deciding whether to trust the platform at all.
- *
- * The figure is the real floor, not a marketing one — see lib/shippingDisplay.
+ * Since 2026-09-27 every listing price includes shipping: the seller prices it
+ * in, as Thai sellers already do on Facebook and Shopee, and the buyer pays the
+ * number on the tile and nothing more. The line sits next to the price because
+ * shipping revealed at the payment form is what ended first purchases — see
+ * lib/shippingDisplay.
  */
 export default function ShippingNote({ variant = 'full', tone = 'muted', className = '' }: {
     /** 'full' for a listing detail; 'short' for a grid tile, where the line

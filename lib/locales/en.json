@@ -817,7 +817,7 @@
             "addressIncomplete": "Please fill in every shipping field before continuing.",
             "saveContinue": "Save & continue",
             "subtotal": "Subtotal",
-            "shippingAtCheckout": "Shipping is calculated at checkout.",
+            "shippingAtCheckout": "Shipping is included in every price.",
             "oneMoment": "One moment...",
             "checkout": "Checkout",
             "signInToCheckout": "Sign in to checkout",
@@ -1778,7 +1778,8 @@
         "highWarning": "Priced well above market — cards this far over rarely sell.",
         "confirmPrompt": "That's well over market. Tap again to list at this price.",
         "useRecommended": "Use recommended",
-        "sellFor": "Sell for"
+        "sellFor": "Sell for",
+        "includeShipping": "Include shipping and handling in your price — buyers pay this amount and nothing more. Flash Express is about ฿30-40 per parcel."
     },
     "sell": {
         "demandOne": "1 person wants this",
@@ -1814,8 +1815,9 @@
         "quantityHint": "Creates one listing per copy, so each can sell separately."
     },
     "shipping": {
-        "note": "Shipping from ฿40 · Flash Express · 1-3 days",
-        "noteShort": "+ ฿40 shipping",
+        "note": "Shipping included · Flash Express · 1-3 days",
+        "noteShort": "Shipping included",
+        "included": "Shipping included",
         "sameSellerFree": "Add more from this seller — shipping stays",
         "perSellerNote": "Shipping is charged once per seller.",
         "checkoutSeller": "Checkout with",

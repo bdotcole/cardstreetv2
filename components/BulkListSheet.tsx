@@ -130,6 +130,13 @@ export default function BulkListSheet({
                     </label>
                 </div>
 
+                {/* Same rule as the single listing form: checkout adds no
+                    shipping line, so every price below must already include it. */}
+                <p className="px-6 pt-3 text-[11px] text-slate-500 leading-snug">
+                    {isThai
+                        ? 'ตั้งราคาให้รวมค่าส่งและค่าแพ็กแล้ว ผู้ซื้อจ่ายเท่านี้ ไม่มีค่าส่งเพิ่ม (Flash Express ประมาณ ฿30-40 ต่อพัสดุ)'
+                        : 'Include shipping and handling in each price — buyers pay this amount and nothing more (Flash Express is about ฿30-40 per parcel).'}
+                </p>
                 <div className="flex-1 overflow-y-auto px-6 py-3 space-y-2">
                     {entries.map((e) => {
                         const raw = prices[e.item.id] ?? '';

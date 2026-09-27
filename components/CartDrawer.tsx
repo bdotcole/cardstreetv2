@@ -195,12 +195,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                     <span className="text-[10px] font-bold text-slate-600 shrink-0">{items.length}</span>
                                 </div>
                             )}
-                            {/* The incentive, stated where it can act on the
-                                decision: one more card from THIS seller adds no
-                                shipping at all. */}
+                            {/* Every price already includes shipping; the buyer
+                                should hear that here, not on the payment form. */}
                             <p className="text-[10px] text-brand-green font-bold px-1">
-                                {t('shipping.sameSellerFree')}
-                                {shippingKnown ? ' ' + formatDisplayPrice(shippingFee / Math.max(1, bySeller.length)) : ''}
+                                {t('shipping.included')}
                             </p>
                             {/* Below this shop's minimum: say how much is
                                 missing, here, where adding a card fixes it. */}
@@ -269,27 +267,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
                     <div className="flex justify-between items-end mb-4">
                         <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Shipping</span>
-                        <span className={'font-black text-brand-cyan ' + (shippingKnown ? 'text-sm' : 'text-[11px]')}>
-                            {isCalculatingShipping
-                                ? '...'
-                                : shippingKnown
-                                    ? formatDisplayPrice(shippingFee)
-                                    : t('shipping.unknownShort')}
-                        </span>
+                        <span className="text-[11px] font-black text-brand-green">{t('shipping.included')}</span>
                     </div>
                     <div className="flex justify-between items-end mb-1 pt-2 border-t border-white/10">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{t('cart.price')}</span>
                         <span className="text-2xl font-black text-white">
-                            {formatDisplayPrice(total + (shippingKnown ? shippingFee : 0))}
-                            {!shippingKnown && !isCalculatingShipping && (
-                                <span className="text-[11px] font-bold text-slate-500 ml-1">{t('shipping.plusShipping')}</span>
-                            )}
+                            {formatDisplayPrice(total)}
                         </span>
                     </div>
-                    {!shippingKnown && !isCalculatingShipping && (
-                        <p className="text-[10px] text-slate-500 leading-snug text-right mb-3">{t('shipping.unknownNote')}</p>
-                    )}
-                    <div className={shippingKnown || isCalculatingShipping ? 'mt-3' : ''}>
+                    <div className="mt-3">
                         {/* A mixed cart cannot go through as one charge (a TH
                             direct-charge PaymentIntent belongs to exactly one
                             connected account). The per-seller buttons above are

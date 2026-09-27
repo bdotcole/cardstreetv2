@@ -29,13 +29,6 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import {
-    estimateRateWithCityFallback,
-    isRegionError,
-    fallbackShippingSatang,
-    estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
-} from '@/lib/flashExpress';
-import {
     fetchSellerMinOrders,
     minOrderShortfall,
     minOrderMessage,
@@ -352,56 +345,12 @@ export async function POST(req: Request) {
             }
         }
 
-        // ─── Shipping estimate per seller (in integer satang to avoid float drift) ───
-        // Live Flash quote first (estimatePrice already includes the fuel
-        // surcharge; upCountryAmount is the additive upcountry premium — together
-        // they match Flash's real billed rate). Province-aware fallback (฿40
-        // intra-Bangkok, ฿90 otherwise) only when Flash can't price the route.
-        // This is applied identically in /api/orders/estimate so the displayed
-        // total matches this charge and the no-overcharge guard doesn't false-trip.
-        const sellerShippingSatang = new Map<string, number>();
-
-        for (const sellerId of sellerIds) {
-            const sp = sellerProfiles?.find(p => p.id === sellerId);
-            // Sealed products (booster boxes, ETBs) weigh far more than cards —
-            // quote off the card_data snapshots so heavy items aren't under-quoted.
-            const sellerItems = listings
-                .filter(l => l.seller_id === sellerId)
-                .map(l => ({
-                    isSealed: (l.card_data as any)?.isSealed === true,
-                    productType: (l.card_data as any)?.productType ?? null,
-                }));
-            let baseSatang: number;
-            try {
-                const quote = await estimateRateWithCityFallback({
-                    srcProvinceName: sp?.province || 'กรุงเทพมหานคร',
-                    srcCityName: sp?.state || sp?.district || 'เขตบางรัก',
-                    srcPostalCode: sp?.postcode || '10500',
-                    dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
-                    dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: estimateParcelWeightGramsForItems(sellerItems),
-                    ...estimateParcelDimsCmForItems(sellerItems),
-                });
-                // Flash returns satang (cents) directly.
-                baseSatang = quote.estimatePrice + quote.upCountryAmount;
-                if (quote.usedCanonicalCity) {
-                    console.warn(`[Orders/Checkout] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
-                }
-            } catch (err) {
-                baseSatang = fallbackShippingSatang(sp?.province, buyerProfile?.province);
-                if (isRegionError(err)) {
-                    console.warn(`[Orders/Checkout] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100}`);
-                } else {
-                    console.error(`[Orders/Checkout] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100}:`, err);
-                }
-            }
-            sellerShippingSatang.set(sellerId, baseSatang);
-        }
-
-        // ─── Build orders. Prices come from the DB; shipping is charged once per seller. ───
+        // ─── Build orders. Prices come from the DB. ───
+        // Shipping is inside the listing price (seller-set, since 2026-09-27),
+        // so no shipping line is charged: shipping_fee stays 0 and the seller
+        // pays Flash at pickup out of the price they set. Flash labels, pickup
+        // and weight reconciliation are unchanged.
         const ordersToInsert: Record<string, unknown>[] = [];
-        const shippingApplied = new Set<string>();
 
         for (const listing of listings) {
             // `??`, not `||`: an admin's fee is a real 0, and `||` turned it into 9%.
@@ -436,15 +385,7 @@ export async function POST(req: Request) {
 
             const platformFeeSatang = Math.round(priceSatang * feePct);
 
-            let shippingSatang = 0;
-            if (!shippingApplied.has(listing.seller_id)) {
-                shippingSatang = sellerShippingSatang.get(listing.seller_id)
-                    ?? fallbackShippingSatang(
-                        sellerProfiles?.find(p => p.id === listing.seller_id)?.province,
-                        buyerProfile?.province,
-                    );
-                shippingApplied.add(listing.seller_id);
-            }
+            const shippingSatang = 0;
 
             ordersToInsert.push({
                 listing_id: listing.id,

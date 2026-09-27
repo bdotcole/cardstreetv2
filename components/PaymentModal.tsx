@@ -452,7 +452,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentSuccess,
     onPaymentFailed
 }) => {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
 
     // A provisioned partner signs in with a synthetic address until they finish
     // setup. It reaches nobody, so it is never offered to Stripe as the billing
@@ -813,22 +813,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
-                            <span className="text-sm font-bold text-brand-cyan">
-                                {estimateLoading
-                                    ? 'Calculating…'
-                                    : effectiveShipping > 0
-                                        ? `+${formatAmount(effectiveShipping)}`
-                                        : formatAmount(0)}
-                            </span>
+                            <span className="text-xs font-bold text-brand-green">{t('shipping.included')}</span>
                         </div>
                         {estimateError && (
                             <p className="text-[10px] text-amber-400 italic">
-                                Could not calculate shipping — showing subtotal only. Final amount will reflect actual shipping.
-                            </p>
-                        )}
-                        {!estimateError && estimate?.shippingIsEstimate && (
-                            <p className="text-[10px] text-slate-500 italic">
-                                {t('paymentFlow.shippingEstimate') || "Flat-rate shipping for this address — you'll be charged exactly the total shown above."}
+                                {isThai ? t('paymentFlow.estimateFailed') : 'Could not confirm your total. Close and try again.'}
                             </p>
                         )}
                         {vouchers.length > 0 && (

@@ -18,13 +18,6 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-    estimateRateWithCityFallback,
-    isRegionError,
-    fallbackShippingSatang,
-    estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
-} from '@/lib/flashExpress';
-import {
     fetchSellerMinOrders,
     minOrderShortfall,
     minOrderMessage,
@@ -178,57 +171,12 @@ export async function POST(req: Request) {
             .eq('id', user.id)
             .single();
 
-        // Per-seller shipping. One charge per seller, regardless of how many
-        // of their cards are in the cart — matches /api/orders/checkout.
-        const sellerShipping = new Map<string, number>();
-        const sellerShippingIsFallback = new Map<string, boolean>();
-
-        for (const sellerId of sellerIds) {
-            const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
-            // Same sealed-aware weight/dims as /api/orders/checkout so the
-            // displayed shipping matches the charged shipping.
-            const sellerItems = listings
-                .filter(l => l.seller_id === sellerId)
-                .map(l => ({
-                    isSealed: (l.card_data as any)?.isSealed === true,
-                    productType: (l.card_data as any)?.productType ?? null,
-                }));
-            let baseSatang: number;
-            let isFallback: boolean;
-            try {
-                const quote = await estimateRateWithCityFallback({
-                    srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
-                    srcCityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
-                    srcPostalCode: sellerProfile?.postcode || '10500',
-                    dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
-                    dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: estimateParcelWeightGramsForItems(sellerItems),
-                    ...estimateParcelDimsCmForItems(sellerItems),
-                });
-                baseSatang = quote.estimatePrice + quote.upCountryAmount;
-                isFallback = false;
-                if (quote.usedCanonicalCity) {
-                    // Live quote recovered via the canonical-district retry —
-                    // a profile involved has a city field Flash can't match.
-                    console.warn(`[Orders/Estimate] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
-                }
-            } catch (err) {
-                baseSatang = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province);
-                isFallback = true;
-                if (isRegionError(err)) {
-                    console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100}`,
-                    );
-                } else {
-                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100}:`, err);
-                }
-            }
-            // Matches /api/orders/checkout exactly so the shown total equals the
-            // charged total.
-            sellerShipping.set(sellerId, baseSatang / 100);
-            sellerShippingIsFallback.set(sellerId, isFallback);
-        }
+        // Shipping is inside every listing price (seller-set, since 2026-09-27):
+        // the buyer pays the list price and nothing more. No courier quote is
+        // made here, so the payment form never waits on Flash. The per-seller
+        // fields stay in the response shape for older clients, all zero.
+        const sellerShipping = new Map<string, number>(sellerIds.map((id) => [id, 0]));
+        const sellerShippingIsFallback = new Map<string, boolean>(sellerIds.map((id) => [id, false]));
 
         // The shop's minimum order, identical to the gate in
         // /api/orders/checkout so the payment form never opens on a cart that
@@ -260,9 +208,9 @@ export async function POST(req: Request) {
             (sum, l) => sum + (offerPriceByListing?.get(l.id) ?? Number(l.price || 0)),
             0,
         );
-        const shipping = Array.from(sellerShipping.values()).reduce((s, n) => s + n, 0);
-        const total = subtotal + shipping;
-        const shippingIsEstimate = Array.from(sellerShippingIsFallback.values()).some(Boolean);
+        const shipping = 0;
+        const total = subtotal;
+        const shippingIsEstimate = false;
 
         // For Thailand direct charges the buyer's card must be tokenized in the
         // SELLER's connected-account context (Stripe.js `stripeAccount`), or the
