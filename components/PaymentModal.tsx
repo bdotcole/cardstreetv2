@@ -6,7 +6,13 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import type { Stripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { trackMetaEvent } from '@/lib/metaEvents';
-import { trackPurchase } from '@/lib/commerceEvents';
+import {
+    trackAddPaymentInfo,
+    trackAddShippingInfo,
+    trackBeginCheckout,
+    trackCheckoutError,
+    trackPurchase,
+} from '@/lib/commerceEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
 
 // Publishable key, region-aware to match the dual-platform server setup.
@@ -141,6 +147,9 @@ const PaymentElementForm: React.FC<{
     const retryRef = useRef<{ transferGroup?: string; clientSecret: string | null } | null>(null);
     // First order id from /api/orders/checkout, for the post-payment redirect.
     const firstOrderIdRef = useRef<string | undefined>(undefined);
+    // The tab the buyer has selected in the PaymentElement, for add_payment_info.
+    // Null until Stripe reports a selection.
+    const selectedTypeRef = useRef<string | null>(null);
 
     const handlePay = async () => {
         if (!stripe || !elements) {
@@ -161,10 +170,15 @@ const PaymentElementForm: React.FC<{
             // Step 1: validate the entered payment details.
             const { error: submitError } = await elements.submit();
             if (submitError) {
+                trackCheckoutError('payment_details', submitError.code || submitError.type || 'invalid');
                 onPaymentFailed(submitError.message || 'Please check your payment details.');
                 setLoading(false);
                 return;
             }
+            // GA4 funnel step 3. After submit() rather than on the click, so a
+            // Pay press with an incomplete card number does not count as
+            // payment details entered.
+            trackAddPaymentInfo({ items, valueThb: amountThb, paymentType: selectedTypeRef.current || 'unknown' });
 
             const isMarketplace = apiEndpoint === '/api/checkout';
 
@@ -194,6 +208,7 @@ const PaymentElementForm: React.FC<{
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
+                    trackCheckoutError('order', orderData.code || `http_${orderRes.status}`);
                     if (orderData.code === 'TOTAL_CHANGED' && typeof orderData.total === 'number') {
                         onTotalChanged?.(orderData.total);
                         onPaymentFailed(
@@ -238,6 +253,7 @@ const PaymentElementForm: React.FC<{
                 });
                 const piData = await piRes.json();
                 if (!piRes.ok || !piData.client_secret) {
+                    trackCheckoutError('payment_intent', piData.code || `http_${piRes.status}`);
                     throw new Error(piData.error || 'Could not start payment');
                 }
                 clientSecret = piData.client_secret;
@@ -277,6 +293,10 @@ const PaymentElementForm: React.FC<{
                     error.type === 'card_error' ||
                     error.code === 'card_declined' ||
                     !!(error as { decline_code?: string }).decline_code;
+                trackCheckoutError(
+                    'confirm',
+                    (error as { decline_code?: string }).decline_code || error.code || error.type || 'unknown',
+                );
                 if (isCardDecline) {
                     setCardDeclined(true);
                     onPaymentFailed(t('paymentFlow.cardDeclinedTryPromptPay'));
@@ -331,6 +351,7 @@ const PaymentElementForm: React.FC<{
                 trackPurchase({ transactionId: paymentIntent!.id, valueThb: amountThb, items, paymentMethod: method, paymentStatus: 'processing' });
                 onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current, processing: true });
             } else {
+                trackCheckoutError('confirm', `status_${status || 'unknown'}`);
                 onPaymentFailed('Payment not completed: ' + (status || 'unknown'));
             }
         } catch (e: any) {
@@ -353,6 +374,7 @@ const PaymentElementForm: React.FC<{
             <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
                 <PaymentElement
                     onReady={() => setReady(true)}
+                    onChange={(e) => { selectedTypeRef.current = e.value?.type || null; }}
                     options={{ layout: 'tabs', paymentMethodOrder }}
                 />
             </div>
@@ -433,6 +455,22 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const handleOrderReserved = useCallback((transferGroup: string) => {
         reservedGroupRef.current = transferGroup;
     }, []);
+
+    // ─── GA4 checkout funnel ───
+    // One flag per step per open, so a re-render, a TOTAL_CHANGED re-quote or a
+    // Stripe retry cannot fire a step twice. Reset when the modal closes.
+    const funnelRef = useRef({ began: false, shipping: false, estimateError: false, sellerNotReady: false, stripeLoad: false });
+    useEffect(() => {
+        if (!isOpen) {
+            funnelRef.current = { began: false, shipping: false, estimateError: false, sellerNotReady: false, stripeLoad: false };
+            return;
+        }
+        if (funnelRef.current.began || !items?.length) return;
+        funnelRef.current.began = true;
+        // Step 1, here rather than in the shells: see lib/commerceEvents.ts.
+        // Display currency, as begin_checkout has always reported.
+        trackBeginCheckout(items, currency, exchangeRate);
+    }, [isOpen, items, currency, exchangeRate]);
 
     const handlePaymentSuccess = useCallback(
         (details: { paymentMethod: string; paymentId: string; transferGroup?: string }) => {
@@ -605,6 +643,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
         let cancelled = false;
         setStripeLoadFailed(false);
+        // Reported from the load itself, not from the stripeLoadFailed state:
+        // that flag outlives a close, and would replay a stale failure into the
+        // next open before this effect had cleared it.
+        const reportLoadFailure = (code: string) => {
+            if (funnelRef.current.stripeLoad) return;
+            funnelRef.current.stripeLoad = true;
+            trackCheckoutError('stripe_load', code);
+        };
         promise.then(
             (loaded) => {
                 if (cancelled) return;
@@ -612,11 +658,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 // A null resolve means an invalid/blank publishable key —
                 // same dead-field outcome as a failed script load.
                 setStripeLoadFailed(!loaded);
+                if (!loaded) reportLoadFailure('stripe_key_rejected');
             },
             () => {
                 if (cancelled) return;
                 setStripe(null);
                 setStripeLoadFailed(true);
+                reportLoadFailure('stripe_js_failed');
             },
         );
         return () => { cancelled = true; };
@@ -629,6 +677,30 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // pay step up front so the buyer never submits a checkout the server would
     // reject. The authoritative block is server-side in /api/orders/checkout.
     const sellerNotReady = isMarketplaceCheckout && !!estimate && !estimate.sellerPayoutReady;
+
+    // Funnel step 2, and the ways the modal itself can stop a purchase before
+    // the buyer is ever offered a Pay button. (A failed Stripe.js load is
+    // reported where it happens, above.)
+    useEffect(() => {
+        if (!isOpen) return;
+        const fired = funnelRef.current;
+        if (estimate && !fired.shipping && items?.length) {
+            fired.shipping = true;
+            trackAddShippingInfo({ items, valueThb: estimate.total, shippingThb: estimate.shipping });
+        }
+        if (estimateError && !fired.estimateError) {
+            fired.estimateError = true;
+            trackCheckoutError('estimate', 'estimate_failed');
+        }
+        if (sellerNotReady && !fired.sellerNotReady) {
+            fired.sellerNotReady = true;
+            trackCheckoutError('seller_not_ready', 'seller_payouts_disabled');
+        }
+        if (!PUBLISHABLE_KEY && !fired.stripeLoad) {
+            fired.stripeLoad = true;
+            trackCheckoutError('stripe_load', 'publishable_key_missing');
+        }
+    }, [isOpen, items, estimate, estimateError, sellerNotReady]);
 
     // Deferred PaymentElement options. amount is in satang and is only used to
     // render eligible methods + wallet amounts; the authoritative charge

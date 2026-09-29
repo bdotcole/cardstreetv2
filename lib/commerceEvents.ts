@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * GA4 ecommerce events — add_to_cart, begin_checkout, purchase.
+ * GA4 ecommerce events — add_to_cart, begin_checkout, add_shipping_info,
+ * add_payment_info, purchase — plus checkout_error for the exits in between.
  *
  * WHY THIS EXISTS: the Meta Pixel has had AddToCart / InitiateCheckout /
  * Purchase since the ads push, but GA4 got none of them. The property could
@@ -21,6 +22,16 @@
  * Fired at the same choke points as the Meta events, and from a shared helper
  * for the same reason lib/engagementEvents.ts gives: a new surface that reuses
  * the cart or PaymentModal code path is instrumented by construction.
+ *
+ * EVERYTHING FROM begin_checkout ONWARD FIRES INSIDE components/PaymentModal.tsx,
+ * not in the shells. begin_checkout used to be called by the two cart buttons,
+ * which left every other way into the payment form uncounted — mobile Buy Now
+ * and pay-an-offer never fired it, so phones reported almost no checkouts while
+ * making most of the carts. And GA4's Checkout journey report is a CLOSED
+ * funnel over begin_checkout -> add_shipping_info -> add_payment_info ->
+ * purchase: with the middle two never sent, steps 2-4 read zero no matter what
+ * buyers did, purchases included. The modal is the one component every
+ * purchase path opens, so the steps live there.
  *
  * Rides the GA tag mounted in app/layout.tsx (env-gated on
  * NEXT_PUBLIC_GA_MEASUREMENT_ID). sendGAEvent pushes onto window.dataLayer,
@@ -102,6 +113,75 @@ export function trackBeginCheckout(items: CommerceItemLike[], currency: string, 
         currency,
         value: round2(items.reduce((s, i) => s + (i.price ?? 0), 0) * mult),
         items: toGaItems(items, mult),
+    });
+}
+
+/**
+ * Step 2 of the GA4 checkout funnel. There is no shipping form inside the
+ * payment modal — the address gate runs before it opens — so the honest moment
+ * is when the server quotes shipping to the buyer's saved address and the
+ * shipping-inclusive total is on screen. A buyer who reaches begin_checkout but
+ * not this step hit a failed quote, which is exactly the drop worth seeing.
+ * THB, like purchase: from here on the figures are the server's, not the cart's.
+ */
+export function trackAddShippingInfo(args: {
+    items: CommerceItemLike[];
+    valueThb: number;
+    shippingThb: number;
+}): void {
+    if (args.items.length === 0) return;
+    send('add_shipping_info', {
+        currency: 'THB',
+        value: round2(args.valueThb),
+        shipping: round2(args.shippingThb),
+        shipping_tier: 'Flash Express',
+        items: toGaItems(args.items, 1),
+    });
+}
+
+/**
+ * Step 3: the buyer pressed Pay and Stripe accepted what they entered.
+ * `paymentType` is the tab selected in the PaymentElement ('promptpay' or
+ * 'card'), or 'unknown' when Stripe never reported a selection.
+ */
+export function trackAddPaymentInfo(args: {
+    items: CommerceItemLike[];
+    valueThb: number;
+    paymentType: string;
+}): void {
+    if (args.items.length === 0) return;
+    send('add_payment_info', {
+        currency: 'THB',
+        value: round2(args.valueThb),
+        payment_type: args.paymentType,
+        items: toGaItems(args.items, 1),
+    });
+}
+
+/**
+ * Where a checkout stopped, and why. A rejected /api/orders/checkout or
+ * /api/checkout call writes no row anywhere, so before this a buyer who was
+ * refused at the payment form was indistinguishable from one who changed their
+ * mind. Codes only, never the message shown to the buyer: GA4 truncates
+ * parameter values at 100 characters and free text does not aggregate.
+ *
+ * Custom event, custom parameters — register `checkout_stage` and `error_code`
+ * as event-scoped custom dimensions in the GA4 admin or they are collected but
+ * not reportable.
+ */
+export type CheckoutStage =
+    | 'estimate'
+    | 'seller_not_ready'
+    | 'stripe_load'
+    | 'payment_details'
+    | 'order'
+    | 'payment_intent'
+    | 'confirm';
+
+export function trackCheckoutError(stage: CheckoutStage, code: string): void {
+    send('checkout_error', {
+        checkout_stage: stage,
+        error_code: String(code || 'unknown').slice(0, 100),
     });
 }
 

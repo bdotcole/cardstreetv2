@@ -57,7 +57,7 @@ import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { sendScanFeedback } from '@/lib/scanFeedback';
 import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
-import { trackAddToCart, trackBeginCheckout } from '@/lib/commerceEvents';
+import { trackAddToCart } from '@/lib/commerceEvents';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -1259,7 +1259,8 @@ export default function HomePage() {
             content_type: 'product',
             num_items: payingItems.length,
         });
-        trackBeginCheckout(payingItems, currency, exchangeRate);
+        // GA4 begin_checkout fires inside PaymentModal, which Buy Now and
+        // pay-an-offer open too (lib/commerceEvents.ts).
         setIsPaymentModalOpen(true);
     };
 
