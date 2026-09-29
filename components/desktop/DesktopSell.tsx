@@ -18,6 +18,7 @@ import SellerChecklist from '@/components/SellerChecklist';
 import MostWantedList from '@/components/MostWantedList';
 import { resolveSellerState, needsPayoutActionInState } from '@/lib/sellerState';
 import ShopPauseSection from '@/components/ShopPauseSection';
+import ShopMinOrderSection from '@/components/ShopMinOrderSection';
 import StripePreScreen from '@/components/StripePreScreen';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
@@ -416,6 +417,11 @@ export default function DesktopSell() {
                 flip so the Paused badges below track the new status. Hidden
                 until its migration runs. */}
             {user && <ShopPauseSection className="mt-12 max-w-2xl" onChanged={refreshMyListings} />}
+
+            {/* Smallest order the shop accepts: what makes ฿10 commons worth
+                listing now that shipping is inside the price. Hidden until its
+                migration runs. */}
+            {user && <ShopMinOrderSection className="mt-4 max-w-2xl" />}
 
             <h2 className="text-sm font-black text-white uppercase tracking-widest mt-12 mb-4">
                 {t('desktop.sell.yourListings')} <span className="text-slate-500">({myListings.length})</span>

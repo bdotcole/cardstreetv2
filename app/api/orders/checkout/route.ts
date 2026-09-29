@@ -35,6 +35,12 @@ import {
     estimateParcelWeightGramsForItems,
     estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
+import {
+    fetchSellerMinOrders,
+    minOrderShortfall,
+    minOrderMessage,
+    MIN_ORDER_NOT_MET_ERROR_CODE,
+} from '@/lib/minOrder';
 import { applyProSellerRate, effectivePartnerLevel, feeFractionForLevel, NON_PARTNER_FEE_FRACTION } from '@/lib/partnerTiers';
 import { isPremium } from '@/lib/entitlements';
 import { isFeatureEnabled } from '@/lib/betaAuth';
@@ -286,6 +292,37 @@ export async function POST(req: Request) {
                 },
                 { status: 409 },
             );
+        }
+
+        // ─── Gate: the shop's minimum order ───
+        // A seller may set the smallest order their shop accepts
+        // (lib/minOrder.ts): with shipping inside the price, that is what makes
+        // ฿10 commons worth listing. The buyer's total from each shop must
+        // reach that shop's minimum. An accepted offer is exempt — the seller
+        // agreed to that sale at that price. Read separately and fail-soft, so
+        // a missing column can never block checkout. Runs before any
+        // reservation or insert, so a refused cart leaves nothing behind.
+        if (!acceptedOfferId) {
+            const minOrders = await fetchSellerMinOrders(supabase, sellerIds, 'profiles');
+            for (const sellerId of sellerIds) {
+                const minOrder = minOrders[sellerId] ?? 0;
+                if (minOrder <= 0) continue;
+                const sellerSubtotal = listings
+                    .filter(l => l.seller_id === sellerId)
+                    .reduce((sum, l) => sum + Number(l.price || 0), 0);
+                const shortfall = minOrderShortfall(sellerSubtotal, minOrder);
+                if (shortfall > 0) {
+                    return NextResponse.json(
+                        {
+                            error: minOrderMessage(false, minOrder, shortfall),
+                            code: MIN_ORDER_NOT_MET_ERROR_CODE,
+                            minOrder,
+                            shortfall,
+                        },
+                        { status: 409 },
+                    );
+                }
+            }
         }
 
         // ─── Platform fee tier ───

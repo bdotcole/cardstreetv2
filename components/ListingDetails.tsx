@@ -6,6 +6,8 @@ import PriceHistoryChart from './PriceHistoryChart';
 import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import ShippingNote from '@/components/ShippingNote';
+import { createClient } from '@/lib/supabase/client';
+import { fetchSellerMinOrders, minOrderNote } from '@/lib/minOrder';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import OfferModal from './OfferModal';
@@ -106,6 +108,23 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     // OBO "Make an offer": only when the feature flag is on, the listing accepts
     // offers, and the viewer is not the seller.
     const sellerId = listing.seller_id ?? listing.seller?.id;
+
+    // The shop's minimum order (lib/minOrder.ts), so a buyer looking at a
+    // ฿10 card learns here, not at checkout, that this shop sells from ฿100.
+    // Fail-soft: no answer shows no note.
+    const [sellerMinOrder, setSellerMinOrder] = useState(0);
+    useEffect(() => {
+        if (!sellerId) {
+            setSellerMinOrder(0);
+            return;
+        }
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), [sellerId]).then((found) => {
+            if (!cancelled) setSellerMinOrder(found[sellerId] ?? 0);
+        });
+        return () => { cancelled = true; };
+    }, [sellerId]);
+
     const canOffer =
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' &&
         listing.accepts_offers === true &&
@@ -282,6 +301,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                     payment screen. On a cheap card it is most of
                                     what the buyer pays. */}
                                 <ShippingNote className="mt-1.5" />
+                                {sellerMinOrder > 0 && (
+                                    <p className="text-[11px] text-amber-300/90 font-bold mt-1">
+                                        {minOrderNote(isThai, sellerMinOrder)}
+                                    </p>
+                                )}
                             </div>
                             <div className="text-right">
                                 <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">

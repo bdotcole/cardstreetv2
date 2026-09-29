@@ -20,6 +20,7 @@ import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import type { CartItem } from '@/types';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { isValidThaiPhone } from '@/lib/utils/phone';
+import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -51,7 +52,7 @@ const ADDRESS_FIELD_LABEL_KEYS: Record<BuyerRequiredField, string> = {
 export default function DesktopCartDrawer() {
     const router = useRouter();
     const { showToast } = useToast();
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const {
         user, items, isOpen, removeItem, clear, closeCart,
         acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout,
@@ -68,6 +69,37 @@ export default function DesktopCartDrawer() {
     const [regionBlocked, setRegionBlocked] = useState(false);
 
     const subtotal = items.reduce((sum, i) => sum + i.price, 0);
+
+    // Shop minimum orders (lib/minOrder.ts). Checkout refuses a cart below a
+    // shop's minimum, so the drawer says how much is missing while the buyer
+    // can still add to it. Keyed on seller ids so removing a card does not
+    // refetch. An accepted offer is exempt, exactly as on the server.
+    // Fail-soft: no answer means nothing is blocked here and the server gate
+    // decides.
+    const sellerKey = [...new Set(items.map((i) => i.sellerId).filter(Boolean))].sort().join(',');
+    const [minOrders, setMinOrders] = useState<Record<string, number>>({});
+    useEffect(() => {
+        if (!isOpen || !sellerKey) {
+            setMinOrders({});
+            return;
+        }
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), sellerKey.split(',')).then((found) => {
+            if (!cancelled) setMinOrders(found);
+        });
+        return () => { cancelled = true; };
+    }, [isOpen, sellerKey]);
+    const minOrderBlock = (() => {
+        if (acceptedOfferId) return null;
+        const totals = new Map<string, number>();
+        for (const item of items) totals.set(item.sellerId, (totals.get(item.sellerId) ?? 0) + item.price);
+        for (const [sellerId, total] of totals) {
+            const min = minOrders[sellerId] ?? 0;
+            const shortfall = minOrderShortfall(total, min);
+            if (shortfall > 0) return { min, shortfall };
+        }
+        return null;
+    })();
 
     // Identical copies (sibling listings, lib/listingSiblings.ts) read as one
     // line with a count; each keeps its own listing id underneath.
@@ -329,9 +361,14 @@ export default function DesktopCartDrawer() {
                                         <span className="text-xl font-black text-white">{formatTHB(subtotal)}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 mb-4">{t('desktop.cart.shippingAtCheckout')}</p>
+                                    {minOrderBlock && (
+                                        <p className="text-[11px] text-amber-300 font-bold leading-snug mb-3">
+                                            {minOrderMessage(isThai, minOrderBlock.min, minOrderBlock.shortfall)}
+                                        </p>
+                                    )}
                                     <button
                                         onClick={beginCheckout}
-                                        disabled={checkingProfile}
+                                        disabled={checkingProfile || !!minOrderBlock}
                                         className="w-full bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black py-3.5 rounded-xl transition-colors disabled:opacity-50"
                                     >
                                         {checkingProfile ? t('desktop.cart.oneMoment') : user ? t('desktop.cart.checkout') : t('desktop.cart.signInToCheckout')}

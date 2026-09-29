@@ -25,6 +25,8 @@ export interface SellerInfo {
     // Vacation mode (20260925 migration). Read by a separate fail-soft query
     // so a missing column can never knock out the seller header.
     shop_paused_at?: string | null;
+    // Smallest order the shop accepts, whole baht; 0 or absent = none.
+    min_order_thb?: number | null;
 }
 
 const LISTING_SELECT = `
@@ -85,6 +87,19 @@ export const getSellerPageData = cache(
             seller.shop_paused_at = pauseRow?.shop_paused_at ?? null;
         } catch {
             seller.shop_paused_at = null;
+        }
+
+        // Shop minimum order (20260929 migration). Its own fail-soft probe for
+        // the same reason: one unknown column must not cost the pause flag.
+        try {
+            const { data: minRow } = await supabase
+                .from('public_profiles')
+                .select('min_order_thb')
+                .eq('id', seller.id)
+                .maybeSingle<{ min_order_thb: number | null }>();
+            seller.min_order_thb = minRow?.min_order_thb ?? 0;
+        } catch {
+            seller.min_order_thb = 0;
         }
 
         const { data: rows } = await supabase

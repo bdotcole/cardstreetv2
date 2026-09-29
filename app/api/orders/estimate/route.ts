@@ -25,6 +25,12 @@ import {
     estimateParcelDimsCmForItems,
 } from '@/lib/flashExpress';
 import {
+    fetchSellerMinOrders,
+    minOrderShortfall,
+    minOrderMessage,
+    MIN_ORDER_NOT_MET_ERROR_CODE,
+} from '@/lib/minOrder';
+import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
     BUYER_PROFILE_INCOMPLETE_TOAST,
@@ -220,6 +226,32 @@ export async function POST(req: Request) {
             // charged total.
             sellerShipping.set(sellerId, baseSatang / 100);
             sellerShippingIsFallback.set(sellerId, isFallback);
+        }
+
+        // The shop's minimum order, identical to the gate in
+        // /api/orders/checkout so the payment form never opens on a cart that
+        // checkout would refuse. Accepted offers are exempt; fail-soft read.
+        if (!acceptedOfferId) {
+            const minOrders = await fetchSellerMinOrders(supabase, sellerIds, 'profiles');
+            for (const sellerId of sellerIds) {
+                const minOrder = minOrders[sellerId] ?? 0;
+                if (minOrder <= 0) continue;
+                const sellerSubtotal = listings
+                    .filter(l => l.seller_id === sellerId)
+                    .reduce((sum, l) => sum + Number(l.price || 0), 0);
+                const shortfall = minOrderShortfall(sellerSubtotal, minOrder);
+                if (shortfall > 0) {
+                    return NextResponse.json(
+                        {
+                            error: minOrderMessage(false, minOrder, shortfall),
+                            code: MIN_ORDER_NOT_MET_ERROR_CODE,
+                            minOrder,
+                            shortfall,
+                        },
+                        { status: 409 },
+                    );
+                }
+            }
         }
 
         const subtotal = listings.reduce(

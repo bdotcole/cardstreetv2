@@ -3,6 +3,8 @@ import { CartItem } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useConditionTranslation } from '@/lib/hooks/useCardTranslations';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { createClient } from '@/lib/supabase/client';
+import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
 
 interface CartDrawerProps {
     isOpen: boolean;
@@ -26,7 +28,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     currencySymbol,
     exchangeRate = 1
 }) => {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const translateCondition = useConditionTranslation();
     const total = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
 
@@ -110,6 +112,42 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         fetchShipping();
     }, [isOpen, cart]);
 
+    // Shop minimum orders (lib/minOrder.ts). A seller may set the smallest
+    // order their shop accepts; checkout refuses a cart below it, so the cart
+    // says how much is missing while the buyer can still do something about
+    // it. Keyed on the seller ids rather than the cart array so removing a
+    // card does not refetch. Fail-soft: no answer means no minimums shown, and
+    // the server gate still has the final word.
+    const sellerKey = useMemo(
+        () => [...new Set(cart.map((i) => i.sellerId).filter(Boolean))].sort().join(','),
+        [cart],
+    );
+    const [minOrders, setMinOrders] = useState<Record<string, number>>({});
+    useEffect(() => {
+        if (!isOpen || !sellerKey) {
+            setMinOrders({});
+            return;
+        }
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), sellerKey.split(',')).then((found) => {
+            if (!cancelled) setMinOrders(found);
+        });
+        return () => { cancelled = true; };
+    }, [isOpen, sellerKey]);
+
+    const sellerShortfall = useMemo(() => {
+        const out: Record<string, { min: number; shortfall: number }> = {};
+        for (const group of bySeller) {
+            const min = minOrders[group.sellerId] ?? 0;
+            if (min <= 0) continue;
+            const groupTotal = group.items.reduce((sum, item) => sum + item.price, 0);
+            out[group.sellerId] = { min, shortfall: minOrderShortfall(groupTotal, min) };
+        }
+        return out;
+    }, [bySeller, minOrders]);
+    const singleSellerBlocked =
+        bySeller.length === 1 && (sellerShortfall[bySeller[0].sellerId]?.shortfall ?? 0) > 0;
+
     if (!isOpen) return null;
 
     return (
@@ -164,6 +202,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                 {t('shipping.sameSellerFree')}
                                 {shippingKnown ? ' ' + formatDisplayPrice(shippingFee / Math.max(1, bySeller.length)) : ''}
                             </p>
+                            {/* Below this shop's minimum: say how much is
+                                missing, here, where adding a card fixes it. */}
+                            {(sellerShortfall[sellerId]?.shortfall ?? 0) > 0 && (
+                                <p className="text-[10px] text-amber-300 font-bold px-1 leading-snug">
+                                    {minOrderMessage(isThai, sellerShortfall[sellerId].min, sellerShortfall[sellerId].shortfall)}
+                                </p>
+                            )}
                             {groupLines(items).map(({ item, ids }) => (
                             <div key={ids[0]} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
                                 <div className="w-16 h-20 bg-brand-darker rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
@@ -200,7 +245,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                             {bySeller.length > 1 && (
                                 <button
                                     onClick={() => onCheckout(shippingFee, sellerId)}
-                                    disabled={isCalculatingShipping}
+                                    disabled={isCalculatingShipping || (sellerShortfall[sellerId]?.shortfall ?? 0) > 0}
                                     className="w-full h-11 rounded-xl bg-white/5 border border-brand-green/30 text-brand-green font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
                                 >
                                     {t('shipping.checkoutSeller')} {sellerName}
@@ -253,7 +298,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                             that from a 400 AFTER entering payment details. */}
                         <button
                             onClick={() => onCheckout(shippingFee)}
-                            disabled={cart.length === 0 || isCalculatingShipping || bySeller.length > 1}
+                            disabled={cart.length === 0 || isCalculatingShipping || bySeller.length > 1 || singleSellerBlocked}
                             className="w-full h-14 bg-brand-green text-brand-darker font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 hover:bg-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {bySeller.length > 1 ? (

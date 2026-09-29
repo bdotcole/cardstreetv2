@@ -118,6 +118,13 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                         {seller.partner_joined_at ? ` · ${lang === 'EN' ? 'Official Partner' : 'พาร์ทเนอร์ทางการ'}` : ''}
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
+                    {/* Said on the shop itself, so a buyer filling a cart here
+                        knows the target before checkout refuses them. */}
+                    {typeof seller.min_order_thb === 'number' && seller.min_order_thb > 0 && (
+                        <p className="text-xs text-amber-300/90 font-bold mt-1">
+                            {lang === 'EN' ? 'Minimum order' : 'ยอดสั่งซื้อขั้นต่ำ'} ฿{seller.min_order_thb.toLocaleString()}
+                        </p>
+                    )}
                 </div>
             </header>
 

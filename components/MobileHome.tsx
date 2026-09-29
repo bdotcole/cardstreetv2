@@ -58,6 +58,7 @@ import { sendScanFeedback } from '@/lib/scanFeedback';
 import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { trackAddToCart } from '@/lib/commerceEvents';
+import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -154,7 +155,7 @@ function readUserSnapshot(): UserProfile | null {
 }
 
 export default function HomePage() {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
 
@@ -1343,7 +1344,7 @@ export default function HomePage() {
         if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing, quantity }))) return;
         // One cart line per unit — each is its own listing row, so checkout's
         // per-row reservation is untouched (lib/listingSiblings.ts).
-        setCart(pickSiblingIds(listing, Math.max(1, quantity)).map((id) => ({
+        const buyNowItems: CartItem[] = pickSiblingIds(listing, Math.max(1, quantity)).map((id) => ({
             id,
             cardId: listing.card_id,
             card: listing.card_data,
@@ -1351,7 +1352,23 @@ export default function HomePage() {
             sellerId: listing.seller_id,
             sellerName: listing.seller?.display_name || 'Unknown',
             condition: listing.condition
-        })));
+        }));
+
+        // The shop's minimum order (lib/minOrder.ts). Buy Now pays for this
+        // listing alone, so below the minimum it cannot go through. Put the
+        // card in the cart instead, where the buyer can add more from the same
+        // shop, and say why. Fail-soft: the server gate has the final word.
+        const minOrders = await fetchSellerMinOrders(createClient(), [listing.seller_id]);
+        const minOrder = minOrders[listing.seller_id] ?? 0;
+        const shortfall = minOrderShortfall(buyNowItems.reduce((sum, i) => sum + i.price, 0), minOrder);
+        if (shortfall > 0) {
+            setSelectedListing(null);
+            handleAddToCartMany(buyNowItems);
+            showToast(minOrderMessage(isThai, minOrder, shortfall), 'info');
+            return;
+        }
+
+        setCart(buyNowItems);
         setSelectedListing(null);
         setIsPaymentModalOpen(true);
     };

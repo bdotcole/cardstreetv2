@@ -20,6 +20,7 @@ import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
 import StripeConnectSection from './StripeConnectSection';
 import ShopPauseSection from './ShopPauseSection';
+import ShopMinOrderSection from './ShopMinOrderSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import ThaiAddressFields from './ThaiAddressFields';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
@@ -2111,6 +2112,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
               {/* Vacation mode: pause the whole shop (hides + blocks every
                   listing) and reopen it later. Hidden until its migration runs. */}
               <ShopPauseSection />
+
+              {/* Smallest order the shop accepts: what makes ฿10 commons
+                  worth listing now that shipping is inside the price. Hidden
+                  until its migration runs. */}
+              <ShopMinOrderSection />
             </div>
           </motion.div>
         )}
