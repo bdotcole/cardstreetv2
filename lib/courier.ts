@@ -2973,3 +2973,75 @@ export async function sendBreakerApplicationConfirmation(applicant: {
         return false;
     }
 }
+
+// ─── Scheduled announcement campaign (lib/launchCampaign.ts) ─────────────────
+
+/**
+ * One campaign email to one address. The body is a single Elemental `html`
+ * element (email-only) inside the Courier brand wrapper: the announcements
+ * need bold lead-ins, bullet lists and a hidden inbox-preview line, none of
+ * which the plain `text` elements used elsewhere in this file can carry.
+ *
+ * Inline content on purpose: a one-off campaign has no dashboard template to
+ * author or keep in sync. The subject goes through the Postmark override
+ * because every one is Thai and past the 48-byte cliff (see SUBJECTS).
+ * Returns false instead of throwing so the caller can release its claim.
+ */
+export async function sendCampaignEmail(
+    to: { userId: string; email: string },
+    msg: { type: string; subject: string; html: string },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+    try {
+        await courier.send.message({
+            message: {
+                // user_id for bounce traceability, same as the show blasts.
+                to: { ...buildRecipient(to.email, null), user_id: to.userId },
+                routing: buildRouting(true, false, 'inline'),
+                content: {
+                    version: '2022-01-01',
+                    elements: [
+                        { type: 'meta', title: msg.subject },
+                        { type: 'html', content: msg.html },
+                    ],
+                },
+                data: { type: msg.type },
+                providers: postmarkOverride(msg.subject),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Campaign email ${msg.type} failed for ${to.userId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * One campaign push to one device. `type` rides in `data` for the tap
+ * deep-link (hooks/usePushNotifications.ts). Inline routing, so the push is
+ * pinned to FCM (see buildRouting).
+ */
+export async function sendCampaignPush(
+    to: { userId: string; fcmToken: string },
+    msg: { type: string; title: string; body: string },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(null, to.fcmToken), user_id: to.userId },
+                routing: buildRouting(false, true, 'inline'),
+                content: { title: msg.title, body: msg.body },
+                data: { type: msg.type },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Campaign push ${msg.type} failed for ${to.userId}:`, error);
+        return false;
+    }
+}

@@ -105,6 +105,10 @@
         {
             "path": "/api/cron/stale-listings",
             "schedule": "0 12 * * 2"
+        },
+        {
+            "path": "/api/cron/launch-campaign",
+            "schedule": "*/10 * * * *"
         }
     ]
 }

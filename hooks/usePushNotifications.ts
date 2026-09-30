@@ -57,6 +57,12 @@ function routeNotificationTap(data: unknown) {
         );
         return;
     }
+    if (type === 'shipping_launch') {
+        // The Oct 9 shipping-in-price reminders go to sellers, whose prices
+        // and listings are in the Vault (lib/launchCampaign.ts).
+        window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=shipping_launch');
+        return;
+    }
     if (type === 'weekly_digest') {
         // Both halves of the digest — wishlist matches and vault price moves —
         // are read from the Vault tab.
