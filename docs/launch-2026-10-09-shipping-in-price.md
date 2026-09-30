@@ -2,9 +2,12 @@
 
 **Go-live: Friday, October 9, 2026 at 12:00 am Bangkok time** (Thursday, October 8, 1:00 pm US Eastern).
 
-Status on 2026-09-29: built, held, not on main. Two commits on branch
-`claude/account-ban-unusual-activity-0a3df4`: `328516bc` (shipping in price) and
-`a359ea49` (shop minimum order).
+Status on 2026-09-30: built, held, not on main. Rebased onto main `9303b7a8` on branch
+`claude/strange-leakey-13a174`: shipping in price, then shop minimum order. The original
+commits (`328516bc`, `a359ea49`) remain on `claude/account-ban-unusual-activity-0a3df4`.
+
+The copy below matches the QC'd Claude Doc "Thai QC: Oct 9 launch emails and pushes" at
+rev 26. That doc is the source of truth; edit it first, then this file.
 
 ## Send schedule
 
@@ -64,7 +67,6 @@ The code fails soft without the column, so steps 1 and 2 can swap.
 - **ยังไม่ต้องปรับราคาก่อนวันดังกล่าว** หากขึ้นราคาเองก่อน ราคาจะถูกบวกซ้ำอีก ฿40 หลังวันที่ 9 ตุลาคม คุณปรับราคาขึ้นหรือลงได้ทุกเมื่อ
 - **รายการใหม่หลังวันที่ 9 ตุลาคม** ให้ตั้งราคารวมค่าส่งและค่าแพ็กแล้ว Flash Express อยู่ที่ประมาณ ฿30-40 ต่อพัสดุ
 - **ใหม่: ตั้งยอดสั่งซื้อขั้นต่ำของร้านได้** เช่น ลงการ์ดคอมมอนใบละ ฿10 แล้วตั้งขั้นต่ำ ฿100 ออเดอร์สิบใบก็ยังมีกำไรในพัสดุเดียว ตั้งค่าได้ที่ โปรไฟล์ > บัญชีผู้ขาย (บนเดสก์ท็อป: หน้าขาย) ข้อเสนอราคาที่คุณกดรับจะไม่ติดขั้นต่ำ
-- **ค่าธรรมเนียมผู้ขายอัตราเดิม** 9% และเริ่มต้น 5% สำหรับพาร์ทเนอร์ คิดจากราคาที่ลงขาย
 - **การจัดส่งเหมือนเดิม** ใบจัดส่ง การเข้ารับพัสดุ และการติดตามผ่าน Flash Express ไม่มีอะไรเปลี่ยน
 
 **อัปเดตอื่น ๆ บน Cardstreet**
@@ -100,15 +102,12 @@ We're making buying and selling on Cardstreet simpler. From **Friday, October 9,
 - **Please don't raise your prices before then.** If you do, the ฿40 lands on top. After October 9 you can lower or raise any price whenever you like.
 - **New listings after October 9** should be priced with shipping and handling included. Flash Express runs about ฿30-40 a parcel.
 - **New: set a minimum order for your shop.** List commons at ฿10 each, set a ฿100 minimum, and a ten-card order still earns you money on one parcel. Find it in Profile > Seller Account (on desktop: Sell). Offers you accept are exempt.
-- **The seller fee stays the same rate.** 9%, from 5% for Partners, applied to the listed price.
 - **Shipping itself is unchanged.** Labels, pickup and tracking through Flash Express work exactly as before.
 
 **Also new on Cardstreet**
 
 - **Pause your shop.** One tap hides every listing, and one tap brings them back.
 - **Quantity picker.** Identical copies of a card show as one listing with a quantity.
-- **30th CELEBRATION is here,** with prices that update every night.
-- **Truer prices.** Market values show the live market price, and sealed products have real price history.
 
 Questions? Reply to this email or write to support@thailandtcg.com.
 
@@ -217,7 +216,7 @@ The Cardstreet team
 
 **ผู้ขาย ทำ 2 อย่างนี้วันนี้**
 
-1. **ตรวจราคาของคุณ** เราบวก ฿40 ให้ทุกรายการแล้ว ปรับขึ้นหรือลงได้ที่คลังของคุณ
+1. **ตรวจราคาของคุณ** เราบวก ฿40 ให้ทุกรายการแล้ว ปรับขึ้นหรือลงได้ที่คลังการ์ด
 2. **ตั้งยอดสั่งซื้อขั้นต่ำของร้าน** ที่ โปรไฟล์ > บัญชีผู้ขาย (บนเดสก์ท็อป: หน้าขาย)
 
 **ผู้ซื้อ** เลือกการ์ด ใส่ตะกร้า แล้วจ่ายตามราคาที่เห็น ถ้าร้านมียอดขั้นต่ำ ตะกร้าจะบอกว่าต้องเพิ่มอีกเท่าไร
