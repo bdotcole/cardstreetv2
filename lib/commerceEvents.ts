@@ -159,6 +159,19 @@ export function trackAddPaymentInfo(args: {
 }
 
 /**
+ * The payment form finished rendering: the method tabs and the Pay button are
+ * on screen. Sits between add_shipping_info and add_payment_info. The first
+ * three days of the full funnel read 12 forms opened, 13 shipping quotes shown
+ * and nothing after — no Pay press, valid or invalid, and no checkout_error —
+ * which cannot tell a form that never appeared on the device from a buyer who
+ * looked at it and left. This event is the difference. Custom event with no
+ * parameters, so it is countable by name with nothing to register in GA4.
+ */
+export function trackCheckoutFormReady(): void {
+    send('checkout_form_ready', {});
+}
+
+/**
  * Where a checkout stopped, and why. A rejected /api/orders/checkout or
  * /api/checkout call writes no row anywhere, so before this a buyer who was
  * refused at the payment form was indistinguishable from one who changed their

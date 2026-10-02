@@ -2848,6 +2848,7 @@ export default function HomePage() {
                     items={checkoutItems}
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
+                    buyerEmail={user?.email}
                     acceptedOfferId={acceptedOfferId ?? undefined}
                     onPaymentSuccess={handlePaymentSuccess}
                     onPaymentFailed={(err) => showToast(`${t('paymentFlow.paymentFailed') || 'Payment failed'}: ${err}`, 'error')}

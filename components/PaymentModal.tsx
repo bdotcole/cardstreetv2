@@ -11,9 +11,11 @@ import {
     trackAddShippingInfo,
     trackBeginCheckout,
     trackCheckoutError,
+    trackCheckoutFormReady,
     trackPurchase,
 } from '@/lib/commerceEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
+import { PARTNER_LOGIN_EMAIL_DOMAIN } from '@/lib/referrals';
 
 // Publishable key, region-aware to match the dual-platform server setup.
 // The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
@@ -75,6 +77,12 @@ interface PaymentModalProps {
      * from the offer server-side. The client never sends the offer price.
      */
     acceptedOfferId?: string;
+    /**
+     * The signed-in buyer's email. Stripe requires one for PromptPay and asks
+     * for it in the form; passing it here prefills that field so a PromptPay
+     * buyer can press Pay without typing anything.
+     */
+    buyerEmail?: string | null;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
 }
@@ -109,7 +117,13 @@ const PaymentElementForm: React.FC<{
     onOrderReserved?: (transferGroup: string) => void;
     /** Collector Pass voucher to apply (validated + clamped server-side). */
     voucherId?: string | null;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId }) => {
+    /** Prefills the email PromptPay requires. See PaymentModalProps. */
+    buyerEmail?: string | null;
+    /** The PaymentElement rendered: the buyer can see the form and Pay. */
+    onFormReady?: () => void;
+    /** The PaymentElement could not load, so there is no form to pay with. */
+    onFormLoadError?: (code: string) => void;
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId, buyerEmail, onFormReady, onFormLoadError }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -373,23 +387,48 @@ const PaymentElementForm: React.FC<{
             )}
             <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
                 <PaymentElement
-                    onReady={() => setReady(true)}
+                    onReady={() => { setReady(true); onFormReady?.(); }}
+                    // Without this a PaymentElement that fails to load leaves an
+                    // empty box over a Pay button that stays grey forever, with
+                    // no message and nothing reported.
+                    onLoadError={(e) => onFormLoadError?.(e.error?.code || e.error?.type || 'unknown')}
                     onChange={(e) => { selectedTypeRef.current = e.value?.type || null; }}
-                    options={{ layout: 'tabs', paymentMethodOrder }}
+                    options={{
+                        layout: 'tabs',
+                        paymentMethodOrder,
+                        // PromptPay leads, and Stripe will not confirm it
+                        // without an email, so the form opens on an empty
+                        // required field: a buyer who came to scan a QR is
+                        // asked to type an address on a phone first. They are
+                        // signed in, so we already have it. Prefilled rather
+                        // than hidden so they can still change it.
+                        ...(buyerEmail ? { defaultValues: { billingDetails: { email: buyerEmail } } } : {}),
+                    }}
                 />
             </div>
-            <button
-                onClick={handlePay}
-                disabled={loading || !stripe || !ready}
-                className={`mt-4 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading || !stripe || !ready
-                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                    : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
-                    }`}
-            >
-                {loading
-                    ? (t('paymentFlow.processing') || 'Processing…')
-                    : `${t('paymentFlow.pay') || 'Pay'} ${formatAmount(amountThb)}`}
-            </button>
+            {/* Pinned to the bottom of the modal's scroll area. The form above
+                is roughly 760px tall with the PromptPay tab open and the modal
+                is capped at 90dvh, so on any viewport under about 840px the
+                button fell below the fold of an inner scroll with nothing to
+                say it was there — entirely out of view under about 750px,
+                which is most phones in a mobile browser. The negative margin
+                spans the modal body's p-6 so the form scrolls behind a solid
+                strip; the shadow is the modal's own colour and only softens
+                the edge. */}
+            <div className="sticky bottom-0 z-10 -mx-6 px-6 pt-2 pb-3 bg-slate-900 shadow-[0_-10px_12px_-2px_#0f172a]">
+                <button
+                    onClick={handlePay}
+                    disabled={loading || !stripe || !ready}
+                    className={`w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading || !stripe || !ready
+                        ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                        : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
+                        }`}
+                >
+                    {loading
+                        ? (t('paymentFlow.processing') || 'Processing…')
+                        : `${t('paymentFlow.pay') || 'Pay'} ${formatAmount(amountThb)}`}
+                </button>
+            </div>
         </>
     );
 };
@@ -405,10 +444,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     apiEndpoint,
     extraData,
     acceptedOfferId,
+    buyerEmail,
     onPaymentSuccess,
     onPaymentFailed
 }) => {
     const { t } = useTranslation();
+
+    // A provisioned partner signs in with a synthetic address until they finish
+    // setup. It reaches nobody, so it is never offered to Stripe as the billing
+    // email; that buyer gets the empty field, as before.
+    const prefillEmail =
+        buyerEmail && !buyerEmail.toLowerCase().endsWith(`@${PARTNER_LOGIN_EMAIL_DOMAIN}`) ? buyerEmail : null;
 
     // ─── Abandoned-checkout cleanup ───
     // /api/orders/checkout reserves inventory (listings → `sold`) and creates
@@ -459,10 +505,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // ─── GA4 checkout funnel ───
     // One flag per step per open, so a re-render, a TOTAL_CHANGED re-quote or a
     // Stripe retry cannot fire a step twice. Reset when the modal closes.
-    const funnelRef = useRef({ began: false, shipping: false, estimateError: false, sellerNotReady: false, stripeLoad: false });
+    const funnelRef = useRef({ began: false, shipping: false, formReady: false, estimateError: false, sellerNotReady: false, stripeLoad: false });
     useEffect(() => {
         if (!isOpen) {
-            funnelRef.current = { began: false, shipping: false, estimateError: false, sellerNotReady: false, stripeLoad: false };
+            funnelRef.current = { began: false, shipping: false, formReady: false, estimateError: false, sellerNotReady: false, stripeLoad: false };
             return;
         }
         if (funnelRef.current.began || !items?.length) return;
@@ -672,6 +718,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
     const stripeInstance = stripe && stripe.account === stripeAccountForElements ? stripe.instance : null;
 
+    // The form itself reports in. Ready is counted once per open (the form
+    // remounts when the total changes). A load error is routed into the same
+    // "couldn't load the payment form" state as a blocked Stripe.js: it tells
+    // the buyer what happened and its retry remounts <Elements>, which loads
+    // the form again.
+    const handleFormReady = useCallback(() => {
+        if (funnelRef.current.formReady) return;
+        funnelRef.current.formReady = true;
+        trackCheckoutFormReady();
+    }, []);
+    const handleFormLoadError = useCallback((code: string) => {
+        if (!funnelRef.current.stripeLoad) {
+            funnelRef.current.stripeLoad = true;
+            trackCheckoutError('stripe_load', `element_${code}`);
+        }
+        setStripeLoadFailed(true);
+    }, []);
+
     // List-first: a seller may list before finishing Stripe verification, but a
     // buyer can't pay until that seller's account can receive charges. Block the
     // pay step up front so the buyer never submits a checkout the server would
@@ -876,6 +940,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         extraData={extraData}
                                         acceptedOfferId={acceptedOfferId}
                                         voucherId={selectedVoucherId}
+                                        buyerEmail={prefillEmail}
+                                        onFormReady={handleFormReady}
+                                        onFormLoadError={handleFormLoadError}
                                         onOrderReserved={handleOrderReserved}
                                         onPaymentSuccess={handlePaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}

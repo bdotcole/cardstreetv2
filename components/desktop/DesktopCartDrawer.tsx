@@ -395,6 +395,7 @@ export default function DesktopCartDrawer() {
                 items={items}
                 apiEndpoint="/api/checkout"
                 extraData={{ buyerId: user?.id }}
+                buyerEmail={user?.email}
                 // OBO: when an accepted offer is being paid, the server reads the
                 // discounted price from the offer; the client never sends it.
                 acceptedOfferId={acceptedOfferId ?? undefined}
