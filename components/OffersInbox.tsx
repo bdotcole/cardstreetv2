@@ -88,14 +88,23 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
 
   if (!enabled) return null;
 
-  const act = async (offerId: string, action: 'accept' | 'reject' | 'withdraw') => {
-    setBusyId(offerId);
+  const act = async (o: Offer, action: 'accept' | 'reject' | 'withdraw') => {
+    setBusyId(o.id);
     setError(null);
     try {
-      const res = await fetch(`/api/offers/${offerId}/${action}`, { method: 'POST' });
+      const res = await fetch(`/api/offers/${o.id}/${action}`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Action failed');
       notifyOffersChanged();
+      // A buyer accepting the seller's counter has just agreed a price, and
+      // paying is the only step left — open the payment sheet now rather than
+      // leave a Pay button to be found. Both counters buyers accepted on
+      // 2026-10-03 went unpaid from this list.
+      if (action === 'accept' && o.viewerRole === 'buyer' && onPayOffer) {
+        onPayOffer({ offer: { ...o, status: 'accepted' } });
+        void load();
+        return;
+      }
       await load();
     } catch (e: any) {
       setError(e?.message || (isThai ? 'ดำเนินการไม่สำเร็จ' : 'Action failed.'));
@@ -209,7 +218,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       return (
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'withdraw')}
+          onClick={() => act(o, 'withdraw')}
           className="w-full sm:w-auto h-10 px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ถอนข้อเสนอ' : 'Withdraw'}
@@ -250,7 +259,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       <div className="flex items-stretch gap-2">
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'accept')}
+          onClick={() => act(o, 'accept')}
           className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ตอบรับ' : 'Accept'}
@@ -264,7 +273,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
         </button>
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'reject')}
+          onClick={() => act(o, 'reject')}
           className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ปฏิเสธ' : 'Decline'}

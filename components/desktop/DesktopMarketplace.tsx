@@ -74,11 +74,16 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
 
     // OBO: the offer-email CTA deep-links to /?view=offers; on desktop the
     // middleware rewrites that to the desktop home. Forward it to the Offers
-    // inbox tab (the desktop offers inbox lives under /orders). Gated on the
-    // offers flag so it's inert when off.
+    // inbox tab (the desktop offers inbox lives under /orders). The accepted-
+    // offer pay link (/pay/<id> -> /?payOffer=<id>) lands here the same way and
+    // used to stop at the homepage; it rides along so DesktopOrders can open
+    // the payment. Gated on the offers flag so it's inert when off.
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_ENABLE_OFFERS !== '1') return;
-        if (searchParams?.get('view') === 'offers') {
+        const payOffer = searchParams?.get('payOffer');
+        if (payOffer) {
+            router.replace(`${pathPrefix}/orders?tab=offers&payOffer=${encodeURIComponent(payOffer)}`);
+        } else if (searchParams?.get('view') === 'offers') {
             router.replace(`${pathPrefix}/orders?tab=offers`);
         }
     }, [searchParams, router, pathPrefix]);

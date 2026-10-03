@@ -2176,6 +2176,23 @@ export default function HomePage() {
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
+                // Accepted-offer pay link (cardstreet.app/pay/<offerId>) — the
+                // "Pay now" button in the offer-accepted email and the link
+                // sellers share on LINE. Android opens the app here instead of
+                // running the /pay route's redirect, so with no branch the path
+                // was dropped and the buyer landed on home. Feed the same pay
+                // flow the web landing uses for /?payOffer=<id>.
+                try {
+                    const appLink = new URL(data.url);
+                    const payMatch = appLink.pathname.match(/^\/pay\/([0-9a-f-]{36})\/?$/i);
+                    if (appLink.protocol.startsWith('http') && payMatch) {
+                        setPayOfferId(payMatch[1]);
+                        setActiveTab('profile');
+                        try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Offer-email CTA App Link (cardstreet.app/?view=offers). Android
                 // intercepts all cardstreet.app URLs, so tapping the email button
                 // opens the app here. A deep-link open IS the user's tap, so

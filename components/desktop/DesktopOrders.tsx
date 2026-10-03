@@ -7,6 +7,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
 import OffersInbox from '@/components/OffersInbox';
+import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup } from '@/lib/orderGroups';
@@ -146,6 +147,36 @@ export default function DesktopOrders() {
         setTab(key);
         router.replace(`/orders?tab=${key}`, { scroll: false });
     };
+
+    // The accepted-offer pay link (/pay/<id>), forwarded by the desktop home as
+    // ?payOffer=<id>. Held until there is a session — the link is opened from
+    // email, often signed out — then handed to the same payOffer as the inbox's
+    // Pay button. A ref, not state: one shot per id, and clearing it must not
+    // re-run the effect and drop the lookup in flight.
+    const pendingPayOfferId = useRef<string | null>(searchParams?.get('payOffer') ?? null);
+    useEffect(() => {
+        const id = pendingPayOfferId.current;
+        if (!OFFERS_ENABLED || !id || !user) return;
+        pendingPayOfferId.current = null;
+        router.replace('/orders?tab=offers', { scroll: false });
+        void (async () => {
+            try {
+                const res = await fetch('/api/offers?state=active', { cache: 'no-store' });
+                const data = res.ok ? await res.json() : null;
+                const list: Offer[] = Array.isArray(data?.offers) ? data.offers : [];
+                const offer = list.find((o) => o.id === id);
+                if (offer && offer.status === 'accepted' && offer.viewerRole === 'buyer') {
+                    payOffer(offer);
+                } else {
+                    // Paid, expired, withdrawn, or someone else's — the Offers
+                    // tab underneath shows the truth.
+                    showToast(t('offer.payUnavailable'), 'error');
+                }
+            } catch {
+                showToast(t('offer.payUnavailable'), 'error');
+            }
+        })();
+    }, [user, payOffer, router, showToast, t]);
     const [orders, setOrders] = useState<OrderRow[]>([]);
     const [shipments, setShipments] = useState<OrderRow[]>([]);
     const [sales, setSales] = useState<SaleRow[]>([]);

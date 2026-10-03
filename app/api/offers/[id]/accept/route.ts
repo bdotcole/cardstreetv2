@@ -11,7 +11,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse, after } from 'next/server';
-import { sendOfferAcceptedNotification } from '@/lib/courier';
+import { sendOfferAcceptedNotification, sendOfferCounterAcceptedNotification } from '@/lib/courier';
 import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
 import { awardEvent } from '@/lib/rewards';
 import { EARN } from '@/lib/rewardTiers';
@@ -72,15 +72,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         dailyCap: EARN.OFFER_ACCEPTED.dailyCap,
     });
 
-    // Notify the offer's buyer (whoever will pay).
+    // Tell the party who did NOT just tap Accept. When the seller accepts, that
+    // is the buyer, who now has to pay. When the buyer accepts the seller's
+    // counter, the app has already put them on the payment sheet (OffersInbox),
+    // so the news goes to the seller instead — previously the buyer got a "your
+    // offer was accepted" mail about their own tap and the seller heard nothing,
+    // so had no reason to chase payment.
     const cardName = cardNameFromListingEmbed((offer as { card_data?: unknown }).card_data);
+    const details = { offerId: offer.id, listingId: offer.listing_id, amount: offer.amount, cardName };
     after(() =>
-        sendOfferAcceptedNotification(offer.buyer_id, {
-            offerId: offer.id,
-            listingId: offer.listing_id,
-            amount: offer.amount,
-            cardName,
-        }).catch((e) => console.error('[Offers/Accept] notify (non-fatal):', e)),
+        (offer.actor_role === 'seller'
+            ? sendOfferCounterAcceptedNotification(offer.seller_id, details)
+            : sendOfferAcceptedNotification(offer.buyer_id, details)
+        ).catch((e) => console.error('[Offers/Accept] notify (non-fatal):', e)),
     );
 
     return NextResponse.json({ id: offer.id, status: 'accepted', amount: offer.amount, listing_id: offer.listing_id });

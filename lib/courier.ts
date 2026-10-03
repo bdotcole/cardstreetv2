@@ -62,6 +62,7 @@ const TEMPLATES = {
     // (base32), NOT a UUID (see the warning above).
     offerReceived: (process.env.COURIER_OFFER_RECEIVED_TEMPLATE_ID || '').trim(),
     offerAccepted: (process.env.COURIER_OFFER_ACCEPTED_TEMPLATE_ID || '').trim(),
+    offerCounterAccepted: (process.env.COURIER_OFFER_COUNTER_ACCEPTED_TEMPLATE_ID || '').trim(),
     offerRejected: (process.env.COURIER_OFFER_REJECTED_TEMPLATE_ID || '').trim(),
     offerCountered: (process.env.COURIER_OFFER_COUNTERED_TEMPLATE_ID || '').trim(),
     offerExpired: (process.env.COURIER_OFFER_EXPIRED_TEMPLATE_ID || '').trim(),
@@ -2247,6 +2248,31 @@ export async function sendOfferAcceptedNotification(buyerId: string, details: Of
             cta: 'Pay now · ชำระเงิน',
             push: 'ชำระเงินภายใน 48 ชม. ก่อนมีคนซื้อตัดหน้า · Pay within 48h before someone else buys it.',
             ctaUrl: offerPayUrl(details.offerId),
+        }),
+    });
+}
+
+/**
+ * The seller: the buyer accepted the seller's counter. The buyer is already on
+ * the payment sheet (OffersInbox opens it on accept), so this is the seller's
+ * cue that the deal is agreed but not paid — and where the pay link to chase
+ * with lives. Rides the `offer_accepted_*` prefs: the counter was the seller's
+ * offer, and this is the news that it was accepted.
+ */
+export async function sendOfferCounterAcceptedNotification(sellerId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(sellerId, 'accepted', details, {
+        emailPref: 'offer_accepted_email',
+        pushPref: 'offer_accepted_push',
+        template: TEMPLATES.offerCounterAccepted,
+        // Not 'offer_accepted': that push type opens the payment sheet, and
+        // the seller has nothing to pay. Any other offer_* type opens Offers.
+        pushType: 'offer_counter_accepted',
+        inline: (priceLabel, cardName) => ({
+            subject: `Counter accepted${priceLabel ? ` (${priceLabel})` : ''} — ${cardName}`,
+            bodyEn: `The buyer accepted your counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. It isn't paid yet — if it stays unpaid, send them the pay link from your Offers list. They have 48 hours to pay.`,
+            bodyTh: `ผู้ซื้อตอบรับราคาที่คุณต่อรองบน ${cardName} แล้ว ยังรอการชำระเงิน — ส่งลิงก์ชำระเงินให้ผู้ซื้อได้จากหน้าข้อเสนอของฉัน ผู้ซื้อมีเวลาชำระ 48 ชั่วโมง`,
+            cta: 'View offer · ดูข้อเสนอ',
+            push: 'รอผู้ซื้อชำระเงิน · Waiting for the buyer to pay.',
         }),
     });
 }
