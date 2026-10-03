@@ -16,6 +16,8 @@ import AvatarFrame from '@/components/rewards/AvatarFrame';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { trackSearch } from '@/lib/searchEvents';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
@@ -64,9 +66,16 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // are served to phones too — see middleware.ts).
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [results, setResults] = useState<Card[]>([]);
+    // The query `results` were found for. The dropdown keeps showing the last
+    // results while the next search runs, so the live input is not it.
+    const resultsQueryRef = useRef('');
     const [searching, setSearching] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Latest search wins: each keystroke bumps the id and aborts the request
+    // still in flight, so a slow earlier query (a typo pass, a cold dictionary
+    // load) can never replace the dropdown under a newer one.
+    const searchReqIdRef = useRef(0);
 
     // Full-catalog search (not just marketplace listings): debounce the query
     // and hit the same client-side catalog search the sell/explore flows use,
@@ -82,38 +91,50 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // lib/desktopCardData.ts).
     useEffect(() => {
         const q = query.trim();
+        const reqId = ++searchReqIdRef.current;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         if (q.length < 2) {
             setResults([]);
+            resultsQueryRef.current = '';
             setSearchOpen(false);
             setSearching(false);
             return;
         }
         setSearching(true);
         setSearchOpen(true);
+        // Aborted by the cleanup below: on the next keystroke, and on unmount.
+        const controller = new AbortController();
         debounceRef.current = setTimeout(async () => {
             try {
                 // Independent catalogs — one failing must not blank the other.
                 const [cards, sealed] = await Promise.all([
-                    pokemonService.searchCards(q, false, undefined, 'all').catch(() => [] as Card[]),
+                    pokemonService.searchCards(q, false, undefined, 'all', { signal: controller.signal }).catch(() => [] as Card[]),
                     pokemonService.fetchSealedProducts({ game: 'all', q }).catch(() => []),
                 ]);
+                if (reqId !== searchReqIdRef.current) return;
                 // Reserve room for sealed rather than letting 8 singles crowd
                 // them out — a box search is often the whole intent.
                 const sealedCards = sealed.slice(0, 3).map(sealedProductToCard);
                 setResults([...cards.slice(0, sealedCards.length ? 6 : 8), ...sealedCards]);
+                resultsQueryRef.current = q;
             } catch {
+                if (reqId !== searchReqIdRef.current) return;
                 setResults([]);
+                resultsQueryRef.current = q;
             } finally {
-                setSearching(false);
+                if (reqId === searchReqIdRef.current) setSearching(false);
             }
         }, 250);
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
+            controller.abort();
         };
     }, [query]);
 
     const goToCard = (id: string) => {
+        // GA4 `search` on a pick, not per keystroke: the term is the query the
+        // picked row was found for.
+        trackSearch({ term: resultsQueryRef.current || query, resultsCount: results.length, surface: 'desktop_nav' });
         setSearchOpen(false);
         setQuery('');
         setResults([]);
@@ -125,6 +146,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
     const goToListings = () => {
         const q = query.trim();
         if (q.length < 2) return;
+        // No `search` event here: the /?q= page this opens sends it
+        // (desktop_marketplace), with the listings count the user actually
+        // sees. Sending one here too counted every Enter search twice.
         setSearchOpen(false);
         setQuery('');
         setResults([]);
@@ -191,7 +215,12 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            onFocus={() => { if (results.length > 0) setSearchOpen(true); }}
+                            onFocus={() => {
+                                // Start the name-dictionary download now, so the
+                                // first query doesn't wait on it.
+                                preloadSearchDictionary();
+                                if (results.length > 0) setSearchOpen(true);
+                            }}
                             placeholder={t('desktop.searchPlaceholder')}
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                         />
@@ -211,6 +240,11 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             ) : (
                                 results.map((card) => {
                                     const thumb = getThumbnailUrl(card.images?.small || card.imageUrl);
+                                    // thaiName holds the ENGLISH name of a JA/TH
+                                    // print (historical naming). Showing it is what
+                                    // makes a コイキング row readable to someone who
+                                    // typed "magikarp".
+                                    const englishName = card.thaiName && card.thaiName !== card.name ? card.thaiName : '';
                                     return (
                                         <button
                                             key={card.id}
@@ -226,7 +260,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                                 )}
                                             </span>
                                             <span className="min-w-0">
-                                                <span className="block text-sm font-bold text-white truncate">{card.name}</span>
+                                                {/* With the extra line, name and English name
+                                                    tighten their leading so the three lines
+                                                    (18 + 13 + 16.5px) still fit inside the 48px
+                                                    thumbnail and the row height doesn't change. */}
+                                                <span className={`block text-sm font-bold text-white truncate ${englishName ? 'leading-[18px]' : ''}`}>{card.name}</span>
+                                                {englishName && (
+                                                    <span className="block text-[11px] leading-[13px] text-slate-400 truncate">{englishName}</span>
+                                                )}
                                                 <span className="block text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">
                                                     {card.game && card.game !== 'pokemon' ? `${getGame(card.game).shortName} · ` : ''}
                                                     {card.set}

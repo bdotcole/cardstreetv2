@@ -1,11 +1,14 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
 import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { isFailedResult } from '@/lib/search/failedResult';
+import { trackSearch } from '@/lib/searchEvents';
 import type { Card } from '@/types';
 import { getOptimizedImageUrl, getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGameLanguages } from '@/lib/games';
@@ -122,20 +125,38 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     // Demand capture on a dead end: a /?q= search with no listings shows the
     // catalog cards it matched, each linking to its card page where the
     // visitor can wishlist it (alerted when a seller lists) or sell their own.
+    //
+    // Only once the listings fetch for the term has come back empty: a catalog
+    // search is several catalog queries per term, and running it alongside
+    // every listings search paid for a panel only an empty result shows.
+    const [emptySearch, setEmptySearch] = useState<string | null>(null);
     const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
     useEffect(() => {
-        const term = q.trim();
-        if (term.length < 3) { setCatalogMatches([]); return; }
-        let cancelled = false;
-        pokemonService.searchCards(term, false, undefined, 'all')
-            .then((cards) => { if (!cancelled) setCatalogMatches(cards.slice(0, 4)); })
-            .catch(() => { if (!cancelled) setCatalogMatches([]); });
-        return () => { cancelled = true; };
-    }, [q]);
+        const term = (emptySearch ?? '').trim();
+        // Drop the previous term's matches up front, so the empty state never
+        // shows them under the new term's heading while its search runs.
+        setCatalogMatches([]);
+        if (term.length < 3) return;
+        // Aborted when the term changes, so a superseded search stops at its
+        // next stage instead of running every catalog query to completion.
+        const controller = new AbortController();
+        pokemonService.searchCards(term, false, undefined, 'all', { signal: controller.signal })
+            .then((cards) => { if (!controller.signal.aborted) setCatalogMatches(cards.slice(0, 4)); })
+            .catch(() => { if (!controller.signal.aborted) setCatalogMatches([]); });
+        return () => controller.abort();
+    }, [emptySearch]);
+
+    // GA4 `search` fires once per distinct /?q= term, not again when only a
+    // filter chip or the sort changes.
+    const lastTrackedSearchRef = useRef('');
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
+        // A /?q= page opened cold (a shared link, the SearchAction) has not
+        // loaded the name dictionary the nav box preloads on focus. Start it,
+        // typo index included, for the listings search and its fallbacks.
+        if (q.trim()) preloadSearchDictionary();
         marketplaceService
             .getActiveListings({
                 search: q || undefined,
@@ -151,6 +172,15 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                 // (lib/listingSiblings.ts); hasMore reads the raw page size.
                 setListings(groupSiblingListings(rows));
                 setHasMore(rows.length === PAGE_SIZE);
+                const term = q.trim();
+                setEmptySearch(term && rows.length === 0 ? term : null);
+                if (!term) {
+                    lastTrackedSearchRef.current = '';
+                } else if (term !== lastTrackedSearchRef.current) {
+                    lastTrackedSearchRef.current = term;
+                    // A failed fetch shows the same empty grid as a miss, but is not one.
+                    trackSearch({ term, resultsCount: isFailedResult(rows) ? null : rows.length, surface: 'desktop_marketplace' });
+                }
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

@@ -50,6 +50,26 @@ const isExpectedDataMiss = (url: string, status: number): boolean =>
     (url.includes('/rest/v1/') && status === 406) ||
     (url.includes('/storage/v1/') && (status === 404 || status === 400));
 
+// Catalog search calls the pg_trgm typo RPC, which ships in an optional
+// migration (20261003_search_trigram_fuzzy.sql). Until it is applied PostgREST
+// answers 404 PGRST202 ("function not in the schema cache") and searchCards
+// stops calling it for the session; that one expected miss per session must
+// not become a Sentry issue with a session replay attached. Scoped to exactly
+// this function and code, so a missing RPC anywhere else still reports.
+const isMissingOptionalSearchRpc = (urlStr: string, status: number, body: unknown): boolean => {
+    if (status !== 404 || !urlStr.includes('/rest/v1/rpc/search_cards_fuzzy_v2')) return false;
+    const b = (body ?? {}) as { code?: unknown };
+    return String(b.code ?? '') === 'PGRST202';
+};
+
+// A cancelled request is the caller's choice, not a failure: search boxes
+// abort the previous query's fetches on every keystroke. Reading the error
+// name covers every browser; the signal check covers a body read cut short.
+const isAbort = (error: unknown, init?: RequestInit, input?: RequestInfo | URL): boolean =>
+    (error as { name?: unknown } | null)?.name === 'AbortError'
+    || !!init?.signal?.aborted
+    || (typeof Request !== 'undefined' && input instanceof Request && input.signal?.aborted === true);
+
 export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     try {
         const response = await fetch(input, init);
@@ -62,7 +82,8 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
                 try {
                     const errorData = await clonedResp.json();
 
-                    if (isConsumedAuthLink(urlStr, response.status, errorData)) {
+                    if (isConsumedAuthLink(urlStr, response.status, errorData)
+                        || isMissingOptionalSearchRpc(urlStr, response.status, errorData)) {
                         return response;
                     }
 
@@ -86,16 +107,18 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
                         }
                     });
                 } catch (jsonErr) {
-                    Sentry.captureException(new Error(`Supabase API Error: [${response.status}] ${response.statusText}`), {
-                        extra: { url: urlStr }
-                    });
+                    if (!isAbort(jsonErr, init, input)) {
+                        Sentry.captureException(new Error(`Supabase API Error: [${response.status}] ${response.statusText}`), {
+                            extra: { url: urlStr }
+                        });
+                    }
                 }
             }
         }
         return response;
     } catch (error) {
         const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-        if (urlStr.includes('.supabase.co') && !isClientOffline()) {
+        if (urlStr.includes('.supabase.co') && !isClientOffline() && !isAbort(error, init, input)) {
             Sentry.captureException(error, {
                 extra: { url: urlStr, message: 'Network connectivity failure to Supabase' },
                 tags: { database_client: 'supabase' }

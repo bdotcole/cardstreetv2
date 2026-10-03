@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
-import { sanitizeOrFilterTerm } from '@/lib/utils/postgrestFilter';
+import { loadSearchDictionary, type SearchDictionary } from '@/lib/search/dictionary';
+import { analyzeQuery, resolveForFilter, resolveLoose } from '@/lib/search/resolve';
+import { buildNamePredicate, LISTING_COLUMNS } from '@/lib/search/postgrestSearch';
+import { clipQuery } from '@/lib/search/normalize';
+import { markFailedResult } from '@/lib/search/failedResult';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -126,7 +130,27 @@ export const marketplaceService = {
         } = filters;
 
         try {
-            const buildQuery = (sortKey: ListingSort) => {
+            // Smart name matching: the same listing can be found as Magikarp,
+            // コイキング, คอยคิง or Koiking. The first pass uses exact dictionary
+            // names only (never a typo guess): a marketplace filter that shows
+            // another Pokémon next to real matches reads as broken. The
+            // dictionary load is raced against a timeout inside
+            // loadSearchDictionary; without it the filter is the plain literal
+            // match it always was. A non-Pokémon game filter can't match a
+            // species arm, so it skips the download entirely.
+            // Clipped like the resolver's input, so the literal leg searches
+            // the same text the resolver read.
+            const term = clipQuery(search).trim();
+            const speciesScope = !game || game === 'all' || game === 'pokemon';
+            let dict: SearchDictionary | null = term && speciesScope ? await loadSearchDictionary() : null;
+            let filterRes = dict ? resolveForFilter(dict, term) : null;
+            // null = nothing searchable left (e.g. only punctuation): no name
+            // filter at all, exactly like the old sanitizer returning ''.
+            let namePredicate = term
+                ? buildNamePredicate({ literal: term, resolution: filterRes, cols: LISTING_COLUMNS })
+                : null;
+
+            const buildQuery = (sortKey: ListingSort, predicate: string | null, from = offset, to = offset + limit - 1) => {
                 let query = supabase
                     .from('listings')
                     .select(`
@@ -148,13 +172,12 @@ export const marketplaceService = {
                     `)
                     .eq('status', 'active');
 
-                // Server-side search inside the JSONB snapshot. Match the
-                // secondary name too: a Japanese card snapshots its printed
-                // Japanese name, with the English one in thaiName, so an
-                // English query would otherwise miss every JA listing.
-                const searchTerm = sanitizeOrFilterTerm(search ?? '');
-                if (searchTerm) {
-                    query = query.or(`card_data->>name.ilike.%${searchTerm}%,card_data->>thaiName.ilike.%${searchTerm}%`);
+                // Server-side search inside the JSONB snapshot. LISTING_COLUMNS
+                // matches the secondary name too: a Japanese card snapshots its
+                // printed Japanese name, with the English one in thaiName, so
+                // an English query would otherwise miss every JA listing.
+                if (predicate) {
+                    query = query.or(predicate);
                 }
 
                 // Server-side language filter. Japanese singles snapshot as 'ja'
@@ -219,22 +242,69 @@ export const marketplaceService = {
                 }
 
                 // Pagination
-                return query.range(offset, offset + limit - 1);
+                return query.range(from, to);
             };
 
-            let { data, error } = await buildQuery(sort);
-            // If the deal_ratio migration hasn't been applied yet, degrade to
-            // newest-first instead of an empty marketplace.
-            if (error && sort === 'best_deals') {
-                console.warn('best_deals sort unavailable, falling back to newest:', error.message);
-                ({ data, error } = await buildQuery('newest'));
+            const fetchPage = async (predicate: string | null) => {
+                let { data, error } = await buildQuery(sort, predicate);
+                // If the deal_ratio migration hasn't been applied yet, degrade to
+                // newest-first instead of an empty marketplace.
+                if (error && sort === 'best_deals') {
+                    console.warn('best_deals sort unavailable, falling back to newest:', error.message);
+                    ({ data, error } = await buildQuery('newest', predicate));
+                }
+                if (error) throw error;
+                return (data || []) as unknown as MarketplaceListing[];
+            };
+
+            let rows = await fetchPage(namePredicate);
+
+            // The dictionary lost the 800 ms race (the first search of a
+            // session on a slow link, or a /?q= link opened cold). An empty
+            // literal answer is exactly where the names matter ("koiking",
+            // คอยคิง), so wait a little longer for it, once, and search again.
+            if (rows.length === 0 && namePredicate && speciesScope && !dict && offset === 0) {
+                dict = await loadSearchDictionary(3000);
+                if (dict) {
+                    filterRes = resolveForFilter(dict, term);
+                    if (filterRes.groups.length > 0) {
+                        namePredicate = buildNamePredicate({ literal: term, resolution: filterRes, cols: LISTING_COLUMNS });
+                        rows = await fetchPage(namePredicate);
+                    }
+                }
             }
-            if (error) throw error;
-            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+
+            // Nothing listed under the exact names: try the typo / sound-alike
+            // reading once ("charizrd", ปิกาชู), species arm only. Only when it
+            // names a species the exact pass didn't, or the retry can only
+            // repeat the same empty query.
+            if (rows.length === 0 && dict && namePredicate) {
+                const loose = resolveLoose(dict, analyzeQuery(term));
+                const seen = new Set((filterRes?.groups ?? []).map((g) => g.group.idx));
+                const loosePredicate = loose.groups.some((g) => !seen.has(g.group.idx))
+                    ? buildNamePredicate({ literal: '', resolution: loose, cols: LISTING_COLUMNS })
+                    : null;
+                if (loosePredicate) {
+                    // A later page that comes back empty is usually just the end
+                    // of a non-empty exact result set; switching to the loose
+                    // reading there would append a different search's rows to
+                    // it. Page 1 decides which reading a search uses, and later
+                    // pages follow it: loose only when the exact one has no rows
+                    // at all.
+                    let exactIsEmpty = offset === 0;
+                    if (!exactIsEmpty) {
+                        const { data: probe, error: probeErr } = await buildQuery('newest', namePredicate, 0, 0);
+                        exactIsEmpty = !probeErr && (probe?.length ?? 0) === 0;
+                    }
+                    if (exactIsEmpty) rows = await fetchPage(loosePredicate);
+                }
+            }
+
+            const listings = rows.map(normalizeListing);
             return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching active listings:', error);
-            return [];
+            return markFailedResult([]);
         }
     },
 

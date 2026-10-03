@@ -23,16 +23,23 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
   const [isAiResolving, setIsAiResolving] = useState(false);
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const searchTimeout = useRef<number | null>(null);
+  // The search still in flight. A newer keystroke aborts it, so a superseded
+  // term stops at its next stage and can never overwrite the newer results.
+  const searchAbort = useRef<AbortController | null>(null);
 
   const performSearch = async (val: string) => {
     if (val.length > 2) {
+      searchAbort.current?.abort();
+      const controller = new AbortController();
+      searchAbort.current = controller;
       setIsSearching(true);
       const needsAi = /[\u0E00-\u0E7F]/.test(val) || val.split(' ').length > 1;
       if (needsAi) setIsAiResolving(true);
 
       // Universal search: every game and language, so adding e.g. a One Piece
       // or Thai card by name works without a game picker.
-      const data = await pokemonService.searchCards(val, false, undefined, 'all');
+      const data = await pokemonService.searchCards(val, false, undefined, 'all', { signal: controller.signal });
+      if (controller.signal.aborted) return;
 
       setResults(data);
       setIsSearching(false);
@@ -47,6 +54,13 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
 
     if (searchTimeout.current) {
       window.clearTimeout(searchTimeout.current);
+    }
+    // A shorter or changed term supersedes whatever is still running.
+    if (searchAbort.current) {
+      searchAbort.current.abort();
+      searchAbort.current = null;
+      setIsSearching(false);
+      setIsAiResolving(false);
     }
 
     if (val.length > 2) {

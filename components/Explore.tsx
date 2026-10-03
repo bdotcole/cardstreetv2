@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { pokemonService, ApiSet, SealedProduct } from '../services/pokemonService';
 import { marketplaceService } from '@/services/marketplaceService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { isFailedResult } from '@/lib/search/failedResult';
+import { flushSettledSearch, trackSettledSearch } from '@/lib/searchEvents';
 import { Card } from '../types';
 import SealedProductDetail from './SealedProductDetail';
 import { CURRENCY_SYMBOLS } from '@/constants';
@@ -95,9 +98,18 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // The term the app put in the box (CardDetails "Shop Now", the scanner's
+  // search fallback), until the user edits it. Not a search the user made, and
+  // MobileHome keeps the request, so it replays on every remount of this tab:
+  // analytics must skip it.
+  const programmaticTermRef = useRef<string | null>(null);
+
   // Handle Search Request from props
   useEffect(() => {
-    if (searchRequest) setSearchTerm(searchRequest.term);
+    if (searchRequest) {
+      programmaticTermRef.current = searchRequest.term.trim();
+      setSearchTerm(searchRequest.term);
+    }
   }, [searchRequest]);
 
   // ── Fetch Sets — with in-memory cache ────────────────────────────────────────
@@ -149,18 +161,52 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
     });
   }, [selectedSetId, debouncedSearchTerm, selectedLanguage, selectedGame]);
 
+  // GA4 `search`: one event per term the user typed, once both the card and
+  // the sealed search for it have answered, counting everything the box
+  // offers for it (a box search can match only sealed products). A failed
+  // fetch sends no count, not a zero-result search. trackSettledSearch holds
+  // each term back until typing stops; the effects re-run when the browse
+  // pickers change under an unchanged term, and those re-runs are not new
+  // searches (`sent`).
+  const searchOutcomeRef = useRef<{ term: string; cards?: number | null; sealed?: number | null; sent?: boolean }>({ term: '' });
+  const reportSearchOutcome = useCallback((term: string, part: 'cards' | 'sealed', rows: unknown[]) => {
+    const q = term.trim();
+    if (!q || q === programmaticTermRef.current) return;
+    let o = searchOutcomeRef.current;
+    if (o.term !== q) o = searchOutcomeRef.current = { term: q };
+    o[part] = isFailedResult(rows) ? null : rows.length;
+    if (o.sent || o.cards === undefined || o.sealed === undefined) return;
+    o.sent = true;
+    const shown = (o.cards ?? 0) + (o.sealed ?? 0);
+    const failed = o.cards === null || o.sealed === null;
+    trackSettledSearch({ term: q, resultsCount: shown === 0 && failed ? null : shown, surface: 'explore' });
+  }, []);
+  // Leaving the tab unmounts Explore: send the term still waiting to settle.
+  useEffect(() => () => flushSettledSearch('explore'), []);
+
   // Perform search when debounced term changes (same sequence guard — see cardsReqIdRef above).
   // Search is universal — every game and language — regardless of the browse
   // pickers above: the pickers scope *browsing*, not the search box.
   useEffect(() => {
+    // Box cleared (or back under the search threshold): typing the same term
+    // again is a new search.
+    if (debouncedSearchTerm.length <= 2) searchOutcomeRef.current = { term: '' };
     if (debouncedSearchTerm.length > 2) {
       const myReq = ++cardsReqIdRef.current;
       setIsLoadingCards(true);
-      pokemonService.searchCards(debouncedSearchTerm, false, undefined, 'all').then(results => {
+      // A superseded term stops at its next stage instead of running every
+      // catalog query to completion (a typo search is up to ~15 of them).
+      const controller = new AbortController();
+      pokemonService.searchCards(debouncedSearchTerm, false, undefined, 'all', { signal: controller.signal }).then(results => {
         if (myReq !== cardsReqIdRef.current) return;
+        // Aborted with no newer fetch behind it (the box was cleared with no
+        // set to browse): only the spinner is left to clear.
+        if (controller.signal.aborted) { setIsLoadingCards(false); return; }
         setCards(results);
         setIsLoadingCards(false);
+        reportSearchOutcome(debouncedSearchTerm, 'cards', results);
       });
+      return () => controller.abort();
     } else if (debouncedSearchTerm.length === 0 && selectedSetId) {
       const myReq = ++cardsReqIdRef.current;
       setIsLoadingCards(true);
@@ -170,7 +216,7 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
         setIsLoadingCards(false);
       });
     }
-  }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame]);
+  }, [debouncedSearchTerm, selectedSetId, selectedLanguage, selectedGame, reportSearchOutcome]);
 
   // Fetch sealed products for the sealed tab, and *also* whenever there's a
   // query — a search must find boxes even while the Cards tab is showing, so
@@ -194,8 +240,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
       if (myReq !== sealedReqIdRef.current) return;
       setSealedProducts(rows);
       setIsLoadingSealed(false);
+      if (searching) reportSearchOutcome(debouncedSearchTerm, 'sealed', rows);
     });
-  }, [browseMode, selectedGame, selectedSetId, debouncedSearchTerm, selectedLanguage, showLanguageSelector]);
+  }, [browseMode, selectedGame, selectedSetId, debouncedSearchTerm, selectedLanguage, showLanguageSelector, reportSearchOutcome]);
 
   // Load which sets carry sealed products (cached per game+language).
   useEffect(() => {
@@ -333,7 +380,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             placeholder={t('explore.searchPlaceholder')}
             className="relative w-full h-12 pl-12 pr-4 bg-slate-800 border border-white/10 rounded-xl focus:border-brand-cyan outline-none text-sm font-medium text-white placeholder:text-slate-500 transition-all z-10 shadow-lg"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              programmaticTermRef.current = null;
+              setSearchTerm(e.target.value);
+            }}
+            // Start the name-dictionary download now, so the first query
+            // doesn't wait on it.
+            onFocus={preloadSearchDictionary}
           />
         </div>
 
@@ -668,6 +721,15 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                           </div>
                           <div className="min-w-0">
                             <p className="text-white text-sm font-bold leading-tight line-clamp-2 group-hover:text-brand-cyan transition-colors">{card.name}</p>
+                            {/* Search results only: the English name of a JA/TH
+                                print (thaiName is the secondary-name slot), so a
+                                コイキング result reads as the Magikarp the user
+                                typed. One truncated line fits in the slack beside
+                                the 80px thumbnail (worst case ~73px of text), so
+                                the fixed 112px virtualized row never grows. */}
+                            {hasSearchResults && card.thaiName && card.thaiName !== card.name && (
+                              <p className="text-[10px] leading-tight text-slate-500 font-bold truncate mt-0.5">{card.thaiName}</p>
+                            )}
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase">{card.rarity}</span>
                               <span className="text-[10px] text-slate-600 font-bold">#{card.number}</span>

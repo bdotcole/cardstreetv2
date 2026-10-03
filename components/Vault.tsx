@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import dynamic from 'next/dynamic';
 import { CustomCollection, Card, CardCondition, UserCollectionItem } from '../types';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
@@ -15,6 +15,8 @@ import { ApiSet } from '../services/pokemonService';
 import CardDetails from './CardDetails';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useSearchResolution } from '@/lib/hooks/useSearchResolution';
+import { cardMatchesQuery, prepareCardKeys, prepareQueryKeys } from '@/lib/search/clientMatch';
 import Image from 'next/image';
 import { getThumbnailUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 
@@ -271,16 +273,27 @@ const Vault: React.FC<VaultProps> = ({
     return list;
   }, [customCollections]);
 
+  // Search keys per card, folded once per collection change instead of on
+  // every keystroke: a big vault re-filters on each character typed.
+  const vaultCardKeys = useMemo(
+    () => allVaultItems.map(({ card }) => prepareCardKeys(card)),
+    [allVaultItems],
+  );
+
+  // The filter trails the input so typing stays responsive on a large vault.
+  // The resolution lets the box match a species by any of its names (Magikarp
+  // finds コイキング and คอยคิง cards); exact names only, never typo guesses.
+  const deferredSearchQuery = useDeferredValue(collectionSearchQuery);
+  const searchQueryKeys = useMemo(() => prepareQueryKeys(deferredSearchQuery), [deferredSearchQuery]);
+  const searchResolution = useSearchResolution(collectionSearchQuery);
+
   // Filter and Sort Items
   const processedItems = useMemo(() => {
-    const q = collectionSearchQuery.toLowerCase();
-    const filtered = allVaultItems.filter(({ card }) => {
-      return (
-        card.name.toLowerCase().includes(q) ||
-        card.set.toLowerCase().includes(q) ||
-        card.number.includes(q)
-      );
-    });
+    // Copy even when unfiltered: the sort below works in place and must not
+    // reorder allVaultItems, which other views read.
+    const filtered = searchQueryKeys.key
+      ? allVaultItems.filter((_, i) => cardMatchesQuery(vaultCardKeys[i], searchQueryKeys, searchResolution))
+      : allVaultItems.slice();
 
     return filtered.sort((a, b) => {
       switch (sortOption) {
@@ -297,7 +310,7 @@ const Vault: React.FC<VaultProps> = ({
           return new Date(b.item.addedAt).getTime() - new Date(a.item.addedAt).getTime();
       }
     });
-  }, [allVaultItems, collectionSearchQuery, sortOption]);
+  }, [allVaultItems, vaultCardKeys, searchQueryKeys, searchResolution, sortOption]);
 
   // Land a reprice nudge on the actual control. Declared here, AFTER
   // allVaultItems, because the dependency array is evaluated during render —

@@ -8,6 +8,9 @@ import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
 import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { isFailedResult } from '@/lib/search/failedResult';
+import { flushSettledSearch, trackSettledSearch } from '@/lib/searchEvents';
 import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -165,16 +168,27 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   // catalog cards it matched so the buyer can open one, wishlist it (which now
   // alerts them when a seller lists it), or ask for it. Before this, "Signal
   // Lost" plus a reset button was the whole answer and the intent evaporated.
+  //
+  // Only once the listings fetch for the term has come back empty (singles
+  // section): a catalog search is several catalog queries per term, and
+  // running it on every marketplace search paid for a panel that only an empty
+  // result ever shows.
+  const [emptySearch, setEmptySearch] = useState<string | null>(null);
   const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
   useEffect(() => {
-    const q = debouncedSearch.trim();
-    if (q.length < 3 || section === 'sealed') { setCatalogMatches([]); return; }
-    let cancelled = false;
-    pokemonService.searchCards(q, false, undefined, 'all')
-      .then((cards) => { if (!cancelled) setCatalogMatches(cards.slice(0, 3)); })
-      .catch(() => { if (!cancelled) setCatalogMatches([]); });
-    return () => { cancelled = true; };
-  }, [debouncedSearch, section]);
+    const q = (emptySearch ?? '').trim();
+    // Drop the previous term's matches up front, so the empty state never
+    // shows them under the new term's heading while its search runs.
+    setCatalogMatches([]);
+    if (q.length < 3) return;
+    // Aborted when the term changes, so a superseded search stops at its next
+    // stage instead of running every catalog query to completion.
+    const controller = new AbortController();
+    pokemonService.searchCards(q, false, undefined, 'all', { signal: controller.signal })
+      .then((cards) => { if (!controller.signal.aborted) setCatalogMatches(cards.slice(0, 3)); })
+      .catch(() => { if (!controller.signal.aborted) setCatalogMatches([]); });
+    return () => controller.abort();
+  }, [emptySearch]);
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -187,8 +201,23 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Every reset starts a new generation; a fetch that resolves after a newer
+  // reset is dropped. A search waits on the dictionary chunk (first search
+  // only) and may retry once with a typo reading, so a superseded term's
+  // response can land after the current one's — and would otherwise overwrite
+  // the grid and the empty-state fallback with the old term's results.
+  const listingsGenRef = useRef(0);
+  // GA4 `search` fires once per distinct settled term, not again when only a
+  // filter or the sort changes. The 400 ms debounce above is about the pause
+  // between keystrokes on a phone, so trackSettledSearch also waits for the
+  // typing to stop: "pik", "pikac", "pikachu" are one search, not three.
+  const lastTrackedSearchRef = useRef('');
+  // Leaving the tab unmounts the shop: send the term still waiting to settle.
+  useEffect(() => () => flushSettledSearch('marketplace'), []);
+
   // ── Fetch listings whenever filters change ──────────────────────────────────
   const fetchListings = useCallback(async (reset = false) => {
+    const gen = reset ? ++listingsGenRef.current : listingsGenRef.current;
     setIsLoading(true);
     const currentOffset = reset ? 0 : offset;
 
@@ -203,12 +232,25 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       limit: PAGE_SIZE,
       offset: currentOffset,
     });
+    if (gen !== listingsGenRef.current) return;
 
     // Identical copies (createListing's quantity) fold into one tile carrying a
     // unit count; hasMore still reads the raw page size.
     if (reset) {
       setListings(groupSiblingListings(data));
       setOffset(PAGE_SIZE);
+      const term = debouncedSearch.trim();
+      // The catalog fallback is a singles-only panel (sealed has no catalog
+      // counterpart), so a sealed result never arms it.
+      setEmptySearch(term && data.length === 0 && section !== 'sealed' ? term : null);
+      if (!term) {
+        // Cleared box: searching the same term again is a new search.
+        lastTrackedSearchRef.current = '';
+      } else if (term !== lastTrackedSearchRef.current) {
+        lastTrackedSearchRef.current = term;
+        // A failed fetch shows the same empty grid as a miss, but is not one.
+        trackSettledSearch({ term, resultsCount: isFailedResult(data) ? null : data.length, surface: 'marketplace' });
+      }
     } else {
       setListings(prev => groupSiblingListings([...prev, ...data]));
       setOffset(prev => prev + PAGE_SIZE);
@@ -280,6 +322,10 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 className="w-full bg-transparent text-white text-xs font-bold focus:outline-none placeholder:text-slate-600 h-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                // Start the name-dictionary download now: the listings search
+                // waits up to 800 ms for it and goes literal-only after that,
+                // so a cold first search ("koiking") would otherwise miss.
+                onFocus={preloadSearchDictionary}
               />
               {debouncedSearch !== searchQuery && (
                 <div className="w-3 h-3 border-2 border-brand-cyan/60 border-t-transparent rounded-full animate-spin mr-3" />
