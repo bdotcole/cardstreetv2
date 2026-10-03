@@ -47,6 +47,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'Offer is no longer pending' }, { status: 409 });
     }
 
+    // Same ceiling as a new offer (app/api/offers/route.ts): a counter above the
+    // ask is a price the buyer can beat with Buy Now.
+    const { data: listing } = await admin
+        .from('listings')
+        .select('price')
+        .eq('id', parent.listing_id)
+        .single();
+    if (listing && amount > Number(listing.price)) {
+        return NextResponse.json(
+            { error: 'Offer is above the asking price — use Buy Now instead', code: 'OFFER_ABOVE_ASKING', max: Number(listing.price) },
+            { status: 422 },
+        );
+    }
+
     const { data: newId, error: rpcErr } = await admin.rpc('counter_offer', {
         p_offer_id: id,
         p_actor_id: user.id,

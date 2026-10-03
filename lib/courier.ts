@@ -2311,7 +2311,7 @@ export async function sendOfferCounteredNotification(offerorId: string, details:
     });
 }
 
-/** The offeror: their offer expired at 48h, or was voided because the listing sold. */
+/** The offeror: their offer expired at 48h, or was voided because the listing sold or was taken down. */
 export async function sendOfferExpiredNotification(offerorId: string, details: OfferNotifDetails): Promise<void> {
     return sendOfferNotification(offerorId, 'expired', details, {
         emailPref: 'offer_expired_email',
@@ -2320,7 +2320,7 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
         pushType: 'offer_expired',
         inline: (priceLabel, cardName) => ({
             subject: `Offer expired — ${cardName}`,
-            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired, or the card was sold or taken down).`,
             bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด Cardstreet เพื่อดูรายการอื่น`,
             cta: 'Browse · เลือกซื้อ',
             push: 'ข้อเสนอหมดอายุหรือสินค้าถูกขายแล้ว · It expired or the listing sold.',

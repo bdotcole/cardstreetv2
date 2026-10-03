@@ -48,6 +48,12 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
 
   const minOffer = Math.ceil(listingPrice * OFFER_MIN_FLOOR_FRACTION);
 
+  // An offer above the ask is refused (server-side too): Buy Now is cheaper.
+  const aboveAskingMessage = () =>
+    isThai
+      ? `ข้อเสนอต้องไม่เกินราคาขาย ฿${listingPrice.toLocaleString()} — กด "ซื้อเลย" เพื่อซื้อในราคานี้`
+      : `Offers can't be above the asking price of ฿${listingPrice.toLocaleString()}. Use Buy Now instead.`;
+
   // Read the buyer's shipping profile once on open so the form can warn before
   // they commit, and so the sheet prefills whatever is already saved.
   useEffect(() => {
@@ -89,6 +95,8 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
         const code = data?.code;
         if (code === 'OFFER_TOO_LOW') {
           setError(isThai ? `ข้อเสนอต่ำเกินไป (ขั้นต่ำ ฿${data.min?.toLocaleString?.() ?? minOffer})` : `Offer too low (minimum ฿${data.min ?? minOffer}).`);
+        } else if (code === 'OFFER_ABOVE_ASKING') {
+          setError(aboveAskingMessage());
         } else if (code === 'OFFER_ALREADY_LIVE') {
           setError(isThai ? 'คุณมีข้อเสนอที่ยังไม่สิ้นสุดบนรายการนี้อยู่แล้ว' : 'You already have a live offer on this listing.');
         } else if (code === 'OFFER_LIMIT_REACHED') {
@@ -127,6 +135,10 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
           ? `ข้อเสนอต้องไม่ต่ำกว่า ฿${minOffer.toLocaleString()}`
           : `Offer must be at least ฿${minOffer.toLocaleString()}.`,
       );
+      return null;
+    }
+    if (value > listingPrice) {
+      setError(aboveAskingMessage());
       return null;
     }
     return value;
@@ -183,6 +195,7 @@ const OfferModal: React.FC<OfferModalProps> = ({ listingId, listingPrice, cardNa
                 type="number"
                 required
                 min={minOffer}
+                max={listingPrice}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 text-white font-bold focus:border-brand-cyan outline-none transition-colors placeholder-slate-600"

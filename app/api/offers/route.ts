@@ -84,6 +84,17 @@ export async function POST(req: NextRequest) {
         );
     }
 
+    // ─── Ceiling: never above the asking price ───
+    // An offer over the ask is a worse Buy Now: the buyer waits for the seller
+    // to agree to MORE money, then meets that bigger total at checkout. One
+    // reached acceptance (฿2,500 on a ฿2,000 listing) and was never paid.
+    if (amount > Number(listing.price)) {
+        return NextResponse.json(
+            { error: 'Offer is above the asking price — use Buy Now instead', code: 'OFFER_ABOVE_ASKING', max: Number(listing.price) },
+            { status: 422 },
+        );
+    }
+
     // ─── Anti-abuse: endpoint rate-limit (creates/min/buyer) ───
     // No reusable in-tree rate limiter was found; count this buyer's own recent
     // offer rows as a lightweight limiter.

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
+import { isListingGone } from '@/lib/offerPolicy';
 import { Offer } from '@/types';
 
 interface OffersInboxProps {
@@ -113,16 +114,26 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
   };
 
-  const submitCounter = async (offerId: string) => {
+  const submitCounter = async (o: Offer) => {
     const value = parseFloat(counterAmount);
     if (!Number.isFinite(value) || value <= 0) {
       setError(isThai ? 'กรุณาระบุจำนวนเงินที่ถูกต้อง' : 'Please enter a valid amount.');
       return;
     }
-    setBusyId(offerId);
+    // Mirrors the server ceiling: above the ask, Buy Now is the better deal.
+    const asking = o.listing?.price != null ? Number(o.listing.price) : null;
+    if (asking != null && value > asking) {
+      setError(
+        isThai
+          ? `ข้อเสนอต้องไม่เกินราคาขาย ฿${asking.toLocaleString()}`
+          : `Offers can't be above the asking price of ฿${asking.toLocaleString()}.`,
+      );
+      return;
+    }
+    setBusyId(o.id);
     setError(null);
     try {
-      const res = await fetch(`/api/offers/${offerId}/counter`, {
+      const res = await fetch(`/api/offers/${o.id}/counter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: value }),
@@ -167,6 +178,13 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
   const renderActions = (o: Offer) => {
     const isViewerActor = o.viewerRole === o.actor_role;
     const busy = busyId === o.id;
+
+    // The seller took the listing down (or moderation removed it): Pay,
+    // Accept and the pay link would all end at a checkout that refuses. The
+    // hourly expire-offers sweep closes the offer itself.
+    if ((o.status === 'accepted' || o.status === 'pending') && isListingGone(o.listing?.status)) {
+      return <p className="text-[10px] text-slate-400 font-bold">{t('offer.payUnavailable')}</p>;
+    }
 
     if (o.status === 'accepted') {
       if (o.viewerRole === 'buyer') {
@@ -240,7 +258,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
           />
           <button
             disabled={busy}
-            onClick={() => submitCounter(o.id)}
+            onClick={() => submitCounter(o)}
             className="h-10 px-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
           >
             {isThai ? 'ส่ง' : 'Send'}

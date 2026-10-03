@@ -12,7 +12,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { sendOfferAcceptedNotification, sendOfferCounterAcceptedNotification } from '@/lib/courier';
-import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
+import { ACCEPTED_PAY_WINDOW_MS, cardNameFromListingEmbed, isListingGone } from '@/lib/offerPolicy';
 import { awardEvent } from '@/lib/rewards';
 import { EARN } from '@/lib/rewardTiers';
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: offer } = await admin
         .from('offers')
-        .select('id, listing_id, buyer_id, seller_id, actor_role, amount, status, card_data:listings(card_data)')
+        .select('id, listing_id, buyer_id, seller_id, actor_role, amount, status, card_data:listings(card_data, status)')
         .eq('id', id)
         .single();
 
@@ -49,10 +49,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'Only the counterparty can accept this offer' }, { status: 403 });
     }
 
+    // A seller can take a listing down with offers still open on it. Accepting
+    // one would agree a price nobody can pay, and send the buyer to a payment
+    // sheet that refuses.
+    const listingEmbed = (offer as { card_data?: unknown }).card_data;
+    const listingRow = (Array.isArray(listingEmbed) ? listingEmbed[0] : listingEmbed) as { status?: string } | null | undefined;
+    if (isListingGone(listingRow?.status)) {
+        return NextResponse.json({ error: 'This listing is no longer available' }, { status: 409 });
+    }
+
     // CAS: accept only if still pending (a concurrent withdraw/counter/expire may have won).
+    // expires_at restarts here: the buyer has 48 hours to pay from acceptance,
+    // and the expiry cron reads it. It cannot read updated_at, which the
+    // payment reminder's own write resets.
     const { data: won } = await admin
         .from('offers')
-        .update({ status: 'accepted' })
+        .update({ status: 'accepted', expires_at: new Date(Date.now() + ACCEPTED_PAY_WINDOW_MS).toISOString() })
         .eq('id', id)
         .eq('status', 'pending')
         .select('id');

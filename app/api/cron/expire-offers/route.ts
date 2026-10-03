@@ -2,7 +2,8 @@
  * OBO Best-Offer — hourly expiry cron.
  *
  * Flips pending offers past their expires_at to `expired` and notifies the
- * offeror. Mirrors the pinned cron pattern (app/api/cron/reconcile-shipments):
+ * offeror; also expires accepted offers past their payment deadline, and open
+ * offers on listings the seller took down. Mirrors the pinned cron pattern (app/api/cron/reconcile-shipments):
  * createAdminClient, nodejs runtime, Bearer CRON_SECRET, wall-clock budget,
  * JSON summary. Feature-flagged: while the flag is off it authenticates and
  * skips, so the schedule is inert until launch.
@@ -12,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendOfferExpiredNotification } from '@/lib/courier';
-import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
+import { cardNameFromListingEmbed, LISTING_GONE_STATUSES } from '@/lib/offerPolicy';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -28,7 +29,55 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const started = Date.now();
-    const summary = { expired: 0, notified: 0, acceptedExpired: 0, errors: 0 };
+    const summary = { expired: 0, notified: 0, acceptedExpired: 0, delisted: 0, errors: 0 };
+    const nowIso = new Date().toISOString();
+
+    // ─── Offers on a listing that was taken down ───
+    //
+    // Sellers cancel listings from the client (services/marketplaceService.ts)
+    // and moderation removes them, and neither touched the offers on them: an
+    // accepted offer kept a live Pay button and pay link for a card that could
+    // no longer be bought. Swept here rather than at each delist path so every
+    // path is covered, including ones added later. Sold listings are not this
+    // sweep's business — those offers are voided after payment
+    // (lib/voidOffersForListing.ts), and a reservation can still fall through.
+    //
+    // The buyer is told in every case: the seller took the card down, so the
+    // seller needs no notice, and the buyer is the one holding a dead offer.
+    const { data: delisted, error: delistedErr } = await supabase
+        .from('offers')
+        .select('id, buyer_id, listing_id, amount, listings!inner(card_data, status)')
+        .in('status', ['pending', 'accepted'])
+        .is('accepted_order_id', null)
+        .in('listings.status', LISTING_GONE_STATUSES)
+        .limit(200);
+    if (delistedErr) {
+        Sentry.captureException(new Error(`expire-offers delisted query failed: ${delistedErr.message}`));
+    }
+    for (const offer of delisted || []) {
+        if (Date.now() - started > TIME_BUDGET_MS) break;
+        const { data: won, error: updErr } = await supabase
+            .from('offers')
+            .update({ status: 'expired' })
+            .eq('id', offer.id)
+            .in('status', ['pending', 'accepted'])
+            .is('accepted_order_id', null)
+            .select('id');
+        if (updErr) { summary.errors++; Sentry.captureException(updErr); continue; }
+        if (!won || won.length !== 1) continue;
+        summary.delisted++;
+        try {
+            await sendOfferExpiredNotification(offer.buyer_id, {
+                offerId: offer.id,
+                amount: offer.amount,
+                listingId: offer.listing_id,
+                cardName: cardNameFromListingEmbed((offer as { listings?: unknown }).listings),
+            });
+            summary.notified++;
+        } catch (e) {
+            console.error('[ExpireOffers] delisted notify (non-fatal):', e);
+        }
+    }
 
     // ─── Accepted-but-unpaid offers expire at 48 hours ───
     //
@@ -42,13 +91,16 @@ export async function GET(request: NextRequest) {
     // it. No reservation is released because none is taken (see the header):
     // the listing has been buyable throughout, so expiry costs the buyer only
     // the discount, which is exactly what a lapsed deadline should cost.
-    const acceptedCutoff = new Date(Date.now() - 48 * 3_600_000).toISOString();
+    //
+    // The deadline is expires_at, which the accept route sets to acceptance +
+    // 48h. This used to read updated_at, but the payment reminder's own write
+    // resets updated_at, so every reminder quietly extended the deadline.
     const { data: staleAccepted, error: acceptedErr } = await supabase
         .from('offers')
         .select('id, buyer_id, seller_id, actor_role, listing_id, amount, listings(card_data)')
         .eq('status', 'accepted')
         .is('accepted_order_id', null)
-        .lte('updated_at', acceptedCutoff)
+        .lte('expires_at', nowIso)
         .limit(200);
     if (acceptedErr) {
         Sentry.captureException(new Error(`expire-offers accepted query failed: ${acceptedErr.message}`));
@@ -90,7 +142,7 @@ export async function GET(request: NextRequest) {
         .from('offers')
         .select('id, buyer_id, seller_id, actor_role, listing_id, amount, listings(card_data)')
         .eq('status', 'pending')
-        .lte('expires_at', new Date().toISOString())
+        .lte('expires_at', nowIso)
         .limit(200);
 
     if (error) {
