@@ -163,6 +163,29 @@ function namesContradict(ourNames: string[], jName: string): boolean {
   return !ours.some((w) => theirs.some((t) => t.includes(w) || w.includes(t)));
 }
 
+/**
+ * Score for the printing of a JustTCG variant, highest = the printing whose price
+ * stands for the card. We keep ONE row per card, so that row must carry the
+ * canonical printing: the plain one, else the holo. Reverse Holofoil never wins.
+ *
+ * WotC-era sets name their printings "1st Edition" / "Unlimited" (with or without
+ * "Holofoil"). Before these were scored, every one of them tied at 0 and the API's
+ * order decided, which usually meant the 1st Edition price: Neo Discovery
+ * Wobbuffet published at $245 against a $34.99 Unlimited copy, and 652 rows across
+ * Jungle, Fossil, Team Rocket, both Gym sets and Neo 1-4 sat 2-3x high
+ * (measured 2026-10-02). Unlimited IS the card for our purposes; 1st Edition only
+ * prices a card that was never printed any other way. Both pricing crons share
+ * this so they cannot drift apart again.
+ */
+export function printingScore(printing: unknown): number {
+  const p = String(printing ?? '').trim().toLowerCase();
+  if (p === 'normal' || p === 'unlimited') return 60;
+  if (p === 'holofoil' || p === 'unlimited holofoil') return 40;
+  if (p === '1st edition') return 20;
+  if (p === '1st edition holofoil') return 10;
+  return 0;
+}
+
 export interface MatchResult {
   card: CatalogCard;
   /** How it resolved — logged so a bad rule shows up in cron output. */
@@ -226,6 +249,17 @@ export function buildMatcher(ourCards: CatalogCard[], allJustTcgCards: JustTcgCa
   const contradicts = (c: CatalogCard, jName: string) =>
     namesContradict([baseName(c.name), c.english_name ? baseName(c.english_name) : ''].filter(Boolean), jName);
 
+  // Every row that shares EITHER of this row's names: the same card in its other
+  // printings (base, art rare, mirror foil), whichever language the name is in.
+  const siblingCount = (c: CatalogCard): number => {
+    const ids = new Set<string>();
+    for (const k of [baseName(c.name), c.english_name ? baseName(c.english_name) : '']) {
+      if (!k) continue;
+      for (const x of byName.get(k) ?? []) ids.add(x.id);
+    }
+    return ids.size;
+  };
+
 
   return function match(jc: JustTcgCard): MatchResult | null {
     const jMarkers = jMarkersOf(jc);
@@ -234,8 +268,23 @@ export function buildMatcher(ourCards: CatalogCard[], allJustTcgCards: JustTcgCa
 
     // 1. Same base name AND same variant identity — the strongest signal.
     const named = (byName.get(jName) ?? []).filter((c) => markersAgree(markersOf(c), jMarkers));
-    if (named.length === 1) return { card: named[0], via: 'name+variant' };
-    if (named.length > 1) {
+    if (named.length === 1) {
+      // A lone name hit is NOT proof when the card exists in several printings and
+      // the collector numbers disagree. Japanese sets carry the English name only on
+      // the secret rare (the base common keeps its Japanese name), so JustTCG's
+      // "Gastly 045/071 common" found exactly one row named Gastly, the 080 art
+      // rare, and priced it at $0.20; "Mewtwo 150/165" landed on the 183 art rare
+      // the same way, because the real 150 is indexed as "Mewtwo (Master Ball
+      // Pattern)". 28 secret rares across five sets sat at 20-150x below their
+      // value (2026-10-02), and the Thai rule's Japanese band then dragged 21 Thai
+      // cards down with them. When the numbers disagree AND the row has a sibling
+      // under either of its names, fall through: rules 2 and 3 resolve by number,
+      // which is where the base card really lives. A row whose name is unique in
+      // the set keeps matching on name alone, which Magic and Lorcana depend on.
+      const ourNum = numberKey(named[0].number);
+      const disagree = !!jNum && !!ourNum && ourNum !== jNum && siblingCount(named[0]) > 1;
+      if (!disagree) return { card: named[0], via: 'name+variant' };
+    } else if (named.length > 1) {
       // Several rows share name and variant (reprints within one set) — number decides.
       const sameNum = named.filter((c) => numberKey(c.number) === jNum);
       if (sameNum.length === 1) return { card: sameNum[0], via: 'name+number' };

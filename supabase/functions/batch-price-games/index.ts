@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
-import { buildMatcher } from '../_shared/cardMatch.ts'
+import { buildMatcher, printingScore } from '../_shared/cardMatch.ts'
 import { hotSetIds } from '../_shared/hotSets.ts'
 import { buildSlugIndex, resolveSetSlug } from '../_shared/setSlug.ts'
 
@@ -180,13 +180,12 @@ function bestNmVariant(jCard: any): any | null {
     if (b.avgPrice > 0) sb += 1000;
     if (a.condition === 'Near Mint' || a.condition === 'NM') sa += 500;
     if (b.condition === 'Near Mint' || b.condition === 'NM') sb += 500;
-    // Canonical printing for the single row we keep per card: Normal when the card
-    // has one, else Holofoil. Without the Holofoil tier a holo-only card scored a
-    // flat tie and fell through to Reverse Holofoil.
-    if (a.printing === 'Normal') sa += 60;
-    else if (a.printing === 'Holofoil') sa += 40;
-    if (b.printing === 'Normal') sb += 60;
-    else if (b.printing === 'Holofoil') sb += 40;
+    // Canonical printing for the single row we keep per card: Normal/Unlimited when
+    // the card has one, else Holofoil, never 1st Edition over Unlimited. Shared with
+    // batch-price-english (printingScore in _shared/cardMatch.ts) so the two crons
+    // cannot drift; see there for the 1st Edition incident.
+    sa += printingScore(a.printing);
+    sb += printingScore(b.printing);
     if (sa === sb && a.avgPrice === 0 && b.avgPrice === 0) return (a.price || 99999) - (b.price || 99999);
     return sb - sa;
   });
@@ -325,12 +324,16 @@ Deno.serve(async (req) => {
       //
       // Sets with zero coverage now go FIRST: no price at all is worse than a stale
       // one. A set leaves this bucket as soon as it is priced, so the backlog drains.
+      //
+      // The same sweep records each set's LAST VISIT — the newest stamp among its
+      // rows — which is what the tail is ordered by. See the sort below for why.
       const pricedSetIds = new Set<string>();
+      const lastVisit = new Map<string, string>();
       let sweepComplete = false;
       for (let p = 0; p < COVERAGE_SWEEP_PAGES; p++) {
         const { data, error } = await supabase
           .from('market_values')
-          .select('card_id, pokemon_cards!inner(set_id)')
+          .select('card_id, last_updated, pokemon_cards!inner(set_id)')
           .eq('game', grp.game)
           .eq('language', grp.storeLang)
           .eq('condition', 'Raw_NM')
@@ -339,7 +342,11 @@ Deno.serve(async (req) => {
         if (error) { console.error(`[${grp.game}] coverage sweep: ${error.message}`); break; }
         for (const r of data ?? []) {
           const sid = (r as any).pokemon_cards?.set_id;
-          if (sid) pricedSetIds.add(sid);
+          if (!sid) continue;
+          pricedSetIds.add(sid);
+          // ISO timestamps from one column compare chronologically as strings.
+          const stamp = String((r as any).last_updated ?? '');
+          if (stamp > (lastVisit.get(sid) ?? '')) lastVisit.set(sid, stamp);
         }
         if (!data || data.length < STALE_PROBE_PAGE) { sweepComplete = true; break; }
       }
@@ -365,8 +372,34 @@ Deno.serve(async (req) => {
         if (neverPriced(a)) return createdMs(b) - createdMs(a);
         if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
         if (isNew(a)) return createdMs(b) - createdMs(a);
-        // Most stale rows first. A set with none in the probe window scores 0 and
-        // sorts last, which is correct — it is the freshest thing we have.
+        // LEAST RECENTLY VISITED FIRST, keyed on each set's NEWEST row.
+        //
+        // The stale-row count alone starves mid-sized sets in a game with a few very
+        // large ones. The probe window is a fixed 8k rows, so once the real backlog
+        // is smaller than that the window fills up with rows priced only nights ago,
+        // and a 1,000-row set priced three nights back outscores a 370-row set nobody
+        // has priced in six weeks. Measured on live Magic, 2026-09-29: 20 sets (4,795
+        // rows, up to 46 days old, among them Outlaws of Thunder Junction and every
+        // older Commander set) sat behind Fallout, Foundations and Aetherdrift, which
+        // were re-priced again and again; four of nine consecutive catch-up passes
+        // refreshed thousands of rows and cleared no stale row at all. The last of
+        // those 20 sets stood at queue position 61 behind 12,512 rows; ordered by
+        // last visit it stands at 26 behind 6,116.
+        //
+        // A set's newest stamp is when it was last successfully visited. Frozen rows
+        // (the ones the matcher refuses, see above) are old by definition, so they
+        // cannot drag it: this is the staleness signal the oldest-row ranking wanted,
+        // without its pinning bug. The one set this cannot move is one where NO row
+        // matches any more; it costs a fetch per night, and the head= log line below
+        // shows it as the same id with the same old date on consecutive nights.
+        //
+        // The count stays as the tie-break, and as the whole ordering whenever the
+        // sweep was truncated and the stamps are therefore incomplete.
+        if (sweepComplete) {
+          const va = lastVisit.get(a.id) ?? '';
+          const vb = lastVisit.get(b.id) ?? '';
+          if (va !== vb) return va < vb ? -1 : 1;
+        }
         const ca = staleRows.get(a.id) ?? 0;
         const cb = staleRows.get(b.id) ?? 0;
         return ca !== cb ? cb - ca : createdMs(b) - createdMs(a);
@@ -376,7 +409,7 @@ Deno.serve(async (req) => {
       // starvation is visible in the logs as a head full of low counts.
       const staleBacklog = [...staleRows.values()].reduce((a, n) => a + n, 0);
       console.log(`[${grp.game}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
-      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0})`).join(',')}`);
+      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0}, last ${(lastVisit.get(s.id) ?? 'never').slice(0, 10)})`).join(',')}`);
 
       // JustTCG sets for this game (one call), build resolver.
       // This ONE call gates the entire night for this game: with no listing nothing

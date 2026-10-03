@@ -338,6 +338,26 @@ async function pool(items, size, worker) {
   }
   if (kept) console.log(`kept mirrored art for ${kept} existing card(s)`);
 
+  // CARD-ID COLLISION GUARD. The set-level guard above is not enough: on 2026-08-10
+  // the Japanese M-P, SV1a and SV5M ingests passed it (their set rows had been
+  // relabelled to -th) and then upserted card ids the THAI rows still held, turning
+  // 63 Thai promos and the entire Thai SV1a set into Japanese cards. Nobody noticed
+  // for seven weeks. Refuse the whole run if any target id belongs to another
+  // language; the Thai rows must be moved to their -th ids first.
+  const foreign = [];
+  for (let j = 0; j < cards.length; j += 200) {
+    const ids = cards.slice(j, j + 200).map((c) => c.id);
+    const { data, error } = await supabase.from('pokemon_cards').select('id, language').in('id', ids).neq('language', 'ja');
+    if (error) throw new Error(`card collision check: ${error.message}`);
+    foreign.push(...(data || []));
+  }
+  if (foreign.length) {
+    throw new Error(
+      `REFUSED: ${foreign.length} card id(s) are held by another language and would be overwritten, e.g. ` +
+      foreign.slice(0, 5).map((r) => `${r.id} (${r.language})`).join(', ')
+    );
+  }
+
   for (let j = 0; j < cards.length; j += 50) {
     const batch = cards.slice(j, j + 50);
     const { error } = await supabase.from('pokemon_cards').upsert(batch, { onConflict: 'id' });

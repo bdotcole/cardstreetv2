@@ -173,6 +173,21 @@ async function main() {
       }, { onConflict: 'id' });
       if (setErr) { console.error(`  set upsert failed: ${setErr.message}`); process.exit(1); }
       let written = 0;
+      // CARD-ID COLLISION GUARD. The Japanese Mega promo set now owns the bare
+      // `M-P-0NN` ids (it overwrote the original Thai rows on 2026-08-10); the Thai
+      // promos were restored under `M-P-0NN-th`. Writing `${code}-${pad}` ids here
+      // would now destroy the JAPANESE rows, so refuse any id another language holds.
+      const foreign = [];
+      for (let i = 0; i < rows.length; i += 200) {
+        const { data, error } = await supabase.from('pokemon_cards').select('id, language')
+          .in('id', rows.slice(i, i + 200).map((r) => r.id)).neq('language', 'th');
+        if (error) { console.error(`  collision check failed: ${error.message}`); process.exit(1); }
+        foreign.push(...(data ?? []));
+      }
+      if (foreign.length) {
+        console.error(`  REFUSED: ${foreign.length} card id(s) belong to another language (e.g. ${foreign.slice(0, 5).map((r) => `${r.id}=${r.language}`).join(', ')}). Use suffixed ids for this set.`);
+        process.exit(1);
+      }
       for (let i = 0; i < rows.length; i += 100) {
         const { error } = await supabase.from('pokemon_cards').upsert(rows.slice(i, i + 100), { onConflict: 'id' });
         if (error) { console.error(`  card batch ${i} failed: ${error.message}`); process.exit(1); }

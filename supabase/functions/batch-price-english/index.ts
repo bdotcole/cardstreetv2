@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
-import { buildMatcher } from '../_shared/cardMatch.ts'
+import { buildMatcher, printingScore } from '../_shared/cardMatch.ts'
 import { hotSetIds } from '../_shared/hotSets.ts'
 
 // =====================================================================
@@ -306,16 +306,16 @@ Deno.serve(async (req) => {
                             else if (b.condition === 'Lightly Played' || b.condition === 'LP') scoreB += 200;
 
                             // Printing priority. We keep ONE row per card, so the price must be
-                            // the card's canonical printing: Normal when the card has one, else
-                            // Holofoil (holo-only cards), never Reverse Holofoil. Preferring the
-                            // premium printing here priced the reverse holo as if it were the
-                            // base card -- Legendary Collection Magikarp read $699.99 instead of
-                            // $7.95, and ~46% of the English catalog was inflated the same way.
-                            if (a.printing === 'Normal') scoreA += 60;
-                            else if (a.printing === 'Holofoil') scoreA += 40;
-
-                            if (b.printing === 'Normal') scoreB += 60;
-                            else if (b.printing === 'Holofoil') scoreB += 40;
+                            // the card's canonical printing: Normal/Unlimited when the card has
+                            // one, else Holofoil, never Reverse Holofoil and never 1st Edition
+                            // over Unlimited. Preferring the premium printing here priced the
+                            // reverse holo as if it were the base card -- Legendary Collection
+                            // Magikarp read $699.99 instead of $7.95, and ~46% of the English
+                            // catalog was inflated the same way. The table lives in
+                            // _shared/cardMatch.ts (printingScore) so batch-price-games scores
+                            // identically; see there for the 1st Edition incident.
+                            scoreA += printingScore(a.printing);
+                            scoreB += printingScore(b.printing);
 
                             // Tie-breaker: prioritize lower price if both have 0 sales, to avoid $5000 troll outliers
                             if (scoreA === scoreB && a.avgPrice === 0 && b.avgPrice === 0) {

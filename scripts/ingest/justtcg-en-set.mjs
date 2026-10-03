@@ -81,6 +81,13 @@ if (!SET_ID || !SLUG) {
   process.exit(1);
 }
 
+// True when the existing row at `id` is this very JustTCG card (same TCGplayer
+// product), so re-upserting it is an update rather than a collision.
+function sameProduct(knownRows, id, c) {
+  const row = (knownRows || []).find((r) => r.id === id);
+  return !!row && !!row.tcgplayerId && !!c.tcgplayerId && String(row.tcgplayerId) === String(c.tcgplayerId);
+}
+
 // TCGplayer CDN, same pattern as scripts/ingest/tcgplayer-jp-images.mjs.
 const imgLarge = (id) => `https://tcgplayer-cdn.tcgplayer.com/product/${id}_in_1000x1000.jpg`;
 const imgSmall = (id) => `https://product-images.tcgplayer.com/fit-in/437x437/${id}.jpg`;
@@ -115,14 +122,38 @@ async function fetchAllCards(slug) {
   // 2. drop sealed products
   const cards = items.filter((c) => c.number && c.number !== 'N/A');
 
+  // Rows already in the set, by TCGplayer product: a card that collides on
+  // collector number keeps whatever id it was given before (hand-added rows
+  // included), so a re-run never renames or re-collapses anything.
+  const { data: knownRows, error: knownErr } = await supabase
+    .from('pokemon_cards').select('id, raw_data->tcgplayerId').eq('set_id', SET_ID);
+  if (knownErr) throw new Error(`known-row lookup: ${knownErr.message}`);
+  const idByTcg = new Map((knownRows || []).filter((r) => r.tcgplayerId).map((r) => [String(r.tcgplayerId), r.id]));
+  const taken = new Set((knownRows || []).map((r) => r.id));
+
   const rows = [];
   const seen = new Set();
   for (const c of cards) {
+    // Reprint sets keep the ORIGINAL collector number, so one set can hold several
+    // cards at the same number: 30th Celebration Classic Collection has Metagross,
+    // Genesect EX and Palkia LV.X all at 11. Collapsing on `${SET_ID}-${num}` hid
+    // three of its 30 cards for two weeks. Later arrivals at a taken number get a
+    // letter suffix (011b, 011c); the printed number is kept in `number`.
+    // Letter-only numbers ("R/RGB" on the 30th Celebration Mew) are real cards too
+    // and take the id `<set>-<total>-<letter>`, e.g. me05.5-RGB-R.
+    let num, idBase;
     const m = String(c.number).match(/^([0-9]+)([A-Za-z]*)(?:\/([0-9]+))?/);
-    if (!m) { console.log(`  skip unparseable number "${c.number}" (${c.name})`); continue; }
-    const num = m[1].padStart(3, '0') + m[2];
-    const id = `${SET_ID}-${num}`;
-    if (seen.has(id)) continue;
+    const lettersOnly = String(c.number).match(/^([A-Za-z]+)\/([A-Za-z]+)$/);
+    if (m) { num = m[1].padStart(3, '0') + m[2]; idBase = `${SET_ID}-${num}`; }
+    else if (lettersOnly) { num = c.number; idBase = `${SET_ID}-${lettersOnly[2]}-${lettersOnly[1]}`; }
+    else { console.log(`  skip unparseable number "${c.number}" (${c.name})`); continue; }
+    let id = c.tcgplayerId ? idByTcg.get(String(c.tcgplayerId)) : undefined;
+    if (!id) {
+      id = idBase;
+      for (let k = 0; seen.has(id) || (taken.has(id) && !sameProduct(knownRows, id, c)); k++) {
+        id = idBase + String.fromCharCode(98 + k); // b, c, d, ...
+      }
+    }
     seen.add(id);
     // 3. strip the parallel-disambiguating number suffix from the name
     const name = String(c.name).replace(/\s*-\s*\d+\/\d+\s*$/, '').trim();
