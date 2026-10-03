@@ -226,7 +226,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
                             <ZoomableSlide active={activeSlide === 0} wrapperClass="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]">
                                 {slabbed ? (
-                                    <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden">
+                                    // Explicit width, not w-full: the zoom library's runtime CSS makes its
+                                    // wrapper fit-content, and a box whose only children are absolutely
+                                    // positioned (the slab layers) has no content width — w-full collapsed
+                                    // the whole slide to 0x0.
+                                    <div className="relative w-[280px] max-w-full aspect-[3/4] rounded-lg overflow-hidden">
                                         <GradedSlabFrame company={listing.grading_company} grade={listing.grade} size="md" title={card.name} subtitle={card.set}>
                                             <Image
                                                 src={card.imageUrl || ""}
