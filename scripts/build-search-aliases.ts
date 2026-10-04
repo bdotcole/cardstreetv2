@@ -4,6 +4,15 @@
  * Koiking. Shape: SearchDictionaryFile in lib/search/types.ts.
  *
  *   npx tsx scripts/build-search-aliases.ts [--refresh-catalog] [--refresh-sources] [--cache-dir <dir>] [--out <file>]
+ *   npx tsx scripts/build-search-aliases.ts --check [--cached-catalog] [--refresh-sources] </dev/null
+ *
+ * --check is the drift check to run after Thai/Japanese sets are ingested (or
+ * english_name is relabelled in bulk): it re-exports the catalog (unless
+ * --cached-catalog), rebuilds in memory and compares with the committed file,
+ * ignoring "built". Nothing committed is touched; the would-be file goes to
+ * <cache>/pokemonNames.next.json and the would-be label-conflict report to
+ * <cache>/catalog-label-conflicts.next.json. Exit 0 = up to date, 3 = stale
+ * (rebuild with --refresh-catalog and commit), 1 = error.
  *
  * Inputs are cached in scripts/out/search-aliases/ (gitignored) and downloaded
  * only when missing (--refresh-sources re-downloads them, --refresh-catalog
@@ -53,10 +62,25 @@ const option = (name: string) => {
     return i >= 0 && argv[i + 1] ? path.resolve(argv[i + 1]) : null;
 };
 const CACHE = option('--cache-dir') || path.join(ROOT, 'scripts', 'out', 'search-aliases');
+const DEFAULT_OUT = path.join(ROOT, 'lib', 'search', 'data', 'pokemonNames.json');
 // --out exists so a from-scratch test build does not overwrite the committed file.
-const OUT_FILE = option('--out') || path.join(ROOT, 'lib', 'search', 'data', 'pokemonNames.json');
-const REFRESH_CATALOG = flag('--refresh-catalog');
+// Under --check it is the file compared against instead.
+const OUT_FILE = option('--out') || DEFAULT_OUT;
+const CHECK = flag('--check');
+// A drift check against a stale export would answer the wrong question, so
+// --check re-exports by default; --cached-catalog is for offline runs.
+const REFRESH_CATALOG = flag('--refresh-catalog') || (CHECK && !flag('--cached-catalog'));
 const REFRESH_SOURCES = flag('--refresh-sources');
+const CONFLICTS_FILE = path.join(CACHE, 'catalog-label-conflicts.json');
+const NEXT_FILE = path.join(CACHE, 'pokemonNames.next.json');
+const CONFLICTS_NEXT_FILE = path.join(CACHE, 'catalog-label-conflicts.next.json');
+/** Exit code for "the committed dictionary is stale", distinct from 1 (error) so automation can branch on it. */
+const EXIT_STALE = 3;
+/** Repo-relative (absolute outside the repo), forward slashes: printed paths get pasted into Git Bash. */
+const rel = (p: string) => {
+    const r = path.relative(ROOT, p);
+    return (r.startsWith('..') || path.isAbsolute(r) ? p : r).split(path.sep).join('/');
+};
 
 const POKEAPI_CSV = 'https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/';
 const THAI_PORTAL_URL = 'https://th.portal-pokemon.com/pokedex/';
@@ -1128,10 +1152,7 @@ async function main() {
         ']}\n',
     ].join('\n');
     JSON.parse(json);
-    fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-    fs.writeFileSync(OUT_FILE, json);
-
-    writeJson(path.join(CACHE, 'catalog-label-conflicts.json'), {
+    const conflictReport: ConflictReport = {
         generated: new Date().toISOString(),
         catalogExport: catalog.fetchedAt,
         note: 'Catalog rows whose english_name looks wrong. officialNameConflicts: the native name is (or contains) the official name of a different species than its english_name says, so those rows carry the wrong english_name (e.g. ฮิเมงกะ is Gossifleur, labelled Hoppip). minorityLabels: a native name whose rows mostly agree on a species, with a few rows labelled otherwise. mojibakeEnglishNames: english_name stored with broken encoding. rejectedCatalogSpellings: native names kept out of the dictionary, mostly machine-translated vintage Japanese names (ペルシャ語 for Persian). Read-only report; nothing was changed in the DB.',
@@ -1139,7 +1160,21 @@ async function main() {
         minorityLabels: minority,
         mojibakeEnglishNames: [...mojibake.entries()].map(([value, e]) => ({ value, fixed: e.fixed, rows: e.rows })),
         rejectedCatalogSpellings: rejected,
-    });
+    };
+
+    if (CHECK) {
+        // The last full build's conflict report stays the baseline, so the
+        // would-be one goes next to it instead of over it.
+        fs.mkdirSync(path.dirname(NEXT_FILE), { recursive: true });
+        fs.writeFileSync(NEXT_FILE, json);
+        writeJson(CONFLICTS_NEXT_FILE, conflictReport);
+        process.exitCode = reportDrift(file, catalog, conflicts);
+        return;
+    }
+
+    fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
+    fs.writeFileSync(OUT_FILE, json);
+    writeJson(CONFLICTS_FILE, conflictReport);
 
     // --- Report
     for (const g of drafts) for (const a of g.aliases) aliasStats[a.src] = (aliasStats[a.src] || 0) + 1;
@@ -1169,6 +1204,132 @@ async function main() {
     console.log(`mojibake english_name values: ${mojibake.size}`);
     console.log(`size: ${(Buffer.byteLength(json) / 1024).toFixed(1)} KB raw, ${(gz / 1024).toFixed(1)} KB gzip, ${(br / 1024).toFixed(1)} KB brotli (target <= 100 KB gzip)${gz > 100 * 1024 ? '  OVER TARGET' : ''}`);
     console.log(`wrote ${path.relative(ROOT, OUT_FILE)}`);
+    console.log(OUT_FILE === DEFAULT_OUT
+        ? `verify: npx tsx scripts/check-search-logic.ts (offline, must pass); optional live read-only replay: npx tsx scripts/replay-search.ts </dev/null; then commit ${rel(OUT_FILE)}`
+        : `verify: npx tsx scripts/check-search-logic.ts ${rel(OUT_FILE)}`);
+}
+
+// ---------------------------------------------------------------------------
+// --check: compare a fresh in-memory build with the committed file
+
+interface ConflictReport {
+    generated: string;
+    catalogExport: string;
+    note: string;
+    officialNameConflicts: LabelConflict[];
+    minorityLabels: unknown[];
+    mojibakeEnglishNames: Array<{ value: string; fixed: string; rows: number }>;
+    rejectedCatalogSpellings: unknown[];
+}
+
+const DICT_FIELDS = [[2, 'enDb'], [3, 'ja'], [4, 'th'], [5, 'aliases'], [6, 'late']] as const;
+const MAX_LINES = 40;
+
+const quoteIfSpaced = (s: string) => (/\s/.test(s) ? JSON.stringify(s) : s);
+const thousands = (n: number) => n.toLocaleString('en-US');
+
+/** "+added -removed", "reordered" (same spellings, new rank order), or null when unchanged. */
+function diffSpellings(before: string[], after: string[]): string | null {
+    const added = after.filter((s) => !before.includes(s));
+    const removed = before.filter((s) => !after.includes(s));
+    if (added.length || removed.length) {
+        return [...added.map((s) => `+${quoteIfSpaced(s)}`), ...removed.map((s) => `-${quoteIfSpaced(s)}`)].join(' ');
+    }
+    return before.join('\u0000') === after.join('\u0000') ? null : 'reordered';
+}
+
+function printCapped(lines: string[], more: string) {
+    for (const l of lines.slice(0, MAX_LINES)) console.log(`  ${l}`);
+    if (lines.length > MAX_LINES) console.log(`  ... ${lines.length - MAX_LINES} more ${more}`);
+}
+
+function describeConflict(c: LabelConflict): string {
+    return `[${c.language}] ${c.spelling} x${c.rows}: labelled ${c.labelledAs.en}; ${c.reason} ${c.officialNameOf.en}`;
+}
+
+/** Prints the drift summary and returns the exit code (0 up to date, EXIT_STALE stale). */
+function reportDrift(next: SearchDictionaryFile, catalog: CatalogExport, conflicts: LabelConflict[]): number {
+    console.log(`\n== --check: ${rel(OUT_FILE)} vs a fresh build (ignoring "built")`);
+
+    const byLang: Record<string, number> = {};
+    for (const [language, , , n] of catalog.pokemon) byLang[language] = (byLang[language] || 0) + n;
+    const pokemonRows = Object.values(byLang).reduce((s, n) => s + n, 0);
+    const enRows = catalog.enNames.reduce((s, [, n]) => s + n, 0);
+    const langs = Object.entries(byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l} ${thousands(n)}`).join(', ');
+    console.log(`catalog export ${catalog.fetchedAt}${REFRESH_CATALOG ? '' : ' (CACHED: drop --cached-catalog to re-export)'}: `
+        + `${thousands(pokemonRows)} Pokémon card rows (${langs}); ${thousands(enRows)} English card rows across all games; ${catalog.setNames.length} sets`);
+
+    // --- Dictionary drift
+    const committed: SearchDictionaryFile | null = fs.existsSync(OUT_FILE) ? readJson<SearchDictionaryFile>(OUT_FILE) : null;
+    const comparable = (f: SearchDictionaryFile) => JSON.stringify([f.v, f.foldVersion, f.groups, f.keys]);
+    const stale = !committed || comparable(committed) !== comparable(next);
+    if (!committed) {
+        console.log(`dictionary: STALE, ${rel(OUT_FILE)} does not exist`);
+    } else if (!stale) {
+        console.log(`dictionary: up to date (${next.groups.length} species; committed file built ${committed.built})`);
+    } else {
+        const before = new Map(committed.groups.map((g) => [g[0], g]));
+        const after = new Map(next.groups.map((g) => [g[0], g]));
+        const lines: string[] = [];
+        const fieldCounts: Record<string, number> = {};
+        const dexes = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => a - b);
+        for (const dex of dexes) {
+            const o = before.get(dex);
+            const n = after.get(dex);
+            if (!o || !n) {
+                lines.push(`#${dex} ${(n || o)![1]}: ${n ? 'NEW species' : 'species REMOVED'}`);
+                fieldCounts[n ? 'added' : 'removed'] = (fieldCounts[n ? 'added' : 'removed'] || 0) + 1;
+                continue;
+            }
+            const parts: string[] = [];
+            if (o[1] !== n[1]) {
+                parts.push(`en ${o[1]} -> ${n[1]}`);
+                fieldCounts.en = (fieldCounts.en || 0) + 1;
+            }
+            for (const [i, label] of DICT_FIELDS) {
+                const d = diffSpellings(o[i], n[i]);
+                if (!d) continue;
+                parts.push(`${label} ${d}`);
+                fieldCounts[label] = (fieldCounts[label] || 0) + 1;
+            }
+            if (parts.length) lines.push(`#${dex} ${n[1]}: ${parts.join('; ')}`);
+        }
+        const header = committed.foldVersion !== next.foldVersion || committed.v !== next.v
+            ? ` (format v${committed.v}/fold ${committed.foldVersion} -> v${next.v}/fold ${next.foldVersion})`
+            : '';
+        const counts = Object.entries(fieldCounts).map(([k, v]) => `${k} ${v}`).join(', ');
+        console.log(`dictionary: STALE${header}, ${lines.length} species changed${counts ? ` (${counts})` : ''}; committed file built ${committed.built}; +/- = what a rebuild adds/removes`);
+        if (!lines.length) console.log('  only the precomputed fold keys differ');
+        printCapped(lines, `species: git diff --no-index ${rel(OUT_FILE)} ${rel(NEXT_FILE)}`);
+    }
+    console.log(`would-be file: ${rel(NEXT_FILE)}`);
+
+    // --- Label conflicts (informational: they do not change the exit code)
+    const key = (c: LabelConflict) => [c.language, c.spelling, c.reason, c.labelledAs.dex, c.officialNameOf.dex].join('|');
+    if (!fs.existsSync(CONFLICTS_FILE)) {
+        console.log(`label conflicts: ${conflicts.length} (no baseline: ${rel(CONFLICTS_FILE)} is written by a full build and is gitignored)`);
+    } else {
+        const baseline = readJson<ConflictReport>(CONFLICTS_FILE);
+        const was = new Set((baseline.officialNameConflicts || []).map(key));
+        const now = new Set(conflicts.map(key));
+        const added = conflicts.filter((c) => !was.has(key(c)));
+        const resolved = (baseline.officialNameConflicts || []).filter((c) => !now.has(key(c)));
+        console.log(`label conflicts: ${conflicts.length} now, ${was.size} in ${rel(CONFLICTS_FILE)} (catalog export ${baseline.catalogExport}): ${added.length} NEW, ${resolved.length} resolved`);
+        printCapped(added.map((c) => `NEW ${describeConflict(c)}`), 'new');
+        printCapped(resolved.map((c) => `resolved ${describeConflict(c)}`), 'resolved');
+    }
+    if (conflicts.length) console.log(`  full list for the DB manager: ${rel(CONFLICTS_NEXT_FILE)}`);
+
+    if (stale) {
+        const refreshed = REFRESH_CATALOG ? '' : ' (re-run --check without --cached-catalog first)';
+        const out = OUT_FILE === DEFAULT_OUT ? '' : ` --out ${rel(OUT_FILE)}`;
+        console.log(`next: npx tsx scripts/build-search-aliases.ts --refresh-catalog${out} [--refresh-sources for a new generation]${refreshed}; `
+            + (out ? `npx tsx scripts/check-search-logic.ts ${rel(OUT_FILE)}` : `npx tsx scripts/check-search-logic.ts; commit ${rel(OUT_FILE)}`));
+        console.log(`check: STALE (exit ${EXIT_STALE})`);
+        return EXIT_STALE;
+    }
+    console.log('check: up to date (exit 0)');
+    return 0;
 }
 
 function readPortal(text: string): PortalEntry[] {
