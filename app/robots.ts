@@ -12,8 +12,17 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app';
 // strategy targets (PerplexityBot, OAI-SearchBot) stay allowed via '*'.
 // meta-externalfetcher (Facebook/Instagram link previews) is deliberately NOT
 // listed — shared links still need their preview card.
+//
+// 2026-10-04: with Meta gone, GPTBot (177K/week, 18% of all requests),
+// SE Ranking's backlink crawler (111K) and Reflectionbot (42K) took its place.
+// GPTBot is OpenAI's TRAINING crawler; ChatGPT search answers come from
+// OAI-SearchBot and ChatGPT-User, which stay allowed.
 const BLOCKED_BOTS = [
   'meta-externalagent', // Meta AI training crawler
+  'GPTBot', // OpenAI training crawler
+  'SERankingBacklinksBot',
+  'Reflectionbot', // reflection.ai training crawler
+  'AteveSearchSourceUrlDiscovery',
   'AhrefsBot',
   'SemrushBot',
   'MJ12bot',
