@@ -56,7 +56,7 @@ function buildFaqJsonLd(isThai: boolean): Record<string, unknown> {
         ? [
               [
                   'ขายการ์ดบน Cardstreet เสียค่าธรรมเนียมเท่าไหร่',
-                  'มีสองส่วน: ค่าธรรมเนียม Cardstreet 9% ของราคาการ์ด (ไม่คิดจากค่าจัดส่ง) ซึ่งสมาชิก Cardstreet Pro และผู้ขายระดับพาร์ทเนอร์เสีย 5% และลดได้ถึง 2% ตามระดับ และค่าธรรมเนียมการชำระเงินของ Stripe อีก 1.6% บวกภาษี ที่หักจากยอดโอนเข้าบัญชี ไม่มีค่าลงประกาศและไม่มีค่าบริการรายเดือน',
+                  'มีสองส่วน: ค่าธรรมเนียม Cardstreet 9% ของราคาการ์ด (ไม่คิดจากค่าจัดส่ง) ซึ่งสมาชิก Cardstreet Pro และผู้ขายระดับพาร์ทเนอร์เสีย 5% และลดได้ถึง 2% ตามระดับ และค่าธรรมเนียมการชำระเงินของ Stripe (PromptPay 1.65% บัตรไทย 3.65% + ฿10 บัตรต่างประเทศ 4.75% + ฿10 บวก VAT 7% ของค่าธรรมเนียม) ที่หักจากยอดโอนเข้าบัญชี ไม่มีค่าลงประกาศและไม่มีค่าบริการรายเดือน',
               ],
               [
                   'ขายการ์ดแล้วได้เงินเมื่อไหร่',
@@ -78,7 +78,7 @@ function buildFaqJsonLd(isThai: boolean): Record<string, unknown> {
         : [
               [
                   'What does it cost to sell on Cardstreet?',
-                  'Two things: the Cardstreet fee of 9% of the item price, with nothing charged on shipping — Cardstreet Pro subscribers and Partner sellers pay 5%, dropping as low as 2% at the top tiers — and Stripe’s payment processing fee of 1.6% plus tax, deducted from your payout. There are no listing fees and no monthly charges.',
+                  'Two things: the Cardstreet fee of 9% of the item price, with nothing charged on shipping — Cardstreet Pro subscribers and Partner sellers pay 5%, dropping as low as 2% at the top tiers — and Stripe’s payment processing fee (1.65% for PromptPay, 3.65% + ฿10 for Thai cards, 4.75% + ฿10 for foreign cards, plus 7% VAT on the fee), deducted from your payout. There are no listing fees and no monthly charges.',
               ],
               [
                   'When do I get paid after selling a card?',

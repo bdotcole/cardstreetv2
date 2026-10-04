@@ -16,7 +16,8 @@ import { SELL_HOWTO } from './howToSteps';
 //   - 9% / 5% / 2% ladder ....... lib/partnerTiers.ts (NON_PARTNER_FEE_PERCENT,
 //     PRO_SELLER_FEE_PERCENT, PARTNER_TIERS). If that ladder changes, this copy
 //     is wrong until it is updated.
-//   - Stripe 1.6% + tax ......... sellerInfo.stripeBody in lib/locales/*.json
+//   - Stripe fee rates .......... sellerInfo.stripeBody in lib/locales/*.json, from
+//     https://stripe.com/en-th/pricing (direct charges: the seller pays them)
 //   - Flash label paid at pickup, oversized boxes on the seller ... sellerInfo.shippingBody
 //
 // Two claims this page must never make:
@@ -70,8 +71,8 @@ const EN: Strings = {
       d: 'Nothing is charged on shipping. Cardstreet Pro subscribers and Partner sellers pay 5%, dropping as low as 2% at the top partner tiers.',
     },
     {
-      t: 'Stripe’s payment processing fee — 1.6% plus tax',
-      d: 'Deducted from your payout. That one goes to Stripe, not to Cardstreet.',
+      t: 'Stripe’s payment processing fee — from 1.65% plus VAT',
+      d: '1.65% for PromptPay, 3.65% + ฿10 for Thai cards and 4.75% + ฿10 for foreign cards, plus 7% VAT on the fee. Deducted from your payout. That one goes to Stripe, not to Cardstreet.',
     },
   ],
   costAfter: 'No listing fees, no monthly charges, and if a card doesn’t sell it costs you nothing.',
@@ -132,8 +133,8 @@ const TH: Strings = {
       d: 'ไม่คิดค่าธรรมเนียมจากค่าจัดส่ง สมาชิก Cardstreet Pro และผู้ขายระดับพาร์ทเนอร์เสีย 5% และลดลงได้ถึง 2% ตามระดับพาร์ทเนอร์',
     },
     {
-      t: 'ค่าธรรมเนียมการชำระเงินของ Stripe — 1.6% บวกภาษี',
-      d: 'หักจากยอดที่โอนเข้าบัญชีคุณ ส่วนนี้เป็นของ Stripe ไม่ใช่ของ Cardstreet',
+      t: 'ค่าธรรมเนียมการชำระเงินของ Stripe — เริ่มต้น 1.65% บวก VAT',
+      d: 'PromptPay 1.65% บัตรไทย 3.65% + ฿10 และบัตรต่างประเทศ 4.75% + ฿10 บวก VAT 7% ของค่าธรรมเนียม หักจากยอดที่โอนเข้าบัญชีคุณ ส่วนนี้เป็นของ Stripe ไม่ใช่ของ Cardstreet',
     },
   ],
   costAfter: 'ไม่มีค่าลงประกาศ ไม่มีค่าบริการรายเดือน และถ้าการ์ดไม่ขาย คุณไม่เสียอะไรเลย',

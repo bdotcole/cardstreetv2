@@ -404,7 +404,8 @@ export async function POST(req: Request) {
         const shippingApplied = new Set<string>();
 
         for (const listing of listings) {
-            const feePct = feeMap.get(listing.seller_id) || NON_PARTNER_FEE_FRACTION;
+            // `??`, not `||`: an admin's fee is a real 0, and `||` turned it into 9%.
+            const feePct = feeMap.get(listing.seller_id) ?? NON_PARTNER_FEE_FRACTION;
 
             // ─── Offer price override (server-authoritative) ───
             // When paying an accepted offer, the price is the accepted offer

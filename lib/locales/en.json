@@ -392,7 +392,7 @@
         "feeTitle": "Cardstreet fee",
         "feeBody": "We keep a 9% fee on the item price. There are no Cardstreet fees for shipping.",
         "stripeTitle": "Payment processing",
-        "stripeBody": "Card payments run through Stripe, which deducts its processing fee (1.6% plus tax) from your payout.",
+        "stripeBody": "Payments run through Stripe, which deducts its processing fee from your payout: 1.65% for PromptPay, 3.65% + ฿10 for Thai cards, 4.75% + ฿10 for foreign cards, plus 7% VAT on the fee.",
         "buyerTitle": "What the buyer pays",
         "buyerBody": "At checkout the buyer pays your item price plus shipping. The full amount is sent to your connected Stripe account.",
         "shippingTitle": "Your part: shipping",
