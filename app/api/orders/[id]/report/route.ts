@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendOrderDisputeAlert } from '@/lib/courier';
 import { DISPUTE_REASONS, REPORT_WINDOW_DAYS, canReportOrder, type DisputeReason } from '@/lib/orderDisputes';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { notifySupportInbox } from '@/lib/supportEmail';
 
 /**
  * POST /api/orders/[id]/report -- the buyer's "report a problem" path behind the
@@ -149,6 +150,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
     } catch (e) {
         console.error('[Orders/Report] alert failed:', e);
+    }
+
+    // The ticket also reaches the support inbox like every other ticket, so it
+    // can be answered by email there.
+    if (ticketId) {
+        const filed = ticketId;
+        after(() => notifySupportInbox(filed, { kind: 'new' }));
     }
 
     return NextResponse.json({ ok: true, ticketId });

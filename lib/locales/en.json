@@ -450,7 +450,7 @@
         "descriptionPlaceholder": "Describe your issue in detail...",
         "submit": "Submit Ticket",
         "cancel": "Cancel",
-        "successMessage": "Ticket submitted. Our team will reply here soon.",
+        "successMessage": "Ticket submitted. We will reply here and by email soon.",
         "failed": "Failed to submit ticket. Please try again.",
         "noTickets": "No support tickets yet",
         "adminReply": "Reply from the Cardstreet team",

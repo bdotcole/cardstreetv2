@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
-import { NextResponse } from 'next/server'
+import { notifyCustomerOfReply } from '@/lib/supportEmail'
+import { NextResponse, after } from 'next/server'
 
 // GET /api/admin/tickets/[id] — ticket + full message thread
 export async function GET(
@@ -105,6 +106,7 @@ export async function PATCH(
             .select('id, ticket_id, sender_id, sender_role, body, created_at')
             .single()
         message = inserted ?? null
+        after(() => notifyCustomerOfReply(id, reply))
     }
 
     return NextResponse.json({ ticket: data, message })

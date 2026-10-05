@@ -516,6 +516,12 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       if (sessionStorage.getItem('cs_open_settings') === '1') {
         sessionStorage.removeItem('cs_open_settings');
         setActivePanel('settings');
+        return;
+      }
+      // Support-reply email CTA (/?tab=support) or push tap.
+      if (sessionStorage.getItem('cs_open_support') === '1') {
+        sessionStorage.removeItem('cs_open_support');
+        setActivePanel('support');
       }
     } catch { /* storage unavailable (private mode) */ }
   }, []);
@@ -530,7 +536,15 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       setActivePanel('offers');
     };
     window.addEventListener('cs-open-offers', onOpenOffers);
-    return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+    const onOpenSupport = () => {
+      try { sessionStorage.removeItem('cs_open_support'); } catch { /* mount-time read handles it */ }
+      setActivePanel('support');
+    };
+    window.addEventListener('cs-open-support', onOpenSupport);
+    return () => {
+      window.removeEventListener('cs-open-offers', onOpenOffers);
+      window.removeEventListener('cs-open-support', onOpenSupport);
+    };
   }, []);
 
   // Fetch profile data on mount

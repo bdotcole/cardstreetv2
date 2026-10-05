@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/adminAuth';
+import { notifyCustomerOfReply } from '@/lib/supportEmail';
 
 /**
  * POST /api/admin/orders/[id]/dispute -- close a buyer's problem report.
@@ -76,6 +77,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Thread row fails soft pre-20260724 migration; the legacy columns carry the reply.
         await admin.from('support_ticket_messages')
             .insert({ ticket_id: row.dispute_ticket_id, sender_id: adminUser?.id ?? null, sender_role: 'admin', body: reply });
+        const ticketId: string = row.dispute_ticket_id;
+        after(() => notifyCustomerOfReply(ticketId, reply));
     }
 
     return NextResponse.json({ ok: true, status: newStatus, outcome });

@@ -69,6 +69,14 @@ function routeNotificationTap(data: unknown) {
         window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=weekly_digest');
         return;
     }
+    if (type === 'support_reply') {
+        // The answer lives in Profile -> Support. Same handoff as offers below:
+        // flag + event for a mounted shell, hard navigation on a cold start.
+        try { sessionStorage.setItem('cs_open_support', '1'); } catch { /* landing fallback still opens Profile */ }
+        const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-support', { cancelable: true }));
+        if (unconsumed) window.location.assign('/?tab=support');
+        return;
+    }
     if (!type.startsWith('offer_')) return;
     // An ACCEPTED offer has exactly one next step, so its tap goes straight to
     // payment rather than to the Offers list. Every other offer push (received,

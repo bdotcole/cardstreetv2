@@ -2793,6 +2793,108 @@ export async function sendOrderDisputeAlert(report: {
     }
 }
 
+// ─── Support tickets: inbox alert + customer reply notice ────────────────────
+
+/**
+ * Emails the support inbox when a customer opens a ticket or replies on one.
+ * Internal, so inline plain content like the other ops alerts; the caller
+ * (lib/supportEmail.ts) writes the text, English translation included.
+ *
+ * `replyTo` decides what pressing Reply does: the signed inbound address posts
+ * the answer onto the ticket, the customer's own address mails them directly.
+ * The subject is forced through postmarkOverride because ticket subjects are
+ * often Thai and Courier cuts non-ASCII subjects at 48 bytes (see SUBJECTS).
+ * Best-effort, never throws.
+ */
+export async function sendSupportInboxAlert(alert: {
+    to: string;
+    subject: string;
+    body: string;
+    replyTo: string | null;
+    ticketId: string;
+    kind: 'new' | 'reply';
+}): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping support inbox alert'); return false; }
+    if (!alert.to) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: alert.to },
+                content: { title: alert.subject, body: alert.body },
+                routing: { method: 'all', channels: ['email'] },
+                providers: postmarkOverride(alert.subject, alert.replyTo ? { ReplyTo: alert.replyTo } : undefined),
+                data: { type: 'support_ticket', ticketId: alert.ticketId, kind: alert.kind },
+            },
+        });
+        console.log(`[Courier] ✅ Support inbox alert (${alert.kind}) for ticket ${alert.ticketId} → ${alert.to}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending support inbox alert for ticket ${alert.ticketId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * Tells a customer the Cardstreet team answered their ticket, with the answer
+ * itself in the email so they never have to open the app to read it. Before
+ * this, a reply was only visible inside Profile → Support, so most answers went
+ * unseen. Email + push, bilingual inline copy like the other nudges; no
+ * notification preference gates it because it answers a question they asked.
+ *
+ * `replyTo` lets them answer by email: the signed inbound address threads that
+ * answer back onto the ticket, otherwise it reaches the support inbox.
+ */
+export async function sendSupportReplyNotification(
+    userId: string,
+    reply: { ticketId: string; subject: string; body: string; replyTo: string | null },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping support reply notification'); return false; }
+
+    const { email, fcmToken } = await getUserNotifContext(userId);
+    const routing = buildRouting(!!email, !!fcmToken, 'inline');
+    if (routing.channels.length === 0) return false;
+
+    const subject = reply.subject.length > 60 ? `${reply.subject.slice(0, 57)}...` : reply.subject;
+    const title = `ทีมงาน Cardstreet ตอบกลับแล้ว · Support replied: ${subject}`;
+    const flat = reply.body.replace(/\s+/g, ' ').trim();
+    const pushBody = flat.length > 140 ? `${flat.slice(0, 137)}...` : flat;
+    // One paragraph per line: Elemental text elements don't reliably keep
+    // single newlines, and a reply's line breaks are part of its meaning.
+    const lines = reply.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const url = `${appBaseUrl()}/?tab=support&utm_source=courier&utm_medium=email&utm_campaign=support_reply`;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, fcmToken), user_id: userId },
+                routing,
+                providers: postmarkOverride(title, reply.replyTo ? { ReplyTo: reply.replyTo } : undefined),
+                data: { type: 'support_reply', ticketId: reply.ticketId },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `เรื่อง / About: ${reply.subject}`, muted: true },
+                        ...lines.map((text) => ({ text })),
+                        {
+                            text: 'ตอบกลับอีเมลนี้เพื่อส่งข้อความถึงทีมงานได้เลย · Reply to this email to answer us.',
+                            muted: true,
+                        },
+                    ],
+                    cta: { label: 'ดูการสนทนา · View the conversation', url },
+                    pushBody,
+                }),
+            } as any,
+        });
+        console.log(`[Courier] ✅ Support reply notification sent to ${userId} for ticket ${reply.ticketId}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending support reply notification to ${userId}:`, error);
+        return false;
+    }
+}
+
 // ─── Seller ship-by reminder (app/api/cron/ship-reminders) ───────────────────
 
 /**

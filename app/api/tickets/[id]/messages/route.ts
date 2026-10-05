@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/rateLimit'
-import { NextResponse } from 'next/server'
+import { notifySupportInbox } from '@/lib/supportEmail'
+import { NextResponse, after } from 'next/server'
 
 // POST /api/tickets/[id]/messages — user replies on their own ticket.
 // Ownership is checked server-side (the writes go through the service-role
@@ -70,6 +71,8 @@ export async function POST(
             .eq('id', ticket.id)
         if (!statusErr) status = 'Open'
     }
+
+    after(() => notifySupportInbox(ticket.id, { kind: 'reply', message, via: 'app' }))
 
     return NextResponse.json({ message: inserted, status }, { status: 201 })
 }

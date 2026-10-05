@@ -1,6 +1,53 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { languageName } from '@/lib/languageNames'
+
+interface Translation {
+    text: string
+    sourceLang: string
+}
+
+// Mirrors needsTranslation() in lib/supportTranslate.ts: pure-ASCII text is
+// read as English already, so only the rest is sent to be translated.
+const needsEnglish = (text: string | null | undefined) => !!text && /[^\x00-\x7F]/.test(text)
+
+// Languages the reply composer can translate a draft into.
+const REPLY_TARGETS = ['th', 'ja']
+
+async function requestTranslations(
+    items: { id: string; text: string }[],
+    target: 'en' | 'th' | 'ja' = 'en',
+): Promise<Record<string, Translation | null> | null> {
+    try {
+        const res = await fetch('/api/admin/tickets/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, target }),
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        return data.translations ?? null
+    } catch {
+        return null
+    }
+}
+
+function TranslationBlock({ translation, pending }: { translation: Translation | null | undefined; pending: boolean }) {
+    if (pending && translation === undefined) {
+        return <p className="text-[10px] text-slate-500 mt-3 italic">Translating to English…</p>
+    }
+    if (!translation) return null
+    return (
+        <div className="mt-3 border-l-2 border-brand-cyan/40 pl-3">
+            <p className="text-[9px] font-bold uppercase tracking-wide text-brand-cyan/80 mb-1">
+                <i className="fa-solid fa-language mr-1" />
+                English · auto-translated from {languageName(translation.sourceLang)}
+            </p>
+            <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-wrap">{translation.text}</p>
+        </div>
+    )
+}
 
 interface Ticket {
     id: string
@@ -67,6 +114,20 @@ export default function TicketsPage() {
     // Buyer problem report linked to the selected ticket, if any.
     const [dispute, setDispute] = useState<DisputeInfo | null>(null)
     const [resolving, setResolving] = useState<string | null>(null)
+    // English renderings of customer text. List keys: `subject:<id>` and
+    // `desc:<id>`; thread keys: 'subject', 'description', `msg:<messageId>`.
+    // undefined = not translated (yet), null = already English.
+    const [listTr, setListTr] = useState<Record<string, Translation | null>>({})
+    const [threadTr, setThreadTr] = useState<Record<string, Translation | null>>({})
+    const [threadTranslating, setThreadTranslating] = useState(false)
+    // Reply composer translation: the English draft is kept so it can be restored.
+    const [replyTranslating, setReplyTranslating] = useState(false)
+    const [draftBeforeTranslate, setDraftBeforeTranslate] = useState<string | null>(null)
+    const [replyNotice, setReplyNotice] = useState<string | null>(null)
+    // Guards async results against the admin having moved to another ticket.
+    const openIdRef = useRef<string | null>(null)
+    // ?ticket=<id> from the support-inbox email, opened once the list loads.
+    const deepLinkRef = useRef<string | null>(null)
 
     const resolveDispute = async (outcome: 'refunded' | 'rejected' | 'resolved') => {
         if (!dispute || !selected) return
@@ -108,31 +169,156 @@ export default function TicketsPage() {
             if (categoryFilter !== 'All') params.set('category', categoryFilter)
             const res = await fetch(`/api/admin/tickets?${params}`)
             const data = await res.json()
-            setTickets(data.tickets ?? [])
+            const list: Ticket[] = data.tickets ?? []
+            setTickets(list)
             setTotal(data.total ?? 0)
+            return list
         } finally {
             setLoading(false)
         }
     }, [statusFilter, categoryFilter])
 
-    useEffect(() => { fetchTickets() }, [fetchTickets])
+    // English subjects and previews for the list, in one batch. Previews are
+    // clipped because the list only shows two lines of them anyway.
+    const translateList = useCallback(async (list: Ticket[]) => {
+        const items: { id: string; text: string }[] = []
+        for (const t of list.slice(0, 30)) {
+            if (needsEnglish(t.subject)) items.push({ id: `subject:${t.id}`, text: t.subject })
+            if (needsEnglish(t.description)) items.push({ id: `desc:${t.id}`, text: t.description.slice(0, 300) })
+        }
+        const todo = items.filter(i => !(i.id in listTr))
+        if (todo.length === 0) return
+        const result = await requestTranslations(todo)
+        if (result) setListTr(prev => ({ ...prev, ...result }))
+    }, [listTr])
 
-    const openTicket = async (ticket: Ticket) => {
+    useEffect(() => {
+        let cancelled = false
+        fetchTickets().then(list => {
+            if (cancelled) return
+            translateList(list)
+            const wanted = deepLinkRef.current
+            if (wanted) {
+                deepLinkRef.current = null
+                const found = list.find(t => t.id === wanted)
+                if (found) openTicket(found)
+                else openTicketById(wanted)
+            }
+        })
+        return () => { cancelled = true }
+        // translateList is deliberately left out: it changes as translations
+        // arrive, and re-fetching the list on every translation would loop.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchTickets])
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const id = params.get('ticket')
+        if (id && /^[0-9a-f-]{36}$/i.test(id)) deepLinkRef.current = id
+        if (id) {
+            params.delete('ticket')
+            const rest = params.toString()
+            window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`)
+        }
+    }, [])
+
+    const translateThread = async (ticket: Ticket, messages: TicketMessage[]) => {
+        const items = [
+            { id: 'subject', text: ticket.subject },
+            { id: 'description', text: ticket.description },
+            ...messages.filter(m => m.sender_role === 'user').map(m => ({ id: `msg:${m.id}`, text: m.body })),
+        ].filter(i => needsEnglish(i.text))
+        if (items.length === 0) return
+        setThreadTranslating(true)
+        try {
+            const result = await requestTranslations(items)
+            if (result && openIdRef.current === ticket.id) setThreadTr(prev => ({ ...prev, ...result }))
+        } finally {
+            if (openIdRef.current === ticket.id) setThreadTranslating(false)
+        }
+    }
+
+    const loadThread = async (ticket: Ticket) => {
+        setThreadLoading(true)
+        let messages: TicketMessage[] = []
+        try {
+            const res = await fetch(`/api/admin/tickets/${ticket.id}`)
+            if (res.ok) {
+                const data = await res.json()
+                if (openIdRef.current !== ticket.id) return
+                messages = data.messages ?? []
+                setThread(messages)
+                setDispute(data.dispute ?? null)
+            }
+        } finally {
+            if (openIdRef.current === ticket.id) setThreadLoading(false)
+        }
+        translateThread(ticket, messages)
+    }
+
+    const resetPane = (ticket: Ticket) => {
+        openIdRef.current = ticket.id
         setSelected(ticket)
         setReplyText('')
         setReplyStatus(ticket.status)
         setThread([])
         setDispute(null)
-        setThreadLoading(true)
+        setThreadTr({})
+        setThreadTranslating(false)
+        setDraftBeforeTranslate(null)
+        setReplyNotice(null)
+    }
+
+    const openTicket = async (ticket: Ticket) => {
+        resetPane(ticket)
+        await loadThread(ticket)
+    }
+
+    // Deep link to a ticket the current filters hide: the detail endpoint
+    // returns the ticket itself along with its thread.
+    const openTicketById = async (id: string) => {
+        const res = await fetch(`/api/admin/tickets/${id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data.ticket) return
+        const ticket = data.ticket as Ticket
+        resetPane(ticket)
+        setThread(data.messages ?? [])
+        setDispute(data.dispute ?? null)
+        translateThread(ticket, data.messages ?? [])
+    }
+
+    // The customer's language, from the most recent translated customer text.
+    const customerLang = (() => {
+        const userMsgs = thread.filter(m => m.sender_role === 'user').reverse()
+        for (const m of userMsgs) {
+            const tr = threadTr[`msg:${m.id}`]
+            if (tr?.sourceLang) return tr.sourceLang
+        }
+        return threadTr.description?.sourceLang ?? threadTr.subject?.sourceLang ?? null
+    })()
+    const replyTarget = customerLang && REPLY_TARGETS.includes(customerLang) ? customerLang as 'th' | 'ja' : null
+
+    // Turns the English draft into "<customer's language>, then the English
+    // original" so the customer can read it and the team can still check it.
+    const translateReply = async () => {
+        const draft = replyText.trim()
+        if (!draft || !replyTarget) return
+        setReplyTranslating(true)
+        setReplyNotice(null)
         try {
-            const res = await fetch(`/api/admin/tickets/${ticket.id}`)
-            if (res.ok) {
-                const data = await res.json()
-                setThread(data.messages ?? [])
-                setDispute(data.dispute ?? null)
+            const result = await requestTranslations([{ id: 'reply', text: draft }], replyTarget)
+            const tr = result?.reply
+            if (tr === undefined) {
+                setReplyNotice('Translation failed. Try again, or send in English.')
+            } else if (tr === null) {
+                setReplyNotice(`The draft is already in ${languageName(replyTarget)}.`)
+            } else {
+                setDraftBeforeTranslate(replyText)
+                setReplyText(`${tr.text}\n\n—\n${draft}`)
             }
         } finally {
-            setThreadLoading(false)
+            setReplyTranslating(false)
         }
     }
 
@@ -151,6 +337,8 @@ export default function TicketsPage() {
                 setSelected(prev => prev ? { ...prev, ...updated.ticket } : null)
                 if (updated.message) setThread(prev => [...prev, updated.message])
                 setReplyText('')
+                setDraftBeforeTranslate(null)
+                setReplyNotice(null)
             }
         } finally {
             setSaving(false)
@@ -197,7 +385,10 @@ export default function TicketsPage() {
                             {tickets.length === 0 && (
                                 <p className="px-6 py-16 text-center text-slate-500 text-sm">No tickets match your filters</p>
                             )}
-                            {tickets.map(ticket => (
+                            {tickets.map(ticket => {
+                                const subjectTr = listTr[`subject:${ticket.id}`]
+                                const descTr = listTr[`desc:${ticket.id}`]
+                                return (
                                 <button
                                     key={ticket.id}
                                     onClick={() => openTicket(ticket)}
@@ -207,12 +398,17 @@ export default function TicketsPage() {
                                         <div className="flex items-start gap-3 min-w-0">
                                             <i className={`${CATEGORY_ICONS[ticket.category] ?? CATEGORY_ICONS.General} text-slate-500 mt-0.5 shrink-0`} />
                                             <div className="min-w-0">
-                                                <p className="text-sm font-semibold text-slate-200 truncate">{ticket.subject}</p>
+                                                <p className="text-sm font-semibold text-slate-200 truncate">{subjectTr?.text ?? ticket.subject}</p>
+                                                {subjectTr && (
+                                                    <p className="text-[10px] text-slate-500 truncate" title={`Original (${languageName(subjectTr.sourceLang)})`}>
+                                                        <i className="fa-solid fa-language mr-1 text-brand-cyan/60" />{ticket.subject}
+                                                    </p>
+                                                )}
                                                 <p className="text-[10px] text-slate-500 mt-0.5">
                                                     {ticket.profiles?.display_name ?? 'Unknown'} · {ticket.category} · {new Date(ticket.created_at).toLocaleDateString()}
                                                 </p>
                                                 {!selected && (
-                                                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{ticket.description}</p>
+                                                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{descTr?.text ?? ticket.description}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -221,7 +417,8 @@ export default function TicketsPage() {
                                         </span>
                                     </div>
                                 </button>
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
                 </div>
@@ -245,6 +442,12 @@ export default function TicketsPage() {
                                 <span className="text-[9px] font-bold text-slate-500 uppercase bg-white/5 px-2 py-1 rounded-full">{selected.category}</span>
                             </div>
                             <h3 className="text-lg font-black text-white">{selected.subject}</h3>
+                            {threadTr.subject && (
+                                <p className="text-sm font-semibold text-brand-cyan/90">
+                                    <i className="fa-solid fa-language mr-1.5" />
+                                    {threadTr.subject.text}
+                                </p>
+                            )}
                             <p className="text-[11px] text-slate-500">
                                 From: <span className="text-slate-400 font-semibold">{selected.profiles?.display_name ?? 'Unknown'}</span>
                                 {' · '}{new Date(selected.created_at).toLocaleString()}
@@ -313,6 +516,10 @@ export default function TicketsPage() {
                             <div className="bg-white/5 rounded-xl p-4">
                                 <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">{userName}</p>
                                 <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
+                                <TranslationBlock
+                                    translation={threadTr.description}
+                                    pending={threadTranslating && needsEnglish(selected.description)}
+                                />
                                 <p className="text-[10px] text-slate-600 mt-2">{new Date(selected.created_at).toLocaleString()}</p>
                             </div>
 
@@ -332,6 +539,10 @@ export default function TicketsPage() {
                                         <div key={msg.id} className="bg-white/5 rounded-xl p-4">
                                             <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">{userName}</p>
                                             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                                            <TranslationBlock
+                                                translation={threadTr[`msg:${msg.id}`]}
+                                                pending={threadTranslating && needsEnglish(msg.body)}
+                                            />
                                             <p className="text-[10px] text-slate-600 mt-2">{new Date(msg.created_at).toLocaleString()}</p>
                                         </div>
                                     ))}
@@ -353,15 +564,41 @@ export default function TicketsPage() {
 
                         {/* Reply composer */}
                         <div className="space-y-3">
-                            <p className="text-[10px] font-bold uppercase text-slate-500">Reply</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-bold uppercase text-slate-500">Reply</p>
+                                {replyTarget && (
+                                    draftBeforeTranslate !== null ? (
+                                        <button
+                                            onClick={() => { setReplyText(draftBeforeTranslate); setDraftBeforeTranslate(null) }}
+                                            className="text-[10px] font-bold text-slate-400 hover:text-slate-200 transition"
+                                        >
+                                            Undo translation
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={translateReply}
+                                            disabled={replyTranslating || !replyText.trim()}
+                                            className="text-[10px] font-bold text-brand-cyan hover:underline disabled:opacity-40 disabled:no-underline transition"
+                                        >
+                                            <i className="fa-solid fa-language mr-1" />
+                                            {replyTranslating ? 'Translating…' : `Translate to ${languageName(replyTarget)}`}
+                                        </button>
+                                    )
+                                )}
+                            </div>
                             <textarea
                                 value={replyText}
                                 onChange={e => setReplyText(e.target.value)}
-                                rows={4}
+                                rows={draftBeforeTranslate !== null ? 8 : 4}
                                 maxLength={5000}
-                                placeholder="Type your response here…"
+                                placeholder={replyTarget ? `Write in English, then translate to ${languageName(replyTarget)}…` : 'Type your response here…'}
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan/50 resize-none"
                             />
+                            {replyNotice && <p className="text-[10px] text-amber-300">{replyNotice}</p>}
+                            {draftBeforeTranslate !== null && (
+                                <p className="text-[10px] text-slate-500">Machine translation: check names and amounts before sending. The English original stays below it.</p>
+                            )}
+                            <p className="text-[10px] text-slate-600">The customer gets your reply by email and in the app.</p>
                         </div>
 
                         {/* Status + Send */}

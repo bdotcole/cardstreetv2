@@ -2,7 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
 import { checkRateLimit } from '@/lib/rateLimit'
-import { NextResponse } from 'next/server'
+import { notifySupportInbox } from '@/lib/supportEmail'
+import { NextResponse, after } from 'next/server'
 
 // GET /api/admin/tickets — admin only
 export async function GET(request: Request) {
@@ -79,5 +80,10 @@ export async function POST(request: Request) {
         .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // The ticket is already on file; the inbox email (with its translation) goes
+    // out after the response so the customer never waits on Gemini or Courier.
+    after(() => notifySupportInbox(data.id, { kind: 'new' }))
+
     return NextResponse.json({ ticket: data }, { status: 201 })
 }

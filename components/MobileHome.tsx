@@ -98,6 +98,8 @@ const TAB_ALIASES: Record<string, { tab: LandingTab; profileFlag?: string }> = {
     sell: { tab: 'vault' },
     orders: { tab: 'profile', profileFlag: 'cs_open_orders' },
     settings: { tab: 'profile', profileFlag: 'cs_open_settings' },
+    // The support-reply email's CTA (lib/courier.ts sendSupportReplyNotification).
+    support: { tab: 'profile', profileFlag: 'cs_open_support' },
 };
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
@@ -388,7 +390,12 @@ export default function HomePage() {
             setActiveTab('profile');
         };
         window.addEventListener('cs-open-offers', onOpenOffers);
-        return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+        // Support-reply push tap: same contract, cs_open_support flag.
+        window.addEventListener('cs-open-support', onOpenOffers);
+        return () => {
+            window.removeEventListener('cs-open-offers', onOpenOffers);
+            window.removeEventListener('cs-open-support', onOpenOffers);
+        };
     }, []);
 
     // Profile's seller checklist asks the shell to switch tabs rather than
