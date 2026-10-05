@@ -7,6 +7,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { formatSatang } from '@/components/live/shared';
+import { declinedCard, isCardDecline, isForeignCard } from '@/lib/cardDecline';
 
 /**
  * On-session checkout for HELD break spots:
@@ -310,6 +311,9 @@ interface ConfirmResult {
     /** The issuer refused the card, as opposed to any other failure. Drives the
      *  "try PromptPay" prompt rather than showing the issuer's own message. */
     cardDeclined?: boolean;
+    /** The declined card was issued outside Thailand: PromptPay is no help
+     *  to its holder, so the sheet gives the overseas-card advice instead. */
+    foreignCard?: boolean;
     paymentIntentId?: string;
     status?: string;
 }
@@ -337,11 +341,9 @@ const ConfirmBridge: React.FC<{
                 // matching components/PaymentModal.tsx. A live break is the
                 // worst place to dead-end a buyer: the spot is held on a timer
                 // and "try another card" spends it.
-                const cardDeclined =
-                    error.type === 'card_error' ||
-                    error.code === 'card_declined' ||
-                    !!(error as { decline_code?: string }).decline_code;
-                return { error: error.message || 'Payment failed', code: error.code, cardDeclined };
+                const cardDeclined = isCardDecline(error);
+                const foreignCard = cardDeclined && isForeignCard(declinedCard(error));
+                return { error: error.message || 'Payment failed', code: error.code, cardDeclined, foreignCard };
             }
             return { paymentIntentId: paymentIntent?.id, status: paymentIntent?.status };
         });
@@ -595,7 +597,7 @@ const SpotPaymentSheet: React.FC<SpotPaymentSheetProps> = ({
                     // issuer's own opaque message. PromptPay already leads the
                     // tabs, so Try Again puts them on a rail that cannot decline.
                     : result.cardDeclined
-                        ? t('paymentFlow.cardDeclinedTryPromptPay')
+                        ? t(result.foreignCard ? 'paymentFlow.foreignCardDeclined' : 'paymentFlow.cardDeclinedTryPromptPay')
                         : result.error,
                 hard,
             });

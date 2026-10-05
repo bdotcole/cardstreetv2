@@ -53,7 +53,10 @@ interface CommerceItemLike {
     cardId?: string;
     price?: number;
     sellerId?: string;
-    card?: { name?: string; game?: string; set?: string | null } | null;
+    card?: { name?: string; game?: string; set?: string | null; isSealed?: boolean } | null;
+    /** Listing rows carry is_graded; mapped shapes carry isGraded. */
+    isGraded?: boolean;
+    is_graded?: boolean;
 }
 
 /** Same shell tag as lib/signupEvents.ts / lib/engagementEvents.ts. */
@@ -191,10 +194,56 @@ export type CheckoutStage =
     | 'payment_intent'
     | 'confirm';
 
-export function trackCheckoutError(stage: CheckoutStage, code: string): void {
+export function trackCheckoutError(
+    stage: CheckoutStage,
+    code: string,
+    /** On a declined card: the card's issuing country / funding / wallet, so a
+     *  decline can be split by foreign vs Thai and credit vs debit. Register
+     *  `card_country`, `card_funding` and `card_wallet` as custom dimensions. */
+    card?: { country: string | null; funding: string | null; wallet: string | null } | null,
+): void {
     send('checkout_error', {
         checkout_stage: stage,
         error_code: String(code || 'unknown').slice(0, 100),
+        ...(card
+            ? {
+                  card_country: card.country || 'unknown',
+                  card_funding: card.funding || 'unknown',
+                  card_wallet: card.wallet || 'none',
+              }
+            : {}),
+    });
+}
+
+/**
+ * A buyer was stopped by the Thailand-only purchase gate (lib/geo.ts). Before
+ * this the block wrote nothing anywhere, and mobile Buy Now / pay-an-offer gate
+ * before any other event fires, so foreign buying intent was invisible: the
+ * "open other countries?" decision had nothing to go on. Fired where the gate
+ * says no, with what the buyer was trying to buy.
+ *
+ * Register `buyer_country`, `entry_point` and `product_kinds` as event-scoped
+ * custom dimensions in the GA4 admin, or they are collected but not reportable.
+ */
+export type RegionBlockEntry = 'cart' | 'buy_now' | 'pay_offer' | 'desktop_cart';
+
+export function trackPurchaseRegionBlocked(args: {
+    country: string | null;
+    entry: RegionBlockEntry;
+    items: CommerceItemLike[];
+}): void {
+    const kinds = new Set<string>();
+    for (const i of args.items) {
+        kinds.add(i.card?.isSealed ? 'sealed' : (i.isGraded || i.is_graded) ? 'graded' : 'single');
+    }
+    send('purchase_region_blocked', {
+        buyer_country: args.country || 'unknown',
+        entry_point: args.entry,
+        currency: 'THB',
+        value: round2(args.items.reduce((s, i) => s + (i.price ?? 0), 0)),
+        item_count: args.items.length,
+        product_kinds: Array.from(kinds).sort().join(',') || 'none',
+        items: toGaItems(args.items, 1),
     });
 }
 

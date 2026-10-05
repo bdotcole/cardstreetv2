@@ -38,7 +38,8 @@ import {
  * so it's frequently wrong (a PromptPay purchase reads 'credit_card'). The raw
  * webhook event object doesn't expand the method, so we retrieve the PI with
  * the method + latest charge expanded and normalize it. Best-effort: a failure
- * here must never affect the 200 we owe Stripe.
+ * here must never affect the 200 we owe Stripe. Returns the expanded intent so
+ * the failure recorder can reuse it instead of fetching it twice.
  */
 async function stampOrderPaymentMethod(
     stripe: Stripe,
@@ -46,15 +47,16 @@ async function stampOrderPaymentMethod(
     piId: string,
     stripeAccount: string | null,
     logPrefix: string,
-): Promise<void> {
+): Promise<Stripe.PaymentIntent | null> {
+    let pi: Stripe.PaymentIntent | null = null;
     try {
-        const pi = await stripe.paymentIntents.retrieve(
+        pi = await stripe.paymentIntents.retrieve(
             piId,
             { expand: ['payment_method', 'latest_charge'] },
             stripeAccount ? { stripeAccount } : undefined,
         );
         const method = orderPaymentMethodFromIntent(pi);
-        if (!method) return;
+        if (!method) return pi;
 
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(
@@ -68,6 +70,71 @@ async function stampOrderPaymentMethod(
         if (error) console.error(`${logPrefix} payment_method stamp failed:`, error.message);
     } catch (e) {
         console.error(`${logPrefix} payment_method stamp (non-fatal):`, (e as Error).message);
+    }
+    return pi;
+}
+
+/**
+ * Keep WHY a payment failed. The order is cancelled and keeps nothing, so
+ * without this the answer (whose card, from where, declined by whom) lived
+ * only in the seller's own Stripe dashboard. One row per failed attempt in
+ * payment_failures (20261005_payment_failures.sql), deduped on the event id
+ * so a webhook retry can't double-count. Best-effort and fails soft, table
+ * missing included; the same facts also go to the function log.
+ */
+async function recordPaymentFailure(
+    stripe: Stripe,
+    eventId: string,
+    eventIntent: Stripe.PaymentIntent,
+    expanded: Stripe.PaymentIntent | null,
+    stripeAccount: string | null,
+    logPrefix: string,
+): Promise<void> {
+    try {
+        const pi = expanded ?? await stripe.paymentIntents.retrieve(
+            eventIntent.id,
+            { expand: ['latest_charge'] },
+            stripeAccount ? { stripeAccount } : undefined,
+        );
+        const err = pi.last_payment_error ?? eventIntent.last_payment_error ?? null;
+        const charge = pi.latest_charge && typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
+        const chargeCard = charge?.payment_method_details?.card ?? null;
+        const pmCard = err?.payment_method?.card ?? null;
+
+        const row = {
+            stripe_event_id: eventId,
+            payment_intent_id: pi.id,
+            transfer_group: pi.transfer_group ?? null,
+            stripe_account_id: stripeAccount,
+            amount_satang: pi.amount ?? null,
+            currency: pi.currency ?? null,
+            method_type: err?.payment_method?.type ?? charge?.payment_method_details?.type ?? null,
+            error_type: err?.type ?? null,
+            error_code: err?.code ?? null,
+            decline_code: err?.decline_code ?? null,
+            network_decline_code: err?.network_decline_code ?? charge?.outcome?.network_decline_code ?? null,
+            outcome_type: charge?.outcome?.type ?? null,
+            outcome_reason: charge?.outcome?.reason ?? null,
+            risk_level: charge?.outcome?.risk_level ?? null,
+            card_brand: chargeCard?.brand ?? pmCard?.brand ?? null,
+            card_country: chargeCard?.country ?? pmCard?.country ?? null,
+            card_funding: chargeCard?.funding ?? pmCard?.funding ?? null,
+            card_wallet: chargeCard?.wallet?.type ?? pmCard?.wallet?.type ?? null,
+            three_ds_result: chargeCard?.three_d_secure?.result ?? null,
+        };
+        console.warn(`${logPrefix} payment failure detail`, JSON.stringify(row));
+
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        const { error } = await supabase
+            .from('payment_failures')
+            .upsert(row, { onConflict: 'stripe_event_id', ignoreDuplicates: true });
+        if (error) console.warn(`${logPrefix} payment_failures insert skipped:`, error.message);
+    } catch (e) {
+        console.warn(`${logPrefix} payment failure record (non-fatal):`, (e as Error).message);
     }
 }
 
@@ -208,6 +275,7 @@ export async function handleStripeWebhook(
             case 'payment_intent.payment_failed': {
                 const paymentIntent = event.data.object as Stripe.PaymentIntent;
                 const transferGroup = paymentIntent.transfer_group;
+                let expandedIntent: Stripe.PaymentIntent | null = null;
 
                 console.warn(`${logPrefix} PaymentIntent ${event.type === 'payment_intent.canceled' ? 'canceled' : 'failed'}: ${paymentIntent.id}, transfer_group: ${transferGroup}`);
 
@@ -264,7 +332,11 @@ export async function handleStripeWebhook(
                     // actually attempted (e.g. an expired PromptPay QR) so
                     // abandonment analytics aren't polluted by the 'credit_card'
                     // seed default.
-                    await stampOrderPaymentMethod(stripe, transferGroup, paymentIntent.id, connectedAccount, logPrefix);
+                    expandedIntent = await stampOrderPaymentMethod(stripe, transferGroup, paymentIntent.id, connectedAccount, logPrefix);
+                }
+
+                if (event.type === 'payment_intent.payment_failed') {
+                    await recordPaymentFailure(stripe, event.id, paymentIntent, expandedIntent, connectedAccount, logPrefix);
                 }
 
                 break;

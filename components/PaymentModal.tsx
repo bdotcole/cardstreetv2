@@ -16,6 +16,7 @@ import {
 } from '@/lib/commerceEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { PARTNER_LOGIN_EMAIL_DOMAIN } from '@/lib/referrals';
+import { declinedCard, isCardDecline, isForeignCard } from '@/lib/cardDecline';
 
 // Publishable key, region-aware to match the dual-platform server setup.
 // The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
@@ -132,8 +133,9 @@ const PaymentElementForm: React.FC<{
     // Set after a card is declined. Only used for the inline explanation now —
     // PromptPay already leads at every amount (see paymentMethodOrder), so the
     // ordering does not need to change on a decline; the buyer needs to be TOLD
-    // why, not silently re-ordered.
-    const [cardDeclined, setCardDeclined] = useState(false);
+    // why, not silently re-ordered. 'foreign' = the card was issued outside
+    // Thailand, where PromptPay is no help (lib/cardDecline.ts).
+    const [declineKind, setDeclineKind] = useState<'thai' | 'foreign' | null>(null);
 
     // PromptPay first. Always, at every amount.
     //
@@ -302,18 +304,20 @@ const PaymentElementForm: React.FC<{
                 // On a card decline, name PromptPay rather than dead-ending.
                 // The issuer has already refused; "try a different card" is the
                 // advice that lost the ฿8,536 order three times across two days.
-                // PromptPay has no issuer authorisation step to refuse.
-                const isCardDecline =
-                    error.type === 'card_error' ||
-                    error.code === 'card_declined' ||
-                    !!(error as { decline_code?: string }).decline_code;
+                // PromptPay has no issuer authorisation step to refuse. A card
+                // issued abroad is different: its holder has no Thai bank for
+                // PromptPay, and the usual cause is their bank blocking
+                // overseas online payments, which they can switch on.
+                const card = declinedCard(error);
                 trackCheckoutError(
                     'confirm',
-                    (error as { decline_code?: string }).decline_code || error.code || error.type || 'unknown',
+                    error.decline_code || error.code || error.type || 'unknown',
+                    card,
                 );
-                if (isCardDecline) {
-                    setCardDeclined(true);
-                    onPaymentFailed(t('paymentFlow.cardDeclinedTryPromptPay'));
+                if (isCardDecline(error)) {
+                    const foreign = isForeignCard(card);
+                    setDeclineKind(foreign ? 'foreign' : 'thai');
+                    onPaymentFailed(t(foreign ? 'paymentFlow.foreignCardDeclined' : 'paymentFlow.cardDeclinedTryPromptPay'));
                 } else {
                     onPaymentFailed(error.message || 'Payment failed');
                 }
@@ -377,11 +381,11 @@ const PaymentElementForm: React.FC<{
 
     return (
         <>
-            {cardDeclined && (
+            {declineKind && (
                 <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 flex items-start gap-3">
                     <i className="fa-solid fa-circle-info text-amber-400 mt-0.5" aria-hidden="true"></i>
                     <p className="text-[13px] leading-snug text-amber-100">
-                        {t('paymentFlow.promptPayFallbackHint')}
+                        {t(declineKind === 'foreign' ? 'paymentFlow.foreignCardHint' : 'paymentFlow.promptPayFallbackHint')}
                     </p>
                 </div>
             )}
