@@ -39,6 +39,8 @@ import {
     SELLER_PAUSED_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { getStripeForRegion, isRegionConfigured } from '@/lib/stripe';
+import { ensurePaymentMethodDomainsWithin } from '@/lib/stripePaymentDomains';
 
 const EstimateBodySchema = z.object({
     items: z
@@ -285,6 +287,13 @@ export async function POST(req: Request) {
                 sellerPayoutReady = ready;
                 if (ready) sellerStripeAccountId = seller.stripe_account_id!;
             }
+        }
+
+        // The payment form mounts as soon as this responds, and Apple Pay /
+        // Google Pay only render if cardstreet.app is registered on the
+        // seller's account by then. Bounded so Stripe can't stall checkout.
+        if (sellerStripeAccountId && isRegionConfigured('th')) {
+            await ensurePaymentMethodDomainsWithin(getStripeForRegion('th'), sellerStripeAccountId, 2500);
         }
 
         return NextResponse.json({

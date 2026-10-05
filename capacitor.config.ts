@@ -9,7 +9,12 @@ const config: CapacitorConfig = {
   // always serves the mobile experience. Without this, WebView user-agents
   // can read as desktop (iPad WKWebViews report as Mac) and the app would get
   // the desktop site. middleware.ts matches this exact string.
-  appendUserAgent: 'CardStreetApp',
+  //
+  // GOOGLE_PAY_SUPPORTED: Google requires it on any WebView whose user agent is
+  // customised, or Google Pay reports not-ready inside the app. Every check
+  // for the marker uses includes(), so appending is safe.
+  // https://developers.google.com/pay/api/android/guides/recipes/using-android-webview
+  appendUserAgent: 'CardStreetApp GOOGLE_PAY_SUPPORTED',
 
   // Native web view background — prevents a white flash between the splash
   // screen hiding and the remote site (cardstreet.app) painting.

@@ -27,6 +27,7 @@ import {
     type StripeRegion,
 } from '@/lib/stripe';
 import type Stripe from 'stripe';
+import { ensurePaymentMethodDomainsWithin } from '@/lib/stripePaymentDomains';
 
 function regionForCurrency(currency: string | null | undefined): StripeRegion {
     return currency === 'thb' ? 'th' : 'us';
@@ -296,6 +297,12 @@ export async function POST(request: Request) {
             if (saveErr) {
                 console.error('[Connect/Start] Failed to persist stripe_account_id:', saveErr);
                 throw new Error('Failed to save Stripe account');
+            }
+
+            // Direct charges run on this account, so Apple Pay / Google Pay
+            // need cardstreet.app registered on it (lib/stripePaymentDomains).
+            if (region === 'th') {
+                await ensurePaymentMethodDomainsWithin(stripe, account.id, 2500);
             }
 
             return account.id;

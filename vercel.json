@@ -39,6 +39,10 @@
             "schedule": "0 2 * * *"
         },
         {
+            "path": "/api/cron/payment-domains",
+            "schedule": "30 7 * * *"
+        },
+        {
             "path": "/api/cron/first-listing-nudge",
             "schedule": "30 2 * * *"
         },

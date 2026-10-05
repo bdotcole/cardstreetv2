@@ -76,6 +76,21 @@
             android:value="true" />
     </application>
 
+    <!-- Google Pay in the checkout WebView (Payment Request API): Android 11+
+         package visibility hides the Google Pay app from the WebView unless
+         these intents are declared. See MainActivity. -->
+    <queries>
+        <intent>
+            <action android:name="org.chromium.intent.action.PAY" />
+        </intent>
+        <intent>
+            <action android:name="org.chromium.intent.action.IS_READY_TO_PAY" />
+        </intent>
+        <intent>
+            <action android:name="org.chromium.intent.action.UPDATE_PAYMENT_DETAILS" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
