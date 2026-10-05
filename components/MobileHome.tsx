@@ -57,7 +57,7 @@ import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { sendScanFeedback } from '@/lib/scanFeedback';
 import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
-import { trackAddToCart } from '@/lib/commerceEvents';
+import { trackAddToCart, trackPurchaseRegionBlocked, type RegionBlockEntry } from '@/lib/commerceEvents';
 import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
@@ -1161,9 +1161,16 @@ export default function HomePage() {
     // clear "coming soon to your country" popup instead of the payment modal.
     // The server re-enforces this in /api/orders/checkout; failures fall open
     // (the server has the final say). Returns true when purchasing may proceed.
-    const ensureCanPurchase = async (): Promise<boolean> => {
+    // A block is reported to GA4 with what the buyer was trying to buy: it is
+    // the only record of foreign buying intent (Buy Now gates before any other
+    // event fires).
+    const ensureCanPurchase = async (
+        entry: RegionBlockEntry,
+        items: Parameters<typeof trackPurchaseRegionBlocked>[0]['items'],
+    ): Promise<boolean> => {
         const region = await ensurePurchaseRegion();
         if (!region.purchaseAllowed) {
+            trackPurchaseRegionBlocked({ country: region.country, entry, items });
             setIsCartOpen(false);
             setSelectedListing(null);
             setIsRegionBlockOpen(true);
@@ -1231,7 +1238,7 @@ export default function HomePage() {
      * after committing. The other seller's items stay in the cart.
      */
     const handleCheckout = async (_shippingFee?: number, sellerId?: string) => {
-        if (!(await ensureCanPurchase())) return;
+        if (!(await ensureCanPurchase('cart', sellerId ? cart.filter((i) => i.sellerId === sellerId) : cart))) return;
 
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
@@ -1278,7 +1285,12 @@ export default function HomePage() {
             showToast(t('offer.payUnavailable') || 'This listing is no longer available.', 'error');
             return;
         }
-        if (!(await ensureCanPurchase())) return;
+        if (!(await ensureCanPurchase('pay_offer', [{
+            id: offer.listing_id,
+            cardId: listingCard.id,
+            card: listingCard,
+            price: offer.amount,
+        }]))) return;
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase')) return;
         if (!(await ensureBuyerProfileComplete({ type: 'payOffer', offer }))) return;
 
@@ -1339,7 +1351,13 @@ export default function HomePage() {
     const handleBuyNow = async (listingArg?: MarketplaceListing, quantity = 1) => {
         const listing = listingArg ?? selectedListing;
         if (!listing) return;
-        if (!(await ensureCanPurchase())) return;
+        if (!(await ensureCanPurchase('buy_now', Array.from({ length: Math.max(1, quantity) }, () => ({
+            id: listing.id,
+            cardId: listing.card_id,
+            card: listing.card_data,
+            price: listing.price,
+            is_graded: listing.is_graded,
+        }))))) return;
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg, quantity }, 'signup')) return;
         if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing, quantity }))) return;
         // One cart line per unit — each is its own listing row, so checkout's

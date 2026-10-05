@@ -19,6 +19,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import type { CartItem } from '@/types';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
+import { trackPurchaseRegionBlocked } from '@/lib/commerceEvents';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
 
@@ -131,6 +132,7 @@ export default function DesktopCartDrawer() {
         // OBO pay-an-accepted-offer flow routes through it too.
         const region = await ensurePurchaseRegion();
         if (!region.purchaseAllowed) {
+            trackPurchaseRegionBlocked({ country: region.country, entry: 'desktop_cart', items });
             setRegionBlocked(true);
             return;
         }
