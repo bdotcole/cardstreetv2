@@ -4,19 +4,47 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ReactNode, useState } from 'react'
 
-const NAV_ITEMS = [
-    { href: '/admin', label: 'Overview', icon: 'fa-solid fa-chart-line' },
-    { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-user' },
-    { href: '/admin/partners', label: 'Partners', icon: 'fa-solid fa-handshake' },
-    { href: '/admin/reports', label: 'Reports', icon: 'fa-solid fa-flag' },
-    { href: '/admin/listings', label: 'Listings', icon: 'fa-solid fa-tags' },
-    { href: '/admin/breakers', label: 'Breaker Applications', icon: 'fa-solid fa-tower-broadcast' },
-    { href: '/admin/tickets', label: 'Support Tickets', icon: 'fa-solid fa-ticket' },
-    { href: '/admin/downloads', label: 'Download Analytics', icon: 'fa-solid fa-download' },
-    { href: '/admin/rewards', label: 'Rewards', icon: 'fa-solid fa-coins' },
-    { href: '/admin/catalog', label: 'Catalog', icon: 'fa-solid fa-database' },
-    { href: '/admin/sets', label: 'Mapping QC', icon: 'fa-solid fa-layer-group' },
+interface NavPage { href: string; label: string }
+interface NavSection { label: string; icon: string; pages: NavPage[] }
+
+// Sidebar sections. A section with several pages shows them as tabs under the
+// top bar. Every page keeps its own URL, so links from emails and other admin
+// pages (e.g. /admin/tickets?ticket=, /admin/breakers) still land directly.
+// The sidebar entry opens the section's first page.
+const NAV_SECTIONS: NavSection[] = [
+    { label: 'Overview', icon: 'fa-solid fa-chart-line', pages: [{ href: '/admin', label: 'Overview' }] },
+    {
+        label: 'Users', icon: 'fa-solid fa-user', pages: [
+            { href: '/admin/users', label: 'Users' },
+            { href: '/admin/breakers', label: 'Breaker Applications' },
+        ],
+    },
+    {
+        label: 'Partners', icon: 'fa-solid fa-handshake', pages: [
+            { href: '/admin/partners', label: 'Partners' },
+            { href: '/admin/downloads', label: 'Download Analytics' },
+        ],
+    },
+    {
+        label: 'Support', icon: 'fa-solid fa-headset', pages: [
+            { href: '/admin/tickets', label: 'Tickets' },
+            { href: '/admin/reports', label: 'User Reports' },
+        ],
+    },
+    {
+        label: 'Catalog & Listings', icon: 'fa-solid fa-database', pages: [
+            { href: '/admin/listings', label: 'Listings' },
+            { href: '/admin/catalog', label: 'Catalog' },
+            { href: '/admin/sets', label: 'Mapping QC' },
+        ],
+    },
+    { label: 'Rewards', icon: 'fa-solid fa-coins', pages: [{ href: '/admin/rewards', label: 'Rewards' }] },
 ]
+
+function isActivePage(href: string, pathname: string): boolean {
+    if (href === '/admin') return pathname === '/admin'
+    return pathname === href || pathname.startsWith(`${href}/`)
+}
 
 /**
  * Client-side chrome for /admin/*. Extracted from the route layout so the
@@ -25,8 +53,13 @@ const NAV_ITEMS = [
  * Config exports aren't allowed in client components.)
  */
 export default function AdminShell({ children }: { children: ReactNode }) {
-    const pathname = usePathname()
+    return <AdminChrome pathname={usePathname() ?? ''}>{children}</AdminChrome>
+}
+
+export function AdminChrome({ pathname, children }: { pathname: string; children: ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const activeSection = NAV_SECTIONS.find(s => s.pages.some(p => isActivePage(p.href, pathname)))
+    const activePage = activeSection?.pages.find(p => isActivePage(p.href, pathname))
 
     return (
         <div className="min-h-screen bg-brand-darker text-slate-200 flex">
@@ -53,22 +86,20 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
                 {/* Nav */}
                 <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-                    {NAV_ITEMS.map((item) => {
-                        const active = item.href === '/admin'
-                            ? pathname === '/admin'
-                            : (pathname ?? '').startsWith(item.href)
+                    {NAV_SECTIONS.map((section) => {
+                        const active = section === activeSection
                         return (
                             <Link
-                                key={item.href}
-                                href={item.href}
+                                key={section.label}
+                                href={section.pages[0].href}
                                 onClick={() => setSidebarOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${active
                                     ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20'
                                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                                     }`}
                             >
-                                <i className={`${item.icon} w-4 text-center`} />
-                                {item.label}
+                                <i className={`${section.icon} w-4 text-center`} />
+                                {section.label}
                             </Link>
                         )
                     })}
@@ -97,11 +128,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                         <i className="fa-solid fa-bars text-slate-400" />
                     </button>
                     <div className="hidden lg:block">
-                        <p className="text-sm font-bold text-slate-300">
-                            {NAV_ITEMS.find(n =>
-                                n.href === '/admin' ? pathname === '/admin' : (pathname ?? '').startsWith(n.href)
-                            )?.label ?? 'Admin'}
-                        </p>
+                        <p className="text-sm font-bold text-slate-300">{activeSection?.label ?? 'Admin'}</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 bg-brand-cyan/10 border border-brand-cyan/20 rounded-full px-3 py-1.5">
@@ -110,6 +137,27 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                         </div>
                     </div>
                 </header>
+
+                {/* Section tabs, kept outside the scrolling content so they stay put */}
+                {activeSection && activeSection.pages.length > 1 && (
+                    <nav className="bg-brand-darker border-b border-white/5 px-6 flex gap-1 overflow-x-auto shrink-0">
+                        {activeSection.pages.map((page) => {
+                            const active = page === activePage
+                            return (
+                                <Link
+                                    key={page.href}
+                                    href={page.href}
+                                    className={`px-4 py-3 -mb-px border-b-2 text-sm font-semibold whitespace-nowrap transition-colors ${active
+                                        ? 'border-brand-cyan text-brand-cyan'
+                                        : 'border-transparent text-slate-400 hover:text-slate-200'
+                                        }`}
+                                >
+                                    {page.label}
+                                </Link>
+                            )
+                        })}
+                    </nav>
+                )}
 
                 {/* Page content */}
                 <main className="flex-1 p-6 overflow-y-auto">
