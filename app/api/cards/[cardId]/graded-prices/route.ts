@@ -9,8 +9,13 @@ import { EXCHANGE_RATES } from '@/constants';
 //   2. market       — PriceCharting graded price (stored in market_values with a
 //                     "PSA 10"-style condition, in USD).
 //   3. thai_estimate — Thai Pokemon cards have no PriceCharting graded data, so we
-//                     show 60% of the English-equivalent card's graded price until a
-//                     real Cardstreet sale exists for that card+grade.
+//                     show 60% of a twin's graded price until a real Cardstreet sale
+//                     exists for that card+grade. The twin is the JAPANESE card first
+//                     (basis 'jp_twin'): a Thai set reprints a Japanese set 1:1 with
+//                     the same numbering, so set code minus "-th" + collector number
+//                     is the same card, the rule apply_thai_price_rule already uses.
+//                     Only when that card has no graded prices does it fall back to
+//                     the English card matched by name (basis 'en_name').
 // A grade tier with none of the above is omitted (the UI renders blank, not a guess).
 //
 // Prices are returned in THB. PriceCharting/market_values rows are USD and converted.
@@ -41,6 +46,8 @@ interface GradedPrice {
     label: string;     // e.g. "PSA 10"
     price: number;     // THB
     source: 'app_sale' | 'market' | 'thai_estimate';
+    /** Which twin a thai_estimate came from. */
+    basis?: 'jp_twin' | 'en_name';
 }
 
 // market_values graded rows for a card -> { "PSA 10": priceThb, ... }
@@ -59,6 +66,47 @@ async function gradedMarketByTier(supabase: any, cardId: string): Promise<Map<st
         out.set(`${company} ${grade}`, { company, grade, label: `${company} ${grade}`, price: priceThb });
     }
     return out;
+}
+
+// The Japanese twin of a Thai card: same set code without the "-th" suffix, same
+// collector number, language 'ja'. Mirrors the join in apply_thai_price_rule
+// (20260921b_thai_price_japanese_twin_band.sql). Null unless exactly one card
+// matches; the whole set is read (a few hundred rows, indexed on set_id) so the
+// number can be compared normalized ("014" vs "14/128").
+//
+// The 1:1 premise has exceptions: a Thai and a Japanese product can share a set
+// code with different lineups (SVK, CLAUDE.md), and 601 of the 4,092 twins that
+// carry an English name on both sides disagreed on it (2026-10-06). So when both
+// names are known they must agree, or there is no twin.
+async function japaneseTwinId(supabase: any, card: any): Promise<string | null> {
+    if (!card.set_id || !card.number) return null;
+    const jaSet = String(card.set_id).replace(/-th$/, '');
+    const { data } = await supabase
+        .from('pokemon_cards')
+        .select('id, number, english_name')
+        .eq('set_id', jaSet)
+        .eq('language', 'ja')
+        .eq('game', 'pokemon');
+    const target = normNum(card.number);
+    const hits = (data || []).filter((c: any) => normNum(c.number) === target);
+    if (hits.length !== 1) return null;
+    const thName = card.english_name;
+    const jaName = hits[0].english_name;
+    if (thName && jaName && !namesAgree(thName, jaName)) return null;
+    return hits[0].id as string;
+}
+
+// Token overlap of two English card names, ignoring case, accents and punctuation
+// ("Pikachu ex" vs "Pikachu EX" agree; "Mew ex" vs "Radiant Charizard" do not).
+function namesAgree(a: string, b: string): boolean {
+    const tokens = (s: string) => new Set(s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean));
+    const A = tokens(a);
+    const B = tokens(b);
+    if (!A.size || !B.size) return false;
+    let both = 0;
+    for (const w of A) if (B.has(w)) both++;
+    return both / Math.min(A.size, B.size) >= 0.6;
 }
 
 // Resolve the English-equivalent card id for a Thai card.
@@ -126,20 +174,27 @@ export async function GET(_request: Request, props: { params: Promise<{ cardId: 
             byTier.set(key, { ...v, source: 'market' });
         }
 
-        // --- Thai estimate: 60% of the English equivalent's graded prices ----------
+        // --- Thai estimate: 60% of the Japanese twin's graded prices, else the -----
+        // --- English equivalent's ----------------------------------------------------
         if (card && card.language === 'th' && (card.game || 'pokemon') === 'pokemon' && byTier.size === 0) {
-            const engId = await englishEquivalentId(supabase, card);
-            if (engId) {
-                const engMarket = await gradedMarketByTier(supabase, engId);
-                for (const [key, v] of engMarket) {
-                    byTier.set(key, {
-                        company: v.company,
-                        grade: v.grade,
-                        label: v.label,
-                        price: Math.round(v.price * THAI_GRADED_FACTOR),
-                        source: 'thai_estimate',
-                    });
-                }
+            let twinMarket = new Map<string, { company: string; grade: number; label: string; price: number }>();
+            let basis: 'jp_twin' | 'en_name' = 'jp_twin';
+            const jpId = await japaneseTwinId(supabase, card);
+            if (jpId) twinMarket = await gradedMarketByTier(supabase, jpId);
+            if (twinMarket.size === 0) {
+                basis = 'en_name';
+                const engId = await englishEquivalentId(supabase, card);
+                if (engId) twinMarket = await gradedMarketByTier(supabase, engId);
+            }
+            for (const [key, v] of twinMarket) {
+                byTier.set(key, {
+                    company: v.company,
+                    grade: v.grade,
+                    label: v.label,
+                    price: Math.round(v.price * THAI_GRADED_FACTOR),
+                    source: 'thai_estimate',
+                    basis,
+                });
             }
         }
 

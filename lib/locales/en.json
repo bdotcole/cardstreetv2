@@ -768,7 +768,8 @@
             "gradedSourceSale": "Sold on Cardstreet",
             "gradedSourceMarket": "Market",
             "gradedSourceEstimate": "Est. EN ×60%",
-            "gradedEstimateNote": "Thai graded values are estimated at 60% of the English card until a Cardstreet sale sets the price.",
+            "gradedSourceEstimateJp": "Est. JP ×60%",
+            "gradedEstimateNote": "Thai graded values are estimated at 60% of the same card in Japanese (or in English when the Japanese card has no graded prices) until a Cardstreet sale sets the price.",
             "sortLabel": "Sort",
             "sortLowest": "Lowest price",
             "sortHighest": "Highest price",
@@ -1843,6 +1844,11 @@
         "sending": "Sending…",
         "shipBy": "Ship by",
         "overdue": "Overdue since"
+    },
+    "movers": {
+        "title": "Market movers this week",
+        "rising": "Rising",
+        "falling": "Falling"
     },
     "searchFallback": {
         "title": "No listings for “{q}” yet",

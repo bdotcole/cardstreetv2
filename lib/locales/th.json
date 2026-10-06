@@ -768,7 +768,8 @@
             "gradedSourceSale": "ขายบน Cardstreet",
             "gradedSourceMarket": "ราคาตลาด",
             "gradedSourceEstimate": "ประมาณจาก EN ×60%",
-            "gradedEstimateNote": "ราคาการ์ดเกรดของไทยประมาณ 60% ของการ์ดภาษาอังกฤษ จนกว่าจะมีการขายจริงบน Cardstreet",
+            "gradedSourceEstimateJp": "ประมาณจาก JP ×60%",
+            "gradedEstimateNote": "ราคาการ์ดเกรดของไทยประมาณ 60% ของการ์ดใบเดียวกันภาษาญี่ปุ่น (หรือภาษาอังกฤษ หากการ์ดญี่ปุ่นยังไม่มีราคาเกรด) จนกว่าจะมีการขายจริงบน Cardstreet",
             "sortLabel": "จัดเรียง",
             "sortLowest": "ราคาต่ำสุด",
             "sortHighest": "ราคาสูงสุด",
@@ -1843,6 +1844,11 @@
         "sending": "กำลังส่ง…",
         "shipBy": "ส่งภายใน",
         "overdue": "เลยกำหนดตั้งแต่"
+    },
+    "movers": {
+        "title": "การ์ดราคาขยับแรงสัปดาห์นี้",
+        "rising": "ขึ้น",
+        "falling": "ลง"
     },
     "searchFallback": {
         "title": "ยังไม่มีรายการขาย “{q}”",

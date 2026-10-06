@@ -65,7 +65,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   // Real graded prices for this card: app sales (official) override JustTCG.
   // Empty until a grade tier actually has data — the dashboard stays blank
   // rather than inventing values off the raw price.
-  interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'market' | 'thai_estimate'; }
+  interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'market' | 'thai_estimate'; basis?: 'jp_twin' | 'en_name'; }
   const [gradedPrices, setGradedPrices] = useState<GradedPrice[]>([]);
 
   useEffect(() => {
@@ -316,7 +316,9 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                             {graded.source === 'app_sale'
                               ? (isThai ? 'ขายบนแอป' : 'Sold on Cardstreet')
                               : graded.source === 'thai_estimate'
-                                ? (isThai ? 'ประมาณจากอังกฤษ ×60%' : 'Est. (EN ×60%)')
+                                ? (graded.basis === 'jp_twin'
+                                  ? (isThai ? 'ประมาณจากญี่ปุ่น ×60%' : 'Est. (JP ×60%)')
+                                  : (isThai ? 'ประมาณจากอังกฤษ ×60%' : 'Est. (EN ×60%)'))
                                 : (isThai ? 'ราคาตลาด' : 'Market')}
                           </p>
                         </div>

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import MarketMovers from '@/components/MarketMovers';
 import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
@@ -434,6 +435,18 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
       {/* Scrollable Listings Grid */}
       <div className="flex-1 overflow-y-auto px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
+        {/* Market movers above the listings, while browsing (not searching) singles. */}
+        {!debouncedSearch && section === 'singles' && (
+          <MarketMovers
+            game={selectedGame}
+            onSelectCard={onSelectCard}
+            formatPrice={(thb) => {
+              const v = thb * exchangeRate;
+              return `${CURRENCY_SYMBOLS[currency] || currency}${v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
+            }}
+            className="mb-4"
+          />
+        )}
         <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-1.5' : 'grid-cols-2 gap-3'}`}>
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);

@@ -58,6 +58,27 @@ export const PC_CATEGORY: Record<string, string> = {
   riftbound: 'other-tcg-cards',
 };
 
+/**
+ * Our game id -> the console-name prefix of its sets inside the category CSV.
+ * Needed because other-tcg-cards mixes many games (Riftbound next to Harry Potter).
+ */
+export const PC_CONSOLE_PREFIX: Record<string, RegExp> = {
+  pokemon: /^Pokemon /i,
+  yugioh: /^YuGiOh /i,
+  mtg: /^Magic /i,
+  onepiece: /^One Piece /i,
+  lorcana: /^Lorcana /i,
+  riftbound: /^Riftbound /i,
+};
+
+/** Language of a PriceCharting console: "Pokemon Japanese ..." -> 'ja', else 'en'. */
+export function consoleLanguage(consoleName: string): 'en' | 'ja' | 'zh' | 'ko' {
+  if (/\bJapanese\b/i.test(consoleName)) return 'ja';
+  if (/\bChinese\b/i.test(consoleName)) return 'zh';
+  if (/\bKorean\b/i.test(consoleName)) return 'ko';
+  return 'en';
+}
+
 /** Integer USD cents -> USD number (2dp). Returns null for missing/zero. */
 export function centsToUsd(cents: unknown): number | null {
   const n = typeof cents === 'string' ? parseInt(cents, 10) : (cents as number);

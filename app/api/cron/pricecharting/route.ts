@@ -8,7 +8,11 @@ import {
     csvDollarsToUsd,
     centsToUsd,
     thaiSealedEstimateThb,
+    looksLikeCardProductName,
+    consoleLanguage,
     PC_CATEGORY,
+    PC_CONSOLE_PREFIX,
+    GRADED_CONDITIONS,
 } from '@/lib/pricecharting';
 import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
 import { EXCHANGE_RATES } from '@/constants';
@@ -20,6 +24,11 @@ import { EXCHANGE_RATES } from '@/constants';
 //     JustTCG's job; PriceCharting only filled it for JP One Piece;
 //   - a price_snapshots change point whenever that Raw_NM price moves, which keeps
 //     the price charts growing now that JustTCG's daily history merge is gone.
+//   Every overwritten price (raw or graded) also leaves its old value in
+//   price_snapshots, dated when it was set: previous prices are history, never
+//   discarded. A card PriceCharting has no price for keeps its existing price.
+//   - pricecharting_console_coverage, once a day per game: which PriceCharting
+//     sets we have matched, so the sets we don't carry can be listed.
 //
 // One game per run, named by `?game=` (vercel.json has one entry per game, spaced
 // 20 minutes apart). PriceCharting answered a Cloudflare challenge after about five
@@ -180,6 +189,14 @@ function utcMs(ts: string | null | undefined): number {
     if (!ts) return 0;
     const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : `${ts}Z`);
     return Number.isFinite(ms) ? ms : 0;
+}
+
+/** The market_values fields read back before a price is overwritten. */
+interface PriorPrice {
+    market_avg: number | null;
+    currency: string | null;
+    source: string | null;
+    last_updated: string | null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -373,6 +390,10 @@ export async function GET(request: NextRequest) {
     // Raw_NM rows written from loose-price, rows left to a fresh JustTCG price, and
     // chart points written because the price moved.
     let rawRows = 0, rawKeptJustTcg = 0, snapshotPoints = 0;
+    // Filled while parsing the CSV, written to pricecharting_console_coverage.
+    const consoleStats = new Map<string, { cards: number; release: string | null }>();
+    const consoleOfCard = new Map<string, string>();
+    let coverageConsoles = 0;
 
     const requestedGame = request.nextUrl.searchParams.get('game');
     if (requestedGame && !SCHEDULED_GAMES.has(requestedGame)) {
@@ -451,11 +472,25 @@ export async function GET(request: NextRequest) {
 
             // pcId -> graded rows + loose (ungraded) price + sales volume.
             const priceById = new Map<string, { graded: Array<{ condition: string; usd: number }>; loose: number | null; volume: number | null }>();
+            // Per-set coverage (pricecharting_console_coverage): singles per console,
+            // and which console each single belongs to, so mapped ids can be counted.
+            const nameCol = colIndex['product-name'];
+            const releaseCol = colIndex['release-date'];
+            const consolePrefix = gradedGame ? PC_CONSOLE_PREFIX[gradedGame] : undefined;
             for (let i = 1; i < csvLines.length; i++) {
                 if (!csvLines[i]) continue;
                 const f = parseCsvLine(csvLines[i]);
                 const pcId = f[idCol];
                 if (!pcId) continue;
+                const consoleName = consoleCol == null ? '' : (f[consoleCol] || '');
+                if (consolePrefix?.test(consoleName) && nameCol != null && looksLikeCardProductName(f[nameCol] || '')) {
+                    const st = consoleStats.get(consoleName) ?? { cards: 0, release: null };
+                    st.cards++;
+                    const rel = releaseCol == null ? '' : (f[releaseCol] || '').trim();
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(rel) && (!st.release || rel < st.release)) st.release = rel;
+                    consoleStats.set(consoleName, st);
+                    consoleOfCard.set(pcId, consoleName);
+                }
                 const vol = volumeCol == null ? NaN : parseInt(f[volumeCol] || '', 10);
                 priceById.set(pcId, {
                     graded: gradedRowsFromCsv(f, colIndex),
@@ -534,7 +569,7 @@ export async function GET(request: NextRequest) {
                 // fresh JustTCG price still owns the row, and whether the price moved
                 // (which is what earns a chart point). Throws for the same reason as the
                 // card lookup: a silent gap would overwrite JustTCG rows it should keep.
-                const rawByKey = new Map<string, { market_avg: number | null; currency: string | null; source: string | null; source_links: unknown; last_updated: string | null }>();
+                const rawByKey = new Map<string, PriorPrice & { source_links: unknown }>();
                 for (const chunk of chunkByLength(pageIds, 6_000, 300)) {
                     const { data: existing, error: rawErr } = await supabase
                         .from('market_values')
@@ -544,6 +579,19 @@ export async function GET(request: NextRequest) {
                     if (rawErr) throw rawErr;
                     for (const r of existing || []) rawByKey.set(`${r.card_id}|${r.language}`, r);
                 }
+                // The current graded rows, so a changed graded price also leaves its
+                // old value behind as history. ~6 graded rows per card: 150 cards per
+                // request keeps the response under PostgREST's 1000-row cap.
+                const gradedByKey = new Map<string, PriorPrice>();
+                for (const chunk of chunkByLength(pageIds, 6_000, 150)) {
+                    const { data: existing, error: gErr } = await supabase
+                        .from('market_values')
+                        .select('card_id, language, condition, market_avg, currency, source, last_updated')
+                        .in('condition', GRADED_CONDITIONS)
+                        .in('card_id', chunk);
+                    if (gErr) throw gErr;
+                    for (const r of existing || []) gradedByKey.set(`${r.card_id}|${r.language}|${r.condition}`, r);
+                }
 
                 const stamp = new Date().toISOString();
                 const nowMs = Date.now();
@@ -552,6 +600,36 @@ export async function GET(request: NextRequest) {
                 const rawRowsPage: any[] = [];
                 const snapshotRows: any[] = [];
                 const stamped: string[] = [];
+                const yesterday = new Date(nowMs - 86_400_000).toISOString().slice(0, 10);
+                // PREVIOUS PRICES ARE HISTORY, NEVER DISCARDED (founder, 2026-10-06).
+                // When a price changes, write today's new point AND the value being
+                // replaced, dated when it was last set (yesterday at the latest), so
+                // the chart keeps the old level even when no earlier point recorded
+                // it. Both go in with ignoreDuplicates, so an existing real point for
+                // that day always wins. Pinned prices are skipped: the guard trigger
+                // keeps them, so the vendor price is not what the card shows (the
+                // price-snapshots cron charts those from the card mapper).
+                const recordChange = (cardId: string, condition: string, newUsd: number, old: PriorPrice | undefined, oldSource: string) => {
+                    if (old?.source === 'cardstreet' || old?.source === 'admin') return;
+                    const newThb = Math.max(1, Math.round(newUsd * THB_PER_USD));
+                    const oldAvg = old?.market_avg == null ? null : Number(old.market_avg);
+                    const oldThb = oldAvg == null || !(oldAvg > 0) ? null
+                        : Math.max(1, Math.round(old?.currency === 'USD' ? oldAvg * THB_PER_USD : oldAvg));
+                    if (oldThb === newThb) return;
+                    const base = { subject_id: cardId, language: cardLangByCard.get(cardId) || 'en', condition, is_sealed: false };
+                    snapshotRows.push({ ...base, market_thb: newThb, market_native: newUsd, currency: 'USD', source: 'pricecharting', captured_on: capturedOn });
+                    if (oldThb != null && oldAvg != null) {
+                        const setOn = old?.last_updated ? new Date(utcMs(old.last_updated)).toISOString().slice(0, 10) : yesterday;
+                        snapshotRows.push({
+                            ...base,
+                            market_thb: oldThb,
+                            market_native: old?.currency === 'USD' ? oldAvg : null,
+                            currency: old?.currency === 'USD' ? 'USD' : 'THB',
+                            source: oldSource,
+                            captured_on: setOn < capturedOn ? setOn : yesterday,
+                        });
+                    }
+                };
                 for (const m of maps) {
                     // Stamp EVERY row the page hands us, before any skip decision.
                     // A row that is considered but never stamped stays at the head of
@@ -574,6 +652,7 @@ export async function GET(request: NextRequest) {
                             condition: r.condition, printing: null,
                             market_avg: r.usd, currency: 'USD', last_updated: stamp,
                         });
+                        recordChange(m.card_id, r.condition, r.usd, gradedByKey.get(`${m.card_id}|${lang}|${r.condition}`), 'pricecharting');
                     }
                     // The ungraded headline price (Raw_NM), from loose-price.
                     if (priced.loose == null) continue;
@@ -595,29 +674,11 @@ export async function GET(request: NextRequest) {
                     });
                     // A chart point only when the price moved (or there was none), the
                     // same change-point rule JustTCG's history merge used, so the series
-                    // carries on where JustTCG's left off.
-                    // /api/price-history forward-fills the days in between.
-                    const newThb = Math.max(1, Math.round(priced.loose * THB_PER_USD));
-                    const oldAvg = existing?.market_avg == null ? null : Number(existing.market_avg);
-                    const oldThb = oldAvg == null || !(oldAvg > 0) ? null
-                        : Math.max(1, Math.round(existing?.currency === 'USD' ? oldAvg * THB_PER_USD : oldAvg));
-                    // Skipped for a price pinned by sales or an admin: the guard trigger
-                    // keeps that price, so the loose price is not what the card shows.
-                    // The price-snapshots cron charts those cards from the card mapper.
-                    const pinned = existing?.source === 'cardstreet' || existing?.source === 'admin';
-                    if (!pinned && oldThb !== newThb) {
-                        snapshotRows.push({
-                            subject_id: m.card_id,
-                            language: cardLangByCard.get(m.card_id) || 'en',
-                            condition: 'Market',
-                            is_sealed: false,
-                            market_thb: newThb,
-                            market_native: priced.loose,
-                            currency: 'USD',
-                            source: 'pricecharting',
-                            captured_on: capturedOn,
-                        });
-                    }
+                    // carries on where JustTCG's left off. /api/price-history
+                    // forward-fills the days in between.
+                    const oldLinks = JSON.stringify(existing?.source_links ?? '');
+                    const oldSource = linkedToJustTcg ? 'justtcg' : oldLinks.includes('pricecharting') ? 'pricecharting' : 'catalog';
+                    recordChange(m.card_id, 'Market', priced.loose, existing, oldSource);
                 }
 
                 for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
@@ -670,6 +731,60 @@ export async function GET(request: NextRequest) {
             }
         } catch (e: any) {
             if (errors.length < ERROR_SAMPLE_CAP) errors.push(`graded ${gradedCategory}: ${e.message}`);
+        }
+
+        // --- Set coverage: which PriceCharting sets we don't carry ---------------
+        // Once a day per game (the catch-up runs skip it), and only with time left
+        // before the sealed reserve. Counts each console's singles against the
+        // PriceCharting ids we have mapped; the admin Catalog page and the daily DB
+        // check list the low-coverage sets, newest first. Best-effort.
+        if (consoleStats.size > 0 && elapsed() < GRADED_DEADLINE_MS + 20_000) {
+            try {
+                const since = new Date(Date.now() - FRESH_WINDOW_MS).toISOString();
+                const { count: freshRows } = await supabase
+                    .from('pricecharting_console_coverage')
+                    .select('console_name', { count: 'exact', head: true })
+                    .eq('game', gradedGame)
+                    .gt('updated_at', since);
+                if (!freshRows) {
+                    const mappedPerConsole = new Map<string, number>();
+                    let lastCard: string | null = null;
+                    for (;;) {
+                        let q = supabase.from('pricecharting_map').select('card_id, pricecharting_id')
+                            .eq('game', gradedGame).order('card_id').limit(1000);
+                        if (lastCard) q = q.gt('card_id', lastCard);
+                        const { data, error } = await q;
+                        if (error) throw error;
+                        if (!data?.length) break;
+                        for (const r of data) {
+                            const c = consoleOfCard.get(String(r.pricecharting_id));
+                            if (c) mappedPerConsole.set(c, (mappedPerConsole.get(c) || 0) + 1);
+                        }
+                        lastCard = data[data.length - 1].card_id;
+                        if (data.length < 1000) break;
+                    }
+                    const nowIso = new Date().toISOString();
+                    const coverageRows = [...consoleStats.entries()].map(([consoleName, st]) => ({
+                        console_name: consoleName,
+                        game: gradedGame,
+                        language: consoleLanguage(consoleName),
+                        card_products: st.cards,
+                        // Several of our cards can map to one product; never report more
+                        // matched than the set lists.
+                        mapped_products: Math.min(st.cards, mappedPerConsole.get(consoleName) || 0),
+                        release_date: st.release,
+                        updated_at: nowIso,
+                    }));
+                    for (let i = 0; i < coverageRows.length; i += UPSERT_BATCH) {
+                        const { error } = await supabase.from('pricecharting_console_coverage')
+                            .upsert(coverageRows.slice(i, i + UPSERT_BATCH), { onConflict: 'console_name' });
+                        if (error) throw error;
+                    }
+                    coverageConsoles = coverageRows.length;
+                }
+            } catch (e: any) {
+                if (errors.length < ERROR_SAMPLE_CAP) errors.push(`coverage ${gradedGame}: ${e.message}`);
+            }
         }
     }
 
@@ -748,6 +863,9 @@ export async function GET(request: NextRequest) {
         // Ungraded prices: rows written from loose-price, rows left to a fresh JustTCG
         // price (falls to 0 a few days after JustTCG stops), chart points written.
         rawRows, rawKeptJustTcg, snapshotPoints,
+        // PriceCharting sets written to pricecharting_console_coverage (0 when an
+        // earlier run today already did this game).
+        coverageConsoles,
         // Mapped rows due at the start; 0 means an earlier run already did this game
         // today and the CSV download was skipped.
         gradedStaleAtStart,

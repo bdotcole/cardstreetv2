@@ -32,6 +32,7 @@ interface GradedPrice {
     label: string;     // e.g. "PSA 10"
     price: number;     // THB
     source: 'app_sale' | 'market' | 'thai_estimate';
+    basis?: 'jp_twin' | 'en_name';
 }
 
 type SortKey = 'lowest' | 'highest' | 'best' | 'condition';
@@ -333,11 +334,11 @@ export default function DesktopCardDetail({
 
     const microLabel = 'text-[10px] text-slate-500 font-black uppercase tracking-widest';
 
-    const gradedSourceLabel = (source: GradedPrice['source']) =>
-        source === 'app_sale'
+    const gradedSourceLabel = (g: GradedPrice) =>
+        g.source === 'app_sale'
             ? t('desktop.card.gradedSourceSale')
-            : source === 'thai_estimate'
-                ? t('desktop.card.gradedSourceEstimate')
+            : g.source === 'thai_estimate'
+                ? t(g.basis === 'jp_twin' ? 'desktop.card.gradedSourceEstimateJp' : 'desktop.card.gradedSourceEstimate')
                 : t('desktop.card.gradedSourceMarket');
 
     return (
@@ -471,7 +472,7 @@ export default function DesktopCardDetail({
                                             >
                                                 <span className={`text-xs font-black ${GRADED_COMPANY_COLOR[g.company] || 'text-white'}`}>{g.label}</span>
                                                 <span className="text-sm font-black text-white">{formatTHB(g.price)}</span>
-                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{gradedSourceLabel(g.source)}</span>
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{gradedSourceLabel(g)}</span>
                                             </div>
                                         ))}
                                     </div>

@@ -14,6 +14,7 @@ import { getOptimizedImageUrl, getPreviewUrl, getThumbnailUrl, shouldSkipNextOpt
 import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
+import MarketMovers from '@/components/MarketMovers';
 import OfferModal from '@/components/OfferModal';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -355,6 +356,9 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     )}
                 </>
             )}
+
+            {/* Homepage only, like the FAQ teaser: hidden once the visitor searches. */}
+            {!q && section === 'singles' && <MarketMovers game={game} pathPrefix={pathPrefix} className="mt-12" />}
 
             {/* Homepage only: the FAQ teaser is a marketing/SEO surface, not a
                 search result. Hidden once the visitor is actively searching. */}

@@ -6,6 +6,7 @@ import { dbLanguage } from '@/lib/catalogFields'
 import { getThumbnailUrl, getSetLogoUrl } from '@/lib/imageUtils'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import MissingSetsPanel from './_MissingSetsPanel'
 
 interface SetRow {
     id: string
@@ -122,6 +123,9 @@ export default function CatalogHomePage() {
                     </div>
                 )}
             </div>
+
+            {/* PriceCharting sets we barely carry (daily, from the pricecharting cron) */}
+            <MissingSetsPanel game={game} language={language} />
 
             {/* Search */}
             <div className="relative max-w-md">
