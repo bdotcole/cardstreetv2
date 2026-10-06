@@ -275,7 +275,10 @@ export async function syncFacebookPage(pageId: string, pageToken: string, window
     const followersNow = toInt(page?.followers_count);
     if (last && followersNow !== null && last.day === shiftDay(isoDay(new Date()), -1)) last.followers = followersNow;
 
-    const posts = await facebookPosts(pageId, pageToken);
+    const notes: string[] = [];
+    const dropped = [...new Set(series.dropped)];
+    if (dropped.length) notes.push(`Facebook refused: ${dropped.join('; ')}`);
+    const posts = await facebookPosts(pageId, pageToken, notes);
 
     return {
         days,
@@ -285,18 +288,42 @@ export async function syncFacebookPage(pageId: string, pageToken: string, window
             profile_url: page?.link ?? null,
             avatar_url: page?.picture?.data?.url ?? null,
         },
-        notes: series.dropped.length ? [`Facebook refused: ${series.dropped.join('; ')}`] : [],
+        notes,
     };
 }
 
-async function facebookPosts(pageId: string, pageToken: string): Promise<PostMetrics[]> {
-    const base = 'id,message,created_time,permalink_url,full_picture,shares,comments.summary(total_count).limit(0),reactions.summary(total_count).limit(0)';
-    let res: any;
-    try {
-        res = await graphGet(`${pageId}/posts`, { fields: `${base},insights.metric(post_media_view)`, limit: POSTS_PER_SYNC }, pageToken);
-    } catch (e) {
-        if (!(e instanceof GraphError) || e.status >= 500) throw e;
-        res = await graphGet(`${pageId}/posts`, { fields: base, limit: POSTS_PER_SYNC }, pageToken);
+/**
+ * Recent Page posts. Comment and reaction counts are user-generated content,
+ * which Meta gates behind pages_read_user_content (error #10) — a permission
+ * the app may not hold. Each field set is tried in turn and the first that
+ * Graph accepts wins; the post list can never take the day's metrics down
+ * with it (the first live sync lost a whole Page to exactly that).
+ */
+async function facebookPosts(pageId: string, pageToken: string, notes: string[]): Promise<PostMetrics[]> {
+    const core = 'id,message,created_time,permalink_url,full_picture,shares';
+    const tiers = [
+        `${core},comments.summary(total_count).limit(0),reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
+        `${core},reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
+        `${core},insights.metric(post_media_view)`,
+        core,
+    ];
+    let res: any = null;
+    let refused: GraphError | null = null;
+    for (const fields of tiers) {
+        try {
+            res = await graphGet(`${pageId}/posts`, { fields, limit: POSTS_PER_SYNC }, pageToken);
+            break;
+        } catch (e) {
+            if (!(e instanceof GraphError) || e.status >= 500) throw e;
+            refused = e;
+        }
+    }
+    if (!res) {
+        notes.push(`Facebook posts unavailable: ${refused?.message ?? 'unknown error'}`);
+        return [];
+    }
+    if (refused) {
+        notes.push('Facebook post comment/reaction counts need the pages_read_user_content permission on the Meta app (add it, then Reconnect).');
     }
     return (res?.data ?? []).map((p: any): PostMetrics => {
         const insight = (p.insights?.data ?? []).find((i: any) => i.name === 'post_media_view');
@@ -320,12 +347,16 @@ async function facebookPosts(pageId: string, pageToken: string): Promise<PostMet
 
 // time_series metrics: one call per <=30-day chunk.
 const IG_SERIES_METRICS = ['reach'];
-// Older daily metrics; Meta may retire them, and the fallback copes.
-const IG_LEGACY_SERIES_METRICS = ['profile_views', 'website_clicks', 'follower_count'];
+// Daily new followers is the one other time_series metric left, and Meta only
+// serves it for the last 30 days (never today) — asked for older days it
+// refuses the whole call, so its window is clamped separately.
+const IG_FOLLOWER_SERIES_METRICS = ['follower_count'];
+const IG_FOLLOWER_LOOKBACK_DAYS = 30;
 // total_value metrics: one call per day (the API aggregates over since..until).
+// profile_views and website_clicks moved here from time_series (first live sync, 2026-10-06).
 const IG_TOTAL_METRICS = [
-    'views', 'profile_links_taps', 'accounts_engaged', 'total_interactions',
-    'likes', 'comments', 'shares', 'saves',
+    'views', 'profile_views', 'website_clicks', 'profile_links_taps', 'accounts_engaged',
+    'total_interactions', 'likes', 'comments', 'shares', 'saves',
 ];
 // total_value days are the slow part (one round trip each); a long backfill
 // keeps the cheap series for the whole window and totals for the recent part.
@@ -336,10 +367,16 @@ export async function syncInstagramAccount(igUserId: string, pageToken: string, 
     const series: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
     const perDayTotals = new Map<string, Map<string, number>>();
 
+    const followerFloor = shiftDay(isoDay(new Date()), -IG_FOLLOWER_LOOKBACK_DAYS);
     for (const c of chunks(w, IG_MAX_SPAN_DAYS)) {
         const params = { period: 'day', since: dayStartUnix(c.since), until: dayStartUnix(c.until) + 86_400 };
         await insightsWithFallback(`${igUserId}/insights`, IG_SERIES_METRICS, { ...params, metric_type: 'time_series' }, pageToken, series);
-        await insightsWithFallback(`${igUserId}/insights`, IG_LEGACY_SERIES_METRICS, params, pageToken, series);
+        const followerSince = c.since < followerFloor ? followerFloor : c.since;
+        if (followerSince <= c.until) {
+            await insightsWithFallback(`${igUserId}/insights`, IG_FOLLOWER_SERIES_METRICS, {
+                period: 'day', since: dayStartUnix(followerSince), until: dayStartUnix(c.until) + 86_400,
+            }, pageToken, series);
+        }
     }
 
     const totalDays = eachDay(w.since, w.until).slice(-IG_TOTAL_MAX_DAYS);
@@ -365,14 +402,14 @@ export async function syncInstagramAccount(igUserId: string, pageToken: string, 
 
     const days: DailyMetrics[] = eachDay(w.since, w.until).map((day) => {
         const linkTaps = tot('profile_links_taps', day);
-        const websiteClicks = at('website_clicks', day);
+        const websiteClicks = tot('website_clicks', day);
         const engagements = tot('total_interactions', day);
         return {
             day,
             follower_delta: at('follower_count', day),
             reach: at('reach', day),
             views: tot('views', day),
-            profile_views: at('profile_views', day),
+            profile_views: tot('profile_views', day),
             link_clicks: linkTaps !== null || websiteClicks !== null ? (linkTaps ?? 0) + (websiteClicks ?? 0) : null,
             engagements: engagements ?? (
                 tot('likes', day) !== null
@@ -401,7 +438,8 @@ export async function syncInstagramAccount(igUserId: string, pageToken: string, 
             avatar_url: profile?.profile_picture_url ?? null,
             profile_url: profile?.username ? `https://www.instagram.com/${profile.username}/` : null,
         },
-        notes: series.dropped.length ? [`Instagram refused: ${series.dropped.join('; ')}`] : [],
+        // Chunked calls repeat the same refusal; say it once.
+        notes: series.dropped.length ? [`Instagram refused: ${[...new Set(series.dropped)].join('; ')}`] : [],
     };
 }
 

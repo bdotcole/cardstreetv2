@@ -1010,6 +1010,16 @@ function Connections({ brand, accounts, providers, ga4, busy, onPatch, onDisconn
                                     </span>
                                 )}
                             </div>
+                            {prov.key === 'youtube' && (
+                                <p className="text-[10px] text-slate-500">
+                                    Google lists your personal channel and every brand channel under your account on its second "Choose an account" screen — pick the channel you want, not your own name. One Connect per channel.
+                                </p>
+                            )}
+                            {prov.key === 'meta' && (
+                                <p className="text-[10px] text-slate-500">
+                                    Tick every Page you want in Meta's dialog; each Page brings its linked Instagram. A Page can be moved to the other brand below.
+                                </p>
+                            )}
                             {rows.length === 0 ? (
                                 <p className="text-[11px] text-slate-500">
                                     {configured
