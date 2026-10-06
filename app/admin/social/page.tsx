@@ -37,8 +37,9 @@ const BRANDS: { key: Brand; label: string }[] = [
 const RANGES = [7, 28, 90] as const
 
 // What each platform's API can report. Anything false renders "n/a", never a zero.
+// Facebook Page reach left the Graph API with Meta's November 2025 metric cull.
 const REPORTS: Record<Platform, { reach: boolean; link_clicks: boolean; profile_views: boolean }> = {
-    facebook: { reach: true, link_clicks: true, profile_views: true },
+    facebook: { reach: false, link_clicks: true, profile_views: true },
     instagram: { reach: true, link_clicks: true, profile_views: true },
     youtube: { reach: false, link_clicks: false, profile_views: false },
     tiktok: { reach: false, link_clicks: false, profile_views: false },
@@ -711,7 +712,7 @@ export default function AdminSocialPage() {
                                 <StatTile
                                     label="Reach" value={compact(agg.kpi.reach.now)}
                                     delta={agg.kpi.reach.now !== null && agg.kpi.reach.prev !== null ? pct(agg.kpi.reach.now, agg.kpi.reach.prev) : null}
-                                    deltaLabel="vs previous period" sub="Facebook + Instagram only"
+                                    deltaLabel="vs previous period" sub="Instagram only — Meta no longer reports Page reach"
                                 />
                                 <StatTile
                                     label="Views" value={compact(agg.kpi.views.now)}
@@ -750,10 +751,10 @@ export default function AdminSocialPage() {
                                         empty={agg.viewsPerDay.every((d) => PLATFORMS.every((pl) => d[pl] === null || d[pl] === undefined)) ? 'No views recorded in this window yet.' : null}
                                     />
                                     <LinesChart
-                                        title="Reach per day" sub="unique accounts reached (Facebook, Instagram)"
+                                        title="Reach per day" sub="unique accounts reached (Instagram)"
                                         data={agg.reachPerDay}
                                         platforms={agg.platforms.map((s) => s.platform).filter((pl) => REPORTS[pl].reach)}
-                                        empty={agg.platforms.some((s) => REPORTS[s.platform].reach) ? (agg.reachPerDay.every((d) => PLATFORMS.every((pl) => d[pl] === null || d[pl] === undefined)) ? 'No reach recorded in this window yet.' : null) : 'YouTube and TikTok do not report reach through their APIs.'}
+                                        empty={agg.platforms.some((s) => REPORTS[s.platform].reach) ? (agg.reachPerDay.every((d) => PLATFORMS.every((pl) => d[pl] === null || d[pl] === undefined)) ? 'No reach recorded in this window yet.' : null) : 'Only Instagram still reports reach; Meta retired Page reach and YouTube never had it.'}
                                     />
                                     {brand === 'cardstreet' ? (
                                         <StackedBars

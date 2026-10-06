@@ -231,6 +231,9 @@ function* chunks(window: SyncWindow, maxSpan: number): Generator<SyncWindow> {
 
 // --- Facebook Page -------------------------------------------------------
 
+// Page reach (page_impressions_unique) is gone: Graph v24 already answers
+// "not a valid insights metric" (first live sync, 2026-10-06), so Facebook
+// reach is reported as unavailable rather than requested and refused daily.
 const FB_DAILY_METRICS = [
     'page_follows',
     'page_daily_follows_unique',
@@ -240,8 +243,6 @@ const FB_DAILY_METRICS = [
     'page_total_actions',
     'page_media_view',
 ];
-// Deprecated from v25; still served on the pinned version. Dropped cleanly when it goes.
-const FB_REACH_METRICS = ['page_impressions_unique'];
 
 export async function syncFacebookPage(pageId: string, pageToken: string, window: SyncWindow): Promise<SyncResult> {
     const series: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
@@ -249,7 +250,6 @@ export async function syncFacebookPage(pageId: string, pageToken: string, window
     for (const w of chunks(window, FB_MAX_SPAN_DAYS)) {
         const params = { period: 'day', since: dayStartUnix(w.since), until: dayStartUnix(w.until) + 86_400 };
         await insightsWithFallback(`${pageId}/insights`, FB_DAILY_METRICS, params, pageToken, series);
-        await insightsWithFallback(`${pageId}/insights`, FB_REACH_METRICS, params, pageToken, series);
     }
 
     const page = await graphGet<any>(pageId, { fields: 'name,link,followers_count,picture{url}' }, pageToken);
@@ -263,7 +263,6 @@ export async function syncFacebookPage(pageId: string, pageToken: string, window
             day,
             followers: at('page_follows', day),
             follower_delta: follows !== null || unfollows !== null ? (follows ?? 0) - (unfollows ?? 0) : null,
-            reach: at('page_impressions_unique', day),
             views: at('page_media_view', day),
             profile_views: at('page_views_total', day),
             link_clicks: at('page_total_actions', day),

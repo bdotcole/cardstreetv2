@@ -19,24 +19,53 @@ import { toInt, type SocialPlatform, type SyncWindow } from './types';
 
 interface ServiceAccountKey { client_email: string; private_key: string }
 
-function loadKey(): ServiceAccountKey | null {
+/**
+ * The key as pasted into Vercel is rarely clean JSON: the dashboard keeps the
+ * real line breaks inside private_key (invalid JSON), or wraps the whole
+ * thing in quotes. Parse strictly first, then fall back to pulling the two
+ * fields we need out of the raw text, so a paste of the file "as is" works.
+ */
+function parseKey(raw: string): ServiceAccountKey | null {
+    let text = raw.trim();
+    if ((text.startsWith("'") && text.endsWith("'")) || (text.startsWith('"') && text.endsWith('"') && text.includes('{'))) {
+        text = text.slice(1, -1);
+    }
+    try {
+        const j = JSON.parse(text);
+        if (j?.client_email && j?.private_key) return { client_email: j.client_email, private_key: j.private_key };
+    } catch {
+        // fall through to the lenient reader
+    }
+    const email = text.match(/"client_email"\s*:\s*"([^"]+)"/)?.[1];
+    const key = text.match(/"private_key"\s*:\s*"([\s\S]*?)"\s*,?\s*(?:"client_email"|"client_id"|"auth_uri"|\})/)?.[1];
+    if (!email || !key) return null;
+    return { client_email: email, private_key: key.replace(/\\n/g, '\n') };
+}
+
+function loadKey(): { key: ServiceAccountKey | null; reason: string } {
     const inline = process.env.GA4_SA_KEY_JSON;
     const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    try {
-        if (inline) return JSON.parse(inline);
-        if (path) return JSON.parse(readFileSync(path, 'utf8'));
-    } catch {
-        return null;
+    if (inline) {
+        const key = parseKey(inline);
+        return { key, reason: key ? '' : 'GA4_SA_KEY_JSON is set but client_email / private_key could not be read from it' };
     }
-    return null;
+    if (path) {
+        try {
+            const key = parseKey(readFileSync(path, 'utf8'));
+            return { key, reason: key ? '' : `GOOGLE_APPLICATION_CREDENTIALS file has no client_email / private_key` };
+        } catch (e) {
+            return { key: null, reason: `GOOGLE_APPLICATION_CREDENTIALS not readable (${e instanceof Error ? e.message : String(e)}) — on Vercel use GA4_SA_KEY_JSON instead` };
+        }
+    }
+    return { key: null, reason: 'GA4_SA_KEY_JSON / GOOGLE_APPLICATION_CREDENTIALS not set' };
 }
 
 let cached: { token: string; exp: number } | null = null;
 
 async function accessToken(): Promise<string> {
     if (cached && cached.exp > Date.now() + 60_000) return cached.token;
-    const key = loadKey();
-    if (!key) throw new Error('GA4 service-account key not configured');
+    const { key, reason } = loadKey();
+    if (!key) throw new Error(`GA4 service-account key: ${reason}`);
     const b64 = (o: unknown) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
     const iat = Math.floor(Date.now() / 1000);
     const claim = {
