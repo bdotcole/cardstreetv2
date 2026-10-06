@@ -92,8 +92,10 @@ Connect button; the others work.
    the app (App roles) — no App Review, no Business Verification needed for
    reading our own insights.
 4. Permissions requested: `pages_show_list`, `pages_read_engagement`,
-   `read_insights`, `instagram_basic`, `instagram_manage_insights`,
-   `business_management`.
+   `pages_read_user_content` (comment/reaction counts on posts), `read_insights`,
+   `instagram_basic`, `instagram_manage_insights`, `business_management`.
+   Facebook Page *reach* is no longer served by the Graph API at all (Meta's
+   November 2025 cull); the dashboard shows it as n/a for Facebook.
 5. Each Instagram account must be a **Professional** account linked to its
    Facebook Page (Instagram app -> Settings -> Account -> Linked accounts).
    Both the Cardstreet and the Chopper & Kuma Pages/IG accounts can be

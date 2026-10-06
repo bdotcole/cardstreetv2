@@ -32,6 +32,8 @@ const DIALOG = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`;
 export const META_SCOPES = [
     'pages_show_list',
     'pages_read_engagement',
+    // Comment and reaction counts on Page posts are "user content" (added 2026-10-06).
+    'pages_read_user_content',
     'read_insights',
     'instagram_basic',
     'instagram_manage_insights',
