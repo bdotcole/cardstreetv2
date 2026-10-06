@@ -52,6 +52,14 @@
         },
         {
             "path": "/api/cron/pricecharting?game=pokemon",
+            "schedule": "0 9 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 9 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=pokemon",
             "schedule": "0 15 * * *"
         },
         {
