@@ -62,6 +62,14 @@ Each row may have `image_large`, `image_small`, and `raw_data` (full original AP
 
 TCGdex-sourced EN sets (e.g. me03, me04) rendered priceless for a while because only the first shape was read. The (retired) mobile mapper in `cardstreet-mobile/services/pokemonService.ts` had the same helper; syncing it is **no longer required** (the Expo app is deprecated — see the `cardstreet-mobile/` repo-layout note). To instead materialize TCGdex prices into `market_values` rows (needed for downstream Thai derivation), use `scripts/price-en-from-rawdata.mjs`.
 
+## Market prices: PriceCharting only (from 2026-10)
+
+PriceCharting (Legendary plan) is the single market-data vendor. JustTCG was cancelled at its ~2026-10-12 billing date; the JustTCG price history already in `price_snapshots` stays.
+
+- **Daily refresh:** `app/api/cron/pricecharting/route.ts` runs once per game (`?game=pokemon|yugioh|mtg|onepiece|lorcana|riftbound`, vercel.json entries spaced 20 minutes apart, plus afternoon catch-ups for the three big games). Each run downloads that game's bulk CSV (ONE request) and writes graded rows, the ungraded `Raw_NM` row from `loose-price`, and a `price_snapshots` change point whenever the Raw_NM price moves. Space CSV downloads out: PriceCharting returned a Cloudflare challenge after ~5 back-to-back downloads. Riftbound lives in the `other-tcg-cards` category; `riftbound-cards` returns the all-products fallback.
+- **Matching:** `pricecharting_map` (card_id -> PriceCharting product id). PriceCharting's set names don't match ours, so `scripts/ingest/pricecharting-bridge.mjs` links cards by TCGplayer product id (`pokemon_cards.tcgplayer_id` <-> the CSV's `tcg-id` column), with number/name and per-set guards. Never overwrite an existing map row from the bridge.
+- **Charts:** PriceCharting has no history API. Change points come from the pricecharting cron (vendor-priced cards) and `app/api/cron/price-snapshots/route.ts` (listed, sealed, Thai and sale-pinned cards).
+
 ## Card images (self-hosted)
 
 Card art used to be hotlinked from third-party hosts (TCGdex, ygoprodeck, Scryfall, optcgapi, asia.pokemon-card, pokemontcg.io). When TCGdex went fully unreachable in June 2026, most English Pokémon art blanked. Card images are now **mirrored into our own Supabase storage** so the catalog never depends on an upstream host being up.

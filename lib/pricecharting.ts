@@ -1,9 +1,9 @@
 /**
  * PriceCharting integration — shared, pure helpers (no env, no I/O).
  *
- * PriceCharting (Legendary plan) is our source for GRADED card prices and SEALED
- * product prices. Catalog + ungraded market prices still come from the per-game
- * sources + JustTCG; this only adds the graded/sealed layer.
+ * PriceCharting (Legendary plan) is our only market-data vendor from 2026-10:
+ * GRADED card prices, SEALED product prices, and the ungraded (Raw_NM) price from
+ * the bulk CSV's loose-price, which JustTCG used to supply.
  *
  * Used by the Next API/cron (TS). The standalone ingest (scripts/ingest/
  * pricecharting.mjs) intentionally re-declares the same constants inline because
@@ -53,6 +53,9 @@ export const PC_CATEGORY: Record<string, string> = {
   onepiece: 'one-piece-cards',
   'onepiece-jp': 'one-piece-cards',
   lorcana: 'lorcana-cards',
+  // No riftbound-cards category (that slug returns the 3DO fallback). Riftbound's
+  // consoles ("Riftbound Origins", ...) sit in the shared other-TCG category.
+  riftbound: 'other-tcg-cards',
 };
 
 /** Integer USD cents -> USD number (2dp). Returns null for missing/zero. */

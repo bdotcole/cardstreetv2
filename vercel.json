@@ -27,8 +27,40 @@
             "schedule": "*/5 * * * *"
         },
         {
-            "path": "/api/cron/pricecharting",
+            "path": "/api/cron/pricecharting?game=pokemon",
             "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=mtg",
+            "schedule": "40 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=onepiece",
+            "schedule": "0 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=lorcana",
+            "schedule": "20 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=riftbound",
+            "schedule": "40 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=pokemon",
+            "schedule": "0 15 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 15 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=mtg",
+            "schedule": "40 15 * * *"
         },
         {
             "path": "/api/cron/price-snapshots",
