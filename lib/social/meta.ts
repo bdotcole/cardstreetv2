@@ -113,7 +113,7 @@ export interface DiscoveredPage {
 /** Every Page the signed-in user has a role on, with its token and linked IG account. */
 export async function metaDiscoverPages(userToken: string): Promise<DiscoveredPage[]> {
     const out: DiscoveredPage[] = [];
-    let path = 'me/accounts';
+    const path = 'me/accounts';
     let params: Record<string, string> = {
         fields: 'id,name,access_token,link,picture{url},instagram_business_account{id,username,name,profile_picture_url}',
         limit: '50',

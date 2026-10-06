@@ -362,7 +362,7 @@ const LegendRow = ({ payload, line }: any) => (
 
 /** Direct label on the last point of each line — the legend carries the rest. */
 function endLabel(lastIndex: number) {
-    return (props: any) => {
+    return function EndLabel(props: any) {
         const { x, y, value, index } = props
         if (index !== lastIndex || value === null || value === undefined || typeof x !== 'number' || typeof y !== 'number') return null
         return (
