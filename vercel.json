@@ -113,6 +113,10 @@
         {
             "path": "/api/cron/launch-campaign",
             "schedule": "*/10 * * * *"
+        },
+        {
+            "path": "/api/cron/social-metrics",
+            "schedule": "30 1 * * *"
         }
     ]
 }

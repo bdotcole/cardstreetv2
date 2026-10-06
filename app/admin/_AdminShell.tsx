@@ -25,6 +25,7 @@ const NAV_SECTIONS: NavSection[] = [
             { href: '/admin/downloads', label: 'Download Analytics' },
         ],
     },
+    { label: 'Social', icon: 'fa-solid fa-share-nodes', pages: [{ href: '/admin/social', label: 'Social' }] },
     {
         label: 'Support', icon: 'fa-solid fa-headset', pages: [
             { href: '/admin/tickets', label: 'Tickets' },
