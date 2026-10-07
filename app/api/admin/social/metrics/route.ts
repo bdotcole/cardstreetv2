@@ -13,11 +13,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CONNECT_PROVIDERS, isGa4Configured, isProviderConfigured } from '@/lib/social/config';
-import { isoDay, shiftDay, SOCIAL_BRANDS, toPublicAccount, type SocialAccountRow, type SocialBrand } from '@/lib/social/types';
+import { brandForCampaign, isoDay, shiftDay, SOCIAL_BRANDS, toPublicAccount, type SocialAccountRow, type SocialBrand } from '@/lib/social/types';
 
 export const runtime = 'nodejs';
 
 const RANGES = new Set([7, 28, 90]);
+
+interface TrafficRow { day: string; platform: string; campaign: string; medium: string; sessions: number; users: number }
+
+/**
+ * Visits to cardstreet.app from social, for one brand: the utm_campaign on
+ * each row decides whose tab it belongs to (lib/social/types brandForCampaign).
+ * Before migration 20261007 the table has no campaign column; then every row
+ * is Cardstreet's and the pet channel shows none.
+ */
+async function siteTrafficForBrand(
+    supabase: ReturnType<typeof createAdminClient>, brand: SocialBrand, since: string, until: string,
+): Promise<{ rows: TrafficRow[]; error: string | null }> {
+    const full = await supabase.from('social_site_traffic_daily')
+        .select('day, platform, campaign, medium, sessions, users').gte('day', since).lte('day', until).order('day');
+    if (!full.error) {
+        return { rows: ((full.data ?? []) as TrafficRow[]).filter((r) => brandForCampaign(r.campaign) === brand), error: null };
+    }
+    if (!/campaign|medium/i.test(full.error.message)) return { rows: [], error: full.error.message };
+    if (brand !== 'cardstreet') return { rows: [], error: null };
+    const legacy = await supabase.from('social_site_traffic_daily')
+        .select('day, platform, sessions, users').gte('day', since).lte('day', until).order('day');
+    if (legacy.error) return { rows: [], error: legacy.error.message };
+    return { rows: (legacy.data ?? []).map((r: any) => ({ ...r, campaign: '', medium: '' })), error: null };
+}
 
 export async function GET(request: NextRequest) {
     const gate = await requireAdmin();
@@ -54,13 +78,12 @@ export async function GET(request: NextRequest) {
                 .select('account_id, external_id, published_at, caption, media_type, permalink, thumbnail_url, reach, views, likes, comments, shares, saves')
                 .in('account_id', ids).gte('published_at', `${prevSince}T00:00:00Z`).order('published_at', { ascending: false }).limit(200)
             : Promise.resolve({ data: [], error: null }),
-        brand === 'cardstreet'
-            ? supabase.from('social_site_traffic_daily').select('day, platform, sessions, users').gte('day', prevSince).lte('day', until).order('day')
-            : Promise.resolve({ data: [], error: null }),
+        siteTrafficForBrand(supabase, brand, prevSince, until),
     ]);
-    for (const r of [dailyRes, postsRes, trafficRes]) {
+    for (const r of [dailyRes, postsRes]) {
         if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
     }
+    if (trafficRes.error) return NextResponse.json({ error: trafficRes.error }, { status: 500 });
 
     return NextResponse.json({
         brand,
@@ -68,7 +91,7 @@ export async function GET(request: NextRequest) {
         accounts: accounts.map(toPublicAccount),
         daily: dailyRes.data ?? [],
         posts: postsRes.data ?? [],
-        siteTraffic: trafficRes.data ?? [],
+        siteTraffic: trafficRes.rows,
         providers: Object.fromEntries(CONNECT_PROVIDERS.map((p) => [p, isProviderConfigured(p)])),
         ga4: isGa4Configured(),
     });

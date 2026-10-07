@@ -177,6 +177,35 @@ re-pulls the visible range on demand.
 - Everything is service-role only (RLS on, no policies); the browser never
   receives a token, only `has_token`.
 
+## Link clicks and the tracked short links (added 2026-10-07)
+
+"Link clicks" on the dashboard = GA4 sessions on cardstreet.app credited to a
+platform, for the brand whose link was tapped. Meta's own "profile taps"
+(profile-link / Page-button taps) are shown separately and only exist for
+Facebook and Instagram.
+
+The short links (`lib/social/shortLinks.ts` data, `lib/socialLinks.ts` +
+`app/{ig,fb,yt,tt}/route.ts`, `app/ck/[slug]/route.ts` redirects) tag every
+visit with `utm_source` (platform), `utm_medium` (where the link sat) and
+`utm_campaign` (the brand — `cardstreet` or `chopperkuma`,
+`lib/social/types.ts:BRAND_CAMPAIGN`). GA4 ranks `utm_source` above the
+referrer, so a tap from Instagram's in-app browser is still credited.
+
+| Paste where | Cardstreet | Chopper & Kuma |
+|---|---|---|
+| Instagram bio | `cardstreet.app/ig` | `cardstreet.app/ck/ig` |
+| Facebook Page button / About | `cardstreet.app/fb` | `cardstreet.app/ck/fb` |
+| YouTube channel link + descriptions | `cardstreet.app/yt` | `cardstreet.app/ck/yt` |
+| TikTok bio | `cardstreet.app/tt` | `cardstreet.app/ck/tt` |
+
+Add `?utm_medium=story` (post, ad, ...) to any of them for a one-off placement.
+Untagged referrals (someone shares a plain cardstreet.app link on Facebook)
+still count — as Cardstreet's, under medium "referral".
+
+`social_site_traffic_daily` is keyed by `(day, platform, campaign, medium)`
+since migration `20261007_social_link_clicks.sql`; the sync and the metrics
+route fall back to the old `(day, platform)` shape until it runs.
+
 ## Known limits
 
 - TikTok reach / profile views / link clicks: not in the Display API. The

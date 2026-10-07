@@ -89,13 +89,31 @@ export async function syncSocialAccounts(opts: {
             try {
                 const rows = await fetchSocialSiteTraffic(window);
                 if (rows.length) {
+                    const stamp = new Date().toISOString();
                     const { error: e } = await supabase.from('social_site_traffic_daily').upsert(
-                        rows.map((r) => ({ ...r, synced_at: new Date().toISOString() })),
-                        { onConflict: 'day,platform' },
+                        rows.map((r) => ({ ...r, synced_at: stamp })),
+                        { onConflict: 'day,platform,campaign,medium' },
                     );
-                    if (e) throw new Error(e.message);
+                    if (e) {
+                        // Before migration 20261007 the table is keyed by day+platform only: fold the
+                        // campaign/medium split back together so the number still lands.
+                        if (!/campaign|medium/i.test(e.message)) throw new Error(e.message);
+                        const folded = new Map<string, { day: string; platform: string; sessions: number; users: number }>();
+                        for (const r of rows) {
+                            const cur = folded.get(`${r.day}|${r.platform}`) ?? { day: r.day, platform: r.platform, sessions: 0, users: 0 };
+                            cur.sessions += r.sessions;
+                            cur.users += r.users;
+                            folded.set(`${r.day}|${r.platform}`, cur);
+                        }
+                        const { error: e2 } = await supabase.from('social_site_traffic_daily').upsert(
+                            [...folded.values()].map((r) => ({ ...r, synced_at: stamp })),
+                            { onConflict: 'day,platform' },
+                        );
+                        if (e2) throw new Error(e2.message);
+                        siteTraffic = { ok: true, rows: folded.size, error: 'per-link split needs migration 20261007_social_link_clicks.sql' };
+                    }
                 }
-                siteTraffic = { ok: true, rows: rows.length };
+                if (!siteTraffic.error) siteTraffic = { ok: true, rows: rows.length };
             } catch (e) {
                 siteTraffic = { ok: false, rows: 0, error: e instanceof Error ? e.message : String(e) };
             }

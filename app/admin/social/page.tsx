@@ -5,6 +5,7 @@ import {
     BarChart, Bar, LineChart, Line, LabelList,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { SHORT_LINKS, shortLinkPath } from '@/lib/social/shortLinks'
 
 /**
  * Admin -> Social: reach, followers, views, link clicks and top posts for the
@@ -102,7 +103,8 @@ interface PostRow {
     saves: number | null
 }
 
-interface TrafficRow { day: string; platform: Platform; sessions: number; users: number }
+// One row per day x platform x campaign x medium; the server already filtered to this brand's campaigns.
+interface TrafficRow { day: string; platform: Platform; campaign?: string; medium?: string; sessions: number; users: number }
 
 interface MetricsPayload {
     brand: Brand
@@ -173,6 +175,10 @@ interface PlatformSummary {
     followersDelta: number | null
     totals: Record<WindowMetric, number | null>
     prevTotals: Record<WindowMetric, number | null>
+    /** Tracked link clicks = GA4 sessions on cardstreet.app credited to this platform (this brand's links). */
+    siteClicks: number
+    siteClicksPrev: number
+    siteClicksByMedium: Record<string, number>
     postsInWindow: number
     lastSynced: string | null
     errors: string[]
@@ -186,12 +192,16 @@ interface Aggregate {
     clicksPerDay: Array<Record<string, number | string | null>>
     trafficPerDay: Array<Record<string, number | string | null>>
     platforms: PlatformSummary[]
+    /** Platforms with tracked clicks but no connected account (TikTok today). */
+    linkClicksByPlatform: Record<Platform, { now: number; prev: number; byMedium: Record<string, number> }>
     kpi: {
         followers: { now: number | null; delta: number | null; prevDelta: number | null }
         reach: { now: number | null; prev: number | null }
         views: { now: number | null; prev: number | null }
-        clicks: { now: number | null; prev: number | null }
-        siteSessions: { now: number | null; prev: number | null }
+        /** Tracked link clicks (GA4), every platform. */
+        clicks: { now: number; prev: number }
+        /** Meta's own profile-link / CTA taps (Facebook + Instagram). */
+        taps: { now: number | null; prev: number | null }
         engagements: { now: number | null; prev: number | null }
     }
     topPosts: (PostRow & { platform: Platform; accountLabel: string })[]
@@ -234,6 +244,20 @@ function aggregate(p: MetricsPayload): Aggregate {
         followersByAccountDay.set(accountId, filled)
     }
 
+    // Tracked link clicks per platform, from GA4 rows (already this brand's campaigns only).
+    const linkClicksByPlatform = Object.fromEntries(PLATFORMS.map((pl) => [pl, { now: 0, prev: 0, byMedium: {} as Record<string, number> }])) as Aggregate['linkClicksByPlatform']
+    for (const t of p.siteTraffic) {
+        const slot = linkClicksByPlatform[t.platform]
+        if (!slot) continue
+        if (inWindow(t.day)) {
+            slot.now += t.sessions
+            const medium = t.medium || 'untagged'
+            slot.byMedium[medium] = (slot.byMedium[medium] || 0) + t.sessions
+        } else if (inPrev(t.day)) {
+            slot.prev += t.sessions
+        }
+    }
+
     const platforms: PlatformSummary[] = PLATFORMS.map((platform) => {
         const accounts = p.accounts.filter((a) => a.platform === platform)
         const rows = p.daily.filter((r) => accountsById.get(r.account_id)?.platform === platform)
@@ -261,6 +285,9 @@ function aggregate(p: MetricsPayload): Aggregate {
             followersDelta,
             totals,
             prevTotals,
+            siteClicks: linkClicksByPlatform[platform].now,
+            siteClicksPrev: linkClicksByPlatform[platform].prev,
+            siteClicksByMedium: linkClicksByPlatform[platform].byMedium,
             postsInWindow: p.posts.filter((post) => accountsById.get(post.account_id)?.platform === platform && post.published_at && inWindow(post.published_at.slice(0, 10))).length,
             lastSynced: accounts.map((a) => a.last_synced_at).filter(Boolean).sort().pop() ?? null,
             errors: accounts.map((a) => a.last_sync_error).filter((e): e is string => Boolean(e)),
@@ -280,18 +307,17 @@ function aggregate(p: MetricsPayload): Aggregate {
         return point
     })
 
+    // Several rows per day and platform now (one per campaign x medium) — sum them.
     const trafficPerDay = days.map((day) => {
         const point: Record<string, number | string | null> = { day }
-        for (const pl of PLATFORMS) {
-            const row = p.siteTraffic.find((t) => t.day === day && t.platform === pl)
-            point[pl] = row ? row.sessions : 0
-        }
+        for (const pl of PLATFORMS) point[pl] = 0
+        for (const t of p.siteTraffic) if (t.day === day && t.platform in linkClicksByPlatform) point[t.platform] = (point[t.platform] as number) + t.sessions
         return point
     })
 
     const kpiSum = (metric: WindowMetric, which: 'totals' | 'prevTotals') => sumNullable(platforms.map((s) => s[which][metric]))
-    const siteNow = p.siteTraffic.filter((t) => inWindow(t.day)).reduce((a, t) => a + t.sessions, 0)
-    const sitePrev = p.siteTraffic.filter((t) => inPrev(t.day)).reduce((a, t) => a + t.sessions, 0)
+    const siteNow = PLATFORMS.reduce((a, pl) => a + linkClicksByPlatform[pl].now, 0)
+    const sitePrev = PLATFORMS.reduce((a, pl) => a + linkClicksByPlatform[pl].prev, 0)
     const prevFollowerDelta = sumNullable(p.daily.filter((r) => inPrev(r.day)).map((r) => r.follower_delta))
 
     const topPosts = p.posts
@@ -311,12 +337,13 @@ function aggregate(p: MetricsPayload): Aggregate {
         clicksPerDay: seriesFor('link_clicks'),
         trafficPerDay,
         platforms,
+        linkClicksByPlatform,
         kpi: {
             followers: { now: sumNullable(platforms.map((s) => s.followersNow)), delta: sumNullable(platforms.map((s) => s.followersDelta)), prevDelta: prevFollowerDelta },
             reach: { now: kpiSum('reach', 'totals'), prev: kpiSum('reach', 'prevTotals') },
             views: { now: kpiSum('views', 'totals'), prev: kpiSum('views', 'prevTotals') },
-            clicks: { now: kpiSum('link_clicks', 'totals'), prev: kpiSum('link_clicks', 'prevTotals') },
-            siteSessions: { now: p.brand === 'cardstreet' ? siteNow : null, prev: p.brand === 'cardstreet' ? sitePrev : null },
+            clicks: { now: siteNow, prev: sitePrev },
+            taps: { now: kpiSum('link_clicks', 'totals'), prev: kpiSum('link_clicks', 'prevTotals') },
             engagements: { now: kpiSum('engagements', 'totals'), prev: kpiSum('engagements', 'prevTotals') },
         },
         topPosts,
@@ -720,27 +747,20 @@ export default function AdminSocialPage() {
                                     deltaLabel="vs previous period" sub={windowLabel}
                                 />
                                 <StatTile
-                                    label="Link clicks" value={compact(agg.kpi.clicks.now)}
-                                    delta={agg.kpi.clicks.now !== null && agg.kpi.clicks.prev !== null ? pct(agg.kpi.clicks.now, agg.kpi.clicks.prev) : null}
-                                    deltaLabel="vs previous period" sub="profile link + CTA taps (FB, IG)"
+                                    label="Link clicks" value={data?.ga4 ? compact(agg.kpi.clicks.now) : 'n/a'}
+                                    delta={data?.ga4 && agg.kpi.clicks.prev ? pct(agg.kpi.clicks.now, agg.kpi.clicks.prev) : null}
+                                    deltaLabel="vs previous period"
+                                    sub={data?.ga4 ? `visits to cardstreet.app from ${brandLabel}'s links` : 'GA4 key not set on the server'}
                                 />
-                                {brand === 'cardstreet' ? (
-                                    <StatTile
-                                        label="Site visits from social" value={data?.ga4 ? compact(agg.kpi.siteSessions.now) : 'n/a'}
-                                        delta={data?.ga4 && agg.kpi.siteSessions.now !== null && agg.kpi.siteSessions.prev ? pct(agg.kpi.siteSessions.now, agg.kpi.siteSessions.prev) : null}
-                                        deltaLabel="vs previous period" sub={data?.ga4 ? 'GA4 sessions, cardstreet.app' : 'GA4 key not set on the server'}
-                                    />
-                                ) : (
-                                    <StatTile
-                                        label="Engagements" value={compact(agg.kpi.engagements.now)}
-                                        delta={agg.kpi.engagements.now !== null && agg.kpi.engagements.prev !== null ? pct(agg.kpi.engagements.now, agg.kpi.engagements.prev) : null}
-                                        deltaLabel="vs previous period" sub="likes + comments + shares + saves"
-                                    />
-                                )}
+                                <StatTile
+                                    label="Engagements" value={compact(agg.kpi.engagements.now)}
+                                    delta={agg.kpi.engagements.now !== null && agg.kpi.engagements.prev !== null ? pct(agg.kpi.engagements.now, agg.kpi.engagements.prev) : null}
+                                    deltaLabel="vs previous period" sub="likes + comments + shares + saves"
+                                />
                             </div>
 
                             {tableView ? (
-                                <DailyTable agg={agg} brand={brand} />
+                                <DailyTable agg={agg} />
                             ) : (
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                     <FollowersChart agg={agg} />
@@ -756,31 +776,28 @@ export default function AdminSocialPage() {
                                         platforms={agg.platforms.map((s) => s.platform).filter((pl) => REPORTS[pl].reach)}
                                         empty={agg.platforms.some((s) => REPORTS[s.platform].reach) ? (agg.reachPerDay.every((d) => PLATFORMS.every((pl) => d[pl] === null || d[pl] === undefined)) ? 'No reach recorded in this window yet.' : null) : 'Only Instagram still reports reach; Meta retired Page reach and YouTube never had it.'}
                                     />
-                                    {brand === 'cardstreet' ? (
-                                        <StackedBars
-                                            title="Visits to cardstreet.app from social" sub="GA4 sessions by referring platform"
-                                            data={agg.trafficPerDay}
-                                            platforms={PLATFORMS.filter((pl) => agg.platforms.some((s) => s.platform === pl) || agg.trafficPerDay.some((d) => Number(d[pl]) > 0))}
-                                            empty={!data?.ga4 ? 'Add GA4_PROPERTY_ID + GA4_SA_KEY_JSON on the server to see which platform sends visitors.' : (agg.trafficPerDay.every((d) => PLATFORMS.every((pl) => !d[pl])) ? 'No social-referred sessions in this window.' : null)}
-                                        />
-                                    ) : (
-                                        <LinesChart
-                                            title="Link clicks per day" sub="profile link + CTA taps (Facebook, Instagram)"
-                                            data={agg.clicksPerDay}
-                                            platforms={agg.platforms.map((s) => s.platform).filter((pl) => REPORTS[pl].link_clicks)}
-                                            empty={agg.platforms.some((s) => REPORTS[s.platform].link_clicks) ? (agg.clicksPerDay.every((d) => PLATFORMS.every((pl) => d[pl] === null || d[pl] === undefined)) ? 'No link taps recorded in this window yet.' : null) : 'Only Facebook and Instagram report link taps.'}
-                                        />
-                                    )}
+                                    <StackedBars
+                                        title="Link clicks per day" sub={`visits to cardstreet.app from ${brandLabel}'s links, by platform`}
+                                        data={agg.trafficPerDay}
+                                        platforms={PLATFORMS.filter((pl) => agg.platforms.some((s) => s.platform === pl) || agg.trafficPerDay.some((d) => Number(d[pl]) > 0))}
+                                        empty={!data?.ga4
+                                            ? 'Add GA4_PROPERTY_ID + GA4_SA_KEY_JSON on the server to count link clicks.'
+                                            : (agg.trafficPerDay.every((d) => PLATFORMS.every((pl) => !d[pl]))
+                                                ? `No clicks yet — put the ${brandLabel} short links (below) in the bios.`
+                                                : null)}
+                                    />
                                 </div>
                             )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                                {agg.platforms.map((s) => <PlatformCard key={s.platform} s={s} windowLabel={windowLabel} />)}
+                                {agg.platforms.map((s) => <PlatformCard key={s.platform} s={s} windowLabel={windowLabel} ga4={Boolean(data?.ga4)} />)}
                             </div>
 
                             <TopPosts posts={agg.topPosts} windowLabel={windowLabel} />
                         </>
                     )}
+
+                    <TrackedLinks brand={brand} brandLabel={brandLabel} agg={agg} ga4={Boolean(data?.ga4)} windowLabel={windowLabel} />
 
                     <Connections
                         brand={brand}
@@ -797,7 +814,7 @@ export default function AdminSocialPage() {
     )
 }
 
-function PlatformCard({ s, windowLabel }: { s: PlatformSummary; windowLabel: string }) {
+function PlatformCard({ s, windowLabel, ga4 }: { s: PlatformSummary; windowLabel: string; ga4: boolean }) {
     const a = s.accounts[0]
     const Row = ({ label, value }: { label: string; value: number | null }) => (
         <div className="flex items-center justify-between text-xs">
@@ -839,7 +856,13 @@ function PlatformCard({ s, windowLabel }: { s: PlatformSummary; windowLabel: str
             <div className="space-y-1 border-t border-white/5 pt-3">
                 <Row label={`Reach, ${windowLabel}`} value={s.totals.reach} />
                 <Row label="Views" value={s.totals.views} />
-                <Row label="Link clicks" value={s.totals.link_clicks} />
+                <Row label="Link clicks" value={ga4 ? s.siteClicks : null} />
+                {ga4 && Object.keys(s.siteClicksByMedium).length > 0 && (
+                    <p className="text-[10px] text-slate-600 text-right -mt-0.5">
+                        {Object.entries(s.siteClicksByMedium).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${m} ${n.toLocaleString()}`).join(' · ')}
+                    </p>
+                )}
+                <Row label="Profile taps" value={s.totals.link_clicks} />
                 <Row label="Engagements" value={s.totals.engagements} />
                 <Row label="Posts" value={s.postsInWindow} />
             </div>
@@ -915,9 +938,65 @@ function TopPosts({ posts, windowLabel }: { posts: Aggregate['topPosts']; window
     )
 }
 
+/**
+ * Tracked short links for this brand, with the clicks each one brought in.
+ * Copy-ready: these are what go in the bios. TikTok is listed even without a
+ * connected account — its clicks are counted by GA4 regardless.
+ */
+function TrackedLinks({ brand, brandLabel, agg, ga4, windowLabel }: { brand: Brand; brandLabel: string; agg: Aggregate; ga4: boolean; windowLabel: string }) {
+    const [copied, setCopied] = useState<string | null>(null)
+    const host = typeof window !== 'undefined' ? window.location.host : 'cardstreet.app'
+    const copy = async (url: string) => {
+        try {
+            await navigator.clipboard.writeText(url)
+            setCopied(url)
+            setTimeout(() => setCopied((c) => (c === url ? null : c)), 1500)
+        } catch {
+            setCopied(null)
+        }
+    }
+    return (
+        <div className="glass rounded-2xl border border-white/10 p-5">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+                <h2 className="text-sm font-black text-white">Tracked links — {brandLabel}</h2>
+                <p className="text-[10px] text-slate-500">paste these in the bios; clicks land in "Link clicks" by platform</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {SHORT_LINKS.map((l) => {
+                    const url = `https://${host}${shortLinkPath(brand, l.slug)}`
+                    const clicks = agg.linkClicksByPlatform[l.source]
+                    return (
+                        <div key={l.slug} className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2">
+                            <PlatformKey platform={l.source} />
+                            <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-white font-mono truncate">{url.replace(/^https:\/\//, '')}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{l.placement}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                                <p className="text-sm font-black text-white tabular-nums">{ga4 ? clicks.now.toLocaleString() : 'n/a'}</p>
+                                <p className="text-[9px] text-slate-600">clicks, {windowLabel}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => copy(url)}
+                                className="px-2 py-1 text-[10px] font-bold text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg hover:bg-brand-cyan/20 transition shrink-0"
+                            >
+                                {copied === url ? 'Copied' : 'Copy'}
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+            <p className="text-[10px] text-slate-600 mt-3">
+                Each link opens cardstreet.app tagged with the platform, where it sat, and the brand, so a click is credited here even when the app's browser hides the referrer. Add <code className="font-mono">?utm_medium=story</code> (or post, ad) to a link for a one-off placement.
+            </p>
+        </div>
+    )
+}
+
 /** The charts' table twin: one row per day per platform. */
-function DailyTable({ agg, brand }: { agg: Aggregate; brand: Brand }) {
-    const rows: { day: string; platform: Platform; followers: number | null; reach: number | null; views: number | null; clicks: number | null; site: number | null }[] = []
+function DailyTable({ agg }: { agg: Aggregate }) {
+    const rows: { day: string; platform: Platform; followers: number | null; reach: number | null; views: number | null; clicks: number | null; taps: number | null }[] = []
     for (let i = agg.days.length - 1; i >= 0; i--) {
         const day = agg.days[i]
         for (const s of agg.platforms) {
@@ -927,8 +1006,8 @@ function DailyTable({ agg, brand }: { agg: Aggregate; brand: Brand }) {
                 followers: (agg.perDay[i][s.platform] as number | null) ?? null,
                 reach: REPORTS[s.platform].reach ? (agg.reachPerDay[i][s.platform] as number | null) ?? null : null,
                 views: (agg.viewsPerDay[i][s.platform] as number | null) ?? null,
-                clicks: REPORTS[s.platform].link_clicks ? (agg.clicksPerDay[i][s.platform] as number | null) ?? null : null,
-                site: brand === 'cardstreet' ? (agg.trafficPerDay[i][s.platform] as number | null) ?? null : null,
+                clicks: (agg.trafficPerDay[i][s.platform] as number | null) ?? null,
+                taps: REPORTS[s.platform].link_clicks ? (agg.clicksPerDay[i][s.platform] as number | null) ?? null : null,
             })
         }
     }
@@ -947,7 +1026,7 @@ function DailyTable({ agg, brand }: { agg: Aggregate; brand: Brand }) {
                         <th className="py-2 px-3 font-black text-right">Reach</th>
                         <th className="py-2 px-3 font-black text-right">Views</th>
                         <th className="py-2 px-3 font-black text-right">Link clicks</th>
-                        {brand === 'cardstreet' && <th className="py-2 px-3 font-black text-right">Site visits</th>}
+                        <th className="py-2 px-3 font-black text-right">Profile taps</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -955,8 +1034,7 @@ function DailyTable({ agg, brand }: { agg: Aggregate; brand: Brand }) {
                         <tr key={`${r.day}:${r.platform}`}>
                             <td className="py-1.5 px-3 text-slate-300 tabular-nums">{r.day}</td>
                             <td className="py-1.5 px-3 text-slate-300"><span className="flex items-center gap-1.5"><PlatformKey platform={r.platform} />{PLATFORM_LABEL[r.platform]}</span></td>
-                            {cell(r.followers)}{cell(r.reach)}{cell(r.views)}{cell(r.clicks)}
-                            {brand === 'cardstreet' && cell(r.site)}
+                            {cell(r.followers)}{cell(r.reach)}{cell(r.views)}{cell(r.clicks)}{cell(r.taps)}
                         </tr>
                     ))}
                 </tbody>
@@ -1084,8 +1162,8 @@ function Connections({ brand, accounts, providers, ga4, busy, onPatch, onDisconn
                 })}
             </div>
             <p className="text-[10px] text-slate-600">
-                Site visits from social: {ga4 ? 'GA4 connected (sessions by referring platform, Cardstreet only).' : 'GA4 key not on the server — add GA4_PROPERTY_ID and GA4_SA_KEY_JSON to see which platform sends visitors to cardstreet.app.'}
-                {' '}YouTube does not expose reach, profile views or link clicks through its API; those read n/a by design. TikTok is parked for now.
+                Link clicks: {ga4 ? 'counted by GA4 from the tracked links above, per platform and per brand.' : 'GA4 key not on the server — add GA4_PROPERTY_ID and GA4_SA_KEY_JSON to count clicks on the tracked links.'}
+                {' '}"Profile taps" is Meta's own count of taps on the profile link and Page buttons (Facebook, Instagram only). YouTube does not expose reach or profile views through its API; those read n/a by design. TikTok is parked for now.
             </p>
         </div>
     )

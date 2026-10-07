@@ -26,6 +26,23 @@ export const PLATFORM_LABELS: Record<SocialPlatform, string> = {
     tiktok: 'TikTok',
 };
 
+/**
+ * utm_campaign value that files a visit to cardstreet.app under a brand.
+ * Cardstreet is the site's own brand, so anything untagged or tagged with an
+ * unknown campaign is Cardstreet's; only an explicit pet-channel campaign
+ * moves a visit to the Chopper & Kuma tab.
+ */
+export const BRAND_CAMPAIGN: Record<SocialBrand, string> = {
+    cardstreet: 'cardstreet',
+    chopper_kuma: 'chopperkuma',
+};
+
+export function brandForCampaign(campaign: string | null | undefined): SocialBrand {
+    const c = (campaign ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (c === 'chopperkuma' || c === 'chopperandkuma' || c === 'ck') return 'chopper_kuma';
+    return 'cardstreet';
+}
+
 /** A social_accounts row as the server reads it (tokens included). */
 export interface SocialAccountRow {
     id: string;

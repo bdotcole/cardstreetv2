@@ -102,7 +102,26 @@ export function platformFromSource(source: string): SocialPlatform | null {
     return null;
 }
 
-export interface SiteTrafficRow { day: string; platform: SocialPlatform; sessions: number; users: number }
+/**
+ * One row per day x platform x campaign x medium. campaign is the utm_campaign
+ * ('' when untagged — a plain referral), which decides the brand; medium is
+ * the utm_medium ('' when none, 'referral' for an untagged referral), which
+ * says where the link sat (bio / page / video / story).
+ */
+export interface SiteTrafficRow {
+    day: string;
+    platform: SocialPlatform;
+    campaign: string;
+    medium: string;
+    sessions: number;
+    users: number;
+}
+
+const GA_UNSET = new Set(['(not set)', '(none)', '(direct)']);
+function clean(v: string | undefined): string {
+    const s = (v ?? '').trim();
+    return GA_UNSET.has(s.toLowerCase()) ? '' : s.toLowerCase();
+}
 
 export async function fetchSocialSiteTraffic(window: SyncWindow): Promise<SiteTrafficRow[]> {
     const property = process.env.GA4_PROPERTY_ID;
@@ -113,7 +132,7 @@ export async function fetchSocialSiteTraffic(window: SyncWindow): Promise<SiteTr
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             dateRanges: [{ startDate: window.since, endDate: window.until }],
-            dimensions: [{ name: 'date' }, { name: 'sessionSource' }],
+            dimensions: [{ name: 'date' }, { name: 'sessionSource' }, { name: 'sessionCampaignName' }, { name: 'sessionMedium' }],
             metrics: [{ name: 'sessions' }, { name: 'totalUsers' }],
             dimensionFilter: {
                 filter: {
@@ -136,8 +155,10 @@ export async function fetchSocialSiteTraffic(window: SyncWindow): Promise<SiteTr
         const platform = platformFromSource(source);
         if (!platform || ymd.length !== 8) continue;
         const day = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
-        const key = `${day}|${platform}`;
-        const cur = acc.get(key) ?? { day, platform, sessions: 0, users: 0 };
+        const campaign = clean(row.dimensionValues?.[2]?.value);
+        const medium = clean(row.dimensionValues?.[3]?.value);
+        const key = `${day}|${platform}|${campaign}|${medium}`;
+        const cur = acc.get(key) ?? { day, platform, campaign, medium, sessions: 0, users: 0 };
         cur.sessions += toInt(row.metricValues?.[0]?.value) ?? 0;
         cur.users += toInt(row.metricValues?.[1]?.value) ?? 0;
         acc.set(key, cur);
