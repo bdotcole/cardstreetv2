@@ -24,6 +24,7 @@ import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
+import GetAppPrompt from '@/components/GetAppPrompt';
 import SignupTracker from '@/components/SignupTracker';
 import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
 import { readAttributionCookie, unknownAttribution, withWriter } from '@/lib/attribution';
@@ -2419,6 +2420,9 @@ export default function HomePage() {
             {/* Failed email-verification links land here with a #error hash
                 that would otherwise be silently ignored. */}
             <AuthLinkErrorNotice />
+            {/* Phone visitors arriving from a social link are offered the app
+                (store picked by device); never shown inside the native shell. */}
+            <GetAppPrompt />
             {/* Fires the GA4 sign_up event for OAuth accounts (see the
                 cs_new_account marker set in /api/auth/callback). */}
             <SignupTracker />

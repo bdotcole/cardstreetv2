@@ -368,6 +368,13 @@
         "body": "Purchases are currently available only in Thailand while we set up shipping in your area. You can still browse the marketplace and build your collection — buying is coming soon to your country.",
         "gotIt": "Got it"
     },
+    "getApp": {
+        "title": "Cardstreet is better in the app",
+        "body": "Scan cards with your camera, get price alerts, and buy and sell faster. Free on your phone.",
+        "appStore": "Download on the App Store",
+        "playStore": "Get it on Google Play",
+        "continueWeb": "Continue on the web"
+    },
     "checkoutAddress": {
         "title": "Shipping details",
         "subtitle": "The courier needs a delivery address and phone number before checkout. Saved to your profile — you only do this once.",

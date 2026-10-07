@@ -208,6 +208,18 @@ Add `?utm_medium=story` (post, ad, ...) to any of them for a one-off placement.
 Untagged referrals (someone shares a plain cardstreet.app link on Facebook)
 still count, under medium "referral".
 
+**Get-the-app popup** (`components/GetAppPrompt.tsx`, mounted in the mobile
+shell): a phone visitor arriving with a social `utm_source` is offered the
+app after the page paints — App Store on iPhone/iPad, Play Store on Android,
+chosen from the user agent in the browser. Never shown inside the Capacitor
+shell or on desktop; "Continue on the web" or a store tap snoozes it for 7
+days on that device. The store links carry the source as an install tag
+(Play install referrer `utm_source=<platform>&utm_medium=<placement>`,
+App Store `?ct=<platform>_<placement>`), and GA4 gets a `get_app_prompt`
+event with `action` shown / store / dismiss. Founder's call (2026-10-07): the
+links themselves stay web-first so every tap is tracked; the popup carries
+the install push.
+
 `social_site_traffic_daily` is keyed by `(day, platform, campaign, medium)`
 since migration `20261007_social_link_clicks.sql`; the sync and the metrics
 route fall back to the old `(day, platform)` shape until it runs.
