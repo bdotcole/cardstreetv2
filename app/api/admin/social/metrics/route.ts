@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CONNECT_PROVIDERS, isGa4Configured, isProviderConfigured } from '@/lib/social/config';
-import { brandForCampaign, isoDay, shiftDay, SOCIAL_BRANDS, toPublicAccount, type SocialAccountRow, type SocialBrand } from '@/lib/social/types';
+import { isoDay, shiftDay, SITE_BRAND, SOCIAL_BRANDS, toPublicAccount, type SocialAccountRow, type SocialBrand } from '@/lib/social/types';
 
 export const runtime = 'nodejs';
 
@@ -22,21 +22,18 @@ const RANGES = new Set([7, 28, 90]);
 interface TrafficRow { day: string; platform: string; campaign: string; medium: string; sessions: number; users: number }
 
 /**
- * Visits to cardstreet.app from social, for one brand: the utm_campaign on
- * each row decides whose tab it belongs to (lib/social/types brandForCampaign).
- * Before migration 20261007 the table has no campaign column; then every row
- * is Cardstreet's and the pet channel shows none.
+ * Visits to cardstreet.app from social — Cardstreet's alone (the pet channel
+ * never links to the site). Split by campaign + medium since migration
+ * 20261007; before it the table is keyed by day + platform only.
  */
 async function siteTrafficForBrand(
     supabase: ReturnType<typeof createAdminClient>, brand: SocialBrand, since: string, until: string,
 ): Promise<{ rows: TrafficRow[]; error: string | null }> {
+    if (brand !== SITE_BRAND) return { rows: [], error: null };
     const full = await supabase.from('social_site_traffic_daily')
         .select('day, platform, campaign, medium, sessions, users').gte('day', since).lte('day', until).order('day');
-    if (!full.error) {
-        return { rows: ((full.data ?? []) as TrafficRow[]).filter((r) => brandForCampaign(r.campaign) === brand), error: null };
-    }
+    if (!full.error) return { rows: (full.data ?? []) as TrafficRow[], error: null };
     if (!/campaign|medium/i.test(full.error.message)) return { rows: [], error: full.error.message };
-    if (brand !== 'cardstreet') return { rows: [], error: null };
     const legacy = await supabase.from('social_site_traffic_daily')
         .select('day, platform, sessions, users').gte('day', since).lte('day', until).order('day');
     if (legacy.error) return { rows: [], error: legacy.error.message };

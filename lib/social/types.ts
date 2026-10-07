@@ -27,21 +27,11 @@ export const PLATFORM_LABELS: Record<SocialPlatform, string> = {
 };
 
 /**
- * utm_campaign value that files a visit to cardstreet.app under a brand.
- * Cardstreet is the site's own brand, so anything untagged or tagged with an
- * unknown campaign is Cardstreet's; only an explicit pet-channel campaign
- * moves a visit to the Chopper & Kuma tab.
+ * Visits to cardstreet.app belong to Cardstreet alone. The Chopper & Kuma pet
+ * channel is unrelated to the site and never links here, so its "link
+ * clicks" are the platforms' own profile-link taps, not GA4 sessions.
  */
-export const BRAND_CAMPAIGN: Record<SocialBrand, string> = {
-    cardstreet: 'cardstreet',
-    chopper_kuma: 'chopperkuma',
-};
-
-export function brandForCampaign(campaign: string | null | undefined): SocialBrand {
-    const c = (campaign ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (c === 'chopperkuma' || c === 'chopperandkuma' || c === 'ck') return 'chopper_kuma';
-    return 'cardstreet';
-}
+export const SITE_BRAND: SocialBrand = 'cardstreet';
 
 /** A social_accounts row as the server reads it (tokens included). */
 export interface SocialAccountRow {

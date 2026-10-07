@@ -6,5 +6,5 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export function GET(request: NextRequest) {
-    return shortLinkResponse('fb', 'cardstreet', request);
+    return shortLinkResponse('fb', request);
 }

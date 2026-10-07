@@ -1,10 +1,13 @@
 /**
- * The tracked short links, as data — shared by the redirect routes
+ * Cardstreet's tracked short links, as data — shared by the redirect routes
  * (lib/socialLinks.ts, server) and the Social dashboard (client), which is
  * why nothing here imports from next/server or any server-only module.
+ *
+ * Cardstreet only: the Chopper & Kuma pet channel is unrelated to the site
+ * and never links here, so it has no short links and no site attribution.
  */
 
-import type { SocialBrand, SocialPlatform } from './types';
+import type { SocialPlatform } from './types';
 
 export interface ShortLink {
     slug: string;
@@ -21,15 +24,9 @@ export const SHORT_LINKS: ShortLink[] = [
     { slug: 'tt', source: 'tiktok', medium: 'bio', placement: 'TikTok bio' },
 ];
 
-/** URL path prefix per brand: Cardstreet owns the root slugs, the pet channel sits under /ck. */
-export const BRAND_LINK_PREFIX: Record<SocialBrand, string> = {
-    cardstreet: '',
-    chopper_kuma: '/ck',
-};
-
-/** "/ig" or "/ck/ig" — the path part of the short link. */
-export function shortLinkPath(brand: SocialBrand, slug: string): string {
-    return `${BRAND_LINK_PREFIX[brand]}/${slug}`;
+/** "/ig" — the path part of the short link. */
+export function shortLinkPath(slug: string): string {
+    return `/${slug}`;
 }
 
 export function shortLinkFor(slug: string): ShortLink | null {

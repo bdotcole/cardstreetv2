@@ -179,28 +179,34 @@ re-pulls the visible range on demand.
 
 ## Link clicks and the tracked short links (added 2026-10-07)
 
-"Link clicks" on the dashboard = GA4 sessions on cardstreet.app credited to a
-platform, for the brand whose link was tapped. Meta's own "profile taps"
-(profile-link / Page-button taps) are shown separately and only exist for
-Facebook and Instagram.
+"Link clicks" means two different things, by brand, because only one brand
+owns a website:
 
-The short links (`lib/social/shortLinks.ts` data, `lib/socialLinks.ts` +
-`app/{ig,fb,yt,tt}/route.ts`, `app/ck/[slug]/route.ts` redirects) tag every
-visit with `utm_source` (platform), `utm_medium` (where the link sat) and
-`utm_campaign` (the brand — `cardstreet` or `chopperkuma`,
-`lib/social/types.ts:BRAND_CAMPAIGN`). GA4 ranks `utm_source` above the
-referrer, so a tap from Instagram's in-app browser is still credited.
+- **Cardstreet**: GA4 sessions on cardstreet.app credited to a platform —
+  i.e. clicks on the tracked short links below. Meta's own "profile taps"
+  (profile-link / Page-button taps) are shown separately.
+- **Chopper & Kuma**: the pet channel is unrelated to the site and never
+  links to it, so its link clicks are Meta's profile-link / Page-button taps
+  (Facebook + Instagram); YouTube has no equivalent. No short links, no GA4.
+  (A first cut gave the pet channel `cardstreet.app/ck/...` links — removed
+  2026-10-07 at the founder's objection; don't bring them back.)
 
-| Paste where | Cardstreet | Chopper & Kuma |
-|---|---|---|
-| Instagram bio | `cardstreet.app/ig` | `cardstreet.app/ck/ig` |
-| Facebook Page button / About | `cardstreet.app/fb` | `cardstreet.app/ck/fb` |
-| YouTube channel link + descriptions | `cardstreet.app/yt` | `cardstreet.app/ck/yt` |
-| TikTok bio | `cardstreet.app/tt` | `cardstreet.app/ck/tt` |
+The Cardstreet short links (`lib/social/shortLinks.ts` data,
+`lib/socialLinks.ts` + `app/{ig,fb,yt,tt}/route.ts` redirects) tag every
+visit with `utm_source` (platform) and `utm_medium` (where the link sat).
+GA4 ranks `utm_source` above the referrer, so a tap from Instagram's in-app
+browser is still credited.
+
+| Paste where | Link |
+|---|---|
+| Instagram bio | `cardstreet.app/ig` |
+| Facebook Page button / About | `cardstreet.app/fb` |
+| YouTube channel link + descriptions | `cardstreet.app/yt` |
+| TikTok bio | `cardstreet.app/tt` |
 
 Add `?utm_medium=story` (post, ad, ...) to any of them for a one-off placement.
 Untagged referrals (someone shares a plain cardstreet.app link on Facebook)
-still count — as Cardstreet's, under medium "referral".
+still count, under medium "referral".
 
 `social_site_traffic_daily` is keyed by `(day, platform, campaign, medium)`
 since migration `20261007_social_link_clicks.sql`; the sync and the metrics
