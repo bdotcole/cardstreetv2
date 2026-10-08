@@ -10,8 +10,28 @@ import * as Sentry from "@sentry/nextjs";
 // disabled), 404, 429 (rate limiting / abuse), and all 5xx — continues to
 // report, as do non-auth responses (e.g. PostgREST 401s, which can signal RLS
 // issues).
+//
+// Logout is the one auth call where 403/404 also mean nothing: signing out a
+// user who no longer exists (account deletion signs out after deleteUser) gets
+// 403 user_not_found, and auth-js itself ignores 401/403/404 from logout and
+// clears the session anyway (CARDSTREET-2M).
 const isExpectedAuthControlFlow = (urlStr: string, status: number): boolean =>
-    urlStr.includes('/auth/v1/') && (status === 400 || status === 401 || status === 422);
+    urlStr.includes('/auth/v1/') && (
+        status === 400 || status === 401 || status === 422
+        || (urlStr.includes('/auth/v1/logout') && (status === 403 || status === 404))
+    );
+
+// GoTrue's per-address cooldown on emailed links: asking for a second reset or
+// confirmation email within the window answers 429 "For security purposes, you
+// can only request this after N seconds." That is the user tapping twice, and
+// the form shows the message (CARDSTREET-23). Scoped by message so the
+// project-wide email quota (429 over_email_send_rate_limit, "email rate limit
+// exceeded"), which means emails are failing for everyone, still reports.
+const isAuthEmailCooldown = (urlStr: string, status: number, body: unknown): boolean => {
+    if (!urlStr.includes('/auth/v1/') || status !== 429) return false;
+    const message = String((body as { message?: unknown } | null)?.message ?? '').toLowerCase();
+    return message.startsWith('for security purposes, you can only request this after');
+};
 
 // GoTrue returns 403 when a one-time email link (signup confirm / password
 // recovery / magic link) has already been consumed or expired — most often
@@ -83,6 +103,7 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
                     const errorData = await clonedResp.json();
 
                     if (isConsumedAuthLink(urlStr, response.status, errorData)
+                        || isAuthEmailCooldown(urlStr, response.status, errorData)
                         || isMissingOptionalSearchRpc(urlStr, response.status, errorData)) {
                         return response;
                     }
@@ -119,7 +140,13 @@ export const sentryFetch = async (input: RequestInfo | URL, init?: RequestInit):
     } catch (error) {
         const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
         if (urlStr.includes('.supabase.co') && !isClientOffline() && !isAbort(error, init, input)) {
+            // One issue per side, not one per call site: grouped by stack, these
+            // were ten separate "Failed to fetch" / "Load failed" issues of a few
+            // events each, none actionable alone. A real outage still shows as a
+            // spike in the grouped issue.
             Sentry.captureException(error, {
+                level: 'warning',
+                fingerprint: ['supabase-network-failure', typeof window === 'undefined' ? 'server' : 'client'],
                 extra: { url: urlStr, message: 'Network connectivity failure to Supabase' },
                 tags: { database_client: 'supabase' }
             });

@@ -111,6 +111,28 @@ async function saveToken(token: string) {
     }
 }
 
+// The permission-denied warning exists to COUNT devices with push turned off,
+// and one report per device does that. Sent on every app launch it was ~440
+// events a fortnight from the same phones (CARDSTREET-3G/3J). Re-reports when
+// the state changes (e.g. 'denied' -> 'prompt'), so a fresh denial still shows.
+function reportPushDeniedOnce(platform: 'ios' | 'android', receive: string) {
+    const key = `cs_push_denied_reported_${platform}`;
+    try {
+        if (localStorage.getItem(key) === receive) return;
+        localStorage.setItem(key, receive);
+    } catch { /* storage blocked: report every time, as before */ }
+    Sentry.captureMessage(`${platform === 'ios' ? 'iOS' : 'Android'} push permission not granted`, {
+        level: 'warning',
+        tags: { area: 'push', platform },
+        extra: { receive },
+    });
+}
+
+// Clears the once-per-device marker so a later denial is reported again.
+function clearPushDeniedMarker(platform: 'ios' | 'android') {
+    try { localStorage.removeItem(`cs_push_denied_reported_${platform}`); } catch { /* nothing to clear */ }
+}
+
 export const usePushNotifications = () => {
     const [fcmToken, setFcmToken] = useState<string | null>(null);
 
@@ -143,13 +165,10 @@ export const usePushNotifications = () => {
                     // installs (measured 2026-08-18) — every remaining
                     // explanation for that silence exits through here or the
                     // catch below, so both now report.
-                    Sentry.captureMessage('iOS push permission not granted', {
-                        level: 'warning',
-                        tags: { area: 'push', platform: 'ios' },
-                        extra: { receive: perm.receive },
-                    });
+                    reportPushDeniedOnce('ios', perm.receive);
                     return;
                 }
+                clearPushDeniedMarker('ios');
 
                 const tokenReceived = await FirebaseMessaging.addListener('tokenReceived', (event) => {
                     setFcmToken(event.token);
@@ -236,13 +255,10 @@ export const usePushNotifications = () => {
 
                 if (permStatus.receive !== 'granted') {
                     console.warn('User denied push notification permissions');
-                    Sentry.captureMessage('Android push permission not granted', {
-                        level: 'warning',
-                        tags: { area: 'push', platform: 'android' },
-                        extra: { receive: permStatus.receive },
-                    });
+                    reportPushDeniedOnce('android', permStatus.receive);
                     return;
                 }
+                clearPushDeniedMarker('android');
 
                 await PushNotifications.register();
             } catch (err) {
@@ -271,9 +287,19 @@ export const usePushNotifications = () => {
             // Same blindness the iOS path suffered from: a device that never
             // registers is indistinguishable from one that never opened the
             // app unless the failure is reported somewhere we read.
-            Sentry.captureException(error, {
+            // The plugin hands back a plain { error: string } object, which
+            // Sentry could only title "Object captured as exception with keys:
+            // error" (CARDSTREET-3K). Wrap it so the native message is the title.
+            const detail = typeof error?.error === 'string' ? error.error
+                : typeof error?.message === 'string' ? error.message
+                : JSON.stringify(error);
+            Sentry.captureException(new Error(`Android push registration failed: ${detail}`), {
+                // SERVICE_NOT_AVAILABLE is the phone failing to reach Google
+                // Play services (no connectivity or no Play services); the next
+                // launch registers again.
+                level: /SERVICE_NOT_AVAILABLE/.test(detail) ? 'warning' : 'error',
                 tags: { area: 'push', platform: 'android' },
-                extra: { stage: 'PushNotifications.register' },
+                extra: { stage: 'PushNotifications.register', raw: error },
             });
         });
 

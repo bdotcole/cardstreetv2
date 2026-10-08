@@ -65,19 +65,21 @@ export function useWishlist(): UseWishlistReturn {
             // Ensure user profile exists (for legacy users)
             await ensureUserProfile();
 
-            const { error } = await supabase
+            // ON CONFLICT DO NOTHING rather than a plain insert: a double tap or a
+            // card already wishlisted on another device used to come back as a
+            // 409, which the app ignored but Sentry reported (CARDSTREET-1D).
+            const { data: inserted, error } = await supabase
                 .from('wishlists')
-                .insert({
+                .upsert({
                     user_id: user.id,
                     card_id: card.id,
                     card_data: card
-                });
+                }, { onConflict: 'user_id,card_id', ignoreDuplicates: true })
+                .select('card_id');
 
-            if (error) {
-                // Ignore unique constraint violations (card already in wishlist)
-                if (error.code === '23505') return;
-                throw error;
-            }
+            if (error) throw error;
+            // No row back = the card was already in the wishlist.
+            if (!inserted?.length) return;
 
             // After the insert, and after the duplicate short-circuit above: a
             // re-add of a card already wishlisted awards nothing in the ledger
