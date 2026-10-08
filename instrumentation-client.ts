@@ -8,8 +8,28 @@
  */
 
 import * as Sentry from '@sentry/nextjs';
+import { installDomMutationGuard } from '@/lib/domMutationGuard';
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+// An exception whose every frame is <anonymous> ran in code with no source
+// file: a script the host browser evaluated into the page. ZTE's system
+// WebView injects autofill/CSS helpers that call globals it never defines
+// ("xbrowser is not defined" from execute_auto_fill, "swbrowser is not
+// defined" from needInjectCss, CARDSTREET-4D/4C). When the injected code ran
+// from a setTimeout, Sentry's own timer wrapper is the outermost frame, so
+// that one frame is allowed. Our own code always has a /_next/ or page-URL
+// frame where it throws, so it never matches.
+const isHostInjectedScriptError = (event: Sentry.ErrorEvent): boolean => {
+    const values = event.exception?.values;
+    if (!values?.length) return false;
+    return values.every((value) => {
+        const frames = value.stacktrace?.frames ?? [];
+        const wrapped = (value.mechanism?.type ?? '').startsWith('auto.browser.browserapierrors');
+        const own = wrapped ? frames.slice(1) : frames;
+        return own.length > 0 && own.every((frame) => frame.filename === '<anonymous>');
+    });
+};
 
 if (dsn) {
     Sentry.init({
@@ -38,10 +58,26 @@ if (dsn) {
         // EOF twin) which also swallowed real syntax errors from our own bundle
         // — that blind spot is why the failure went unnoticed. Don't reintroduce
         // a bare-message filter to quiet a symptom; fix what is throwing.
+        //
+        // The two added since are exact messages from code that is not ours
+        // and that we cannot catch:
+        // - supabase auth-js's own fire-and-forget calls (the visibility-change
+        //   session recovery, onAuthStateChange's initial emit) give up after
+        //   10s when the iOS app resumes while a suspended token refresh still
+        //   holds the auth lock, and reject with nothing awaiting them
+        //   (CARDSTREET-2B). The refresh that holds the lock completes.
+        // - "runtime.sendMessage ... Tab not found" is the WebExtension API,
+        //   which this app never calls: DuckDuckGo's iOS browser's own
+        //   scripts (CARDSTREET-4F, no stack frames at all).
         ignoreErrors: [
             /Java object is gone/i,
             /Error invoking postMessage/i,
+            /^Acquiring process lock with name "lock:sb-[a-z0-9]+-auth-token" timed out$/,
+            /^Invalid call to runtime\.sendMessage\(\)\. Tab not found\.$/,
         ],
+        beforeSend(event) {
+            return isHostInjectedScriptError(event) ? null : event;
+        },
         integrations: [
             Sentry.browserTracingIntegration(),
         ],
@@ -60,6 +96,9 @@ if (dsn) {
             .catch(() => { /* replay is a diagnostic nicety, not a dependency */ });
     }
 }
+
+// Before hydration, so React's first commit already runs with it.
+if (typeof window !== 'undefined') installDomMutationGuard();
 
 // Surfaces client-side router transition errors in Sentry. Required hook
 // export for Next.js App Router.
