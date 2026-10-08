@@ -36,6 +36,8 @@ interface SnapshotRow {
     language: string;
     condition: string;
     is_sealed: boolean;
+    // CHECK (market_thb > 0): a sub-0.5 THB price rounds to 0 and one such row
+    // fails its whole 500-row upsert batch, so every writer floors at 1.
     market_thb: number;
     market_native: number | null;
     currency: string;
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest) {
                         language: r.language || 'en',
                         condition: 'Sealed',
                         is_sealed: true,
-                        market_thb: Math.round(thb),
+                        market_thb: Math.max(1, Math.round(thb)),
                         market_native: r.new_price ?? r.cib_price ?? r.loose_price ?? null,
                         currency: r.currency || 'USD',
                         source: 'pricecharting',
@@ -121,7 +123,7 @@ export async function GET(request: NextRequest) {
                         language: (row as { language?: string }).language || card.language || 'en',
                         condition: 'Market',
                         is_sealed: false,
-                        market_thb: Math.round(card.marketPrice),
+                        market_thb: Math.max(1, Math.round(card.marketPrice)),
                         market_native: null,
                         currency: 'THB',
                         source: 'catalog',
@@ -193,7 +195,7 @@ export async function GET(request: NextRequest) {
                 const card = mapSupabaseCardToInternal(row);
                 if (!(card.marketPrice > 0)) continue;
                 const language = (row as { language?: string }).language || card.language || 'en';
-                const thb = Math.round(card.marketPrice);
+                const thb = Math.max(1, Math.round(card.marketPrice));
                 if (prev.get(`${card.id}|${language}`) === thb) continue;
                 rows.push({
                     subject_id: card.id,
