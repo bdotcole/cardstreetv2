@@ -53,7 +53,12 @@ const TEMPLATES = {
     labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '000AHF66DDMCJVMGZJK5P8Q2824Z').trim(),
     shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
     orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'WAE55N73MYM5CAGN7GTWQT7XPN8B').trim(),
-    firstTimeSale: (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'nt_01kvba0yzweh78ef8f9c1b49z7').trim(),
+    // First Time Sale is deliberately NOT here any more: it renders inline
+    // (sendFirstTimeSaleEmail). Its dashboard template (nt_01kvba0yzweh78ef8f9c1b49z7)
+    // was authored in Courier's newer Elemental editor, which stored the pasted
+    // {seller_first_name} / {order_number} tokens as literal text, so every
+    // send went out reading "Congratulations on your first sale,
+    // {seller_first_name}!" (2026-10-09). Only link hrefs substituted.
     // OBO Best-Offer templates. No default id yet — these dashboard templates
     // are ops/founder action before go-live. When the env id is empty the send
     // functions fall back to inline bilingual `content` (like
@@ -94,8 +99,8 @@ const SUBJECTS: Partial<Record<keyof typeof TEMPLATES, string>> = {
     labelGenerated: 'ใบปะหน้าพัสดุพร้อมแล้ว — Shipping label ready',
     shipped: 'สินค้าถูกจัดส่งแล้ว Order Shipped!',
     orderConfirmed: 'ยืนยันคำสั่งซื้อ Order Confirmed!',
-    // firstTimeSale: that subject is ASCII plus one emoji (43 UTF-8 bytes,
-    // under the 48-byte cliff) so it renders intact without an override.
+    // firstTimeSale is inline (FIRST_SALE_SUBJECT below) and forces its own
+    // subject through the same override.
     // Offer templates: add entries alongside the env IDs when those dashboard
     // templates go live, or any Thai subject on them will truncate.
 };
@@ -756,6 +761,87 @@ function appBaseUrl(): string {
     return (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/+$/, '');
 }
 
+// Bilingual subject for the first-sale email. Thai first, so it goes through
+// the Postmark override (see SUBJECTS) rather than Courier's 48-byte cliff.
+const FIRST_SALE_SUBJECT = 'ยินดีด้วยกับการขายครั้งแรกบน Cardstreet 🎉 Congrats on your first sale!';
+// The packing walkthrough the dashboard template linked; env-overridable.
+const FIRST_SALE_PACKING_VIDEO_DEFAULT = 'https://youtu.be/GBF0qq81VWQ?si=Ax7efr8fkqolLncz';
+
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>
+    )[c]);
+}
+
+/**
+ * The first-sale email body: one Elemental `html` element inside the Courier
+ * brand wrapper, English then Thai, copied from the published dashboard
+ * template. Rendered in code so the seller's name and order number are
+ * substituted by us — the dashboard template stored those tokens as literal
+ * text and they never resolved (see the TEMPLATES note). The display name is
+ * user-controlled, so every value is HTML-escaped.
+ */
+export function firstTimeSaleHtml(v: {
+    firstName: string;
+    orderNumber: string;
+    orderLink: string;
+    supportEmail: string;
+    packingVideo: string;
+}): string {
+    const name = escapeHtml(v.firstName);
+    const order = escapeHtml(v.orderNumber);
+    const link = escapeHtml(v.orderLink);
+    const support = escapeHtml(v.supportEmail);
+    const video = escapeHtml(v.packingVideo);
+    const font = 'font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#000000;';
+    const p = (inner: string) => `<p style="margin:0 0 12px;${font}">${inner}</p>`;
+    const a = (href: string, text: string) =>
+        `<a href="${href}" style="color:#2a9edb;font-weight:500;text-decoration:none;">${text}</a>`;
+    const button = (href: string, text: string) =>
+        `<p style="margin:4px 0 16px;"><a href="${href}" style="display:inline-block;padding:11px 22px;border-radius:8px;` +
+        `background-color:#0891b2;color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;` +
+        `text-decoration:none;">${text}</a></p>`;
+    const ol = (items: string[]) =>
+        `<ol style="margin:0 0 12px;padding-left:22px;${font}">` +
+        items.map((item) => `<li style="margin:0 0 4px;">${item}</li>`).join('') +
+        '</ol>';
+    const divider = '<hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;">';
+
+    return [
+        p(`<strong>Congratulations on your first sale, ${name}! 🎉</strong>`),
+        p('You just sold your first card on Cardstreet — welcome to the club.'),
+        p(`Order <strong>${order}</strong> is paid and ready to ship. The buyer is waiting, so the next step is yours: pack the card safely and send it out.`),
+        button(link, 'View your order'),
+        p(`<strong>How to pack a card the right way:</strong> ${a(video, video)}`),
+        ol([
+            'Sleeve the card in a penny sleeve.',
+            'Protect it in a top-loader or card saver.',
+            'Tape the top-loader closed — never tape the card itself.',
+            'Place it between two pieces of cardboard or in a rigid mailer.',
+            'Use a bubble mailer or small box, and add a "Do Not Bend" note.',
+        ]),
+        p('Good packaging protects your seller rating and keeps buyers coming back.'),
+        p(`Questions? Email us at ${a(`mailto:${support}`, support)}`),
+        p('Happy selling,<br>— The Cardstreet Team'),
+        divider,
+        p(`<strong>ยินดีด้วยกับการขายครั้งแรกของคุณ ${name}! 🎉</strong>`),
+        p('คุณเพิ่งขายการ์ดใบแรกบน Cardstreet สำเร็จ — ยินดีต้อนรับสู่ครอบครัวผู้ขายของเรา'),
+        p(`ออเดอร์ <strong>${order}</strong> ชำระเงินแล้วและพร้อมจัดส่ง ผู้ซื้อกำลังรออยู่ ขั้นตอนต่อไปเป็นของคุณ — แพ็คการ์ดให้ปลอดภัยแล้วส่งออกไปได้เลย`),
+        button(link, 'ดูออเดอร์ของคุณ'),
+        p(`<strong>วิธีแพ็คการ์ดให้ปลอดภัย:</strong> ${a(video, video)}`),
+        ol([
+            'ใส่การ์ดในซองพลาสติก (penny sleeve)',
+            'ใส่ใน top-loader หรือ card saver เพื่อป้องกัน',
+            'ติดเทปปิดปาก top-loader (อย่าติดเทปลงบนการ์ด)',
+            'วางการ์ดไว้ระหว่างกระดาษแข็งสองแผ่น หรือใช้ซองแบบแข็ง',
+            'ใช้ซองกันกระแทกหรือกล่องเล็ก และเขียนกำกับว่า "ห้ามพับ / Do Not Bend"',
+        ]),
+        p('การแพ็คที่ดีช่วยรักษาคะแนนรีวิวของคุณ และทำให้ผู้ซื้อกลับมาซื้อซ้ำ'),
+        p(`มีคำถามไหม? อีเมลหาเราได้ที่ ${a(`mailto:${support}`, support)}`),
+        p('ขอให้ขายดี<br>— ทีมงาน Cardstreet'),
+    ].join('');
+}
+
 // ─── Internal ops alert: welcome-package partner activated their account ─────
 
 /**
@@ -863,7 +949,7 @@ export async function sendFirstTimeSaleEmail(
         // ── 1. Cheap pre-check: already sent? ──
         const { data: profile, error: profileErr } = await supabaseAdmin
             .from('profiles')
-            .select('display_name, first_sale_email_sent_at')
+            .select('display_name, username, first_sale_email_sent_at')
             .eq('id', sellerId)
             .single();
 
@@ -920,36 +1006,40 @@ export async function sendFirstTimeSaleEmail(
             return 'skipped';
         }
 
-        // ── 5. Build payload + send the "First Time Sale" template. ──
-        // Prefer an explicit template ID; fall back to the Courier event alias.
-        const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || TEMPLATES.firstTimeSale).trim();
-        const firstName = (profile?.display_name || '').trim().split(/\s+/)[0] || 'there';
-        const orderNumber = opts.orderNumber || opts.orderId;
-        // Deep-link straight to the addressable order page (app/orders/[id]).
+        // ── 5. Render + send. Inline content, not the dashboard template: the
+        // template's name/order tokens never substituted (see TEMPLATES), so
+        // the body is built here with the values already in place. ──
+        const firstName =
+            (profile?.display_name || profile?.username || '').trim().split(/\s+/)[0] || 'there';
+        // Same "#XXXXXXXX" short id the ship reminders and the order page use —
+        // a raw UUID in the sentence read as a bug.
+        const orderNumber = opts.orderNumber || `#${opts.orderId.slice(0, 8).toUpperCase()}`;
+        // Deep-link straight to the addressable order page (app/orders/[id]);
+        // the native shell's appUrlOpen turns it into the seller's shipment.
         const orderLink = `${appBaseUrl()}/orders/${opts.orderId}`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
-        const youtube = (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim();
-
-        const data: Record<string, string> = {
-            seller_first_name: firstName,
-            order_number: orderNumber,
-            order_link: orderLink,
-            support_email: supportEmail,
-        };
-        // Optional — don't break the send if the guide URL isn't configured yet.
-        if (youtube) data.youtube_packaging_link = youtube;
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+        const packingVideo =
+            (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim() || FIRST_SALE_PACKING_VIDEO_DEFAULT;
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: { email },
-                    // The "First Time Sale" template owns the subject/body
-                    // ("Congrats on your first Cardstreet sale 🎉") — we only
-                    // supply the merge data above.
-                    template,
-                    data,
+                    content: {
+                        version: '2022-01-01',
+                        elements: [
+                            { type: 'meta', title: FIRST_SALE_SUBJECT },
+                            {
+                                type: 'html',
+                                content: firstTimeSaleHtml({ firstName, orderNumber, orderLink, supportEmail, packingVideo }),
+                            },
+                        ],
+                    },
+                    data: { type: 'first_time_sale', orderId: opts.orderId },
                     routing: { method: 'all', channels: ['email'] },
-                },
+                    providers: postmarkOverride(FIRST_SALE_SUBJECT),
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                } as any,
             });
             console.log(
                 `[Courier] ✅ 'First Time Sale' email sent to seller ${sellerId} (order ${orderNumber}). ` +

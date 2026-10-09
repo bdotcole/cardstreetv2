@@ -69,6 +69,24 @@ function routeNotificationTap(data: unknown) {
         window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=weekly_digest');
         return;
     }
+    // Order pushes (seller: sold, label ready, ship reminders; buyer: shipped,
+    // confirmed, delivered, payout) all carry the orderId. Land on that order
+    // inside Profile — Pending Shipments with the Print Shipping Label button
+    // for the seller, Track Orders for the buyer; Profile resolves the side.
+    // Before this branch every one of these taps opened the app to home.
+    if (
+        type === 'sold' || type === 'label_generated' || type === 'ship_reminder' || type === 'unshipped_order' ||
+        type === 'shipped' || type === 'order_confirmation' || type === 'purchase_completed' ||
+        type === 'package_delivered' || type === 'payout_completed'
+    ) {
+        const d = data as { orderId?: unknown };
+        const orderId = typeof d?.orderId === 'string' && /^[0-9a-f-]{36}$/i.test(d.orderId) ? d.orderId : '';
+        if (!orderId) return;
+        try { sessionStorage.setItem('cs_focus_order', orderId); } catch { /* landing fallback still opens Profile */ }
+        const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-order', { detail: orderId, cancelable: true }));
+        if (unconsumed) window.location.assign(`/?order=${encodeURIComponent(orderId)}`);
+        return;
+    }
     if (type === 'support_reply') {
         // The answer lives in Profile -> Support. Same handoff as offers below:
         // flag + event for a mounted shell, hard navigation on a cold start.

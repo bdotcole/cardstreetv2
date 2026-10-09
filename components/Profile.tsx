@@ -424,11 +424,65 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
 
   // The shell dispatches this when the hardware back button is pressed while a
   // sub-panel is open — close the panel rather than letting the shell navigate.
+  // Sales History is reached from inside Seller Account, so back from it
+  // returns there rather than jumping to the Profile root.
+  const activePanelRef = useRef<ActivePanel>('none');
+  activePanelRef.current = activePanel;
   useEffect(() => {
-    const handler = () => setActivePanel('none');
+    const handler = () => setActivePanel(activePanelRef.current === 'sales' ? 'payouts' : 'none');
     window.addEventListener('profile-panel-back', handler);
     return () => window.removeEventListener('profile-panel-back', handler);
   }, []);
+
+  // An order to land on, from an email link (cardstreet.app/orders/<id>, via
+  // the shell's appUrlOpen) or a push tap: which panel depends on which side
+  // of the order this user is on. The seller's "View your order" must end on
+  // the shipment with its Print Shipping Label button, not the Profile root —
+  // Android App Links intercept every cardstreet.app URL, so without this the
+  // path was dropped and sellers landed on home with no way to the label.
+  const [focusOrderId, setFocusOrderId] = useState<string | null>(null);
+  const focusOrder = async (orderId: string) => {
+    let seller = false;
+    try {
+      // Orders RLS admits buyer and seller, so a missing row means neither.
+      const { data } = await supabase
+        .from('orders')
+        .select('seller_id')
+        .eq('id', orderId)
+        .maybeSingle<{ seller_id: string }>();
+      seller = !!data && data.seller_id === user?.id;
+    } catch { /* unknown side: the buyer panel is the safer default */ }
+    setFocusOrderId(orderId);
+    openPanel(seller ? 'shipments' : 'orders');
+  };
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const pending = sessionStorage.getItem('cs_focus_order');
+      if (pending && /^[0-9a-f-]{36}$/i.test(pending)) {
+        sessionStorage.removeItem('cs_focus_order');
+        void focusOrder(pending);
+      }
+    } catch { /* storage unavailable (private mode) */ }
+    // Already-mounted case (user was on this tab): the shell's tab switch is
+    // a no-op and nothing remounts, so the flag read above never re-runs.
+    const onOpenOrder = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      try { sessionStorage.removeItem('cs_focus_order'); } catch { /* mount-time read handles it */ }
+      if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) void focusOrder(id);
+    };
+    window.addEventListener('cs-open-order', onOpenOrder);
+    return () => window.removeEventListener('cs-open-order', onOpenOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  // Bring the focused card into view once its list has loaded, then let the
+  // highlight go when the panel closes.
+  useEffect(() => {
+    if (!focusOrderId) return;
+    if (activePanel === 'none') { setFocusOrderId(null); return; }
+    const el = document.getElementById(`order-card-${focusOrderId}`);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusOrderId, activePanel, orders, shipments]);
 
   // Auto-open the payouts panel when Stripe redirects back from Connect
   // onboarding. The StripeConnectSection's own useEffect strips the query
@@ -813,7 +867,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
     }
   };
 
-  const openSavedLabel = async () => {
+  // Hand the saved PDF to the system share sheet (Android lists Print there).
+  const shareSavedLabel = async () => {
     if (!labelModal.savedUri) return;
     try {
       const { Share } = await import('@capacitor/share');
@@ -827,10 +882,33 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       // User cancelling the share sheet throws; ignore that and only
       // surface real failures.
       if (err?.message && !/cancel/i.test(err.message)) {
-        console.error('[Label] Share/open failed:', err);
+        console.error('[Label] Share failed:', err);
         showToast(err.message, 'error');
       }
     }
+  };
+
+  // Open / Print: an ACTION_VIEW chooser ("Open with...") for the saved PDF,
+  // so the tap lands in the seller's PDF viewer, where Print lives. The share
+  // sheet used here before read as "send this somewhere", and sellers could
+  // not find the label. openWithDefault:false forces the chooser even when a
+  // default viewer is set — the popup IS the affordance. Falls back to the
+  // share sheet on a binary that predates the plugin (UNIMPLEMENTED) or a
+  // phone with no PDF viewer (plugin code '8'), so the label stays reachable.
+  const openSavedLabel = async () => {
+    if (!labelModal.savedUri) return;
+    try {
+      const { FileOpener } = await import('@capacitor-community/file-opener');
+      await FileOpener.open({
+        filePath: labelModal.savedUri,
+        contentType: 'application/pdf',
+        openWithDefault: false,
+      });
+      return;
+    } catch (err: any) {
+      console.warn('[Label] File opener unavailable, falling back to share:', err?.code || err?.message || err);
+    }
+    await shareSavedLabel();
   };
 
   const closeLabel = () => {
@@ -1010,7 +1088,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
     if (panel === 'orders') fetchOrders().then(syncInFlightOrders);
-    if (panel === 'sales') fetchSales();
+    // Seller Account shows earnings + recent sales; Sales History is its
+    // sub-panel, so both need the list.
+    if (panel === 'sales' || panel === 'payouts') fetchSales();
     if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {
       setEditName(user.name);
@@ -1061,7 +1141,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
           ? [{ name: t('live.myShows.menuTitle'), icon: Radio, panel: 'liveShows' as ActivePanel, color: 'text-brand-red' }]
           : []),
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
-        { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
+        // Sales History lives inside Seller Account (earnings + recent sales
+        // there, the full list one tap deeper) — no separate menu row.
         { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
       ]
     },
@@ -1654,7 +1735,15 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                     const order = group[0];
                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                     return (
-                    <div key={order.id} className="glass p-4 rounded-2xl border border-white/5 space-y-4">
+                    <div
+                      key={order.id}
+                      id={group.some((o) => o.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
+                      className={`glass p-4 rounded-2xl border space-y-4 ${
+                        group.some((o) => o.id === focusOrderId)
+                          ? 'border-brand-cyan/60 ring-2 ring-brand-cyan/40'
+                          : 'border-white/5'
+                      }`}
+                    >
                       {/* Order Header — one row per item in the parcel */}
                       {group.map((item) => {
                         const itemImage = rowDisplayImage(item);
@@ -1807,7 +1896,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                {/* Sub-panel of Seller Account: back returns there. */}
+                <button onClick={() => setActivePanel('payouts')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
                 <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.salesHistory')}</h2>
@@ -1819,8 +1909,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                 <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
               </div>
 
-              {/* Stripe Connect payout onboarding */}
-              <StripeConnectSection />
+              {/* Payout onboarding sits one level up, in Seller Account. */}
 
               <div className="space-y-3">
                 {sales.length === 0 ? (
@@ -1973,7 +2062,12 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                           clearShipments(group.map((s) => s.id));
                         }
                       }}
-                      className="glass p-4 rounded-2xl border border-white/5 space-y-4"
+                      id={group.some((s) => s.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
+                      className={`glass p-4 rounded-2xl border space-y-4 ${
+                        group.some((s) => s.id === focusOrderId)
+                          ? 'border-brand-green/60 ring-2 ring-brand-green/40'
+                          : 'border-white/5'
+                      }`}
                     >
                       {/* Shipment Header — one row per item in the parcel */}
                       {group.map((item) => {
@@ -2123,6 +2217,54 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
 
               <StripeConnectSection />
 
+              {/* Sales: lifetime earnings and the latest sales, with the full
+                  Sales History one tap deeper. Moved in here from its own
+                  menu row (2026-10-09) — it is seller-account information. */}
+              <div className="space-y-3">
+                <div className="glass p-4 rounded-2xl border border-brand-green/20 bg-brand-green/5">
+                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">{t('profile.totalEarnings')}</p>
+                  <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
+                </div>
+                {sales.length === 0 ? (
+                  <p className="text-slate-500 text-xs text-center py-2">{t('profile.noSalesYet')}</p>
+                ) : (
+                  <div className="glass rounded-2xl border border-white/5 divide-y divide-white/5">
+                    <p className="px-3 pt-3 pb-1 text-slate-400 text-[10px] uppercase tracking-wider">{t('profile.recentSales')}</p>
+                    {sales.slice(0, 3).map((sale) => {
+                      const saleImage = rowDisplayImage(sale);
+                      return (
+                        <div key={sale.id} className="p-3 flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0">
+                            {saleImage && (
+                              <img
+                                src={getThumbnailUrl(saleImage)}
+                                alt="Card"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
+                            <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
+                          </div>
+                          <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <button
+                  onClick={() => openPanel('sales')}
+                  className="w-full glass p-4 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                >
+                  <History className="w-5 h-5 text-green-400" />
+                  <span className="flex-1 text-left text-white font-semibold text-sm">{t('profile.salesHistory')}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+
               {/* Vacation mode: pause the whole shop (hides + blocks every
                   listing) and reopen it later. Hidden until its migration runs. */}
               <ShopPauseSection />
@@ -2254,6 +2396,17 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                     className="w-full h-12 rounded-xl bg-brand-green text-white font-black text-xs uppercase tracking-widest hover:bg-brand-green/90 active:scale-[0.98] transition-all"
                   >
                     {t('profile.labelOpenPrint')}
+                  </button>
+                  <p className="text-slate-500 text-[11px] leading-relaxed -mt-1">
+                    {t('profile.labelOpenHint')}
+                  </p>
+                  {/* The share sheet stays reachable on its own button — it is
+                      the route to a printer app or to sending the PDF on. */}
+                  <button
+                    onClick={shareSavedLabel}
+                    className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
+                  >
+                    {t('profile.labelShare')}
                   </button>
                   {/* Track Order — opens the same delivery timeline the buyer
                       sees. Layered above this modal (higher z-index), so

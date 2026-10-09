@@ -343,6 +343,24 @@ export default function HomePage() {
             return;
         }
 
+        // /?order=<id> lands on that order inside Profile — the cold-start
+        // fallback for an order push tap (hooks/usePushNotifications) when no
+        // shell was mounted to consume the cs-open-order event. Flag, not
+        // event, for the same reason as openRewards above.
+        const focusOrder = params.get('order');
+        if (focusOrder && /^[0-9a-f-]{36}$/i.test(focusOrder)) {
+            try { sessionStorage.setItem('cs_focus_order', focusOrder); } catch { /* lands on Profile root instead */ }
+            setActiveTab('profile');
+            params.delete('order');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
         // /?tab=<name> lands on an explicit tab — the Pro hub's back button
         // returns via /?tab=profile, and middleware bounces /sell, /orders,
         // /collection and /settings here. Strip the param (keeping everything
@@ -393,9 +411,13 @@ export default function HomePage() {
         window.addEventListener('cs-open-offers', onOpenOffers);
         // Support-reply push tap: same contract, cs_open_support flag.
         window.addEventListener('cs-open-support', onOpenOffers);
+        // Order push tap / order App Link: same contract, cs_focus_order flag
+        // (Profile reads the id and picks the shipment or order panel).
+        window.addEventListener('cs-open-order', onOpenOffers);
         return () => {
             window.removeEventListener('cs-open-offers', onOpenOffers);
             window.removeEventListener('cs-open-support', onOpenOffers);
+            window.removeEventListener('cs-open-order', onOpenOffers);
         };
     }, []);
 
@@ -2235,6 +2257,27 @@ export default function HomePage() {
                     // ?view=vault): straight into the Vault.
                     if (appLink.searchParams.get('view') === 'vault') {
                         setActiveTab('vault');
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
+                // Order link App Link (cardstreet.app/orders/<id>) — the "View
+                // your order" CTA in the first-sale, sold, label-ready and buyer
+                // emails. Android intercepts all cardstreet.app URLs, so the tap
+                // opened the app HERE and, with no branch, dropped the path:
+                // sellers landed on home with no route to their label. Hand the
+                // id to Profile, which resolves which side of the order this
+                // user is on and opens Pending Shipments (seller, with the
+                // Print Shipping Label button) or Track Orders (buyer). Flag
+                // for a Profile that mounts on the tab switch, event for one
+                // that is already mounted.
+                try {
+                    const appLink = new URL(data.url);
+                    const orderMatch = appLink.pathname.match(/^\/(?:en\/|th\/)?orders\/([0-9a-f-]{36})\/?$/i);
+                    if (appLink.protocol.startsWith('http') && orderMatch) {
+                        try { sessionStorage.setItem('cs_focus_order', orderMatch[1]); } catch { /* opens Profile root instead */ }
+                        setActiveTab('profile');
+                        window.dispatchEvent(new CustomEvent('cs-open-order', { detail: orderMatch[1] }));
                         return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
