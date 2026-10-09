@@ -22,6 +22,7 @@ import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchase
 import { trackPurchaseRegionBlocked } from '@/lib/commerceEvents';
 import { isValidThaiPhone } from '@/lib/utils/phone';
 import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
+import { fetchPublicSellers } from '@/lib/publicProfiles';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -97,10 +98,21 @@ export default function DesktopCartDrawer() {
         for (const [sellerId, total] of totals) {
             const min = minOrders[sellerId] ?? 0;
             const shortfall = minOrderShortfall(total, min);
-            if (shortfall > 0) return { min, shortfall };
+            if (shortfall > 0) return { sellerId, min, shortfall };
         }
         return null;
     })();
+
+    // Below a shop's minimum the fix is in that shop: take the buyer to the
+    // seller's page (its header shows the live shortfall) instead of leaving
+    // them on a disabled button. The seller page is keyed by username, which
+    // the cart line does not carry, so one public_profiles read resolves it.
+    const browseShop = useCallback(async (sellerId: string) => {
+        const seller = (await fetchPublicSellers(createClient(), [sellerId])).get(sellerId);
+        if (!seller?.username) return;
+        closeCart();
+        router.push(`/seller/${seller.username}`);
+    }, [closeCart, router]);
 
     // Identical copies (sibling listings, lib/listingSiblings.ts) read as one
     // line with a count; each keeps its own listing id underneath.
@@ -180,8 +192,27 @@ export default function DesktopCartDrawer() {
     useEffect(() => {
         if (!pendingOfferCheckout) return;
         clearPendingOfferCheckout();
-        void beginCheckout();
-    }, [pendingOfferCheckout, clearPendingOfferCheckout, beginCheckout]);
+        // Buy Now on a card under its shop's minimum: the minimums above are
+        // still loading when this fires, so ask directly. Below the minimum
+        // the card stays in the cart and the buyer goes to the shop to add
+        // more, with the reason in a toast; nothing is sent to the payment
+        // sheet that /api/orders/checkout would refuse after the fact. An
+        // accepted offer is exempt, as on the server.
+        void (async () => {
+            const sellerId = items[0]?.sellerId;
+            if (!acceptedOfferId && sellerId) {
+                const minOrders = await fetchSellerMinOrders(createClient(), [sellerId]);
+                const min = minOrders[sellerId] ?? 0;
+                const shortfall = minOrderShortfall(items.reduce((sum, i) => sum + i.price, 0), min);
+                if (shortfall > 0) {
+                    showToast(minOrderMessage(isThai, min, shortfall), 'info');
+                    await browseShop(sellerId);
+                    return;
+                }
+            }
+            await beginCheckout();
+        })();
+    }, [pendingOfferCheckout, clearPendingOfferCheckout, beginCheckout, acceptedOfferId, items, browseShop, showToast, isThai]);
 
     const saveAddress = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -364,9 +395,17 @@ export default function DesktopCartDrawer() {
                                     </div>
                                     <p className="text-[11px] text-slate-500 mb-4">{t('desktop.cart.shippingAtCheckout')}</p>
                                     {minOrderBlock && (
-                                        <p className="text-[11px] text-amber-300 font-bold leading-snug mb-3">
-                                            {minOrderMessage(isThai, minOrderBlock.min, minOrderBlock.shortfall)}
-                                        </p>
+                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 mb-3">
+                                            <p className="text-[11px] text-amber-300 font-bold leading-snug">
+                                                {minOrderMessage(isThai, minOrderBlock.min, minOrderBlock.shortfall)}
+                                            </p>
+                                            <button
+                                                onClick={() => { void browseShop(minOrderBlock.sellerId); }}
+                                                className="mt-2 w-full bg-amber-400 hover:bg-amber-300 text-brand-darker text-xs font-black py-2.5 rounded-lg transition-colors"
+                                            >
+                                                {t('desktop.cart.browseShop')} →
+                                            </button>
+                                        </div>
                                     )}
                                     <button
                                         onClick={beginCheckout}

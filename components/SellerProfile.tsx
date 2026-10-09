@@ -13,6 +13,7 @@ import BadgePill from './rewards/BadgePill';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
+import { fetchSellerMinOrders, minOrderMessage, minOrderNote, minOrderShortfall } from '@/lib/minOrder';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -21,14 +22,34 @@ interface SellerProfileProps {
     onBack: () => void;
     onSelectListing: (listing: any) => void;
     onAddToCart?: (item: any) => void;
+    /** THB already in the buyer's cart from this shop, so the minimum-order
+     *  notice can say how much is still missing and update as cards go in. */
+    cartTotalForShop?: number;
+    /** Opens the cart once the shop minimum is met. */
+    onOpenCart?: () => void;
     currency?: string;
     exchangeRate?: number;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, currency = 'THB', exchangeRate = 1 }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, cartTotalForShop = 0, onOpenCart, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
+
+    // Shop minimum order (lib/minOrder.ts). A buyer sent here from a refused
+    // Buy Now or a blocked cart needs the target in front of them while they
+    // browse, not only on the cart they just left. Fail-soft: no answer, no
+    // notice, and the server gate still decides.
+    const [minOrder, setMinOrder] = useState(0);
+    useEffect(() => {
+        if (!seller?.id) return;
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), [seller.id]).then((found) => {
+            if (!cancelled) setMinOrder(found[seller.id] ?? 0);
+        });
+        return () => { cancelled = true; };
+    }, [seller?.id]);
+    const minShortfall = minOrderShortfall(cartTotalForShop, minOrder);
 
     // Collector Pass display data (rank + showcased badges) — fetched here
     // rather than threaded through the listing embed so the page is correct
@@ -148,6 +169,43 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         <i className="fa-solid fa-flag"></i>
                     </button>
                 </div>
+
+                {/* Shop minimum order. Three states: nothing from this shop in
+                    the cart yet (standing note), below the minimum (how much is
+                    still missing — this is where the buyer lands after a
+                    refused Buy Now or a blocked cart), and met (straight to
+                    checkout). Amounts are THB: the minimum is a THB rule. */}
+                {minOrder > 0 && (
+                    minShortfall > 0 && cartTotalForShop > 0 ? (
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-left">
+                            <p className="font-bold text-sm text-amber-300 leading-snug">
+                                {minOrderMessage(isThai, minOrder, minShortfall)}
+                            </p>
+                            <p className="text-slate-400 text-xs mt-1">
+                                {t('seller.inYourCart').replace('{amount}', cartTotalForShop.toLocaleString())}
+                            </p>
+                        </div>
+                    ) : cartTotalForShop > 0 ? (
+                        <div className="rounded-2xl border border-brand-green/30 bg-brand-green/10 px-5 py-4 flex items-center justify-between gap-3">
+                            <div className="text-left min-w-0">
+                                <p className="font-bold text-sm text-brand-green">{t('seller.minOrderMet')}</p>
+                                <p className="text-slate-400 text-xs mt-0.5 truncate">
+                                    {t('seller.inYourCart').replace('{amount}', cartTotalForShop.toLocaleString())}
+                                </p>
+                            </div>
+                            {onOpenCart && (
+                                <button
+                                    onClick={onOpenCart}
+                                    className="shrink-0 h-10 px-4 rounded-xl bg-brand-green text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    {t('cart.checkout')}
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-amber-300/90 font-bold">{minOrderNote(isThai, minOrder)}</p>
+                    )
+                )}
             </div>
 
             {/* Tabs */}

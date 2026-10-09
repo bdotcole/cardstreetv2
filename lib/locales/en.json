@@ -364,7 +364,8 @@
         "quantity": "Quantity",
         "removeOne": "Remove one",
         "each": "each",
-        "chooseSeller": "Pick a seller above"
+        "chooseSeller": "Pick a seller above",
+        "addMoreFromShop": "Add more from this shop"
     },
     "purchaseRegion": {
         "title": "Available in Thailand only",
@@ -426,7 +427,9 @@
         "defaultBio": "Welcome to my Cardstreet shop!",
         "memberSince": "Member Since",
         "avgShipTime": "Avg Ship Time",
-        "newMember": "New Member"
+        "newMember": "New Member",
+        "minOrderMet": "Minimum order met",
+        "inYourCart": "฿{amount} from this shop in your cart"
     },
     "report": {
         "reportSeller": "Report Seller",
@@ -827,7 +830,8 @@
             "toastSaveFailed": "Could not save your shipping details",
             "toastPaymentReceived": "Payment received — track your order under Orders",
             "toastPaymentFailed": "Payment failed",
-            "replaceSellerConfirm": "Your cart has cards from {seller}. Checkout is one seller at a time — replace the cart with this card?"
+            "replaceSellerConfirm": "Your cart has cards from {seller}. Checkout is one seller at a time — replace the cart with this card?",
+            "browseShop": "Browse this shop"
         },
         "searchListingsFor": "See marketplace listings for"
     },

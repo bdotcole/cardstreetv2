@@ -60,6 +60,7 @@ import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
 import { trackAddToCart, trackPurchaseRegionBlocked, type RegionBlockEntry } from '@/lib/commerceEvents';
 import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
+import { fetchPublicSellers } from '@/lib/publicProfiles';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -77,6 +78,18 @@ const PartnerPortal = dynamic(() => import('@/components/PartnerPortal'), { ssr:
 const PartnerRequest = dynamic(() => import('@/components/PartnerRequest'), { ssr: false });
 const PartnerFinishSetup = dynamic(() => import('@/components/PartnerFinishSetup'), { ssr: false });
 const SellerProfile = dynamic(() => import('@/components/SellerProfile'), { ssr: false });
+
+// What openSellerShop needs to draw a shop header — satisfied by a listing's
+// seller embed and by a public_profiles row alike.
+type SellerShopHint = {
+    display_name?: string | null;
+    username?: string | null;
+    avatar_url?: string | null;
+    rating?: number | string | null;
+    review_count?: number | null;
+    partner_joined_at?: string | null;
+    role?: string | null;
+};
 const BuylistRequest = dynamic(() => import('@/components/BuylistRequest'), { ssr: false });
 const SellPromptSheet = dynamic(() => import('@/components/SellPromptSheet'), { ssr: false });
 import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
@@ -1163,13 +1176,13 @@ export default function HomePage() {
 
     // Several units of one listing arrive together (each its own listing id,
     // see lib/listingSiblings.ts): one state update, one cart open, one event.
-    const handleAddToCartMany = (items: CartItem[]) => {
+    const handleAddToCartMany = (items: CartItem[], { openCart = true }: { openCart?: boolean } = {}) => {
         if (items.length === 0) return;
         setCart(prev => {
             const seen = new Set(prev.map(i => i.id));
             return [...prev, ...items.filter(i => !seen.has(i.id))]; // No duplicates
         });
-        setIsCartOpen(true);
+        if (openCart) setIsCartOpen(true);
         // Meta AddToCart (value in the user's display currency, matching the
         // PaymentModal/Purchase convention).
         trackMetaEvent('AddToCart', {
@@ -1181,6 +1194,40 @@ export default function HomePage() {
         trackAddToCart(items, currency, exchangeRate);
     };
     const handleAddToCart = (item: CartItem) => handleAddToCartMany([item]);
+
+    // Open a seller's shop from anywhere that only knows the seller id (the
+    // cart, a refused Buy Now). The listing embed is enough for the header when
+    // we have it; otherwise one public_profiles read fills it in. Closes the
+    // cart and any listing sheet so the shop is what the buyer sees.
+    const openSellerShop = async (sellerId: string, hint?: SellerShopHint | null) => {
+        let profile: SellerShopHint | null = hint ?? null;
+        if (!profile?.display_name || !profile?.avatar_url) {
+            const found = (await fetchPublicSellers(createClient(), [sellerId])).get(sellerId);
+            if (found) profile = { ...profile, ...found };
+        }
+        setViewingSeller({
+            id: sellerId,
+            name: profile?.display_name || profile?.username || 'Seller',
+            email: 'seller@example.com',
+            avatar: profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sellerId}`,
+            provider: 'google',
+            rating: parseFloat(String(profile?.rating ?? '')) || 0,
+            reviewCount: profile?.review_count || 0,
+            isPartner: !!(profile?.partner_joined_at || profile?.role === 'partner'),
+            badges: [],
+        });
+        setSelectedListing(null);
+        setIsCartOpen(false);
+        setActiveTab('seller_profile');
+        window.scrollTo({ top: 0 });
+    };
+
+    // THB the cart already holds from the shop being viewed, for its
+    // minimum-order notice. THB because the minimum is a THB rule.
+    const cartTotalForViewingSeller = useMemo(
+        () => viewingSeller ? cart.filter((i) => i.sellerId === viewingSeller.id).reduce((sum, i) => sum + i.price, 0) : 0,
+        [cart, viewingSeller],
+    );
 
     const handleRemoveFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
@@ -1404,15 +1451,23 @@ export default function HomePage() {
 
         // The shop's minimum order (lib/minOrder.ts). Buy Now pays for this
         // listing alone, so below the minimum it cannot go through. Put the
-        // card in the cart instead, where the buyer can add more from the same
-        // shop, and say why. Fail-soft: the server gate has the final word.
+        // card in the cart instead and take the buyer to the seller's shop,
+        // where adding more fixes it; the shop header shows how much is still
+        // missing (SellerProfile) and the toast says why they moved. The
+        // shortfall counts what the cart already holds from this shop, so a
+        // second card from the same seller can complete the order. Fail-soft:
+        // the server gate has the final word.
         const minOrders = await fetchSellerMinOrders(createClient(), [listing.seller_id]);
         const minOrder = minOrders[listing.seller_id] ?? 0;
-        const shortfall = minOrderShortfall(buyNowItems.reduce((sum, i) => sum + i.price, 0), minOrder);
+        const buyNowIds = new Set(buyNowItems.map((i) => i.id));
+        const alreadyInCart = cart
+            .filter((i) => i.sellerId === listing.seller_id && !buyNowIds.has(i.id))
+            .reduce((sum, i) => sum + i.price, 0);
+        const shortfall = minOrderShortfall(alreadyInCart + buyNowItems.reduce((sum, i) => sum + i.price, 0), minOrder);
         if (shortfall > 0) {
-            setSelectedListing(null);
-            handleAddToCartMany(buyNowItems);
+            handleAddToCartMany(buyNowItems, { openCart: false });
             showToast(minOrderMessage(isThai, minOrder, shortfall), 'info');
+            await openSellerShop(listing.seller_id, listing.seller);
             return;
         }
 
@@ -2650,6 +2705,8 @@ export default function HomePage() {
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectListing={setSelectedListing}
                                 onAddToCart={handleAddToCart}
+                                cartTotalForShop={cartTotalForViewingSeller}
+                                onOpenCart={() => setIsCartOpen(true)}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                             />
@@ -2896,6 +2953,7 @@ export default function HomePage() {
                     cart={cart}
                     onRemoveItem={handleRemoveFromCart}
                     onCheckout={handleCheckout}
+                    onBrowseSeller={(sellerId, sellerName) => { void openSellerShop(sellerId, { display_name: sellerName }); }}
                     currencySymbol={currencySymbol}
                     exchangeRate={exchangeRate}
                 />

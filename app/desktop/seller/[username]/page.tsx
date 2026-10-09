@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
+import SellerMinOrderNotice from '@/components/desktop/SellerMinOrderNotice';
 import RankChip from '@/components/rewards/rankChip';
 import AvatarFrame from '@/components/rewards/AvatarFrame';
 import BadgePill, { badgeLabel } from '@/components/rewards/BadgePill';
@@ -119,11 +120,10 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
                     {/* Said on the shop itself, so a buyer filling a cart here
-                        knows the target before checkout refuses them. */}
+                        knows the target before checkout refuses them; reads
+                        the live cart to say how much is still missing. */}
                     {typeof seller.min_order_thb === 'number' && seller.min_order_thb > 0 && (
-                        <p className="text-xs text-amber-300/90 font-bold mt-1">
-                            {lang === 'EN' ? 'Minimum order' : 'ยอดสั่งซื้อขั้นต่ำ'} ฿{seller.min_order_thb.toLocaleString()}
-                        </p>
+                        <SellerMinOrderNotice sellerId={seller.id} minOrderThb={seller.min_order_thb} />
                     )}
                 </div>
             </header>

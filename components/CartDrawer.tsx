@@ -15,6 +15,9 @@ interface CartDrawerProps {
      *  belongs to a single connected account, so a mixed cart cannot go through
      *  in one charge. Omitted for a single-seller cart. */
     onCheckout: (shippingFee: number, sellerId?: string) => void;
+    /** Below a shop's minimum the fix is in that shop, not here: takes the
+     *  buyer to the seller's listings (the parent closes the drawer). */
+    onBrowseSeller?: (sellerId: string, sellerName: string) => void;
     currencySymbol: string;
     exchangeRate?: number;
 }
@@ -25,6 +28,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     cart,
     onRemoveItem,
     onCheckout,
+    onBrowseSeller,
     currencySymbol,
     exchangeRate = 1
 }) => {
@@ -201,11 +205,22 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                 {t('shipping.included')}
                             </p>
                             {/* Below this shop's minimum: say how much is
-                                missing, here, where adding a card fixes it. */}
+                                missing and offer the way to fix it — the
+                                seller's own listings. */}
                             {(sellerShortfall[sellerId]?.shortfall ?? 0) > 0 && (
-                                <p className="text-[10px] text-amber-300 font-bold px-1 leading-snug">
-                                    {minOrderMessage(isThai, sellerShortfall[sellerId].min, sellerShortfall[sellerId].shortfall)}
-                                </p>
+                                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-2">
+                                    <p className="text-[10px] text-amber-300 font-bold leading-snug">
+                                        {minOrderMessage(isThai, sellerShortfall[sellerId].min, sellerShortfall[sellerId].shortfall)}
+                                    </p>
+                                    {onBrowseSeller && sellerId !== 'unknown' && (
+                                        <button
+                                            onClick={() => onBrowseSeller(sellerId, sellerName)}
+                                            className="w-full h-9 rounded-lg bg-amber-400 text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            {t('cart.addMoreFromShop')} <i className="fa-solid fa-arrow-right"></i>
+                                        </button>
+                                    )}
+                                </div>
                             )}
                             {groupLines(items).map(({ item, ids }) => (
                             <div key={ids[0]} className="bg-white/5 p-3 rounded-xl flex gap-3 border border-white/5 relative group">
