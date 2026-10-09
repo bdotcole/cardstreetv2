@@ -15,6 +15,16 @@ import { formatTHB } from '@/lib/currency';
  * including before the movers migration runs.
  */
 
+/**
+ * Switched off 2026-10-09 (founder call): the rail fills the top of the
+ * marketplace with catalog cards that are not for sale, which reads as dead
+ * space above the listings. Both marketplaces gate their mount on this flag,
+ * so nothing renders and nothing is fetched while it is false. The daily cron
+ * and /api/market/movers keep running so the data is ready the moment a
+ * better UI lands; flip this to bring the rail back on mobile and desktop.
+ */
+export const MARKET_MOVERS_ENABLED = false;
+
 interface MoverItem {
     card: Card;
     oldThb: number;

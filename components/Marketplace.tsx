@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import MarketMovers from '@/components/MarketMovers';
+import MarketMovers, { MARKET_MOVERS_ENABLED } from '@/components/MarketMovers';
 import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
@@ -435,8 +435,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
       {/* Scrollable Listings Grid */}
       <div className="flex-1 overflow-y-auto px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
-        {/* Market movers above the listings, while browsing (not searching) singles. */}
-        {!debouncedSearch && section === 'singles' && (
+        {/* Market movers above the listings, while browsing (not searching) singles.
+            Off for everyone until a better UI exists; see MARKET_MOVERS_ENABLED. */}
+        {MARKET_MOVERS_ENABLED && !debouncedSearch && section === 'singles' && (
           <MarketMovers
             game={selectedGame}
             onSelectCard={onSelectCard}
