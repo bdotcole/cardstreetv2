@@ -186,7 +186,8 @@ interface PlatformSummary {
 
 interface Aggregate {
     days: string[]
-    perDay: Array<Record<string, number | string | null>>        // followers by platform
+    perDay: Array<Record<string, number | string | null>>        // followers (running total) by platform
+    newFollowersPerDay: Array<Record<string, number | string | null>>  // net new followers that day by platform
     viewsPerDay: Array<Record<string, number | string | null>>
     reachPerDay: Array<Record<string, number | string | null>>
     clicksPerDay: Array<Record<string, number | string | null>>
@@ -294,7 +295,7 @@ function aggregate(p: MetricsPayload): Aggregate {
         }
     }).filter((s) => s.accounts.length > 0)
 
-    const seriesFor = (metric: 'followers' | WindowMetric) => days.map((day) => {
+    const seriesFor = (metric: 'followers' | 'follower_delta' | WindowMetric) => days.map((day) => {
         const point: Record<string, number | string | null> = { day }
         for (const s of platforms) {
             if (metric === 'followers') {
@@ -332,6 +333,7 @@ function aggregate(p: MetricsPayload): Aggregate {
     return {
         days,
         perDay: seriesFor('followers'),
+        newFollowersPerDay: seriesFor('follower_delta'),
         viewsPerDay: seriesFor('views'),
         reachPerDay: seriesFor('reach'),
         clicksPerDay: seriesFor('link_clicks'),
@@ -407,12 +409,15 @@ const axisProps = {
     tickLine: false as const,
 }
 
-function ChartCard({ title, sub, children, empty }: { title: string; sub?: string; children: React.ReactNode; empty?: string | null }) {
+function ChartCard({ title, sub, action, children, empty }: { title: string; sub?: string; action?: React.ReactNode; children: React.ReactNode; empty?: string | null }) {
     return (
         <div className="glass rounded-2xl border border-white/10 p-5">
-            <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <h2 className="text-sm font-black text-white">{title}</h2>
-                {sub && <p className="text-[10px] text-slate-500 text-right">{sub}</p>}
+                <div className="flex items-center gap-3">
+                    {sub && <p className="text-[10px] text-slate-500 text-right">{sub}</p>}
+                    {action}
+                </div>
             </div>
             {empty ? (
                 <div className="h-[220px] flex items-center justify-center text-xs text-slate-500 text-center px-6">{empty}</div>
@@ -421,13 +426,37 @@ function ChartCard({ title, sub, children, empty }: { title: string; sub?: strin
     )
 }
 
+/**
+ * New followers per day by default (founder, 2026-10-10): the running total
+ * is a flat line at 32K that hides the day-to-day story, and the total is
+ * already the Followers tile. The toggle keeps the total view one tap away.
+ */
 function FollowersChart({ agg }: { agg: Aggregate }) {
-    const platforms = agg.platforms.filter((s) => agg.perDay.some((d) => d[s.platform] !== null))
-    const lastIndex = agg.perDay.length - 1
+    const [mode, setMode] = useState<'new' | 'total'>('new')
+    const data = mode === 'new' ? agg.newFollowersPerDay : agg.perDay
+    const platforms = agg.platforms.filter((s) => data.some((d) => d[s.platform] !== null))
+    const lastIndex = data.length - 1
+    const toggle = (
+        <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5" role="group" aria-label="Followers view">
+            {([['new', 'New per day'], ['total', 'Total']] as const).map(([key, label]) => (
+                <button
+                    key={key} type="button" onClick={() => setMode(key)} aria-pressed={mode === key}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-colors ${mode === key ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    )
     return (
-        <ChartCard title="Followers" sub="end of day, every platform" empty={platforms.length === 0 ? 'No follower history yet — it builds from the first sync.' : null}>
+        <ChartCard
+            title={mode === 'new' ? 'New followers per day' : 'Followers'}
+            sub={mode === 'new' ? 'net of unfollows, every platform' : 'end of day, every platform'}
+            action={toggle}
+            empty={platforms.length === 0 ? 'No follower history yet — it builds from the first sync.' : null}
+        >
             <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={agg.perDay} margin={{ top: 10, right: 44, left: -10, bottom: 0 }}>
+                <LineChart data={data} margin={{ top: 10, right: 44, left: -10, bottom: 0 }}>
                     <CartesianGrid stroke={GRID} vertical={false} />
                     <XAxis dataKey="day" tickFormatter={shortDay} {...axisProps} minTickGap={24} />
                     <YAxis {...axisProps} tickFormatter={(v) => compact(Number(v))} width={48} domain={['auto', 'auto']} />
