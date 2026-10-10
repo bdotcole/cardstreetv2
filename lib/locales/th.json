@@ -809,6 +809,8 @@
             "noListings": "ยังไม่มีรายการขายสำหรับการ์ดนี้ในขณะนี้",
             "notifyOnListing": "แจ้งเตือนเมื่อมีคนวางขาย",
             "notifyOnListingOn": "เราจะแจ้งเตือนเมื่อมีคนวางขาย",
+            "notifyOnListingOff": "ปิดการแจ้งเตือน",
+            "notifyOnListingOffToast": "ปิดการแจ้งเตือนแล้ว · นำออกจากรายการที่อยากได้",
             "addToCart": "เพิ่มลงตะกร้า",
             "moreFromSet": "การ์ดอื่นในชุดนี้",
             "moreFromGame": "การ์ดอื่นในเกมนี้",

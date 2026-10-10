@@ -808,6 +808,8 @@
             "noListings": "No active listings for this card right now.",
             "notifyOnListing": "Notify me on listing",
             "notifyOnListingOn": "You'll be notified when it's listed",
+            "notifyOnListingOff": "Turn off",
+            "notifyOnListingOffToast": "Listing alert off · removed from your wishlist",
             "addToCart": "Add to cart",
             "moreFromSet": "More from this set",
             "moreFromGame": "More cards in this game",

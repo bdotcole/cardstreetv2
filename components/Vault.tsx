@@ -981,7 +981,9 @@ const Vault: React.FC<VaultProps> = ({
       {viewingCard && (
         <CardDetails
           card={viewingCard}
-          isWishlisted={true} // In wishlist view, it's always true
+          // Live, not hard-coded true: the card stays open after the heart or
+          // the listing-alert button removes it, and both must show that.
+          isWishlisted={wishlist.some(c => c.id === viewingCard.id)}
           onClose={() => { setViewingCard(null); setViewingItem(null); }}
           onToggleWishlist={onToggleWishlist}
           onAddToCollection={onAddToCollection}

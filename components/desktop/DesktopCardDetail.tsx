@@ -163,13 +163,18 @@ export default function DesktopCardDetail({
     };
 
     // Wishlisting IS the listing alert (lib/wishlistAlerts), so this is the
-    // heart button's add path with a toast that confirms what was asked for.
-    const handleNotifyOnListing = async () => {
+    // heart button's toggle with toasts that say what was asked for.
+    const handleToggleListingAlert = async () => {
         if (!card) return;
         if (!user) { setAuthOpen(true); return; }
         try {
-            await addToWishlist(card);
-            showToast(t('desktop.card.notifyOnListingOn'), 'success');
+            if (isInWishlist(card.id)) {
+                await removeFromWishlist(card.id);
+                showToast(t('desktop.card.notifyOnListingOffToast'), 'success');
+            } else {
+                await addToWishlist(card);
+                showToast(t('desktop.card.notifyOnListingOn'), 'success');
+            }
         } catch {
             showToast(t('desktop.collection.addFailed'), 'error');
         }
@@ -551,14 +556,22 @@ export default function DesktopCardDetail({
                     {listings.length === 0 ? (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                             <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
+                            {/* Stays a button when on: a static line that ignores
+                                clicks reads as broken. */}
                             {isInWishlist(card.id) ? (
-                                <span className="inline-flex items-center gap-2 text-sm font-bold text-brand-green">
+                                <button
+                                    onClick={handleToggleListingAlert}
+                                    className="group inline-flex items-center gap-2 bg-brand-green/10 hover:bg-white/10 border border-brand-green/25 text-brand-green text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+                                >
                                     <i className="fa-solid fa-bell text-xs"></i>
                                     {t('desktop.card.notifyOnListingOn')}
-                                </span>
+                                    <span className="text-slate-500 group-hover:text-white font-semibold underline underline-offset-2 transition-colors">
+                                        {t('desktop.card.notifyOnListingOff')}
+                                    </span>
+                                </button>
                             ) : (
                                 <button
-                                    onClick={handleNotifyOnListing}
+                                    onClick={handleToggleListingAlert}
                                     className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-brand-cyan text-sm font-bold px-4 py-2 rounded-xl transition-colors"
                                 >
                                     <i className="fa-regular fa-bell text-xs"></i>

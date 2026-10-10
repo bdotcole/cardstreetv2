@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { Card } from '../types';
@@ -9,13 +9,14 @@ import { getSellerTrust } from '@/lib/sellerTrust';
 import { marketplaceService } from '@/services/marketplaceService';
 import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
 import { useCardWishlistDemand } from '@/lib/hooks/useWishlistDemand';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface CardDetailsProps {
   card: Card;
   isWishlisted: boolean;
   onClose: () => void;
   onAddToCollection: (card: Card) => void;
-  onToggleWishlist: (card: Card) => void;
+  onToggleWishlist: (card: Card) => void | Promise<void>;
   onShopNow?: () => void;
   onAddToBuylist?: () => void;
   listings?: any[];
@@ -61,6 +62,35 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   const wishlistDemand = useCardWishlistDemand(card?.id);
 
   const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Listing-alert button. alertTargetRef holds the state a tap asked for, so
+  // the confirmation toast fires only once the parent's wishlist actually
+  // flips: a signed-out tap opens the auth gate instead (and the post-sign-in
+  // resume still earns the toast), and a failure already toasts upstream.
+  const { showToast } = useToast();
+  const [alertBusy, setAlertBusy] = useState(false);
+  const alertTargetRef = useRef<boolean | null>(null);
+  const toggleListingAlert = async () => {
+    if (alertBusy) return;
+    alertTargetRef.current = !isWishlisted;
+    setAlertBusy(true);
+    try {
+      await onToggleWishlist(card);
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+  useEffect(() => {
+    const target = alertTargetRef.current;
+    alertTargetRef.current = null;
+    if (target === null || target !== isWishlisted) return;
+    showToast(
+      isWishlisted
+        ? (isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed")
+        : (isThai ? 'ปิดการแจ้งเตือนแล้ว · นำออกจากรายการที่อยากได้' : 'Listing alert off · removed from your wishlist'),
+      'success',
+    );
+  }, [isWishlisted, isThai, showToast]);
 
   // Real graded prices for this card: app sales (official) override JustTCG.
   // Empty until a grade tier actually has data — the dashboard stays blank
@@ -299,21 +329,31 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                       <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">{isThai ? 'ไม่มีรายการขายในขณะนี้' : 'No listings available for this item'}</p>
                       {/* The wishlist IS the listing alert: lib/wishlistAlerts
                           notifies every wishlister when this card is listed, so
-                          the button just wishlists it (auth gate included). */}
-                      {isWishlisted ? (
-                        <p className="mt-2 text-[9px] text-brand-green font-black uppercase tracking-widest">
-                          <i className="fa-solid fa-bell mr-1.5"></i>
-                          {isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed"}
-                        </p>
-                      ) : (
-                        <button
-                          onClick={() => onToggleWishlist(card)}
-                          className="mt-2 px-3 py-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white active:scale-95 transition-all"
-                        >
-                          <i className="fa-regular fa-bell mr-1.5"></i>
-                          {isThai ? 'แจ้งเตือนเมื่อมีคนวางขาย' : 'Notify me on listing'}
-                        </button>
-                      )}
+                          this toggles the wishlist (auth gate included). The
+                          "on" state stays tappable: a green line that looked
+                          like a button and ignored taps read as broken. */}
+                      <button
+                        onClick={toggleListingAlert}
+                        disabled={alertBusy}
+                        className="mt-2 px-3 py-2 inline-flex flex-col items-center gap-1 active:scale-95 transition-all disabled:opacity-60"
+                      >
+                        {isWishlisted ? (
+                          <>
+                            <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">
+                              <i className="fa-solid fa-bell mr-1.5"></i>
+                              {isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed"}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest underline underline-offset-2">
+                              {isThai ? 'ปิดการแจ้งเตือน' : 'Turn off'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[9px] text-brand-cyan font-black uppercase tracking-widest">
+                            <i className="fa-regular fa-bell mr-1.5"></i>
+                            {isThai ? 'แจ้งเตือนเมื่อมีคนวางขาย' : 'Notify me on listing'}
+                          </span>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
