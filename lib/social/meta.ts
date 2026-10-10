@@ -300,8 +300,39 @@ export async function syncFacebookPage(pageId: string, pageToken: string, window
  * Graph accepts wins; the post list can never take the day's metrics down
  * with it (the first live sync lost a whole Page to exactly that).
  */
+function fbFormat(p: any): PostMetrics['format'] {
+    const att = p.attachments?.data?.[0];
+    const type = String(att?.type ?? '').toLowerCase();
+    const media = String(att?.media_type ?? '').toLowerCase();
+    if (media === 'video' || type.startsWith('video')) return 'video';
+    if (type === 'album' || type === 'multi_share') return 'carousel';
+    if (media === 'photo' || type === 'photo') return 'photo';
+    if (type === 'share' || media === 'link') return 'link';
+    return 'post';
+}
+
+// Video posts: watch-time figures live on the video object, not the post.
+// Best-effort per video; Meta's November 2025 cull may have taken some.
+const FB_VIDEO_INSIGHTS = ['total_video_views', 'total_video_avg_time_watched', 'total_video_view_total_time'];
+
+async function facebookVideoInsights(videoId: string, pageToken: string): Promise<Map<string, number>> {
+    const s: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+    try {
+        await insightsWithFallback(`${videoId}/video_insights`, FB_VIDEO_INSIGHTS, {}, pageToken, s);
+    } catch {
+        return new Map();
+    }
+    const lifetime = new Map<string, number>();
+    for (const [name, byDay] of s.byDay) {
+        const v = byDay.get(LIFETIME);
+        if (v !== undefined) lifetime.set(name, v);
+    }
+    for (const [name, v] of s.totals) lifetime.set(name, v);
+    return lifetime;
+}
+
 async function facebookPosts(pageId: string, pageToken: string, notes: string[]): Promise<PostMetrics[]> {
-    const core = 'id,message,created_time,permalink_url,full_picture,shares';
+    const core = 'id,message,created_time,permalink_url,full_picture,shares,attachments{media_type,type,target{id}}';
     const tiers = [
         `${core},comments.summary(total_count).limit(0),reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
         `${core},reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
@@ -326,22 +357,33 @@ async function facebookPosts(pageId: string, pageToken: string, notes: string[])
     if (refused) {
         notes.push('Facebook post comment/reaction counts need the pages_read_user_content permission on the Meta app (add it, then Reconnect).');
     }
-    return (res?.data ?? []).map((p: any): PostMetrics => {
+    const out: PostMetrics[] = [];
+    for (const p of res?.data ?? []) {
         const insight = (p.insights?.data ?? []).find((i: any) => i.name === 'post_media_view');
-        const views = insight ? toInt(insight.values?.[0]?.value) : null;
-        return {
+        const format = fbFormat(p);
+        const post: PostMetrics = {
             external_id: String(p.id),
             published_at: p.created_time ?? null,
             caption: p.message ?? null,
             media_type: 'post',
             permalink: p.permalink_url ?? null,
             thumbnail_url: p.full_picture ?? null,
-            views,
+            format,
+            views: insight ? toInt(insight.values?.[0]?.value) : null,
             likes: toInt(p.reactions?.summary?.total_count),
             comments: toInt(p.comments?.summary?.total_count),
             shares: toInt(p.shares?.count),
         };
-    });
+        const videoId = format === 'video' ? p.attachments?.data?.[0]?.target?.id : null;
+        if (videoId) {
+            const v = await facebookVideoInsights(String(videoId), pageToken);
+            if (v.has('total_video_views')) post.views = v.get('total_video_views')!;
+            if (v.has('total_video_avg_time_watched')) post.avg_watch_seconds = Math.round(v.get('total_video_avg_time_watched')! / 10) / 100;
+            if (v.has('total_video_view_total_time')) post.watch_time_seconds = Math.round(v.get('total_video_view_total_time')! / 1000);
+        }
+        out.push(post);
+    }
+    return out;
 }
 
 // --- Instagram professional account -------------------------------------
@@ -428,6 +470,12 @@ export async function syncInstagramAccount(igUserId: string, pageToken: string, 
     const followersNow = toInt(profile?.followers_count);
     if (last && followersNow !== null && last.day === shiftDay(isoDay(new Date()), -1)) last.followers = followersNow;
 
+    const online = await instagramOnlineFollowers(igUserId, pageToken, w);
+    for (const d of days) {
+        const hours = online.get(d.day);
+        if (hours) d.raw = { ...(d.raw ?? {}), online_followers: hours };
+    }
+
     const posts = await instagramPosts(igUserId, pageToken);
 
     return {
@@ -444,7 +492,24 @@ export async function syncInstagramAccount(igUserId: string, pageToken: string, 
     };
 }
 
-const IG_MEDIA_INSIGHTS = ['reach', 'views', 'saved', 'shares', 'total_interactions'];
+// Per-media insights by product type. Meta keeps re-shaping the Reels set
+// (plays / replays went in March 2025, watch time stayed), so each list is a
+// wish list: insightsWithFallback keeps whatever the API still answers.
+const IG_REEL_INSIGHTS = [
+    'reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions',
+    'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'follows', 'profile_visits',
+];
+const IG_FEED_INSIGHTS = ['reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'];
+
+function igFormat(m: any): PostMetrics['format'] {
+    const product = String(m.media_product_type ?? '').toUpperCase();
+    const type = String(m.media_type ?? '').toUpperCase();
+    if (product === 'REELS') return 'reel';
+    if (product === 'STORY') return 'story';
+    if (type === 'CAROUSEL_ALBUM') return 'carousel';
+    if (type === 'VIDEO') return 'video';
+    return 'photo';
+}
 
 async function instagramPosts(igUserId: string, pageToken: string): Promise<PostMetrics[]> {
     const res = await graphGet<any>(`${igUserId}/media`, {
@@ -453,9 +518,10 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
     }, pageToken);
     const out: PostMetrics[] = [];
     for (const m of res?.data ?? []) {
+        const format = igFormat(m);
         const s: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
         try {
-            await insightsWithFallback(`${m.id}/insights`, IG_MEDIA_INSIGHTS, {}, pageToken, s);
+            await insightsWithFallback(`${m.id}/insights`, format === 'reel' ? IG_REEL_INSIGHTS : IG_FEED_INSIGHTS, {}, pageToken, s);
         } catch {
             // A single post's insights are not worth failing the account.
         }
@@ -466,6 +532,9 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
             if (v !== undefined) lifetime.set(name, v);
         }
         for (const [name, v] of s.totals) lifetime.set(name, v);
+        const get = (k: string) => (lifetime.has(k) ? lifetime.get(k)! : undefined);
+        const avgMs = get('ig_reels_avg_watch_time');
+        const totalMs = get('ig_reels_video_view_total_time');
         out.push({
             external_id: String(m.id),
             published_at: m.timestamp ?? null,
@@ -473,13 +542,47 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
             media_type: (m.media_product_type || m.media_type || null)?.toLowerCase() ?? null,
             permalink: m.permalink ?? null,
             thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
-            reach: lifetime.get('reach') ?? null,
-            views: lifetime.get('views') ?? null,
+            format,
+            reach: get('reach') ?? null,
+            views: get('views') ?? null,
             likes: toInt(m.like_count),
             comments: toInt(m.comments_count),
-            shares: lifetime.get('shares') ?? null,
-            saves: lifetime.get('saved') ?? null,
+            shares: get('shares') ?? null,
+            saves: get('saved') ?? null,
+            total_interactions: get('total_interactions'),
+            follows: get('follows'),
+            profile_visits: get('profile_visits'),
+            avg_watch_seconds: avgMs !== undefined ? Math.round(avgMs / 10) / 100 : undefined,
+            watch_time_seconds: totalMs !== undefined ? Math.round(totalMs / 1000) : undefined,
         });
+    }
+    return out;
+}
+
+/**
+ * When this account's followers are online, hour by hour (Instagram's
+ * `online_followers`, only served for the last 30 days). Returned per day as
+ * {hour: followers}; the content tab averages the days into "best time to
+ * post". Best-effort — a refusal returns an empty map, never an error.
+ */
+async function instagramOnlineFollowers(igUserId: string, pageToken: string, window: SyncWindow): Promise<Map<string, Record<string, number>>> {
+    const out = new Map<string, Record<string, number>>();
+    const floor = shiftDay(isoDay(new Date()), -IG_FOLLOWER_LOOKBACK_DAYS);
+    const since = window.since < floor ? floor : window.since;
+    if (since > window.until) return out;
+    try {
+        const res = await graphGet<any>(`${igUserId}/insights`, {
+            metric: 'online_followers', period: 'lifetime',
+            since: dayStartUnix(since), until: dayStartUnix(window.until) + 86_400,
+        }, pageToken);
+        for (const v of res?.data?.[0]?.values ?? []) {
+            if (!v?.end_time || typeof v.value !== 'object' || v.value === null) continue;
+            const hours: Record<string, number> = {};
+            for (const [h, n] of Object.entries(v.value)) hours[h] = toInt(n) ?? 0;
+            out.set(dayFromEndTime(v.end_time), hours);
+        }
+    } catch {
+        // Not served (too few followers, or Meta retired it) — the tab says "no data" for best times.
     }
     return out;
 }

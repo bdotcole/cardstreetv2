@@ -3292,3 +3292,42 @@ export async function sendCampaignPush(
         return false;
     }
 }
+
+/**
+ * One-off HTML email to a fixed address (reports, alerts to the team).
+ * Same Elemental envelope the first-sale email uses; no user lookup, no
+ * notification preference — the recipient is ours, not a customer's.
+ */
+export async function sendHtmlEmail(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    data?: Record<string, unknown>;
+}): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping HTML email'); return false; }
+    if (!opts.to) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: opts.to },
+                content: {
+                    version: '2022-01-01',
+                    elements: [
+                        { type: 'meta', title: opts.subject },
+                        { type: 'html', content: opts.html },
+                    ],
+                },
+                data: opts.data ?? {},
+                routing: { method: 'all', channels: ['email'] },
+                providers: postmarkOverride(opts.subject),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        console.log(`[Courier] ✅ HTML email "${opts.subject}" → ${opts.to}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ HTML email "${opts.subject}" → ${opts.to} failed:`, error);
+        return false;
+    }
+}

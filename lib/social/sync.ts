@@ -24,7 +24,7 @@ import { isGa4Configured } from './config';
 import { syncFacebookPage, syncInstagramAccount } from './meta';
 import { googleRefresh, syncYouTubeChannel } from './youtube';
 import { syncTikTokAccount, tiktokRefresh } from './tiktok';
-import { fetchSocialSiteTraffic } from './ga4';
+import { fetchSocialSignups, fetchSocialSiteTraffic } from './ga4';
 import {
     eachDay, isoDay, shiftDay,
     type DailyMetrics, type SocialAccountRow, type SocialBrand, type SyncResult, type SyncWindow,
@@ -48,7 +48,7 @@ export interface AccountSyncOutcome {
 export interface SyncSummary {
     window: SyncWindow;
     accounts: AccountSyncOutcome[];
-    siteTraffic: { ok: boolean; rows: number; error?: string; skipped?: boolean };
+    siteTraffic: { ok: boolean; rows: number; error?: string; skipped?: boolean; signupRows?: number; signupError?: string };
     durationMs: number;
 }
 
@@ -116,6 +116,21 @@ export async function syncSocialAccounts(opts: {
                 if (!siteTraffic.error) siteTraffic = { ok: true, rows: rows.length };
             } catch (e) {
                 siteTraffic = { ok: false, rows: 0, error: e instanceof Error ? e.message : String(e) };
+            }
+            // Sign-ups by first-touch source ride the same table on their own
+            // upsert (sessions/users default to 0 on a row only a sign-up created).
+            try {
+                const signups = await fetchSocialSignups(window);
+                if (signups.length) {
+                    const { error: e } = await supabase.from('social_site_traffic_daily').upsert(
+                        signups.map((r) => ({ ...r, synced_at: new Date().toISOString() })),
+                        { onConflict: 'day,platform,campaign,medium' },
+                    );
+                    if (e) throw new Error(e.message);
+                }
+                siteTraffic.signupRows = signups.length;
+            } catch (e) {
+                siteTraffic.signupError = e instanceof Error ? e.message : String(e);
             }
         }
     }
@@ -243,10 +258,23 @@ async function persist(supabase: SupabaseClient, account: SocialAccountRow, resu
     }
 
     if (result.posts.length) {
-        const { error } = await supabase.from('social_posts').upsert(
-            result.posts.map((p) => ({ ...p, account_id: account.id, synced_at: new Date().toISOString() })),
-            { onConflict: 'account_id,external_id' },
-        );
-        if (error) throw new Error(`write posts: ${error.message}`);
+        // Only the fields the provider actually set go up: a metric a platform
+        // never reports stays undefined here and so keeps its stored value.
+        const rows = result.posts.map((p) => {
+            const row: Record<string, unknown> = { account_id: account.id, synced_at: new Date().toISOString() };
+            for (const [k, v] of Object.entries(p)) if (v !== undefined) row[k] = v;
+            return row;
+        });
+        const { error } = await supabase.from('social_posts').upsert(rows, { onConflict: 'account_id,external_id' });
+        if (error) {
+            // Before migration 20261010 the content columns don't exist: keep the basic post list flowing.
+            if (!/column|schema cache/i.test(error.message)) throw new Error(`write posts: ${error.message}`);
+            const basic = ['account_id', 'external_id', 'published_at', 'caption', 'media_type', 'permalink', 'thumbnail_url', 'reach', 'views', 'likes', 'comments', 'shares', 'saves', 'raw', 'synced_at'];
+            const { error: e2 } = await supabase.from('social_posts').upsert(
+                rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => basic.includes(k)))),
+                { onConflict: 'account_id,external_id' },
+            );
+            if (e2) throw new Error(`write posts: ${e2.message}`);
+        }
     }
 }

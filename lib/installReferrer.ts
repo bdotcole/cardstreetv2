@@ -25,6 +25,7 @@ import {
     INSTALL_ID_KEY,
     INSTALL_REPORTED_KEY,
 } from '@/lib/referralClient';
+import { captureAcquisitionFromReferrer } from '@/lib/social/acquisitionClient';
 
 interface InstallReferrerPlugin {
     getReferrer(): Promise<{ referrer?: string | null }>;
@@ -61,6 +62,11 @@ export async function maybeReportInstallReferrer(): Promise<string | null> {
         // marking reported, so an app update can still credit this install.
         const { referrer } = await InstallReferrer.getReferrer();
         if (!referrer) return null;
+
+        // Social-link installs (utm_source=instagram&utm_medium=bio from the
+        // get-the-app popup) carry no partner slug; they are still the
+        // account's first touch, recorded at sign-up for the Social dashboard.
+        captureAcquisitionFromReferrer(referrer);
 
         const params = new URLSearchParams(referrer);
         const slug = params.get('utm_content');

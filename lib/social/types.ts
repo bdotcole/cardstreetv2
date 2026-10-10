@@ -84,6 +84,14 @@ export interface DailyMetrics {
     raw?: Record<string, unknown>;
 }
 
+/** reel / short / video / live / photo / carousel / story / post / link */
+export type PostFormat = 'reel' | 'short' | 'video' | 'live' | 'photo' | 'carousel' | 'story' | 'post' | 'link';
+
+/**
+ * One post / video. The content fields are undefined when a platform never
+ * reports them (so a re-sync leaves the stored value alone) and null when
+ * it reported nothing — a refused metric must not become a fake zero.
+ */
 export interface PostMetrics {
     external_id: string;
     published_at: string | null;
@@ -97,6 +105,18 @@ export interface PostMetrics {
     comments?: number | null;
     shares?: number | null;
     saves?: number | null;
+    format?: PostFormat | null;
+    duration_seconds?: number | null;
+    watch_time_seconds?: number | null;
+    avg_watch_seconds?: number | null;
+    avg_watch_pct?: number | null;
+    /** % of viewers still watching at the 30-second mark (YouTube retention curve). */
+    hook_pct?: number | null;
+    follows?: number | null;
+    profile_visits?: number | null;
+    total_interactions?: number | null;
+    /** YouTube audience retention: [elapsedRatio, watchRatio] pairs. */
+    retention?: [number, number][] | null;
     raw?: Record<string, unknown>;
 }
 

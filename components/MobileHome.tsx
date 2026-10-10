@@ -25,6 +25,7 @@ import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
 import GetAppPrompt from '@/components/GetAppPrompt';
+import { captureAcquisitionParams, maybeRecordAcquisition } from '@/lib/social/acquisitionClient';
 import SignupTracker from '@/components/SignupTracker';
 import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
 import { readAttributionCookie, unknownAttribution, withWriter } from '@/lib/attribution';
@@ -838,6 +839,9 @@ export default function HomePage() {
         // signup this session can be attributed even if the cs_ref cookie
         // from /join/<slug> didn't survive.
         captureReferralParam();
+        // Which social link brought them (utm_* from the tracked short links);
+        // written onto the profile at sign-up. Analytics only.
+        captureAcquisitionParams();
 
         // Android native shell only: report the Play install referrer once so
         // the referring partner gets download credit (iOS earns it at QR-scan
@@ -864,6 +868,7 @@ export default function HomePage() {
         const applySessionUser = (sessionUser: SupabaseAuthUser) => {
             Sentry.setUser({ id: sessionUser.id, email: sessionUser.email });
             void maybeAttributeReferral(sessionUser.id);
+            void maybeRecordAcquisition(sessionUser.id);
             setUser(prev => ({
                 id: sessionUser.id,
                 name: sessionUser.user_metadata.full_name || sessionUser.email?.split('@')[0] || 'User',

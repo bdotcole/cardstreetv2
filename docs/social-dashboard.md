@@ -224,6 +224,52 @@ the install push.
 since migration `20261007_social_link_clicks.sql`; the sync and the metrics
 route fall back to the old `(day, platform)` shape until it runs.
 
+## Sign-ups per link, Content tab, weekly insights email (added 2026-10-10)
+
+Migration `20261010_social_content_signups.sql` (SQL Editor) adds all of it.
+
+**Sign-ups per platform (Cardstreet).** Two layers, both on the Tracked links
+card and the platform cards:
+- *GA4 first-touch* — `sign_up` events counted by the user's first-ever
+  source (`lib/social/ga4.ts:fetchSocialSignups`), stored as
+  `social_site_traffic_daily.signups` on the same (day, platform, campaign,
+  medium) key as clicks. Has history; web + Android app (the shell loads
+  cardstreet.app).
+- *Confirmed* — `profiles.acquisition_{source,medium,campaign,landed_at}`:
+  the landing utm_* (or the Play install referrer on Android) is stashed in
+  localStorage for 30 days (`lib/social/acquisitionClient.ts`, wired into
+  the mobile shell beside the partner-referral capture) and written once at
+  sign-in by `POST /api/profile/acquisition` (new accounts only, first touch
+  wins). Exact and cross-session; lets later questions ("did Instagram
+  sign-ups buy?") be answered from our own data. iOS installs via the popup
+  stay unattributable (Apple gives no referrer).
+
+**Content tab** (`app/admin/social/ContentView.tsx`, data from
+`GET /api/admin/social/content`): every stored post with the metrics its
+platform serves, sortable by engagement rate / reach / saves / watch % /
+hook; by-format and by-posting-hour comparisons; Instagram's online-followers
+by hour (best time to post, Bangkok). Stored per post by the daily sync:
+- YouTube (`lib/social/youtube.ts`): length, Shorts vs long-form, average
+  view duration and %, watch time, subscribers gained, and the audience
+  retention curve (`social_posts.retention`), from which `hook_pct` = viewers
+  still watching at 30 s. One Analytics call per video for retention.
+- Instagram: per-media reach, views, saves, shares, total interactions,
+  follows and profile visits from the post, Reels average watch time (ms →
+  s). Meta reshuffles Reels fields; refused ones stay null. `online_followers`
+  (last 30 days only) rides `social_metrics_daily.raw`.
+- Facebook: post format from attachments; video average watch time via
+  `/{video}/video_insights`, best-effort.
+
+**Weekly insights email** (`lib/social/insights.ts`): Monday 02:00 UTC
+(`app/api/cron/social-weekly-insights`), one report per brand per week to
+`SOCIAL_INSIGHTS_EMAIL` (default support@thailandtcg.com). Stats are
+computed from stored data (no platform calls); the narrative — headline,
+what worked / didn't, recommendations, experiments — is written by Gemini
+Flash from those numbers with a rule-based fallback. Stored in
+`social_insight_reports` (idempotent per week; `?force=1` resends). Admin:
+`GET /api/admin/social/insights?brand=` previews this week-to-date,
+`POST` sends now, `?id=` opens a stored report — all from the Content tab.
+
 ## Known limits
 
 - TikTok reach / profile views / link clicks: not in the Display API. The

@@ -165,3 +165,53 @@ export async function fetchSocialSiteTraffic(window: SyncWindow): Promise<SiteTr
     }
     return [...acc.values()];
 }
+
+export interface SignupRow { day: string; platform: SocialPlatform; campaign: string; medium: string; signups: number }
+
+/**
+ * sign_up events by the user's FIRST-touch source — "accounts whose first
+ * visit ever came from this platform" — which is the question a bio link
+ * asks. Session-scoped attribution (used for clicks) would hand a sign-up
+ * that happens two visits later to "(direct)".
+ */
+export async function fetchSocialSignups(window: SyncWindow): Promise<SignupRow[]> {
+    const property = process.env.GA4_PROPERTY_ID;
+    if (!property) throw new Error('GA4_PROPERTY_ID not set');
+    const token = await accessToken();
+    const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            dateRanges: [{ startDate: window.since, endDate: window.until }],
+            dimensions: [{ name: 'date' }, { name: 'firstUserSource' }, { name: 'firstUserCampaignName' }, { name: 'firstUserMedium' }],
+            metrics: [{ name: 'eventCount' }],
+            dimensionFilter: {
+                andGroup: {
+                    expressions: [
+                        { filter: { fieldName: 'eventName', stringFilter: { matchType: 'EXACT', value: 'sign_up' } } },
+                        { filter: { fieldName: 'firstUserSource', stringFilter: { matchType: 'PARTIAL_REGEXP', value: 'facebook|fb|messenger|instagram|^ig$|tiktok|youtu', caseSensitive: false } } },
+                    ],
+                },
+            },
+            limit: 10000,
+        }),
+        cache: 'no-store',
+    });
+    const j = await res.json().catch(() => ({}));
+    if (j.error) throw new Error(`GA4 ${j.error.status}: ${j.error.message}`);
+
+    const acc = new Map<string, SignupRow>();
+    for (const row of j.rows ?? []) {
+        const ymd: string = row.dimensionValues?.[0]?.value ?? '';
+        const platform = platformFromSource(row.dimensionValues?.[1]?.value ?? '');
+        if (!platform || ymd.length !== 8) continue;
+        const day = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
+        const campaign = clean(row.dimensionValues?.[2]?.value);
+        const medium = clean(row.dimensionValues?.[3]?.value);
+        const key = `${day}|${platform}|${campaign}|${medium}`;
+        const cur = acc.get(key) ?? { day, platform, campaign, medium, signups: 0 };
+        cur.signups += toInt(row.metricValues?.[0]?.value) ?? 0;
+        acc.set(key, cur);
+    }
+    return [...acc.values()];
+}

@@ -6,6 +6,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { SHORT_LINKS, shortLinkPath } from '@/lib/social/shortLinks'
+import ContentView from './ContentView'
 
 /**
  * Admin -> Social: reach, followers, views, link clicks and top posts for the
@@ -104,7 +105,10 @@ interface PostRow {
 }
 
 // One row per day x platform x campaign x medium. Cardstreet only: the pet channel never links to the site.
-interface TrafficRow { day: string; platform: Platform; campaign?: string; medium?: string; sessions: number; users: number }
+// `signups` = GA4 sign_up events by first-touch source, on the same key.
+interface TrafficRow { day: string; platform: Platform; campaign?: string; medium?: string; sessions: number; users: number; signups?: number }
+// Accounts whose profile records a social first touch (exact; from migration 20261010 onward).
+interface ProfileSignupRow { day: string; platform: Platform; medium: string; count: number }
 
 interface MetricsPayload {
     brand: Brand
@@ -113,6 +117,7 @@ interface MetricsPayload {
     daily: DailyRow[]
     posts: PostRow[]
     siteTraffic: TrafficRow[]
+    profileSignups?: ProfileSignupRow[]
     providers: Record<Provider, boolean>
     ga4: boolean
     error?: string
@@ -179,6 +184,8 @@ interface PlatformSummary {
     siteClicks: number
     siteClicksPrev: number
     siteClicksByMedium: Record<string, number>
+    /** GA4 first-touch sign-ups credited to this platform. */
+    signups: number
     postsInWindow: number
     lastSynced: string | null
     errors: string[]
@@ -195,6 +202,8 @@ interface Aggregate {
     platforms: PlatformSummary[]
     /** Platforms with tracked clicks but no connected account (TikTok today). */
     linkClicksByPlatform: Record<Platform, { now: number; prev: number; byMedium: Record<string, number> }>
+    /** Sign-ups credited to each platform: GA4 first-touch, and accounts whose profile confirms it. */
+    signupsByPlatform: Record<Platform, { ga4: number; ga4Prev: number; confirmed: number }>
     kpi: {
         followers: { now: number | null; delta: number | null; prevDelta: number | null }
         reach: { now: number | null; prev: number | null }
@@ -247,6 +256,7 @@ function aggregate(p: MetricsPayload): Aggregate {
 
     // Tracked link clicks per platform, from GA4 rows (empty for the pet channel — it has no site).
     const linkClicksByPlatform = Object.fromEntries(PLATFORMS.map((pl) => [pl, { now: 0, prev: 0, byMedium: {} as Record<string, number> }])) as Aggregate['linkClicksByPlatform']
+    const signupsByPlatform = Object.fromEntries(PLATFORMS.map((pl) => [pl, { ga4: 0, ga4Prev: 0, confirmed: 0 }])) as Aggregate['signupsByPlatform']
     for (const t of p.siteTraffic) {
         const slot = linkClicksByPlatform[t.platform]
         if (!slot) continue
@@ -254,9 +264,14 @@ function aggregate(p: MetricsPayload): Aggregate {
             slot.now += t.sessions
             const medium = t.medium || 'untagged'
             slot.byMedium[medium] = (slot.byMedium[medium] || 0) + t.sessions
+            signupsByPlatform[t.platform].ga4 += t.signups ?? 0
         } else if (inPrev(t.day)) {
             slot.prev += t.sessions
+            signupsByPlatform[t.platform].ga4Prev += t.signups ?? 0
         }
+    }
+    for (const s of p.profileSignups ?? []) {
+        if (signupsByPlatform[s.platform] && inWindow(s.day)) signupsByPlatform[s.platform].confirmed += s.count
     }
 
     const platforms: PlatformSummary[] = PLATFORMS.map((platform) => {
@@ -289,6 +304,7 @@ function aggregate(p: MetricsPayload): Aggregate {
             siteClicks: linkClicksByPlatform[platform].now,
             siteClicksPrev: linkClicksByPlatform[platform].prev,
             siteClicksByMedium: linkClicksByPlatform[platform].byMedium,
+            signups: signupsByPlatform[platform].ga4,
             postsInWindow: p.posts.filter((post) => accountsById.get(post.account_id)?.platform === platform && post.published_at && inWindow(post.published_at.slice(0, 10))).length,
             lastSynced: accounts.map((a) => a.last_synced_at).filter(Boolean).sort().pop() ?? null,
             errors: accounts.map((a) => a.last_sync_error).filter((e): e is string => Boolean(e)),
@@ -340,6 +356,7 @@ function aggregate(p: MetricsPayload): Aggregate {
         trafficPerDay,
         platforms,
         linkClicksByPlatform,
+        signupsByPlatform,
         kpi: {
             followers: { now: sumNullable(platforms.map((s) => s.followersNow)), delta: sumNullable(platforms.map((s) => s.followersDelta)), prevDelta: prevFollowerDelta },
             reach: { now: kpiSum('reach', 'totals'), prev: kpiSum('reach', 'prevTotals') },
@@ -565,6 +582,7 @@ export default function AdminSocialPage() {
     const [notice, setNotice] = useState<string | null>(null)
     const [syncing, setSyncing] = useState(false)
     const [tableView, setTableView] = useState(false)
+    const [view, setView] = useState<'overview' | 'content'>('overview')
     const [busyAccount, setBusyAccount] = useState<string | null>(null)
     const [pendingBackfill, setPendingBackfill] = useState<Brand | null>(null)
 
@@ -686,6 +704,16 @@ export default function AdminSocialPage() {
                     <p className="text-slate-500 text-sm mt-1">Reach, followers, views and link clicks across the brand channels</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5" role="group" aria-label="View">
+                        {(['overview', 'content'] as const).map((v) => (
+                            <button
+                                key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
+                                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide transition-colors ${view === v ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                {v}
+                            </button>
+                        ))}
+                    </div>
                     <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5" role="group" aria-label="Brand">
                         {BRANDS.map((b) => (
                             <button
@@ -747,7 +775,9 @@ export default function AdminSocialPage() {
                 </div>
             )}
 
-            {loading && !data ? (
+            {view === 'content' && !data?.migrationMissing ? (
+                <ContentView brand={brand} brandLabel={brandLabel} range={range} />
+            ) : loading && !data ? (
                 <div className="text-center py-20 text-slate-500 text-sm">Loading…</div>
             ) : agg ? (
                 <div className={`space-y-6 transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
@@ -915,6 +945,7 @@ function PlatformCard({ s, windowLabel, siteLinks, ga4 }: { s: PlatformSummary; 
                                 {Object.entries(s.siteClicksByMedium).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${m} ${n.toLocaleString()}`).join(' · ')}
                             </p>
                         )}
+                        <Row label="Sign-ups" value={ga4 ? s.signups : null} />
                         <Row label="Profile taps" value={s.totals.link_clicks} />
                     </>
                 ) : (
@@ -1032,6 +1063,12 @@ function TrackedLinks({ agg, ga4, windowLabel }: { agg: Aggregate; ga4: boolean;
                             <div className="text-right shrink-0">
                                 <p className="text-sm font-black text-white tabular-nums">{ga4 ? clicks.now.toLocaleString() : 'n/a'}</p>
                                 <p className="text-[9px] text-slate-600">clicks, {windowLabel}</p>
+                                {ga4 && (
+                                    <p className="text-[10px] text-slate-400 tabular-nums">
+                                        {agg.signupsByPlatform[l.source].ga4.toLocaleString()} sign-up{agg.signupsByPlatform[l.source].ga4 === 1 ? '' : 's'}
+                                        {agg.signupsByPlatform[l.source].confirmed > 0 && <span className="text-slate-600"> · {agg.signupsByPlatform[l.source].confirmed} confirmed</span>}
+                                    </p>
+                                )}
                             </div>
                             <button
                                 type="button"
@@ -1045,7 +1082,7 @@ function TrackedLinks({ agg, ga4, windowLabel }: { agg: Aggregate; ga4: boolean;
                 })}
             </div>
             <p className="text-[10px] text-slate-600 mt-3">
-                Each link opens cardstreet.app tagged with the platform and where it sat, so a click is credited here even when the app's browser hides the referrer. Add <code className="font-mono">?utm_medium=story</code> (or post, ad) to a link for a one-off placement.
+                Each link opens cardstreet.app tagged with the platform and where it sat, so a click is credited here even when the app's browser hides the referrer. Add <code className="font-mono">?utm_medium=story</code> (or post, ad) to a link for a one-off placement. Sign-ups are accounts whose first-ever visit came from that platform (GA4); "confirmed" are accounts whose profile recorded the link at sign-up.
             </p>
         </div>
     )
