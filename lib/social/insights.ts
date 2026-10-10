@@ -172,9 +172,10 @@ const BUCKET_HOURS: Record<HourBucket['bucket'], string> = { night: '00–05', m
 function engagementRate(p: { likes?: number | null; comments?: number | null; shares?: number | null; saves?: number | null; reach?: number | null; views?: number | null }): number | null {
     const base = Math.max(p.reach ?? 0, p.views ?? 0);
     if (base < 1) return null;
-    const parts = [p.likes, p.comments, p.shares, p.saves];
-    if (parts.every((v) => v === null || v === undefined)) return null;
-    const inter = parts.reduce<number>((a, v) => a + (v ?? 0), 0);
+    // Likes and comments are the bulk of any post's interactions; without both the
+    // rate would be a shares-only sliver that reads as a real 0.0%.
+    if ((p.likes === null || p.likes === undefined) && (p.comments === null || p.comments === undefined)) return null;
+    const inter = [p.likes, p.comments, p.shares, p.saves].reduce<number>((a, v) => a + (v ?? 0), 0);
     return Math.round((inter / base) * 10000) / 100;
 }
 

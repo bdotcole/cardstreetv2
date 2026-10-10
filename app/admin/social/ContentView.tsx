@@ -76,9 +76,8 @@ function secs(v: number | null | undefined): string {
 function engagementRate(p: Post): number | null {
     const base = Math.max(p.reach ?? 0, p.views ?? 0)
     if (base < 1) return null
-    const parts = [p.likes, p.comments, p.shares, p.saves]
-    if (parts.every((v) => v === null || v === undefined)) return null
-    return parts.reduce<number>((a, v) => a + (v ?? 0), 0) / base * 100
+    if ((p.likes === null || p.likes === undefined) && (p.comments === null || p.comments === undefined)) return null
+    return [p.likes, p.comments, p.shares, p.saves].reduce<number>((a, v) => a + (v ?? 0), 0) / base * 100
 }
 function bangkokHour(iso: string | null): number | null {
     if (!iso) return null
