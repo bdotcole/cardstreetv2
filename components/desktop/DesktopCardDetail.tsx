@@ -162,6 +162,19 @@ export default function DesktopCardDetail({
         }
     };
 
+    // Wishlisting IS the listing alert (lib/wishlistAlerts), so this is the
+    // heart button's add path with a toast that confirms what was asked for.
+    const handleNotifyOnListing = async () => {
+        if (!card) return;
+        if (!user) { setAuthOpen(true); return; }
+        try {
+            await addToWishlist(card);
+            showToast(t('desktop.card.notifyOnListingOn'), 'success');
+        } catch {
+            showToast(t('desktop.collection.addFailed'), 'error');
+        }
+    };
+
     useEffect(() => {
         // Server already supplied the data — nothing to fetch.
         if (initialCard) return;
@@ -536,7 +549,23 @@ export default function DesktopCardDetail({
                     </div>
 
                     {listings.length === 0 ? (
-                        <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                            <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
+                            {isInWishlist(card.id) ? (
+                                <span className="inline-flex items-center gap-2 text-sm font-bold text-brand-green">
+                                    <i className="fa-solid fa-bell text-xs"></i>
+                                    {t('desktop.card.notifyOnListingOn')}
+                                </span>
+                            ) : (
+                                <button
+                                    onClick={handleNotifyOnListing}
+                                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-brand-cyan text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+                                >
+                                    <i className="fa-regular fa-bell text-xs"></i>
+                                    {t('desktop.card.notifyOnListing')}
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         <div>
                             {/* Column labels — aligned to the same grid as the rows (sm+ only). */}

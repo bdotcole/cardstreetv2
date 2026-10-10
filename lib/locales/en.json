@@ -806,6 +806,8 @@
             "newSeller": "New seller",
             "activeListings": "Active listings",
             "noListings": "No active listings for this card right now.",
+            "notifyOnListing": "Notify me on listing",
+            "notifyOnListingOn": "You'll be notified when it's listed",
             "addToCart": "Add to cart",
             "moreFromSet": "More from this set",
             "moreFromGame": "More cards in this game",
