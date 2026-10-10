@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { EARN, FIRST_AWARD_BY_KEY } from '@/lib/rewardTiers';
+import type { RewardsEarnValues } from '@/lib/hooks/useRewardsSummary';
 
 /**
  * Invite-a-friend card for the rewards hub.
@@ -10,8 +11,9 @@ import { EARN, FIRST_AWARD_BY_KEY } from '@/lib/rewardTiers';
  * The referral link, the attribution endpoint and BOTH payouts already existed
  * and were already being paid — they were simply unreachable, because
  * /api/referrals/me returned 403 to anyone without partner_joined_at. Nothing
- * here invents a reward: the numbers shown are read from lib/rewardTiers.ts so
- * the card can never advertise an amount the ledger does not actually grant.
+ * here invents a reward: the numbers shown are the live values from the
+ * rewards summary (admin-editable; lib/rewardTiers.ts defaults for an older
+ * payload), so the card never advertises an amount the ledger does not grant.
  *
  * Fails quiet. A user whose slug can't be minted (offline, migration not run)
  * sees nothing rather than a broken share sheet — this sits inside the hub's
@@ -51,7 +53,7 @@ function loadReferral(): Promise<ReferralMe | null> {
     return inflight;
 }
 
-export default function InviteCard() {
+export default function InviteCard({ earn }: { earn?: RewardsEarnValues }) {
     const { t, isThai } = useTranslation();
     const [data, setData] = useState<ReferralMe | null>(cached);
     const [copied, setCopied] = useState(false);
@@ -84,9 +86,9 @@ export default function InviteCard() {
         }
     };
 
-    const signupXp = EARN.REFERRAL_SIGNUP.xp;
-    const convertedCoins = EARN.REFERRAL_CONVERTED.coins;
-    const firstBonus = FIRST_AWARD_BY_KEY['first_referral'];
+    const signupXp = earn?.referralSignupXp ?? EARN.REFERRAL_SIGNUP.xp;
+    const convertedCoins = earn?.referralConvertedCoins ?? EARN.REFERRAL_CONVERTED.coins;
+    const firstBonus = earn ? earn.firstReferral : FIRST_AWARD_BY_KEY['first_referral'];
 
     return (
         <div>

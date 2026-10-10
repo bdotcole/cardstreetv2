@@ -1,11 +1,12 @@
 /**
- * POST /api/rewards/quests/claim { slot } — claim one of today's three quests.
+ * POST /api/rewards/quests/claim { slot } — claim one of today's quests.
  *
  * Progress is derived from the user's OWN reward_ledger earn rows for today's
  * Bangkok day — never from a client-reported counter — so a quest can only be
  * claimed after the underlying server-awarded actions actually happened. The
- * quest schedule is fixed by weekday (lib/rewardTiers.ts QUESTS_BY_WEEKDAY),
- * identical for all users, deliberately randomness-free.
+ * quest schedule is fixed by weekday (admin-edited reward_config, defaults in
+ * lib/rewardTiers.ts QUESTS_BY_WEEKDAY), identical for all users, deliberately
+ * randomness-free.
  *
  * Idempotency: the quest award's ref_id is `${bangkokDate}:${slot}` and the
  * all-three bonus's ref_id is the date — both once-only via the ledger UNIQUE.
@@ -15,7 +16,7 @@ import { NextResponse } from 'next/server';
 import { requireBeta } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { awardEvent, bangkokDateString, bangkokDayStartIso, bangkokWeekday } from '@/lib/rewards';
-import { QUESTS_BY_WEEKDAY, QUEST_XP, QUEST_COINS, QUEST_BONUS_COINS } from '@/lib/rewardTiers';
+import { getRewardConfig } from '@/lib/rewardConfig.server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,13 +29,14 @@ export async function POST(req: Request) {
     try {
         const body = await req.json().catch(() => ({}));
         const slot = Number(body?.slot);
-        const quests = QUESTS_BY_WEEKDAY[bangkokWeekday()] ?? [];
+        const admin = createAdminClient();
+        const { quests: questConfig } = await getRewardConfig(admin);
+        const quests = questConfig.byWeekday[bangkokWeekday()] ?? [];
         if (!Number.isInteger(slot) || slot < 0 || slot >= quests.length) {
             return NextResponse.json({ ok: false, error: 'Invalid quest' }, { status: 400 });
         }
         const quest = quests[slot];
         const today = bangkokDateString();
-        const admin = createAdminClient();
 
         const { data: rows, error } = await admin
             .from('reward_ledger')
@@ -56,20 +58,23 @@ export async function POST(req: Request) {
             userId: user.id,
             rule: 'quest',
             ref: `${today}:${slot}`,
-            xp: QUEST_XP,
-            coins: QUEST_COINS,
+            xp: questConfig.xp,
+            coins: questConfig.coins,
         });
         if (!award?.awarded) {
             return NextResponse.json({ ok: true, claimed: false, reason: award?.reason ?? 'unavailable' });
         }
 
-        // All three claimed today (this one included) => once-only bonus.
+        // Every one of today's challenges claimed (this one included) =>
+        // once-only bonus. Only slots that exist today count: an admin can
+        // shorten today's list after someone claimed a later slot.
         const claimedBefore = new Set(
             (rows ?? [])
                 .filter((r) => r.rule_key === 'quest' && r.ref_id.startsWith(today))
-                .map((r) => r.ref_id.split(':')[1]),
+                .map((r) => Number(r.ref_id.split(':')[1]))
+                .filter((s) => Number.isInteger(s) && s < quests.length),
         );
-        claimedBefore.add(String(slot));
+        claimedBefore.add(slot);
         let bonus = 0;
         if (claimedBefore.size >= quests.length) {
             const bonusAward = await awardEvent(admin, {
@@ -77,16 +82,16 @@ export async function POST(req: Request) {
                 rule: 'quest_bonus',
                 ref: today,
                 xp: 0,
-                coins: QUEST_BONUS_COINS,
+                coins: questConfig.bonusCoins,
             });
-            if (bonusAward?.awarded) bonus = QUEST_BONUS_COINS;
+            if (bonusAward?.awarded) bonus = questConfig.bonusCoins;
         }
 
         return NextResponse.json({
             ok: true,
             claimed: true,
-            xp: QUEST_XP,
-            coins: QUEST_COINS,
+            xp: questConfig.xp,
+            coins: questConfig.coins,
             bonusCoins: bonus,
             leveledUp: award.leveledUp === true,
             level: award.level ?? 1,

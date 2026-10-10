@@ -19,7 +19,8 @@ import { requireBeta, isFeatureEnabled } from '@/lib/betaAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { awardFirst } from '@/lib/rewards';
 import { bangkokDateString, bangkokDayStartIso, bangkokWeekday } from '@/lib/rewards';
-import { FIRST_AWARDS, QUESTS_BY_WEEKDAY } from '@/lib/rewardTiers';
+import { FIRST_AWARDS } from '@/lib/rewardTiers';
+import { getRewardConfig } from '@/lib/rewardConfig.server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,7 +43,9 @@ export async function GET() {
         const today = bangkokDateString();
         const dayStart = bangkokDayStartIso();
         const weekday = bangkokWeekday();
-        const quests = QUESTS_BY_WEEKDAY[weekday] ?? [];
+        // Admin-edited values, so the hub shows what the RPCs actually pay.
+        const config = await getRewardConfig(admin);
+        const quests = config.quests.byWeekday[weekday] ?? [];
 
         // Lazy one-shot awards (idempotent; run before reading balances so the
         // very first open already shows them).
@@ -167,7 +170,24 @@ export async function GET() {
                 claimed: claimedSlots.has(String(slot)),
             })),
             questBonusClaimed: todayRows.some((r) => r.rule_key === 'quest_bonus' && r.ref_id === today),
-            journey: FIRST_AWARDS.map((a) => ({ key: a.key, xp: a.xp, coins: a.coins, done: done.has(a.key) })),
+            // A step switched off in the console can no longer be earned, so
+            // it leaves the checklist unless this user already has it.
+            journey: FIRST_AWARDS
+                .map((a) => ({ key: a.key, rule: config.rules[a.key], done: done.has(a.key) }))
+                .filter((s) => s.done || s.rule?.enabled !== false)
+                .map((s) => ({ key: s.key, xp: s.rule?.xp ?? 0, coins: s.rule?.coins ?? 0, done: s.done })),
+            earn: {
+                checkinCalendar: config.checkin.calendar,
+                checkinXp: config.checkin.xp,
+                questXp: config.quests.xp,
+                questCoins: config.quests.coins,
+                questBonusCoins: config.quests.bonusCoins,
+                referralSignupXp: config.rules.referral_signup?.enabled === false ? 0 : config.rules.referral_signup?.xp ?? 0,
+                referralConvertedCoins: config.rules.referral_converted?.enabled === false ? 0 : config.rules.referral_converted?.coins ?? 0,
+                firstReferral: config.rules.first_referral?.enabled === false
+                    ? null
+                    : { xp: config.rules.first_referral?.xp ?? 0, coins: config.rules.first_referral?.coins ?? 0 },
+            },
             recent: recentRows.map((r) => ({
                 rule: r.rule_key,
                 xp: r.xp,

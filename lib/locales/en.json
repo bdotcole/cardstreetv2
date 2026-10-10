@@ -1646,7 +1646,8 @@
             "wishlist_add": "Wishlist a card",
             "chat_stream": "Say hi in a live chat",
             "listing_publish": "List a card for sale",
-            "scan_confirm": "Scan a new card"
+            "scan_confirm": "Scan a new card",
+            "watch_10m": "Watch a live show for 10 minutes"
         },
         "boardTitle": "This week's top collectors",
         "boardPitch": "Join the weekly leaderboard — your display name and XP earned this week, nothing else.",

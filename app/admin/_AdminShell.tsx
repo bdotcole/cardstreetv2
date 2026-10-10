@@ -39,7 +39,13 @@ const NAV_SECTIONS: NavSection[] = [
             { href: '/admin/sets', label: 'Mapping QC' },
         ],
     },
-    { label: 'Rewards', icon: 'fa-solid fa-coins', pages: [{ href: '/admin/rewards', label: 'Rewards' }] },
+    {
+        label: 'Rewards', icon: 'fa-solid fa-coins', pages: [
+            { href: '/admin/rewards', label: 'Overview' },
+            { href: '/admin/rewards/challenges', label: 'Challenges & check-in' },
+            { href: '/admin/rewards/earning', label: 'Earning rules' },
+        ],
+    },
 ]
 
 function isActivePage(href: string, pathname: string): boolean {
@@ -60,7 +66,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 export function AdminChrome({ pathname, children }: { pathname: string; children: ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const activeSection = NAV_SECTIONS.find(s => s.pages.some(p => isActivePage(p.href, pathname)))
-    const activePage = activeSection?.pages.find(p => isActivePage(p.href, pathname))
+    // Longest match wins: /admin/rewards/earning also prefix-matches /admin/rewards.
+    const activePage = activeSection?.pages
+        .filter(p => isActivePage(p.href, pathname))
+        .sort((a, b) => b.href.length - a.href.length)[0]
 
     return (
         <div className="min-h-screen bg-brand-darker text-slate-200 flex">

@@ -24,6 +24,18 @@ export interface RewardsJourneyStep {
     done: boolean;
 }
 
+export interface RewardsEarnValues {
+    checkinCalendar: number[];
+    checkinXp: number;
+    questXp: number;
+    questCoins: number;
+    questBonusCoins: number;
+    referralSignupXp: number;
+    referralConvertedCoins: number;
+    /** null = the first-referral bonus is switched off. */
+    firstReferral: { xp: number; coins: number } | null;
+}
+
 export interface RewardsOwnedItem {
     id: string;
     key: string;
@@ -46,6 +58,9 @@ export interface RewardsSummary {
     quests: RewardsQuest[];
     questBonusClaimed: boolean;
     journey: RewardsJourneyStep[];
+    /** Live earn values (admin-editable). Optional: a summary cached from a
+     *  pre-config deploy lacks it, so consumers fall back to the defaults. */
+    earn?: RewardsEarnValues;
     recent: { rule: string; xp: number; coins: number; at: string }[];
     /** Store state (empty until the 20260829 migration is applied). */
     owned: RewardsOwnedItem[];

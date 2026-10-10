@@ -229,6 +229,9 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
     const prog = levelProgress(summary.xp);
     const band = bandForLevel(summary.level);
     const doneThrough = summary.checkinClaimedToday ? summary.cycleDay : summary.cycleDay - 1;
+    // Live (admin-edited) values from the summary, defaults for an old payload.
+    const calendar = summary.earn?.checkinCalendar ?? CHECKIN_CALENDAR;
+    const questCoins = summary.earn?.questCoins ?? QUEST_COINS;
 
     // Showcase derivations. A frame is wearable only when a redeemed
     // reward_items row exists (the equip route re-checks ownership).
@@ -384,7 +387,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-7 gap-1.5">
-                                        {CHECKIN_CALENDAR.map((coins, i) => {
+                                        {calendar.map((coins, i) => {
                                             const day = i + 1;
                                             const done = day <= doneThrough;
                                             const isToday = day === summary.cycleDay;
@@ -422,7 +425,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                             ? '...'
                                             : summary.checkinClaimedToday
                                                 ? t('rewards.comeBackTomorrow')
-                                                : `${t('rewards.claimCheckin')} +${CHECKIN_CALENDAR[summary.cycleDay - 1] ?? 5}`}
+                                                : `${t('rewards.claimCheckin')} +${calendar[summary.cycleDay - 1] ?? 5}`}
                                     </button>
                                 </div>
 
@@ -521,7 +524,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                 {/* Invite a friend. In Overview rather than
                                     Challenges: it is not a daily task, it is the
                                     one action here that brings a new person in. */}
-                                <InviteCard />
+                                <InviteCard earn={summary.earn} />
 
                                 {/* Recent activity */}
                                 {summary.recent.length > 0 && (
@@ -586,7 +589,7 @@ const RewardsHub: React.FC<RewardsHubProps> = ({ open, onClose, summary, refresh
                                                                     : 'bg-white/5 text-slate-500'
                                                         }`}
                                                     >
-                                                        {q.claimed ? t('rewards.claimed') : `+${QUEST_COINS} `}
+                                                        {q.claimed ? t('rewards.claimed') : `+${questCoins} `}
                                                         {!q.claimed && <i className="fa-solid fa-coins text-[9px]"></i>}
                                                     </button>
                                                 </div>

@@ -7,6 +7,11 @@
 // array / the trigger award values). Change both together — the
 // lib/partnerTiers.ts convention. This module is imported by client components
 // AND server routes, so it must stay free of server-only imports.
+//
+// The earn values, check-in calendar and quest schedule below are DEFAULTS:
+// /admin/rewards overrides them at runtime (lib/rewardConfig.ts, the
+// reward_config table, which the award RPCs read since 20261010). Award paths
+// read live values through getRewardConfig(), not these constants.
 
 // ---------------------------------------------------------------------------
 // Levels & rarity bands
@@ -103,7 +108,7 @@ export const QUEST_BONUS_COINS = 10;
 
 export interface QuestDef {
     /** The ledger rule whose Bangkok-day earn rows measure progress. */
-    rule: 'vault_add' | 'wishlist_add' | 'chat_stream' | 'listing_publish' | 'scan_confirm';
+    rule: 'vault_add' | 'wishlist_add' | 'chat_stream' | 'listing_publish' | 'scan_confirm' | 'watch_10m';
     target: number;
 }
 
@@ -131,6 +136,12 @@ export const QUESTS_BY_WEEKDAY: readonly (readonly QuestDef[])[] = [
 // ---------------------------------------------------------------------------
 
 export const EARN = {
+    // Awarded by the DB triggers in 20260828 (trg_award_*), listed here as the
+    // admin console's defaults. ref = card id / card id / listing id / order id.
+    VAULT_ADD: { rule: 'vault_add', xp: 3, coins: 0, dailyCap: 10 },
+    WISHLIST_ADD: { rule: 'wishlist_add', xp: 2, coins: 0, dailyCap: 5 },
+    LISTING_PUBLISH: { rule: 'listing_publish', xp: 10, coins: 0, dailyCap: 5 },
+    REVIEW: { rule: 'review', xp: 15, coins: 20, dailyCap: null },
     /** First chat message per stream per day-capped stream count. */
     CHAT_STREAM: { rule: 'chat_stream', xp: 5, coins: 0, dailyCap: 3 },
     /** Candidate-validated scan confirm; ref = card id (once per card, ever). */
