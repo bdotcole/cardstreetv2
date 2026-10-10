@@ -72,10 +72,13 @@ function secs(v: number | null | undefined): string {
     const s = Math.round(Number(v))
     return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`
 }
+// Null when no interaction counts exist at all (Facebook before the Meta reconnect): unknown, not zero.
 function engagementRate(p: Post): number | null {
     const base = Math.max(p.reach ?? 0, p.views ?? 0)
     if (base < 1) return null
-    return ((p.likes ?? 0) + (p.comments ?? 0) + (p.shares ?? 0) + (p.saves ?? 0)) / base * 100
+    const parts = [p.likes, p.comments, p.shares, p.saves]
+    if (parts.every((v) => v === null || v === undefined)) return null
+    return parts.reduce<number>((a, v) => a + (v ?? 0), 0) / base * 100
 }
 function bangkokHour(iso: string | null): number | null {
     if (!iso) return null

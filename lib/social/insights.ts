@@ -53,8 +53,17 @@ export interface PlatformWeek {
     postsPrev: number;
     linkClicks: number | null;
     linkClicksPrev: number | null;
+    /** Cardstreet only: the organic share of link clicks (bio / page / video / plain referrals), the rest being paid placements. */
+    linkClicksOrganic: number | null;
+    linkClicksOrganicPrev: number | null;
     signups: number | null;
     signupsPrev: number | null;
+}
+
+// GA4 mediums that mean money was spent; everything else is organic.
+const PAID_MEDIUM = /paid|cpc|cpm|ppc|ads?$|_ads|right_column|desktop_feed|mobile_feed|instagram_feed|reels_ads|boost/i;
+export function isPaidMedium(medium: string | null | undefined): boolean {
+    return PAID_MEDIUM.test(medium ?? '');
 }
 
 export interface PostSummary {
@@ -155,10 +164,17 @@ function bucketOf(hour: number): HourBucket['bucket'] {
 }
 const BUCKET_HOURS: Record<HourBucket['bucket'], string> = { night: '00–05', morning: '06–11', afternoon: '12–17', evening: '18–23' };
 
+/**
+ * Null when the platform reported no interaction counts at all (a Facebook
+ * post before the pages_read_user_content reconnect): unknown is not zero,
+ * and a zero here would rank real posts as failures.
+ */
 function engagementRate(p: { likes?: number | null; comments?: number | null; shares?: number | null; saves?: number | null; reach?: number | null; views?: number | null }): number | null {
     const base = Math.max(p.reach ?? 0, p.views ?? 0);
     if (base < 1) return null;
-    const inter = (p.likes ?? 0) + (p.comments ?? 0) + (p.shares ?? 0) + (p.saves ?? 0);
+    const parts = [p.likes, p.comments, p.shares, p.saves];
+    if (parts.every((v) => v === null || v === undefined)) return null;
+    const inter = parts.reduce<number>((a, v) => a + (v ?? 0), 0);
     return Math.round((inter / base) * 10000) / 100;
 }
 
@@ -191,7 +207,7 @@ export async function buildWeeklyStats(brand: SocialBrand, weekEnd: string): Pro
     let traffic: any[] = [];
     if (brand === SITE_BRAND) {
         const res = await supabase.from('social_site_traffic_daily')
-            .select('day, platform, sessions, signups').gte('day', prevStart).lte('day', weekEnd);
+            .select('day, platform, medium, sessions, signups').gte('day', prevStart).lte('day', weekEnd);
         if (res.error) {
             const legacy = await supabase.from('social_site_traffic_daily').select('day, platform, sessions').gte('day', prevStart).lte('day', weekEnd);
             traffic = legacy.data ?? [];
@@ -251,6 +267,8 @@ export async function buildWeeklyStats(brand: SocialBrand, weekEnd: string): Pro
             postsPrev,
             linkClicks: useSite ? tWeek.reduce((a, t) => a + (t.sessions ?? 0), 0) : (platform === 'youtube' ? null : sum(week.map((r) => r.link_clicks))),
             linkClicksPrev: useSite ? tPrev.reduce((a, t) => a + (t.sessions ?? 0), 0) : (platform === 'youtube' ? null : sum(prev.map((r) => r.link_clicks))),
+            linkClicksOrganic: useSite ? tWeek.filter((t) => !isPaidMedium(t.medium)).reduce((a, t) => a + (t.sessions ?? 0), 0) : null,
+            linkClicksOrganicPrev: useSite ? tPrev.filter((t) => !isPaidMedium(t.medium)).reduce((a, t) => a + (t.sessions ?? 0), 0) : null,
             signups: useSite ? tWeek.reduce((a, t) => a + (t.signups ?? 0), 0) : null,
             signupsPrev: useSite ? tPrev.reduce((a, t) => a + (t.signups ?? 0), 0) : null,
         };
@@ -303,6 +321,10 @@ export async function buildWeeklyStats(brand: SocialBrand, weekEnd: string): Pro
         : [];
 
     if (posts.length === 0) notes.push('No posts in the last 28 days with stored metrics.');
+    const fbPosts = posts.filter((p) => p.platform === 'facebook');
+    if (fbPosts.length && fbPosts.every((p) => p.engagementRate === null)) {
+        notes.push('Facebook post likes/comments are not available yet (the Meta app needs a Reconnect for pages_read_user_content), so Facebook engagement rates are unknown — not zero — and those posts are left out of the rankings.');
+    }
 
     return {
         brand, brandLabel: BRAND_LABELS[brand], weekStart, weekEnd, prevStart, prevEnd,
@@ -326,6 +348,13 @@ function rulesNarrative(s: WeeklyStats): Narrative {
     const summary = `${s.brandLabel} added ${fmt(followers)} followers across ${s.platforms.length} platform${s.platforms.length === 1 ? '' : 's'} this week; ${s.postsAnalysed} posts from the last 28 days were analysed.`;
     const whatWorked = s.topPosts.slice(0, 3).map((p) => `${PLATFORM_LABELS[p.platform]} ${p.format ?? 'post'} "${p.caption}" — ${fmtPct(p.engagementRate)} engagement${p.saves ? `, ${p.saves} saves` : ''}${p.shares ? `, ${p.shares} shares` : ''}.`);
     const whatDidnt = s.bottomPosts.slice(0, 2).map((p) => `${PLATFORM_LABELS[p.platform]} ${p.format ?? 'post'} "${p.caption}" — ${fmtPct(p.engagementRate)} engagement on ${fmt(Math.max(p.reach ?? 0, p.views ?? 0))} reached.`);
+    const site = s.platforms.filter((p) => p.linkClicksOrganic !== null);
+    if (site.length) {
+        const org = sum(site.map((p) => p.linkClicksOrganic));
+        const orgPrev = sum(site.map((p) => p.linkClicksOrganicPrev));
+        const total = sum(site.map((p) => p.linkClicks));
+        whatDidnt.push(`Organic link clicks ${fmt(org)} vs ${fmt(orgPrev)} last week (${fmt(total)} total including paid).`);
+    }
     const recommendations: string[] = [];
     const bestFormat = [...s.formats].filter((f) => f.count >= 2 && f.avgEngagementRate !== null).sort((a, b) => (b.avgEngagementRate ?? 0) - (a.avgEngagementRate ?? 0))[0];
     if (bestFormat) recommendations.push(`${PLATFORM_LABELS[bestFormat.platform]} ${bestFormat.format}s average ${fmtPct(bestFormat.avgEngagementRate)} engagement over ${bestFormat.count} posts — lean into that format.`);
@@ -356,9 +385,9 @@ export async function narrate(stats: WeeklyStats): Promise<Narrative> {
         : 'Chopper & Kuma is a pet (dog) entertainment channel — unrelated to any product; the goal is audience growth and engagement. Link clicks are taps on the profile link.';
     const prompt = `You are a social media analyst writing the Monday report for ${stats.brandLabel}'s content lead (Arisa). ${context}
 
-Below are this week's numbers (${stats.weekStart} to ${stats.weekEnd}) versus the previous week, plus the last 28 days of posts with their metrics. Engagement rate = (likes+comments+shares+saves) / max(reach, views). "hookPct" (YouTube only) = % of viewers still watching at 30 seconds. "avgWatchPct" = average % of the video watched. Hours are Bangkok time. Numbers marked null were not reported by the platform — never invent them.
+Below are this week's numbers (${stats.weekStart} to ${stats.weekEnd}) versus the previous week, plus the last 28 days of posts with their metrics. Engagement rate = (likes+comments+shares+saves) / max(reach, views). "hookPct" (YouTube only) = % of viewers still watching at 30 seconds. "avgWatchPct" = average % of the video watched (Shorts loop, so it can exceed 100%). "linkClicksOrganic" is the part of linkClicks that came from bio/page/video links and plain shares; the remainder came from paid placements, so a fall in total clicks when organic held steady means ads stopped, not that content got worse. Hours are Bangkok time. Numbers marked null were not reported by the platform — never invent them, and never describe a null metric as zero or poor. Read the "notes" first: they say which metrics are unavailable this week.
 
-Write a short, concrete, honest analysis. Cite the actual numbers. Prefer specific observations ("the two carousels averaged 4.1% vs 1.3% for photos") over generic advice. If the data is too thin to support a claim, say so instead of guessing. Keep each bullet under 30 words. 3-5 bullets per list; experiments are 2-3 testable ideas for next week.
+Write a short, concrete, honest analysis. Cite the actual numbers. Prefer specific observations ("the two carousels averaged 4.1% vs 1.3% for photos") over generic advice. If the data is too thin to support a claim, say so instead of guessing. Keep each bullet under 30 words. 3-5 bullets per list; experiments are 2-3 testable ideas for next week. Each list item must be a complete sentence.
 
 DATA:
 ${JSON.stringify({
@@ -393,7 +422,12 @@ ${JSON.stringify({
         });
         const parsed = JSON.parse(response.text || '{}');
         if (!parsed?.headline || !Array.isArray(parsed.recommendations)) return fallback;
-        const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, 6) : []);
+        // Gemini occasionally leaks a stray key ("whatDidnt':") or a one-word fragment into a list.
+        const list = (v: unknown) => (Array.isArray(v)
+            ? v.map((x) => String(x).trim().replace(/^["'“]+|["'”]+$/g, '').trim())
+                .filter((x) => x.length >= 15 && !/^(what|recommend|experiment|summary|headline)\w*['"]?:?$/i.test(x))
+                .slice(0, 6)
+            : []);
         return {
             headline: String(parsed.headline).slice(0, 160),
             summary: String(parsed.summary ?? '').slice(0, 600),
@@ -435,7 +469,7 @@ export function renderInsightsHtml(s: WeeklyStats, n: Narrative): string {
         <td style="${num}">${fmt(p.reach)}${arrow(pctChange(p.reach, p.reachPrev))}</td>
         <td style="${num}">${fmt(p.views)}${arrow(pctChange(p.views, p.viewsPrev))}</td>
         <td style="${num}">${fmt(p.engagements)}${arrow(pctChange(p.engagements, p.engagementsPrev))}</td>
-        <td style="${num}">${fmt(p.linkClicks)}${arrow(pctChange(p.linkClicks, p.linkClicksPrev))}</td>
+        <td style="${num}">${fmt(p.linkClicks)}${arrow(pctChange(p.linkClicks, p.linkClicksPrev))}${p.linkClicksOrganic !== null && p.linkClicks !== null && p.linkClicksOrganic !== p.linkClicks ? `<br><span style="color:#6b7280;font-size:11px;">${fmt(p.linkClicksOrganic)} organic${arrow(pctChange(p.linkClicksOrganic, p.linkClicksOrganicPrev))}</span>` : ''}</td>
         <td style="${num}">${p.signups === null ? '—' : fmt(p.signups) + arrow(pctChange(p.signups, p.signupsPrev))}</td>
         <td style="${num}">${p.posts}</td>
     </tr>`).join('');
