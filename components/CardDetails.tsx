@@ -297,7 +297,23 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                   ) : (
                     <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
                       <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">{isThai ? 'ไม่มีรายการขายในขณะนี้' : 'No listings available for this item'}</p>
-                      <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
+                      {/* The wishlist IS the listing alert: lib/wishlistAlerts
+                          notifies every wishlister when this card is listed, so
+                          the button just wishlists it (auth gate included). */}
+                      {isWishlisted ? (
+                        <p className="mt-2 text-[9px] text-brand-green font-black uppercase tracking-widest">
+                          <i className="fa-solid fa-bell mr-1.5"></i>
+                          {isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed"}
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => onToggleWishlist(card)}
+                          className="mt-2 px-3 py-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white active:scale-95 transition-all"
+                        >
+                          <i className="fa-regular fa-bell mr-1.5"></i>
+                          {isThai ? 'แจ้งเตือนเมื่อมีคนวางขาย' : 'Notify me on listing'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
