@@ -55,10 +55,28 @@ export async function GET(request: NextRequest) {
         // stream/lot/spot context (service-role: streams RLS is per-role and
         // this join spans buyer-visible + seller-visible rows) so the panel
         // names them and hides the per-order label actions.
-        const withBreakContext = await attachBreakContext(createAdminClient(), normalized)
+        const admin = createAdminClient()
+        const withBreakContext = await attachBreakContext(admin, normalized)
+
+        // The buyer's display name, so a seller with several parcels can see
+        // at a glance which ones go to the same person (and combine them via
+        // /api/orders/ship-together). Name only; fails soft to no name.
+        const buyerIds = [...new Set(withBreakContext.map((s: any) => s.buyer_id).filter(Boolean))] as string[]
+        const buyerNames = new Map<string, string | null>()
+        if (buyerIds.length > 0) {
+            const { data: buyers } = await admin
+                .from('profiles')
+                .select('id, display_name')
+                .in('id', buyerIds)
+            for (const b of buyers || []) buyerNames.set(b.id, b.display_name ?? null)
+        }
+        const withBuyer = withBreakContext.map((s: any) => ({
+            ...s,
+            buyer: { display_name: buyerNames.get(s.buyer_id) ?? null },
+        }))
 
         return NextResponse.json({
-            shipments: withBreakContext,
+            shipments: withBuyer,
             pagination: {
                 page,
                 limit,

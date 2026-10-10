@@ -19,6 +19,7 @@ import {
     sendFirstTimeSaleEmail,
 } from '@/lib/courier';
 import { voidOffersForSoldListing } from '@/lib/voidOffersForListing';
+import { findMergeableWaybill, waybillRowFor } from '@/lib/shipTogether';
 import { recordInternalSales } from '@/lib/internalPricing';
 import { awardEvent, awardFirst } from '@/lib/rewards';
 import { orderXp } from '@/lib/rewardTiers';
@@ -445,6 +446,36 @@ export async function fulfillOrdersByTransferGroup(
 
             const primaryOrder = sellerOrders[0];
             const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
+
+            // ─── Same buyer, same seller, parcel still on the desk? ───
+            // A follow-up purchase inside the auto-merge window rides the
+            // buyer's existing waybill instead of minting a second one (see
+            // lib/shipTogether): one label, one pickup, one Flash fee, and
+            // the seller's parcel card lists every card to pack. The
+            // "label ready" email goes out again with that same label so the
+            // seller holds the one PDF for the combined parcel.
+            const mergeInto = await findMergeableWaybill(supabase, { sellerId, buyerId });
+            if (mergeInto) {
+                console.log(
+                    `[Fulfillment] Attaching ${sellerOrders.length} order(s) for seller ${sellerId} ` +
+                    `to the buyer's unshipped waybill ${mergeInto.tracking_number} (order ${mergeInto.orderId})`,
+                );
+                result.trackingNumbers.push(mergeInto.tracking_number);
+                for (const order of sellerOrders) {
+                    labelsToInsert.push(waybillRowFor(order.id, mergeInto));
+                    ordersToFlipToLabelGenerated.push(order.id);
+                }
+                if (mergeInto.label_url && mergeInto.label_url !== 'N/A') {
+                    sellerLabelMap.set(sellerId, mergeInto.label_url);
+                }
+                try {
+                    const labelPdf = await generateLabel(mergeInto.tracking_number);
+                    sellerLabelPdfMap.set(sellerId, labelPdf.toString('base64'));
+                } catch (labelErr) {
+                    console.error('[Fulfillment] Label regeneration for merged parcel failed (non-fatal):', labelErr);
+                }
+                continue;
+            }
 
             const src = {
                 name: sellerProfile?.display_name || 'Cardstreet Seller',

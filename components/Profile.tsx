@@ -31,7 +31,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, combinableParcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
@@ -149,6 +149,10 @@ interface Order {
   // hidden for them.
   break_spot_id?: string | null;
   break_context?: { title: string; imageSmall: string | null } | null;
+  // Seller shipments only: who the parcel goes to, so parcels for the same
+  // buyer can be spotted (and combined) at a glance.
+  buyer_id?: string | null;
+  buyer?: { display_name: string | null } | null;
   listing: {
     card_data: any;
     condition: string;
@@ -735,6 +739,34 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
     } catch {
       showToast(t('profile.shipmentClearFailed'), 'error');
       fetchShipments();
+    }
+  };
+
+  // "Ship together": fold a buyer's other unshipped parcel(s) into one waybill
+  // (POST /api/orders/ship-together). Two taps — the first expands an
+  // explanation, the second commits — because the newer label is cancelled
+  // at Flash. The confirm state holds the buyer id whose banner is open.
+  const [shipTogetherConfirm, setShipTogetherConfirm] = useState<string | null>(null);
+  const [shipTogetherBusy, setShipTogetherBusy] = useState(false);
+  const shipTogether = async (orderIds: string[]) => {
+    setShipTogetherBusy(true);
+    try {
+      const res = await fetch('/api/orders/ship-together', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ orderIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'ship-together failed');
+      setShipTogetherConfirm(null);
+      showToast(t('parcel.done'), 'success');
+      await fetchShipments();
+    } catch (err) {
+      console.error('Ship together failed:', err);
+      showToast(t('parcel.failed'), 'error');
+    } finally {
+      setShipTogetherBusy(false);
     }
   };
 
@@ -2024,13 +2056,24 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
-                  {groupByTransferGroup(shipments).map((group) => {
-                    // One card per checkout: the group's rows ship as a single
-                    // Flash parcel under one waybill (see lib/fulfillOrder), so
-                    // it gets one status, one label, one swipe. `shipment` is
-                    // the primary order — the same row fulfillment keys the
-                    // label to — and its id drives the label/track actions.
+                  {groupByParcel(shipments).map((group, _i, parcels) => {
+                    // One card per PARCEL (waybill). A checkout ships as one
+                    // Flash parcel, and two checkouts share one when they were
+                    // merged (lib/shipTogether), so the card lists every card
+                    // going into that envelope under its single label.
+                    // `shipment` is the primary order; its id drives the
+                    // label/track actions (every row carries the same waybill).
                     const shipment = group[0];
+                    const pno = shipment.shipping_labels?.[0]?.tracking_number;
+                    const checkouts = countCheckouts(group);
+                    const buyerName = shipment.buyer?.display_name || null;
+                    // This buyer's other parcels still on the desk can be
+                    // folded into one with this one.
+                    const siblings = shipment.buyer_id
+                      ? (combinableParcelsByBuyer(parcels).get(shipment.buyer_id) || [])
+                      : [];
+                    const canShipTogether = siblings.length > 1 && siblings.includes(group);
+                    const shipTogetherIds = siblings.flatMap((g) => g.map((o) => o.id));
                     // Finished shipments stay in the panel as a delivery
                     // notice until the seller swipes them away (see
                     // clearShipments). Active ones can't be dismissed.
@@ -2069,38 +2112,108 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                           : 'border-white/5'
                       }`}
                     >
-                      {/* Shipment Header — one row per item in the parcel */}
-                      {group.map((item) => {
-                        const itemImage = rowDisplayImage(item);
-                        return (
-                        <div key={item.id} className="flex items-start gap-3">
-                          <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                            {itemImage && (
-                              <img
-                                src={getThumbnailUrl(itemImage)}
-                                alt="Card"
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-semibold text-sm truncate">
-                              {rowDisplayName(item, t, 'profile.cardOrder')}
-                            </p>
-                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
-                            {group.length === 1 && statusLine}
-                          </div>
+                      {/* Parcel header: who it goes to, the waybill, and how
+                          many checkouts were folded into it. */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider truncate">
+                            {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
+                          </p>
+                          {isRealWaybill(pno) && (
+                            <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
+                          )}
                         </div>
-                        );
-                      })}
+                        {checkouts > 1 && (
+                          <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
+                            {t('parcel.combined').replace('{count}', String(checkouts))}
+                          </span>
+                        )}
+                      </div>
+                      {checkouts > 1 && !isDeliveredCard && (
+                        <p className="text-brand-cyan text-xs font-semibold">{t('parcel.packTogether')}</p>
+                      )}
+
+                      {/* One row per card in the parcel. A combined parcel keeps
+                          each checkout's cards under an "Order n" caption so the
+                          seller can match them to the sale notifications. */}
+                      {groupByTransferGroup(group).map((checkout, idx) => (
+                        <div key={checkout[0].id} className="space-y-3">
+                          {checkouts > 1 && (
+                            <p className="text-slate-500 text-[10px] uppercase tracking-wider">
+                              {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                          {checkout.map((item) => {
+                            const itemImage = rowDisplayImage(item);
+                            return (
+                            <div key={item.id} className="flex items-start gap-3">
+                              <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                                {itemImage && (
+                                  <img
+                                    src={getThumbnailUrl(itemImage)}
+                                    alt="Card"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-semibold text-sm truncate">
+                                  {rowDisplayName(item, t, 'profile.cardOrder')}
+                                </p>
+                                <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                                {group.length === 1 && statusLine}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                       {group.length > 1 && (
                         <div className="flex items-end justify-between gap-2">
                           {statusLine}
                           <span className="text-slate-500 text-[10px] uppercase tracking-wider pb-1">
-                            {isThai ? `${group.length} รายการ · พัสดุเดียว` : `${group.length} items · one parcel`}
+                            {t('parcel.itemsOne').replace('{count}', String(group.length))}
                           </span>
+                        </div>
+                      )}
+
+                      {/* Same buyer, another parcel still on the desk: offer to
+                          ship them as one. Two taps, since the newer label is
+                          cancelled at Flash. */}
+                      {canShipTogether && (
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+                          <p className="text-amber-300 text-xs font-bold">{t('parcel.sameBuyer')}</p>
+                          {shipTogetherConfirm === shipment.buyer_id ? (
+                            <>
+                              <p className="text-slate-300 text-xs leading-relaxed">{t('parcel.explain')}</p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => shipTogether(shipTogetherIds)}
+                                  disabled={shipTogetherBusy}
+                                  className="flex-1 h-9 flex items-center justify-center gap-2 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest disabled:opacity-50"
+                                >
+                                  {shipTogetherBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                  {shipTogetherBusy ? t('parcel.combining') : t('parcel.confirm')}
+                                </button>
+                                <button
+                                  onClick={() => setShipTogetherConfirm(null)}
+                                  disabled={shipTogetherBusy}
+                                  className="flex-1 h-9 bg-white/5 text-slate-300 border border-white/10 font-bold rounded-xl text-xs uppercase tracking-widest disabled:opacity-50"
+                                >
+                                  {t('parcel.keepSeparate')}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setShipTogetherConfirm(shipment.buyer_id ?? null)}
+                              className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest"
+                            >
+                              {t('parcel.shipTogether')}
+                            </button>
+                          )}
                         </div>
                       )}
 

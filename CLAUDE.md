@@ -262,6 +262,15 @@ Shipping (Flash Express) is only configured for Thailand, so **buying is restric
 
 The client gate is UX only and **fails open** (a `/api/geo` hiccup leaves `purchaseAllowed` true); the server gate has the final say. The popup's blocked state can't be reproduced in local dev, since the browser never sends `x-vercel-ip-country` — exercise `/api/geo` with a forced header to verify the logic.
 
+## Parcels: one waybill per buyer per seller
+
+A checkout inserts one `orders` row per listing under one `transfer_group` (the payment), and fulfilment mints **one Flash waybill per seller per checkout**. Two checkouts by the same buyer from the same seller used to mean two labels, two pickup tickets and two Flash fees for cards that fit one envelope. Since 2026-10-10 two things fold them together, both touching only `shipping_labels` (payment groups stay separate; Stripe keys off `transfer_group`):
+
+- **Auto-merge at fulfilment** (`lib/shipTogether.ts:findMergeableWaybill`, called from `lib/fulfillOrder.ts`): if the buyer has an order from this seller at `label_generated` whose label row is still `created` (Flash has not scanned it) and was minted within `AUTO_MERGE_WINDOW_MS` (1h), the new orders get label rows pointing at that waybill and no new shipment/pickup is created. The "label ready" email goes out again with the same PDF. The window is short because nothing in our data says whether the seller already sealed the older parcel.
+- **Seller "Ship together"** (`POST /api/orders/ship-together` -> `mergeParcels`): offered on Pending Shipments (mobile `components/Profile.tsx`) and the desktop "To ship" tab whenever two of one buyer's parcels are still combinable (`canCombineParcel`). The server expands to every order under each touched waybill, keeps the **oldest** waybill, repoints the others' label rows in the DB first, then `cancelOrder`s the newer waybills at Flash (a cancel failure is a Sentry warning, not a rollback). The extra pickup ticket is left alone.
+
+**Seller surfaces group by waybill, not checkout**: `groupByParcel` in `lib/orderGroups.ts` (falls back to `transfer_group` while no real waybill exists; `MANUAL`/`N/A` are not waybills). A parcel holding more than one checkout shows a "{n} orders in this parcel" badge, a pack-together hint, and each checkout's cards under an "Order n" caption. Buyer surfaces still group by `transfer_group` (one review per purchase). The Flash webhook, reconcile cron and label route already key on the waybill, so a merged parcel advances every order under it. Flash re-weighs at the depot, so a stale declared weight on the surviving waybill is harmless. `/api/profile/shipments` attaches `buyer.display_name` so the seller can see which parcels go to the same person.
+
 ## pHash backfill
 
 `scripts/backfill-phashes.mjs` populates `pokemon_cards.phash` for every row with a usable image URL.

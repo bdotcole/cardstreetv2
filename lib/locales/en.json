@@ -1833,6 +1833,22 @@
         "unknownNote": "Shipping is added once you enter your delivery address.",
         "plusShipping": "+ shipping"
     },
+    "parcel": {
+        "heading": "Parcel",
+        "to": "To {name}",
+        "itemsOne": "{count} items · one parcel",
+        "combined": "{count} orders in this parcel",
+        "orderN": "Order {n}",
+        "packTogether": "Pack every card below in one envelope and use this one label.",
+        "sameBuyer": "This buyer has another parcel waiting to ship.",
+        "shipTogether": "Ship together",
+        "explain": "Combine into one parcel? The newer label is cancelled and every card ships under the older label. Only do this if nothing has been handed to Flash yet.",
+        "confirm": "Combine parcels",
+        "keepSeparate": "Keep separate",
+        "combining": "Combining…",
+        "done": "Parcels combined. Print one label and pack every card together.",
+        "failed": "Couldn't combine the parcels. Please try again."
+    },
     "orderActions": {
         "reviewSeller": "Review seller",
         "editReview": "Edit review",

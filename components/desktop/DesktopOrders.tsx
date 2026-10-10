@@ -10,7 +10,7 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, combinableParcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
@@ -40,6 +40,9 @@ interface OrderRow {
     // replaced by a passive notice for them.
     break_spot_id?: string | null;
     break_context?: { title: string; imageSmall: string | null } | null;
+    // Seller shipments only: who the parcel goes to (see /api/profile/shipments).
+    buyer_id?: string | null;
+    buyer?: { display_name: string | null } | null;
     listing: { card_data: any; condition: string } | null;
     shipping_labels?: {
         tracking_number?: string | null;
@@ -289,6 +292,33 @@ export default function DesktopOrders() {
         }
     };
 
+    // "Ship together": fold a buyer's other unshipped parcel(s) into one
+    // waybill (POST /api/orders/ship-together). Two clicks — explain, then
+    // commit — because the newer label is cancelled at Flash. The confirm
+    // state holds the buyer id whose banner is expanded.
+    const [shipTogetherConfirm, setShipTogetherConfirm] = useState<string | null>(null);
+    const [shipTogetherBusy, setShipTogetherBusy] = useState(false);
+    const shipTogether = async (orderIds: string[]) => {
+        setShipTogetherBusy(true);
+        try {
+            const res = await fetch('/api/orders/ship-together', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderIds }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'ship-together failed');
+            setShipTogetherConfirm(null);
+            showToast(t('parcel.done'), 'success');
+            fetchTab('shipments');
+        } catch (err) {
+            console.error('Ship together failed:', err);
+            showToast(t('parcel.failed'), 'error');
+        } finally {
+            setShipTogetherBusy(false);
+        }
+    };
+
     const openLabel = async (orderId: string) => {
         try {
             const res = await fetch(`/api/orders/${orderId}/label/url`, { method: 'POST' });
@@ -501,13 +531,25 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {/* One row per checkout — the group ships as one
-                                    Flash parcel under one waybill, so it gets one
-                                    label button / one Clear. The primary order's
-                                    id drives both (fulfillment keys the label to
-                                    it); Clear stamps every row in the group. */}
-                                {groupByTransferGroup(shipments).map((group) => {
+                                {/* One row per PARCEL (waybill). A checkout ships as
+                                    one Flash parcel, and two checkouts share one when
+                                    they were merged (lib/shipTogether), so the row
+                                    lists every card for that envelope under its one
+                                    label button / one Clear. The primary order's id
+                                    drives both (every row carries the same waybill);
+                                    Clear stamps every row in the group. */}
+                                {groupByParcel(shipments).map((group, _i, parcels) => {
                                     const order = group[0];
+                                    const pno = order.shipping_labels?.[0]?.tracking_number;
+                                    const checkouts = countCheckouts(group);
+                                    const buyerName = order.buyer?.display_name || null;
+                                    // This buyer's other parcels still on the desk can
+                                    // be folded into one with this one.
+                                    const siblings = order.buyer_id
+                                        ? (combinableParcelsByBuyer(parcels).get(order.buyer_id) || [])
+                                        : [];
+                                    const canShipTogether = siblings.length > 1 && siblings.includes(group);
+                                    const shipTogetherIds = siblings.flatMap((g) => g.map((o) => o.id));
                                     // Delivered/completed rows linger as a delivery
                                     // notice until cleared — label printing no longer
                                     // applies to them.
@@ -520,13 +562,80 @@ export default function DesktopOrders() {
                                     return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <div className="space-y-2 min-w-0">
-                                            {group.map((o) => (
-                                                <CardCell key={o.id} row={o} />
+                                            {/* Parcel header: who it goes to, the waybill,
+                                                and how many checkouts it holds. */}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide">
+                                                    {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
+                                                </span>
+                                                {isRealWaybill(pno) && (
+                                                    <span className="font-mono text-[11px] text-slate-500">{pno}</span>
+                                                )}
+                                                {checkouts > 1 && (
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-md px-2 py-0.5">
+                                                        {t('parcel.combined').replace('{count}', String(checkouts))}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {checkouts > 1 && !isDelivered && (
+                                                <p className="text-xs font-semibold text-brand-cyan">{t('parcel.packTogether')}</p>
+                                            )}
+                                            {/* A combined parcel keeps each checkout's cards
+                                                under an "Order n" caption so the seller can
+                                                match them to the sale notifications. */}
+                                            {groupByTransferGroup(group).map((checkout, idx) => (
+                                                <div key={checkout[0].id} className="space-y-2">
+                                                    {checkouts > 1 && (
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-wide">
+                                                            {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    )}
+                                                    {checkout.map((o) => (
+                                                        <CardCell key={o.id} row={o} />
+                                                    ))}
+                                                </div>
                                             ))}
                                             {group.length > 1 && (
                                                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
                                                     {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
                                                 </p>
+                                            )}
+                                            {/* Same buyer, another parcel still on the desk:
+                                                offer to ship them as one. Two clicks, since
+                                                the newer label is cancelled at Flash. */}
+                                            {canShipTogether && (
+                                                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 space-y-2 max-w-md">
+                                                    <p className="text-xs font-bold text-amber-300">{t('parcel.sameBuyer')}</p>
+                                                    {shipTogetherConfirm === order.buyer_id ? (
+                                                        <>
+                                                            <p className="text-xs text-slate-300 leading-relaxed">{t('parcel.explain')}</p>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => shipTogether(shipTogetherIds)}
+                                                                    disabled={shipTogetherBusy}
+                                                                    className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                                >
+                                                                    {shipTogetherBusy ? t('parcel.combining') : t('parcel.confirm')}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setShipTogetherConfirm(null)}
+                                                                    disabled={shipTogetherBusy}
+                                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                                >
+                                                                    {t('parcel.keepSeparate')}
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setShipTogetherConfirm(order.buyer_id ?? null)}
+                                                            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                                                        >
+                                                            <i className="fa-solid fa-box mr-2"></i>
+                                                            {t('parcel.shipTogether')}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-5 flex-wrap">
