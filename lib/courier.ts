@@ -49,6 +49,9 @@ const TEMPLATES = {
     // not — Courier's snippets use the base32 content-template ids below, and
     // the dashboard logs showed zero template sends ever succeeding, so treat
     // any UUID-looking id in this table as wrong.
+    // UNUSED since 2026-10-10: the Sold send is inline (soldNotificationContent)
+    // because this Legacy Designer template cannot be edited through the API
+    // and its copy predates seller-minted labels. Kept so SUBJECTS.sold types.
     sold: (process.env.COURIER_SOLD_TEMPLATE_ID || 'BATFJT2XTH4YAHJNK96A3MG762DQ').trim(),
     labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '000AHF66DDMCJVMGZJK5P8Q2824Z').trim(),
     shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
@@ -284,6 +287,37 @@ function emailPlusPushContent(c: {
 /**
  * Notifies the seller when their item is sold.
  */
+/**
+ * The seller's "you sold something" copy. Since labels are minted by the
+ * seller (lib/parcels), the message has to send them to the app to create
+ * the Flash label, and mention that one buyer's several orders can share a
+ * parcel. Exported so a zero-impact render check (undeliverable recipient +
+ * GET /messages/{id}/output) can send exactly what production sends.
+ */
+export function soldNotificationContent(totalAmount: number, orderId: string) {
+    const amount = Number(totalAmount || 0).toLocaleString('en-US');
+    return emailPlusPushContent({
+        title: SUBJECTS.sold!,
+        emailParagraphs: [
+            {
+                text:
+                    `ยินดีด้วย! สินค้าของคุณขายได้แล้วในราคา ${amount} บาท ` +
+                    'เปิดแอป Cardstreet ไปที่ รายการรอจัดส่ง แล้วกด "สร้างและพิมพ์ป้ายจัดส่ง" เพื่อสร้างใบปะหน้า Flash Express ' +
+                    'หากผู้ซื้อคนเดียวกันมีหลายออเดอร์ คุณสามารถรวมส่งเป็นพัสดุเดียวได้',
+            },
+            {
+                text:
+                    `Great news! Your item has been sold for ${amount} THB. ` +
+                    'Open the Cardstreet app, go to Pending Shipments and tap "Create & print label" to create your Flash Express label. ' +
+                    'If the same buyer has several orders, you can combine them into one parcel.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Create label · สร้างป้ายจัดส่ง', url: `${appBaseUrl()}/orders/${orderId}` },
+        pushBody: `ขายได้ ${amount} บาท — เปิดแอปเพื่อสร้างป้ายจัดส่ง · Open the app to create your shipping label.`,
+    });
+}
+
 export async function sendSoldNotification(sellerId: string, orderDetails: any) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping sold notification'); return; }
@@ -298,7 +332,8 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         prefs.sold_email ? email : null,
         prefs.sold_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
@@ -308,17 +343,11 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         const sendResult = await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.sold,
+                content: soldNotificationContent(Number(orderDetails.total_amount) || 0, String(orderDetails.id)),
                 routing,
                 providers: postmarkOverride(SUBJECTS.sold),
-                data: {
-                    // Template references {orderDetails.total_amount} (and {orderDetails.id}).
-                    // Pass only the fields the template reads, not the whole order row.
-                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
-                    // Push deep-link payload (read by the mobile FCM handler).
-                    orderId: orderDetails.id,
-                    type: 'sold',
-                },
+                // Push deep-link payload (read by the mobile FCM handler).
+                data: { orderId: orderDetails.id, type: 'sold' },
             }
         });
         console.log(`[Courier] ✅ 'Sold' notification sent. Request ID: ${(sendResult as { requestId?: string }).requestId}`);

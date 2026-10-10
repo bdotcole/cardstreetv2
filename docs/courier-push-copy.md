@@ -22,6 +22,12 @@ channel tab → edit the title and the body block shown there → **Publish**).
 
 ## 1. Sold — `BATFJT2XTH4YAHJNK96A3MG762DQ`
 
+> **Done another way, 2026-10-10.** The Sold send is now inline from `lib/courier.ts`
+> (`soldNotificationContent`): Courier refuses API edits on Legacy Designer templates,
+> and the copy had to change for seller-minted labels. Push title and body below are
+> what ships; the email tells the seller to create the label in the app. This dashboard
+> template is unused, so nothing to edit here.
+
 - Push **title** (replace `CardStreet: คุณมีคำสั่งซื้อใหม่ You have a new sale!`):
 
   > คุณมีคำสั่งซื้อใหม่ — New sale!
