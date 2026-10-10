@@ -26,12 +26,13 @@ import { googleRefresh, syncYouTubeChannel } from './youtube';
 import { syncTikTokAccount, tiktokRefresh } from './tiktok';
 import { fetchSocialSignups, fetchSocialSiteTraffic } from './ga4';
 import {
-    eachDay, isoDay, shiftDay,
+    eachDay, isoDay, mapLimit, shiftDay,
     type DailyMetrics, type SocialAccountRow, type SocialBrand, type SyncResult, type SyncWindow,
 } from './types';
 
 export const DEFAULT_SYNC_DAYS = 3;
 export const MAX_SYNC_DAYS = 90;
+const ACCOUNT_CONCURRENCY = 3;
 
 export interface AccountSyncOutcome {
     accountId: string;
@@ -74,12 +75,10 @@ export async function syncSocialAccounts(opts: {
     const { data: accounts, error } = await q;
     if (error) throw new Error(`social_accounts: ${error.message}`);
 
-    const outcomes: AccountSyncOutcome[] = [];
-    // Sequential on purpose: the platforms rate-limit per app, and a run is a
-    // handful of accounts, not hundreds.
-    for (const account of (accounts ?? []) as SocialAccountRow[]) {
-        outcomes.push(await syncOne(supabase, account, window));
-    }
+    // A few accounts at a time: each account is its own platform calls and
+    // its own rows, so they don't contend, and six in series blew the route's
+    // time budget once per-post metrics were added.
+    const outcomes = await mapLimit((accounts ?? []) as SocialAccountRow[], ACCOUNT_CONCURRENCY, (account) => syncOne(supabase, account, window));
 
     let siteTraffic: SyncSummary['siteTraffic'] = { ok: true, rows: 0, skipped: true };
     if (opts.includeSiteTraffic !== false && !opts.accountId) {

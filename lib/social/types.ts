@@ -172,6 +172,20 @@ export function dayStartUnix(day: string): number {
     return Math.floor(new Date(`${day}T00:00:00Z`).getTime() / 1000);
 }
 
+/** Run `fn` over `items` with at most `limit` in flight; results keep input order. */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (next < items.length) {
+            const i = next++;
+            results[i] = await fn(items[i], i);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
+
 export function toInt(v: unknown): number | null {
     if (v === null || v === undefined || v === '') return null;
     const n = typeof v === 'number' ? v : Number(v);

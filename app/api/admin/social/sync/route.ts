@@ -12,7 +12,8 @@ import { syncSocialAccounts, DEFAULT_SYNC_DAYS, MAX_SYNC_DAYS } from '@/lib/soci
 import { SOCIAL_BRANDS, type SocialBrand } from '@/lib/social/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+// Same budget as the cron: a 90-day backfill with per-post metrics is a few minutes.
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
     const gate = await requireAdmin();

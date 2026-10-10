@@ -20,9 +20,13 @@
  */
 
 import {
-    dayStartUnix, eachDay, isoDay, shiftDay, toInt,
+    dayStartUnix, eachDay, isoDay, mapLimit, shiftDay, toInt,
     type DailyMetrics, type PostMetrics, type SyncResult, type SyncWindow,
 } from './types';
+
+// Per-post calls run a few at a time: Graph's per-app budget is far above
+// this, and series calls made a 90-day backfill blow a 2-minute route.
+const POST_CONCURRENCY = 4;
 import { providerCredentials } from './config';
 
 export const GRAPH_VERSION = 'v24.0';
@@ -357,8 +361,7 @@ async function facebookPosts(pageId: string, pageToken: string, notes: string[])
     if (refused) {
         notes.push('Facebook post comment/reaction counts need the pages_read_user_content permission on the Meta app (add it, then Reconnect).');
     }
-    const out: PostMetrics[] = [];
-    for (const p of res?.data ?? []) {
+    return mapLimit(res?.data ?? [], POST_CONCURRENCY, async (p: any): Promise<PostMetrics> => {
         const insight = (p.insights?.data ?? []).find((i: any) => i.name === 'post_media_view');
         const format = fbFormat(p);
         const post: PostMetrics = {
@@ -381,9 +384,8 @@ async function facebookPosts(pageId: string, pageToken: string, notes: string[])
             if (v.has('total_video_avg_time_watched')) post.avg_watch_seconds = Math.round(v.get('total_video_avg_time_watched')! / 10) / 100;
             if (v.has('total_video_view_total_time')) post.watch_time_seconds = Math.round(v.get('total_video_view_total_time')! / 1000);
         }
-        out.push(post);
-    }
-    return out;
+        return post;
+    });
 }
 
 // --- Instagram professional account -------------------------------------
@@ -516,15 +518,22 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
         fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count',
         limit: POSTS_PER_SYNC,
     }, pageToken);
-    const out: PostMetrics[] = [];
-    for (const m of res?.data ?? []) {
+    // A metric Meta refuses for one Reel it refuses for every Reel on this
+    // account; remember it so later posts don't re-pay the one-by-one probe.
+    const refused: Record<string, Set<string>> = { reel: new Set(), feed: new Set() };
+    const media: any[] = res?.data ?? [];
+    const kindOf = (m: any) => (igFormat(m) === 'reel' ? 'reel' : 'feed');
+    const one = async (m: any): Promise<PostMetrics> => {
         const format = igFormat(m);
+        const kind = kindOf(m);
+        const wanted = (kind === 'reel' ? IG_REEL_INSIGHTS : IG_FEED_INSIGHTS).filter((x) => !refused[kind].has(x));
         const s: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
         try {
-            await insightsWithFallback(`${m.id}/insights`, format === 'reel' ? IG_REEL_INSIGHTS : IG_FEED_INSIGHTS, {}, pageToken, s);
+            if (wanted.length) await insightsWithFallback(`${m.id}/insights`, wanted, {}, pageToken, s);
         } catch {
             // A single post's insights are not worth failing the account.
         }
+        for (const d of s.dropped) refused[kind].add(d.split(' ')[0]);
         // Media insights are lifetime figures: parseInsights files them under LIFETIME (or as totals).
         const lifetime = new Map<string, number>();
         for (const [name, byDay] of s.byDay) {
@@ -535,7 +544,7 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
         const get = (k: string) => (lifetime.has(k) ? lifetime.get(k)! : undefined);
         const avgMs = get('ig_reels_avg_watch_time');
         const totalMs = get('ig_reels_video_view_total_time');
-        out.push({
+        return {
             external_id: String(m.id),
             published_at: m.timestamp ?? null,
             caption: m.caption ?? null,
@@ -554,9 +563,17 @@ async function instagramPosts(igUserId: string, pageToken: string): Promise<Post
             profile_visits: get('profile_visits'),
             avg_watch_seconds: avgMs !== undefined ? Math.round(avgMs / 10) / 100 : undefined,
             watch_time_seconds: totalMs !== undefined ? Math.round(totalMs / 1000) : undefined,
-        });
-    }
-    return out;
+        };
+    };
+    // The first post of each kind runs alone to learn that kind's refused
+    // set; the rest fan out with the probe already paid.
+    const seen = new Set<string>();
+    const learners = media.filter((m) => (seen.has(kindOf(m)) ? false : (seen.add(kindOf(m)), true)));
+    const byId = new Map<string, PostMetrics>();
+    for (const m of learners) byId.set(String(m.id), await one(m));
+    const rest = media.filter((m) => !byId.has(String(m.id)));
+    for (const p of await mapLimit(rest, POST_CONCURRENCY, one)) byId.set(p.external_id, p);
+    return media.map((m) => byId.get(String(m.id))!).filter(Boolean);
 }
 
 /**

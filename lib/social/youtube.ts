@@ -14,7 +14,7 @@
  * (playlistItems + videos.list, never search.list which costs 100).
  */
 
-import { eachDay, isoDay, shiftDay, toInt, type DailyMetrics, type PostMetrics, type SyncResult, type SyncWindow } from './types';
+import { eachDay, isoDay, mapLimit, shiftDay, toInt, type DailyMetrics, type PostMetrics, type SyncResult, type SyncWindow } from './types';
 import { providerCredentials } from './config';
 
 const AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -263,8 +263,8 @@ async function youtubeUploads(accessToken: string, uploadsPlaylistId: string | n
         notes.push(`YouTube per-video analytics unavailable: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    const out: PostMetrics[] = [];
-    for (const v of videos?.items ?? []) {
+    // Retention is one Analytics call per video; four at a time keeps a 15-video sync under ~5 s.
+    return mapLimit(videos?.items ?? [], 4, async (v: any): Promise<PostMetrics> => {
         const a = perVideo.get(String(v.id));
         const duration = parseDuration(v.contentDetails?.duration);
         const post: PostMetrics = {
@@ -309,7 +309,6 @@ async function youtubeUploads(accessToken: string, uploadsPlaylistId: string | n
         } catch {
             // A video too new or too small for retention data — the rest still lands.
         }
-        out.push(post);
-    }
-    return out;
+        return post;
+    });
 }
