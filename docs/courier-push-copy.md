@@ -40,6 +40,8 @@ channel tab → edit the title and the body block shown there → **Publish**).
 
 ## 2. Shipping label — `000AHF66DDMCJVMGZJK5P8Q2824Z`
 
+> **Done another way, 2026-10-10.** Sent inline from `lib/courier.ts` (`labelReadyNotificationContent`), with the push title and body below and email copy for seller-minted labels. Courier refuses API edits on Legacy Designer templates, so this dashboard template is unused; nothing to edit here.
+
 - Push **title** (replace `CardStreet: สร้างใบปะหน้าพัสดุสำเร็จ Shipping Label Generated!`):
 
   > ใบปะหน้าพัสดุพร้อมแล้ว — Label ready
@@ -58,6 +60,8 @@ channel tab → edit the title and the body block shown there → **Publish**).
 
 ## 3. Shipped — `PN39K94HQS47C4GTEGVSDD7GFMPR`
 
+> **Done another way, 2026-10-10.** Sent inline from `lib/courier.ts` (`shippedNotificationContent`), with the push title and body below and email copy for seller-minted labels. Courier refuses API edits on Legacy Designer templates, so this dashboard template is unused; nothing to edit here.
+
 - Push **title** (replace `CardStreet: สินค้าถูกจัดส่งแล้ว Order Shipped!`):
 
   > สินค้าถูกจัดส่งแล้ว — Order shipped!
@@ -68,6 +72,8 @@ channel tab → edit the title and the body block shown there → **Publish**).
   > พัสดุ {trackingNumber} กำลังเดินทางถึงคุณ — ติดตามสถานะได้ในแอป · On the way — track it in the app.
 
 ## 4. Order confirmed — `WAE55N73MYM5CAGN7GTWQT7XPN8B`
+
+> **Done another way, 2026-10-10.** Sent inline from `lib/courier.ts` (`orderConfirmedNotificationContent`), with the push title and body below and email copy for seller-minted labels. Courier refuses API edits on Legacy Designer templates, so this dashboard template is unused; nothing to edit here.
 
 - Push **title** (replace `CardStreet: ยืนยันคำสั่งซื้อ Order Confirmed!`):
 

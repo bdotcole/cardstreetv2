@@ -273,7 +273,7 @@ A checkout inserts one `orders` row per listing under one `transfer_group` (the 
 
 **Seller surfaces group by waybill, not checkout**: `groupByParcel` in `lib/orderGroups.ts` (falls back to `transfer_group` while no real waybill exists; `MANUAL`/`N/A`/`PENDING` are not waybills). A parcel holding several checkouts shows a "{n} orders in this parcel" badge, a pack-together hint, and each checkout's cards under an "Order n" caption. `isAwaitingLabel` / `isUnscannedParcel` / `parcelsByBuyer` drive the three buttons and mirror the server rules. `/api/profile/shipments` attaches `buyer.display_name` so parcels for the same person are obvious. Buyer surfaces still group by `transfer_group` (one review per purchase); the buyer's confirmation carries no tracking number any more, the number appears on their order card once the seller creates the label, and the "shipped" push still fires at the first Flash scan. The Flash webhook, reconcile cron and label route already key on the waybill, so a combined parcel advances every order under it; Flash re-weighs at the depot, so a parcel's declared weight only needs to be a fair estimate.
 
-The Courier "sold" template (dashboard-managed) should tell the seller to create the label in the app; the push deep-links to the sale card where the button is.
+The Sold, Label ready, Shipped and Order confirmed notifications are sent inline from `lib/courier.ts` (the `*NotificationContent` builders, verified via undeliverable test sends + Courier's rendered-output API). The four Legacy Designer templates in the Courier dashboard are unused and cannot be edited through the API. Order pushes deep-link to the order card where the Create label button is.
 
 ## pHash backfill
 

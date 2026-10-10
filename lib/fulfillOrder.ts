@@ -420,7 +420,11 @@ export async function fulfillOrdersByTransferGroup(
             const totalAmount = orders.reduce((sum, o) => sum + (o.total_amount || 0) + (o.shipping_fee || 0), 0);
             await sendOrderConfirmationNotification(
                 buyerId,
-                { id: orders.length > 1 ? 'multiple' : orders[0].id, total_amount: totalAmount },
+                // The first order id, never a 'multiple' sentinel: the push
+                // handler and the /orders/<id> link both land on the purchase
+                // that contains it, and a non-UUID would silently deep-link
+                // nowhere (which is what multi-item buyers used to get).
+                { id: orders[0].id, total_amount: totalAmount },
                 result.trackingNumbers
             );
 

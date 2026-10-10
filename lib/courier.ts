@@ -49,9 +49,11 @@ const TEMPLATES = {
     // not — Courier's snippets use the base32 content-template ids below, and
     // the dashboard logs showed zero template sends ever succeeding, so treat
     // any UUID-looking id in this table as wrong.
-    // UNUSED since 2026-10-10: the Sold send is inline (soldNotificationContent)
-    // because this Legacy Designer template cannot be edited through the API
-    // and its copy predates seller-minted labels. Kept so SUBJECTS.sold types.
+    // UNUSED since 2026-10-10: Sold, Label Generated, Shipped and Order
+    // Confirmed are sent inline (the *NotificationContent builders below).
+    // These Legacy Designer templates cannot be edited through the API, their
+    // push blocks delivered raw UUIDs / a literal "xxx", and the copy predates
+    // seller-minted labels. Kept so SUBJECTS keeps its key type.
     sold: (process.env.COURIER_SOLD_TEMPLATE_ID || 'BATFJT2XTH4YAHJNK96A3MG762DQ').trim(),
     labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '000AHF66DDMCJVMGZJK5P8Q2824Z').trim(),
     shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
@@ -100,8 +102,8 @@ const TEMPLATES = {
 const SUBJECTS: Partial<Record<keyof typeof TEMPLATES, string>> = {
     sold: 'คุณมีคำสั่งซื้อใหม่ — New sale!',
     labelGenerated: 'ใบปะหน้าพัสดุพร้อมแล้ว — Shipping label ready',
-    shipped: 'สินค้าถูกจัดส่งแล้ว Order Shipped!',
-    orderConfirmed: 'ยืนยันคำสั่งซื้อ Order Confirmed!',
+    shipped: 'สินค้าถูกจัดส่งแล้ว — Order shipped!',
+    orderConfirmed: 'ยืนยันคำสั่งซื้อแล้ว — Order confirmed!',
     // firstTimeSale is inline (FIRST_SALE_SUBJECT below) and forces its own
     // subject through the same override.
     // Offer templates: add entries alongside the env IDs when those dashboard
@@ -367,9 +369,52 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
  * recipient's mail client strips the attachment (or for the push channel
  * where attachments don't apply).
  */
+export interface LabelReadyDetails {
+    id: string;
+    /** Flash waybill, shown so the seller can match label to parcel. */
+    trackingNumber?: string | null;
+    /** Cards in the parcel; above one, the copy says to pack them together. */
+    itemCount?: number | null;
+}
+
+/**
+ * The seller's "label is ready" copy. Fires when the seller mints the label
+ * (lib/parcels), adds orders to an unscanned parcel, or the safety-net cron
+ * mints for them. The PDF rides the email as a Postmark attachment; the push
+ * is one line and the app button prints it. Exported for render checks.
+ */
+export function labelReadyNotificationContent(d: LabelReadyDetails) {
+    const pno = d.trackingNumber ? ` (${d.trackingNumber})` : '';
+    const many = (d.itemCount ?? 1) > 1;
+    return emailPlusPushContent({
+        title: SUBJECTS.labelGenerated!,
+        emailParagraphs: [
+            {
+                text:
+                    `ใบปะหน้าพัสดุ Flash Express ของคุณพร้อมแล้ว${pno} ไฟล์ PDF แนบมากับอีเมลนี้ หรือพิมพ์จากแอปได้ที่ รายการรอจัดส่ง ` +
+                    (many
+                        ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้า `
+                        : 'แพ็กการ์ด ติดใบปะหน้า ') +
+                    'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา',
+            },
+            {
+                text:
+                    `Your Flash Express label is ready${pno}. The PDF is attached, or print it from Pending Shipments in the app. ` +
+                    (many
+                        ? `Pack all ${d.itemCount} cards for this parcel in one envelope, attach the label, `
+                        : 'Pack the card, attach the label, ') +
+                    'and hand it to Flash at pickup or at a branch.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Print label · พิมพ์ใบปะหน้า', url: `${appBaseUrl()}/orders/${d.id}` },
+        pushBody: 'เปิดแอปเพื่อพิมพ์ใบปะหน้าและจัดส่งได้เลย · Open the app to print your label and ship.',
+    });
+}
+
 export async function sendLabelGeneratedNotification(
     sellerId: string,
-    orderDetails: { id: string },
+    orderDetails: LabelReadyDetails,
     labelPdfBase64?: string | null,
 ) {
     const courier = getCourier();
@@ -385,10 +430,10 @@ export async function sendLabelGeneratedNotification(
         prefs.label_email ? email : null,
         prefs.label_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
-    const orderUrl = `${appBaseUrl()}/orders/${orderDetails.id}`;
     const hasAttachment = !!labelPdfBase64;
 
     // Postmark attachment rides the same per-provider override as the subject
@@ -400,7 +445,7 @@ export async function sendLabelGeneratedNotification(
             ? {
                   Attachments: [
                       {
-                          Name: `cardstreet-label-${orderDetails.id}.pdf`,
+                          Name: `cardstreet-label-${orderDetails.trackingNumber || orderDetails.id}.pdf`,
                           Content: labelPdfBase64,
                           ContentType: 'application/pdf',
                       },
@@ -414,32 +459,11 @@ export async function sendLabelGeneratedNotification(
         const { requestId } = await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.labelGenerated,
+                content: labelReadyNotificationContent(orderDetails),
                 routing,
                 ...(providers ? { providers } : {}),
-                data: {
-                    // Template references {orderDetails.id} and {labelUrl}. The label
-                    // route requires auth, so deep-link to the order page where the
-                    // seller can pull the label (the PDF is also attached to this
-                    // email via the Postmark override below).
-                    //
-                    // These keys are EXACTLY aligned with the template — verified
-                    // 2026-08-15 against the live Courier API (GET /notifications/
-                    // 000AHF66.../content + GET /messages/{id}/output): the push
-                    // block renders both values from this very payload. The email
-                    // block's ENGLISH sentence still shows raw {orderDetails.id} /
-                    // {labelUrl} because those two tokens were typed as PLAIN TEXT
-                    // there — not <variable>-wrapped like the Thai sentence and the
-                    // push block — and Courier only substitutes tokenized variables.
-                    // No data payload can fix that; the cure is a dashboard edit
-                    // (re-insert the two variables in the email block's English
-                    // line). Do not "fix" this payload again.
-                    orderDetails: { id: orderDetails.id },
-                    labelUrl: orderUrl,
-                    // Push deep-link payload.
-                    orderId: orderDetails.id,
-                    type: 'label_generated',
-                },
+                // Push deep-link payload (read by the mobile FCM handler).
+                data: { orderId: orderDetails.id, type: 'label_generated' },
             },
         });
         console.log(`[Courier] ✅ 'Label Generated' notification sent. Request ID: ${requestId}`);
@@ -451,6 +475,34 @@ export async function sendLabelGeneratedNotification(
 /**
  * Notifies the buyer that their item has shipped.
  */
+/**
+ * The buyer's "parcel picked up" copy (Flash's first scan). Tracking in the
+ * email as a plain line and a Flash link; the push carries the waybill and
+ * nothing else. Exported for render checks.
+ */
+export function shippedNotificationContent(orderId: string, trackingNumber: string) {
+    const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${encodeURIComponent(trackingNumber)}`;
+    return emailPlusPushContent({
+        title: SUBJECTS.shipped!,
+        emailParagraphs: [
+            {
+                text:
+                    `พัสดุของคุณกำลังเดินทาง! Flash Express รับพัสดุหมายเลข ${trackingNumber} แล้ว ` +
+                    'ติดตามสถานะได้ในแอปที่ ติดตามคำสั่งซื้อ หรือที่เว็บไซต์ Flash Express',
+            },
+            {
+                text:
+                    `Your parcel is on its way. Flash Express has picked up waybill ${trackingNumber}. ` +
+                    'Track it in the app under Track Orders, or on the Flash Express site.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Track parcel · ติดตามพัสดุ', url: `${appBaseUrl()}/orders/${orderId}` },
+        emailFooter: `Flash Express: ${trackingLink}`,
+        pushBody: `พัสดุ ${trackingNumber} กำลังเดินทางถึงคุณ — ติดตามสถานะได้ในแอป · On the way — track it in the app.`,
+    });
+}
+
 export async function sendShippedNotification(buyerId: string, orderDetails: any, trackingUrl: string) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping shipped notification'); return; }
@@ -465,27 +517,20 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
         prefs.shipped_email ? email : null,
         prefs.shipped_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
-    const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`;
     try {
         await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.shipped,
+                // `trackingUrl` is the raw waybill number (legacy parameter name).
+                content: shippedNotificationContent(String(orderDetails.id), trackingUrl),
                 routing,
                 providers: postmarkOverride(SUBJECTS.shipped),
-                data: {
-                    // Template references {trackingLink} (full URL) + {orderDetails.id}.
-                    orderDetails: { id: orderDetails.id },
-                    trackingLink,
-                    trackingNumber: trackingUrl,
-                    // Push deep-link payload (unchanged contract: raw tracking number).
-                    orderId: orderDetails.id,
-                    type: 'shipped',
-                    trackingUrl,
-                },
+                // Push deep-link payload (unchanged contract: raw tracking number).
+                data: { orderId: orderDetails.id, type: 'shipped', trackingUrl },
             }
         });
         console.log(`[Courier] ✅ 'Shipped' notification sent to buyer ${buyerId}`);
@@ -497,6 +542,37 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
 /**
  * Notifies the buyer that their order was confirmed, with tracking info.
  */
+/**
+ * The buyer's receipt. Since the seller mints the label after payment, there
+ * is no tracking number yet; the copy says the seller is preparing the parcel
+ * and a shipped notification follows at Flash's first scan. Exported for
+ * render checks.
+ */
+export function orderConfirmedNotificationContent(orderId: string, totalAmount: number, trackingNumbers: string[] = []) {
+    const amount = Number(totalAmount || 0).toLocaleString('en-US');
+    const tracking = trackingNumbers.length > 0 ? trackingNumbers.join(', ') : '';
+    return emailPlusPushContent({
+        title: SUBJECTS.orderConfirmed!,
+        emailParagraphs: [
+            {
+                text:
+                    `ขอบคุณสำหรับคำสั่งซื้อ! เราได้รับการชำระเงิน ${amount} บาทแล้ว ผู้ขายกำลังเตรียมพัสดุของคุณ ` +
+                    'เราจะแจ้งเตือนอีกครั้งเมื่อ Flash Express รับพัสดุ ติดตามสถานะได้ในแอปที่ ติดตามคำสั่งซื้อ' +
+                    (tracking ? ` หมายเลขพัสดุ: ${tracking}` : ''),
+            },
+            {
+                text:
+                    `Thanks for your order! Your payment of ${amount} THB is confirmed. The seller is preparing your parcel, ` +
+                    "and you'll get another notification when Flash Express picks it up. Track it in the app under Track Orders." +
+                    (tracking ? ` Tracking: ${tracking}` : ''),
+                muted: true,
+            },
+        ],
+        cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+        pushBody: 'ขอบคุณสำหรับคำสั่งซื้อ — ติดตามสถานะพัสดุได้ในแอป · Thanks for your order — track it in the app.',
+    });
+}
+
 export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any, trackingNumbers: string[] = []) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping order confirmation'); return; }
@@ -519,26 +595,19 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
         wantEmail ? email : null,
         wantPush ? fcmToken : null
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
         await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.orderConfirmed,
+                content: orderConfirmedNotificationContent(String(orderDetails.id), Number(orderDetails.total_amount) || 0, trackingNumbers),
                 routing,
                 providers: postmarkOverride(SUBJECTS.orderConfirmed),
-                data: {
-                    // Template references {orderDetails.total_amount} + {trackingNumbersText}.
-                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
-                    trackingNumbersText: trackingNumbers.join(', '),
-                    hasTracking: trackingNumbers.length > 0,
-                    // Push deep-link payload (unchanged contract: array form).
-                    orderId: orderDetails.id,
-                    type: 'order_confirmation',
-                    trackingNumbers,
-                },
+                // Push deep-link payload (unchanged contract: array form).
+                data: { orderId: orderDetails.id, type: 'order_confirmation', trackingNumbers },
             }
         });
         console.log(`[Courier] ✅ 'Order Confirmation' notification sent to buyer ${buyerId}`);

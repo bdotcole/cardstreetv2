@@ -242,9 +242,18 @@ async function advanceToLabelGenerated(admin: SupabaseClient, orderIds: string[]
     return error ? error.message : null;
 }
 
-async function notifyLabelReady(sellerId: string, primaryOrderId: string, pdfBase64: string | null) {
+async function notifyLabelReady(
+    sellerId: string,
+    primaryOrderId: string,
+    pdfBase64: string | null,
+    parcel: { trackingNumber: string; itemCount: number },
+) {
     try {
-        await sendLabelGeneratedNotification(sellerId, { id: primaryOrderId }, pdfBase64);
+        await sendLabelGeneratedNotification(
+            sellerId,
+            { id: primaryOrderId, trackingNumber: parcel.trackingNumber, itemCount: parcel.itemCount },
+            pdfBase64,
+        );
     } catch (e) {
         console.error('[Parcels] label notification failed (non-fatal):', (e as Error).message);
     }
@@ -412,7 +421,7 @@ export async function mintParcel(
     }
 
     if (params.notify !== false) {
-        await notifyLabelReady(params.sellerId, primary.id, labelPdfBase64);
+        await notifyLabelReady(params.sellerId, primary.id, labelPdfBase64, { trackingNumber: flashOrder.pno, itemCount: orderIds.length });
     }
     console.log(`[Parcels] Waybill ${flashOrder.pno} covers ${orderIds.length} order(s) for seller ${params.sellerId}`);
     return { ok: true, trackingNumber: flashOrder.pno, orderIds, manual: false };
@@ -480,7 +489,7 @@ export async function attachToParcel(
         } catch (e) {
             console.error('[Parcels] Label regeneration failed (non-fatal):', (e as Error).message);
         }
-        await notifyLabelReady(params.sellerId, orderIds[0], pdf);
+        await notifyLabelReady(params.sellerId, orderIds[0], pdf, { trackingNumber: waybill.tracking_number, itemCount: target.length + orderIds.length });
     }
     console.log(`[Parcels] ${orderIds.length} order(s) added to waybill ${waybill.tracking_number} for seller ${params.sellerId}`);
     return { ok: true, trackingNumber: waybill.tracking_number, orderIds, manual: false };
