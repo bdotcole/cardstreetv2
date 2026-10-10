@@ -875,8 +875,10 @@ export default function HomePage() {
                 email: sessionUser.email || '',
                 avatar: sessionUser.user_metadata.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + sessionUser.id,
                 provider: sessionUser.app_metadata.provider as any || 'email',
+                // name too: the profile's display_name replaces the OAuth
+                // full_name below, and a token refresh must not revert it.
                 ...(prev && prev.id === sessionUser.id
-                    ? { isPartner: prev.isPartner, partnerStats: prev.partnerStats }
+                    ? { name: prev.name, isPartner: prev.isPartner, partnerStats: prev.partnerStats }
                     : {}),
             }));
         };
@@ -903,7 +905,9 @@ export default function HomePage() {
         return () => subscription.unsubscribe();
     }, []);
 
-    // Hydrate partner status from the profile. Partner status is keyed off
+    // Hydrate the display name and partner status from the profile. The
+    // session only carries the OAuth full_name, so without this a name changed
+    // in Edit Profile never shows. Partner status is keyed off
     // partner_joined_at (independent of `role`, so an admin can also be a
     // partner); `role === 'partner'` is kept for legacy partner rows.
     useEffect(() => {
@@ -914,9 +918,16 @@ export default function HomePage() {
                 const res = await fetch('/api/profile');
                 if (!res.ok) return;
                 const { profile } = await res.json();
+                if (cancelled) return;
+                const displayName = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
                 const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
-                if (cancelled || !isPartner) return;
-                setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+                setUser(prev => {
+                    if (!prev) return prev;
+                    const name = displayName || prev.name;
+                    const partner = !!prev.isPartner || isPartner;
+                    return name === prev.name && partner === !!prev.isPartner ? prev : { ...prev, name, isPartner: partner };
+                });
+                if (!isPartner) return;
                 // Provisioned partners (created by an admin with a temp password)
                 // must complete setup before using the app.
                 if (profile?.partner_joined_at && profile?.partner_onboarding_complete === false) {
@@ -2750,6 +2761,10 @@ export default function HomePage() {
                                 rewardsLevel={rewardsSummary?.level ?? null}
                                 rewardsFrame={rewardsSummary?.equippedFrame ?? null}
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
+                                onDisplayNameChange={(name) => {
+                                    const trimmed = name.trim();
+                                    if (trimmed) setUser(prev => (prev ? { ...prev, name: trimmed } : prev));
+                                }}
                                 onNavigatePartner={() => setActiveTab('partner')}
                                 onPayOffer={handlePayOffer}
                                 onViewListing={handleViewOfferListing}

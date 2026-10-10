@@ -64,6 +64,9 @@ interface ProfileProps {
   // renders above this panel (it's a sibling of <main>), so closing it drops
   // the user right back on the Offers panel. Undefined when offers are off.
   onViewListing?: (offer: Offer) => void;
+  // Hands a saved display name up so the shell's user.name (seeded from the
+  // OAuth full_name, which never changes) shows it everywhere else too.
+  onDisplayNameChange?: (name: string) => void;
 }
 
 // Slide panel animation variants
@@ -315,7 +318,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onDisplayNameChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -1054,6 +1057,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
             bio: editBio,
             ...editAddress
           }));
+          onDisplayNameChange?.(editName);
           showToast('Profile updated successfully', 'success');
       } else {
           showToast(data.error || 'Failed to update profile', 'error');
@@ -1126,7 +1130,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
     if (panel === 'sales' || panel === 'payouts') fetchSales();
     if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {
-      setEditName(user.name);
+      // profiles.display_name is the saved name; user.name can still be the
+      // Google full_name, and seeding from it made the next save revert the
+      // user's chosen name.
+      setEditName(profileData?.display_name || user.name);
       setEditUsername(profileData?.username || '');
       setEditPhone(profileData?.phone_number || '');
       setEditBio(profileData?.bio || '');
@@ -1341,7 +1348,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                 )}
               </div>
               <div className="space-y-1">
-                <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
+                <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{profileData?.display_name || user.name}</h3>
                 {user.provider !== 'guest' ? (
                    <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem] flex items-center gap-2">
                      <span>{profileData?.username ? `@${profileData.username}` : ' '}</span>
