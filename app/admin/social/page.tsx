@@ -468,7 +468,9 @@ function FollowersChart({ agg }: { agg: Aggregate }) {
                             strokeWidth={2} dot={false} connectNulls isAnimationActive={false}
                             activeDot={{ r: 4, stroke: SURFACE, strokeWidth: 2 }}
                         >
-                            <LabelList dataKey={s.platform} content={endLabel(lastIndex)} />
+                            {/* Daily deltas converge near zero and their end labels pile up; the
+                                last day's figure is only a headline for the running total. */}
+                            {mode === 'total' && <LabelList dataKey={s.platform} content={endLabel(lastIndex)} />}
                         </Line>
                     ))}
                 </LineChart>
