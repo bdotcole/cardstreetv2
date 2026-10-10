@@ -1840,14 +1840,14 @@
         "combined": "{count} orders in this parcel",
         "orderN": "Order {n}",
         "packTogether": "Pack every card below in one envelope and use this one label.",
-        "sameBuyer": "This buyer has another parcel waiting to ship.",
-        "shipTogether": "Ship together",
-        "explain": "Combine into one parcel? The newer label is cancelled and every card ships under the older label. Only do this if nothing has been handed to Flash yet.",
-        "confirm": "Combine parcels",
-        "keepSeparate": "Keep separate",
-        "combining": "Combining…",
-        "done": "Parcels combined. Print one label and pack every card together.",
-        "failed": "Couldn't combine the parcels. Please try again."
+        "createLabel": "Create & print label",
+        "creating": "Creating label…",
+        "created": "Label created. Print it and pack the cards.",
+        "createFailed": "Couldn't create the label. Please try again.",
+        "moreUnlabelled": "This buyer has {count} more unlabelled orders.",
+        "combineAndPrint": "Combine {count} orders into one parcel",
+        "hasOpenParcel": "This buyer has a parcel Flash has not collected yet.",
+        "addToParcel": "Add to parcel {pno}"
     },
     "orderActions": {
         "reviewSeller": "Review seller",

@@ -31,7 +31,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup, groupByParcel, countCheckouts, combinableParcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
@@ -742,31 +742,32 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
     }
   };
 
-  // "Ship together": fold a buyer's other unshipped parcel(s) into one waybill
-  // (POST /api/orders/ship-together). Two taps — the first expands an
-  // explanation, the second commits — because the newer label is cancelled
-  // at Flash. The confirm state holds the buyer id whose banner is open.
-  const [shipTogetherConfirm, setShipTogetherConfirm] = useState<string | null>(null);
-  const [shipTogetherBusy, setShipTogetherBusy] = useState(false);
-  const shipTogether = async (orderIds: string[]) => {
-    setShipTogetherBusy(true);
+  // Labels are minted when the seller is ready (lib/parcels), so the seller
+  // decides which of a buyer's orders travel together. One handler serves
+  // all three buttons: create for one checkout, combine several checkouts,
+  // or add to a waybill Flash has not scanned yet. On success the list
+  // refreshes and the label opens for printing (any order id in the parcel
+  // works: every row carries the same waybill).
+  const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
+  const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+    setLabelBusyIds(orderIds);
     try {
-      const res = await fetch('/api/orders/ship-together', {
+      const res = await fetch('/api/orders/label/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ orderIds }),
+        body: JSON.stringify({ orderIds, attachToTrackingNumber }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'ship-together failed');
-      setShipTogetherConfirm(null);
-      showToast(t('parcel.done'), 'success');
+      if (!res.ok) throw new Error(data?.error || 'label create failed');
+      showToast(t('parcel.created'), 'success');
       await fetchShipments();
+      if (data?.manual !== true) await openLabel(orderIds[0]);
     } catch (err) {
-      console.error('Ship together failed:', err);
-      showToast(t('parcel.failed'), 'error');
+      console.error('Create label failed:', err);
+      showToast(t('parcel.createFailed'), 'error');
     } finally {
-      setShipTogetherBusy(false);
+      setLabelBusyIds([]);
     }
   };
 
@@ -2057,23 +2058,32 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                 ) : (
                   <AnimatePresence initial={false}>
                   {groupByParcel(shipments).map((group, _i, parcels) => {
-                    // One card per PARCEL (waybill). A checkout ships as one
-                    // Flash parcel, and two checkouts share one when they were
-                    // merged (lib/shipTogether), so the card lists every card
-                    // going into that envelope under its single label.
-                    // `shipment` is the primary order; its id drives the
-                    // label/track actions (every row carries the same waybill).
+                    // One card per PARCEL (waybill). A checkout is one parcel,
+                    // and several of a buyer's checkouts share one when the
+                    // seller labels them together (lib/parcels), so the card
+                    // lists every card going into that envelope under its
+                    // single label. `shipment` is the primary order; its id
+                    // drives the label/track actions (every row carries the
+                    // same waybill).
                     const shipment = group[0];
                     const pno = shipment.shipping_labels?.[0]?.tracking_number;
                     const checkouts = countCheckouts(group);
                     const buyerName = shipment.buyer?.display_name || null;
-                    // This buyer's other parcels still on the desk can be
-                    // folded into one with this one.
-                    const siblings = shipment.buyer_id
-                      ? (combinableParcelsByBuyer(parcels).get(shipment.buyer_id) || [])
+                    // No label yet: the seller mints it here. The buyer's other
+                    // unlabelled checkouts can go in the same parcel, and a
+                    // parcel Flash has not collected yet can take these cards
+                    // too (no new waybill, nothing cancelled).
+                    const awaitingLabel = group.every(isAwaitingLabel);
+                    const buyerKey = shipment.buyer_id || '';
+                    const otherUnlabelled = awaitingLabel
+                      ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
                       : [];
-                    const canShipTogether = siblings.length > 1 && siblings.includes(group);
-                    const shipTogetherIds = siblings.flatMap((g) => g.map((o) => o.id));
+                    const openParcel = awaitingLabel
+                      ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
+                      : undefined;
+                    const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
+                    const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                    const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
                     // Finished shipments stay in the panel as a delivery
                     // notice until the seller swipes them away (see
                     // clearShipments). Active ones can't be dismissed.
@@ -2179,43 +2189,6 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                         </div>
                       )}
 
-                      {/* Same buyer, another parcel still on the desk: offer to
-                          ship them as one. Two taps, since the newer label is
-                          cancelled at Flash. */}
-                      {canShipTogether && (
-                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
-                          <p className="text-amber-300 text-xs font-bold">{t('parcel.sameBuyer')}</p>
-                          {shipTogetherConfirm === shipment.buyer_id ? (
-                            <>
-                              <p className="text-slate-300 text-xs leading-relaxed">{t('parcel.explain')}</p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => shipTogether(shipTogetherIds)}
-                                  disabled={shipTogetherBusy}
-                                  className="flex-1 h-9 flex items-center justify-center gap-2 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest disabled:opacity-50"
-                                >
-                                  {shipTogetherBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                  {shipTogetherBusy ? t('parcel.combining') : t('parcel.confirm')}
-                                </button>
-                                <button
-                                  onClick={() => setShipTogetherConfirm(null)}
-                                  disabled={shipTogetherBusy}
-                                  className="flex-1 h-9 bg-white/5 text-slate-300 border border-white/10 font-bold rounded-xl text-xs uppercase tracking-widest disabled:opacity-50"
-                                >
-                                  {t('parcel.keepSeparate')}
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setShipTogetherConfirm(shipment.buyer_id ?? null)}
-                              className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest"
-                            >
-                              {t('parcel.shipTogether')}
-                            </button>
-                          )}
-                        </div>
-                      )}
 
                       {/* Delivery notice for sellers not opted into push or
                           email — the card lingers here until swiped away. */}
@@ -2237,13 +2210,45 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                           {t('profile.liveBreakShipsWithParcel')}
                         </div>
                       )}
-                      {/* Status hint while Flash is preparing the label.
-                          Labels are generated automatically after payment — no
-                          seller action is needed. If the order sticks at 'paid'
-                          for long, fulfillment hit an error and support is on it. */}
-                      {!isBreakOrder && (shipment.status === 'paid' || shipment.status === 'pending') && (
-                        <div className="w-full h-10 bg-slate-800 text-slate-400 border border-white/5 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center">
-                          {t('profile.labelBeingPrepared')}
+                      {/* No waybill yet: the seller mints it here, alone or
+                          combined with the buyer's other unlabelled orders, or
+                          adds these cards to a parcel Flash has not collected. */}
+                      {!isBreakOrder && awaitingLabel && (
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => createLabel(group.map((o) => o.id))}
+                            disabled={labelBusy}
+                            className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {labelBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                          </button>
+                          {otherUnlabelled.length > 0 && (
+                            <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-3 space-y-2">
+                              <p className="text-brand-cyan text-xs font-bold">
+                                {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
+                              </p>
+                              <button
+                                onClick={() => createLabel(combineIds)}
+                                disabled={labelBusy}
+                                className="w-full h-9 bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/25 transition-colors disabled:opacity-50"
+                              >
+                                {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
+                              </button>
+                            </div>
+                          )}
+                          {openParcelPno && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+                              <p className="text-amber-300 text-xs font-bold">{t('parcel.hasOpenParcel')}</p>
+                              <button
+                                onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
+                                disabled={labelBusy}
+                                className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                              >
+                                {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                       {/* The handling promise the buyer already read on the card

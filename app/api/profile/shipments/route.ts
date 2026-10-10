@@ -59,8 +59,8 @@ export async function GET(request: NextRequest) {
         const withBreakContext = await attachBreakContext(admin, normalized)
 
         // The buyer's display name, so a seller with several parcels can see
-        // at a glance which ones go to the same person (and combine them via
-        // /api/orders/ship-together). Name only; fails soft to no name.
+        // at a glance which ones go to the same person (and label them together via
+        // /api/orders/label/create). Name only; fails soft to no name.
         const buyerIds = [...new Set(withBreakContext.map((s: any) => s.buyer_id).filter(Boolean))] as string[]
         const buyerNames = new Map<string, string | null>()
         if (buyerIds.length > 0) {

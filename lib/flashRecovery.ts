@@ -1,29 +1,17 @@
 /**
- * Shared single-order Flash shipment recovery.
+ * Single-order Flash shipment recovery.
  *
- * Used by BOTH the seller's self-serve "Print Label" route
- * (/api/orders/[id]/label) and the automatic recover-unshipped-orders cron, so
- * the "create a waybill for an order that reached a shippable state without a
- * usable shipping_labels row" logic lives in exactly one place.
- *
- * CAUTION: Flash does NOT treat outTradeNo as an idempotency key — a second
- * createShipment for the same order mints a *brand-new* pno (proven by order
- * 26126d8d's two live waybills WFAF97C / WKM1K5C). So we re-read the source of
- * truth immediately before minting and never overwrite an existing real
- * waybill. Parcel weight/dims are declared from the seller's whole transfer
- * group so a multi-item parcel isn't under-declared and re-rated at pickup.
+ * Used by the seller's self-serve "Print Label" route (/api/orders/[id]/label)
+ * when an order has reached a shippable state without a usable
+ * shipping_labels row. Since labels are minted by the seller (lib/parcels),
+ * a 'paid' order with no label is the normal resting state of a fresh sale,
+ * and this helper simply mints for that one order on demand. It never
+ * double-mints: an existing real waybill is reused, and lib/parcels claims
+ * the order before calling Flash.
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import {
-    createShipmentWithCityFallback,
-    estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
-    type ParcelItemInfo,
-} from '@/lib/flashExpress';
-
-const SHIPPING_PROFILE_COLS =
-    'id, display_name, phone_number, province, state, district, sub_district, postcode, address';
+import { mintParcel } from '@/lib/parcels';
 
 export interface RecoverableOrder {
     id: string;
@@ -38,33 +26,12 @@ export type ShipmentRecoveryResult =
 
 /**
  * Ensure `order` has a Flash waybill, creating one only if needed. Returns the
- * tracking number (reused or freshly minted). Never throws — Flash / DB errors
- * are returned as a discriminated result the caller can act on.
+ * tracking number (reused or freshly minted). Never throws.
  */
 export async function recoverShipmentForOrder(
     admin: SupabaseClient,
     order: RecoverableOrder,
 ): Promise<ShipmentRecoveryResult> {
-    // Live-break spot orders must NEVER get a per-order waybill — their
-    // parcels are consolidated per buyer per lot at stream settle
-    // (app/api/live/streams/[id]/settle). This is the last line of defense:
-    // every caller filters break_spot_id upstream, but this helper is the one
-    // place that actually mints, so it re-checks the source of truth itself
-    // (a spot order that slipped through here shipped a stray waybill +
-    // "label ready" email in production).
-    const { data: orderRow } = await admin
-        .from('orders')
-        .select('break_spot_id')
-        .eq('id', order.id)
-        .maybeSingle();
-    if (orderRow?.break_spot_id) {
-        return {
-            ok: false,
-            reason: 'live_break_order',
-            error: 'Live-break spot orders ship as one consolidated parcel at stream settle — no per-order waybill',
-        };
-    }
-
     // Reuse an existing REAL waybill (a 'MANUAL' placeholder is a region-error
     // stand-in and is treated as "needs a real waybill", matching the prior
     // label-route behaviour).
@@ -74,92 +41,17 @@ export async function recoverShipmentForOrder(
         .eq('order_id', order.id)
         .maybeSingle();
     const existing = freshLabel?.tracking_number || null;
-    if (existing && existing !== 'MANUAL') {
+    if (existing && existing !== 'MANUAL' && existing !== 'PENDING') {
         return { ok: true, trackingNumber: existing, created: false };
     }
 
-    const { data: profiles } = await admin
-        .from('profiles')
-        .select(SHIPPING_PROFILE_COLS)
-        .in('id', [order.seller_id, order.buyer_id]);
-    const seller = profiles?.find(p => p.id === order.seller_id);
-    const buyer = profiles?.find(p => p.id === order.buyer_id);
-    if (!seller || !buyer) {
-        return { ok: false, reason: 'profile_missing', error: 'Seller or buyer profile missing' };
+    const result = await mintParcel(admin, { sellerId: order.seller_id, orderIds: [order.id] });
+    if (result.ok) {
+        return { ok: true, trackingNumber: result.trackingNumber, created: true };
     }
-
-    // All of this seller's orders in the transfer group ride one waybill; sealed
-    // products (booster boxes, ETBs) must declare their real weight rather than
-    // fall back to the single-card default.
-    let parcelItems: ParcelItemInfo[] = [];
-    try {
-        let q = admin
-            .from('orders')
-            .select('id, listing:listings(card_data)')
-            .eq('seller_id', order.seller_id);
-        q = order.transfer_group
-            ? q.eq('transfer_group', order.transfer_group)
-            : q.eq('id', order.id);
-        const { data: groupOrders } = await q;
-        parcelItems = (groupOrders || []).map(o => ({
-            isSealed: (o as any).listing?.card_data?.isSealed === true,
-            productType: (o as any).listing?.card_data?.productType ?? null,
-        }));
-    } catch {
-        // fall through to single-card default below
-    }
-    if (parcelItems.length === 0) parcelItems = [{}];
-
-    let flashOrder: Awaited<ReturnType<typeof createShipmentWithCityFallback>>;
-    try {
-        flashOrder = await createShipmentWithCityFallback({
-            outTradeNo: order.id,
-            srcName: seller.display_name || 'Cardstreet Seller',
-            srcPhone: seller.phone_number || '0000000000',
-            srcProvinceName: seller.province || 'กรุงเทพมหานคร',
-            srcCityName: seller.state || seller.district || 'เขตบางรัก',
-            srcDistrictName: seller.sub_district || seller.district || 'บางรัก',
-            srcPostalCode: seller.postcode || '10500',
-            srcDetailAddress: seller.address || 'Cardstreet Platform',
-            dstName: buyer.display_name || 'Cardstreet Buyer',
-            dstPhone: buyer.phone_number || '0000000000',
-            dstProvinceName: buyer.province || 'กรุงเทพมหานคร',
-            dstCityName: buyer.state || buyer.district || 'เขตบางรัก',
-            dstDistrictName: buyer.sub_district || buyer.district || 'บางรัก',
-            dstPostalCode: buyer.postcode || '10500',
-            dstDetailAddress: buyer.address || 'Cardstreet Platform',
-            weight: estimateParcelWeightGramsForItems(parcelItems),
-            ...estimateParcelDimsCmForItems(parcelItems),
-            expressCategory: 1,
-            articleCategory: 3,
-            remark: 'Cardstreet TCG - Handle with care',
-        });
-    } catch (e: any) {
-        return { ok: false, reason: 'flash_error', error: e?.message || 'Flash shipment creation failed' };
-    }
-
-    const courierTrackingUrl = `https://www.flashexpress.com/fle/tracking?se=${flashOrder.pno}`;
-    const { error: upsertErr } = await admin
-        .from('shipping_labels')
-        .upsert(
-            {
-                order_id: order.id,
-                tracking_number: flashOrder.pno,
-                carrier_name: 'Flash Express',
-                status: 'created',
-                label_url: 'N/A',
-                flash_order_id: flashOrder.outTradeNo,
-                flash_sort_code: flashOrder.sortCode,
-                pickup_id: null,
-                pickup_status: 'pending',
-                courier_tracking_url: courierTrackingUrl,
-            },
-            { onConflict: 'order_id' },
-        );
-    if (upsertErr) {
-        // Not fatal — we have the pno. The next pass re-reads and reuses it.
-        console.error('[FlashRecovery] label upsert failed:', upsertErr.message);
-    }
-
-    return { ok: true, trackingNumber: flashOrder.pno, created: true };
+    const reason =
+        result.code === 'LIVE_BREAK' ? 'live_break_order'
+        : result.code === 'PROFILE_MISSING' ? 'profile_missing'
+        : 'flash_error';
+    return { ok: false, reason, error: result.error };
 }

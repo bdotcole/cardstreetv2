@@ -10,7 +10,7 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup, groupByParcel, countCheckouts, combinableParcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
@@ -292,30 +292,30 @@ export default function DesktopOrders() {
         }
     };
 
-    // "Ship together": fold a buyer's other unshipped parcel(s) into one
-    // waybill (POST /api/orders/ship-together). Two clicks — explain, then
-    // commit — because the newer label is cancelled at Flash. The confirm
-    // state holds the buyer id whose banner is expanded.
-    const [shipTogetherConfirm, setShipTogetherConfirm] = useState<string | null>(null);
-    const [shipTogetherBusy, setShipTogetherBusy] = useState(false);
-    const shipTogether = async (orderIds: string[]) => {
-        setShipTogetherBusy(true);
+    // Labels are minted when the seller is ready (lib/parcels), so the seller
+    // decides which of a buyer's orders travel together. One handler serves
+    // all three buttons: create for one checkout, combine several checkouts,
+    // or add to a waybill Flash has not scanned yet. On success the tab
+    // refreshes and the label opens (any order id in the parcel works).
+    const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
+    const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+        setLabelBusyIds(orderIds);
         try {
-            const res = await fetch('/api/orders/ship-together', {
+            const res = await fetch('/api/orders/label/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderIds }),
+                body: JSON.stringify({ orderIds, attachToTrackingNumber }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.error || 'ship-together failed');
-            setShipTogetherConfirm(null);
-            showToast(t('parcel.done'), 'success');
-            fetchTab('shipments');
+            if (!res.ok) throw new Error(data?.error || 'label create failed');
+            showToast(t('parcel.created'), 'success');
+            await fetchTab('shipments');
+            if (data?.manual !== true) await openLabel(orderIds[0]);
         } catch (err) {
-            console.error('Ship together failed:', err);
-            showToast(t('parcel.failed'), 'error');
+            console.error('Create label failed:', err);
+            showToast(t('parcel.createFailed'), 'error');
         } finally {
-            setShipTogetherBusy(false);
+            setLabelBusyIds([]);
         }
     };
 
@@ -533,7 +533,7 @@ export default function DesktopOrders() {
                             <div className="space-y-2">
                                 {/* One row per PARCEL (waybill). A checkout ships as
                                     one Flash parcel, and two checkouts share one when
-                                    they were merged (lib/shipTogether), so the row
+                                    the seller labels them together (lib/parcels), so the row
                                     lists every card for that envelope under its one
                                     label button / one Clear. The primary order's id
                                     drives both (every row carries the same waybill);
@@ -543,13 +543,21 @@ export default function DesktopOrders() {
                                     const pno = order.shipping_labels?.[0]?.tracking_number;
                                     const checkouts = countCheckouts(group);
                                     const buyerName = order.buyer?.display_name || null;
-                                    // This buyer's other parcels still on the desk can
-                                    // be folded into one with this one.
-                                    const siblings = order.buyer_id
-                                        ? (combinableParcelsByBuyer(parcels).get(order.buyer_id) || [])
+                                    // No label yet: the seller mints it here. The buyer's
+                                    // other unlabelled checkouts can go in the same parcel,
+                                    // and a parcel Flash has not collected yet can take
+                                    // these cards too (no new waybill, nothing cancelled).
+                                    const awaitingLabel = group.every(isAwaitingLabel);
+                                    const buyerKey = order.buyer_id || '';
+                                    const otherUnlabelled = awaitingLabel
+                                        ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
                                         : [];
-                                    const canShipTogether = siblings.length > 1 && siblings.includes(group);
-                                    const shipTogetherIds = siblings.flatMap((g) => g.map((o) => o.id));
+                                    const openParcel = awaitingLabel
+                                        ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
+                                        : undefined;
+                                    const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
+                                    const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                                    const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
                                     // Delivered/completed rows linger as a delivery
                                     // notice until cleared — label printing no longer
                                     // applies to them.
@@ -600,41 +608,35 @@ export default function DesktopOrders() {
                                                     {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
                                                 </p>
                                             )}
-                                            {/* Same buyer, another parcel still on the desk:
-                                                offer to ship them as one. Two clicks, since
-                                                the newer label is cancelled at Flash. */}
-                                            {canShipTogether && (
+                                            {/* The buyer's other unlabelled checkouts can ship
+                                                in this parcel; a parcel Flash has not collected
+                                                yet can take these cards too. */}
+                                            {!isBreakOrder && awaitingLabel && otherUnlabelled.length > 0 && (
+                                                <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 px-3 py-2 space-y-2 max-w-md">
+                                                    <p className="text-xs font-bold text-brand-cyan">
+                                                        {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => createLabel(combineIds)}
+                                                        disabled={labelBusy}
+                                                        className="bg-brand-cyan/15 hover:bg-brand-cyan/25 border border-brand-cyan/30 text-brand-cyan text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        <i className="fa-solid fa-box mr-2"></i>
+                                                        {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {!isBreakOrder && awaitingLabel && openParcelPno && (
                                                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 space-y-2 max-w-md">
-                                                    <p className="text-xs font-bold text-amber-300">{t('parcel.sameBuyer')}</p>
-                                                    {shipTogetherConfirm === order.buyer_id ? (
-                                                        <>
-                                                            <p className="text-xs text-slate-300 leading-relaxed">{t('parcel.explain')}</p>
-                                                            <div className="flex gap-2">
-                                                                <button
-                                                                    onClick={() => shipTogether(shipTogetherIds)}
-                                                                    disabled={shipTogetherBusy}
-                                                                    className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                                                                >
-                                                                    {shipTogetherBusy ? t('parcel.combining') : t('parcel.confirm')}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setShipTogetherConfirm(null)}
-                                                                    disabled={shipTogetherBusy}
-                                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                                                                >
-                                                                    {t('parcel.keepSeparate')}
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => setShipTogetherConfirm(order.buyer_id ?? null)}
-                                                            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-                                                        >
-                                                            <i className="fa-solid fa-box mr-2"></i>
-                                                            {t('parcel.shipTogether')}
-                                                        </button>
-                                                    )}
+                                                    <p className="text-xs font-bold text-amber-300">{t('parcel.hasOpenParcel')}</p>
+                                                    <button
+                                                        onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
+                                                        disabled={labelBusy}
+                                                        className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        <i className="fa-solid fa-box-open mr-2"></i>
+                                                        {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
@@ -667,6 +669,15 @@ export default function DesktopOrders() {
                                                     <i className="fa-solid fa-box-open mr-2"></i>
                                                     {t('desktop.orders.liveBreakShipsWithParcel')}
                                                 </span>
+                                            ) : awaitingLabel ? (
+                                                <button
+                                                    onClick={() => createLabel(group.map((o) => o.id))}
+                                                    disabled={labelBusy}
+                                                    className="bg-brand-green/20 hover:bg-brand-green/30 border border-brand-green/30 text-brand-green text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                                                >
+                                                    <i className="fa-solid fa-tag mr-2"></i>
+                                                    {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                                                </button>
                                             ) : (
                                                 <button
                                                     onClick={() => openLabel(order.id)}

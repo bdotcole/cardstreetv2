@@ -34,20 +34,23 @@ export function groupByTransferGroup<T extends TransferGroupableRow>(rows: T[]):
 /**
  * Parcel grouping for the SELLER's shipment surfaces.
  *
- * Two checkouts can end up in one Flash parcel: fulfillment attaches a
- * follow-up purchase to the buyer's still-unshipped waybill when it lands
- * within the auto-merge window, and the seller can combine parcels by hand
- * (lib/shipTogether). The waybill is then the thing the seller packs and
- * labels, so the "To ship" list groups by it. Rows with no real waybill yet
- * (label still being prepared, MANUAL placeholder) fall back to the checkout
- * grouping above, which is what they were before a waybill existed.
+ * The seller mints the Flash waybill when they are ready (lib/parcels) and
+ * may put several of one buyer's checkouts in it, so the waybill is the thing
+ * the seller packs and labels and the "To ship" list groups by it. Rows with
+ * no real waybill yet (label not created, MANUAL placeholder, PENDING claim)
+ * fall back to the checkout grouping above.
  */
 export interface ParcelGroupableRow extends TransferGroupableRow {
     shipping_labels?: { tracking_number?: string | null }[] | null;
 }
 
 export function isRealWaybill(trackingNumber: string | null | undefined): trackingNumber is string {
-    return !!trackingNumber && trackingNumber !== 'MANUAL' && trackingNumber !== 'N/A';
+    return (
+        !!trackingNumber &&
+        trackingNumber !== 'MANUAL' &&
+        trackingNumber !== 'N/A' &&
+        trackingNumber !== 'PENDING'
+    );
 }
 
 export function parcelKey(row: ParcelGroupableRow): string {
@@ -72,26 +75,7 @@ export function countCheckouts(group: TransferGroupableRow[]): number {
     return new Set(group.map((r) => r.transfer_group || r.id)).size;
 }
 
-/**
- * Can this row's parcel still be combined with another of the same buyer's?
- * True only while the label exists and Flash has not scanned the parcel:
- * status 'label_generated' with a real waybill whose label row is still
- * 'created'. Live-break spot orders are consolidated at settle instead.
- * Mirrors the server rules in lib/shipTogether.ts.
- */
-export function canCombineParcel(row: {
-    status: string;
-    break_spot_id?: string | null;
-    shipping_labels?: { tracking_number?: string | null; status?: string | null }[] | null;
-}): boolean {
-    if (row.break_spot_id) return false;
-    if (row.status !== 'label_generated') return false;
-    const label = row.shipping_labels?.[0];
-    if (!label || !isRealWaybill(label.tracking_number)) return false;
-    return !label.status || label.status === 'created';
-}
-
-export interface CombinableRow extends ParcelGroupableRow {
+export interface ShipmentRow extends ParcelGroupableRow {
     status: string;
     buyer_id?: string | null;
     break_spot_id?: string | null;
@@ -99,15 +83,41 @@ export interface CombinableRow extends ParcelGroupableRow {
 }
 
 /**
- * Buyer id -> that buyer's parcels still waiting on the seller's desk. A
- * buyer with two or more entries is a "ship together" candidate.
+ * Paid, no waybill yet: the seller still has to create the label. Mirrors the
+ * server rule in lib/parcels (LABEL_READY_STATUSES, no real waybill). A
+ * PENDING claim counts as "still awaiting" so the button stays visible; a
+ * second click is refused server-side while the first is in flight.
  */
-export function combinableParcelsByBuyer<T extends CombinableRow>(parcels: T[][]): Map<string, T[][]> {
+export function isAwaitingLabel(row: ShipmentRow): boolean {
+    if (row.break_spot_id) return false;
+    if (row.status !== 'paid' && row.status !== 'processing') return false;
+    const pno = row.shipping_labels?.[0]?.tracking_number;
+    if (pno === 'MANUAL') return false;
+    return !isRealWaybill(pno);
+}
+
+/**
+ * A labelled parcel Flash has not scanned yet: still on the seller's desk, so
+ * the buyer's later orders can be added to it (lib/parcels attachToParcel).
+ */
+export function isUnscannedParcel(row: ShipmentRow): boolean {
+    if (row.break_spot_id) return false;
+    if (row.status !== 'label_generated') return false;
+    const label = row.shipping_labels?.[0];
+    if (!label || !isRealWaybill(label.tracking_number)) return false;
+    return !label.status || label.status === 'created';
+}
+
+/** Buyer id -> the parcel groups whose every row satisfies `predicate`. */
+export function parcelsByBuyer<T extends ShipmentRow>(
+    parcels: T[][],
+    predicate: (row: T) => boolean,
+): Map<string, T[][]> {
     const byBuyer = new Map<string, T[][]>();
     for (const group of parcels) {
         const buyerId = group[0]?.buyer_id;
         if (!buyerId) continue;
-        if (!group.every((row) => canCombineParcel(row))) continue;
+        if (!group.every(predicate)) continue;
         byBuyer.set(buyerId, [...(byBuyer.get(buyerId) || []), group]);
     }
     return byBuyer;
