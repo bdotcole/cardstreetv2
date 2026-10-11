@@ -1,6 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { attachSellers, fetchPublicSellers } from '@/lib/publicProfiles';
 import type { MarketplaceListing } from '@/services/marketplaceService';
@@ -16,6 +17,16 @@ export interface SellerInfo {
     review_count: number | null;
     is_verified_shop: boolean | null;
     created_at: string | null;
+    // Collector Pass display columns; absent until the 20260828/20260829
+    // migrations run (the select falls back to the legacy column list).
+    reward_level?: number | null;
+    displayed_badges?: string[] | null;
+    equipped_frame?: string | null;
+    // Vacation mode (20260925 migration). Read by a separate fail-soft query
+    // so a missing column can never knock out the seller header.
+    shop_paused_at?: string | null;
+    // Smallest order the shop accepts, whole baht; 0 or absent = none.
+    min_order_thb?: number | null;
 }
 
 const LISTING_SELECT = `
@@ -30,12 +41,66 @@ export const getSellerPageData = cache(
     async (username: string): Promise<{ seller: SellerInfo | null; listings: MarketplaceListing[] }> => {
         const supabase = await createClient();
 
-        const { data: seller } = await supabase
+        const SELLER_COLUMNS_LEGACY =
+            'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at';
+        const firstTry = await supabase
             .from('public_profiles')
-            .select('id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, created_at')
+            .select(`${SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame`)
             .eq('username', username)
             .maybeSingle<SellerInfo>();
+        let seller = firstTry.data;
+        // Pre-migration the view lacks the Collector Pass columns and PostgREST
+        // rejects the whole select — retry with the legacy list so seller pages
+        // never 404 over a cosmetic column.
+        if (firstTry.error) {
+            ({ data: seller } = await supabase
+                .from('public_profiles')
+                .select(SELLER_COLUMNS_LEGACY)
+                .eq('username', username)
+                .maybeSingle<SellerInfo>());
+        }
         if (!seller) return { seller: null, listings: [] };
+
+        // A banned seller has no public shop: the page must 404 rather than
+        // render an empty storefront under their name. banned_at is not on the
+        // public_profiles view, so read it through the service-role client.
+        // Fails open only if the ban columns are missing (pre-migration).
+        try {
+            const { data: banRow } = await createAdminClient()
+                .from('profiles')
+                .select('banned_at')
+                .eq('id', seller.id)
+                .maybeSingle<{ banned_at: string | null }>();
+            if (banRow?.banned_at) return { seller: null, listings: [] };
+        } catch {
+            /* pre-migration: no ban columns, nothing to hide */
+        }
+
+        // Vacation mode flag, kept out of the main select: PostgREST rejects a
+        // whole select over one unknown column, and this one is cosmetic.
+        try {
+            const { data: pauseRow } = await supabase
+                .from('public_profiles')
+                .select('shop_paused_at')
+                .eq('id', seller.id)
+                .maybeSingle<{ shop_paused_at: string | null }>();
+            seller.shop_paused_at = pauseRow?.shop_paused_at ?? null;
+        } catch {
+            seller.shop_paused_at = null;
+        }
+
+        // Shop minimum order (20260929 migration). Its own fail-soft probe for
+        // the same reason: one unknown column must not cost the pause flag.
+        try {
+            const { data: minRow } = await supabase
+                .from('public_profiles')
+                .select('min_order_thb')
+                .eq('id', seller.id)
+                .maybeSingle<{ min_order_thb: number | null }>();
+            seller.min_order_thb = minRow?.min_order_thb ?? 0;
+        } catch {
+            seller.min_order_thb = 0;
+        }
 
         const { data: rows } = await supabase
             .from('listings')
@@ -83,3 +148,81 @@ export async function getActiveSellerUsernames(): Promise<string[]> {
     }
     return [...usernames];
 }
+
+export interface ShopSummary {
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    rating: number | null;
+    reviewCount: number;
+    isVerified: boolean;
+    listingCount: number;
+    /** Cheapest active listing, THB — the "from" price on a directory card. */
+    fromPrice: number | null;
+}
+
+// Every shop with active inventory, for the /shops directory.
+//
+// getActiveSellerUsernames() above returns usernames only, which is all the
+// sitemap needs. A directory page needs enough to be worth landing on, so this
+// carries the listing count and a "from" price too.
+//
+// WHY THE PAGE EXISTS: measured 2026-09-01, the seller pages holding the whole
+// of the active inventory had ZERO internal links from any content page — they
+// were reachable only through sellers-sitemap. With 222 listings against
+// 117,322 card pages, the shops are the scarce, convertible surface, and they
+// had no crawl path.
+//
+// Sorted by listing count so the shops with real stock lead. Fails soft: any
+// error returns an empty list and the page renders its empty state rather than
+// throwing.
+export const getActiveShops = cache(async (): Promise<ShopSummary[]> => {
+    const supabase = await createClient();
+
+    // Same 1000-row paging as getActiveSellerUsernames — PostgREST caps a
+    // single response, and a silent truncation here would drop real shops.
+    const rows: { seller_id: string | null; price: number | null }[] = [];
+    for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+            .from('listings')
+            .select('seller_id, price')
+            .eq('status', 'active')
+            .order('seller_id', { ascending: true })
+            .range(from, from + 999);
+        if (error || !data?.length) break;
+        rows.push(...(data as typeof rows));
+        if (data.length < 1000) break;
+    }
+    if (!rows.length) return [];
+
+    const byId = new Map<string, { count: number; from: number | null }>();
+    for (const r of rows) {
+        if (!r.seller_id) continue;
+        const cur = byId.get(r.seller_id) ?? { count: 0, from: null };
+        cur.count += 1;
+        const price = Number(r.price);
+        if (price > 0 && (cur.from === null || price < cur.from)) cur.from = price;
+        byId.set(r.seller_id, cur);
+    }
+
+    const sellers = await fetchPublicSellers(supabase, [...byId.keys()]);
+    const shops: ShopSummary[] = [];
+    for (const [id, agg] of byId) {
+        const s = sellers.get(id);
+        // A shop with no public username has no page to link to.
+        if (!s?.username) continue;
+        const rating = s.rating === null || s.rating === undefined ? null : Number(s.rating);
+        shops.push({
+            username: s.username,
+            displayName: s.display_name || s.username,
+            avatarUrl: s.avatar_url ?? null,
+            rating: Number.isFinite(rating as number) ? (rating as number) : null,
+            reviewCount: s.review_count ?? 0,
+            isVerified: !!s.is_verified_shop,
+            listingCount: agg.count,
+            fromPrice: agg.from,
+        });
+    }
+    shops.sort((a, b) => b.listingCount - a.listingCount || a.displayName.localeCompare(b.displayName));
+    return shops;
+});

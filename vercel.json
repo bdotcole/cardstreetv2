@@ -27,16 +27,64 @@
             "schedule": "*/5 * * * *"
         },
         {
-            "path": "/api/cron/pricecharting",
+            "path": "/api/cron/pricecharting?game=pokemon",
             "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=mtg",
+            "schedule": "40 3 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=onepiece",
+            "schedule": "0 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=lorcana",
+            "schedule": "20 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=riftbound",
+            "schedule": "40 4 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=pokemon",
+            "schedule": "0 9 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 9 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=pokemon",
+            "schedule": "0 15 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=yugioh",
+            "schedule": "20 15 * * *"
+        },
+        {
+            "path": "/api/cron/pricecharting?game=mtg",
+            "schedule": "40 15 * * *"
         },
         {
             "path": "/api/cron/price-snapshots",
             "schedule": "30 1 * * *"
         },
         {
+            "path": "/api/cron/market-movers",
+            "schedule": "30 5 * * *"
+        },
+        {
             "path": "/api/cron/stripe-setup-nudge",
             "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/cron/payment-domains",
+            "schedule": "30 7 * * *"
         },
         {
             "path": "/api/cron/first-listing-nudge",
@@ -63,7 +111,59 @@
             "schedule": "*/30 * * * *"
         },
         {
+            "path": "/api/cron/recompute-thai-prices",
+            "schedule": "45 3 * * *"
+        },
+        {
+            "path": "/api/cron/refresh-listing-snapshots",
+            "schedule": "15 4 * * *"
+        },
+        {
+            "path": "/api/cron/ship-reminders",
+            "schedule": "0 */6 * * *"
+        },
+        {
             "path": "/api/cron/recompute-internal-prices",
+            "schedule": "0 2 * * 1"
+        },
+        {
+            "path": "/api/cron/rewards-milestones",
+            "schedule": "45 2 * * *"
+        },
+        {
+            "path": "/api/cron/rewards-expiry",
+            "schedule": "30 3 1 * *"
+        },
+        {
+            "path": "/api/cron/indexnow-content",
+            "schedule": "0 5 * * 1"
+        },
+        {
+            "path": "/api/cron/streak-at-risk",
+            "schedule": "0 12 * * *"
+        },
+        {
+            "path": "/api/cron/weekly-digest",
+            "schedule": "0 11 * * 5"
+        },
+        {
+            "path": "/api/cron/vault-demand",
+            "schedule": "0 12 * * 3"
+        },
+        {
+            "path": "/api/cron/stale-listings",
+            "schedule": "0 12 * * 2"
+        },
+        {
+            "path": "/api/cron/launch-campaign",
+            "schedule": "*/10 * * * *"
+        },
+        {
+            "path": "/api/cron/social-metrics",
+            "schedule": "30 1 * * *"
+        },
+        {
+            "path": "/api/cron/social-weekly-insights",
             "schedule": "0 2 * * 1"
         }
     ]

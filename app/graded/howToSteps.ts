@@ -6,7 +6,7 @@
 // with client references when a server component imports them, so the value
 // arrives `undefined` on the server. A plain module crosses the boundary fine.
 //
-// SCOPE: these steps describe CHECKING a graded price. CardStreet has no
+// SCOPE: these steps describe CHECKING a graded price. Cardstreet has no
 // grading submission service, and a HowTo that reads as "how to submit" would
 // imply one to any answer engine quoting it. Keep the framing.
 

@@ -20,8 +20,16 @@ export interface SetIntro {
 
 const SET_INTROS: Record<string, SetIntro> = {
   ma5: {
-    th: 'เงามืดคุกคาม (MA5) คือชุดการ์ดโปเกมอนภาษาไทยยุคเมก้าที่นักสะสมจับตามองมากที่สุดชุดหนึ่ง โดยมีเมก้าดาร์กไรex เป็นการ์ดตัวท็อปของชุดที่ใคร ๆ ก็ตามหา ทั้งเวอร์ชัน SR, SAR และ MUR เช็คราคาล่าสุดได้ครบทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้เลยบน CardStreet',
-    en: 'เงามืดคุกคาม (MA5) is one of the most closely watched Thai-language sets of the Mega era, headlined by Mega Darkrai ex across its SR, SAR, and MUR treatments. Check live prices for every card in the set and buy or sell authentic copies with sellers across Thailand on CardStreet.',
+    th: 'เงามืดคุกคาม (MA5) คือชุดการ์ดโปเกมอนภาษาไทยยุคเมก้าที่นักสะสมจับตามองมากที่สุดชุดหนึ่ง โดยมีเมก้าดาร์กไรex เป็นการ์ดตัวท็อปของชุดที่ใคร ๆ ก็ตามหา ทั้งเวอร์ชัน SR, SAR และ MUR เช็คราคาล่าสุดได้ครบทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้เลยบน Cardstreet',
+    en: 'เงามืดคุกคาม (MA5) is one of the most closely watched Thai-language sets of the Mega era, headlined by Mega Darkrai ex across its SR, SAR, and MUR treatments. Check live prices for every card in the set and buy or sell authentic copies with sellers across Thailand on Cardstreet.',
+  },
+  // MA6 verified 2026-09-25: 181 of 200 priced (the rest are mostly basic energies),
+  // so no "every card" claim. Chase cards are the top Raw_NM prices that day, all
+  // numbered past the printed 130; the rarity column is null for this set, so the
+  // copy names cards rather than rarity tiers.
+  ma6: {
+    th: 'MA6 30th CELEBRATION คือชุดการ์ดโปเกมอนภาษาไทยฉลองครบรอบ 30 ปีของโปเกมอนเทรดดิ้งการ์ดเกม วางจำหน่ายในไทยเมื่อกันยายน 2026 โดยหยิบการ์ดดังจากหลายยุคกลับมาไว้ในชุดเดียว ทั้งการ์ด LEGEND, GX และไชนิง ใบที่นักสะสมตามล่ามากที่สุดอยู่ในช่วงเลขเกิน 130 อย่าง ลูเกีย, ลิซาร์ดอน, คอยคิง, มิวex และพิคาชูex ชุดเพิ่งออกใหม่ ราคาจึงยังขยับทุกวัน เช็คราคาการ์ดโปเกม่อนชุด MA6 ล่าสุดก่อนซื้อหรือขาย แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทยได้ที่นี่',
+    en: 'MA6 30th CELEBRATION is the Thai-language set marking thirty years of the Pokemon Trading Card Game, released in Thailand in September 2026. It brings famous cards from across the history of the game back into one set, LEGEND, GX and Shining cards among them. The most hunted cards sit in the numbers past 130: Lugia, Charizard, Magikarp, Mew ex and Pikachu ex. The set is brand new, so prices are still moving daily. Check the latest MA6 prices before you buy or sell, then trade authentic copies with identity-verified sellers across Thailand.',
   },
   ma3: {
     th: 'วิวัฒนาการเมก้า ดรีมex (MA3) เป็นชุดใหญ่ของการ์ดโปเกมอนภาษาไทย ที่รวมการ์ดหายากระดับ AR, SAR และซีเคร็ตแรร์เอาไว้ครบ ใบชูโรงอย่างเมก้าลิซาร์ดอน Xex คือเป้าหมายอันดับต้น ๆ ของนักล่าการ์ดสายเมก้า อยากรู้ว่าใบไหนราคาเท่าไหร่ เช็คราคาตลาดแล้วเลือกซื้อ-ขายการ์ดของแท้จากผู้ขายทั่วไทยได้ในหน้านี้เลย',
@@ -94,6 +102,148 @@ const SET_INTROS: Record<string, SetIntro> = {
   'lorcana-13': {
     th: 'Attack of the Vine! คือชุดการ์ด Disney Lorcana ที่นักสะสมในไทยจับตามากที่สุดชุดหนึ่ง โดยมีการ์ดระดับ Iconic อย่าง Belle & Beast - Certain as the Sun และ Lilo & Stitch - Fun-Loving Friends เป็นใบราคาสูงสุด ส่วนการ์ด Enchanted ทั้งชุดก็เป็นของหายากที่คนตามเก็บ เช็คราคาการ์ด Lorcana ล่าสุด แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
     en: 'Attack of the Vine! is one of the most closely watched Disney Lorcana sets among collectors in Thailand. The Iconic Belle & Beast - Certain as the Sun and Lilo & Stitch - Fun-Loving Friends are the top cards, with the set’s Enchanted cards close behind. Check the latest Lorcana prices and buy or sell authentic copies with sellers across Thailand.',
+  },
+
+  // Batch 3 (drafted 2026-08-18, re-verified against the live catalog before
+  // shipping 2026-08-28). Picked from active listings and from Search Console,
+  // where /lorcana is the #1 page on the domain on a handful of listings and
+  // /sets/S7D is the only set page in the top-pages report.
+  //
+  // RANKING CLAIMS MUST BE CHECKED AGAINST THE **DISPLAY** PRICE, i.e. the one
+  // lib/cardMapper.ts picks: ungraded only (GRADED_CONDITION_RE), Raw_NM then
+  // Near Mint. market_values also holds PSA/BGS/CGC/SGC slab rows whose prices
+  // run orders of magnitude above raw — a 4-cent Common can carry a $12,000
+  // BGS 10 row. Taking max() across all conditions therefore ranks graded slabs,
+  // not cards, and it briefly produced three wrong "corrections" here (shipped
+  // f3cba7f, reverted in this commit). The original 2026-08-18 claims were right.
+  //
+  // Apostrophes are straight ('), matching the catalog exactly — the copy
+  // promises a collector can find the named card, and a curly quote breaks a
+  // copy-paste search.
+  //
+  // sv10s keeps its Thai name in English copy on purpose: the bare code SV10 is
+  // a Japanese row ("The Glory of Team Rocket") but at printed_total 98 against
+  // SV10s's 138 it is a different product, so it is NOT this set's English name.
+  // sv6-th does get "Transformation Mask" — SV6 is Japanese, same name, and both
+  // are printed_total 101, which is what confirms the 1:1 Thai reprint. Both
+  // re-checked 2026-08-28.
+  //
+  // S7D-th was considered and rejected: all 67 of its rows are still unpriced,
+  // so the standard "เช็คราคาได้ทุกใบ" promise would be false on that page.
+  'lorcana-11': {
+    th: 'Winterspell คือชุดการ์ดดิสนีย์ Disney Lorcana ที่สายสะสมในไทยตามหากันหนักที่สุดชุดหนึ่ง การ์ดระดับ Iconic อย่าง Moana - Curious Explorer และ Pocahontas - Peacekeeper คือสองใบที่ราคาสูงสุดของชุด ส่วนสาย Enchanted ก็มี Elsa - Ice Artisan เป็นเป้าหมายหลัก เช็คราคาการ์ดดิสนีย์ล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย ไม่ต้องรอสั่งข้ามประเทศ',
+    en: 'Winterspell is one of the most hunted Disney Lorcana sets among collectors in Thailand. The Iconic Moana - Curious Explorer and Pocahontas - Peacekeeper are the two most valuable cards in it, with the Enchanted Elsa - Ice Artisan leading the rest. Check the latest Lorcana prices card by card, then buy or sell authentic copies with sellers inside Thailand — no international ordering.',
+  },
+  'lorcana-12': {
+    th: "Wilds Unknown คือชุดการ์ดดิสนีย์ Disney Lorcana ที่มี Buzz Lightyear - Jungle Ranger ระดับ Iconic เป็นใบราคาแรงที่สุดของชุดแบบทิ้งห่าง ตามด้วย Merida - Formidable Archer และการ์ด Enchanted อย่าง You've Got a Friend in Me ที่นักสะสมไล่เก็บกันไม่หยุด อยากรู้ว่าราคาขยับไปถึงไหนแล้ว เช็คราคาการ์ดดิสนีย์แบบอัปเดต แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายทั่วไทยได้ในหน้านี้",
+    en: "Wilds Unknown is a Disney Lorcana set headlined by the Iconic Buzz Lightyear - Jungle Ranger, comfortably the most valuable card in it, followed by Merida - Formidable Archer and the Enchanted You've Got a Friend in Me. See where prices have moved across the whole set, then buy or sell authentic copies from sellers all over Thailand.",
+  },
+  'lorcana-10': {
+    th: 'Whispers in the Well คือชุดการ์ดดิสนีย์ Disney Lorcana ที่ขึ้นชื่อเรื่องการ์ดหายากระดับ Iconic โดยมี Ariel - Ethereal Voice และ Hades - Looking for a Deal เป็นสองใบที่ราคาสูงสุด ส่วนการ์ด Enchanted อย่าง Spooky Sight ก็เป็นใบที่คนตามเก็บกันเยอะ เช็คราคาการ์ดดิสนีย์ทีละใบแบบเรียลไทม์ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'Whispers in the Well is a Disney Lorcana set known for its Iconic rares, with Ariel - Ethereal Voice and Hades - Looking for a Deal the two most valuable cards in it and the Enchanted Spooky Sight close behind. Check live Lorcana prices card by card, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  'sv6-th': {
+    th: 'หน้ากากจอมลวงตา (SV6) คือชุดการ์ดโปเกมอนภาษาไทยที่มีการ์ดเทรนเนอร์อาร์ตพิเศษเป็นจุดขาย โดยเซย์ยุแบบ SAR คือใบราคาสูงสุดของชุด ตามด้วยซุกุริแบบ SAR และลัคกีแบบ AR ที่หาซื้อกันไม่หยุด ใครกำลังไล่เก็บชุดนี้ เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทยได้ในหน้าเดียว',
+    en: 'Transformation Mask (SV6) is a Thai-language Pokemon set built around its special-art trainer cards. The SAR Carmine is the most valuable card in the set, followed by the SAR Kieran and the AR Chansey. Check the latest price for every card in the set, then buy or sell authentic copies with sellers across Thailand.',
+  },
+  sv10s: {
+    th: 'การผงาดของผู้ไร้พ่าย (SV10s) คือชุดการ์ดโปเกมอนภาษาไทยที่รวมการ์ด SAR ของตัวละครดังไว้แน่นทั้งชุด นำโดยมิวทู ex ของแก๊งร็อกเกต ที่เป็นใบแพงที่สุด ตามด้วยกาเบรียส ex ของชิโรนะ และโฮโอ ex ของฮิบิกิ สายสะสมการ์ดตัวละครห้ามพลาดชุดนี้ เช็คราคาตลาดล่าสุดของทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย',
+    en: "การผงาดของผู้ไร้พ่าย (SV10s) is a Thai-language Pokemon set packed with special-art rares of the series best-known characters. Team Rocket's Mewtwo ex is the most valuable card in it, followed by Cynthia's Garchomp ex and Ethan's Ho-Oh ex. Check current market prices across the full set, then buy or sell authentic copies with sellers in Thailand.",
+  },
+  'me02.5': {
+    th: 'Ascended Heroes (me02.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุคเมก้าที่ขนการ์ดหายากมาเต็ม โดยมี Mega Gengar ex และ Pikachu ex แบบ Special Illustration Rare เป็นสองใบที่ราคาสูงสุด ตามด้วย Mega Dragonite ex แบบเดียวกัน ส่วน Mega Charizard Y ex แบบ Mega Hyper Rare คือใบที่สายเมก้าตามล่า สายสะสมการ์ดภาษาอังกฤษเช็คราคาได้ทุกใบ แล้วซื้อ-ขายของแท้จากผู้ขายในไทยได้โดยตรง',
+    en: 'Ascended Heroes (me02.5) is an English-language Mega-era set loaded with chase cards. The Special Illustration Rare Mega Gengar ex and Pikachu ex are the two most valuable cards in it, with the Special Illustration Rare Mega Dragonite ex behind them, while the Mega Hyper Rare Mega Charizard Y ex is the one Mega collectors hunt. Check the price of every card in the set and buy or sell authentic copies directly from sellers inside Thailand.',
+  },
+  'sv04.5': {
+    th: 'Paldean Fates (sv04.5) คือชุดการ์ดโปเกมอนภาษาอังกฤษสายชายนี่ที่นักสะสมทั่วโลกตามเก็บ ใบชูโรงคือ Mew ex แบบ SAR ที่เป็นการ์ดราคาสูงสุดของชุดแบบทิ้งห่าง ตามด้วย Charizard ex และ Gardevoir ex แบบ SAR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทีละใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทย',
+    en: 'Paldean Fates (sv04.5) is the English-language shiny set collectors worldwide keep coming back to. The SAR Mew ex is comfortably the most valuable card in it, followed by the SAR Charizard ex and Gardevoir ex. Check the latest price card by card, then buy or sell authentic copies with sellers across Thailand.',
+  },
+  sv09: {
+    th: "Journey Together (sv09) คือชุดการ์ดโปเกมอนภาษาอังกฤษที่เน้นการ์ด ex ของตัวละคร โดยมี Lillie's Clefairy ex แบบ SAR เป็นใบราคาสูงสุดของชุด ตามด้วย Salamence ex และ N's Zoroark ex แบบ SAR เช็คราคาตลาดของทุกใบในชุด แล้วซื้อ-ขายการ์ดของแท้จากผู้ขายในไทยได้ในหน้านี้",
+    en: "Journey Together (sv09) is an English-language set centred on character ex cards. The SAR Lillie's Clefairy ex is the most valuable card in it, with the SAR Salamence ex and N's Zoroark ex behind it. Check market prices across the full set, then buy or sell authentic copies from sellers in Thailand.",
+  },
+  swsh9: {
+    th: 'Brilliant Stars (swsh9) คือชุดการ์ดโปเกมอนภาษาอังกฤษยุค Sword & Shield ที่นักสะสมยังตามเก็บถึงวันนี้ ใบที่ราคาแรงที่สุดคือ Charizard V แบบ SR ตามด้วย Umbreon VMAX จากหมวด Trainer Gallery และ Charizard VSTAR แบบ SAR เช็คราคาการ์ดโปเกม่อนย้อนยุคได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายทั่วไทยได้เลย',
+    en: 'Brilliant Stars (swsh9) is a Sword & Shield-era English set collectors still chase today. The SR Charizard V is the most valuable card in it, followed by the Trainer Gallery Umbreon VMAX and the SAR Charizard VSTAR. Check prices across the whole set, then buy or sell authentic copies with sellers all over Thailand.',
+  },
+  s7d: {
+    th: 'Skyscraping Perfection (S7D) คือชุดการ์ดโปเกมอนภาษาญี่ปุ่นยุค Sword & Shield ที่สายสะสมการ์ดญี่ปุ่นในไทยยังตามหา ใบราคาสูงสุดของชุดคือ Noivern V (オンバーンV) แบบ Super Rare ตามด้วย Duraludon V และการ์ดเทรนเนอร์ Raihan เช็คราคาการ์ดโปเกม่อนภาษาญี่ปุ่นได้ทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'Skyscraping Perfection (S7D) is a Japanese-language Sword & Shield-era set that Japanese-card collectors in Thailand still hunt. The Super Rare Noivern V (オンバーンV) is the most valuable card in it, followed by Duraludon V and the trainer card Raihan. Check Japanese Pokemon card prices one by one, then buy or sell authentic copies with sellers in Thailand.',
+  },
+
+  // Marvel's Spider-Man. Added for a MEASURED query rather than a hunch:
+  // "thwip app" carries 86 impressions and 0 clicks — the biggest zero-click
+  // query on the domain — and Thwip! is a card in THIS set (#20). 283 of the
+  // 286 rows are priced, so the standard "check every price" promise holds;
+  // that is the same test that disqualified S7D-th from batch 3.
+  //
+  // The Soul Stone's seven-figure baht price is CORRECT, not a bad row: the
+  // cosmic foil textless printing traded at USD 32,999 on TCGplayer, confirmed
+  // externally before the copy was written to lean on it.
+  'mtg-spm': {
+    th: 'Marvel’s Spider-Man คือชุดการ์ดเมจิก (Magic: The Gathering) ที่จับมือกับมาร์เวล และกลายเป็นชุดที่คนพูดถึงมากที่สุดชุดหนึ่ง ใบชูโรงคือ The Soul Stone ซึ่งเวอร์ชันหายากที่สุดซื้อขายกันในหลักล้านบาท ถัดมาคือ Spectacular Spider-Man และการ์ด Mythic สองหน้าอย่าง Eddie Brock // Venom, Lethal Protector กับ Peter Parker // Amazing Spider-Man ส่วนสายเล่นก็ตามเก็บการ์ดอย่าง Thwip! กันด้วย เช็คราคาการ์ดในชุดนี้ได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้เลย',
+    en: 'Marvel’s Spider-Man is Magic: The Gathering’s Marvel crossover set and one of the most talked-about releases in years. The Soul Stone leads it — its rarest treatment trades in the millions of baht — followed by Spectacular Spider-Man and the double-faced Mythics Eddie Brock // Venom, Lethal Protector and Peter Parker // Amazing Spider-Man. Players also chase commons like Thwip!. Check the price of every card in the set, then buy or sell authentic copies with sellers in Thailand.',
+  },
+
+  // Batch 4 — the AS-era Thai Sun & Moon sets (2019-2020). Twelve set pages that
+  // had no prose at all, and the largest Thai-language block still without any.
+  // Thailand shipped each of these as a PAIR (ชุด A / ชุด B) on one release date,
+  // which is the detail collectors actually search on, so every blurb names its twin.
+  //
+  // Chase cards are the SR/HR (and, where the set has them, CHR/TR/Shining) rows
+  // verified against pokemon_cards on 2026-09-16. English names come from
+  // english_name on those same rows. Set names stay Thai in the English copy:
+  // pokemon_sets carries no English name for any AS set.
+  //
+  // DEPENDS ON the 0.98 Thai price re-run: at the 0.99 bar these sets are 60%
+  // priced and the "check every price" promise is false. After it they are 98%.
+  as1a: {
+    th: 'เฟิร์สอิมแพค ชุด A (AS1a) คือชุดการ์ดโปเกมอนภาษาไทยยุคซันมูนที่เปิดตัวพร้อมกับ ชุด B ในปี 2019 และเป็นจุดเริ่มต้นของการสะสมการ์ดไทยสำหรับหลายคน ใบชูโรงคือ ลิซาร์ดอนGX ทั้งแบบ SR และ HR ตามด้วย โฮโอGX และ เกียราดอสGX ชุดนี้เลิกผลิตไปแล้ว ราคาจึงขยับตามของที่เหลือในตลาด เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบในชุด แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทยได้ที่นี่',
+    en: 'เฟิร์สอิมแพค ชุด A (AS1a) is a Thai-language Sun & Moon set released in 2019 alongside its twin, ชุด B, and it is where a lot of Thai collections started. Charizard-GX leads it in both SR and HR treatments, followed by Ho-Oh-GX and Gyarados-GX. The set is long out of print, so prices move with what is left in circulation. Check the latest price for every card in the set, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as1b: {
+    th: 'เฟิร์สอิมแพค ชุด B (AS1b) คือชุดคู่แฝดของ ชุด A ในยุคซันมูน วางจำหน่ายพร้อมกันเมื่อปี 2019 แต่รายชื่อการ์ดคนละชุดกัน ใบที่นักสะสมไทยตามหามากที่สุดคือสายอีวุยอย่าง แบล็กกีGX และ เอฟีGX ตามด้วย ดาร์กไรGX และ เมทากรอสGX แบบ SR/HR ชุดนี้เลิกผลิตแล้วเช่นกัน เช็คราคาการ์ดโปเกม่อนแต่ละใบก่อนซื้อ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ในหน้านี้',
+    en: 'เฟิร์สอิมแพค ชุด B (AS1b) is the twin of ชุด A from the Sun & Moon era — same 2019 release date, a different card list. The Eeveelutions carry it for Thai collectors: Umbreon-GX and Espeon-GX, with Darkrai-GX and Metagross-GX close behind in their SR and HR treatments. It is also out of print. Check the price of each card before you buy, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as2a: {
+    th: 'ปลุกตำนาน ชุด A (AS2a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2019 ที่พิเศษตรงมีการ์ด "ชายนิ่ง" อยู่ในชุดด้วย ซึ่งเป็นแบบที่หายากและเป็นที่ต้องการเป็นพิเศษ ใบชูโรงฝั่ง GX คือ โซโรอาร์คGX และ ลูกาลูกันGX ตามด้วย ไรชูGX และ มาร์ชาโดว์GX เช็คราคาการ์ดโปเกม่อนได้ครบทุกใบทั้งแบบธรรมดาและแบบ SR/HR แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายทั่วไทยได้เลย',
+    en: 'ปลุกตำนาน ชุด A (AS2a) is a 2019 Thai-language set that stands out for including Shining cards — a scarce treatment collectors pay up for. On the GX side, Zoroark-GX and Lycanroc-GX lead, with Raichu-GX and Marshadow-GX behind them. Check prices across the whole set, base rarities and SR/HR alike, then buy or sell authentic cards with sellers all over Thailand.',
+  },
+  as2b: {
+    th: 'ปลุกตำนาน ชุด B (AS2b) ออกพร้อม ชุด A ในปี 2019 และมีการ์ดชายนิ่งเป็นจุดขายเหมือนกัน ใบที่คนตามหามากที่สุดคือ มิวทูGX รองลงมาคือ กาโอกาเอ็นGX เซอไนท์GX และ เอ็นเตGX ทั้งเวอร์ชัน SR และ HR ชุดนี้ไม่มีการผลิตเพิ่มแล้ว ราคาจึงอิงกับของมือสองในตลาดล้วน ๆ เช็คราคาการ์ดโปเกมอนทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วได้ที่นี่',
+    en: 'ปลุกตำนาน ชุด B (AS2b) shipped alongside ชุด A in 2019 and carries Shining cards of its own. Mewtwo-GX is the most hunted card in it, followed by Incineroar-GX, Gardevoir-GX and Entei-GX in their SR and HR versions. Nothing is being printed any more, so the price is whatever the secondary market says it is. Check prices card by card, then buy or sell authentic copies with identity-verified sellers.',
+  },
+  as3a: {
+    th: 'เงาอำพราง ชุด A (AS3a) เป็นชุดการ์ดโปเกมอนภาษาไทยปลายปี 2019 ที่รวมการ์ด GX ยอดนิยมไว้หลายใบ นำโดย เก็คโคกะGX และ ลูคาริโอGX ส่วนสายอีวุยมี ลีเฟียGX กับ กราเซียGX ที่ยังมีคนตามเก็บอยู่เสมอ ทั้งคู่มีทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้ในหน้าเดียว',
+    en: 'เงาอำพราง ชุด A (AS3a) is a late-2019 Thai-language set with a deep GX lineup, led by Greninja-GX and Lucario-GX. On the Eeveelution side, Leafeon-GX and Glaceon-GX still have a steady following, both in SR and HR. Check the latest price for every card and buy or sell authentic copies with sellers in Thailand, all on one page.',
+  },
+  as3b: {
+    th: 'เงาอำพราง ชุด B (AS3b) คือชุดคู่ของ AS3a วางจำหน่ายวันเดียวกันในปี 2019 จุดเด่นคือการ์ดสายมังกรและสายตำนาน ใบที่ราคาน่าสนใจที่สุดคือ ดีอัลกาGX ตามด้วย ไคริวGX โบมันเดอร์GX และ เซอเนียสGX ทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกมอนทีละใบก่อนตัดสินใจ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'เงาอำพราง ชุด B (AS3b) is the companion to AS3a, released the same day in 2019, and it leans on dragons and legendaries. Dialga-GX is the one to watch on price, with Dragonite-GX, Salamence-GX and Xerneas-GX behind it in SR and HR. Check each card price before you commit, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as4a: {
+    th: 'เทพเวหา ชุด A (AS4a) คือชุดการ์ดโปเกมอนภาษาไทยส่งท้ายปี 2019 ใบเด่นของชุดคือ เซครอมGX และ อีเวลทอลGX ส่วน เซราโอราGX กับ ดาเทนกุGX ก็เป็นใบที่สายสะสมตามหาในเวอร์ชัน SR และ HR ชุดนี้หมดจากแผงไปนานแล้ว ราคาขึ้นกับสภาพการ์ดเป็นหลัก เช็คราคาการ์ดโปเกม่อนตามสภาพได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทยได้ที่นี่',
+    en: 'เทพเวหา ชุด A (AS4a) closed out 2019 for Thai-language Pokemon cards. Zekrom-GX and Yveltal-GX headline it, with Zeraora-GX and Shiftry-GX chased in their SR and HR treatments. It left shelves a long time ago, so condition drives the price more than anything. Check prices by condition across the set, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as4b: {
+    th: 'เทพเวหา ชุด B (AS4b) ออกคู่กับ ชุด A ในปี 2019 และเน้นการ์ดโปเกมอนในตำนาน ใบชูโรงคือ เรชิรัมGX และ พัลเกียGX ตามด้วย ฟรีเซอร์GX และ บาชาโมGX ทั้งแบบ SR และ HR สำหรับคนที่กำลังไล่เก็บให้ครบชุด เช็คราคาการ์ดโปเกมอนได้ทุกใบในหน้านี้ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'เทพเวหา ชุด B (AS4b) launched next to ชุด A in 2019 with a legendary-heavy list. Reshiram-GX and Palkia-GX lead, followed by Articuno-GX and Blaziken-GX in SR and HR. If you are working toward a complete set, every card price is on this page — then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as5a: {
+    th: 'ดับเบิ้ลเบิร์ส ชุด A (AS5a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2020 ยุคการ์ดคู่ ที่โปเกม่อนสองตัวมาอยู่บนใบเดียวกัน ใบที่ดังที่สุดคือ พิคาชู & เซครอมGX ตามด้วย เซเลบี & ฟุชิกิบานะGX และ เก็คโคกะ & โซโรอาร์คGX ส่วนสายเดี่ยวมี คาเม็กซ์GX นอกจากนี้ยังมีการ์ดเทรนเนอร์แบบ TR ที่หายากในชุดด้วย เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายในไทย',
+    en: 'ดับเบิ้ลเบิร์ส ชุด A (AS5a) is a 2020 Thai-language set from the era of paired cards, where two Pokemon share one card. Pikachu & Zekrom-GX is the famous one, with Celebi & Venusaur-GX and Greninja & Zoroark-GX right behind, plus Blastoise-GX among the singles. The set also carries scarce TR trainer cards. Check the latest price for every card, then buy or sell authentic copies with sellers in Thailand.',
+  },
+  as5b: {
+    th: 'ดับเบิ้ลเบิร์ส ชุด B (AS5b) ออกพร้อม ชุด A ในปี 2020 และเป็นชุดที่รวมการ์ดคู่ระดับตำนานเอาไว้เยอะที่สุดชุดหนึ่ง นำโดย เรชิรัม & ลิซาร์ดอนGX ตามด้วย เก็งกา & มิมิคคิวGX เซอไนท์ & นิมเฟียGX และ ลูคาริโอ & เมลเมทัลGX ทั้งเวอร์ชัน SR และ HR รวมถึงการ์ดเทรนเนอร์แบบ TR เช็คราคาการ์ดโปเกมอนทีละใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'ดับเบิ้ลเบิร์ส ชุด B (AS5b) arrived with ชุด A in 2020 and packs one of the strongest paired-card lists of the era. Reshiram & Charizard-GX leads, followed by Gengar & Mimikyu-GX, Gardevoir & Sylveon-GX and Lucario & Melmetal-GX in SR and HR, alongside TR trainer cards. Check prices card by card, then buy or sell authentic copies with identity-verified sellers across Thailand.',
+  },
+  as6a: {
+    th: 'ศึกตำนาน ชุด A (AS6a) คือชุดการ์ดโปเกมอนภาษาไทยปี 2020 ที่มีการ์ดแบบ CHR ซึ่งเป็นอาร์ตพิเศษที่นักสะสมชอบเป็นพิเศษ เช่น มิมิคคิว ส่วนใบชูโรงของชุดคือ มิวทู & มิวGX ตามด้วย รัฟเฟรเซียGX และ ลาทิโอสGX ในเวอร์ชัน SR และ HR เช็คราคาการ์ดโปเกม่อนได้ครบทั้งชุด แล้วซื้อ-ขายการ์ดของแท้กับผู้ขายในไทยได้ในหน้านี้',
+    en: 'ศึกตำนาน ชุด A (AS6a) is a 2020 Thai-language set that introduced CHR cards — the special-art treatment collectors single out, Mimikyu among them. Mewtwo & Mew-GX heads the set, with Vileplume-GX and Latios-GX behind it in SR and HR. Check prices across the full set, then buy or sell authentic cards with sellers in Thailand.',
+  },
+  as6b: {
+    th: 'ศึกตำนาน ชุด B (AS6b) ปิดท้ายยุคซันมูนของการ์ดโปเกมอนภาษาไทยในปี 2020 จุดเด่นคือการ์ด CHR อาร์ตพิเศษอย่าง พิคาชู ที่ยังเป็นที่ต้องการจนถึงวันนี้ ฝั่งการ์ดคู่มี เรชิรัม & เซครอมGX และ คาเม็กซ์ & โพจจามะGX ส่วนสายเดี่ยวมี อุลกามอธGX ทั้งแบบ SR และ HR เช็คราคาการ์ดโปเกม่อนล่าสุดได้ทุกใบ แล้วซื้อ-ขายของแท้กับผู้ขายที่ยืนยันตัวตนแล้วทั่วไทย',
+    en: 'ศึกตำนาน ชุด B (AS6b) closed the Sun & Moon era for Thai-language Pokemon cards in 2020. Its CHR special-art cards — Pikachu chief among them — are still in demand. On the paired side there is Reshiram & Zekrom-GX and Blastoise & Piplup-GX, with Volcarona-GX among the singles, all in SR and HR. Check the latest price for every card, then buy or sell authentic copies with identity-verified sellers across Thailand.',
   },
 };
 

@@ -1,7 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
-import { NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/rateLimit'
+import { notifySupportInbox } from '@/lib/supportEmail'
+import { NextResponse, after } from 'next/server'
 
 // GET /api/admin/tickets — admin only
 export async function GET(request: Request) {
@@ -42,6 +44,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Ticket creation pages the founder; one account must not be able to flood it.
+    const rl = await checkRateLimit(`ticket:${user.id}:1d`, { windowSeconds: 86400, max: 5 })
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many tickets today. Reply on an existing ticket instead.' }, { status: 429 })
+    }
+
     const body = await request.json().catch(() => ({}))
     const { subject, description, category } = body || {}
 
@@ -72,5 +80,10 @@ export async function POST(request: Request) {
         .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // The ticket is already on file; the inbox email (with its translation) goes
+    // out after the response so the customer never waits on Gemini or Courier.
+    after(() => notifySupportInbox(data.id, { kind: 'new' }))
+
     return NextResponse.json({ ticket: data }, { status: 201 })
 }

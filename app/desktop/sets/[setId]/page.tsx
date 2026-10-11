@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
-import { getGameLabel } from '@/lib/games';
+import { getGameLabel, thaiCardNoun } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
+import { setTitleName, withEnglishLanguage, withThaiLanguage } from '@/lib/setCodes';
+import { buildSetSummary } from '@/lib/setSummary';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
+import LandingCtaRow from '@/components/desktop/LandingCtaRow';
 import type { Card } from '@/types';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -21,22 +24,27 @@ function gameLabel(game: string, lang: 'EN' | 'TH'): string {
     return getGameLabel(game, lang === 'EN' ? 'en' : 'th');
 }
 
+
 export async function generateMetadata({ params }: { params: Promise<{ setId: string }> }): Promise<Metadata> {
     const { setId } = await params;
     const { set, cards } = await getSetPageData(setId);
-    if (!set) return { title: 'Set not found | CardStreet', robots: { index: false, follow: false } };
+    if (!set) return { title: 'Set not found | Cardstreet', robots: { index: false, follow: false } };
 
     const lang = await resolveLang();
     const count = cards.length || set.printed_total || set.total || 0;
     const game = gameLabel(set.game, lang);
+    // Code + language keep twin sets (OP-01 in English and Japanese, MA6 and M6a)
+    // from sharing a title. Sets with neither — English Pokemon, MTG, Lorcana,
+    // Riftbound — render exactly as before.
+    const named = setTitleName(set);
     const title =
         lang === 'EN'
-            ? `${set.name} — ${game} Cards & Prices | CardStreet`
-            : `${set.name} — การ์ด${game} เช็คราคาและรายการขาย | CardStreet`;
+            ? `${named} — ${withEnglishLanguage(game, set.language)} Cards & Prices | Cardstreet`
+            : `${named} — ${withThaiLanguage(thaiCardNoun(set.game), set.language)} เช็คราคาและรายการขาย | Cardstreet`;
     const description =
         lang === 'EN'
-            ? `Browse all ${count} ${set.name} ${game} cards with live market prices and listings from verified sellers. Buy and sell on CardStreet with nationwide shipping in Thailand.`
-            : `เลือกชมการ์ด ${set.name} (${game}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน CardStreet จัดส่งทั่วไทย`;
+            ? `Browse all ${count} ${named} ${withEnglishLanguage(game, set.language)} cards with live market prices and listings from verified sellers. Buy and sell on Cardstreet with nationwide shipping in Thailand.`
+            : `เลือกชมการ์ด ${named} (${withThaiLanguage(game, set.language)}) ทั้งหมด ${count} ใบ พร้อมราคาตลาดเรียลไทม์และรายการขายจากผู้ขายที่ยืนยันแล้ว ซื้อขายบน Cardstreet จัดส่งทั่วไทย`;
 
     const ogImage = set.logo_url ? getSetLogoUrl(set.logo_url, 600, 85) : undefined;
 
@@ -50,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ setId: st
             title,
             description,
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/sets/${setId}`, pathLocale),
             images: ogImage ? [{ url: ogImage }] : undefined,
         },
@@ -90,6 +98,7 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
     const game = gameLabel(set.game, lang);
     const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
     const intro = getSetIntro(setId);
+    const summary = buildSetSummary(set, cards, lang);
     // Internal links follow the URL variant, not the cookie language: on
     // /en/sets/<id> the breadcrumbs and the card grid must stay inside /en.
     const pathLocale = await requestPathLocale();
@@ -133,11 +142,31 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
                 </p>
             )}
 
+            {summary && (
+                <p className="text-sm text-slate-500 leading-relaxed mt-3 max-w-3xl">
+                    {summary}
+                </p>
+            )}
+
             {cards.length === 0 ? (
                 <p className="text-slate-500 text-sm mt-10">{lang === 'EN' ? 'No cards found for this set.' : 'ไม่พบการ์ดในชุดนี้'}</p>
             ) : (
                 <DesktopSetCards cards={cards} pathPrefix={prefix} />
             )}
+
+            {/* Below the grid here, not above it: a set page's job is the card
+                list, and a reader who scrolls the whole set is the one worth
+                asking. The game landings put the same row after the intro,
+                where the shape of the page is different. */}
+            <LandingCtaRow
+                lang={lang}
+                prefix={prefix}
+                gameId={set.game}
+                browseLabel={{
+                    en: `Browse ${gameLabel(set.game, 'EN')} listings`,
+                    th: `ดู${thaiCardNoun(set.game)}ที่ประกาศขาย`,
+                }}
+            />
         </div>
     );
 }

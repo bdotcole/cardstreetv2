@@ -1,7 +1,7 @@
 /**
  * POST /api/streams/payment-method/setup
  *
- * Begins "add a card to bid": ensures the caller has a CardStreet platform (TH)
+ * Begins "add a card to bid": ensures the caller has a Cardstreet platform (TH)
  * Stripe customer and returns a SetupIntent client_secret the client confirms
  * with stripe.confirmSetup(). The saved card is charged off-session at
  * hammer-fall / Buy-It-Now (see lib/liveStreamPayments.ts).

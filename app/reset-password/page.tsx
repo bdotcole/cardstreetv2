@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
                         Set Your <span className="text-brand-cyan">Password</span>
                     </h1>
                     <p className="text-xs text-slate-400 mt-2 font-medium">
-                        Choose a new password for your CardStreet account
+                        Choose a new password for your Cardstreet account
                     </p>
                 </div>
 
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
                                 Request a new one from the app: Sign In → Forgot password?
                             </p>
                             <a href="/" className="inline-block px-6 h-12 leading-[3rem] bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-semibold transition-colors">
-                                Back to CardStreet
+                                Back to Cardstreet
                             </a>
                         </div>
                     )}
@@ -110,7 +110,7 @@ export default function ResetPasswordPage() {
                         <div className="space-y-4 text-center py-4">
                             <CheckCircle2 className="w-12 h-12 text-brand-green mx-auto" />
                             <p className="text-sm text-slate-300">
-                                Password set. You&apos;re signed in — taking you to CardStreet…
+                                Password set. You&apos;re signed in — taking you to Cardstreet…
                             </p>
                         </div>
                     )}

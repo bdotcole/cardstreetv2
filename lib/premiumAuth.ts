@@ -20,7 +20,7 @@ import { NextResponse } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isPremium } from '@/lib/entitlements';
+import { FEATURE_TIERS, isPremium, type PremiumFeature } from '@/lib/entitlements';
 
 export interface PremiumContext {
   user: User;
@@ -59,6 +59,36 @@ export async function requirePremium(): Promise<PremiumContext | NextResponse> {
   // the caller's own row from this check.
   const ent = await getEntitlement(user.id);
   if (!ent.premium) {
+    return NextResponse.json(
+      { error: 'Premium subscription required', code: 'PREMIUM_REQUIRED' },
+      { status: 403 },
+    );
+  }
+
+  return { user, premiumUntil: ent.premiumUntil };
+}
+
+/**
+ * Gate ONE feature rather than the whole tier.
+ *
+ * Use this wherever a route backs a capability listed in FEATURE_TIERS: a
+ * feature flipped to 'free' there then needs only a signed-in user, and the
+ * flip takes effect on the server and in the client hook at the same instant.
+ * requirePremium() is still correct for routes that back the plan itself
+ * (billing, entitlement management) rather than a named feature -- when
+ * trade_finder went free the three /api/trade routes kept a hard 403 for a
+ * feature the UI had already unlocked, which is exactly the drift this closes.
+ */
+export async function requireFeature(feature: PremiumFeature): Promise<PremiumContext | NextResponse> {
+  const cookieSupabase = await createServerClient();
+  const { data: { user }, error } = await cookieSupabase.auth.getUser();
+
+  if (error || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const ent = await getEntitlement(user.id);
+  if (FEATURE_TIERS[feature] !== 'free' && !ent.premium) {
     return NextResponse.json(
       { error: 'Premium subscription required', code: 'PREMIUM_REQUIRED' },
       { status: 403 },

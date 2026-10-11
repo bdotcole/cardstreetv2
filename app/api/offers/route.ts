@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
     if (listingErr || !listing) {
         return NextResponse.json({ error: 'Listing not found' }, { status: 400 });
     }
+    if (listing.status === 'paused') {
+        return NextResponse.json({ error: "This seller's shop is paused right now. Try again when it reopens." }, { status: 400 });
+    }
     if (listing.status !== 'active') {
         return NextResponse.json({ error: 'Listing is no longer available' }, { status: 400 });
     }
@@ -77,6 +80,17 @@ export async function POST(req: NextRequest) {
     if (amount < floor) {
         return NextResponse.json(
             { error: 'Offer is below the minimum for this listing', code: 'OFFER_TOO_LOW', min: Math.ceil(floor) },
+            { status: 422 },
+        );
+    }
+
+    // ─── Ceiling: never above the asking price ───
+    // An offer over the ask is a worse Buy Now: the buyer waits for the seller
+    // to agree to MORE money, then meets that bigger total at checkout. One
+    // reached acceptance (฿2,500 on a ฿2,000 listing) and was never paid.
+    if (amount > Number(listing.price)) {
+        return NextResponse.json(
+            { error: 'Offer is above the asking price — use Buy Now instead', code: 'OFFER_ABOVE_ASKING', max: Number(listing.price) },
             { status: 422 },
         );
     }

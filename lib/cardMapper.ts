@@ -115,11 +115,32 @@ export function displaySetName(
 // JustTCG-refreshed 'Raw_NM', then 'Near Mint' (the two catalog conventions), then
 // any other ungraded condition, freshest first. Queries must project `condition`
 // for the graded filter to work; without it this degrades to freshest-row-first.
-export function pickDisplayMarketValue(marketValues: any): any | null {
+// pokemon_cards stores Japanese as 'ja'; market_values stores it as 'jp'. That
+// disagreement is the documented convention, so normalise before comparing.
+function langKey(v: string | null | undefined): string {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'jp' ? 'ja' : s;
+}
+
+export function pickDisplayMarketValue(marketValues: any, cardLanguage?: string | null): any | null {
   if (!marketValues) return null;
-  const rows = (Array.isArray(marketValues) ? marketValues : [marketValues]).filter(
+  let rows = (Array.isArray(marketValues) ? marketValues : [marketValues]).filter(
     (r: any) => r && !GRADED_CONDITION_RE.test(String(r.condition || '').trim()),
   );
+  // Drop rows priced for a DIFFERENT language than the card. market_values is
+  // keyed (card_id, language, condition), so one card can carry rows from two
+  // pricing pipelines and freshness alone then decides — which picks the wrong
+  // one. Measured 2026-09-21: apply_thai_price_rule had written THB rows onto
+  // 1,606 Japanese cards, and because it runs at 03:45 UTC (after the 22:12 JP
+  // job) those rows were fresher on 1,603 of them, so they won. SV2a-185
+  // リザードンex displayed at $218.64 against a real JP market of $21.75.
+  // Rows whose language a query does not project are kept, so this only ever
+  // narrows a genuine collision.
+  if (cardLanguage) {
+    const want = langKey(cardLanguage);
+    const sameLang = rows.filter((r: any) => !r.language || langKey(r.language) === want);
+    if (sameLang.length) rows = sameLang;
+  }
   const rank = (r: any) =>
     r.condition === 'Raw_NM' ? 0 : r.condition === 'Near Mint' ? 1 : 2;
   rows.sort(
@@ -128,6 +149,23 @@ export function pickDisplayMarketValue(marketValues: any): any | null {
       (Date.parse(b.last_updated || '') || 0) - (Date.parse(a.last_updated || '') || 0),
   );
   return rows[0] ?? null;
+}
+
+// The one place a catalog row becomes a THB market price. Used by the mapper
+// below and by app/api/cron/refresh-listing-snapshots, which rewrites the price
+// frozen into each listing's card snapshot so deal badges track the live market.
+// A row is any object carrying `market_values` (per-condition rows) and either
+// `raw_data.tcgplayer` or a projected top-level `tcgplayer` slice.
+export function computeMarketThb(supabaseCard: any): { marketThb: number; lastUpdated: string } {
+  const rawData = supabaseCard.raw_data || {};
+  const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
+  const marketValueData = pickDisplayMarketValue(supabaseCard.market_values, supabaseCard.language);
+  if (marketValueData && marketValueData.market_avg > 0) {
+    let avg = Number(marketValueData.market_avg);
+    if (marketValueData.currency === 'USD') avg = avg * EXCHANGE_RATE;
+    return { marketThb: avg, lastUpdated: marketValueData.last_updated || '' };
+  }
+  return { marketThb: Math.round(tcgplayerMarketUsd(tcgData) * EXCHANGE_RATE), lastUpdated: '' };
 }
 
 export function mapSupabaseCardToInternal(supabaseCard: any): Card {
@@ -141,19 +179,7 @@ export function mapSupabaseCardToInternal(supabaseCard: any): Card {
   // whole raw_data blob, so the slice arrives as a top-level key.
   const tcgData = rawData.tcgplayer ?? supabaseCard.tcgplayer;
 
-  const marketValueData = pickDisplayMarketValue(supabaseCard.market_values);
-
-  let marketThb = 0;
-  let lastUpdated = '';
-  if (marketValueData && marketValueData.market_avg > 0) {
-    let avg = marketValueData.market_avg;
-    if (marketValueData.currency === 'USD') avg = avg * EXCHANGE_RATE;
-    marketThb = avg;
-    lastUpdated = marketValueData.last_updated;
-  } else {
-    const marketUsd = tcgplayerMarketUsd(tcgData);
-    marketThb = Math.round(marketUsd * EXCHANGE_RATE);
-  }
+  const { marketThb, lastUpdated } = computeMarketThb(supabaseCard);
 
   let imageUrl = '';
   let imageSmall = '';

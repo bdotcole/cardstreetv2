@@ -7,8 +7,14 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, UserProfile, CartItem, Review, Offer } from '@/types';
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS } from '@/constants';
-import CurrencySwitcher from '@/components/CurrencySwitcher';
 import LanguagePicker from '@/components/LanguagePicker';
+import RewardsChip from '@/components/rewards/RewardsChip';
+// Code-split: the shell used to statically import every tab and modal, so a
+// first open parsed the partner portal, rewards hub, buylist, and live chooser
+// for users who never touch them. Only Explore, Marketplace, Vault, Profile,
+// AddCard, and CardDetails stay in the initial bundle.
+const RewardsHub = dynamic(() => import('@/components/rewards/RewardsHub'), { ssr: false });
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import Explore from '@/components/Explore';
 import Marketplace from '@/components/Marketplace';
 import AddCard from '@/components/AddCard';
@@ -18,14 +24,16 @@ import CardDetails from '@/components/CardDetails';
 import CartDrawer from '@/components/CartDrawer';
 import AuthModal from '@/components/AuthModal';
 import AuthLinkErrorNotice from '@/components/AuthLinkErrorNotice';
+import GetAppPrompt from '@/components/GetAppPrompt';
+import { captureAcquisitionParams, maybeRecordAcquisition } from '@/lib/social/acquisitionClient';
 import SignupTracker from '@/components/SignupTracker';
 import { trackSignUp, signUpMethodFromProvider } from '@/lib/signupEvents';
-import { readAttributionCookie } from '@/lib/attribution';
+import { readAttributionCookie, unknownAttribution, withWriter } from '@/lib/attribution';
 import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import CheckoutAddressSheet, { EMPTY_CHECKOUT_ADDRESS, type CheckoutAddressValues } from '@/components/CheckoutAddressSheet';
 import ScanCandidateModal from '@/components/ScanCandidateModal';
 import ListingDetails from '@/components/ListingDetails';
-import OfferModal from '@/components/OfferModal';
+const OfferModal = dynamic(() => import('@/components/OfferModal'), { ssr: false });
 
 // Lazy-loaded — these carry heavy deps (Stripe Elements, camera plugin) we
 // don't need until the user actually opens checkout or the scanner.
@@ -34,6 +42,7 @@ const WebLiveScanner = dynamic(() => import('@/components/WebLiveScanner'), { ss
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
+import { pickSiblingIds } from '@/lib/listingSiblings';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -50,6 +59,9 @@ import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { sendScanFeedback } from '@/lib/scanFeedback';
 import { isNativeWebPath } from '@/lib/nativeWebPaths';
 import { trackMetaEvent } from '@/lib/metaEvents';
+import { trackAddToCart, trackPurchaseRegionBlocked, type RegionBlockEntry } from '@/lib/commerceEvents';
+import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
+import { fetchPublicSellers } from '@/lib/publicProfiles';
 import { captureReferralParam, maybeAttributeReferral } from '@/lib/referralClient';
 import { maybeReportInstallReferrer } from '@/lib/installReferrer';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
@@ -60,13 +72,29 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
-import LiveShopChooser from '@/components/live/LiveShopChooser';
+import { isEntryPointHidden } from '@/lib/betaFeatures';
+const LiveShopChooser = dynamic(() => import('@/components/live/LiveShopChooser'), { ssr: false });
 
-import PartnerPortal from '@/components/PartnerPortal';
-import PartnerRequest from '@/components/PartnerRequest';
-import PartnerFinishSetup from '@/components/PartnerFinishSetup';
-import SellerProfile from '@/components/SellerProfile';
-import BuylistRequest from '@/components/BuylistRequest';
+const PartnerPortal = dynamic(() => import('@/components/PartnerPortal'), { ssr: false });
+const PartnerRequest = dynamic(() => import('@/components/PartnerRequest'), { ssr: false });
+const PartnerFinishSetup = dynamic(() => import('@/components/PartnerFinishSetup'), { ssr: false });
+const SellerProfile = dynamic(() => import('@/components/SellerProfile'), { ssr: false });
+
+// What openSellerShop needs to draw a shop header — satisfied by a listing's
+// seller embed and by a public_profiles row alike.
+type SellerShopHint = {
+    display_name?: string | null;
+    username?: string | null;
+    avatar_url?: string | null;
+    rating?: number | string | null;
+    review_count?: number | null;
+    partner_joined_at?: string | null;
+    role?: string | null;
+};
+const BuylistRequest = dynamic(() => import('@/components/BuylistRequest'), { ssr: false });
+const SellPromptSheet = dynamic(() => import('@/components/SellPromptSheet'), { ssr: false });
+import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
+import { resolveSellerState, sellerStateCopy, type StripeConnectStatus } from '@/lib/sellerState';
 
 // Tabs that are safe to land on directly (via /?tab=<name> or a same-session
 // restore). 'seller_profile' needs a seller loaded in state and 'home' no
@@ -75,6 +103,19 @@ const LANDING_TABS = ['explore', 'marketplace', 'add', 'vault', 'profile', 'part
 type LandingTab = (typeof LANDING_TABS)[number];
 const isLandingTab = (v: string | null): v is LandingTab =>
     !!v && (LANDING_TABS as readonly string[]).includes(v);
+
+// Desktop account URLs a phone was bounced off, named as ?tab= values by
+// middleware.ts (SPA_TAB_FOR_PATH). They aren't tabs here — the SPA keeps
+// selling inside the Vault and orders/settings inside Profile — so each maps
+// to the real tab plus, where needed, the sessionStorage flag Profile reads on
+// mount to open the right panel (the cs_open_payouts / cs_open_offers pattern).
+const TAB_ALIASES: Record<string, { tab: LandingTab; profileFlag?: string }> = {
+    sell: { tab: 'vault' },
+    orders: { tab: 'profile', profileFlag: 'cs_open_orders' },
+    settings: { tab: 'profile', profileFlag: 'cs_open_settings' },
+    // The support-reply email's CTA (lib/courier.ts sendSupportReplyNotification).
+    support: { tab: 'profile', profileFlag: 'cs_open_support' },
+};
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
 
@@ -87,8 +128,12 @@ const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
 type PendingAuthAction =
     | { type: 'wishlist'; card: Card }
     | { type: 'vault'; card: Card; collectionId?: string }
-    | { type: 'checkout'; items: CartItem[] }
-    | { type: 'buyNow'; listing?: MarketplaceListing };
+    // sellerId carries WHICH seller's items the buyer chose to check out. A
+    // mixed cart can only go through one seller at a time, so resuming a
+    // per-seller checkout without it would submit the whole cart and earn the
+    // multi-seller 400 the per-seller button exists to avoid.
+    | { type: 'checkout'; items: CartItem[]; sellerId?: string }
+    | { type: 'buyNow'; listing?: MarketplaceListing; quantity?: number };
 
 // A purchase tap that hit the shipping-profile gate. The CheckoutAddressSheet
 // collects the missing address/phone inline and this records which entry point
@@ -96,8 +141,10 @@ type PendingAuthAction =
 // the Profile tab. buyNow carries the resolved listing so the resume works
 // even after the ListingDetails modal behind the sheet is gone.
 type AddressGateResume =
-    | { type: 'checkout' }
-    | { type: 'buyNow'; listing: MarketplaceListing }
+    // Same reason as PendingAuthAction above: the chosen seller has to survive
+    // the address sheet, or the resumed checkout reverts to the whole cart.
+    | { type: 'checkout'; sellerId?: string }
+    | { type: 'buyNow'; listing: MarketplaceListing; quantity?: number }
     | { type: 'payOffer'; offer: Offer };
 
 // Layout effect that is safe to reference from SSR'd client components —
@@ -108,7 +155,7 @@ const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffe
 // The shell fully remounts when the user comes back from the standalone
 // routes (/premium, /grade, /trade, /insights, Stripe redirects). Auth then
 // re-resolves asynchronously, which used to paint the signed-out "Join
-// CardStreet" profile for a few frames before the session came back. This
+// Cardstreet" profile for a few frames before the session came back. This
 // snapshot lets the remount paint signed-in immediately; onAuthStateChange
 // stays the source of truth and clears it when the session is really gone.
 // Guests are in-memory only and intentionally not snapshotted.
@@ -125,7 +172,7 @@ function readUserSnapshot(): UserProfile | null {
 }
 
 export default function HomePage() {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
 
@@ -137,7 +184,10 @@ export default function HomePage() {
     // from /live remounts the shell and lands on the chooser again.
     const { hasBeta: hasLiveBeta } = useBetaFeatures();
     const [shopChooserDismissed, setShopChooserDismissed] = useState(false);
-    const showShopChooser = hasLiveBeta('live_streams') && !shopChooserDismissed;
+    // Hidden entry point (lib/betaFeatures HIDDEN_ENTRY_POINTS): Shop opens
+    // straight on the Marketplace while Live has no door, even for admins.
+    const showShopChooser =
+        hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') && !shopChooserDismissed;
 
     // Picking Marketplace pushes a history entry so the phone's BACK gesture
     // (or button) returns to the chooser instead of leaving the Shop tab — the
@@ -171,6 +221,14 @@ export default function HomePage() {
         window.addEventListener('popstate', onPop);
         return () => window.removeEventListener('popstate', onPop);
     }, []);
+
+    // Card id from a stale-listing nudge's ?reprice= param. Declared up here
+    // beside the tab state because the landing effect below consumes it, and
+    // handed down to the Vault, which opens that listing's price editor.
+    const [repriceCardId, setRepriceCardId] = useState<string | null>(null);
+    // Offer id from a pay link. Consumed once the offer is loadable — see the
+    // effect near handlePayOffer.
+    const [payOfferId, setPayOfferId] = useState<string | null>(null);
 
     // Shop tab press. Re-tapping the tab you're already on returns to that
     // tab's root — here, the Live-vs-Marketplace chooser. Routed through
@@ -230,6 +288,61 @@ export default function HomePage() {
             return;
         }
 
+        // /?payOffer=<offerId> — the accepted-offer pay link (see app/pay/
+        // [offerId]/route.ts, which is what actually gets shared on LINE).
+        // Held in state; the offers list loads asynchronously, so the pay flow
+        // is dispatched by the effect below once the offer is in hand.
+        const payOffer = params.get('payOffer');
+        if (payOffer) {
+            setPayOfferId(payOffer);
+            setActiveTab('profile');
+            try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+            params.delete('payOffer');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
+        // /?reprice=<cardId> — from a stale-listing nudge. Held in state and
+        // handed to the Vault, which opens that listing's price editor. Stripped
+        // like the others so a refresh does not re-open it.
+        const reprice = params.get('reprice');
+        if (reprice) {
+            setRepriceCardId(reprice);
+            params.delete('reprice');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            // Falls through: ?tab=vault on the same URL still picks the tab.
+        }
+
+        // /?openRewards=1 opens the Rewards Hub — the streak-at-risk push's
+        // cold-start fallback, for when the app was killed and no shell was
+        // mounted to consume the cs:openRewards event. A sessionStorage flag
+        // rather than an event dispatch (the cs_open_payouts pattern): this
+        // branch runs in a pre-paint effect, and the hub's own listener is
+        // registered by a later passive effect, so an event fired here could
+        // arrive before anything is listening.
+        if (params.get('openRewards') === '1') {
+            try { sessionStorage.setItem('cs_open_rewards', '1'); } catch { /* lands on the tab instead */ }
+            params.delete('openRewards');
+            // Deliberately falls through: ?tab= on the same URL still decides
+            // which tab sits behind the hub.
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+        }
+
         // /?view=vault lands in the Vault — the first-listing activation
         // email's CTA deep-links here. Strip the param like the branches above.
         if (params.get('view') === 'vault') {
@@ -244,12 +357,35 @@ export default function HomePage() {
             return;
         }
 
+        // /?order=<id> lands on that order inside Profile — the cold-start
+        // fallback for an order push tap (hooks/usePushNotifications) when no
+        // shell was mounted to consume the cs-open-order event. Flag, not
+        // event, for the same reason as openRewards above.
+        const focusOrder = params.get('order');
+        if (focusOrder && /^[0-9a-f-]{36}$/i.test(focusOrder)) {
+            try { sessionStorage.setItem('cs_focus_order', focusOrder); } catch { /* lands on Profile root instead */ }
+            setActiveTab('profile');
+            params.delete('order');
+            const rest = params.toString();
+            window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+            );
+            return;
+        }
+
         // /?tab=<name> lands on an explicit tab — the Pro hub's back button
-        // returns via /?tab=profile. Strip the param (keeping everything
+        // returns via /?tab=profile, and middleware bounces /sell, /orders,
+        // /collection and /settings here. Strip the param (keeping everything
         // else) so a refresh doesn't re-apply it.
         const tab = params.get('tab');
-        if (isLandingTab(tab)) {
-            setActiveTab(tab);
+        const alias = tab ? TAB_ALIASES[tab] : undefined;
+        if (alias || isLandingTab(tab)) {
+            if (alias?.profileFlag) {
+                try { sessionStorage.setItem(alias.profileFlag, '1'); } catch { /* opens Profile root instead */ }
+            }
+            setActiveTab(alias ? alias.tab : (tab as LandingTab));
             params.delete('tab');
             const rest = params.toString();
             window.history.replaceState(
@@ -287,7 +423,25 @@ export default function HomePage() {
             setActiveTab('profile');
         };
         window.addEventListener('cs-open-offers', onOpenOffers);
-        return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+        // Support-reply push tap: same contract, cs_open_support flag.
+        window.addEventListener('cs-open-support', onOpenOffers);
+        // Order push tap / order App Link: same contract, cs_focus_order flag
+        // (Profile reads the id and picks the shipment or order panel).
+        window.addEventListener('cs-open-order', onOpenOffers);
+        return () => {
+            window.removeEventListener('cs-open-offers', onOpenOffers);
+            window.removeEventListener('cs-open-support', onOpenOffers);
+            window.removeEventListener('cs-open-order', onOpenOffers);
+        };
+    }, []);
+
+    // Profile's seller checklist asks the shell to switch tabs rather than
+    // navigating: Profile renders inside this shell, and a hard navigation
+    // would tear down and rebuild the whole SPA to move one tab.
+    useEffect(() => {
+        const onOpenVault = () => setActiveTab('vault');
+        window.addEventListener('cs-open-vault', onOpenVault);
+        return () => window.removeEventListener('cs-open-vault', onOpenVault);
     }, []);
     const [marketGameFilter, setMarketGameFilter] = useState('all');
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -392,6 +546,11 @@ export default function HomePage() {
     // the user leaves the profile tab, so completing setup clears it without
     // a reload. Session-dismissible.
     const [payoutSetupStalled, setPayoutSetupStalled] = useState(false);
+    // The same two inputs DesktopSell feeds lib/sellerState.ts, so both shells
+    // describe a seller's situation identically instead of each inventing a
+    // rule (see the header of that module for what they used to disagree about).
+    const [sellerStripeStatus, setSellerStripeStatus] = useState<StripeConnectStatus | null>(null);
+    const [sellerProfileRow, setSellerProfileRow] = useState<Record<string, string | boolean | null> | null>(null);
     // First-listing activation: the seller is fully verified but has never
     // listed a card. Shares the status fetch below; the "has no listings"
     // half of the condition is derived from the vault (hasAnyListing).
@@ -426,14 +585,32 @@ export default function HomePage() {
                 if (!res.ok) return; // banners are best-effort — fail quiet
                 const s = await res.json();
                 if (!cancelled) {
+                    setSellerStripeStatus(s);
                     if (!payoutNudgeDismissed) {
                         setPayoutSetupStalled(
                             !!s.connected && s.detailsSubmitted !== true && s.chargesEnabled !== true
                         );
                     }
-                    setFirstListingEligible(s.chargesEnabled === true);
+                    // details_submitted, not charges_enabled. Stripe's async
+                    // review can take days, and a seller who finished the form
+                    // is done with their half — telling them nothing until
+                    // Stripe finishes wastes the window where they still
+                    // remember they meant to list something. Listings created
+                    // in the meantime save as drafts and publish themselves.
+                    setFirstListingEligible(s.chargesEnabled === true || s.detailsSubmitted === true);
                 }
             } catch { /* fail quiet */ }
+            try {
+                // Shipping fields, so the shared helper can tell
+                // 'shipping_incomplete' from a payout problem. Same select the
+                // listing gate uses.
+                const { data } = await createClient()
+                    .from('profiles')
+                    .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                    .eq('id', user.id)
+                    .single<Record<string, string | boolean | null>>();
+                if (!cancelled && data) setSellerProfileRow(data);
+            } catch { /* fail quiet — the banner degrades, nothing breaks */ }
         })();
         return () => { cancelled = true; };
     }, [user, activeTab]);
@@ -481,6 +658,15 @@ export default function HomePage() {
         setActiveTab('vault');
     };
 
+    // Shared derivation, same helper the desktop sell page uses. Falls back to
+    // 'no_payout_account' copy while the profile row is still loading, which is
+    // the state the banner is almost always shown in anyway.
+    const shellSellerState = resolveSellerState(
+        !!user && user.provider !== 'guest',
+        sellerProfileRow,
+        sellerStripeStatus,
+    );
+
     const dismissFirstListingPrompt = () => {
         setFirstListingDismissed(true);
         try { sessionStorage.setItem('cs_first_listing_prompt_dismissed', '1'); } catch { /* re-shows next session */ }
@@ -496,7 +682,6 @@ export default function HomePage() {
 
     const {
         settings,
-        updateCurrency,
         updateLanguage
     } = useUserSettings();
 
@@ -519,6 +704,16 @@ export default function HomePage() {
     // PaymentModal forwards it to /api/orders/checkout (server reads the
     // discounted price from the offer authoritatively). Null for normal buys.
     const [acceptedOfferId, setAcceptedOfferId] = useState<string | null>(null);
+    // Set when checking out one seller from a mixed cart (see handleCheckout).
+    // null = the whole cart.
+    const [checkoutSellerId, setCheckoutSellerId] = useState<string | null>(null);
+    // What the payment modal is actually charging for. A Buy Now / pay-offer
+    // flow replaces the cart outright, so those are unaffected; only a mixed
+    // cart narrows.
+    const checkoutItems = useMemo(
+        () => (checkoutSellerId ? cart.filter((i) => i.sellerId === checkoutSellerId) : cart),
+        [cart, checkoutSellerId],
+    );
     // Purchases are Thailand-only for now (shipping isn't configured elsewhere).
     // Warm the geo lookup on mount so the checkout gate is instant; the popup
     // below explains the restriction when a non-TH buyer tries to check out.
@@ -528,6 +723,49 @@ export default function HomePage() {
     const offerBadge = useOfferBadge(
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
     );
+    // Collector Pass rewards: the header coin chip replaced the currency
+    // switcher (currency now lives in Profile > Settings). Beta-gated + signed
+    // in only; the summary hook fails closed so the chip simply doesn't render
+    // until /api/rewards/summary answers enabled.
+    const rewardsActive = hasLiveBeta('rewards') && !!user && user.provider !== 'guest';
+    const { summary: rewardsSummary, refresh: refreshRewards } = useRewardsSummary(rewardsActive);
+    const [isRewardsOpen, setIsRewardsOpen] = useState(false);
+    // Profile's Rewards menu row (and future push deep-links) open the hub via
+    // a window event — Profile renders inside this shell, so the event is the
+    // cheapest cross-component channel that survives its z-[200] panels.
+    useEffect(() => {
+        const onOpenRewards = (e: Event) => {
+            // Mark the event consumed. The streak push's tap handler dispatches
+            // this cancelable and hard-navigates when nothing cancels it (the
+            // cs-open-offers pattern), so without preventDefault a tap would
+            // open the hub AND reload the page out from under it.
+            e.preventDefault();
+            setIsRewardsOpen(true);
+            void refreshRewards();
+        };
+        window.addEventListener('cs:openRewards', onOpenRewards);
+        // Cold-start half of the same deep link: the landing effect (which runs
+        // before this one) leaves a flag when the URL carried ?openRewards=1.
+        try {
+            if (sessionStorage.getItem('cs_open_rewards') === '1') {
+                sessionStorage.removeItem('cs_open_rewards');
+                setIsRewardsOpen(true);
+                void refreshRewards();
+            }
+        } catch { /* storage unavailable (private mode) */ }
+        return () => window.removeEventListener('cs:openRewards', onOpenRewards);
+    }, [refreshRewards]);
+
+    // Shop pause / reopen (Profile > Seller Account) flips every listing's
+    // status server-side; the vault's "Live on Market" badges are derived from
+    // those rows, so refetch them rather than showing stale state until the
+    // next cold load.
+    useEffect(() => {
+        const onShopPauseChanged = () => { void refreshCollections(); };
+        window.addEventListener('cs:shopPauseChanged', onShopPauseChanged);
+        return () => window.removeEventListener('cs:shopPauseChanged', onShopPauseChanged);
+    }, [refreshCollections]);
+
     const [isRegionBlockOpen, setIsRegionBlockOpen] = useState(false);
     // In-checkout shipping-details gate (see AddressGateResume above).
     const [addressGate, setAddressGate] = useState<{
@@ -601,6 +839,9 @@ export default function HomePage() {
         // signup this session can be attributed even if the cs_ref cookie
         // from /join/<slug> didn't survive.
         captureReferralParam();
+        // Which social link brought them (utm_* from the tracked short links);
+        // written onto the profile at sign-up. Analytics only.
+        captureAcquisitionParams();
 
         // Android native shell only: report the Play install referrer once so
         // the referring partner gets download credit (iOS earns it at QR-scan
@@ -627,14 +868,17 @@ export default function HomePage() {
         const applySessionUser = (sessionUser: SupabaseAuthUser) => {
             Sentry.setUser({ id: sessionUser.id, email: sessionUser.email });
             void maybeAttributeReferral(sessionUser.id);
+            void maybeRecordAcquisition(sessionUser.id);
             setUser(prev => ({
                 id: sessionUser.id,
                 name: sessionUser.user_metadata.full_name || sessionUser.email?.split('@')[0] || 'User',
                 email: sessionUser.email || '',
                 avatar: sessionUser.user_metadata.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + sessionUser.id,
                 provider: sessionUser.app_metadata.provider as any || 'email',
+                // name too: the profile's display_name replaces the OAuth
+                // full_name below, and a token refresh must not revert it.
                 ...(prev && prev.id === sessionUser.id
-                    ? { isPartner: prev.isPartner, partnerStats: prev.partnerStats }
+                    ? { name: prev.name, isPartner: prev.isPartner, partnerStats: prev.partnerStats }
                     : {}),
             }));
         };
@@ -661,7 +905,9 @@ export default function HomePage() {
         return () => subscription.unsubscribe();
     }, []);
 
-    // Hydrate partner status from the profile. Partner status is keyed off
+    // Hydrate the display name and partner status from the profile. The
+    // session only carries the OAuth full_name, so without this a name changed
+    // in Edit Profile never shows. Partner status is keyed off
     // partner_joined_at (independent of `role`, so an admin can also be a
     // partner); `role === 'partner'` is kept for legacy partner rows.
     useEffect(() => {
@@ -672,9 +918,16 @@ export default function HomePage() {
                 const res = await fetch('/api/profile');
                 if (!res.ok) return;
                 const { profile } = await res.json();
+                if (cancelled) return;
+                const displayName = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
                 const isPartner = profile?.role === 'partner' || !!profile?.partner_joined_at;
-                if (cancelled || !isPartner) return;
-                setUser(prev => (prev && !prev.isPartner ? { ...prev, isPartner: true } : prev));
+                setUser(prev => {
+                    if (!prev) return prev;
+                    const name = displayName || prev.name;
+                    const partner = !!prev.isPartner || isPartner;
+                    return name === prev.name && partner === !!prev.isPartner ? prev : { ...prev, name, isPartner: partner };
+                });
+                if (!isPartner) return;
                 // Provisioned partners (created by an admin with a temp password)
                 // must complete setup before using the app.
                 if (profile?.partner_joined_at && profile?.partner_onboarding_complete === false) {
@@ -837,10 +1090,20 @@ export default function HomePage() {
     // resumes after sign-in. Replaces the old toast + jump to the Profile
     // tab, which lost the user's context and buried the sign-in CTA.
     const [authGateMessage, setAuthGateMessage] = useState<string | null>(null);
+    // Which tab the wall opens on. Sign-in is right for gates a returning user
+    // hits (their vault, their wishlist); Buy Now is not one of those — someone
+    // tapping it on a listing is far more likely to have no account yet, and a
+    // sign-in form asks them for a password they never set.
+    const [authGateMode, setAuthGateMode] = useState<'signin' | 'signup'>('signin');
     const pendingAuthActionRef = useRef<(PendingAuthAction & { at: number }) | null>(null);
-    const requireAuth = (message: string, pending?: PendingAuthAction): boolean => {
+    const requireAuth = (
+        message: string,
+        pending?: PendingAuthAction,
+        mode: 'signin' | 'signup' = 'signin',
+    ): boolean => {
         if (!user || user.provider === 'guest') {
             pendingAuthActionRef.current = pending ? { ...pending, at: Date.now() } : null;
+            setAuthGateMode(mode);
             setAuthGateMessage(message);
             return false;
         }
@@ -859,7 +1122,7 @@ export default function HomePage() {
         } catch (error: any) {
             console.error('Failed to update wishlist:', error);
             const errorMessage = error?.message || 'Unknown error';
-            showToast(`Failed to update wishlist: ${errorMessage}`, 'error');
+            showToast(`${t('toast.wishlistFailed')}: ${errorMessage}`, 'error');
         }
     };
 
@@ -883,6 +1146,14 @@ export default function HomePage() {
                 purchasePrice: card.marketPrice
             });
 
+            // Confirm at the top of the screen. On Explore nothing else
+            // changes after an add (we deliberately stay on the set), and a
+            // sealed product's detail sheet stays open, so without this the
+            // tap looked like it did nothing. The item name covers cards and
+            // sealed products alike.
+            const itemName = card.name?.trim();
+            showToast(itemName ? `${itemName} · ${t('toast.vaultAdded')}` : t('toast.vaultAdded'), 'success');
+
             // Vaulting a just-scanned card is the strongest "the scan was right"
             // signal — feed it to the learned-phash index.
             const lastScan = lastScanRef.current;
@@ -903,29 +1174,76 @@ export default function HomePage() {
             if (activeTab !== 'explore') {
                 setActiveTab('vault');
             }
+
+            // Offer to sell it, at the one moment the card is still in their
+            // hand. Not during a bulk Explore add — interrupting every add with
+            // a sheet would make adding ten cards unusable. The sheet renders
+            // nothing without a usable market value.
+            if (activeTab !== 'explore' && suggestedSellPrice(card.marketPrice) > 0) {
+                setSellPrompt(card);
+            }
         } catch (error: any) {
             console.error('Failed to add card to collection:', error);
             // Show more detailed error for debugging
             const errorMessage = error?.message || 'Unknown error';
-            showToast(`Failed to add card to collection: ${errorMessage}`, 'error');
+            showToast(`${t('toast.vaultAddFailed')}: ${errorMessage}`, 'error');
         }
     };
 
-    const handleAddToCart = (item: CartItem) => {
+    // Several units of one listing arrive together (each its own listing id,
+    // see lib/listingSiblings.ts): one state update, one cart open, one event.
+    const handleAddToCartMany = (items: CartItem[], { openCart = true }: { openCart?: boolean } = {}) => {
+        if (items.length === 0) return;
         setCart(prev => {
-            if (prev.find(i => i.id === item.id)) return prev; // No duplicates
-            return [...prev, item];
+            const seen = new Set(prev.map(i => i.id));
+            return [...prev, ...items.filter(i => !seen.has(i.id))]; // No duplicates
         });
-        setIsCartOpen(true);
+        if (openCart) setIsCartOpen(true);
         // Meta AddToCart (value in the user's display currency, matching the
         // PaymentModal/Purchase convention).
         trackMetaEvent('AddToCart', {
-            value: item.price * (currency === 'THB' ? 1 : exchangeRate),
+            value: items.reduce((sum, i) => sum + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
             currency,
-            content_ids: [item.cardId || item.id].filter(Boolean),
+            content_ids: [items[0].cardId || items[0].id].filter(Boolean),
             content_type: 'product',
         });
+        trackAddToCart(items, currency, exchangeRate);
     };
+    const handleAddToCart = (item: CartItem) => handleAddToCartMany([item]);
+
+    // Open a seller's shop from anywhere that only knows the seller id (the
+    // cart, a refused Buy Now). The listing embed is enough for the header when
+    // we have it; otherwise one public_profiles read fills it in. Closes the
+    // cart and any listing sheet so the shop is what the buyer sees.
+    const openSellerShop = async (sellerId: string, hint?: SellerShopHint | null) => {
+        let profile: SellerShopHint | null = hint ?? null;
+        if (!profile?.display_name || !profile?.avatar_url) {
+            const found = (await fetchPublicSellers(createClient(), [sellerId])).get(sellerId);
+            if (found) profile = { ...profile, ...found };
+        }
+        setViewingSeller({
+            id: sellerId,
+            name: profile?.display_name || profile?.username || 'Seller',
+            email: 'seller@example.com',
+            avatar: profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sellerId}`,
+            provider: 'google',
+            rating: parseFloat(String(profile?.rating ?? '')) || 0,
+            reviewCount: profile?.review_count || 0,
+            isPartner: !!(profile?.partner_joined_at || profile?.role === 'partner'),
+            badges: [],
+        });
+        setSelectedListing(null);
+        setIsCartOpen(false);
+        setActiveTab('seller_profile');
+        window.scrollTo({ top: 0 });
+    };
+
+    // THB the cart already holds from the shop being viewed, for its
+    // minimum-order notice. THB because the minimum is a THB rule.
+    const cartTotalForViewingSeller = useMemo(
+        () => viewingSeller ? cart.filter((i) => i.sellerId === viewingSeller.id).reduce((sum, i) => sum + i.price, 0) : 0,
+        [cart, viewingSeller],
+    );
 
     const handleRemoveFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
@@ -936,9 +1254,16 @@ export default function HomePage() {
     // clear "coming soon to your country" popup instead of the payment modal.
     // The server re-enforces this in /api/orders/checkout; failures fall open
     // (the server has the final say). Returns true when purchasing may proceed.
-    const ensureCanPurchase = async (): Promise<boolean> => {
+    // A block is reported to GA4 with what the buyer was trying to buy: it is
+    // the only record of foreign buying intent (Buy Now gates before any other
+    // event fires).
+    const ensureCanPurchase = async (
+        entry: RegionBlockEntry,
+        items: Parameters<typeof trackPurchaseRegionBlocked>[0]['items'],
+    ): Promise<boolean> => {
         const region = await ensurePurchaseRegion();
         if (!region.purchaseAllowed) {
+            trackPurchaseRegionBlocked({ country: region.country, entry, items });
             setIsCartOpen(false);
             setSelectedListing(null);
             setIsRegionBlockOpen(true);
@@ -998,28 +1323,45 @@ export default function HomePage() {
         }
     };
 
-    const handleCheckout = async () => {
-        if (!(await ensureCanPurchase())) return;
+    /**
+     * `sellerId` checks out one seller's items from a mixed cart. A TH
+     * PaymentIntent is a direct charge on exactly one connected account, so
+     * /api/orders/checkout rejects a multi-seller cart with a 400 — this makes
+     * that a choice the buyer makes in the cart rather than an error they meet
+     * after committing. The other seller's items stay in the cart.
+     */
+    const handleCheckout = async (_shippingFee?: number, sellerId?: string) => {
+        if (!(await ensureCanPurchase('cart', sellerId ? cart.filter((i) => i.sellerId === sellerId) : cart))) return;
 
         // Buyers must be authenticated — the /api/orders/checkout route requires
         // a real buyer profile id, and the modal would otherwise fail server-side
         // with a generic "missing required fields" message that's hard to debug.
         // The cart items ride along on the pending action because the per-user
         // cart hydration wipes the in-memory signed-out cart at sign-in.
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart })) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'checkout', items: cart, sellerId })) return;
 
-        if (!(await ensureBuyerProfileComplete({ type: 'checkout' }))) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'checkout', sellerId }))) return;
 
         setIsCartOpen(false);
+
+        // Narrow to one seller when asked. Held in state rather than mutating
+        // the cart: the buyer's other items must survive this purchase, and a
+        // cancelled checkout has to leave the cart exactly as it was.
+        const payingItems = sellerId ? cart.filter((i) => i.sellerId === sellerId) : cart;
+        if (payingItems.length === 0) return;
+        setCheckoutSellerId(sellerId ?? null);
+
         // Meta InitiateCheckout — fired only once the buyer clears the geo/auth/
         // profile gates and the payment modal actually opens.
         trackMetaEvent('InitiateCheckout', {
-            value: cart.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
+            value: payingItems.reduce((s, i) => s + i.price, 0) * (currency === 'THB' ? 1 : exchangeRate),
             currency,
-            content_ids: cart.map(i => i.cardId || i.id).filter(Boolean),
+            content_ids: payingItems.map(i => i.cardId || i.id).filter(Boolean),
             content_type: 'product',
-            num_items: cart.length,
+            num_items: payingItems.length,
         });
+        // GA4 begin_checkout fires inside PaymentModal, which Buy Now and
+        // pay-an-offer open too (lib/commerceEvents.ts).
         setIsPaymentModalOpen(true);
     };
 
@@ -1036,7 +1378,12 @@ export default function HomePage() {
             showToast(t('offer.payUnavailable') || 'This listing is no longer available.', 'error');
             return;
         }
-        if (!(await ensureCanPurchase())) return;
+        if (!(await ensureCanPurchase('pay_offer', [{
+            id: offer.listing_id,
+            cardId: listingCard.id,
+            card: listingCard,
+            price: offer.amount,
+        }]))) return;
         if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase')) return;
         if (!(await ensureBuyerProfileComplete({ type: 'payOffer', offer }))) return;
 
@@ -1054,6 +1401,39 @@ export default function HomePage() {
         setIsPaymentModalOpen(true);
     };
 
+    // Consume a pay link (/pay/<offerId> -> /?payOffer=<id>). Waits for a real
+    // session: the link is shared over LINE and routinely opened by someone not
+    // signed in on that device, and dispatching before auth would fail the
+    // buyer-profile gate for the wrong reason. One shot per id — cleared before
+    // dispatch so a failed attempt does not loop.
+    useEffect(() => {
+        if (!payOfferId || !user || user.provider === 'guest') return;
+        const id = payOfferId;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch('/api/offers?state=active', { cache: 'no-store' });
+                if (!res.ok) throw new Error('offers fetch failed');
+                const data = await res.json();
+                const list: Offer[] = Array.isArray(data?.offers) ? data.offers : (Array.isArray(data) ? data : []);
+                const offer = list.find((o) => o.id === id);
+                if (cancelled) return;
+                setPayOfferId(null);
+                if (!offer) {
+                    // Paid, expired, withdrawn, or someone else's — the Offers
+                    // panel is already open behind this and shows the truth.
+                    showToast(t('offer.payUnavailable'), 'error');
+                    return;
+                }
+                void handlePayOffer({ offer });
+            } catch {
+                if (!cancelled) setPayOfferId(null);
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [payOfferId, user]);
+
     // Buy Now skips the cart and opens the payment modal directly, so it runs
     // the same geo, auth, and buyer-profile (address + phone) gates as cart
     // checkout itself. Callable two ways: from a ListingDetails "Buy Now" (no
@@ -1061,21 +1441,53 @@ export default function HomePage() {
     // while the listing modal is still open behind the auth gate), or from a
     // marketplace grid tile (listing passed in, so it survives the auth resume
     // even though no ListingDetails modal is open).
-    const handleBuyNow = async (listingArg?: MarketplaceListing) => {
+    const handleBuyNow = async (listingArg?: MarketplaceListing, quantity = 1) => {
         const listing = listingArg ?? selectedListing;
         if (!listing) return;
-        if (!(await ensureCanPurchase())) return;
-        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg })) return;
-        if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing }))) return;
-        setCart([{
+        if (!(await ensureCanPurchase('buy_now', Array.from({ length: Math.max(1, quantity) }, () => ({
             id: listing.id,
+            cardId: listing.card_id,
+            card: listing.card_data,
+            price: listing.price,
+            is_graded: listing.is_graded,
+        }))))) return;
+        if (!requireAuth(t('authGate.purchase') || 'Sign in to complete your purchase', { type: 'buyNow', listing: listingArg, quantity }, 'signup')) return;
+        if (!(await ensureBuyerProfileComplete({ type: 'buyNow', listing, quantity }))) return;
+        // One cart line per unit — each is its own listing row, so checkout's
+        // per-row reservation is untouched (lib/listingSiblings.ts).
+        const buyNowItems: CartItem[] = pickSiblingIds(listing, Math.max(1, quantity)).map((id) => ({
+            id,
             cardId: listing.card_id,
             card: listing.card_data,
             price: listing.price, // Store base price for now
             sellerId: listing.seller_id,
             sellerName: listing.seller?.display_name || 'Unknown',
             condition: listing.condition
-        }]);
+        }));
+
+        // The shop's minimum order (lib/minOrder.ts). Buy Now pays for this
+        // listing alone, so below the minimum it cannot go through. Put the
+        // card in the cart instead and take the buyer to the seller's shop,
+        // where adding more fixes it; the shop header shows how much is still
+        // missing (SellerProfile) and the toast says why they moved. The
+        // shortfall counts what the cart already holds from this shop, so a
+        // second card from the same seller can complete the order. Fail-soft:
+        // the server gate has the final word.
+        const minOrders = await fetchSellerMinOrders(createClient(), [listing.seller_id]);
+        const minOrder = minOrders[listing.seller_id] ?? 0;
+        const buyNowIds = new Set(buyNowItems.map((i) => i.id));
+        const alreadyInCart = cart
+            .filter((i) => i.sellerId === listing.seller_id && !buyNowIds.has(i.id))
+            .reduce((sum, i) => sum + i.price, 0);
+        const shortfall = minOrderShortfall(alreadyInCart + buyNowItems.reduce((sum, i) => sum + i.price, 0), minOrder);
+        if (shortfall > 0) {
+            handleAddToCartMany(buyNowItems, { openCart: false });
+            showToast(minOrderMessage(isThai, minOrder, shortfall), 'info');
+            await openSellerShop(listing.seller_id, listing.seller);
+            return;
+        }
+
+        setCart(buyNowItems);
         setSelectedListing(null);
         setIsPaymentModalOpen(true);
     };
@@ -1089,9 +1501,9 @@ export default function HomePage() {
         setAddressGate(null);
         if (!gate) return;
         if (gate.resume.type === 'checkout') {
-            void handleCheckout();
+            void handleCheckout(undefined, gate.resume.sellerId);
         } else if (gate.resume.type === 'buyNow') {
-            void handleBuyNow(gate.resume.listing);
+            void handleBuyNow(gate.resume.listing, gate.resume.quantity);
         } else {
             void handlePayOffer({ offer: gate.resume.offer });
         }
@@ -1138,9 +1550,9 @@ export default function HomePage() {
                 }
                 return merged;
             });
-            void handleCheckout();
+            void handleCheckout(undefined, pending.sellerId);
         } else if (pending.type === 'buyNow') {
-            void handleBuyNow(pending.listing);
+            void handleBuyNow(pending.listing, pending.quantity);
         }
         // Handlers are re-created every render and the pending ref is one-shot,
         // so only the wake-up-relevant deps are listed.
@@ -1172,11 +1584,18 @@ export default function HomePage() {
         paymentMethod: string;
         paymentId: string;
         transferGroup?: string;
+        orderId?: string;
+        processing?: boolean;
     }) => {
         if (!user) return;
 
         setIsPaymentModalOpen(false);
-        setCart([]);
+        // Clear only what was actually paid for. A per-seller checkout out of a
+        // mixed cart leaves the other seller's items exactly where the buyer
+        // left them — emptying the whole cart here would silently discard cards
+        // they never bought and never removed.
+        setCart((prev) => (checkoutSellerId ? prev.filter((i) => i.sellerId !== checkoutSellerId) : []));
+        setCheckoutSellerId(null);
         // An offer purchase clears that offer from the actionable count, so drop
         // the badge cache instead of letting it sit stale for its TTL.
         if (acceptedOfferId) notifyOffersChanged();
@@ -1186,7 +1605,24 @@ export default function HomePage() {
         fetchGlobalListings();
         refreshCollections();
 
-        showToast(`Payment Successful! Thank you for your purchase.`, 'success');
+        // Land on the order, not back on the marketplace. A buyer who has just
+        // paid — especially by PromptPay, where the charge settles after they
+        // leave the modal — needs to see status, a ship-by date and where
+        // tracking will appear. Dropping them on the grid with a toast gave a
+        // first-time buyer no evidence their money did anything.
+        //
+        // ?confirming=1 for the PromptPay case: the order is still
+        // pending_payment for a few seconds while the webhook lands, and
+        // "Awaiting payment" would read as failure to someone whose banking app
+        // just said success.
+        if (_details.orderId) {
+            const q = _details.processing ? '?confirming=1' : '';
+            // Full navigation, not a router push: /orders/<id> is a server page
+            // outside this shell, and it must render with the session cookie.
+            window.location.assign(`/orders/${_details.orderId}${q}`);
+            return;
+        }
+        showToast(t('toast.paymentSuccess'), 'success');
     };
 
     const handleScanCard = async () => {
@@ -1269,6 +1705,7 @@ export default function HomePage() {
             // Step 4: Handle results
             if (matches.length === 1) {
                 setSelectedCard(matches[0]);
+                maybePromptSellAfterScan(matches[0]);
             } else if (matches.length > 1) {
                 setScanCandidates(matches);
             } else {
@@ -1298,6 +1735,36 @@ export default function HomePage() {
     // Listing State (New)
     const [listingTarget, setListingTarget] = useState<{ colId: string, item: UserCollectionItem, card: Card } | null>(null);
 
+    // A listing tap that hit the shipping-profile gate. Without this the user
+    // was sent to the Profile tab and the card they were selling was simply
+    // forgotten — they had to find it in the vault again and start over, which
+    // is the same dead end the auth gate's pendingAuthActionRef exists to
+    // prevent. Same shape and same 10-minute staleness cap, for the same
+    // reason: a much-later profile edit must not resurrect a forgotten tap.
+    const pendingListingRef = useRef<{ colId: string; item: UserCollectionItem; card: Card; at: number } | null>(null);
+
+    // "Sell it for ~฿X?" after a scan confirm or a vault add. Holds the card
+    // only; the vault item is resolved at tap time, because the collections
+    // state has not settled when this is set.
+    const [sellPrompt, setSellPrompt] = useState<Card | null>(null);
+
+    /**
+     * Queue the sell sheet for a card a scan just confirmed.
+     *
+     * Only for cards ALREADY in the vault. A scan of something new ends in a
+     * vault add, and that path raises the sheet itself — firing here too would
+     * show it twice for one scan. This covers the case a vault add can never
+     * reach: scanning a card you already own, which is exactly what someone
+     * does when they are working through a pile deciding what to sell.
+     */
+    const maybePromptSellAfterScan = (card: Card) => {
+        if (suggestedSellPrice(card.marketPrice) <= 0) return;
+        const owned = customCollections.some((c) =>
+            c.items.some((i) => i.cardId === card.id && !i.isListing),
+        );
+        if (owned) setSellPrompt(card);
+    };
+
     // Click-time gate on listing creation. We check the seller's shipping
     // fields before opening ListingForm so they don't fill out price /
     // condition / photos only to be rejected at submit. The same check is
@@ -1322,6 +1789,10 @@ export default function HomePage() {
                 // fields still block: Flash needs them and they're filled
                 // in-app in seconds.
                 if (!isStripeOnlyIncomplete(completeness.missing)) {
+                    // Stash the card so finishing the profile drops the user
+                    // back into the listing form for THIS card, instead of
+                    // leaving them on Profile with nothing to show for it.
+                    pendingListingRef.current = { colId, item, card, at: Date.now() };
                     showToast(t('profile.incompleteSeller'), 'error');
                     setActiveTab('profile');
                     return;
@@ -1332,8 +1803,72 @@ export default function HomePage() {
             // marketplaceService.createListing will re-check on submit.
             console.warn('[Listing gate] Profile completeness check failed, falling through:', err);
         }
+        pendingListingRef.current = null;
         setListingTarget({ colId, item, card });
+        // The form renders inside the Vault tab, so a listing started from a
+        // card detail or the post-scan sheet has to land there to be seen.
+        setActiveTab('vault');
     };
+
+    /**
+     * Start listing a card the user owns, without the caller having to know
+     * which collection it sits in. Used by the "Sell for ~฿X" strip and the
+     * post-scan sheet, where all we have is the card.
+     *
+     * Prefers an unlisted copy: someone with two of a card who already listed
+     * one wants to list the other, not to re-open the live listing.
+     */
+    const startListingForCard = async (card: Card): Promise<boolean> => {
+        for (const col of customCollections) {
+            const item = col.items.find((i) => i.cardId === card.id && !i.isListing);
+            if (item) {
+                await handleStartListing(col.id, item, card);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Resume a listing that was interrupted by the profile-completion detour,
+    // once the user leaves the Profile tab. Re-reads the profile rather than
+    // trusting that they finished: if the fields are still missing they simply
+    // did not complete it, and the pending intent is dropped rather than
+    // bouncing them back to Profile in a loop.
+    const prevTabForListingRef = useRef(activeTab);
+    useEffect(() => {
+        const leftProfile = prevTabForListingRef.current === 'profile' && activeTab !== 'profile';
+        prevTabForListingRef.current = activeTab;
+        const pending = pendingListingRef.current;
+        if (!leftProfile || !pending || !user) return;
+        if (Date.now() - pending.at > 10 * 60_000) {
+            pendingListingRef.current = null;
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+                    .eq('id', user.id)
+                    .single<Record<string, string | boolean | null>>();
+                const completeness = checkSellerProfileComplete(profile);
+                if (cancelled) return;
+                if (completeness.complete || isStripeOnlyIncomplete(completeness.missing)) {
+                    pendingListingRef.current = null;
+                    setListingTarget({ colId: pending.colId, item: pending.item, card: pending.card });
+                    setActiveTab('vault');
+                } else {
+                    pendingListingRef.current = null;
+                }
+            } catch {
+                pendingListingRef.current = null;
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, user]);
 
     // Global Active Listings state powered by Supabase
     const [activeListings, setActiveListings] = useState<MarketplaceListing[]>([]);
@@ -1405,7 +1940,7 @@ export default function HomePage() {
                 const supabase = createClient();
                 const { data } = await supabase
                     .from('pokemon_cards')
-                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
+                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)')
                     .eq('id', cardId)
                     .maybeSingle();
                 if (data) setSelectedCard(mapSupabaseCardToInternal(data));
@@ -1417,6 +1952,53 @@ export default function HomePage() {
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    /**
+     * List several vault cards in one pass (see components/BulkListSheet.tsx).
+     *
+     * Sequential, not Promise.all: createListing re-reads the seller profile on
+     * every call and a 50-wide burst would be 50 simultaneous profile reads
+     * plus 50 inserts, which is how a bulk action turns into a rate limit.
+     * Partial success is reported honestly rather than rolled back — a seller
+     * who got 47 of 50 listed wants the 47.
+     */
+    const handleBulkListCards = async (
+        rows: { colId: string; item: UserCollectionItem; card: Card; price: number }[],
+        opts: { condition: CardCondition; useCatalogArt: boolean },
+    ) => {
+        let created = 0;
+        let drafts = 0;
+        for (const row of rows) {
+            try {
+                const listing = await marketplaceService.createListing({
+                    cardId: row.card.id,
+                    cardData: row.card,
+                    price: row.price,
+                    condition: opts.condition,
+                    // Catalog art means no uploaded photos; the tile falls back
+                    // to card_data.images on its own.
+                    acceptsOffers: false,
+                });
+                if (listing?.status === 'draft') drafts++;
+                created++;
+                await updateCollectionItem(row.colId, row.item.id, {
+                    isListing: true,
+                    listingPrice: row.price,
+                    listingStatus: listing?.status === 'draft' ? 'draft' : listing?.status === 'paused' ? 'paused' : 'active',
+                });
+            } catch (error) {
+                console.error('[BulkList] failed for', row.card.id, error);
+            }
+        }
+        await fetchGlobalListings();
+        if (created === 0) {
+            showToast(t('paymentFlow.listingFailed'), 'error');
+        } else if (drafts > 0) {
+            showToast(`${created}/${rows.length} · ${t('paymentFlow.listingDraftSaved')}`, 'success');
+        } else {
+            showToast(`${created}/${rows.length} · ${t('paymentFlow.listingPublished')}`, 'success');
+        }
+    };
 
     const handlePublishListing = async (listingData: any) => {
         if (!listingTarget) return;
@@ -1434,9 +2016,13 @@ export default function HomePage() {
                 grade: listingData.grade,
                 image_front_url: listingData.image_front_url,
                 image_back_url: listingData.image_back_url,
-                acceptsOffers: listingData.accepts_offers
+                acceptsOffers: listingData.accepts_offers,
+                quantity: listingData.quantity,
             });
             const isDraft = created?.status === 'draft';
+            // A listing created while the shop is paused comes back 'paused'
+            // (the DB trigger holds it); the vault must not badge it as live.
+            const isPaused = created?.status === 'paused';
 
             // 2. Refresh global marketplace listings
             await fetchGlobalListings();
@@ -1445,7 +2031,7 @@ export default function HomePage() {
             await updateCollectionItem(listingTarget.colId, listingTarget.item.id, {
                 isListing: true,
                 listingPrice: listingData.price,
-                listingStatus: isDraft ? 'draft' : 'active',
+                listingStatus: isDraft ? 'draft' : isPaused ? 'paused' : 'active',
                 // condition: listingData.condition, (avoid overwriting base item stats if we only want the listing to hold them)
                 // isGraded: listingData.is_graded,
             });
@@ -1664,12 +2250,12 @@ export default function HomePage() {
                             });
                             if (verifyErr) {
                                 console.error('[DeepLink] Email verification failed:', verifyErr);
-                                showToast('That link was already used or expired. Try signing in, or resend the email from the sign-in screen.', 'error');
+                                showToast(t('toast.authLinkUsed'), 'error');
                             } else if (otpType === 'recovery') {
                                 window.location.href = '/reset-password';
                             } else {
                                 // Session is set; onAuthStateChange updates the UI.
-                                showToast('Email confirmed — you are signed in!', 'success');
+                                showToast(t('toast.emailConfirmed'), 'success');
                             }
                             return;
                         }
@@ -1709,6 +2295,23 @@ export default function HomePage() {
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
+                // Accepted-offer pay link (cardstreet.app/pay/<offerId>) — the
+                // "Pay now" button in the offer-accepted email and the link
+                // sellers share on LINE. Android opens the app here instead of
+                // running the /pay route's redirect, so with no branch the path
+                // was dropped and the buyer landed on home. Feed the same pay
+                // flow the web landing uses for /?payOffer=<id>.
+                try {
+                    const appLink = new URL(data.url);
+                    const payMatch = appLink.pathname.match(/^\/pay\/([0-9a-f-]{36})\/?$/i);
+                    if (appLink.protocol.startsWith('http') && payMatch) {
+                        setPayOfferId(payMatch[1]);
+                        setActiveTab('profile');
+                        try { sessionStorage.setItem('cs_open_offers', '1'); } catch { /* opens Profile root instead */ }
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Offer-email CTA App Link (cardstreet.app/?view=offers). Android
                 // intercepts all cardstreet.app URLs, so tapping the email button
                 // opens the app here. A deep-link open IS the user's tap, so
@@ -1725,6 +2328,27 @@ export default function HomePage() {
                     // ?view=vault): straight into the Vault.
                     if (appLink.searchParams.get('view') === 'vault') {
                         setActiveTab('vault');
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
+                // Order link App Link (cardstreet.app/orders/<id>) — the "View
+                // your order" CTA in the first-sale, sold, label-ready and buyer
+                // emails. Android intercepts all cardstreet.app URLs, so the tap
+                // opened the app HERE and, with no branch, dropped the path:
+                // sellers landed on home with no route to their label. Hand the
+                // id to Profile, which resolves which side of the order this
+                // user is on and opens Pending Shipments (seller, with the
+                // Print Shipping Label button) or Track Orders (buyer). Flag
+                // for a Profile that mounts on the tab switch, event for one
+                // that is already mounted.
+                try {
+                    const appLink = new URL(data.url);
+                    const orderMatch = appLink.pathname.match(/^\/(?:en\/|th\/)?orders\/([0-9a-f-]{36})\/?$/i);
+                    if (appLink.protocol.startsWith('http') && orderMatch) {
+                        try { sessionStorage.setItem('cs_focus_order', orderMatch[1]); } catch { /* opens Profile root instead */ }
+                        setActiveTab('profile');
+                        window.dispatchEvent(new CustomEvent('cs-open-order', { detail: orderMatch[1] }));
                         return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
@@ -1793,7 +2417,7 @@ export default function HomePage() {
 
                         if (error) {
                             console.error('[DeepLink] Auth Error:', error, errorDescription);
-                            showToast(`Authentication Failed: ${errorDescription || error}`, 'error');
+                            showToast(`${t('toast.authFailed')}: ${errorDescription || error}`, 'error');
                             return;
                         }
 
@@ -1804,11 +2428,11 @@ export default function HomePage() {
 
                             if (sessionError) {
                                 console.error('[DeepLink] Exchange Failed:', sessionError);
-                                showToast(`Login Failed: ${sessionError.message}`, 'error');
+                                showToast(`${t('toast.loginFailed')}: ${sessionError.message}`, 'error');
                             } else {
                                 console.log('[DeepLink] Exchange Success for user:', sessionData?.user?.id);
                                 // Session is set, UI will update via onAuthStateChange
-                                showToast('Successfully signed in!', 'success');
+                                showToast(t('toast.signedIn'), 'success');
 
                                 // Native OAuth never touches /api/auth/callback: handleOAuthLogin
                                 // sends Capacitor builds to /mobile-redirect, which bounces to the
@@ -1827,19 +2451,22 @@ export default function HomePage() {
                                     if (newUser && isNewAccount) {
                                         trackSignUp(signUpMethodFromProvider(newUser.app_metadata?.provider));
                                         const attribution = readAttributionCookie();
-                                        if (attribution) {
-                                            // The user updating their OWN profile row, which the
-                                            // "Users can update own profile" RLS policy permits — no
-                                            // service-role round trip needed from the client.
-                                            // Guarded on null so a later sign-in cannot restamp
-                                            // first touch into last touch.
-                                            const { error: attrErr } = await supabase
-                                                .from('profiles')
-                                                .update({ signup_attribution: attribution })
-                                                .eq('id', newUser.id)
-                                                .is('signup_attribution', null);
-                                            if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);
-                                        }
+                                        // The user updating their OWN profile row, which the
+                                        // "Users can update own profile" RLS policy permits — no
+                                        // service-role round trip needed from the client.
+                                        // Guarded on null so a later sign-in cannot restamp
+                                        // first touch into last touch. A missing cookie records
+                                        // the miss rather than nothing, matching the web callback.
+                                        const { error: attrErr } = await supabase
+                                            .from('profiles')
+                                            .update({
+                                                signup_attribution: attribution
+                                                    ? withWriter(attribution, 'native')
+                                                    : unknownAttribution('callback_nocookie', '/'),
+                                            })
+                                            .eq('id', newUser.id)
+                                            .is('signup_attribution', null);
+                                        if (attrErr) console.error('[DeepLink] attribution write failed:', attrErr.message);
                                     }
                                 } catch (e) {
                                     // Analytics must never break a sign-in.
@@ -1861,9 +2488,9 @@ export default function HomePage() {
                                     });
                                     if (setSessionError) {
                                         console.error('[DeepLink] SetSession Failed:', setSessionError);
-                                        showToast('Login Failed: ' + setSessionError.message, 'error');
+                                        showToast(`${t('toast.loginFailed')}: ${setSessionError.message}`, 'error');
                                     } else {
-                                        showToast('Successfully signed in!', 'success');
+                                        showToast(t('toast.signedIn'), 'success');
                                     }
                                 }
                             }
@@ -1882,7 +2509,7 @@ export default function HomePage() {
         if (error === 'auth_failed') {
             const details = params.get('details');
             console.error("Auth Failed Redirect Detected:", details);
-            showToast(`Authentication failed: ${details || 'Unknown error'}`, 'error');
+            showToast(`${t('toast.authFailed')}: ${details || t('toast.unknownError')}`, 'error');
 
             // Clean up URL
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -1907,6 +2534,9 @@ export default function HomePage() {
             {/* Failed email-verification links land here with a #error hash
                 that would otherwise be silently ignored. */}
             <AuthLinkErrorNotice />
+            {/* Phone visitors arriving from a social link are offered the app
+                (store picked by device); never shown inside the native shell. */}
+            <GetAppPrompt />
             {/* Fires the GA4 sign_up event for OAuth accounts (see the
                 cs_new_account marker set in /api/auth/callback). */}
             <SignupTracker />
@@ -1952,14 +2582,14 @@ export default function HomePage() {
                         className="w-full px-6 py-3 flex justify-between items-center z-50 shrink-0 bg-brand-darker border-b border-white/5"
                     >
                         <div className="flex items-center">
-                            {/* CardStreet Logo */}
+                            {/* Cardstreet Logo */}
                             <button
                                 onClick={() => setActiveTab('marketplace')}
                                 className="relative w-[54px] h-[54px] flex-shrink-0 hover:scale-105 transition-transform"
                             >
                                 <Image
                                     src="/logo.png"
-                                    alt="CardStreet"
+                                    alt="Cardstreet"
                                     width={54}
                                     height={54}
                                     priority
@@ -1982,16 +2612,28 @@ export default function HomePage() {
                             </button>
 
                             <LanguagePicker currentLanguage={language} onLanguageChange={(newLang) => updateLanguage(newLang)} />
-                            <CurrencySwitcher currentCurrency={currency} onCurrencyChange={(newCurrency) => updateCurrency(newCurrency)} />
+                            {rewardsSummary && (
+                                <RewardsChip
+                                    coins={rewardsSummary.coins}
+                                    unclaimed={!rewardsSummary.checkinClaimedToday}
+                                    onClick={() => { setIsRewardsOpen(true); void refreshRewards(); }}
+                                    label={t('rewards.title')}
+                                />
+                            )}
                         </div>
                     </header>
 
-                    {/* Stalled Stripe onboarding: one tap back into payout setup */}
+                    {/* Stalled Stripe onboarding: one tap back into payout setup.
+                        The copy is the change that matters — it used to read as a
+                        blocker, and draft-first listings mean it never was one.
+                        Same wording as the desktop banner via lib/sellerState.ts. */}
                     {payoutSetupStalled && activeTab !== 'profile' && (
                         <div className="w-full px-6 py-2.5 bg-amber-400/10 border-b border-amber-400/20 flex items-center gap-2 z-40 shrink-0">
                             <button onClick={openPayoutSetup} className="flex-1 flex items-center gap-2.5 text-left min-w-0">
                                 <i className="fa-solid fa-circle-exclamation text-amber-400 text-sm shrink-0"></i>
-                                <span className="text-amber-200 text-xs font-bold leading-snug">{t('profile.payoutNudgeBanner')}</span>
+                                <span className="text-amber-200 text-xs font-bold leading-snug">
+                                    {t(sellerStateCopy(shellSellerState).bodyKey)}
+                                </span>
                                 <i className="fa-solid fa-chevron-right text-amber-400/70 text-[10px] shrink-0 ml-auto"></i>
                             </button>
                             <button
@@ -2022,7 +2664,10 @@ export default function HomePage() {
                         </div>
                     )}
 
-                    <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6 pb-24' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
+                    {/* Marketplace and Explore scroll their own panes and pad them
+                        to clear the tab bar, so no bottom padding here: any left a
+                        dead strip between the last row and the nav. */}
+                    <div className={`flex-1 w-full ${activeTab === 'marketplace' || activeTab === 'explore' ? 'overflow-hidden flex flex-col px-6' : 'overflow-y-auto scrollbar-hide px-6 pb-40'}`}>
                         {/* Home Tab Removed - Default is Marketplace */}
                         {activeTab === 'explore' && (
                             <Explore
@@ -2040,6 +2685,10 @@ export default function HomePage() {
                         {activeTab === 'marketplace' && !showShopChooser && (
                             <Marketplace
                                 initialGame={marketGameFilter}
+                                // Only behind the beta grant, so the Live
+                                // section never appears for users who cannot
+                                // reach live shows.
+                                onLive={hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') ? () => { window.location.assign('/live'); } : undefined}
                                 onSelectCard={setSelectedCard}
                                 onSelectListing={setSelectedListing}
                                 onSellerClick={(seller) => {
@@ -2072,6 +2721,8 @@ export default function HomePage() {
                                 onBack={() => setActiveTab('marketplace')}
                                 onSelectListing={setSelectedListing}
                                 onAddToCart={handleAddToCart}
+                                cartTotalForShop={cartTotalForViewingSeller}
+                                onOpenCart={() => setIsCartOpen(true)}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                             />
@@ -2079,6 +2730,8 @@ export default function HomePage() {
                         {activeTab === 'add' && <AddCard onScanClick={handleScanCard} onSelectCard={setSelectedCard} isScanning={isAiLoading} />}
                         {activeTab === 'vault' && (
                             <Vault
+                                repriceCardId={repriceCardId}
+                                onBulkListCards={handleBulkListCards}
                                 customCollections={customCollections}
                                 wishlist={wishlist}
                                 onUpdateCollections={(updatedCollections) => {
@@ -2105,7 +2758,13 @@ export default function HomePage() {
                         {activeTab === 'profile' && (
                             <Profile
                                 user={user}
+                                rewardsLevel={rewardsSummary?.level ?? null}
+                                rewardsFrame={rewardsSummary?.equippedFrame ?? null}
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
+                                onDisplayNameChange={(name) => {
+                                    const trimmed = name.trim();
+                                    if (trimmed) setUser(prev => (prev ? { ...prev, name: trimmed } : prev));
+                                }}
                                 onNavigatePartner={() => setActiveTab('partner')}
                                 onPayOffer={handlePayOffer}
                                 onViewListing={handleViewOfferListing}
@@ -2197,7 +2856,7 @@ export default function HomePage() {
                     </button>
                 </nav>
 
-                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { sendScanFeedback(lastScanRef.current?.scanId, 'confirmed', card.id); setSelectedCard(card); setScanCandidates([]); }} onCancel={() => { sendScanFeedback(lastScanRef.current?.scanId, 'rejected'); setScanCandidates([]); }} />}
+                {scanCandidates.length > 0 && <ScanCandidateModal candidates={scanCandidates} onSelect={(card) => { sendScanFeedback(lastScanRef.current?.scanId, 'confirmed', card.id); setSelectedCard(card); setScanCandidates([]); maybePromptSellAfterScan(card); }} onCancel={() => { sendScanFeedback(lastScanRef.current?.scanId, 'rejected'); setScanCandidates([]); }} />}
                 {selectedCard && (
                     <CardDetails
                         card={selectedCard}
@@ -2216,9 +2875,36 @@ export default function HomePage() {
                             setSelectedCard(null);
                         }}
                         listings={activeListings}
+                        onSellCard={(card) => {
+                            setSelectedCard(null);
+                            void (async () => {
+                                // Already in their vault: straight into the
+                                // listing form. Not yet: add it first, which is
+                                // a prerequisite for listing anyway, and the
+                                // vault-add path then offers the sell sheet.
+                                const started = await startListingForCard(card);
+                                if (!started) await handleAddToCollection(card);
+                            })();
+                        }}
                         onAddToCart={(item) => handleAddToCart(item)}
                         currency={currency}
                         exchangeRate={exchangeRate}
+                    />
+                )}
+
+                {/* "Sell it for ~฿X?" — only with no card detail open, so it
+                    never stacks on top of one. Both triggers (vault add, scan
+                    confirm) close the detail first. */}
+                {sellPrompt && !selectedCard && (
+                    <SellPromptSheet
+                        card={sellPrompt}
+                        suggested={suggestedSellPrice(sellPrompt.marketPrice)}
+                        onDismiss={() => setSellPrompt(null)}
+                        onList={() => {
+                            const card = sellPrompt;
+                            setSellPrompt(null);
+                            void startListingForCard(card);
+                        }}
                     />
                 )}
 
@@ -2226,17 +2912,18 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
-                        onBuyNow={handleBuyNow}
-                        onAddToCart={() => {
-                            handleAddToCart({
-                                id: selectedListing.id,
+                        onBuyNow={(quantity) => handleBuyNow(undefined, quantity)}
+                        onAddToCart={(quantity) => {
+                            const ids = pickSiblingIds(selectedListing, quantity, cart.map((i) => i.id));
+                            handleAddToCartMany(ids.map((id) => ({
+                                id,
                                 cardId: selectedListing.card_id,
                                 card: selectedListing.card_data,
                                 price: selectedListing.price,
                                 sellerId: selectedListing.seller_id,
                                 sellerName: selectedListing.seller?.display_name || 'Unknown',
                                 condition: selectedListing.condition
-                            });
+                            })));
                             setSelectedListing(null);
                         }}
                         onSellerClick={(seller) => {
@@ -2286,6 +2973,7 @@ export default function HomePage() {
                     cart={cart}
                     onRemoveItem={handleRemoveFromCart}
                     onCheckout={handleCheckout}
+                    onBrowseSeller={(sellerId, sellerName) => { void openSellerShop(sellerId, { display_name: sellerName }); }}
                     currencySymbol={currencySymbol}
                     exchangeRate={exchangeRate}
                 />
@@ -2293,6 +2981,7 @@ export default function HomePage() {
                 <AuthModal
                     isOpen={authGateMessage !== null}
                     contextMessage={authGateMessage ?? undefined}
+                    initialMode={authGateMode}
                     onClose={() => {
                         setAuthGateMessage(null);
                         // Distinguish cancel from post-sign-in close: the email
@@ -2319,16 +3008,24 @@ export default function HomePage() {
 
                 <PaymentModal
                     isOpen={isPaymentModalOpen}
-                    onClose={() => { setIsPaymentModalOpen(false); setAcceptedOfferId(null); }}
-                    amount={cart.reduce((s, i) => s + i.price, 0)}
+                    onClose={() => { setIsPaymentModalOpen(false); setAcceptedOfferId(null); setCheckoutSellerId(null); }}
+                    amount={checkoutItems.reduce((s, i) => s + i.price, 0)}
                     currency={currency}
                     exchangeRate={exchangeRate}
-                    items={cart}
+                    items={checkoutItems}
                     apiEndpoint="/api/checkout"
                     extraData={{ buyerId: user?.id }}
+                    buyerEmail={user?.email}
                     acceptedOfferId={acceptedOfferId ?? undefined}
                     onPaymentSuccess={handlePaymentSuccess}
                     onPaymentFailed={(err) => showToast(`${t('paymentFlow.paymentFailed') || 'Payment failed'}: ${err}`, 'error')}
+                />
+
+                <RewardsHub
+                    open={isRewardsOpen}
+                    onClose={() => setIsRewardsOpen(false)}
+                    summary={rewardsSummary}
+                    refresh={refreshRewards}
                 />
             </div>
         </div>

@@ -32,6 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { isFeatureDisabledInCode } from '@/lib/betaFeatures';
 import {
     sendShowEmailBlast,
     sendShowLivePushBlast,
@@ -157,6 +158,14 @@ async function announceSweep(
 export async function GET(request: NextRequest) {
     if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // This sweep pushes and emails the WHOLE base a link into /live. With the
+    // Live section switched off in code that link is a 404, so the sweep must
+    // go quiet with it -- rows left over from before the switch simply keep
+    // their unclaimed CAS columns and announce normally if live comes back.
+    if (isFeatureDisabledInCode('live_streams')) {
+        return NextResponse.json({ ok: true, skipped: 'live_disabled' });
     }
 
     const supabase = createClient(

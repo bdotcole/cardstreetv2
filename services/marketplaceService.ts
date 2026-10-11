@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/types';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
-import { sanitizeOrFilterTerm } from '@/lib/utils/postgrestFilter';
+import { loadSearchDictionary, type SearchDictionary } from '@/lib/search/dictionary';
+import { analyzeQuery, resolveForFilter, resolveLoose } from '@/lib/search/resolve';
+import { buildNamePredicate, LISTING_COLUMNS } from '@/lib/search/postgrestSearch';
+import { clipQuery } from '@/lib/search/normalize';
+import { markFailedResult } from '@/lib/search/failedResult';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -10,6 +14,7 @@ import {
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { attachSellers } from '@/lib/publicProfiles';
+import { trackEngagement } from '@/lib/engagementEvents';
 
 /**
  * Thrown when a seller tries to create a listing while their profile is
@@ -69,19 +74,35 @@ export interface MarketplaceListing {
     // hides it from everyone else) and auto-published when details_submitted
     // flips true. Never surfaces on any buyer-facing query, which all filter
     // status = 'active'.
-    status: 'active' | 'sold' | 'cancelled' | 'draft';
+    // 'paused': the seller paused their whole shop (Profile > Seller Account).
+    // Same owner-only visibility as a draft; restored to 'active' on reopen.
+    status: 'active' | 'sold' | 'cancelled' | 'draft' | 'paused';
     created_at: string;
     sold_at?: string;
     updated_at: string;
     seller?: SellerProfile;
+    // Set by lib/listingSiblings.ts:groupSiblingListings on a representative row:
+    // how many identical copies (same seller/card/condition/price) are live, and
+    // their listing ids. Absent on rows that were never grouped.
+    units?: number;
+    siblingIds?: string[];
 }
 
 export type ListingSort = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
+
+/**
+ * Singles vs sealed product. Sealed is a different purchase with different
+ * expectations (no condition, no grading, a box not a card), and mixing the two
+ * in one grid made the sealed catalog invisible — measured 2026-09-06, exactly
+ * 1 of 222 active listings is sealed.
+ */
+export type ListingKind = 'all' | 'singles' | 'sealed';
 
 export interface ListingFilters {
     search?: string;
     language?: string;
     game?: string;
+    kind?: ListingKind;
     minPrice?: number;
     maxPrice?: number;
     sort?: ListingSort;
@@ -100,6 +121,7 @@ export const marketplaceService = {
             search,
             language,
             game,
+            kind = 'all',
             minPrice,
             maxPrice,
             sort = 'newest',
@@ -108,7 +130,27 @@ export const marketplaceService = {
         } = filters;
 
         try {
-            const buildQuery = (sortKey: ListingSort) => {
+            // Smart name matching: the same listing can be found as Magikarp,
+            // コイキング, คอยคิง or Koiking. The first pass uses exact dictionary
+            // names only (never a typo guess): a marketplace filter that shows
+            // another Pokémon next to real matches reads as broken. The
+            // dictionary load is raced against a timeout inside
+            // loadSearchDictionary; without it the filter is the plain literal
+            // match it always was. A non-Pokémon game filter can't match a
+            // species arm, so it skips the download entirely.
+            // Clipped like the resolver's input, so the literal leg searches
+            // the same text the resolver read.
+            const term = clipQuery(search).trim();
+            const speciesScope = !game || game === 'all' || game === 'pokemon';
+            let dict: SearchDictionary | null = term && speciesScope ? await loadSearchDictionary() : null;
+            let filterRes = dict ? resolveForFilter(dict, term) : null;
+            // null = nothing searchable left (e.g. only punctuation): no name
+            // filter at all, exactly like the old sanitizer returning ''.
+            let namePredicate = term
+                ? buildNamePredicate({ literal: term, resolution: filterRes, cols: LISTING_COLUMNS })
+                : null;
+
+            const buildQuery = (sortKey: ListingSort, predicate: string | null, from = offset, to = offset + limit - 1) => {
                 let query = supabase
                     .from('listings')
                     .select(`
@@ -130,13 +172,12 @@ export const marketplaceService = {
                     `)
                     .eq('status', 'active');
 
-                // Server-side search inside the JSONB snapshot. Match the
-                // secondary name too: a Japanese card snapshots its printed
-                // Japanese name, with the English one in thaiName, so an
-                // English query would otherwise miss every JA listing.
-                const searchTerm = sanitizeOrFilterTerm(search ?? '');
-                if (searchTerm) {
-                    query = query.or(`card_data->>name.ilike.%${searchTerm}%,card_data->>thaiName.ilike.%${searchTerm}%`);
+                // Server-side search inside the JSONB snapshot. LISTING_COLUMNS
+                // matches the secondary name too: a Japanese card snapshots its
+                // printed Japanese name, with the English one in thaiName, so
+                // an English query would otherwise miss every JA listing.
+                if (predicate) {
+                    query = query.or(predicate);
                 }
 
                 // Server-side language filter. Japanese singles snapshot as 'ja'
@@ -158,6 +199,18 @@ export const marketplaceService = {
                     } else {
                         query = query.eq('card_data->>game', game);
                     }
+                }
+
+                // Singles vs sealed. The key is ABSENT on almost every listing
+                // rather than false — 221 of 222 active rows carry no isSealed
+                // at all (they predate sealed selling) — so singles must accept
+                // null as well as false, exactly like the legacy game filter
+                // above. Testing `.neq('...isSealed','true')` would silently
+                // drop all 221, which is the entire marketplace.
+                if (kind === 'sealed') {
+                    query = query.eq('card_data->>isSealed', 'true');
+                } else if (kind === 'singles') {
+                    query = query.or('card_data->>isSealed.is.null,card_data->>isSealed.eq.false');
                 }
 
                 // Server-side price range
@@ -189,22 +242,69 @@ export const marketplaceService = {
                 }
 
                 // Pagination
-                return query.range(offset, offset + limit - 1);
+                return query.range(from, to);
             };
 
-            let { data, error } = await buildQuery(sort);
-            // If the deal_ratio migration hasn't been applied yet, degrade to
-            // newest-first instead of an empty marketplace.
-            if (error && sort === 'best_deals') {
-                console.warn('best_deals sort unavailable, falling back to newest:', error.message);
-                ({ data, error } = await buildQuery('newest'));
+            const fetchPage = async (predicate: string | null) => {
+                let { data, error } = await buildQuery(sort, predicate);
+                // If the deal_ratio migration hasn't been applied yet, degrade to
+                // newest-first instead of an empty marketplace.
+                if (error && sort === 'best_deals') {
+                    console.warn('best_deals sort unavailable, falling back to newest:', error.message);
+                    ({ data, error } = await buildQuery('newest', predicate));
+                }
+                if (error) throw error;
+                return (data || []) as unknown as MarketplaceListing[];
+            };
+
+            let rows = await fetchPage(namePredicate);
+
+            // The dictionary lost the 800 ms race (the first search of a
+            // session on a slow link, or a /?q= link opened cold). An empty
+            // literal answer is exactly where the names matter ("koiking",
+            // คอยคิง), so wait a little longer for it, once, and search again.
+            if (rows.length === 0 && namePredicate && speciesScope && !dict && offset === 0) {
+                dict = await loadSearchDictionary(3000);
+                if (dict) {
+                    filterRes = resolveForFilter(dict, term);
+                    if (filterRes.groups.length > 0) {
+                        namePredicate = buildNamePredicate({ literal: term, resolution: filterRes, cols: LISTING_COLUMNS });
+                        rows = await fetchPage(namePredicate);
+                    }
+                }
             }
-            if (error) throw error;
-            const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
+
+            // Nothing listed under the exact names: try the typo / sound-alike
+            // reading once ("charizrd", ปิกาชู), species arm only. Only when it
+            // names a species the exact pass didn't, or the retry can only
+            // repeat the same empty query.
+            if (rows.length === 0 && dict && namePredicate) {
+                const loose = resolveLoose(dict, analyzeQuery(term));
+                const seen = new Set((filterRes?.groups ?? []).map((g) => g.group.idx));
+                const loosePredicate = loose.groups.some((g) => !seen.has(g.group.idx))
+                    ? buildNamePredicate({ literal: '', resolution: loose, cols: LISTING_COLUMNS })
+                    : null;
+                if (loosePredicate) {
+                    // A later page that comes back empty is usually just the end
+                    // of a non-empty exact result set; switching to the loose
+                    // reading there would append a different search's rows to
+                    // it. Page 1 decides which reading a search uses, and later
+                    // pages follow it: loose only when the exact one has no rows
+                    // at all.
+                    let exactIsEmpty = offset === 0;
+                    if (!exactIsEmpty) {
+                        const { data: probe, error: probeErr } = await buildQuery('newest', namePredicate, 0, 0);
+                        exactIsEmpty = !probeErr && (probe?.length ?? 0) === 0;
+                    }
+                    if (exactIsEmpty) rows = await fetchPage(loosePredicate);
+                }
+            }
+
+            const listings = rows.map(normalizeListing);
             return attachSellers(supabase, listings);
         } catch (error) {
             console.error('Error fetching active listings:', error);
-            return [];
+            return markFailedResult([]);
         }
     },
 
@@ -222,6 +322,13 @@ export const marketplaceService = {
         image_front_url?: string;
         image_back_url?: string;
         acceptsOffers?: boolean;
+        /**
+         * Copies to list. N identical ROWS, not a quantity column: checkout
+         * reserves a listing by flipping its status, so one row per physical
+         * card is what makes two buyers able to buy two copies at once. A
+         * quantity column would need that reservation rewritten.
+         */
+        quantity?: number;
     }): Promise<MarketplaceListing | null> {
         const supabase = createClient();
 
@@ -259,24 +366,35 @@ export const marketplaceService = {
             // required fields, even if the caller passed a partial Card.
             const safeCard = normalizeCard(params.cardData, params.cardId);
 
-            const { data, error } = await supabase
+            // Bounded: a slip in a quantity field must not mint hundreds of
+            // listings. 20 is well past any realistic stack of one card.
+            const copies = Math.min(20, Math.max(1, Math.round(params.quantity ?? 1)));
+            const row = {
+                seller_id: user.id,
+                card_id: params.cardId,
+                card_data: safeCard,
+                price: params.price,
+                condition: params.condition,
+                is_graded: params.isGraded || false,
+                grading_company: params.gradingCompany || null,
+                grade: params.grade || null,
+                image_front_url: params.image_front_url || null,
+                image_back_url: params.image_back_url || null,
+                accepts_offers: params.acceptsOffers ?? false,
+                status: asDraft ? 'draft' : 'active',
+            };
+
+            // The caller only needs one representative row (toast + the vault
+            // item's listed state), but it must be read from the FULL
+            // representation: PostgREST ignores `limit` on an INSERT, so a
+            // `.limit(1).single()` here 406'd (PGRST116) on every multi-copy
+            // insert and rolled the whole thing back — "Failed to publish
+            // listing" for any quantity above 1 (fixed 2026-09-16).
+            const { data: inserted, error } = await supabase
                 .from('listings')
-                .insert({
-                    seller_id: user.id,
-                    card_id: params.cardId,
-                    card_data: safeCard,
-                    price: params.price,
-                    condition: params.condition,
-                    is_graded: params.isGraded || false,
-                    grading_company: params.gradingCompany || null,
-                    grade: params.grade || null,
-                    image_front_url: params.image_front_url || null,
-                    image_back_url: params.image_back_url || null,
-                    accepts_offers: params.acceptsOffers ?? false,
-                    status: asDraft ? 'draft' : 'active'
-                })
-                .select()
-                .single();
+                .insert(Array.from({ length: copies }, () => row))
+                .select();
+            const data = inserted?.[0] ?? null;
 
             if (error) {
                 // Pre-migration fail-soft: until 20260730_draft_listings.sql
@@ -291,12 +409,24 @@ export const marketplaceService = {
                 }
                 throw error;
             }
+            if (!data) throw new Error('Listing insert returned no rows');
 
-            // Wake the wishlist-alert fan-out (Pro perk). This insert runs in
-            // the browser, so alerting needs a server round-trip -- strictly
-            // fire-and-forget: a failed alert must never fail the listing.
-            // Drafts skip it: wishlisters are alerted at publish time instead
-            // (see the auto-publish hooks), never about an unbuyable listing.
+            // Only a real publish counts, not a draft: the listing_publish
+            // reward trigger fires on status='active', so counting drafts here
+            // would put GA and the ledger permanently out of step.
+            if (!asDraft && data?.id) {
+                trackEngagement('listing_publish', {
+                    card_id: params.cardId,
+                    price: Number(params.price) || 0,
+                    condition: params.condition ?? '',
+                });
+            }
+
+            // Wake the wishlist-alert fan-out. This insert runs in the browser,
+            // so alerting needs a server round-trip -- strictly fire-and-forget:
+            // a failed alert must never fail the listing. Drafts skip it:
+            // wishlisters are alerted at publish time instead (see the
+            // auto-publish hooks), never about an unbuyable listing.
             if (!asDraft && data?.id && typeof fetch !== 'undefined') {
                 void fetch('/api/alerts/listing-created', {
                     method: 'POST',
@@ -456,7 +586,7 @@ export const marketplaceService = {
                 // Drafts are the seller's own pre-Stripe listings — they
                 // belong on the "my listings" surface (with a Draft badge),
                 // else the seller re-lists the card and duplicates it.
-                .in('status', ['active', 'draft'])
+                .in('status', ['active', 'draft', 'paused'])
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
@@ -486,7 +616,7 @@ export const marketplaceService = {
                 .eq('id', listingId)
                 // Drafts are price-editable too — only sold/cancelled rows
                 // report false so callers reconcile stale UI.
-                .in('status', ['active', 'draft'])
+                .in('status', ['active', 'draft', 'paused'])
                 .select('id');
 
             if (error) throw error;
@@ -501,25 +631,33 @@ export const marketplaceService = {
      * Update the price of the signed-in user's active listing for a given
      * card. Same id-less matching as cancelListingForCard: the mobile Vault
      * only knows card_id (+ condition), not the listing id.
+     *
+     * Every copy at that condition moves together. createListing's `quantity`
+     * inserts N sibling rows and the Vault shows them as one "N unit(s)"
+     * entry, so repricing a single row would silently leave the other copies
+     * at the old ask.
      */
     async updateListingPriceForCard(cardId: string, condition: string | undefined, price: number): Promise<boolean> {
+        // Mirror the bounds enforced by /api/listings' zod schema.
+        if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+            throw new Error('Invalid listing price');
+        }
         const supabase = createClient();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Must be signed in to update a listing');
+            const targets = await ownListingIdsForCard(supabase, cardId, condition);
+            if (targets.length === 0) return false;
 
-            const { data: listings, error: fetchError } = await supabase
+            const { data, error } = await supabase
                 .from('listings')
-                .select('id, condition')
-                .eq('seller_id', user.id)
-                .eq('card_id', cardId)
-                .in('status', ['active', 'draft']);
+                .update({ price })
+                .in('id', targets)
+                // Drafts are price-editable too — only sold/cancelled rows
+                // report false so callers reconcile stale UI.
+                .in('status', ['active', 'draft', 'paused'])
+                .select('id');
 
-            if (fetchError) throw fetchError;
-            if (!listings || listings.length === 0) return false;
-
-            const target = listings.find(l => l.condition === condition) || listings[0];
-            return await this.updateListingPrice(target.id, price);
+            if (error) throw error;
+            return (data?.length ?? 0) > 0;
         } catch (error) {
             console.error('Error updating listing price for card:', error);
             throw error;
@@ -553,30 +691,21 @@ export const marketplaceService = {
      * listings on card_id (+ condition), exactly as `useUserCollections`
      * does on load. So removal matches the same way: prefer an exact
      * condition match, otherwise cancel the first active listing for the card.
-     * Returns false when no active listing is found (already removed/sold).
+     * Every sibling copy at that condition is cancelled together (one Vault
+     * entry, one "Remove"). Returns false when no active listing is found
+     * (already removed/sold).
      */
     async cancelListingForCard(cardId: string, condition?: string): Promise<boolean> {
         const supabase = createClient();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Must be signed in to remove a listing');
-
-            const { data: listings, error: fetchError } = await supabase
-                .from('listings')
-                .select('id, condition')
-                .eq('seller_id', user.id)
-                .eq('card_id', cardId)
-                .in('status', ['active', 'draft']);
-
-            if (fetchError) throw fetchError;
-            if (!listings || listings.length === 0) return false;
-
-            const target = listings.find(l => l.condition === condition) || listings[0];
+            const targets = await ownListingIdsForCard(supabase, cardId, condition);
+            if (targets.length === 0) return false;
 
             const { error } = await supabase
                 .from('listings')
                 .update({ status: 'cancelled' })
-                .eq('id', target.id);
+                .in('id', targets)
+                .in('status', ['active', 'draft', 'paused']);
 
             if (error) throw error;
             return true;
@@ -586,3 +715,32 @@ export const marketplaceService = {
         }
     }
 };
+
+/**
+ * Ids of the signed-in seller's live (active/draft) listings for a card:
+ * every row at `condition` when any exist there, else every row sharing the
+ * condition of the oldest live row (the pre-quantity fallback, widened to
+ * its siblings). Throws when signed out.
+ */
+async function ownListingIdsForCard(
+    supabase: ReturnType<typeof createClient>,
+    cardId: string,
+    condition: string | undefined,
+): Promise<string[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Must be signed in to manage a listing');
+
+    const { data: listings, error } = await supabase
+        .from('listings')
+        .select('id, condition')
+        .eq('seller_id', user.id)
+        .eq('card_id', cardId)
+        .in('status', ['active', 'draft', 'paused'])
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    if (!listings || listings.length === 0) return [];
+
+    const exact = listings.filter(l => l.condition === condition);
+    const cond = exact.length ? condition : listings[0].condition;
+    return listings.filter(l => l.condition === cond).map(l => l.id);
+}

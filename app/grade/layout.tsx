@@ -8,7 +8,7 @@ import type { Metadata } from 'next';
 // Static Thai title for the same reason as app/live/layout.tsx: /grade is not in
 // middleware's config.matcher, so x-cs-lang never reaches it.
 export const metadata: Metadata = {
-    title: 'ตรวจเกรดการ์ดด้วย AI | CardStreet',
+    title: 'ตรวจเกรดการ์ดด้วย AI | Cardstreet',
     robots: { index: false, follow: false },
 };
 

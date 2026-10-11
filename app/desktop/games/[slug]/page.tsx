@@ -3,10 +3,13 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getGameLanding, GAME_LANDINGS } from '@/lib/gameLanding';
-import { getGame } from '@/lib/games';
+import { getGuidesForGame } from '@/lib/guides';
+import { getLandingSections } from '@/lib/gameLandingSections';
+import { getGame, thaiCardNoun } from '@/lib/games';
 import { getAllSets, type SetRow } from '@/lib/setPageData';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
+import LandingCtaRow from '@/components/desktop/LandingCtaRow';
 
 // Per-game landing pages (/pokemon, /one-piece, /yugioh, /mtg, /lorcana,
 // /riftbound — middleware rewrites those clean URLs here for every device).
@@ -23,7 +26,7 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
     const landing = getGameLanding(slug);
-    if (!landing) return { title: 'Not found | CardStreet', robots: { index: false, follow: false } };
+    if (!landing) return { title: 'Not found | Cardstreet', robots: { index: false, follow: false } };
 
     // Metadata follows the URL variant, never the cs_lang cookie. The bare path
     // IS the Thai canonical, so an English-cookie visitor there must still get
@@ -38,10 +41,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         description: landing.description[lang],
         alternates: buildAlternates(`/${landing.slug}`, pathLocale),
         openGraph: {
+            images: DEFAULT_OG_IMAGE,
             title: landing.title[lang],
             description: landing.description[lang],
             type: 'website',
-            siteName: 'CardStreet',
+            siteName: 'Cardstreet',
             url: localizedUrl(`/${landing.slug}`, pathLocale),
         },
     };
@@ -61,7 +65,7 @@ function buildJsonLd(
             {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                    { '@type': 'ListItem', position: 1, name: 'CardStreet', item: BASE_URL },
+                    { '@type': 'ListItem', position: 1, name: 'Cardstreet', item: BASE_URL },
                     { '@type': 'ListItem', position: 2, name: gameName, item: url },
                 ],
             },
@@ -113,6 +117,17 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
     const prefix = localePrefix(pathLocale);
     const game = getGame(landing.gameId);
 
+    // Guides for this game. The link surface matters as much as the copy:
+    // a guide with no inbound link from the page that already ranks is a guide
+    // nobody finds.
+    const guides = getGuidesForGame(landing.gameId);
+
+    // Prose sections. Every landing was 3 intro paragraphs + 6 FAQs and nothing
+    // else, which capped the head-term pages at 4 h2s and left them thinner than
+    // /graded. Chosen per game against that game's own guide coverage - see
+    // lib/gameLandingSections.ts.
+    const sections = getLandingSections(landing.gameId);
+
     const allSets = await getAllSets();
     const gameSets = allSets.filter((s) => s.game === landing.gameId);
     const newest = gameSets.slice(0, SETS_SHOWN);
@@ -126,7 +141,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
             />
 
             <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">CardStreet</Link>
+                <Link href={prefix || '/'} className="hover:text-slate-300 transition-colors">Cardstreet</Link>
                 <span className="mx-2">/</span>
                 <span className="text-slate-300">{game.name}</span>
             </nav>
@@ -147,6 +162,33 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                     <p key={p.slice(0, 24)}>{p}</p>
                 ))}
             </section>
+
+            {/* Above the fold-ish, right after the intro rather than only at the
+                bottom: this is the page's highest-intent moment, and a reader who
+                stops after the first section still gets an offer. */}
+            <LandingCtaRow
+                lang={lang}
+                prefix={prefix}
+                gameId={landing.gameId}
+                browseLabel={{
+                    en: `Browse ${game.name} listings`,
+                    // thaiCardNoun, not a fresh Thai string: lib/games.ts is
+                    // where Thai game names live, and duplicating them is how
+                    // One Piece ended up spelled two ways across the site.
+                    th: `ดู${thaiCardNoun(landing.gameId)}ที่ประกาศขาย`,
+                }}
+            />
+
+            {sections.map((sec) => (
+                <section key={sec.h2.en} className="mt-10 max-w-3xl">
+                    <h2 className="text-xl font-black text-white mb-3">{sec.h2[l]}</h2>
+                    <div className="space-y-3 text-sm md:text-base text-slate-300 leading-relaxed">
+                        {sec.body[l].map((para) => (
+                            <p key={para.slice(0, 24)}>{para}</p>
+                        ))}
+                    </div>
+                </section>
+            ))}
 
             {newest.length > 0 && (
                 <section className="mt-12">
@@ -189,6 +231,31 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                 </section>
             )}
 
+            {guides.length > 0 && (
+                <section className="mt-12 max-w-3xl">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                        <h2 className="text-xl font-black text-white">
+                            {isThai ? 'คู่มือและบทความ' : 'Guides'}
+                        </h2>
+                        <Link href={`${prefix}/guides`} className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
+                            {isThai ? 'ดูทั้งหมด →' : 'All guides →'}
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {guides.map((g) => (
+                            <Link
+                                key={g.slug}
+                                href={`${prefix}/guides/${g.slug}`}
+                                className="block rounded-xl border border-white/10 bg-white/[0.03] hover:border-brand-cyan/40 hover:bg-white/[0.06] transition-colors p-4"
+                            >
+                                <span className="block text-sm font-bold text-white">{g.h1[l]}</span>
+                                <span className="block mt-1 text-xs text-slate-400 line-clamp-2">{g.description[l]}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             <section className="mt-12 max-w-3xl">
                 <h2 className="text-xl font-black text-white mb-4">
                     {isThai ? 'คำถามที่พบบ่อย' : 'Frequently asked questions'}
@@ -208,7 +275,7 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
 
             <section className="mt-12">
                 <h2 className="text-sm font-black text-slate-400 uppercase tracking-wide mb-3">
-                    {isThai ? 'เกมการ์ดอื่น ๆ บน CardStreet' : 'Other card games on CardStreet'}
+                    {isThai ? 'เกมการ์ดอื่น ๆ บน Cardstreet' : 'Other card games on Cardstreet'}
                 </h2>
                 <div className="flex flex-wrap gap-2">
                     {GAME_LANDINGS.filter((g) => g.slug !== landing.slug).map((g) => (

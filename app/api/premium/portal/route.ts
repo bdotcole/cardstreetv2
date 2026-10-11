@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getStripeForRegion, isRegionConfigured, getAppBaseUrl } from '@/lib/stripe';
 
 // POST /api/premium/portal — Stripe Billing Portal session so a web subscriber
-// can manage/cancel CardStreet Pro. Only meaningful for Stripe-rail subs;
+// can manage/cancel Cardstreet Pro. Only meaningful for Stripe-rail subs;
 // store-IAP subs (later) are managed in the store's own subscription settings.
 export async function POST() {
   const supabase = await createServerClient();

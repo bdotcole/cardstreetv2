@@ -2,7 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 // Bilingual copy lives in this module rather than lib/locales/*.json because it
 // is page-prose, not reusable UI strings, and it has to stay readable as a whole
@@ -34,15 +36,12 @@ interface Strings {
   ctaSets: string;
   browseTitle: string;
   games: { href: string; label: string }[];
-  gradedLink: string;
-  sellLink: string;
-  faqLink: string;
 }
 
 const EN: Strings = {
   h1: 'Check Trading Card Prices — Free, Updated Daily',
   intro1:
-    'Wondering what your cards are worth? CardStreet tracks market prices for over 100,000 cards across more than 1,200 sets — Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound. Search a card by name or number and see its current price straight away. Free, no account needed.',
+    'Wondering what your cards are worth? Cardstreet tracks market prices for over 100,000 cards across more than 1,200 sets — Pokémon, Yu-Gi-Oh!, One Piece, Magic: The Gathering, Disney Lorcana and Riftbound. Search a card by name or number and see its current price straight away. Free, no account needed. It works as a card price-check app on your phone too: Cardstreet has Android and iOS apps for checking prices while you are standing in a shop or opening a booster — scan a card with the camera to pull up its market price, no typing card names one at a time.',
   intro2:
     'Prices update daily from real sale data and are always shown in Thai baht, so there is no currency maths to do. Thai-language Pokémon cards are priced separately from their English and Japanese counterparts, because they trade in different markets — Thailand’s MA, SV and AS sets carry their own prices rather than inheriting English ones.',
   howTitle: 'How to check a card’s price',
@@ -61,7 +60,7 @@ const EN: Strings = {
     },
     {
       t: 'Scan with your camera',
-      d: 'Point your camera at the card and CardStreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.',
+      d: 'Point your camera at the card and Cardstreet identifies it automatically and shows the price. Works on Thai, English and Japanese printings.',
     },
     {
       t: 'Match the version before you trust the price',
@@ -95,11 +94,11 @@ const EN: Strings = {
   differ: [
     {
       t: 'Condition',
-      d: 'A card with sharp corners, clean edges, and an unmarked surface sells for noticeably more than a played copy. Market prices on CardStreet reference cards in good condition, so a card with flaws will realistically sell below them.',
+      d: 'A card with sharp corners, clean edges, and an unmarked surface sells for noticeably more than a played copy. Market prices on Cardstreet reference cards in good condition, so a card with flaws will realistically sell below them.',
     },
     {
       t: 'Language',
-      d: 'Thai, English, and Japanese cards trade in separate markets at different prices, which is why CardStreet prices them separately. Do not apply a price from one language to another.',
+      d: 'Thai, English, and Japanese cards trade in separate markets at different prices, which is why Cardstreet prices them separately. Do not apply a price from one language to another.',
     },
     {
       t: 'Version and rarity',
@@ -125,7 +124,7 @@ const EN: Strings = {
     },
     {
       t: 'Reading asking prices as market value',
-      d: 'What a seller is asking is not the market price — anyone can ask anything. CardStreet market prices are built from transactions that actually happened, which makes them a firmer reference point.',
+      d: 'What a seller is asking is not the market price — anyone can ask anything. Cardstreet market prices are built from transactions that actually happened, which makes them a firmer reference point.',
     },
     {
       t: 'Forgetting the condition of your own card',
@@ -150,17 +149,14 @@ const EN: Strings = {
     { href: '/en/lorcana', label: 'Disney Lorcana' },
     { href: '/en/riftbound', label: 'Riftbound' },
   ],
-  gradedLink: 'Graded card prices',
-  sellLink: 'Sell your cards',
-  faqLink: 'Frequently asked questions',
 };
 
 const TH: Strings = {
   h1: 'เช็คราคาการ์ด — ราคาตลาดล่าสุด ฟรี',
   intro1:
-    'อยากรู้ว่าการ์ดในมือมีมูลค่าเท่าไหร่? CardStreet รวบรวมราคาตลาดของการ์ดสะสมกว่า 100,000 ใบ จาก 1,200 กว่าชุด ทั้งโปเกม่อน ยูกิโอ วันพีช Magic: The Gathering, Disney Lorcana และ Riftbound ค้นหาชื่อการ์ดหรือเลขในชุด แล้วดูราคาล่าสุดได้ทันที ไม่มีค่าใช้จ่าย ไม่ต้องสมัครสมาชิก',
+    'อยากรู้ว่าการ์ดในมือมีมูลค่าเท่าไหร่? Cardstreet รวบรวมราคาตลาดของการ์ดสะสมกว่า 100,000 ใบ จาก 1,200 กว่าชุด ทั้งโปเกม่อน ยูกิโอ วันพีช การ์ดดิสนีย์ (Disney Lorcana) Magic: The Gathering และ Riftbound ค้นหาชื่อการ์ดหรือเลขในชุด แล้วดูราคาล่าสุดได้ทันที ไม่มีค่าใช้จ่าย ไม่ต้องสมัครสมาชิก ใช้เป็นแอปเช็คราคาการ์ดบนมือถือก็ได้ เพราะ Cardstreet มีแอปทั้ง Android และ iOS สำหรับคนที่อยากเช็คราคาตอนอยู่หน้าร้านหรือระหว่างเปิดบูสเตอร์ สแกนการ์ดด้วยกล้องแล้วดูราคาตลาดได้ทันที ไม่ต้องพิมพ์ชื่อการ์ดทีละใบ',
   intro2:
-    'ราคาบน CardStreet อัปเดตทุกวันจากข้อมูลการซื้อขายจริง และแสดงเป็นเงินบาทเสมอ ไม่ต้องแปลงค่าเงินเอง การ์ดโปเกมอนภาษาไทยมีราคาแยกจากฉบับภาษาอังกฤษและญี่ปุ่น เพราะเป็นคนละตลาดกัน — ชุด MA, SV และ AS ของไทยจึงมีราคาของตัวเอง ไม่ได้ใช้ราคาการ์ดอังกฤษมาทับ',
+    'ราคาบน Cardstreet อัปเดตทุกวันจากข้อมูลการซื้อขายจริง และแสดงเป็นเงินบาทเสมอ ไม่ต้องแปลงค่าเงินเอง การ์ดโปเกมอนภาษาไทยมีราคาแยกจากฉบับภาษาอังกฤษและญี่ปุ่น เพราะเป็นคนละตลาดกัน — ชุด MA, SV และ AS ของไทยจึงมีราคาของตัวเอง ไม่ได้ใช้ราคาการ์ดอังกฤษมาทับ',
   howTitle: 'วิธีเช็คราคาการ์ด',
   how: [
     {
@@ -211,11 +207,11 @@ const TH: Strings = {
   differ: [
     {
       t: 'สภาพการ์ด',
-      d: 'การ์ดที่มุมคม ขอบไม่ขาว และผิวไม่มีรอย ขายได้ราคาสูงกว่าใบที่ผ่านการเล่นมาอย่างชัดเจน ราคาตลาดที่แสดงบน CardStreet อ้างอิงการ์ดสภาพดีเป็นหลัก ถ้าการ์ดของคุณมีตำหนิ ราคาที่ขายได้จริงจะต่ำกว่านั้น',
+      d: 'การ์ดที่มุมคม ขอบไม่ขาว และผิวไม่มีรอย ขายได้ราคาสูงกว่าใบที่ผ่านการเล่นมาอย่างชัดเจน ราคาตลาดที่แสดงบน Cardstreet อ้างอิงการ์ดสภาพดีเป็นหลัก ถ้าการ์ดของคุณมีตำหนิ ราคาที่ขายได้จริงจะต่ำกว่านั้น',
     },
     {
       t: 'ภาษา',
-      d: 'การ์ดภาษาไทย อังกฤษ และญี่ปุ่น ซื้อขายกันคนละตลาดและมีราคาต่างกัน CardStreet จึงแยกราคาตามภาษาไว้ให้แล้ว อย่าเอาราคาของภาษาหนึ่งไปใช้กับอีกภาษาหนึ่ง',
+      d: 'การ์ดภาษาไทย อังกฤษ และญี่ปุ่น ซื้อขายกันคนละตลาดและมีราคาต่างกัน Cardstreet จึงแยกราคาตามภาษาไว้ให้แล้ว อย่าเอาราคาของภาษาหนึ่งไปใช้กับอีกภาษาหนึ่ง',
     },
     {
       t: 'เวอร์ชันและความหายาก',
@@ -241,7 +237,7 @@ const TH: Strings = {
     },
     {
       t: 'ดูราคาที่ตั้งขาย ไม่ใช่ราคาที่ขายได้จริง',
-      d: 'ราคาที่ผู้ขายตั้งไว้ไม่ใช่ราคาตลาด ใครก็ตั้งราคาเท่าไหร่ก็ได้ ราคาตลาดบน CardStreet คำนวณจากการซื้อขายที่เกิดขึ้นจริง จึงใช้เป็นจุดอ้างอิงได้ตรงกว่า',
+      d: 'ราคาที่ผู้ขายตั้งไว้ไม่ใช่ราคาตลาด ใครก็ตั้งราคาเท่าไหร่ก็ได้ ราคาตลาดบน Cardstreet คำนวณจากการซื้อขายที่เกิดขึ้นจริง จึงใช้เป็นจุดอ้างอิงได้ตรงกว่า',
     },
     {
       t: 'ลืมดูสภาพการ์ดของตัวเอง',
@@ -250,7 +246,7 @@ const TH: Strings = {
   ],
   sellTitle: 'เช็คราคาแล้วขายต่อได้เลย',
   sell:
-    'ถ้าเช็คราคาแล้วอยากขาย ลงประกาศขายบน CardStreet ได้จากหน้าการ์ดเดียวกัน ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ไม่มีค่าลงประกาศ ผู้ซื้อชำระผ่านบัตรหรือพร้อมเพย์ จัดส่งทั่วประเทศผ่าน Flash Express และยอดขายจะเข้าบัญชี Stripe ของผู้ขาย แล้วโอนออกตามรอบการจ่ายเงินปกติของบัญชีนั้น',
+    'ถ้าเช็คราคาแล้วอยากขาย ลงประกาศขายบน Cardstreet ได้จากหน้าการ์ดเดียวกัน ผู้ขายเสียค่าธรรมเนียมเฉพาะตอนขายได้จริง ไม่มีค่าลงประกาศ ผู้ซื้อชำระผ่านบัตรหรือพร้อมเพย์ จัดส่งทั่วประเทศผ่าน Flash Express และยอดขายจะเข้าบัญชี Stripe ของผู้ขาย แล้วโอนออกตามรอบการจ่ายเงินปกติของบัญชีนั้น',
   ctaSearch: 'ค้นหาหรือสแกนการ์ด',
   ctaSets: 'ดูชุดการ์ดทั้งหมด',
   browseTitle: 'ดูราคาแยกตามเกม',
@@ -262,9 +258,6 @@ const TH: Strings = {
     { href: '/lorcana', label: 'การ์ด Disney Lorcana' },
     { href: '/riftbound', label: 'การ์ด Riftbound' },
   ],
-  gradedLink: 'ราคาการ์ดเกรด',
-  sellLink: 'ขายการ์ดของคุณ',
-  faqLink: 'คำถามที่พบบ่อย',
 };
 
 // `prefix` comes from the URL — the server page passes localePrefix(pathLocale)
@@ -287,6 +280,7 @@ export default function PricesContent({ prefix }: { prefix: string }) {
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t.h1}</h1>
+          <LocaleSwitchLink prefix={prefix} path="/prices" />
         </div>
 
         <p className="text-sm text-slate-300 leading-relaxed mb-4">{t.intro1}</p>
@@ -374,17 +368,7 @@ export default function PricesContent({ prefix }: { prefix: string }) {
             </Link>
           ))}
         </div>
-        <div className="flex flex-wrap gap-4">
-          <Link href={`${prefix}/graded`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.gradedLink}
-          </Link>
-          <Link href={`${prefix}/sell-cards`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.sellLink}
-          </Link>
-          <Link href={`${prefix}/faq`} className="text-sm text-brand-cyan font-bold hover:underline">
-            {t.faqLink}
-          </Link>
-        </div>
+        <CommercialLinks prefix={prefix} current="/prices" />
       </div>
     </div>
   );

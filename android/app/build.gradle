@@ -98,6 +98,10 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // WebSettingsCompat.setPaymentRequestEnabled (Google Pay in the WebView,
+    // MainActivity). Capacitor already pulls this version in, but only as its
+    // own implementation dependency, so the app module can't compile against it.
+    implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     // Meta (Facebook) SDK - app-event + install attribution for Meta Ads.
     // Events-only artifact (no Login/Share), mirroring the iOS FacebookCore SPM
     // package. The SDK ships its own consumer ProGuard rules in the AAR, so no

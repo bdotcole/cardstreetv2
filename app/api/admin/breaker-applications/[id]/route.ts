@@ -191,7 +191,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
                 {
                     error: account.lookupTruncated
                         ? 'Could not finish looking up an account for this email. Try again.'
-                        : 'No CardStreet account is linked to this application. The applicant must sign up first.',
+                        : 'No Cardstreet account is linked to this application. The applicant must sign up first.',
                     code: 'NO_LINKED_ACCOUNT',
                 },
                 { status: 409 },

@@ -1,0 +1,605 @@
+/**
+ * Meta Graph API provider: Facebook Pages and the Instagram professional
+ * accounts linked to them.
+ *
+ * Auth model: the admin signs in with Facebook once; the short-lived user
+ * token is exchanged for a 60-day one, and the PAGE tokens minted from that
+ * long-lived user token do not expire while the admin keeps their Page role
+ * and the app stays installed. Only Page tokens are stored — one per Page,
+ * reused for the Page's Instagram account.
+ *
+ * Metrics move under us: Meta retired `impressions` and `page_fans` in
+ * November 2025 and marks `page_impressions_unique` (reach) deprecated from
+ * v25. Rather than hard-code today's list, every insights call goes through
+ * `insightsWithFallback`: a metric the API refuses is dropped and named in
+ * `notes` (the dashboard shows it), the rest still land. The API version is
+ * pinned so a metric does not vanish between two cron runs.
+ *
+ * Instagram account insights only reach back ~90 days and accept at most a
+ * 30-day since/until span per call, so windows are chunked.
+ */
+
+import {
+    dayStartUnix, eachDay, isoDay, mapLimit, shiftDay, toInt,
+    type DailyMetrics, type PostMetrics, type SyncResult, type SyncWindow,
+} from './types';
+
+// Per-post calls run a few at a time: Graph's per-app budget is far above
+// this, and series calls made a 90-day backfill blow a 2-minute route.
+const POST_CONCURRENCY = 4;
+import { providerCredentials } from './config';
+
+export const GRAPH_VERSION = 'v24.0';
+const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const DIALOG = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`;
+
+export const META_SCOPES = [
+    'pages_show_list',
+    'pages_read_engagement',
+    // Comment and reaction counts on Page posts are "user content" (added 2026-10-06).
+    'pages_read_user_content',
+    'read_insights',
+    'instagram_basic',
+    'instagram_manage_insights',
+    'business_management',
+];
+
+const POSTS_PER_SYNC = 15;
+const IG_MAX_SPAN_DAYS = 30;
+const IG_LOOKBACK_DAYS = 88;
+const FB_MAX_SPAN_DAYS = 90;
+
+export class GraphError extends Error {
+    constructor(message: string, public code: number | null, public subcode: number | null, public status: number) {
+        super(message);
+        this.name = 'GraphError';
+    }
+}
+
+async function graphGet<T = any>(path: string, params: Record<string, string | number | undefined>, token?: string): Promise<T> {
+    const url = new URL(`${GRAPH}/${path.replace(/^\//, '')}`);
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
+    if (token) url.searchParams.set('access_token', token);
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) {
+        const e = json?.error ?? {};
+        throw new GraphError(e.message || `Graph ${res.status}`, toInt(e.code), toInt(e.error_subcode), res.status);
+    }
+    return json as T;
+}
+
+// --- OAuth ---------------------------------------------------------------
+
+export function metaAuthUrl(state: string, redirectUri: string): string {
+    const creds = providerCredentials('meta');
+    if (!creds) throw new Error('META_APP_ID / META_APP_SECRET not set');
+    const url = new URL(DIALOG);
+    url.searchParams.set('client_id', creds.id);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('state', state);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', META_SCOPES.join(','));
+    return url.toString();
+}
+
+/** Code -> short-lived user token -> long-lived (60-day) user token. */
+export async function metaExchangeCode(code: string, redirectUri: string): Promise<string> {
+    const creds = providerCredentials('meta');
+    if (!creds) throw new Error('META_APP_ID / META_APP_SECRET not set');
+    const short = await graphGet<{ access_token: string }>('oauth/access_token', {
+        client_id: creds.id,
+        client_secret: creds.secret,
+        redirect_uri: redirectUri,
+        code,
+    });
+    const long = await graphGet<{ access_token: string }>('oauth/access_token', {
+        grant_type: 'fb_exchange_token',
+        client_id: creds.id,
+        client_secret: creds.secret,
+        fb_exchange_token: short.access_token,
+    });
+    return long.access_token;
+}
+
+export interface DiscoveredPage {
+    pageId: string;
+    name: string;
+    pageToken: string;
+    avatarUrl: string | null;
+    link: string | null;
+    instagram: {
+        igUserId: string;
+        username: string | null;
+        name: string | null;
+        avatarUrl: string | null;
+    } | null;
+}
+
+/** Every Page the signed-in user has a role on, with its token and linked IG account. */
+export async function metaDiscoverPages(userToken: string): Promise<DiscoveredPage[]> {
+    const out: DiscoveredPage[] = [];
+    const path = 'me/accounts';
+    let params: Record<string, string> = {
+        fields: 'id,name,access_token,link,picture{url},instagram_business_account{id,username,name,profile_picture_url}',
+        limit: '50',
+    };
+    for (let page = 0; page < 10; page++) {
+        const res = await graphGet<{ data: any[]; paging?: { cursors?: { after?: string }; next?: string } }>(path, params, userToken);
+        for (const p of res.data ?? []) {
+            if (!p?.id || !p?.access_token) continue;
+            const ig = p.instagram_business_account;
+            out.push({
+                pageId: String(p.id),
+                name: p.name ?? '',
+                pageToken: p.access_token,
+                avatarUrl: p.picture?.data?.url ?? null,
+                link: p.link ?? null,
+                instagram: ig?.id ? {
+                    igUserId: String(ig.id),
+                    username: ig.username ?? null,
+                    name: ig.name ?? null,
+                    avatarUrl: ig.profile_picture_url ?? null,
+                } : null,
+            });
+        }
+        const after = res.paging?.cursors?.after;
+        if (!res.paging?.next || !after) break;
+        params = { ...params, after };
+    }
+    return out;
+}
+
+// --- Insights plumbing ---------------------------------------------------
+
+const LIFETIME = 'lifetime';
+
+interface InsightSeries {
+    /** metric -> day -> value (time series); LIFETIME for period=lifetime rows. */
+    byDay: Map<string, Map<string, number>>;
+    /** metric -> value (total_value). */
+    totals: Map<string, number>;
+    dropped: string[];
+}
+
+/** Graph's end_time is the midnight AFTER the reported day (Pacific); step back one day. */
+function dayFromEndTime(endTime: string): string {
+    const d = new Date(endTime);
+    d.setUTCDate(d.getUTCDate() - 1);
+    return isoDay(d);
+}
+
+function parseInsights(json: any, into: InsightSeries) {
+    for (const row of json?.data ?? []) {
+        const name: string = row.name;
+        if (!name) continue;
+        if (row.total_value && typeof row.total_value.value !== 'undefined') {
+            const v = toInt(row.total_value.value);
+            if (v !== null) into.totals.set(name, v);
+            continue;
+        }
+        const series = into.byDay.get(name) ?? new Map<string, number>();
+        for (const v of row.values ?? []) {
+            // Some metrics come broken down (e.g. by content type); the day's figure is their sum.
+            const n = typeof v.value === 'object' && v.value !== null
+                ? Object.values(v.value as Record<string, unknown>).reduce<number>((a, b) => a + (toInt(b) ?? 0), 0)
+                : toInt(v.value);
+            if (n === null) continue;
+            // Lifetime values (media insights) carry no end_time.
+            series.set(v.end_time ? dayFromEndTime(v.end_time) : LIFETIME, n);
+        }
+        into.byDay.set(name, series);
+    }
+}
+
+/**
+ * Fetch a metric group; if the group is refused, retry each metric alone and
+ * drop only the ones the API rejects. A rejected metric is a platform change,
+ * not an outage — the rest of the row still lands.
+ */
+async function insightsWithFallback(
+    path: string, metrics: string[], params: Record<string, string | number | undefined>, token: string, into: InsightSeries,
+) {
+    try {
+        parseInsights(await graphGet(path, { ...params, metric: metrics.join(',') }, token), into);
+        return;
+    } catch (e) {
+        // Only a 4xx from Graph means "that metric"; anything else is an outage and should fail the sync.
+        if (!(e instanceof GraphError) || e.status >= 500) throw e;
+        if (metrics.length === 1) {
+            into.dropped.push(`${metrics[0]} (${e.message})`);
+            return;
+        }
+    }
+    for (const m of metrics) {
+        try {
+            parseInsights(await graphGet(path, { ...params, metric: m }, token), into);
+        } catch (e) {
+            if (e instanceof GraphError && e.status < 500) into.dropped.push(`${m} (${e.message})`);
+            else throw e;
+        }
+    }
+}
+
+function clampWindow(window: SyncWindow, maxLookbackDays: number): SyncWindow {
+    const floor = shiftDay(isoDay(new Date()), -maxLookbackDays);
+    return { since: window.since < floor ? floor : window.since, until: window.until };
+}
+
+function* chunks(window: SyncWindow, maxSpan: number): Generator<SyncWindow> {
+    let since = window.since;
+    while (since <= window.until) {
+        const until = shiftDay(since, maxSpan - 1) < window.until ? shiftDay(since, maxSpan - 1) : window.until;
+        yield { since, until };
+        since = shiftDay(until, 1);
+    }
+}
+
+// --- Facebook Page -------------------------------------------------------
+
+// Page reach (page_impressions_unique) is gone: Graph v24 already answers
+// "not a valid insights metric" (first live sync, 2026-10-06), so Facebook
+// reach is reported as unavailable rather than requested and refused daily.
+const FB_DAILY_METRICS = [
+    'page_follows',
+    'page_daily_follows_unique',
+    'page_daily_unfollows_unique',
+    'page_views_total',
+    'page_post_engagements',
+    'page_total_actions',
+    'page_media_view',
+];
+
+export async function syncFacebookPage(pageId: string, pageToken: string, window: SyncWindow): Promise<SyncResult> {
+    const series: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+
+    for (const w of chunks(window, FB_MAX_SPAN_DAYS)) {
+        const params = { period: 'day', since: dayStartUnix(w.since), until: dayStartUnix(w.until) + 86_400 };
+        await insightsWithFallback(`${pageId}/insights`, FB_DAILY_METRICS, params, pageToken, series);
+    }
+
+    const page = await graphGet<any>(pageId, { fields: 'name,link,followers_count,picture{url}' }, pageToken);
+    const at = (metric: string, day: string) => series.byDay.get(metric)?.get(day) ?? null;
+
+    const days: DailyMetrics[] = eachDay(window.since, window.until).map((day) => {
+        const follows = at('page_daily_follows_unique', day);
+        const unfollows = at('page_daily_unfollows_unique', day);
+        const engagements = at('page_post_engagements', day);
+        return {
+            day,
+            followers: at('page_follows', day),
+            follower_delta: follows !== null || unfollows !== null ? (follows ?? 0) - (unfollows ?? 0) : null,
+            views: at('page_media_view', day),
+            profile_views: at('page_views_total', day),
+            link_clicks: at('page_total_actions', day),
+            engagements,
+        };
+    });
+    // The live follower total is the freshest number we have for the last day in the window.
+    const last = days[days.length - 1];
+    const followersNow = toInt(page?.followers_count);
+    if (last && followersNow !== null && last.day === shiftDay(isoDay(new Date()), -1)) last.followers = followersNow;
+
+    const notes: string[] = [];
+    const dropped = [...new Set(series.dropped)];
+    if (dropped.length) notes.push(`Facebook refused: ${dropped.join('; ')}`);
+    const posts = await facebookPosts(pageId, pageToken, notes);
+
+    return {
+        days,
+        posts,
+        profile: {
+            display_name: page?.name ?? null,
+            profile_url: page?.link ?? null,
+            avatar_url: page?.picture?.data?.url ?? null,
+        },
+        notes,
+    };
+}
+
+/**
+ * Recent Page posts. Comment and reaction counts are user-generated content,
+ * which Meta gates behind pages_read_user_content (error #10) — a permission
+ * the app may not hold. Each field set is tried in turn and the first that
+ * Graph accepts wins; the post list can never take the day's metrics down
+ * with it (the first live sync lost a whole Page to exactly that).
+ */
+function fbFormat(p: any): PostMetrics['format'] {
+    const att = p.attachments?.data?.[0];
+    const type = String(att?.type ?? '').toLowerCase();
+    const media = String(att?.media_type ?? '').toLowerCase();
+    if (media === 'video' || type.startsWith('video')) return 'video';
+    if (type === 'album' || type === 'multi_share') return 'carousel';
+    if (media === 'photo' || type === 'photo') return 'photo';
+    if (type === 'share' || media === 'link') return 'link';
+    return 'post';
+}
+
+// Video posts: watch-time figures live on the video object, not the post.
+// Best-effort per video; Meta's November 2025 cull may have taken some.
+const FB_VIDEO_INSIGHTS = ['total_video_views', 'total_video_avg_time_watched', 'total_video_view_total_time'];
+
+async function facebookVideoInsights(videoId: string, pageToken: string): Promise<Map<string, number>> {
+    const s: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+    try {
+        await insightsWithFallback(`${videoId}/video_insights`, FB_VIDEO_INSIGHTS, {}, pageToken, s);
+    } catch {
+        return new Map();
+    }
+    const lifetime = new Map<string, number>();
+    for (const [name, byDay] of s.byDay) {
+        const v = byDay.get(LIFETIME);
+        if (v !== undefined) lifetime.set(name, v);
+    }
+    for (const [name, v] of s.totals) lifetime.set(name, v);
+    return lifetime;
+}
+
+async function facebookPosts(pageId: string, pageToken: string, notes: string[]): Promise<PostMetrics[]> {
+    const core = 'id,message,created_time,permalink_url,full_picture,shares,attachments{media_type,type,target{id}}';
+    const tiers = [
+        `${core},comments.summary(total_count).limit(0),reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
+        `${core},reactions.summary(total_count).limit(0),insights.metric(post_media_view)`,
+        `${core},insights.metric(post_media_view)`,
+        core,
+    ];
+    let res: any = null;
+    let refused: GraphError | null = null;
+    for (const fields of tiers) {
+        try {
+            res = await graphGet(`${pageId}/posts`, { fields, limit: POSTS_PER_SYNC }, pageToken);
+            break;
+        } catch (e) {
+            if (!(e instanceof GraphError) || e.status >= 500) throw e;
+            refused = e;
+        }
+    }
+    if (!res) {
+        notes.push(`Facebook posts unavailable: ${refused?.message ?? 'unknown error'}`);
+        return [];
+    }
+    if (refused) {
+        notes.push('Facebook post comment/reaction counts need the pages_read_user_content permission on the Meta app (add it, then Reconnect).');
+    }
+    return mapLimit(res?.data ?? [], POST_CONCURRENCY, async (p: any): Promise<PostMetrics> => {
+        const insight = (p.insights?.data ?? []).find((i: any) => i.name === 'post_media_view');
+        const format = fbFormat(p);
+        const post: PostMetrics = {
+            external_id: String(p.id),
+            published_at: p.created_time ?? null,
+            caption: p.message ?? null,
+            media_type: 'post',
+            permalink: p.permalink_url ?? null,
+            thumbnail_url: p.full_picture ?? null,
+            format,
+            views: insight ? toInt(insight.values?.[0]?.value) : null,
+            likes: toInt(p.reactions?.summary?.total_count),
+            comments: toInt(p.comments?.summary?.total_count),
+            shares: toInt(p.shares?.count),
+        };
+        const videoId = format === 'video' ? p.attachments?.data?.[0]?.target?.id : null;
+        if (videoId) {
+            const v = await facebookVideoInsights(String(videoId), pageToken);
+            if (v.has('total_video_views')) post.views = v.get('total_video_views')!;
+            if (v.has('total_video_avg_time_watched')) post.avg_watch_seconds = Math.round(v.get('total_video_avg_time_watched')! / 10) / 100;
+            if (v.has('total_video_view_total_time')) post.watch_time_seconds = Math.round(v.get('total_video_view_total_time')! / 1000);
+        }
+        return post;
+    });
+}
+
+// --- Instagram professional account -------------------------------------
+
+// time_series metrics: one call per <=30-day chunk.
+const IG_SERIES_METRICS = ['reach'];
+// Daily new followers is the one other time_series metric left, and Meta only
+// serves it for the last 30 days (never today) — asked for older days it
+// refuses the whole call, so its window is clamped separately.
+const IG_FOLLOWER_SERIES_METRICS = ['follower_count'];
+const IG_FOLLOWER_LOOKBACK_DAYS = 30;
+// total_value metrics: one call per day (the API aggregates over since..until).
+// profile_views and website_clicks moved here from time_series (first live sync, 2026-10-06).
+const IG_TOTAL_METRICS = [
+    'views', 'profile_views', 'website_clicks', 'profile_links_taps', 'accounts_engaged',
+    'total_interactions', 'likes', 'comments', 'shares', 'saves',
+];
+// total_value days are the slow part (one round trip each); a long backfill
+// keeps the cheap series for the whole window and totals for the recent part.
+const IG_TOTAL_MAX_DAYS = 31;
+
+export async function syncInstagramAccount(igUserId: string, pageToken: string, window: SyncWindow): Promise<SyncResult> {
+    const w = clampWindow(window, IG_LOOKBACK_DAYS);
+    const series: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+    const perDayTotals = new Map<string, Map<string, number>>();
+
+    const followerFloor = shiftDay(isoDay(new Date()), -IG_FOLLOWER_LOOKBACK_DAYS);
+    for (const c of chunks(w, IG_MAX_SPAN_DAYS)) {
+        const params = { period: 'day', since: dayStartUnix(c.since), until: dayStartUnix(c.until) + 86_400 };
+        await insightsWithFallback(`${igUserId}/insights`, IG_SERIES_METRICS, { ...params, metric_type: 'time_series' }, pageToken, series);
+        const followerSince = c.since < followerFloor ? followerFloor : c.since;
+        if (followerSince <= c.until) {
+            await insightsWithFallback(`${igUserId}/insights`, IG_FOLLOWER_SERIES_METRICS, {
+                period: 'day', since: dayStartUnix(followerSince), until: dayStartUnix(c.until) + 86_400,
+            }, pageToken, series);
+        }
+    }
+
+    const totalDays = eachDay(w.since, w.until).slice(-IG_TOTAL_MAX_DAYS);
+    let totalMetrics = [...IG_TOTAL_METRICS];
+    for (const day of totalDays) {
+        if (totalMetrics.length === 0) break;
+        const dayTotals: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+        await insightsWithFallback(`${igUserId}/insights`, totalMetrics, {
+            period: 'day', metric_type: 'total_value', since: dayStartUnix(day), until: dayStartUnix(day) + 86_400,
+        }, pageToken, dayTotals);
+        perDayTotals.set(day, dayTotals.totals);
+        // Whatever the first day rejected, every day will; stop asking.
+        if (dayTotals.dropped.length) {
+            const rejected = new Set(dayTotals.dropped.map((d) => d.split(' ')[0]));
+            totalMetrics = totalMetrics.filter((m) => !rejected.has(m));
+            for (const d of dayTotals.dropped) if (!series.dropped.includes(d)) series.dropped.push(d);
+        }
+    }
+
+    const profile = await graphGet<any>(igUserId, { fields: 'username,name,profile_picture_url,followers_count,media_count' }, pageToken);
+    const at = (metric: string, day: string) => series.byDay.get(metric)?.get(day) ?? null;
+    const tot = (metric: string, day: string) => perDayTotals.get(day)?.get(metric) ?? null;
+
+    const days: DailyMetrics[] = eachDay(w.since, w.until).map((day) => {
+        const linkTaps = tot('profile_links_taps', day);
+        const websiteClicks = tot('website_clicks', day);
+        const engagements = tot('total_interactions', day);
+        return {
+            day,
+            follower_delta: at('follower_count', day),
+            reach: at('reach', day),
+            views: tot('views', day),
+            profile_views: tot('profile_views', day),
+            link_clicks: linkTaps !== null || websiteClicks !== null ? (linkTaps ?? 0) + (websiteClicks ?? 0) : null,
+            engagements: engagements ?? (
+                tot('likes', day) !== null
+                    ? (tot('likes', day) ?? 0) + (tot('comments', day) ?? 0) + (tot('shares', day) ?? 0) + (tot('saves', day) ?? 0)
+                    : null
+            ),
+            likes: tot('likes', day),
+            comments: tot('comments', day),
+            shares: tot('shares', day),
+            saves: tot('saves', day),
+            raw: { accounts_engaged: tot('accounts_engaged', day) },
+        };
+    });
+    const last = days[days.length - 1];
+    const followersNow = toInt(profile?.followers_count);
+    if (last && followersNow !== null && last.day === shiftDay(isoDay(new Date()), -1)) last.followers = followersNow;
+
+    const online = await instagramOnlineFollowers(igUserId, pageToken, w);
+    for (const d of days) {
+        const hours = online.get(d.day);
+        if (hours) d.raw = { ...(d.raw ?? {}), online_followers: hours };
+    }
+
+    const posts = await instagramPosts(igUserId, pageToken);
+
+    return {
+        days,
+        posts,
+        profile: {
+            handle: profile?.username ?? null,
+            display_name: profile?.name ?? profile?.username ?? null,
+            avatar_url: profile?.profile_picture_url ?? null,
+            profile_url: profile?.username ? `https://www.instagram.com/${profile.username}/` : null,
+        },
+        // Chunked calls repeat the same refusal; say it once.
+        notes: series.dropped.length ? [`Instagram refused: ${[...new Set(series.dropped)].join('; ')}`] : [],
+    };
+}
+
+// Per-media insights by product type. Meta keeps re-shaping the Reels set
+// (plays / replays went in March 2025, watch time stayed), so each list is a
+// wish list: insightsWithFallback keeps whatever the API still answers.
+const IG_REEL_INSIGHTS = [
+    'reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions',
+    'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'follows', 'profile_visits',
+];
+const IG_FEED_INSIGHTS = ['reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'];
+
+function igFormat(m: any): PostMetrics['format'] {
+    const product = String(m.media_product_type ?? '').toUpperCase();
+    const type = String(m.media_type ?? '').toUpperCase();
+    if (product === 'REELS') return 'reel';
+    if (product === 'STORY') return 'story';
+    if (type === 'CAROUSEL_ALBUM') return 'carousel';
+    if (type === 'VIDEO') return 'video';
+    return 'photo';
+}
+
+async function instagramPosts(igUserId: string, pageToken: string): Promise<PostMetrics[]> {
+    const res = await graphGet<any>(`${igUserId}/media`, {
+        fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count',
+        limit: POSTS_PER_SYNC,
+    }, pageToken);
+    // A metric Meta refuses for one Reel it refuses for every Reel on this
+    // account; remember it so later posts don't re-pay the one-by-one probe.
+    const refused: Record<string, Set<string>> = { reel: new Set(), feed: new Set() };
+    const media: any[] = res?.data ?? [];
+    const kindOf = (m: any) => (igFormat(m) === 'reel' ? 'reel' : 'feed');
+    const one = async (m: any): Promise<PostMetrics> => {
+        const format = igFormat(m);
+        const kind = kindOf(m);
+        const wanted = (kind === 'reel' ? IG_REEL_INSIGHTS : IG_FEED_INSIGHTS).filter((x) => !refused[kind].has(x));
+        const s: InsightSeries = { byDay: new Map(), totals: new Map(), dropped: [] };
+        try {
+            if (wanted.length) await insightsWithFallback(`${m.id}/insights`, wanted, {}, pageToken, s);
+        } catch {
+            // A single post's insights are not worth failing the account.
+        }
+        for (const d of s.dropped) refused[kind].add(d.split(' ')[0]);
+        // Media insights are lifetime figures: parseInsights files them under LIFETIME (or as totals).
+        const lifetime = new Map<string, number>();
+        for (const [name, byDay] of s.byDay) {
+            const v = byDay.get(LIFETIME);
+            if (v !== undefined) lifetime.set(name, v);
+        }
+        for (const [name, v] of s.totals) lifetime.set(name, v);
+        const get = (k: string) => (lifetime.has(k) ? lifetime.get(k)! : undefined);
+        const avgMs = get('ig_reels_avg_watch_time');
+        const totalMs = get('ig_reels_video_view_total_time');
+        return {
+            external_id: String(m.id),
+            published_at: m.timestamp ?? null,
+            caption: m.caption ?? null,
+            media_type: (m.media_product_type || m.media_type || null)?.toLowerCase() ?? null,
+            permalink: m.permalink ?? null,
+            thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
+            format,
+            reach: get('reach') ?? null,
+            views: get('views') ?? null,
+            likes: toInt(m.like_count),
+            comments: toInt(m.comments_count),
+            shares: get('shares') ?? null,
+            saves: get('saved') ?? null,
+            total_interactions: get('total_interactions'),
+            follows: get('follows'),
+            profile_visits: get('profile_visits'),
+            avg_watch_seconds: avgMs !== undefined ? Math.round(avgMs / 10) / 100 : undefined,
+            watch_time_seconds: totalMs !== undefined ? Math.round(totalMs / 1000) : undefined,
+        };
+    };
+    // The first post of each kind runs alone to learn that kind's refused
+    // set; the rest fan out with the probe already paid.
+    const seen = new Set<string>();
+    const learners = media.filter((m) => (seen.has(kindOf(m)) ? false : (seen.add(kindOf(m)), true)));
+    const byId = new Map<string, PostMetrics>();
+    for (const m of learners) byId.set(String(m.id), await one(m));
+    const rest = media.filter((m) => !byId.has(String(m.id)));
+    for (const p of await mapLimit(rest, POST_CONCURRENCY, one)) byId.set(p.external_id, p);
+    return media.map((m) => byId.get(String(m.id))!).filter(Boolean);
+}
+
+/**
+ * When this account's followers are online, hour by hour (Instagram's
+ * `online_followers`, only served for the last 30 days). Returned per day as
+ * {hour: followers}; the content tab averages the days into "best time to
+ * post". Best-effort — a refusal returns an empty map, never an error.
+ */
+async function instagramOnlineFollowers(igUserId: string, pageToken: string, window: SyncWindow): Promise<Map<string, Record<string, number>>> {
+    const out = new Map<string, Record<string, number>>();
+    const floor = shiftDay(isoDay(new Date()), -IG_FOLLOWER_LOOKBACK_DAYS);
+    const since = window.since < floor ? floor : window.since;
+    if (since > window.until) return out;
+    try {
+        const res = await graphGet<any>(`${igUserId}/insights`, {
+            metric: 'online_followers', period: 'lifetime',
+            since: dayStartUnix(since), until: dayStartUnix(window.until) + 86_400,
+        }, pageToken);
+        for (const v of res?.data?.[0]?.values ?? []) {
+            if (!v?.end_time || typeof v.value !== 'object' || v.value === null) continue;
+            const hours: Record<string, number> = {};
+            for (const [h, n] of Object.entries(v.value)) hours[h] = toInt(n) ?? 0;
+            out.set(dayFromEndTime(v.end_time), hours);
+        }
+    } catch {
+        // Not served (too few followers, or Meta retired it) — the tab says "no data" for best times.
+    }
+    return out;
+}

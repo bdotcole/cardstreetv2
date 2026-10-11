@@ -9,11 +9,11 @@ async function resolveLang(): Promise<'EN' | 'TH'> {
 
 export async function generateMetadata(): Promise<Metadata> {
     const lang = await resolveLang();
-    const title = lang === 'EN' ? 'My Collection | CardStreet' : 'คอลเลกชันของฉัน | CardStreet';
+    const title = lang === 'EN' ? 'My Collection | Cardstreet' : 'คอลเลกชันของฉัน | Cardstreet';
     const description =
         lang === 'EN'
-            ? 'Track your card collection value, complete master sets, and manage your wishlist on CardStreet.'
-            : 'ติดตามมูลค่าคอลเลกชันการ์ด สะสมชุดการ์ดให้ครบ และจัดการรายการที่อยากได้บน CardStreet';
+            ? 'Track your card collection value, complete master sets, and manage your wishlist on Cardstreet.'
+            : 'ติดตามมูลค่าคอลเลกชันการ์ด สะสมชุดการ์ดให้ครบ และจัดการรายการที่อยากได้บน Cardstreet';
     return {
         metadataBase: new URL(BASE_URL),
         title,

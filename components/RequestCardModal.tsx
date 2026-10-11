@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import BodyPortal from './BodyPortal';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { pokemonService } from '@/services/pokemonService';
@@ -187,7 +188,8 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
         'w-full h-12 bg-black/40 border border-white/10 rounded-xl px-4 text-sm text-white outline-none focus:border-brand-cyan cursor-pointer';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <BodyPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
             <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-scaleIn">
                 <div className="p-6 border-b border-white/5">
@@ -348,6 +350,7 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
                 )}
             </div>
         </div>
+        </BodyPortal>
     );
 };
 

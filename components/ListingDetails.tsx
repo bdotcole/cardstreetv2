@@ -5,6 +5,9 @@ import ReportModal from './ReportModal';
 import PriceHistoryChart from './PriceHistoryChart';
 import { CURRENCY_SYMBOLS, THAI_SETS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import ShippingNote from '@/components/ShippingNote';
+import { createClient } from '@/lib/supabase/client';
+import { fetchSellerMinOrders, minOrderNote } from '@/lib/minOrder';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import OfferModal from './OfferModal';
@@ -59,10 +62,14 @@ interface ListingDetailsProps {
         is_graded?: boolean;
         grading_company?: string | null;
         grade?: number | null;
+        // Identical copies from this seller (lib/listingSiblings.ts). Above 1 the
+        // sheet shows a quantity stepper and passes the chosen count along.
+        units?: number;
+        siblingIds?: string[];
     };
     onClose: () => void;
-    onBuyNow: () => void;
-    onAddToCart: () => void;
+    onBuyNow: (quantity: number) => void;
+    onAddToCart: (quantity: number) => void;
     onSellerClick: (seller: any) => void;
     currency?: string;
     exchangeRate?: number;
@@ -93,10 +100,31 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     // offers on mount and flipped optimistically after a successful submit so
     // the button reflects the 409-OFFER_ALREADY_LIVE state without a refetch.
     const [hasPendingOffer, setHasPendingOffer] = useState(false);
+    // Copies the buyer can take from this seller in one go. The stepper only
+    // renders past 1, so a single-copy listing reads exactly as before.
+    const units = Math.max(1, listing.units ?? 1);
+    const [quantity, setQuantity] = useState(1);
 
     // OBO "Make an offer": only when the feature flag is on, the listing accepts
     // offers, and the viewer is not the seller.
     const sellerId = listing.seller_id ?? listing.seller?.id;
+
+    // The shop's minimum order (lib/minOrder.ts), so a buyer looking at a
+    // ฿10 card learns here, not at checkout, that this shop sells from ฿100.
+    // Fail-soft: no answer shows no note.
+    const [sellerMinOrder, setSellerMinOrder] = useState(0);
+    useEffect(() => {
+        if (!sellerId) {
+            setSellerMinOrder(0);
+            return;
+        }
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), [sellerId]).then((found) => {
+            if (!cancelled) setSellerMinOrder(found[sellerId] ?? 0);
+        });
+        return () => { cancelled = true; };
+    }, [sellerId]);
+
     const canOffer =
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' &&
         listing.accepts_offers === true &&
@@ -198,7 +226,11 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         <div className="flex-none w-full snap-center flex justify-center p-8 items-center min-h-[400px]">
                             <ZoomableSlide active={activeSlide === 0} wrapperClass="w-full max-w-[280px] drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]">
                                 {slabbed ? (
-                                    <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden">
+                                    // Explicit width, not w-full: the zoom library's runtime CSS makes its
+                                    // wrapper fit-content, and a box whose only children are absolutely
+                                    // positioned (the slab layers) has no content width — w-full collapsed
+                                    // the whole slide to 0x0.
+                                    <div className="relative w-[280px] max-w-full aspect-[3/4] rounded-lg overflow-hidden">
                                         <GradedSlabFrame company={listing.grading_company} grade={listing.grade} size="md" title={card.name} subtitle={card.set}>
                                             <Image
                                                 src={card.imageUrl || ""}
@@ -269,6 +301,15 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                     {CURRENCY_SYMBOLS[currency] || currency}{' '}
                                     {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
                                 </p>
+                                {/* Shipping, before checkout rather than at the
+                                    payment screen. On a cheap card it is most of
+                                    what the buyer pays. */}
+                                <ShippingNote className="mt-1.5" />
+                                {sellerMinOrder > 0 && (
+                                    <p className="text-[11px] text-amber-300/90 font-bold mt-1">
+                                        {minOrderNote(isThai, sellerMinOrder)}
+                                    </p>
+                                )}
                             </div>
                             <div className="text-right">
                                 <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">
@@ -356,20 +397,52 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         </button>
                     )
                 )}
+                {units > 1 && (
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t('cart.quantity')}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">{t('cart.available').replace('{n}', String(units))}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                                disabled={quantity <= 1}
+                                aria-label="-"
+                                className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                            >
+                                −
+                            </button>
+                            <span className="w-8 text-center text-white font-black tabular-nums text-lg">{quantity}</span>
+                            <button
+                                type="button"
+                                onClick={() => setQuantity((q) => Math.min(units, q + 1))}
+                                disabled={quantity >= units}
+                                aria-label="+"
+                                className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                            >
+                                +
+                            </button>
+                        </div>
+                        <p className="text-sm font-black text-brand-cyan whitespace-nowrap">
+                            {currencySymbol}{Math.round(listing.price * quantity * exchangeRate).toLocaleString()}
+                        </p>
+                    </div>
+                )}
                 <div className="flex gap-3">
                     <button
-                        onClick={onAddToCart}
+                        onClick={() => onAddToCart(quantity)}
                         className="flex-1 h-14 bg-white/5 border border-white/10 text-white hover:bg-white/10 font-black text-[10px] tracking-[0.2em] rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2 group"
                     >
                         <i className="fa-solid fa-cart-plus text-brand-cyan group-hover:scale-110 transition-transform text-lg"></i>
                         {isThai ? 'เพิ่มลงรถเข็น' : 'Add to Cart'}
                     </button>
                     <button
-                        // Call with no args — passing the bare handler hands the
-                        // click event to handleBuyNow as its `listingArg`, which
-                        // then builds a garbage cart (NaN total) and crashes the
-                        // payment modal. The shell reads `selectedListing` instead.
-                        onClick={() => onBuyNow()}
+                        // Pass only the quantity — handing the click event to
+                        // handleBuyNow as its `listingArg` builds a garbage cart
+                        // (NaN total) and crashes the payment modal. The shell
+                        // reads `selectedListing` for the listing itself.
+                        onClick={() => onBuyNow(quantity)}
                         className="flex-[2] h-14 bg-brand-green text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-brand-green/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
                     >
                         {isThai ? 'ซื้อเลย' : 'Buy Now'}

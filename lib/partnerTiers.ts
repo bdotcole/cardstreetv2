@@ -27,7 +27,7 @@ export interface PartnerTierSpec {
 export const NON_PARTNER_FEE_PERCENT = 9.0;
 export const NON_PARTNER_FEE_FRACTION = NON_PARTNER_FEE_PERCENT / 100;
 
-// CardStreet Pro perk: subscribers sell at the Bronze partner rate without
+// Cardstreet Pro perk: subscribers sell at the Bronze partner rate without
 // needing partner status. Applied as a FLOOR -- a partner whose ladder already
 // beats 5% keeps the better rate.
 export const PRO_SELLER_FEE_PERCENT = 5.0;

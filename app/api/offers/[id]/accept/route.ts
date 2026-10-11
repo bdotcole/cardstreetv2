@@ -11,8 +11,10 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse, after } from 'next/server';
-import { sendOfferAcceptedNotification } from '@/lib/courier';
-import { cardNameFromListingEmbed } from '@/lib/offerPolicy';
+import { sendOfferAcceptedNotification, sendOfferCounterAcceptedNotification } from '@/lib/courier';
+import { ACCEPTED_PAY_WINDOW_MS, cardNameFromListingEmbed, isListingGone } from '@/lib/offerPolicy';
+import { awardEvent } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 export const runtime = 'nodejs';
 
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: offer } = await admin
         .from('offers')
-        .select('id, listing_id, buyer_id, seller_id, actor_role, amount, status, card_data:listings(card_data)')
+        .select('id, listing_id, buyer_id, seller_id, actor_role, amount, status, card_data:listings(card_data, status)')
         .eq('id', id)
         .single();
 
@@ -47,10 +49,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'Only the counterparty can accept this offer' }, { status: 403 });
     }
 
+    // A seller can take a listing down with offers still open on it. Accepting
+    // one would agree a price nobody can pay, and send the buyer to a payment
+    // sheet that refuses.
+    const listingEmbed = (offer as { card_data?: unknown }).card_data;
+    const listingRow = (Array.isArray(listingEmbed) ? listingEmbed[0] : listingEmbed) as { status?: string } | null | undefined;
+    if (isListingGone(listingRow?.status)) {
+        return NextResponse.json({ error: 'This listing is no longer available' }, { status: 409 });
+    }
+
     // CAS: accept only if still pending (a concurrent withdraw/counter/expire may have won).
+    // expires_at restarts here: the buyer has 48 hours to pay from acceptance,
+    // and the expiry cron reads it. It cannot read updated_at, which the
+    // payment reminder's own write resets.
     const { data: won } = await admin
         .from('offers')
-        .update({ status: 'accepted' })
+        .update({ status: 'accepted', expires_at: new Date(Date.now() + ACCEPTED_PAY_WINDOW_MS).toISOString() })
         .eq('id', id)
         .eq('status', 'pending')
         .select('id');
@@ -58,15 +72,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'Offer is no longer pending' }, { status: 409 });
     }
 
-    // Notify the offer's buyer (whoever will pay).
+    // Collector Pass: seller XP when an offer on their listing is accepted —
+    // a counterparty action, deliberately never awarded on offer creation
+    // (creating offers is free and reversible). Fail-soft, once per offer.
+    await awardEvent(admin, {
+        userId: offer.seller_id,
+        rule: EARN.OFFER_ACCEPTED.rule,
+        ref: offer.id,
+        xp: EARN.OFFER_ACCEPTED.xp,
+        coins: 0,
+        dailyCap: EARN.OFFER_ACCEPTED.dailyCap,
+    });
+
+    // Tell the party who did NOT just tap Accept. When the seller accepts, that
+    // is the buyer, who now has to pay. When the buyer accepts the seller's
+    // counter, the app has already put them on the payment sheet (OffersInbox),
+    // so the news goes to the seller instead — previously the buyer got a "your
+    // offer was accepted" mail about their own tap and the seller heard nothing,
+    // so had no reason to chase payment.
     const cardName = cardNameFromListingEmbed((offer as { card_data?: unknown }).card_data);
+    const details = { offerId: offer.id, listingId: offer.listing_id, amount: offer.amount, cardName };
     after(() =>
-        sendOfferAcceptedNotification(offer.buyer_id, {
-            offerId: offer.id,
-            listingId: offer.listing_id,
-            amount: offer.amount,
-            cardName,
-        }).catch((e) => console.error('[Offers/Accept] notify (non-fatal):', e)),
+        (offer.actor_role === 'seller'
+            ? sendOfferCounterAcceptedNotification(offer.seller_id, details)
+            : sendOfferAcceptedNotification(offer.buyer_id, details)
+        ).catch((e) => console.error('[Offers/Accept] notify (non-fatal):', e)),
     );
 
     return NextResponse.json({ id: offer.id, status: 'accepted', amount: offer.amount, listing_id: offer.listing_id });

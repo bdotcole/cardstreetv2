@@ -22,6 +22,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { broadcastStreamEvent, postSystemChat } from '@/lib/liveBreaks';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { orderXp } from '@/lib/rewardTiers';
 
 interface LiveSpotOrderRow {
     id: string;
@@ -29,6 +31,7 @@ interface LiveSpotOrderRow {
     seller_id: string;
     status: string;
     break_spot_id: string | null;
+    total_amount: number | null;
 }
 
 export interface LiveFinalizeResult {
@@ -62,7 +65,7 @@ export async function finalizeLiveSpotOrders(
 
         const { data: orders, error: fetchErr } = await admin
             .from('orders')
-            .select('id, buyer_id, seller_id, status, break_spot_id')
+            .select('id, buyer_id, seller_id, status, break_spot_id, total_amount')
             .eq('transfer_group', transferGroup)
             .returns<LiveSpotOrderRow[]>();
 
@@ -123,6 +126,27 @@ export async function finalizeLiveSpotOrders(
         const newlyPaidIds = new Set(newlyPaidRows.map(o => o.id));
         result.ordersPaid = newlyPaidRows.length;
         result.alreadyPaid = spotOrders.filter(o => o.status === 'paid').length;
+
+        // ─── Collector Pass XP (fail-soft, keyed to the CAS winners only) ───
+        // Live sales never reach lib/fulfillOrder.ts, so the award lives here
+        // too. The cancelled-order-in-paid-group refund branch above is
+        // excluded automatically: those rows never win the pending->paid CAS.
+        try {
+            const byId = new Map(spotOrders.map(o => [o.id, o]));
+            for (const row of newlyPaidRows) {
+                const o = byId.get(row.id);
+                if (!o || !o.buyer_id || !o.seller_id || o.buyer_id === o.seller_id) continue;
+                const xp = orderXp(Number(o.total_amount) || 0);
+                if (xp > 0) {
+                    await awardEvent(admin, { userId: o.buyer_id, rule: 'order_paid_buyer', ref: o.id, xp, coins: 0 });
+                    await awardEvent(admin, { userId: o.seller_id, rule: 'order_paid_seller', ref: o.id, xp, coins: 0 });
+                }
+                await awardFirst(admin, o.buyer_id, 'first_purchase');
+                await awardFirst(admin, o.buyer_id, 'first_spot');
+            }
+        } catch (rewardErr) {
+            console.warn('[LiveSpotFulfillment] reward award error (non-fatal):', (rewardErr as Error)?.message);
+        }
 
         // ─── held -> sold via the idempotent RPC ───
         // Run for already-'paid' rows too: it heals a prior partial run where

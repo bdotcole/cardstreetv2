@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserProfile, Review } from '@/types';
 import RatingStars from './RatingStars';
 import ReviewList from './ReviewList';
@@ -7,6 +7,13 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import GradedSlabFrame from './GradedSlabFrame';
+import RankChip from './rewards/rankChip';
+import AvatarFrame from './rewards/AvatarFrame';
+import BadgePill from './rewards/BadgePill';
+import { createClient } from '@/lib/supabase/client';
+import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
+import { FRAME_STYLES } from '@/lib/rewardTiers';
+import { fetchSellerMinOrders, minOrderMessage, minOrderNote, minOrderShortfall } from '@/lib/minOrder';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -15,14 +22,71 @@ interface SellerProfileProps {
     onBack: () => void;
     onSelectListing: (listing: any) => void;
     onAddToCart?: (item: any) => void;
+    /** THB already in the buyer's cart from this shop, so the minimum-order
+     *  notice can say how much is still missing and update as cards go in. */
+    cartTotalForShop?: number;
+    /** Opens the cart once the shop minimum is met. */
+    onOpenCart?: () => void;
     currency?: string;
     exchangeRate?: number;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, currency = 'THB', exchangeRate = 1 }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, cartTotalForShop = 0, onOpenCart, currency = 'THB', exchangeRate = 1 }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
+
+    // Shop minimum order (lib/minOrder.ts). A buyer sent here from a refused
+    // Buy Now or a blocked cart needs the target in front of them while they
+    // browse, not only on the cart they just left. Fail-soft: no answer, no
+    // notice, and the server gate still decides.
+    const [minOrder, setMinOrder] = useState(0);
+    useEffect(() => {
+        if (!seller?.id) return;
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), [seller.id]).then((found) => {
+            if (!cancelled) setMinOrder(found[seller.id] ?? 0);
+        });
+        return () => { cancelled = true; };
+    }, [seller?.id]);
+    const minShortfall = minOrderShortfall(cartTotalForShop, minOrder);
+
+    // Collector Pass display data (rank + showcased badges) — fetched here
+    // rather than threaded through the listing embed so the page is correct
+    // no matter which surface navigated to it. Fail-soft: no row, no chrome.
+    const [publicSeller, setPublicSeller] = useState<PublicSeller | null>(null);
+    // Vacation mode (20260925 migration): a paused shop has no active
+    // listings, and an empty grid reads as a dead shop unless we say why.
+    // Separate fail-soft select so a missing column can't break the page.
+    const [shopPaused, setShopPaused] = useState(false);
+    useEffect(() => {
+        if (!seller?.id) return;
+        let cancelled = false;
+        const supabase = createClient();
+        fetchPublicSellers(supabase, [seller.id]).then((map) => {
+            if (!cancelled) setPublicSeller(map.get(seller.id) ?? null);
+        });
+        supabase
+            .from('public_profiles')
+            .select('shop_paused_at')
+            .eq('id', seller.id)
+            .maybeSingle()
+            .then(({ data }) => {
+                if (!cancelled) setShopPaused(!!(data as { shop_paused_at?: string | null } | null)?.shop_paused_at);
+            }, () => { /* column may not exist yet */ });
+        return () => { cancelled = true; };
+    }, [seller?.id]);
+
+    const badgeLabel = (key: string) => {
+        const lk = `rewards.badge.${key}`;
+        const v = t(lk);
+        return v === lk ? key.replace(/_/g, ' ') : v;
+    };
+    const displayedBadges = publicSeller?.displayed_badges ?? seller.badges ?? [];
+    const rewardLevel = publicSeller?.reward_level ?? null;
+    const wornFrame = publicSeller?.equipped_frame && FRAME_STYLES[publicSeller.equipped_frame]
+        ? publicSeller.equipped_frame
+        : null;
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -47,25 +111,31 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
             {/* Profile Header */}
             <div className="px-6 mt-6 text-center space-y-4 relative z-10">
                 <div className="relative mx-auto w-24 h-24">
-                    <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow">
-                        <img src={seller.avatar} className="w-full h-full rounded-full object-cover border-4 border-brand-darker" alt={seller.name} />
-                    </div>
+                    {/* Equipped Collector Pass frame replaces the default ring. */}
+                    <AvatarFrame
+                        frame={wornFrame}
+                        size={96}
+                        ringWidth={wornFrame ? undefined : 4}
+                        gap={3}
+                        fallbackRing="bg-gradient-to-br from-brand-cyan via-brand-purple to-brand-red animate-pulse-slow"
+                    >
+                        <img src={seller.avatar} className="w-full h-full object-cover" alt={seller.name} />
+                    </AvatarFrame>
                 </div>
 
                 <div>
                     <h1 className="text-2xl font-black text-white italic skew-x-[-5deg] mb-1">{seller.name}</h1>
-                    {(seller.isPartner || (seller.badges && seller.badges.length > 0)) && (
-                        <div className="flex items-center justify-center gap-2 mb-3">
+                    {(seller.isPartner || displayedBadges.length > 0 || rewardLevel != null) && (
+                        <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+                            {rewardLevel != null && <RankChip level={rewardLevel} variant="page" />}
                             {seller.isPartner && (
                                 <span className="px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/30 text-[9px] font-black text-brand-cyan uppercase tracking-wider flex items-center gap-1">
                                     <i className="fa-solid fa-circle-check"></i>
                                     {t('seller.officialPartner')}
                                 </span>
                             )}
-                            {seller.badges?.map(badge => (
-                                <span key={badge} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                    {badge}
-                                </span>
+                            {displayedBadges.map(badge => (
+                                <BadgePill key={badge} badge={badge} label={badgeLabel(badge)} />
                             ))}
                         </div>
                     )}
@@ -99,6 +169,43 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         <i className="fa-solid fa-flag"></i>
                     </button>
                 </div>
+
+                {/* Shop minimum order. Three states: nothing from this shop in
+                    the cart yet (standing note), below the minimum (how much is
+                    still missing — this is where the buyer lands after a
+                    refused Buy Now or a blocked cart), and met (straight to
+                    checkout). Amounts are THB: the minimum is a THB rule. */}
+                {minOrder > 0 && (
+                    minShortfall > 0 && cartTotalForShop > 0 ? (
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-left">
+                            <p className="font-bold text-sm text-amber-300 leading-snug">
+                                {minOrderMessage(isThai, minOrder, minShortfall)}
+                            </p>
+                            <p className="text-slate-400 text-xs mt-1">
+                                {t('seller.inYourCart').replace('{amount}', cartTotalForShop.toLocaleString())}
+                            </p>
+                        </div>
+                    ) : cartTotalForShop > 0 ? (
+                        <div className="rounded-2xl border border-brand-green/30 bg-brand-green/10 px-5 py-4 flex items-center justify-between gap-3">
+                            <div className="text-left min-w-0">
+                                <p className="font-bold text-sm text-brand-green">{t('seller.minOrderMet')}</p>
+                                <p className="text-slate-400 text-xs mt-0.5 truncate">
+                                    {t('seller.inYourCart').replace('{amount}', cartTotalForShop.toLocaleString())}
+                                </p>
+                            </div>
+                            {onOpenCart && (
+                                <button
+                                    onClick={onOpenCart}
+                                    className="shrink-0 h-10 px-4 rounded-xl bg-brand-green text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    {t('cart.checkout')}
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-amber-300/90 font-bold">{minOrderNote(isThai, minOrder)}</p>
+                    )
+                )}
             </div>
 
             {/* Tabs */}
@@ -118,11 +225,19 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
 
             {/* Content */}
             <div className="p-6 min-h-[300px]">
+                {activeTab === 'shop' && shopPaused && (
+                    <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center">
+                        <p className="font-bold text-sm text-amber-300">{t('seller.shopPausedTitle')}</p>
+                        <p className="text-slate-400 text-xs mt-0.5 leading-snug">{t('seller.shopPausedBody')}</p>
+                    </div>
+                )}
                 {activeTab === 'shop' && (
                     listings.length === 0 ? (
-                        <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
-                            {t('seller.noListings')}
-                        </div>
+                        !shopPaused && (
+                            <div className="glass p-6 rounded-2xl border border-white/5 text-center text-sm text-slate-500">
+                                {t('seller.noListings')}
+                            </div>
+                        )
                     ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {listings.map(listing => {

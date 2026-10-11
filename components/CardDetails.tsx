@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { Card } from '../types';
 import PriceHistoryChart from './PriceHistoryChart';
@@ -6,13 +7,16 @@ import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { marketplaceService } from '@/services/marketplaceService';
+import { suggestedSellPrice } from '@/lib/listingPriceGuidance';
+import { useCardWishlistDemand } from '@/lib/hooks/useWishlistDemand';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface CardDetailsProps {
   card: Card;
   isWishlisted: boolean;
   onClose: () => void;
   onAddToCollection: (card: Card) => void;
-  onToggleWishlist: (card: Card) => void;
+  onToggleWishlist: (card: Card) => void | Promise<void>;
   onShopNow?: () => void;
   onAddToBuylist?: () => void;
   listings?: any[];
@@ -25,6 +29,13 @@ interface CardDetailsProps {
   // Signed-out viewers get a "sign in to save this" banner above the action
   // bar — the post-scan moment is the strongest signup hook in the app.
   showSignInPrompt?: boolean;
+  /**
+   * Opens the listing flow for this card from the default action bar. Omitted
+   * on surfaces where selling makes no sense (a listing the user is buying).
+   * The strip hides itself when the catalog has no usable market value, so a
+   * card priced at the 10-baht placeholder never invites a 20-baht listing.
+   */
+  onSellCard?: (card: Card) => void;
 }
 
 const CardDetails: React.FC<CardDetailsProps> = ({
@@ -42,16 +53,49 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   exchangeRate = 1,
   isVaultView = false,
   vaultActionButtons,
-  showSignInPrompt = false
+  showSignInPrompt = false,
+  onSellCard
 }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
+
+  const suggestedSell = suggestedSellPrice(card.marketPrice);
+  const wishlistDemand = useCardWishlistDemand(card?.id);
 
   const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Listing-alert button. alertTargetRef holds the state a tap asked for, so
+  // the confirmation toast fires only once the parent's wishlist actually
+  // flips: a signed-out tap opens the auth gate instead (and the post-sign-in
+  // resume still earns the toast), and a failure already toasts upstream.
+  const { showToast } = useToast();
+  const [alertBusy, setAlertBusy] = useState(false);
+  const alertTargetRef = useRef<boolean | null>(null);
+  const toggleListingAlert = async () => {
+    if (alertBusy) return;
+    alertTargetRef.current = !isWishlisted;
+    setAlertBusy(true);
+    try {
+      await onToggleWishlist(card);
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+  useEffect(() => {
+    const target = alertTargetRef.current;
+    alertTargetRef.current = null;
+    if (target === null || target !== isWishlisted) return;
+    showToast(
+      isWishlisted
+        ? (isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed")
+        : (isThai ? 'ปิดการแจ้งเตือนแล้ว · นำออกจากรายการที่อยากได้' : 'Listing alert off · removed from your wishlist'),
+      'success',
+    );
+  }, [isWishlisted, isThai, showToast]);
 
   // Real graded prices for this card: app sales (official) override JustTCG.
   // Empty until a grade tier actually has data — the dashboard stays blank
   // rather than inventing values off the raw price.
-  interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'market' | 'thai_estimate'; }
+  interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'market' | 'thai_estimate'; basis?: 'jp_twin' | 'en_name'; }
   const [gradedPrices, setGradedPrices] = useState<GradedPrice[]>([]);
 
   useEffect(() => {
@@ -126,7 +170,19 @@ const CardDetails: React.FC<CardDetailsProps> = ({
   // Prioritize hires images if available
   const displayImageUrl = card.imageUrl;
 
-  return (
+  // Portal target is document.body, which only exists after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  // Portaled to document.body. The Vault opens this overlay from inside the
+  // mobile shell's <main>, which is its own stacking context (z-10) with the
+  // bottom tab bar as a z-40 sibling, so rendered in place the tab bar always
+  // painted over the action bar (Add to Vault / Shop Now were untappable on a
+  // 640px phone). The shell's own mount sits after the nav and never had the
+  // problem; the portal makes every mount behave like that one. Same trap as
+  // AuthModal (fdc92af), SellerInfoModal (ca123e0) and ListingForm (33034b5).
+  return createPortal(
     <div className="fixed inset-0 z-50 max-w-[480px] mx-auto flex flex-col bg-brand-darker animate-slideUp">
       {/* Header with Wishlist Toggle */}
       <div className="px-6 pb-6 flex justify-between items-center sticky top-0 z-10 bg-brand-darker/80 backdrop-blur-lg border-b border-white/5" style={{ paddingTop: 'calc(1.5rem + var(--sat))' }}>
@@ -271,7 +327,33 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                   ) : (
                     <div className="py-8 border border-dashed border-white/5 rounded-xl text-center">
                       <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">{isThai ? 'ไม่มีรายการขายในขณะนี้' : 'No listings available for this item'}</p>
-                      <button className="mt-2 text-[9px] text-brand-cyan font-black uppercase tracking-widest hover:text-white transition-colors">Notify me on drop</button>
+                      {/* The wishlist IS the listing alert: lib/wishlistAlerts
+                          notifies every wishlister when this card is listed, so
+                          this toggles the wishlist (auth gate included). The
+                          "on" state stays tappable: a green line that looked
+                          like a button and ignored taps read as broken. */}
+                      <button
+                        onClick={toggleListingAlert}
+                        disabled={alertBusy}
+                        className="mt-2 px-3 py-2 inline-flex flex-col items-center gap-1 active:scale-95 transition-all disabled:opacity-60"
+                      >
+                        {isWishlisted ? (
+                          <>
+                            <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">
+                              <i className="fa-solid fa-bell mr-1.5"></i>
+                              {isThai ? 'เราจะแจ้งเตือนเมื่อมีคนวางขาย' : "You'll be notified when it's listed"}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest underline underline-offset-2">
+                              {isThai ? 'ปิดการแจ้งเตือน' : 'Turn off'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[9px] text-brand-cyan font-black uppercase tracking-widest">
+                            <i className="fa-regular fa-bell mr-1.5"></i>
+                            {isThai ? 'แจ้งเตือนเมื่อมีคนวางขาย' : 'Notify me on listing'}
+                          </span>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -288,9 +370,11 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                           <p className="font-black text-white text-sm tracking-tight">{graded.label}</p>
                           <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">
                             {graded.source === 'app_sale'
-                              ? (isThai ? 'ขายบนแอป' : 'Sold on CardStreet')
+                              ? (isThai ? 'ขายบนแอป' : 'Sold on Cardstreet')
                               : graded.source === 'thai_estimate'
-                                ? (isThai ? 'ประมาณจากอังกฤษ ×60%' : 'Est. (EN ×60%)')
+                                ? (graded.basis === 'jp_twin'
+                                  ? (isThai ? 'ประมาณจากญี่ปุ่น ×60%' : 'Est. (JP ×60%)')
+                                  : (isThai ? 'ประมาณจากอังกฤษ ×60%' : 'Est. (EN ×60%)'))
                                 : (isThai ? 'ราคาตลาด' : 'Market')}
                           </p>
                         </div>
@@ -330,6 +414,34 @@ const CardDetails: React.FC<CardDetailsProps> = ({
               <i className="fa-solid fa-arrow-right text-brand-cyan"></i>
             </button>
           )}
+          {/* "Sell for ~฿X". Above the two primary buttons rather than beside
+              them: a third button in that row shrinks all three below a
+              comfortable tap target on a 360dp phone, and this is the CTA the
+              marketplace is short of. Hidden without a usable market value. */}
+          {onSellCard && suggestedSell > 0 && (
+            <button
+              onClick={() => onSellCard(card)}
+              className="w-full flex items-center gap-3 bg-brand-green/10 border border-brand-green/25 rounded-xl px-4 py-3 text-left active:scale-[0.98] transition-all"
+            >
+              <i className="fa-solid fa-tag text-brand-green text-lg"></i>
+              <span className="flex-1 min-w-0 text-sm font-bold text-white leading-snug">
+                {isThai ? 'ขายใบนี้ได้ราว' : 'Sell yours for about'}{' '}
+                <span className="text-brand-green">฿{suggestedSell.toLocaleString()}</span>
+                {/* Demand turns a generic prompt into a specific one: "someone
+                    is waiting for this" is a far stronger reason to list than
+                    "you could sell this". */}
+                {wishlistDemand > 0 && (
+                  <span className="block text-[11px] font-semibold text-amber-300/90 mt-0.5">
+                    <i className="fa-solid fa-heart text-[9px] mr-1"></i>
+                    {wishlistDemand === 1
+                      ? t('sell.demandOne')
+                      : `${wishlistDemand} ${t('sell.demandMany')}`}
+                  </span>
+                )}
+              </span>
+              <i className="fa-solid fa-arrow-right text-brand-green text-sm"></i>
+            </button>
+          )}
           <div className="flex gap-3">
           <button
             onClick={() => onAddToCollection(card)}
@@ -354,7 +466,8 @@ const CardDetails: React.FC<CardDetailsProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -122,6 +122,36 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['recharts', 'lucide-react'],
   },
+  // Alias domains that must land on a specific page rather than the homepage.
+  //
+  // The other alias domains (thaitcg.com, thailandtcg.com) are plain "redirect to
+  // cardstreet.app" domains in the Vercel dashboard, which keeps the path and so
+  // lands on the homepage. Vercel applies that kind of redirect before the app is
+  // reached, so a domain listed here must instead be attached to the project as a
+  // normal Production domain — otherwise this rule never runs.
+  //
+  // Every path goes to the one page: these domains never hosted this site, so an
+  // inbound path means nothing here, and a host that served the real routes would
+  // be a full duplicate of cardstreet.app. Runs ahead of middleware.
+  async redirects() {
+    const pokemonAliases = [
+      'pokemonthailand.com',
+      'www.pokemonthailand.com',
+      'thailandpokemon.com',
+      'www.thailandpokemon.com',
+    ]
+    // '/' is listed beside '/:path*' on purpose: the bare domain is the request
+    // that matters most, so it does not rest on how the wildcard treats an empty path.
+    return pokemonAliases.flatMap((host) =>
+      ['/', '/:path*'].map((source) => ({
+        source,
+        // `value` is a pattern, so the dots are escaped to mean dots.
+        has: [{ type: 'host', value: host.replace(/\./g, '\\.') }],
+        destination: 'https://cardstreet.app/pokemon',
+        permanent: true,
+      }))
+    )
+  },
   // Baseline security headers, site-wide. Deliberately excludes a Content-Security
   // -Policy (needs per-source auditing of the inline scripts / third-party origins
   // this app loads) and leaves HSTS to the platform. X-Frame-Options is SAMEORIGIN

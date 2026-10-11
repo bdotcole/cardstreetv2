@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL, DEFAULT_OG_IMAGE } from '@/lib/i18nRouting';
 import TermsContent from './TermsContent';
 
 // Server wrapper so the shared /terms route emits canonical + hreflang in <head>.
@@ -10,19 +10,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(BASE_URL),
     title: isThai
-      ? 'ข้อกำหนดการใช้บริการ | CardStreet'
-      : 'Terms of Service — CardStreet TCG Marketplace',
+      ? 'ข้อกำหนดการใช้บริการ | Cardstreet'
+      : 'Terms of Service — Cardstreet TCG Marketplace',
     description: isThai
-      ? 'ข้อกำหนดการใช้บริการ CardStreet: กฎของมาร์เก็ตเพลส สินค้าต้องห้ามและการ์ดปลอม ค่าธรรมเนียมผู้ขาย การชำระเงิน การจัดส่ง และการระงับข้อพิพาทสำหรับการ์ดสะสมในประเทศไทย'
-      : 'CardStreet Terms of Service: marketplace rules, prohibited and counterfeit items, seller fees, payments, shipping, and dispute resolution for trading cards in Thailand.',
+      ? 'ข้อกำหนดการใช้บริการ Cardstreet: กฎของมาร์เก็ตเพลส สินค้าต้องห้ามและการ์ดปลอม ค่าธรรมเนียมผู้ขาย การชำระเงิน การจัดส่ง และการระงับข้อพิพาทสำหรับการ์ดสะสมในประเทศไทย'
+      : 'Cardstreet Terms of Service: marketplace rules, prohibited and counterfeit items, seller fees, payments, shipping, and dispute resolution for trading cards in Thailand.',
     alternates: buildAlternates('/terms', pathLocale),
     openGraph: {
-      title: isThai ? 'ข้อกำหนดการใช้บริการ CardStreet' : 'CardStreet Terms of Service',
+        images: DEFAULT_OG_IMAGE,
+      title: isThai ? 'ข้อกำหนดการใช้บริการ Cardstreet' : 'Cardstreet Terms of Service',
       description: isThai
-        ? 'กฎของมาร์เก็ตเพลส ค่าธรรมเนียมผู้ขาย การชำระเงิน การจัดส่ง และการระงับข้อพิพาทบน CardStreet'
-        : 'Marketplace rules, seller fees, payments, shipping, and dispute resolution on CardStreet.',
+        ? 'กฎของมาร์เก็ตเพลส ค่าธรรมเนียมผู้ขาย การชำระเงิน การจัดส่ง และการระงับข้อพิพาทบน Cardstreet'
+        : 'Marketplace rules, seller fees, payments, shipping, and dispute resolution on Cardstreet.',
       type: 'website',
-      siteName: 'CardStreet',
+      siteName: 'Cardstreet',
       url: localizedUrl('/terms', pathLocale),
     },
   };

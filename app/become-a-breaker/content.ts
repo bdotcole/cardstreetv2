@@ -162,7 +162,7 @@ export interface BreakerCopy {
 }
 
 const EN: BreakerCopy = {
-    backToHome: 'Back to CardStreet',
+    backToHome: 'Back to Cardstreet',
     langToggleLabel: 'อ่านภาษาไทย',
 
     eyebrow: 'Applications Now Open',
@@ -334,7 +334,7 @@ const EN: BreakerCopy = {
     consent: {
         accurate: 'The information I have submitted is accurate.',
         noGuarantee: 'I understand that applying does not guarantee approval.',
-        termsBefore: 'I agree to CardStreet’s ',
+        termsBefore: 'I agree to Cardstreet’s ',
         privacyLink: 'Privacy Policy',
         termsMiddle: ', ',
         termsLink: 'Terms of Service',
@@ -368,11 +368,11 @@ const EN: BreakerCopy = {
     successTitle: 'Application received!',
     successBody:
         'Thank you for applying to become a Cardstreet Breaker. Our team will review your information and contact you if you are selected for the next step.',
-    successBack: 'Back to CardStreet',
+    successBack: 'Back to Cardstreet',
 };
 
 const TH: BreakerCopy = {
-    backToHome: 'กลับสู่ CardStreet',
+    backToHome: 'กลับสู่ Cardstreet',
     langToggleLabel: 'Read in English',
 
     eyebrow: 'เปิดรับสมัครแล้ว',
@@ -550,7 +550,7 @@ const TH: BreakerCopy = {
         breakerTermsLink: 'ข้อกำหนดโปรแกรม Breaker',
         // Leading space: Thai runs words together, but this segment now follows
         // the Latin "Breaker", and "Breakerของ" reads as one broken token.
-        termsAfter: ' ของ CardStreet',
+        termsAfter: ' ของ Cardstreet',
     },
 
     submit: 'ส่งใบสมัคร',
@@ -578,7 +578,7 @@ const TH: BreakerCopy = {
     successTitle: 'ได้รับใบสมัครแล้ว!',
     successBody:
         'ขอบคุณที่สมัครเป็น Cardstreet Breaker ทีมงานของเราจะตรวจสอบข้อมูลของคุณ และจะติดต่อกลับหากคุณได้รับเลือกให้เข้าสู่ขั้นตอนถัดไป',
-    successBack: 'กลับสู่ CardStreet',
+    successBack: 'กลับสู่ Cardstreet',
 };
 
 export function getBreakerCopy(isThai: boolean): BreakerCopy {

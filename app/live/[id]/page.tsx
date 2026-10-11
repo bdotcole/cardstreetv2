@@ -31,7 +31,7 @@ export async function generateMetadata({
 }: {
     params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-    const fallback: Metadata = { title: 'ไลฟ์เปิดการ์ด | CardStreet' };
+    const fallback: Metadata = { title: 'ไลฟ์เปิดการ์ด | Cardstreet' };
     try {
         const { id } = await params;
         const admin = createAdminClient();
@@ -75,10 +75,10 @@ export async function generateMetadata({
         });
         const title =
             phase === 'live'
-                ? `LIVE • ${data.title} | CardStreet Live`
+                ? `LIVE • ${data.title} | Cardstreet Live`
                 : phase === 'scheduled'
-                  ? `Upcoming${shortDate ? ` • ${shortDate}` : ''} • ${data.title} | CardStreet Live`
-                  : `${data.title} | CardStreet Live`;
+                  ? `Upcoming${shortDate ? ` • ${shortDate}` : ''} • ${data.title} | Cardstreet Live`
+                  : `${data.title} | Cardstreet Live`;
 
         // Thai copy on purpose: /live is outside middleware's locale matcher
         // (see app/live/layout.tsx), and the share audience is LINE/FB Thailand.
@@ -94,25 +94,25 @@ export async function generateMetadata({
         const description =
             phase === 'live'
                 ? sellerName
-                    ? `ไลฟ์เปิดการ์ดสดโดย ${sellerName} บน CardStreet`
-                    : 'ไลฟ์เปิดการ์ดสดบน CardStreet'
+                    ? `ไลฟ์เปิดการ์ดสดโดย ${sellerName} บน Cardstreet`
+                    : 'ไลฟ์เปิดการ์ดสดบน Cardstreet'
                 : phase === 'scheduled'
                   ? presaleOpen
                       ? sellerName
-                          ? `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตกับ ${sellerName} ได้เลยบน CardStreet`
-                          : `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตได้เลยบน CardStreet`
+                          ? `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตกับ ${sellerName} ได้เลยบน Cardstreet`
+                          : `ไลฟ์เริ่ม ${when} — พรีเซลเปิดแล้ว จองสล็อตได้เลยบน Cardstreet`
                       : sellerName
-                        ? `ไลฟ์เริ่ม ${when} — พบกับ ${sellerName} ได้บน CardStreet`
-                        : `ไลฟ์เริ่ม ${when} บน CardStreet`
+                        ? `ไลฟ์เริ่ม ${when} — พบกับ ${sellerName} ได้บน Cardstreet`
+                        : `ไลฟ์เริ่ม ${when} บน Cardstreet`
                   : sellerName
-                    ? `${sellerName} ไลฟ์เปิดการ์ดบน CardStreet — ติดตามไลฟ์รอบหน้าได้เลย`
-                    : 'ไลฟ์เปิดการ์ดบน CardStreet — ติดตามไลฟ์รอบหน้าได้เลย';
+                    ? `${sellerName} ไลฟ์เปิดการ์ดบน Cardstreet — ติดตามไลฟ์รอบหน้าได้เลย`
+                    : 'ไลฟ์เปิดการ์ดบน Cardstreet — ติดตามไลฟ์รอบหน้าได้เลย';
         return {
             title,
             description,
             openGraph: {
                 type: 'website',
-                siteName: 'CardStreet',
+                siteName: 'Cardstreet',
                 url: `https://cardstreet.app/live/${id}`,
                 title,
                 description,

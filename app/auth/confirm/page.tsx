@@ -83,7 +83,7 @@ function ConfirmInner() {
                             href="/"
                             className="block w-full h-12 leading-[3rem] bg-brand-cyan text-brand-darker font-black rounded-xl text-sm uppercase tracking-widest hover:bg-white transition-colors"
                         >
-                            ไปที่ CardStreet · Open CardStreet
+                            ไปที่ Cardstreet · Open Cardstreet
                         </a>
                     </>
                 ) : (
@@ -99,12 +99,12 @@ function ConfirmInner() {
                         <p className="text-slate-400 text-sm leading-relaxed">
                             {isRecovery
                                 ? 'กดปุ่มด้านล่างเพื่อยืนยันตัวตนและตั้งรหัสผ่านใหม่'
-                                : 'กดปุ่มด้านล่างเพื่อยืนยันอีเมลและเริ่มใช้งาน CardStreet'}
+                                : 'กดปุ่มด้านล่างเพื่อยืนยันอีเมลและเริ่มใช้งาน Cardstreet'}
                         </p>
                         <p className="text-slate-500 text-xs leading-relaxed">
                             {isRecovery
                                 ? 'Press the button below to verify it\'s you and set a new password.'
-                                : 'Press the button below to confirm your email and start using CardStreet.'}
+                                : 'Press the button below to confirm your email and start using Cardstreet.'}
                         </p>
                         <button
                             onClick={confirm}

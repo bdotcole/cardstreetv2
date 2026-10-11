@@ -11,6 +11,9 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { CHAT_BODY_MAX, requireViewerOrSeller, resolvePublicViewer } from '@/lib/liveBreaks';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
+import { extractEmoteKeys, emoteMinLevel, EMOTE_PACKS } from '@/components/rewards/emotes';
 
 const CHAT_WINDOW_SECONDS = 30;
 const CHAT_MAX_PER_WINDOW = 10;
@@ -75,6 +78,46 @@ export async function POST(
             );
         }
 
+        // Collector Pass emotes are level-gated: a body containing known
+        // `:emote:` tokens is checked against the sender's level (unknown
+        // tokens are plain text and skip this entirely). Pre-migration the
+        // level lookup fails -> level 1 -> emotes read as locked, which is
+        // the honest state; sellers bypass the gate in their own room.
+        const emoteKeys = extractEmoteKeys(text);
+        if (emoteKeys.length > 0 && !isSeller) {
+            let level = 1;
+            const ownedPacks = new Set<string>();
+            try {
+                const { data: rw } = await admin
+                    .from('rewards')
+                    .select('level')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+                if (typeof rw?.level === 'number') level = rw.level;
+                // Early-unlocked packs (coin store) count as entitled.
+                const { data: unlocks } = await admin
+                    .from('reward_items')
+                    .select('meta')
+                    .eq('user_id', user.id)
+                    .eq('item_key', 'emote_early_unlock')
+                    .eq('status', 'active');
+                for (const u of (unlocks ?? []) as { meta: { pack?: string } | null }[]) {
+                    if (u.meta?.pack) ownedPacks.add(u.meta.pack);
+                }
+            } catch { /* fail toward locked */ }
+            const packOf = (k: string) => EMOTE_PACKS.find((p) => p.emotes.includes(k));
+            const locked = emoteKeys.find((k) => {
+                const pack = packOf(k);
+                return emoteMinLevel(k) > level && !(pack && ownedPacks.has(pack.key));
+            });
+            if (locked) {
+                return NextResponse.json(
+                    { error: 'Emote locked', code: 'EMOTE_LOCKED', emote: locked, minLevel: emoteMinLevel(locked) },
+                    { status: 403 },
+                );
+            }
+        }
+
         const { data: message, error: insertErr } = await admin
             .from('stream_chat_messages')
             .insert({ stream_id: stream.id, sender_id: user.id, body: text })
@@ -85,6 +128,19 @@ export async function POST(
             console.error('[Live/Chat] insert failed:', insertErr?.message);
             return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
         }
+
+        // Collector Pass: XP for the FIRST message in each stream (ref_id =
+        // stream id) with a daily stream cap — the 10/30s rate limit above
+        // bounds raw spam, this bounds reward farming. XP only, never coins.
+        await awardEvent(admin, {
+            userId: user.id,
+            rule: EARN.CHAT_STREAM.rule,
+            ref: stream.id,
+            xp: EARN.CHAT_STREAM.xp,
+            coins: 0,
+            dailyCap: EARN.CHAT_STREAM.dailyCap,
+        });
+        await awardFirst(admin, user.id, 'first_chat');
 
         return NextResponse.json({ success: true, message });
     } catch (err: any) {
@@ -123,9 +179,35 @@ export async function GET(
             return NextResponse.json({ error: 'Failed to load chat' }, { status: 500 });
         }
 
+        // The multi-line embed select defeats supabase-js's row inference, so
+        // the rows are treated as plain records here.
+        const ordered = ((messages ?? []) as unknown as Record<string, unknown>[]).reverse();
+
+        // Attach each sender's Collector Pass level (rank chips in both chat
+        // renderers). Fail-soft: pre-migration the view lacks the column and
+        // this whole block quietly no-ops.
+        try {
+            const senderIds = [...new Set(
+                ordered
+                    .filter((m) => m.is_system !== true && typeof m.sender_id === 'string')
+                    .map((m) => m.sender_id as string),
+            )];
+            if (senderIds.length > 0) {
+                type DisplayRow = { id: string; reward_level: number | null };
+                const { data: rows } = await admin
+                    .from('public_profiles')
+                    .select('id, reward_level')
+                    .in('id', senderIds);
+                const byId = new Map(((rows ?? []) as DisplayRow[]).map((r) => [r.id, r]));
+                for (const m of ordered) {
+                    m.sender_level = byId.get(m.sender_id as string)?.reward_level ?? null;
+                }
+            }
+        } catch { /* chips just don't render */ }
+
         // Chronological for rendering; the query was newest-first to get the
         // LAST 100.
-        return NextResponse.json({ messages: (messages ?? []).reverse() });
+        return NextResponse.json({ messages: ordered });
     } catch (err: any) {
         console.error('[Live/Chat] GET error:', err);
         return NextResponse.json({ error: 'Failed to load chat' }, { status: 500 });

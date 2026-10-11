@@ -49,11 +49,21 @@ const TEMPLATES = {
     // not — Courier's snippets use the base32 content-template ids below, and
     // the dashboard logs showed zero template sends ever succeeding, so treat
     // any UUID-looking id in this table as wrong.
+    // UNUSED since 2026-10-10: Sold, Label Generated, Shipped and Order
+    // Confirmed are sent inline (the *NotificationContent builders below).
+    // These Legacy Designer templates cannot be edited through the API, their
+    // push blocks delivered raw UUIDs / a literal "xxx", and the copy predates
+    // seller-minted labels. Kept so SUBJECTS keeps its key type.
     sold: (process.env.COURIER_SOLD_TEMPLATE_ID || 'BATFJT2XTH4YAHJNK96A3MG762DQ').trim(),
     labelGenerated: (process.env.COURIER_LABEL_GENERATED_TEMPLATE_ID || '000AHF66DDMCJVMGZJK5P8Q2824Z').trim(),
     shipped: (process.env.COURIER_SHIPPED_TEMPLATE_ID || 'PN39K94HQS47C4GTEGVSDD7GFMPR').trim(),
     orderConfirmed: (process.env.COURIER_ORDER_CONFIRMED_TEMPLATE_ID || 'WAE55N73MYM5CAGN7GTWQT7XPN8B').trim(),
-    firstTimeSale: (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || 'nt_01kvba0yzweh78ef8f9c1b49z7').trim(),
+    // First Time Sale is deliberately NOT here any more: it renders inline
+    // (sendFirstTimeSaleEmail). Its dashboard template (nt_01kvba0yzweh78ef8f9c1b49z7)
+    // was authored in Courier's newer Elemental editor, which stored the pasted
+    // {seller_first_name} / {order_number} tokens as literal text, so every
+    // send went out reading "Congratulations on your first sale,
+    // {seller_first_name}!" (2026-10-09). Only link hrefs substituted.
     // OBO Best-Offer templates. No default id yet — these dashboard templates
     // are ops/founder action before go-live. When the env id is empty the send
     // functions fall back to inline bilingual `content` (like
@@ -62,6 +72,7 @@ const TEMPLATES = {
     // (base32), NOT a UUID (see the warning above).
     offerReceived: (process.env.COURIER_OFFER_RECEIVED_TEMPLATE_ID || '').trim(),
     offerAccepted: (process.env.COURIER_OFFER_ACCEPTED_TEMPLATE_ID || '').trim(),
+    offerCounterAccepted: (process.env.COURIER_OFFER_COUNTER_ACCEPTED_TEMPLATE_ID || '').trim(),
     offerRejected: (process.env.COURIER_OFFER_REJECTED_TEMPLATE_ID || '').trim(),
     offerCountered: (process.env.COURIER_OFFER_COUNTERED_TEMPLATE_ID || '').trim(),
     offerExpired: (process.env.COURIER_OFFER_EXPIRED_TEMPLATE_ID || '').trim(),
@@ -91,10 +102,10 @@ const TEMPLATES = {
 const SUBJECTS: Partial<Record<keyof typeof TEMPLATES, string>> = {
     sold: 'คุณมีคำสั่งซื้อใหม่ — New sale!',
     labelGenerated: 'ใบปะหน้าพัสดุพร้อมแล้ว — Shipping label ready',
-    shipped: 'สินค้าถูกจัดส่งแล้ว Order Shipped!',
-    orderConfirmed: 'ยืนยันคำสั่งซื้อ Order Confirmed!',
-    // firstTimeSale: that subject is ASCII plus one emoji (43 UTF-8 bytes,
-    // under the 48-byte cliff) so it renders intact without an override.
+    shipped: 'สินค้าถูกจัดส่งแล้ว — Order shipped!',
+    orderConfirmed: 'ยืนยันคำสั่งซื้อแล้ว — Order confirmed!',
+    // firstTimeSale is inline (FIRST_SALE_SUBJECT below) and forces its own
+    // subject through the same override.
     // Offer templates: add entries alongside the env IDs when those dashboard
     // templates go live, or any Thai subject on them will truncate.
 };
@@ -148,6 +159,16 @@ async function getUserNotifContext(userId: string): Promise<{
         // a NULL over these, and an account with no prefs row at all still
         // resolves to opted-in.
         show_live_email: true, show_live_push: true,
+        // Retention pushes (streak-at-risk, weekly digest). These have NO
+        // migration behind them yet, on purpose: the spread above cannot
+        // override a default with a column that does not exist, so both resolve
+        // to opted-in today, and adding real columns later starts honoring them
+        // with no code change. The streak nudge is deliberately push-only —
+        // a daily email about a check-in streak is spam by any measure.
+        streak_push: true,
+        digest_email: true, digest_push: true,
+        demand_email: true, demand_push: true,
+        stale_listing_email: true, stale_listing_push: true,
     };
 
     return {
@@ -197,8 +218,108 @@ function buildRouting(wantEmail: boolean, wantPush: boolean, contentSource: 'tem
 }
 
 /**
+ * Element `channels` filter for push-only Elemental elements. Lists both the
+ * channel class and the provider name because our inline routing addresses the
+ * provider directly ("firebase-fcm", see buildRouting) — whichever string
+ * Courier matches element scoping against, the element renders on the push
+ * and nowhere else.
+ */
+const PUSH_ELEMENT_CHANNELS = ['push', 'firebase-fcm'];
+
+/**
+ * Elemental content that gives email and push DIFFERENT bodies in one send.
+ *
+ * Why: simple `content: {title, body}` renders the same body verbatim on
+ * every routed channel, so copy written for email — paragraphs, raw URLs,
+ * support footers — was landing in notification trays as multi-hundred-
+ * character walls with visible links (push QC 2026-08-27, verified against
+ * Courier's rendered-output API). Per-element `channels` scoping splits them:
+ * email keeps the long-form copy and a CTA button, push gets one short line.
+ * The push tap never needs a visible URL — the FCM handlers deep-link from
+ * the message `data` payload (hooks/usePushNotifications.ts).
+ *
+ * `title` doubles as the email subject and the push title, so keep the
+ * signal in front (trays and inbox lists truncate the tail). Thai titles
+ * still need postmarkOverride(title) at the call site — Courier's email
+ * subject encoder truncates non-ASCII at 48 bytes (see SUBJECTS).
+ */
+// Returns `any`: the SDK's ElementalContent union doesn't know the spec's
+// per-element `channels` property (the API accepts it), and the existing
+// Elemental sends already pass `message as any` for the same reason.
+function emailPlusPushContent(c: {
+    title: string;
+    emailParagraphs: { text: string; muted?: boolean }[];
+    cta?: { label: string; url: string };
+    /** Muted line rendered under the CTA button (support contact, etc.). */
+    emailFooter?: string;
+    pushBody: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}): any {
+    return {
+        version: '2022-01-01',
+        elements: [
+            { type: 'meta', title: c.title },
+            ...c.emailParagraphs.map((p) => ({
+                type: 'text',
+                content: p.text,
+                ...(p.muted ? { color: '#6b7280' } : {}),
+                channels: ['email'],
+            })),
+            ...(c.cta
+                ? [
+                      {
+                          type: 'action',
+                          content: c.cta.label,
+                          href: c.cta.url,
+                          style: 'button',
+                          align: 'center',
+                          background_color: '#0891b2',
+                          channels: ['email'],
+                      },
+                  ]
+                : []),
+            ...(c.emailFooter
+                ? [{ type: 'text', content: c.emailFooter, color: '#6b7280', align: 'center', channels: ['email'] }]
+                : []),
+            { type: 'text', content: c.pushBody, channels: PUSH_ELEMENT_CHANNELS },
+        ],
+    };
+}
+
+/**
  * Notifies the seller when their item is sold.
  */
+/**
+ * The seller's "you sold something" copy. Since labels are minted by the
+ * seller (lib/parcels), the message has to send them to the app to create
+ * the Flash label, and mention that one buyer's several orders can share a
+ * parcel. Exported so a zero-impact render check (undeliverable recipient +
+ * GET /messages/{id}/output) can send exactly what production sends.
+ */
+export function soldNotificationContent(totalAmount: number, orderId: string) {
+    const amount = Number(totalAmount || 0).toLocaleString('en-US');
+    return emailPlusPushContent({
+        title: SUBJECTS.sold!,
+        emailParagraphs: [
+            {
+                text:
+                    `ยินดีด้วย! สินค้าของคุณขายได้แล้วในราคา ${amount} บาท ` +
+                    'เปิดแอป Cardstreet ไปที่ รายการรอจัดส่ง แล้วกด "สร้างและพิมพ์ป้ายจัดส่ง" เพื่อสร้างใบปะหน้า Flash Express ' +
+                    'หากผู้ซื้อคนเดียวกันมีหลายออเดอร์ คุณสามารถรวมส่งเป็นพัสดุเดียวได้',
+            },
+            {
+                text:
+                    `Great news! Your item has been sold for ${amount} THB. ` +
+                    'Open the Cardstreet app, go to Pending Shipments and tap "Create & print label" to create your Flash Express label. ' +
+                    'If the same buyer has several orders, you can combine them into one parcel.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Create label · สร้างป้ายจัดส่ง', url: `${appBaseUrl()}/orders/${orderId}` },
+        pushBody: `ขายได้ ${amount} บาท — เปิดแอปเพื่อสร้างป้ายจัดส่ง · Open the app to create your shipping label.`,
+    });
+}
+
 export async function sendSoldNotification(sellerId: string, orderDetails: any) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping sold notification'); return; }
@@ -213,7 +334,8 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         prefs.sold_email ? email : null,
         prefs.sold_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.sold_email && !!email, !!prefs.sold_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
@@ -223,17 +345,11 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         const sendResult = await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.sold,
+                content: soldNotificationContent(Number(orderDetails.total_amount) || 0, String(orderDetails.id)),
                 routing,
                 providers: postmarkOverride(SUBJECTS.sold),
-                data: {
-                    // Template references {orderDetails.total_amount} (and {orderDetails.id}).
-                    // Pass only the fields the template reads, not the whole order row.
-                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
-                    // Push deep-link payload (read by the mobile FCM handler).
-                    orderId: orderDetails.id,
-                    type: 'sold',
-                },
+                // Push deep-link payload (read by the mobile FCM handler).
+                data: { orderId: orderDetails.id, type: 'sold' },
             }
         });
         console.log(`[Courier] ✅ 'Sold' notification sent. Request ID: ${(sendResult as { requestId?: string }).requestId}`);
@@ -249,13 +365,56 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
  * Postmark provider override — Courier's project here is configured against
  * Postmark, whose attachment schema is { Name, Content, ContentType } inside
  * an `Attachments` array. The email body always links to the seller's
- * CardStreet dashboard as a backup so the message is useful even if the
+ * Cardstreet dashboard as a backup so the message is useful even if the
  * recipient's mail client strips the attachment (or for the push channel
  * where attachments don't apply).
  */
+export interface LabelReadyDetails {
+    id: string;
+    /** Flash waybill, shown so the seller can match label to parcel. */
+    trackingNumber?: string | null;
+    /** Cards in the parcel; above one, the copy says to pack them together. */
+    itemCount?: number | null;
+}
+
+/**
+ * The seller's "label is ready" copy. Fires when the seller mints the label
+ * (lib/parcels), adds orders to an unscanned parcel, or the safety-net cron
+ * mints for them. The PDF rides the email as a Postmark attachment; the push
+ * is one line and the app button prints it. Exported for render checks.
+ */
+export function labelReadyNotificationContent(d: LabelReadyDetails) {
+    const pno = d.trackingNumber ? ` (${d.trackingNumber})` : '';
+    const many = (d.itemCount ?? 1) > 1;
+    return emailPlusPushContent({
+        title: SUBJECTS.labelGenerated!,
+        emailParagraphs: [
+            {
+                text:
+                    `ใบปะหน้าพัสดุ Flash Express ของคุณพร้อมแล้ว${pno} ไฟล์ PDF แนบมากับอีเมลนี้ หรือพิมพ์จากแอปได้ที่ รายการรอจัดส่ง ` +
+                    (many
+                        ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้า `
+                        : 'แพ็กการ์ด ติดใบปะหน้า ') +
+                    'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา',
+            },
+            {
+                text:
+                    `Your Flash Express label is ready${pno}. The PDF is attached, or print it from Pending Shipments in the app. ` +
+                    (many
+                        ? `Pack all ${d.itemCount} cards for this parcel in one envelope, attach the label, `
+                        : 'Pack the card, attach the label, ') +
+                    'and hand it to Flash at pickup or at a branch.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Print label · พิมพ์ใบปะหน้า', url: `${appBaseUrl()}/orders/${d.id}` },
+        pushBody: 'เปิดแอปเพื่อพิมพ์ใบปะหน้าและจัดส่งได้เลย · Open the app to print your label and ship.',
+    });
+}
+
 export async function sendLabelGeneratedNotification(
     sellerId: string,
-    orderDetails: { id: string },
+    orderDetails: LabelReadyDetails,
     labelPdfBase64?: string | null,
 ) {
     const courier = getCourier();
@@ -271,10 +430,10 @@ export async function sendLabelGeneratedNotification(
         prefs.label_email ? email : null,
         prefs.label_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.label_email && !!email, !!prefs.label_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
-    const orderUrl = `${appBaseUrl()}/orders/${orderDetails.id}`;
     const hasAttachment = !!labelPdfBase64;
 
     // Postmark attachment rides the same per-provider override as the subject
@@ -286,7 +445,7 @@ export async function sendLabelGeneratedNotification(
             ? {
                   Attachments: [
                       {
-                          Name: `cardstreet-label-${orderDetails.id}.pdf`,
+                          Name: `cardstreet-label-${orderDetails.trackingNumber || orderDetails.id}.pdf`,
                           Content: labelPdfBase64,
                           ContentType: 'application/pdf',
                       },
@@ -300,32 +459,11 @@ export async function sendLabelGeneratedNotification(
         const { requestId } = await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.labelGenerated,
+                content: labelReadyNotificationContent(orderDetails),
                 routing,
                 ...(providers ? { providers } : {}),
-                data: {
-                    // Template references {orderDetails.id} and {labelUrl}. The label
-                    // route requires auth, so deep-link to the order page where the
-                    // seller can pull the label (the PDF is also attached to this
-                    // email via the Postmark override below).
-                    //
-                    // These keys are EXACTLY aligned with the template — verified
-                    // 2026-08-15 against the live Courier API (GET /notifications/
-                    // 000AHF66.../content + GET /messages/{id}/output): the push
-                    // block renders both values from this very payload. The email
-                    // block's ENGLISH sentence still shows raw {orderDetails.id} /
-                    // {labelUrl} because those two tokens were typed as PLAIN TEXT
-                    // there — not <variable>-wrapped like the Thai sentence and the
-                    // push block — and Courier only substitutes tokenized variables.
-                    // No data payload can fix that; the cure is a dashboard edit
-                    // (re-insert the two variables in the email block's English
-                    // line). Do not "fix" this payload again.
-                    orderDetails: { id: orderDetails.id },
-                    labelUrl: orderUrl,
-                    // Push deep-link payload.
-                    orderId: orderDetails.id,
-                    type: 'label_generated',
-                },
+                // Push deep-link payload (read by the mobile FCM handler).
+                data: { orderId: orderDetails.id, type: 'label_generated' },
             },
         });
         console.log(`[Courier] ✅ 'Label Generated' notification sent. Request ID: ${requestId}`);
@@ -337,6 +475,34 @@ export async function sendLabelGeneratedNotification(
 /**
  * Notifies the buyer that their item has shipped.
  */
+/**
+ * The buyer's "parcel picked up" copy (Flash's first scan). Tracking in the
+ * email as a plain line and a Flash link; the push carries the waybill and
+ * nothing else. Exported for render checks.
+ */
+export function shippedNotificationContent(orderId: string, trackingNumber: string) {
+    const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${encodeURIComponent(trackingNumber)}`;
+    return emailPlusPushContent({
+        title: SUBJECTS.shipped!,
+        emailParagraphs: [
+            {
+                text:
+                    `พัสดุของคุณกำลังเดินทาง! Flash Express รับพัสดุหมายเลข ${trackingNumber} แล้ว ` +
+                    'ติดตามสถานะได้ในแอปที่ ติดตามคำสั่งซื้อ หรือที่เว็บไซต์ Flash Express',
+            },
+            {
+                text:
+                    `Your parcel is on its way. Flash Express has picked up waybill ${trackingNumber}. ` +
+                    'Track it in the app under Track Orders, or on the Flash Express site.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'Track parcel · ติดตามพัสดุ', url: `${appBaseUrl()}/orders/${orderId}` },
+        emailFooter: `Flash Express: ${trackingLink}`,
+        pushBody: `พัสดุ ${trackingNumber} กำลังเดินทางถึงคุณ — ติดตามสถานะได้ในแอป · On the way — track it in the app.`,
+    });
+}
+
 export async function sendShippedNotification(buyerId: string, orderDetails: any, trackingUrl: string) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping shipped notification'); return; }
@@ -351,27 +517,20 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
         prefs.shipped_email ? email : null,
         prefs.shipped_push ? fcmToken : null
     );
-    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!prefs.shipped_email && !!email, !!prefs.shipped_push && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
-    const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${trackingUrl}`;
     try {
         await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.shipped,
+                // `trackingUrl` is the raw waybill number (legacy parameter name).
+                content: shippedNotificationContent(String(orderDetails.id), trackingUrl),
                 routing,
                 providers: postmarkOverride(SUBJECTS.shipped),
-                data: {
-                    // Template references {trackingLink} (full URL) + {orderDetails.id}.
-                    orderDetails: { id: orderDetails.id },
-                    trackingLink,
-                    trackingNumber: trackingUrl,
-                    // Push deep-link payload (unchanged contract: raw tracking number).
-                    orderId: orderDetails.id,
-                    type: 'shipped',
-                    trackingUrl,
-                },
+                // Push deep-link payload (unchanged contract: raw tracking number).
+                data: { orderId: orderDetails.id, type: 'shipped', trackingUrl },
             }
         });
         console.log(`[Courier] ✅ 'Shipped' notification sent to buyer ${buyerId}`);
@@ -383,6 +542,37 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
 /**
  * Notifies the buyer that their order was confirmed, with tracking info.
  */
+/**
+ * The buyer's receipt. Since the seller mints the label after payment, there
+ * is no tracking number yet; the copy says the seller is preparing the parcel
+ * and a shipped notification follows at Flash's first scan. Exported for
+ * render checks.
+ */
+export function orderConfirmedNotificationContent(orderId: string, totalAmount: number, trackingNumbers: string[] = []) {
+    const amount = Number(totalAmount || 0).toLocaleString('en-US');
+    const tracking = trackingNumbers.length > 0 ? trackingNumbers.join(', ') : '';
+    return emailPlusPushContent({
+        title: SUBJECTS.orderConfirmed!,
+        emailParagraphs: [
+            {
+                text:
+                    `ขอบคุณสำหรับคำสั่งซื้อ! เราได้รับการชำระเงิน ${amount} บาทแล้ว ผู้ขายกำลังเตรียมพัสดุของคุณ ` +
+                    'เราจะแจ้งเตือนอีกครั้งเมื่อ Flash Express รับพัสดุ ติดตามสถานะได้ในแอปที่ ติดตามคำสั่งซื้อ' +
+                    (tracking ? ` หมายเลขพัสดุ: ${tracking}` : ''),
+            },
+            {
+                text:
+                    `Thanks for your order! Your payment of ${amount} THB is confirmed. The seller is preparing your parcel, ` +
+                    "and you'll get another notification when Flash Express picks it up. Track it in the app under Track Orders." +
+                    (tracking ? ` Tracking: ${tracking}` : ''),
+                muted: true,
+            },
+        ],
+        cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+        pushBody: 'ขอบคุณสำหรับคำสั่งซื้อ — ติดตามสถานะพัสดุได้ในแอป · Thanks for your order — track it in the app.',
+    });
+}
+
 export async function sendOrderConfirmationNotification(buyerId: string, orderDetails: any, trackingNumbers: string[] = []) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping order confirmation'); return; }
@@ -405,26 +595,19 @@ export async function sendOrderConfirmationNotification(buyerId: string, orderDe
         wantEmail ? email : null,
         wantPush ? fcmToken : null
     );
-    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'template');
+    // Inline content, so the push is pinned to Firebase (see buildRouting).
+    const routing = buildRouting(!!wantEmail && !!email, !!wantPush && !!fcmToken, 'inline');
     if (routing.channels.length === 0) return;
 
     try {
         await courier.send.message({
             message: {
                 to: recipient,
-                template: TEMPLATES.orderConfirmed,
+                content: orderConfirmedNotificationContent(String(orderDetails.id), Number(orderDetails.total_amount) || 0, trackingNumbers),
                 routing,
                 providers: postmarkOverride(SUBJECTS.orderConfirmed),
-                data: {
-                    // Template references {orderDetails.total_amount} + {trackingNumbersText}.
-                    orderDetails: { id: orderDetails.id, total_amount: orderDetails.total_amount },
-                    trackingNumbersText: trackingNumbers.join(', '),
-                    hasTracking: trackingNumbers.length > 0,
-                    // Push deep-link payload (unchanged contract: array form).
-                    orderId: orderDetails.id,
-                    type: 'order_confirmation',
-                    trackingNumbers,
-                },
+                // Push deep-link payload (unchanged contract: array form).
+                data: { orderId: orderDetails.id, type: 'order_confirmation', trackingNumbers },
             }
         });
         console.log(`[Courier] ✅ 'Order Confirmation' notification sent to buyer ${buyerId}`);
@@ -454,15 +637,22 @@ export async function sendPurchaseCompletedNotification(sellerId: string, orderD
     if (routing.channels.length === 0) return;
 
     try {
+        const title = 'การขายเสร็จสมบูรณ์ — Sale complete';
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Purchase Completed! 💰",
-                    body: `The buyer has confirmed receipt of order ${orderDetails.id}. Your funds are being released to your account!`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: 'The buyer confirmed receipt of your order. Your funds are being released to your account.' },
+                        { text: 'ผู้ซื้อยืนยันรับสินค้าเรียบร้อยแล้ว — เงินจากคำสั่งซื้อนี้กำลังถูกโอนเข้าบัญชีของคุณ', muted: true },
+                    ],
+                    cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderDetails.id}` },
+                    pushBody: 'ผู้ซื้อยืนยันรับสินค้าแล้ว เงินกำลังถูกโอนให้คุณ · Buyer confirmed receipt — funds on the way.',
+                }),
                 routing,
-                data: { orderId: orderDetails.id, type: 'purchase_completed' }
+                data: { orderId: orderDetails.id, type: 'purchase_completed' },
+                providers: postmarkOverride(title),
             }
         });
         console.log(`[Courier] ✅ 'Purchase Completed' notification sent to seller ${sellerId}`);
@@ -497,13 +687,22 @@ export async function sendPayoutCompletedNotification(sellerId: string, orderId:
     if (routing.channels.length === 0) return;
 
     try {
+        const amountLabel = `฿${amount.toLocaleString()}`;
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Payout Sent! 💸",
-                    body: `Your payout of ฿${amount.toLocaleString()} for order ${orderId} has been successfully transferred to your Stripe account.`,
-                },
+                content: emailPlusPushContent({
+                    // Amount-first: the figure IS the signal, and trays truncate
+                    // the tail. Same copy as the TH-path send in
+                    // supabase/functions/release-funds/index.ts — change both.
+                    title: `Payout sent — ${amountLabel}`,
+                    emailParagraphs: [
+                        { text: `Your payout of ${amountLabel} for this order has been transferred to your Stripe account.` },
+                        { text: `เงิน ${amountLabel} จากคำสั่งซื้อนี้ถูกโอนเข้าบัญชี Stripe ของคุณเรียบร้อยแล้ว`, muted: true },
+                    ],
+                    cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+                    pushBody: 'โอนเข้าบัญชี Stripe ของคุณแล้ว · Sent to your Stripe account.',
+                }),
                 routing,
                 data: { orderId, type: 'payout_completed', amount }
             }
@@ -540,15 +739,22 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
     if (routing.channels.length === 0) return;
 
     try {
+        const title = 'พัสดุถึงแล้ว — Package delivered';
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Package Delivered! 📦",
-                    body: `Your Flash Express package (${trackingNumber}) for order ${orderId} has been delivered. Please confirm receipt in the app to release funds to the seller.`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `Your Flash Express package (${trackingNumber}) has been delivered. Please confirm receipt in the app to release the seller's funds.` },
+                        { text: `พัสดุ Flash Express (${trackingNumber}) ของคุณจัดส่งเรียบร้อยแล้ว — กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย`, muted: true },
+                    ],
+                    cta: { label: 'Confirm receipt · ยืนยันรับสินค้า', url: `${appBaseUrl()}/orders/${orderId}` },
+                    pushBody: 'กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย · Confirm receipt in the app.',
+                }),
                 routing,
-                data: { orderId, type: 'package_delivered', trackingNumber }
+                data: { orderId, type: 'package_delivered', trackingNumber },
+                providers: postmarkOverride(title),
             }
         });
         console.log(`[Courier] ✅ 'Package Delivered' notification sent to buyer ${buyerId}`);
@@ -593,15 +799,23 @@ export async function sendCardRequestFulfilledNotification(
     const extra = details.note?.trim() ? ` ${details.note.trim()}` : '';
 
     try {
+        const title = `${card} is now on Cardstreet`;
         await courier.send.message({
             message: {
                 to: recipient,
-                content: {
-                    title: "CardStreet: Your requested card is here! 🎴",
-                    body: `Good news — "${card}" has been added to the CardStreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.`,
-                },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `Good news — "${card}" has been added to the Cardstreet catalog and is now searchable.${extra} Open the app and search for it to add it to your collection or find it on the marketplace.` },
+                        { text: `การ์ดที่คุณขอ "${card}" ถูกเพิ่มเข้าแคตตาล็อกแล้ว — ค้นหาในแอปเพื่อเพิ่มเข้าคอลเลกชันหรือหาซื้อในตลาด`, muted: true },
+                    ],
+                    pushBody: 'การ์ดที่คุณขอถูกเพิ่มแล้ว — ค้นหาในแอปได้เลย · Search the app to collect or buy it.',
+                }),
                 routing,
                 data: { type: 'card_request_fulfilled', searchQuery: card },
+                // Requested cards can have Thai names, pushing the subject past
+                // Courier's 48-byte encoded-word cliff (see SUBJECTS).
+                providers: postmarkOverride(title),
             },
         });
         console.log(`[Courier] ✅ 'Card Request Fulfilled' notification sent to requester ${requesterId}`);
@@ -645,10 +859,91 @@ function appBaseUrl(): string {
     return (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/+$/, '');
 }
 
+// Bilingual subject for the first-sale email. Thai first, so it goes through
+// the Postmark override (see SUBJECTS) rather than Courier's 48-byte cliff.
+const FIRST_SALE_SUBJECT = 'ยินดีด้วยกับการขายครั้งแรกบน Cardstreet 🎉 Congrats on your first sale!';
+// The packing walkthrough the dashboard template linked; env-overridable.
+const FIRST_SALE_PACKING_VIDEO_DEFAULT = 'https://youtu.be/GBF0qq81VWQ?si=Ax7efr8fkqolLncz';
+
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>
+    )[c]);
+}
+
+/**
+ * The first-sale email body: one Elemental `html` element inside the Courier
+ * brand wrapper, English then Thai, copied from the published dashboard
+ * template. Rendered in code so the seller's name and order number are
+ * substituted by us — the dashboard template stored those tokens as literal
+ * text and they never resolved (see the TEMPLATES note). The display name is
+ * user-controlled, so every value is HTML-escaped.
+ */
+export function firstTimeSaleHtml(v: {
+    firstName: string;
+    orderNumber: string;
+    orderLink: string;
+    supportEmail: string;
+    packingVideo: string;
+}): string {
+    const name = escapeHtml(v.firstName);
+    const order = escapeHtml(v.orderNumber);
+    const link = escapeHtml(v.orderLink);
+    const support = escapeHtml(v.supportEmail);
+    const video = escapeHtml(v.packingVideo);
+    const font = 'font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#000000;';
+    const p = (inner: string) => `<p style="margin:0 0 12px;${font}">${inner}</p>`;
+    const a = (href: string, text: string) =>
+        `<a href="${href}" style="color:#2a9edb;font-weight:500;text-decoration:none;">${text}</a>`;
+    const button = (href: string, text: string) =>
+        `<p style="margin:4px 0 16px;"><a href="${href}" style="display:inline-block;padding:11px 22px;border-radius:8px;` +
+        `background-color:#0891b2;color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;` +
+        `text-decoration:none;">${text}</a></p>`;
+    const ol = (items: string[]) =>
+        `<ol style="margin:0 0 12px;padding-left:22px;${font}">` +
+        items.map((item) => `<li style="margin:0 0 4px;">${item}</li>`).join('') +
+        '</ol>';
+    const divider = '<hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;">';
+
+    return [
+        p(`<strong>Congratulations on your first sale, ${name}! 🎉</strong>`),
+        p('You just sold your first card on Cardstreet — welcome to the club.'),
+        p(`Order <strong>${order}</strong> is paid and ready to ship. The buyer is waiting, so the next step is yours: pack the card safely and send it out.`),
+        button(link, 'View your order'),
+        p(`<strong>How to pack a card the right way:</strong> ${a(video, video)}`),
+        ol([
+            'Sleeve the card in a penny sleeve.',
+            'Protect it in a top-loader or card saver.',
+            'Tape the top-loader closed — never tape the card itself.',
+            'Place it between two pieces of cardboard or in a rigid mailer.',
+            'Use a bubble mailer or small box, and add a "Do Not Bend" note.',
+        ]),
+        p('Good packaging protects your seller rating and keeps buyers coming back.'),
+        p(`Questions? Email us at ${a(`mailto:${support}`, support)}`),
+        p('Happy selling,<br>— The Cardstreet Team'),
+        divider,
+        p(`<strong>ยินดีด้วยกับการขายครั้งแรกของคุณ ${name}! 🎉</strong>`),
+        p('คุณเพิ่งขายการ์ดใบแรกบน Cardstreet สำเร็จ — ยินดีต้อนรับสู่ครอบครัวผู้ขายของเรา'),
+        p(`ออเดอร์ <strong>${order}</strong> ชำระเงินแล้วและพร้อมจัดส่ง ผู้ซื้อกำลังรออยู่ ขั้นตอนต่อไปเป็นของคุณ — แพ็คการ์ดให้ปลอดภัยแล้วส่งออกไปได้เลย`),
+        button(link, 'ดูออเดอร์ของคุณ'),
+        p(`<strong>วิธีแพ็คการ์ดให้ปลอดภัย:</strong> ${a(video, video)}`),
+        ol([
+            'ใส่การ์ดในซองพลาสติก (penny sleeve)',
+            'ใส่ใน top-loader หรือ card saver เพื่อป้องกัน',
+            'ติดเทปปิดปาก top-loader (อย่าติดเทปลงบนการ์ด)',
+            'วางการ์ดไว้ระหว่างกระดาษแข็งสองแผ่น หรือใช้ซองแบบแข็ง',
+            'ใช้ซองกันกระแทกหรือกล่องเล็ก และเขียนกำกับว่า "ห้ามพับ / Do Not Bend"',
+        ]),
+        p('การแพ็คที่ดีช่วยรักษาคะแนนรีวิวของคุณ และทำให้ผู้ซื้อกลับมาซื้อซ้ำ'),
+        p(`มีคำถามไหม? อีเมลหาเราได้ที่ ${a(`mailto:${support}`, support)}`),
+        p('ขอให้ขายดี<br>— ทีมงาน Cardstreet'),
+    ].join('');
+}
+
 // ─── Internal ops alert: welcome-package partner activated their account ─────
 
 /**
- * Notifies the CardStreet team when a cold-provisioned partner activates the
+ * Notifies the Cardstreet team when a cold-provisioned partner activates the
  * account from their mailed welcome package — i.e. they signed in with the
  * username + temp password printed in their letter and finished setup (real
  * email, phone, new password) via /api/partner/complete-onboarding.
@@ -696,7 +991,7 @@ export async function sendPartnerActivatedNotification(partner: {
                 content: {
                     title: `New partner activated: ${partner.shopName}`,
                     body:
-                        'A welcome-package partner just activated their CardStreet account ' +
+                        'A welcome-package partner just activated their Cardstreet account ' +
                         '(signed in with their mailed credentials and set a new password).\n\n' +
                         lines.join('\n'),
                 },
@@ -752,7 +1047,7 @@ export async function sendFirstTimeSaleEmail(
         // ── 1. Cheap pre-check: already sent? ──
         const { data: profile, error: profileErr } = await supabaseAdmin
             .from('profiles')
-            .select('display_name, first_sale_email_sent_at')
+            .select('display_name, username, first_sale_email_sent_at')
             .eq('id', sellerId)
             .single();
 
@@ -809,36 +1104,40 @@ export async function sendFirstTimeSaleEmail(
             return 'skipped';
         }
 
-        // ── 5. Build payload + send the "First Time Sale" template. ──
-        // Prefer an explicit template ID; fall back to the Courier event alias.
-        const template = (process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID || TEMPLATES.firstTimeSale).trim();
-        const firstName = (profile?.display_name || '').trim().split(/\s+/)[0] || 'there';
-        const orderNumber = opts.orderNumber || opts.orderId;
-        // Deep-link straight to the addressable order page (app/orders/[id]).
+        // ── 5. Render + send. Inline content, not the dashboard template: the
+        // template's name/order tokens never substituted (see TEMPLATES), so
+        // the body is built here with the values already in place. ──
+        const firstName =
+            (profile?.display_name || profile?.username || '').trim().split(/\s+/)[0] || 'there';
+        // Same "#XXXXXXXX" short id the ship reminders and the order page use —
+        // a raw UUID in the sentence read as a bug.
+        const orderNumber = opts.orderNumber || `#${opts.orderId.slice(0, 8).toUpperCase()}`;
+        // Deep-link straight to the addressable order page (app/orders/[id]);
+        // the native shell's appUrlOpen turns it into the seller's shipment.
         const orderLink = `${appBaseUrl()}/orders/${opts.orderId}`;
         const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
-        const youtube = (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim();
-
-        const data: Record<string, string> = {
-            seller_first_name: firstName,
-            order_number: orderNumber,
-            order_link: orderLink,
-            support_email: supportEmail,
-        };
-        // Optional — don't break the send if the guide URL isn't configured yet.
-        if (youtube) data.youtube_packaging_link = youtube;
+        const packingVideo =
+            (process.env.YOUTUBE_PACKAGING_GUIDE_URL || '').trim() || FIRST_SALE_PACKING_VIDEO_DEFAULT;
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: { email },
-                    // The "First Time Sale" template owns the subject/body
-                    // ("Congrats on your first Cardstreet sale 🎉") — we only
-                    // supply the merge data above.
-                    template,
-                    data,
+                    content: {
+                        version: '2022-01-01',
+                        elements: [
+                            { type: 'meta', title: FIRST_SALE_SUBJECT },
+                            {
+                                type: 'html',
+                                content: firstTimeSaleHtml({ firstName, orderNumber, orderLink, supportEmail, packingVideo }),
+                            },
+                        ],
+                    },
+                    data: { type: 'first_time_sale', orderId: opts.orderId },
                     routing: { method: 'all', channels: ['email'] },
-                },
+                    providers: postmarkOverride(FIRST_SALE_SUBJECT),
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                } as any,
             });
             console.log(
                 `[Courier] ✅ 'First Time Sale' email sent to seller ${sellerId} (order ${orderNumber}). ` +
@@ -884,9 +1183,7 @@ export const NUDGE_MIN_SPACING_MS = 48 * 3600_000;
 function stripeNudgeCopy(
     touch: number,
     firstName: string,
-    resumeUrl: string,
-    supportEmail: string,
-): { title: string; body: string } {
+): { title: string; thBody: string; enBody: string; pushBody: string } {
     const thHi = firstName ? `สวัสดีคุณ ${firstName},\n\n` : '';
     const enHi = firstName ? `Hi ${firstName},\n\n` : '';
     const thPrep =
@@ -897,12 +1194,12 @@ function stripeNudgeCopy(
         'account number ready and it takes about 2 minutes.';
 
     const titles = [
-        'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your CardStreet payout setup',
-        'การ์ดของคุณยังรอลงขายอยู่ — Your CardStreet listings are waiting',
+        'ตั้งค่าการรับเงินของคุณอีกนิดเดียวเสร็จ — Finish your Cardstreet payout setup',
+        'การ์ดของคุณยังรอลงขายอยู่ — Your Cardstreet listings are waiting',
         'เตือนครั้งสุดท้าย: ตั้งค่าการรับเงินให้เสร็จ — Last reminder: finish your payout setup',
     ];
     const thBodies = [
-        'คุณเริ่มตั้งค่าการรับเงินบน CardStreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
+        'คุณเริ่มตั้งค่าการรับเงินบน Cardstreet ไว้แล้วแต่ยังไม่เสร็จ — ' +
             'เหลืออีกเพียงไม่กี่ขั้นตอนก็พร้อมลงขายการ์ด และรับเงินเข้าบัญชีธนาคารของคุณโดยตรง',
         'คุณยังตั้งค่าการรับเงินไม่เสร็จ จึงยังลงขายการ์ดไม่ได้ ' +
             'ทำให้เสร็จวันนี้แล้วเริ่มขายได้เลย',
@@ -910,24 +1207,27 @@ function stripeNudgeCopy(
             'ทำให้เสร็จเมื่อไหร่ก็เริ่มลงขายการ์ดและรับเงินได้ทันที',
     ];
     const enBodies = [
-        'You started setting up payouts on CardStreet but didn\'t finish — only a few ' +
+        'You started setting up payouts on Cardstreet but didn\'t finish — only a few ' +
             'steps remain before you can list cards for sale and get paid directly to your bank account.',
         'Your payout setup is still unfinished, so you can\'t list cards yet. ' +
             'Finish it today and you can start selling right away.',
         'This is our last reminder about your payout setup. Finish it whenever you\'re ' +
             'ready and you can list cards and get paid straight away.',
     ];
+    // One tray-sized line per touch — the email paragraphs above never reach
+    // the push channel (see emailPlusPushContent).
+    const pushBodies = [
+        'เหลืออีกไม่กี่ขั้นตอน — แตะเพื่อทำต่อ · A few steps left — tap to finish.',
+        'ทำให้เสร็จวันนี้แล้วเริ่มลงขายได้เลย · Finish today and start selling.',
+        'เตือนครั้งสุดท้าย — แตะเพื่อทำให้เสร็จ · Last reminder — tap to finish.',
+    ];
 
     const i = Math.min(Math.max(touch, 1), titles.length) - 1;
     return {
         title: titles[i],
-        body:
-            `${thHi}${thBodies[i]}\n\n${thPrep}\n\n` +
-            `ทำต่อได้ที่: ${resumeUrl}\n\n` +
-            '- - -\n\n' +
-            `${enHi}${enBodies[i]}\n\n${enPrep}\n\n` +
-            `Pick up where you left off: ${resumeUrl}\n\n` +
-            `Questions? Contact ${supportEmail}`,
+        thBody: `${thHi}${thBodies[i]}\n\n${thPrep}`,
+        enBody: `${enHi}${enBodies[i]}\n\n${enPrep}`,
+        pushBody: pushBodies[i],
     };
 }
 
@@ -1036,15 +1336,24 @@ export async function sendStripeSetupReminderEmail(
         // ── 5. Send. Roll the claim back on failure so a later run retries. ──
         const touch = touchesSent + 1;
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
-        const { title, body } = stripeNudgeCopy(touch, firstName, resumeUrl, supportEmail);
+        const { title, thBody, enBody, pushBody } = stripeNudgeCopy(touch, firstName);
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: buildRecipient(email, fcmToken),
-                    content: { title, body },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            { text: thBody },
+                            { text: enBody, muted: true },
+                        ],
+                        cta: { label: 'ทำต่อเลย · Resume setup', url: resumeUrl },
+                        emailFooter: `มีคำถาม? ติดต่อ ${supportEmail} · Questions? Contact ${supportEmail}`,
+                        pushBody,
+                    }),
                     routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'stripe_setup_nudge', touch },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
@@ -1173,27 +1482,35 @@ export async function sendFirstListingNudgeEmail(
 
         // ── 4. Send. Roll the claim back on failure so a later run retries. ──
         const vaultUrl = `${appBaseUrl()}/?view=vault`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
-        const title =
-            'บัญชีของคุณพร้อมขายแล้ว — ลงขายการ์ดใบแรกเลย! — You\'re verified, list your first card on CardStreet';
-        const body =
-            `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
-            'การตั้งค่าการรับเงินของคุณเสร็จสมบูรณ์แล้ว — ตอนนี้ลงขายการ์ดได้เลย ' +
-            'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ก็เริ่มขายได้ทันที เงินจากการขายเข้าบัญชีธนาคารของคุณโดยตรง\n\n' +
-            `ลงขายการ์ดใบแรก: ${vaultUrl}\n\n` +
-            '- - -\n\n' +
-            `${firstName ? `Hi ${firstName},\n\n` : ''}` +
-            'Your payout setup is complete — you can sell now. Scan cards into your vault, ' +
-            'tap "New Listing", and the money from every sale goes straight to your bank account.\n\n' +
-            `List your first card: ${vaultUrl}\n\n` +
-            `Questions? Contact ${supportEmail}`;
+        const title = 'บัญชีพร้อมขายแล้ว — You\'re verified, list your first card';
 
         try {
             const sendResult = await courier.send.message({
                 message: {
                     to: buildRecipient(email, fcmToken),
-                    content: { title, body },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            {
+                                text:
+                                    `${firstName ? `สวัสดีคุณ ${firstName},\n\n` : ''}` +
+                                    'การตั้งค่าการรับเงินของคุณเสร็จสมบูรณ์แล้ว — ตอนนี้ลงขายการ์ดได้เลย ' +
+                                    'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ก็เริ่มขายได้ทันที เงินจากการขายเข้าบัญชีธนาคารของคุณโดยตรง',
+                            },
+                            {
+                                text:
+                                    `${firstName ? `Hi ${firstName},\n\n` : ''}` +
+                                    'Your payout setup is complete — you can sell now. Scan cards into your vault, ' +
+                                    'tap "New Listing", and the money from every sale goes straight to your bank account.',
+                                muted: true,
+                            },
+                        ],
+                        cta: { label: 'ลงขายการ์ดใบแรก · List your first card', url: vaultUrl },
+                        emailFooter: `มีคำถาม? ติดต่อ ${supportEmail} · Questions? Contact ${supportEmail}`,
+                        pushBody: 'สแกนการ์ดเข้าคลังแล้วกด "ประกาศขายใหม่" ได้เลย · Scan a card and tap New Listing.',
+                    }),
                     routing: buildRouting(true, !!fcmToken, 'inline'),
                     data: { type: 'first_listing_nudge' },
                     // Thai-first subject exceeds Courier's 48-byte encoded-word
@@ -1333,28 +1650,36 @@ export async function sendAbandonedCheckoutNudge(
         const cardId: string | null = listing.card_id ?? null;
         const cardName = ((listing.card_data as any)?.name || '').toString().trim() || 'the card';
         const cardUrl = cardId ? `${appBaseUrl()}/card/${cardId}` : `${appBaseUrl()}/`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
 
         const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
         const routing = buildRouting(wantEmail, wantPush, 'inline');
         if (routing.channels.length === 0) return 'skipped';
 
         try {
+            const title = `ยังซื้อ ${cardName} ได้อยู่ — Still want ${cardName}?`;
             const sendResult = await courier.send.message({
                 message: {
                     to: recipient,
-                    content: {
-                        title: `ยังซื้อ ${cardName} ได้อยู่ — Still want ${cardName}?`,
-                        body:
-                            `คุณเริ่มสั่งซื้อ "${cardName}" ไว้แต่การชำระเงินยังไม่เสร็จ — ` +
-                            'การ์ดใบนี้ยังมีอยู่และพร้อมให้คุณซื้อ ' +
-                            `กดที่นี่เพื่อซื้อให้เสร็จก่อนใคร: ${cardUrl}\n\n` +
-                            '- - -\n\n' +
-                            `You started buying "${cardName}" but the payment didn't go through — ` +
-                            'good news, it\'s still available. Complete your purchase before ' +
-                            `someone else grabs it: ${cardUrl}\n\n` +
-                            `Need a hand? Contact ${supportEmail}`,
-                    },
+                    content: emailPlusPushContent({
+                        title,
+                        emailParagraphs: [
+                            {
+                                text:
+                                    `คุณเริ่มสั่งซื้อ "${cardName}" ไว้แต่การชำระเงินยังไม่เสร็จ — ` +
+                                    'การ์ดใบนี้ยังมีอยู่และพร้อมให้คุณซื้อให้เสร็จก่อนใคร',
+                            },
+                            {
+                                text:
+                                    `You started buying "${cardName}" but the payment didn't go through — ` +
+                                    'good news, it\'s still available. Complete your purchase before someone else grabs it.',
+                                muted: true,
+                            },
+                        ],
+                        cta: { label: 'ซื้อให้เสร็จ · Complete purchase', url: cardUrl },
+                        emailFooter: `ติดขัดตรงไหน? ติดต่อ ${supportEmail} · Need a hand? Contact ${supportEmail}`,
+                        pushBody: 'การ์ดยังว่างอยู่ — แตะเพื่อซื้อให้เสร็จ · Still available — tap to finish checkout.',
+                    }),
                     routing,
                     // Push deep-link payload (read by the mobile FCM handler).
                     data: {
@@ -1363,6 +1688,9 @@ export async function sendAbandonedCheckoutNudge(
                         listingId: listing.id,
                         ...(cardId ? { cardId } : {}),
                     },
+                    // Thai-first subject exceeds Courier's 48-byte encoded-word
+                    // cliff (see SUBJECTS) — force the full subject at Postmark.
+                    providers: postmarkOverride(title),
                 },
             });
             console.log(
@@ -1392,7 +1720,7 @@ export async function sendAbandonedCheckoutNudge(
 }
 
 /**
- * CardStreet Pro perk: tells a wishlister that a card on their wishlist was
+ * Cardstreet Pro perk: tells a wishlister that a card on their wishlist was
  * just listed for sale. Entitlement filtering and dedupe happen in the caller
  * (lib/wishlistAlerts.ts) -- this only handles prefs, channels, and the send.
  *
@@ -1449,11 +1777,11 @@ export async function sendWishlistListingAlert(
     if (templateId) {
         message.template = templateId;
     } else {
+        // Title already carries card + price — the body only adds the source
+        // and the action. One short line serves both channels.
         message.content = {
             title: `${listing.cardName} just listed — ${priceLabel}`,
-            body:
-                `${listing.cardName} (${listing.condition}) from your wishlist was just listed for ${priceLabel} on CardStreet. ` +
-                `การ์ดใน Wishlist ของคุณเพิ่งถูกลงขาย — เปิด CardStreet เพื่อดูก่อนใคร`,
+            body: `จาก Wishlist ของคุณ (${listing.condition}) — แตะเพื่อดูก่อนใคร · From your wishlist — tap to see it first.`,
         };
     }
 
@@ -1525,16 +1853,37 @@ export async function sendShowLiveNotification(
         message.template = templateId;
     } else {
         // A reminder subscriber never reserved anything — saying they did
-        // would read as a mistake and undercut the alert.
-        message.content = {
-            title: `${show.title} is live now`,
-            body:
+        // would read as a mistake and undercut the alert. The show URL lives
+        // in the email CTA and the push `data` payload only — never in the
+        // visible body (the tap deep-links; a pasted UTM URL just reads as
+        // clutter in a tray).
+        const title = `LIVE now — ${show.title}`;
+        message.content = emailPlusPushContent({
+            title,
+            emailParagraphs: [
+                {
+                    text:
+                        show.reason === 'reminder'
+                            ? `${show.title} — the show you asked to be reminded about — is live on Cardstreet right now.`
+                            : `${show.title} — the show you reserved a spot in — is live on Cardstreet right now.`,
+                },
+                {
+                    text:
+                        show.reason === 'reminder'
+                            ? `ไลฟ์ ${show.title} ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — เข้ามาดูได้เลย`
+                            : `ไลฟ์ ${show.title} ที่คุณจองสปอตไว้เริ่มแล้ว — เข้ามาดูได้เลย`,
+                    muted: true,
+                },
+            ],
+            cta: { label: 'Watch now / ดูไลฟ์เลย', url: showUrl },
+            pushBody:
                 show.reason === 'reminder'
-                    ? `The show you asked to be reminded about is live now — watch it here: ${showUrl} ` +
-                      `ไลฟ์ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`
-                    : `The show you reserved a spot in is live now — watch it here: ${showUrl} ` +
-                      `ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — เข้าไปดูได้เลยที่ ${showUrl}`,
-        };
+                    ? 'ไลฟ์ที่คุณกดแจ้งเตือนไว้เริ่มแล้ว — แตะเพื่อดู · Tap to watch.'
+                    : 'ไลฟ์ที่คุณจองสปอตไว้เริ่มแล้ว — แตะเพื่อดู · Your show has started — tap to watch.',
+        });
+        // Thai show titles push the subject past Courier's 48-byte encoded-word
+        // cliff (see SUBJECTS) — force the full subject at Postmark.
+        message.providers = postmarkOverride(title);
     }
 
     try {
@@ -1586,12 +1935,19 @@ export async function sendShowStartingSoonNotification(
     if (templateId) {
         message.template = templateId;
     } else {
-        message.content = {
-            title: `${show.title} starts in ${show.minutes} minutes`,
-            body:
-                `The show you asked to be reminded about starts soon: ${showUrl} ` +
-                `ไลฟ์ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่ม: ${showUrl}`,
-        };
+        // Signal-first title (trays truncate the tail of long Thai titles);
+        // URL only in the email CTA + push `data`, never the visible body.
+        const title = `Starts in ${show.minutes} min — ${show.title}`;
+        message.content = emailPlusPushContent({
+            title,
+            emailParagraphs: [
+                { text: `${show.title} — the show you asked to be reminded about — starts in about ${show.minutes} minutes on Cardstreet.` },
+                { text: `ไลฟ์ ${show.title} ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่มในอีกประมาณ ${show.minutes} นาที`, muted: true },
+            ],
+            cta: { label: 'Watch now / ดูไลฟ์เลย', url: showUrl },
+            pushBody: 'ไลฟ์ที่คุณกดแจ้งเตือนไว้กำลังจะเริ่ม — แตะเพื่อเข้าดู · Tap to watch.',
+        });
+        message.providers = postmarkOverride(title);
     }
 
     try {
@@ -1695,18 +2051,20 @@ export async function sendShowLivePushBlast(
                     message.template = templateId;
                 } else if (kind === 'announce') {
                     // Signal-first, like the email subject: notification trays
-                    // truncate even harder than inbox list views.
+                    // truncate even harder than inbox list views. The show URL
+                    // rides only in `data` (tap deep-link + GA attribution) —
+                    // a pasted UTM URL in the visible body reads as clutter.
                     const when = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
                     message.content = {
                         title: when
                             ? `Live ${when} — ${show.title}`
                             : `Going live soon — ${show.title}`,
-                        body: `Tap to see the show and get notified when it starts — กดดูรายละเอียดไลฟ์และรับแจ้งเตือนเมื่อเริ่ม: ${showUrl}`,
+                        body: 'แตะเพื่อดูรายละเอียดและรับแจ้งเตือนเมื่อไลฟ์เริ่ม · Tap to see the show and get a start reminder.',
                     };
                 } else {
                     message.content = {
                         title: `LIVE now — ${show.title}`,
-                        body: `Watch the live break now — ดูไลฟ์ได้เลยตอนนี้: ${showUrl}`,
+                        body: 'ดูไลฟ์ได้เลยตอนนี้ — แตะเพื่อเข้าดู · Watch the live break now.',
                     };
                 }
                 await courier.send.message({ message: message as any });
@@ -1808,13 +2166,13 @@ export async function sendShowEmailBlast(
     // truncate in inbox list views, so a title-first subject shows only the
     // cut-off title and none of the "live ... 20:30" part (seen on the
     // 2026-08-22 announce). "(Bangkok time)" stays in the body where space
-    // is free; the sender name already says CardStreet.
+    // is free; the sender name already says Cardstreet.
     const subjectWhen = show.startsAtLabel?.replace(/\s*\(Bangkok time\)\s*$/i, '');
     const subject =
         kind === 'announce'
             ? subjectWhen
                 ? `Live ${subjectWhen} — ${show.title}`
-                : `Coming soon on CardStreet — ${show.title}`
+                : `Coming soon on Cardstreet — ${show.title}`
             : `LIVE now — ${show.title}`;
     // Built per recipient, because the unsubscribe link is signed for one
     // user. This is promotional mail going to the whole base — without a way
@@ -1829,8 +2187,8 @@ export async function sendShowEmailBlast(
                 type: 'text',
                 content:
                     kind === 'announce'
-                        ? `${show.title} goes live on CardStreet ${show.startsAtLabel || 'soon'}. Open the show page and tap "Get notified" so you don't miss the start.`
-                        : `${show.title} is live on CardStreet right now — come watch the break and grab a spot.`,
+                        ? `${show.title} goes live on Cardstreet ${show.startsAtLabel || 'soon'}. Open the show page and tap "Get notified" so you don't miss the start.`
+                        : `${show.title} is live on Cardstreet right now — come watch the break and grab a spot.`,
             },
             {
                 type: 'text',
@@ -1923,22 +2281,42 @@ export interface OfferNotifDetails {
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/$/, '');
 
 /**
- * Branded Courier Elemental content for an offer email. `meta.title` is the email
- * subject; the two text blocks are the bilingual body (EN then TH, muted); the
- * action is a CTA button. The Courier default brand wraps this with the logo /
- * header. Push renders meta.title as the title and the text blocks as the body.
- * Rendering falls to this only when no dashboard template id is set for the event.
+ * Branded Courier Elemental content for an offer notification. `meta.title` is
+ * the email subject AND the push title; the two long text blocks + CTA button
+ * are email-only, and the push channel renders just the short `push` line
+ * (see emailPlusPushContent — before that scoping, the CTA button rendered
+ * into delivered push bodies as a raw "label: URL" line, verified against
+ * Courier's output API 2026-08-27). The Courier default brand wraps the email
+ * with the logo / header. Rendering falls to this only when no dashboard
+ * template id is set for the event.
  */
-function buildOfferEmailContent(c: { subject: string; bodyEn: string; bodyTh: string; cta: string }) {
-    return {
-        version: '2022-01-01',
-        elements: [
-            { type: 'meta', title: c.subject },
-            { type: 'text', content: c.bodyEn },
-            { type: 'text', content: c.bodyTh, color: '#6b7280' },
-            { type: 'action', content: c.cta, href: `${APP_URL}/?view=offers`, style: 'button', align: 'center', background_color: '#0891b2' },
+function buildOfferEmailContent(c: {
+    subject: string; bodyEn: string; bodyTh: string; cta: string; push: string;
+    /** Overrides the CTA destination. The accepted-offer mail points straight
+     *  at the pay link rather than at the Offers list, which is one more screen
+     *  between a buyer who has decided and the payment. */
+    ctaUrl?: string;
+}) {
+    return emailPlusPushContent({
+        title: c.subject,
+        emailParagraphs: [
+            { text: c.bodyEn },
+            { text: c.bodyTh, muted: true },
         ],
-    };
+        cta: { label: c.cta, url: c.ctaUrl ?? `${APP_URL}/?view=offers` },
+        pushBody: c.push,
+    });
+}
+
+/**
+ * The shareable pay link for an accepted offer (app/pay/[offerId]/route.ts).
+ *
+ * Exported because the seller needs it too: the deal is agreed in the app and
+ * then chased in LINE, and until now the seller had nothing to send. A link
+ * they can paste is the whole difference between "have you paid yet" and a tap.
+ */
+export function offerPayUrl(offerId: string): string {
+    return `${APP_URL}/pay/${offerId}`;
 }
 
 /**
@@ -1957,7 +2335,7 @@ async function sendOfferNotification(
         pushPref: string;
         template: string;
         pushType: string;
-        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string };
+        inline: (priceLabel: string, cardName: string) => { subject: string; bodyEn: string; bodyTh: string; cta: string; push: string; ctaUrl?: string };
     },
 ): Promise<void> {
     const courier = getCourier();
@@ -1988,6 +2366,10 @@ async function sendOfferNotification(
             amount: details.amount,
             priceLabel,
             cardName,
+            // The pay link, so a template-backed send can use it too and the
+            // push tap has a destination that is the payment itself rather than
+            // the Offers list.
+            payUrl: offerPayUrl(details.offerId),
             // Push deep-link payload (read by the mobile FCM handler).
             type: cfg.pushType,
         },
@@ -2029,9 +2411,10 @@ export async function sendOfferReceivedNotification(recipientId: string, details
         pushType: 'offer_received',
         inline: (priceLabel, cardName) => ({
             subject: `New offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
-            bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter, or decline.`,
-            bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
+            bodyEn: `You received an offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open Cardstreet to accept, counter, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอราคาใหม่บน ${cardName} — เปิด Cardstreet เพื่อตอบรับ ต่อรอง หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
+            push: 'แตะเพื่อตอบรับ ต่อรอง หรือปฏิเสธ · Tap to accept, counter, or decline.',
         }),
     });
 }
@@ -2045,9 +2428,39 @@ export async function sendOfferAcceptedNotification(buyerId: string, details: Of
         pushType: 'offer_accepted',
         inline: (priceLabel, cardName) => ({
             subject: `Offer accepted — ${cardName}`,
-            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay now to complete the purchase before someone else buys it.`,
-            bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว — ชำระเงินให้เสร็จก่อนใคร`,
+            // 48 hours is stated because it is now true: the hourly cron
+            // expires accepted offers at that mark. A deadline nobody enforces
+            // is worse than none, and one nobody states is not a deadline.
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was accepted. Pay within 48 hours to complete the purchase — the card stays on sale until you do.`,
+            bodyTh: `ข้อเสนอของคุณได้รับการตอบรับแล้ว ชำระเงินภายใน 48 ชั่วโมง — การ์ดยังเปิดขายอยู่จนกว่าคุณจะชำระ`,
             cta: 'Pay now · ชำระเงิน',
+            push: 'ชำระเงินภายใน 48 ชม. ก่อนมีคนซื้อตัดหน้า · Pay within 48h before someone else buys it.',
+            ctaUrl: offerPayUrl(details.offerId),
+        }),
+    });
+}
+
+/**
+ * The seller: the buyer accepted the seller's counter. The buyer is already on
+ * the payment sheet (OffersInbox opens it on accept), so this is the seller's
+ * cue that the deal is agreed but not paid — and where the pay link to chase
+ * with lives. Rides the `offer_accepted_*` prefs: the counter was the seller's
+ * offer, and this is the news that it was accepted.
+ */
+export async function sendOfferCounterAcceptedNotification(sellerId: string, details: OfferNotifDetails): Promise<void> {
+    return sendOfferNotification(sellerId, 'accepted', details, {
+        emailPref: 'offer_accepted_email',
+        pushPref: 'offer_accepted_push',
+        template: TEMPLATES.offerCounterAccepted,
+        // Not 'offer_accepted': that push type opens the payment sheet, and
+        // the seller has nothing to pay. Any other offer_* type opens Offers.
+        pushType: 'offer_counter_accepted',
+        inline: (priceLabel, cardName) => ({
+            subject: `Counter accepted${priceLabel ? ` (${priceLabel})` : ''} — ${cardName}`,
+            bodyEn: `The buyer accepted your counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. It isn't paid yet — if it stays unpaid, send them the pay link from your Offers list. They have 48 hours to pay.`,
+            bodyTh: `ผู้ซื้อตอบรับราคาที่คุณต่อรองบน ${cardName} แล้ว ยังรอการชำระเงิน — ส่งลิงก์ชำระเงินให้ผู้ซื้อได้จากหน้าข้อเสนอของฉัน ผู้ซื้อมีเวลาชำระ 48 ชั่วโมง`,
+            cta: 'View offer · ดูข้อเสนอ',
+            push: 'รอผู้ซื้อชำระเงิน · Waiting for the buyer to pay.',
         }),
     });
 }
@@ -2062,8 +2475,9 @@ export async function sendOfferRejectedNotification(offerorId: string, details: 
         inline: (priceLabel, cardName) => ({
             subject: `Offer declined — ${cardName}`,
             bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} was declined. You can make a new offer anytime.`,
-            bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ CardStreet`,
+            bodyTh: `ข้อเสนอของคุณถูกปฏิเสธ — ลองเสนอราคาใหม่ได้ที่ Cardstreet`,
             cta: 'Browse · เลือกซื้อ',
+            push: 'ลองเสนอราคาใหม่ได้ทุกเมื่อ · You can make a new offer anytime.',
         }),
     });
 }
@@ -2077,14 +2491,15 @@ export async function sendOfferCounteredNotification(offerorId: string, details:
         pushType: 'offer_countered',
         inline: (priceLabel, cardName) => ({
             subject: `Counter offer${priceLabel ? ` (${priceLabel})` : ''} on ${cardName}`,
-            bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open CardStreet to accept, counter back, or decline.`,
-            bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด CardStreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
+            bodyEn: `You got a counter offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName}. Open Cardstreet to accept, counter back, or decline.`,
+            bodyTh: `คุณได้รับข้อเสนอต่อรองราคาบน ${cardName} — เปิด Cardstreet เพื่อตอบรับ ต่อรองกลับ หรือปฏิเสธ`,
             cta: 'Respond · ตอบกลับ',
+            push: 'แตะเพื่อตอบรับหรือต่อรองกลับ · Tap to accept or counter back.',
         }),
     });
 }
 
-/** The offeror: their offer expired at 48h, or was voided because the listing sold. */
+/** The offeror: their offer expired at 48h, or was voided because the listing sold or was taken down. */
 export async function sendOfferExpiredNotification(offerorId: string, details: OfferNotifDetails): Promise<void> {
     return sendOfferNotification(offerorId, 'expired', details, {
         emailPref: 'offer_expired_email',
@@ -2093,9 +2508,10 @@ export async function sendOfferExpiredNotification(offerorId: string, details: O
         pushType: 'offer_expired',
         inline: (priceLabel, cardName) => ({
             subject: `Offer expired — ${cardName}`,
-            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired or the listing sold).`,
-            bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด CardStreet เพื่อดูรายการอื่น`,
+            bodyEn: `Your offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is no longer active (it expired, or the card was sold or taken down).`,
+            bodyTh: `ข้อเสนอของคุณสิ้นสุดแล้ว — เปิด Cardstreet เพื่อดูรายการอื่น`,
             cta: 'Browse · เลือกซื้อ',
+            push: 'ข้อเสนอหมดอายุหรือสินค้าถูกขายแล้ว · It expired or the listing sold.',
         }),
     });
 }
@@ -2124,6 +2540,7 @@ export async function sendOfferPaymentReminderNotification(
             bodyEn: `Your accepted offer${priceLabel ? ` of ${priceLabel}` : ''} on ${cardName} is still waiting for payment. It isn't reserved — another buyer can still take it until you pay.`,
             bodyTh: `ข้อเสนอที่ได้รับการตอบรับของคุณยังรอการชำระเงิน สินค้ายังไม่ถูกจอง — ผู้อื่นซื้อได้จนกว่าคุณจะชำระเงิน`,
             cta: 'Pay now · ชำระเงิน',
+            push: 'ยังไม่ถูกจอง — ชำระเงินเพื่อปิดดีล · Not reserved until you pay.',
         }),
     });
 }
@@ -2131,7 +2548,7 @@ export async function sendOfferPaymentReminderNotification(
 // ─── Internal ops alert: new breaker application ─────────────────────────────
 
 /**
- * Notifies the CardStreet team when someone applies at /become-a-breaker.
+ * Notifies the Cardstreet team when someone applies at /become-a-breaker.
  *
  * Internal ops alert, so it follows sendPartnerActivatedNotification rather
  * than the customer-facing sends above: a single inbox
@@ -2150,6 +2567,285 @@ export async function sendOfferPaymentReminderNotification(
  * that has already been written to the database. The caller fires it via
  * `after()` so the applicant's response isn't waiting on an email.
  */
+/**
+ * Streak-at-risk nudge. PUSH ONLY, by design.
+ *
+ * A daily email reminding someone to open an app is spam, and would burn the
+ * sender reputation that the order and shipping mail depends on. Push costs
+ * nothing, is silent when declined, and is the channel a daily loop belongs on.
+ * Accordingly this returns false rather than falling back to email when the
+ * user has no token: no token means no nudge, full stop.
+ *
+ * Content is inline (no Courier template), so routing must name the FCM
+ * provider explicitly — see buildRouting: the bare `push` channel resolves to
+ * Courier Inbox for inline content and the notification is silently dropped.
+ */
+export async function sendStreakAtRiskPush(
+    userId: string,
+    streak: number,
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { fcmToken, prefs } = await getUserNotifContext(userId);
+    if (!fcmToken || prefs.streak_push === false) return false;
+
+    try {
+        await courier.send.message({
+            message: {
+                // user_id rides along so a failed send is traceable back to OUR
+                // user id in Courier's log — without it the log shows an opaque
+                // anon_* profile and a dead token can never be pruned.
+                to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                routing: buildRouting(false, true, 'inline'),
+                data: { type: 'streak_at_risk', streak },
+                content: {
+                    // Number first: a tray notification is read at a glance, and
+                    // the streak length IS the reason to care.
+                    title: `${streak} วันติด — อย่าให้ขาด · ${streak}-day streak`,
+                    body: 'เช็คอินวันนี้เพื่อรักษาสตรีคและรับเหรียญ · Check in today to keep your streak and claim your coins.',
+                },
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] streak nudge to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+export interface WeeklyDigest {
+    /** Active listings on cards this user has wishlisted. */
+    wishlistMatches: number;
+    /** Cheapest wishlist match, for the headline. */
+    topMatchName?: string;
+    topMatchPrice?: number;
+    /** Biggest 7-day mover in the user's vault. */
+    moverName?: string;
+    moverPercent?: number;
+}
+
+/**
+ * Weekly digest: wishlist matches + the week's biggest price move in the vault.
+ *
+ * PUSH FIRST — a push when the user has a token, email only for the accounts
+ * that cannot receive one. Two reasons. The obvious one is cost and inbox
+ * fatigue. The load-bearing one is that this app's email is transactional
+ * (orders, shipping, payouts) and a weekly marketing send from the same domain
+ * is how that reputation gets spent; push has no shared reputation to lose.
+ *
+ * Never sends an empty digest — the caller is responsible for skipping users
+ * with nothing to report, and this asserts it, because "0 new matches this
+ * week" is exactly the notification that teaches people to disable them.
+ */
+export async function sendWeeklyDigestNotification(
+    userId: string,
+    digest: WeeklyDigest,
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+    if (digest.wishlistMatches <= 0 && digest.moverPercent === undefined) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantPush = !!fcmToken && prefs.digest_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.digest_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const matchLineTh = digest.wishlistMatches > 0
+        ? `มีการ์ดใน Wishlist ${digest.wishlistMatches} ใบวางขายอยู่`
+        : '';
+    const matchLineEn = digest.wishlistMatches > 0
+        ? `${digest.wishlistMatches} card${digest.wishlistMatches === 1 ? '' : 's'} from your wishlist ${digest.wishlistMatches === 1 ? 'is' : 'are'} listed`
+        : '';
+    const moverLineTh = digest.moverName && digest.moverPercent !== undefined
+        ? `${digest.moverName} ${digest.moverPercent > 0 ? '+' : ''}${digest.moverPercent}% สัปดาห์นี้`
+        : '';
+    const moverLineEn = digest.moverName && digest.moverPercent !== undefined
+        ? `${digest.moverName} moved ${digest.moverPercent > 0 ? '+' : ''}${digest.moverPercent}% this week`
+        : '';
+
+    const title = digest.wishlistMatches > 0
+        ? `${matchLineTh || matchLineEn} · Cardstreet`
+        : `${moverLineTh || moverLineEn} · Cardstreet`;
+    const body = [matchLineEn, moverLineEn].filter(Boolean).join(' · ')
+        || 'Your weekly Cardstreet summary.';
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'weekly_digest', wishlistMatches: digest.wishlistMatches },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: userId },
+                routing: buildRouting(true, false, 'inline'),
+                // Thai in the subject needs the Postmark override: Courier's own
+                // subject encoder truncates non-ASCII at 48 bytes (see SUBJECTS).
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        ...(matchLineEn ? [{ text: `${matchLineTh} · ${matchLineEn}.` }] : []),
+                        ...(moverLineEn ? [{ text: `${moverLineTh} · ${moverLineEn}.` }] : []),
+                        ...(digest.topMatchName && digest.topMatchPrice !== undefined
+                            ? [{ text: `เช่น ${digest.topMatchName} — ฿${digest.topMatchPrice.toLocaleString('en-US')} · e.g. ${digest.topMatchName} at ฿${digest.topMatchPrice.toLocaleString('en-US')}.`, muted: true }]
+                            : []),
+                    ],
+                    cta: {
+                        label: 'เปิด Cardstreet · Open Cardstreet',
+                        url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=weekly_digest`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] weekly digest to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+/**
+ * "Someone wants a card in your vault." PUSH FIRST, email only without a token.
+ *
+ * The wishlist table has been collecting demand since launch and no seller
+ * could see any of it. This is the seller-side counterpart of the buyer digest:
+ * the buyer gets told when a wanted card is listed, the seller gets told when a
+ * card they already own is wanted.
+ *
+ * Deliberately names ONE card rather than summarising. A count ("3 cards in
+ * your vault are wanted") is a statistic; a name is an action.
+ */
+export async function sendVaultDemandNotification(
+    userId: string,
+    top: { cardName: string; wishlisters: number; suggestedPrice: number; othersCount: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantPush = !!fcmToken && prefs.demand_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.demand_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const priceLabel = `฿${top.suggestedPrice.toLocaleString('en-US')}`;
+    const title = `${top.wishlisters} คนตามหา ${top.cardName} · ${top.wishlisters} ${top.wishlisters === 1 ? 'person wants' : 'people want'} ${top.cardName}`;
+    const more = top.othersCount > 0
+        ? ` (+${top.othersCount} more in your vault)`
+        : '';
+    const body = `คุณมีใบนี้อยู่ในคลัง ลงขายราว ${priceLabel} · You have one in your vault — list it for about ${priceLabel}${more}.`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: userId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'vault_demand', wishlisters: top.wishlisters },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: userId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: {
+                        label: 'ลงขายเลย · List it',
+                        url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=vault_demand`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] vault demand to ${userId} failed:`, error);
+        return false;
+    }
+}
+
+/**
+ * "This listing has sat for a month above market — reprice to ฿X?"
+ *
+ * The tap target is the listing, not a generic screen: a nudge that drops
+ * someone on their listings page and leaves them to find the right row is the
+ * same nudge that produced 667 stream pushes landing on the homepage.
+ */
+export async function sendStaleListingNudge(
+    sellerId: string,
+    listing: { listingId: string; cardId: string; cardName: string; currentPrice: number; suggestedPrice: number; ageDays: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantPush = !!fcmToken && prefs.stale_listing_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.stale_listing_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const from = `฿${listing.currentPrice.toLocaleString('en-US')}`;
+    const to = `฿${listing.suggestedPrice.toLocaleString('en-US')}`;
+    const title = `${listing.cardName} — ${listing.ageDays} วันยังไม่ขาย · unsold for ${listing.ageDays} days`;
+    const body = `ราคาสูงกว่าตลาด ลองปรับจาก ${from} เป็น ${to} · Priced above market. Try ${from} → ${to}.`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: sellerId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: {
+                        type: 'stale_listing',
+                        listingId: listing.listingId,
+                        cardId: listing.cardId,
+                        suggestedPrice: listing.suggestedPrice,
+                    },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: sellerId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: {
+                        label: 'แก้ราคา · Update the price',
+                        // cardId for the same reason as the push tap handler:
+                        // the vault's price editor is keyed on the collection
+                        // item, which knows its card but not its listing.
+                        url: `${appBaseUrl()}/?tab=vault&reprice=${encodeURIComponent(listing.cardId)}&utm_source=courier&utm_medium=email&utm_campaign=stale_listing`,
+                    },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] stale listing nudge to ${sellerId} failed:`, error);
+        return false;
+    }
+}
+
 export async function sendBreakerApplicationAlert(application: {
     id: string;
     fullName: string;
@@ -2196,7 +2892,7 @@ export async function sendBreakerApplicationAlert(application: {
         `Breaking experience: ${ADMIN_LABELS.experience[application.breakingExperience as keyof typeof ADMIN_LABELS.experience] ?? application.breakingExperience}`,
         `Availability: ${application.availability}`,
         `Applied in: ${application.locale === 'th' ? 'Thai' : 'English'}`,
-        `CardStreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
+        `Cardstreet account: ${application.hasAccount ? 'yes (linked)' : 'not signed in'}`,
         `Campaign: ${campaign}`,
         `Submitted: ${submittedAt} (Bangkok)`,
         '',
@@ -2224,6 +2920,269 @@ export async function sendBreakerApplicationAlert(application: {
     }
 }
 
+// ─── Founder alert: buyer reported a problem with an order ───────────────────
+
+/**
+ * Sent from /api/orders/[id]/report the moment a buyer opens a problem report.
+ * The order is already 'disputed' and the ticket already filed when this runs;
+ * this is the page to the founder, who decides the outcome under the Cardstreet
+ * Guarantee (refund from platform funds, ban if warranted). English-only,
+ * internal. Best-effort, never throws.
+ */
+export async function sendOrderDisputeAlert(report: {
+    orderId: string;
+    shortId: string;
+    reason: string;
+    details: string;
+    itemName: string;
+    amountThb: number;
+    buyer: string;
+    seller: string;
+    ticketId: string | null;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping order-dispute alert'); return; }
+
+    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+
+    const openedAt = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
+    });
+    const lines = [
+        `Order: #${report.shortId} (${report.orderId})`,
+        report.itemName ? `Item: ${report.itemName}` : null,
+        `Amount: ฿${Math.round(report.amountThb).toLocaleString()}`,
+        `Buyer: ${report.buyer}`,
+        `Seller: ${report.seller}`,
+        `Reason: ${report.reason}`,
+        report.details ? `Details: ${report.details}` : null,
+        `Opened: ${openedAt} (Bangkok)`,
+        '',
+        `Ticket: ${appBaseUrl()}/admin/tickets`,
+        `Order: ${appBaseUrl()}/orders/${report.orderId}`,
+    ].filter((l) => l !== null) as string[];
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `Problem report on order #${report.shortId}: ${report.reason}`,
+                    body: `A buyer reported a problem. The order is on hold as 'disputed' until you resolve the ticket.\n\n${lines.join('\n')}`,
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'order_dispute', orderId: report.orderId, ticketId: report.ticketId ?? '' },
+            },
+        });
+        console.log(`[Courier] ✅ Order-dispute alert sent for #${report.shortId} → ${to}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending order-dispute alert for #${report.shortId}:`, error);
+    }
+}
+
+// ─── Support tickets: inbox alert + customer reply notice ────────────────────
+
+/**
+ * Emails the support inbox when a customer opens a ticket or replies on one.
+ * Internal, so inline plain content like the other ops alerts; the caller
+ * (lib/supportEmail.ts) writes the text, English translation included.
+ *
+ * `replyTo` decides what pressing Reply does: the signed inbound address posts
+ * the answer onto the ticket, the customer's own address mails them directly.
+ * The subject is forced through postmarkOverride because ticket subjects are
+ * often Thai and Courier cuts non-ASCII subjects at 48 bytes (see SUBJECTS).
+ * Best-effort, never throws.
+ */
+export async function sendSupportInboxAlert(alert: {
+    to: string;
+    subject: string;
+    body: string;
+    replyTo: string | null;
+    ticketId: string;
+    kind: 'new' | 'reply';
+}): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping support inbox alert'); return false; }
+    if (!alert.to) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: alert.to },
+                content: { title: alert.subject, body: alert.body },
+                routing: { method: 'all', channels: ['email'] },
+                providers: postmarkOverride(alert.subject, alert.replyTo ? { ReplyTo: alert.replyTo } : undefined),
+                data: { type: 'support_ticket', ticketId: alert.ticketId, kind: alert.kind },
+            },
+        });
+        console.log(`[Courier] ✅ Support inbox alert (${alert.kind}) for ticket ${alert.ticketId} → ${alert.to}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending support inbox alert for ticket ${alert.ticketId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * Tells a customer the Cardstreet team answered their ticket, with the answer
+ * itself in the email so they never have to open the app to read it. Before
+ * this, a reply was only visible inside Profile → Support, so most answers went
+ * unseen. Email + push, bilingual inline copy like the other nudges; no
+ * notification preference gates it because it answers a question they asked.
+ *
+ * `replyTo` lets them answer by email: the signed inbound address threads that
+ * answer back onto the ticket, otherwise it reaches the support inbox.
+ */
+export async function sendSupportReplyNotification(
+    userId: string,
+    reply: { ticketId: string; subject: string; body: string; replyTo: string | null },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping support reply notification'); return false; }
+
+    const { email, fcmToken } = await getUserNotifContext(userId);
+    const routing = buildRouting(!!email, !!fcmToken, 'inline');
+    if (routing.channels.length === 0) return false;
+
+    const subject = reply.subject.length > 60 ? `${reply.subject.slice(0, 57)}...` : reply.subject;
+    const title = `ทีมงาน Cardstreet ตอบกลับแล้ว · Support replied: ${subject}`;
+    const flat = reply.body.replace(/\s+/g, ' ').trim();
+    const pushBody = flat.length > 140 ? `${flat.slice(0, 137)}...` : flat;
+    // One paragraph per line: Elemental text elements don't reliably keep
+    // single newlines, and a reply's line breaks are part of its meaning.
+    const lines = reply.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const url = `${appBaseUrl()}/?tab=support&utm_source=courier&utm_medium=email&utm_campaign=support_reply`;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, fcmToken), user_id: userId },
+                routing,
+                providers: postmarkOverride(title, reply.replyTo ? { ReplyTo: reply.replyTo } : undefined),
+                data: { type: 'support_reply', ticketId: reply.ticketId },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `เรื่อง / About: ${reply.subject}`, muted: true },
+                        ...lines.map((text) => ({ text })),
+                        {
+                            text: 'ตอบกลับอีเมลนี้เพื่อส่งข้อความถึงทีมงานได้เลย · Reply to this email to answer us.',
+                            muted: true,
+                        },
+                    ],
+                    cta: { label: 'ดูการสนทนา · View the conversation', url },
+                    pushBody,
+                }),
+            } as any,
+        });
+        console.log(`[Courier] ✅ Support reply notification sent to ${userId} for ticket ${reply.ticketId}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending support reply notification to ${userId}:`, error);
+        return false;
+    }
+}
+
+// ─── Seller ship-by reminder (app/api/cron/ship-reminders) ───────────────────
+
+/**
+ * Nudges a seller whose paid parcel has not moved. Stage 1 at 24h ("ship by
+ * <date>"), stage 2 at 48h ("overdue"), stage 3 at 72h (same message; the founder
+ * is paged separately). Push first, email fallback, bilingual inline copy like the
+ * other nudges; deep-links to the order page where the label lives.
+ */
+export async function sendShipReminderNotification(
+    sellerId: string,
+    order: { orderId: string; itemName: string; itemCount: number; hoursSincePaid: number; stage: number; shipByIso: string | null; handlingDays: number },
+): Promise<'push' | 'email' | false> {
+    const courier = getCourier();
+    if (!courier) return false;
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantPush = !!fcmToken && prefs.label_push !== false;
+    const wantEmail = !wantPush && !!email && prefs.label_email !== false;
+    if (!wantPush && !wantEmail) return false;
+
+    const shortId = order.orderId.slice(0, 8).toUpperCase();
+    const what = order.itemName || (order.itemCount > 1 ? `${order.itemCount} items` : 'your card');
+    const shipBy = order.shipByIso
+        ? new Date(order.shipByIso).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' })
+        : null;
+    const overdue = order.stage >= 2;
+    const title = overdue
+        ? `คำสั่งซื้อ #${shortId} เลยกำหนดส่งแล้ว · Order #${shortId} is overdue`
+        : `อย่าลืมส่ง #${shortId} · Ship order #${shortId}`;
+    const body = overdue
+        ? `ผู้ซื้อจ่ายเงินมา ${order.hoursSincePaid} ชม.แล้ว กรุณาส่ง ${what} วันนี้ · Paid ${order.hoursSincePaid}h ago. Please ship ${what} today.`
+        : `ผู้ซื้อจ่ายเงินแล้ว กรุณาส่ง ${what} ภายใน ${shipBy ?? `${order.handlingDays} วัน`} · Paid. Please ship ${what} by ${shipBy ?? `${order.handlingDays} days`}.`;
+    const url = `${appBaseUrl()}/orders/${order.orderId}?utm_source=courier&utm_medium=${wantPush ? 'push' : 'email'}&utm_campaign=ship_reminder_${order.stage}`;
+
+    try {
+        if (wantPush) {
+            await courier.send.message({
+                message: {
+                    to: { ...buildRecipient(null, fcmToken), user_id: sellerId },
+                    routing: buildRouting(false, true, 'inline'),
+                    data: { type: 'ship_reminder', orderId: order.orderId, stage: order.stage },
+                    content: { title, body },
+                } as any,
+            });
+            return 'push';
+        }
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, null), user_id: sellerId },
+                routing: buildRouting(true, false, 'inline'),
+                providers: postmarkOverride(title),
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [{ text: body }],
+                    cta: { label: 'เปิดคำสั่งซื้อ · Open the order', url },
+                    pushBody: body,
+                }),
+            } as any,
+        });
+        return 'email';
+    } catch (error) {
+        console.error(`[Courier] ship reminder to ${sellerId} for ${order.orderId} failed:`, error);
+        return false;
+    }
+}
+
+/** Pages the founder when a paid parcel has not moved for 72 hours. */
+export async function sendUnshippedOrderAlert(alert: {
+    orderId: string; shortId: string; seller: string; buyer: string; hoursSincePaid: number; itemName: string;
+}): Promise<void> {
+    const courier = getCourier();
+    if (!courier) return;
+    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    if (!to) return;
+    const lines = [
+        `Order: #${alert.shortId} (${alert.orderId})`,
+        alert.itemName ? `Item: ${alert.itemName}` : null,
+        `Seller: ${alert.seller}`,
+        `Buyer: ${alert.buyer}`,
+        `Paid: ${alert.hoursSincePaid} hours ago, still not shipped (two seller reminders sent)`,
+        '',
+        `Order: ${appBaseUrl()}/orders/${alert.orderId}`,
+    ].filter((l) => l !== null) as string[];
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: to },
+                content: {
+                    title: `Unshipped order #${alert.shortId}: ${alert.hoursSincePaid}h since payment`,
+                    body: `A paid order has not moved for three days. The buyer can report it under the guarantee; you may want to reach the seller first.\n\n${lines.join('\n')}`,
+                },
+                routing: { method: 'all', channels: ['email'] },
+                data: { type: 'unshipped_order', orderId: alert.orderId },
+            },
+        });
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending unshipped-order alert for #${alert.shortId}:`, error);
+    }
+}
+
 // ─── Applicant receipt: breaker application confirmation ─────────────────────
 
 /**
@@ -2238,7 +3197,7 @@ export async function sendBreakerApplicationAlert(application: {
  * dashboard work. Set COURIER_BREAKER_CONFIRMATION_TEMPLATE_ID to switch — the
  * `data` block below already carries the merge fields a template would read.
  *
- * Most applicants have no CardStreet account, so this addresses a raw email
+ * Most applicants have no Cardstreet account, so this addresses a raw email
  * rather than a userId: no notification_preferences row to consult and no push
  * channel. That also means there is no unsubscribe state to honour — which is
  * fine for a transactional receipt of an action they just took, and is the
@@ -2268,7 +3227,7 @@ export async function sendBreakerApplicationConfirmation(applicant: {
     const to = applicant.email.trim();
     if (!to) return false;
 
-    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
     // First name only: "Somchai Tanaka" -> "Somchai". Falls back to no greeting
     // name rather than printing an empty string.
     const firstName = applicant.fullName.trim().split(/\s+/)[0] || '';
@@ -2327,6 +3286,117 @@ export async function sendBreakerApplicationConfirmation(applicant: {
         return true;
     } catch (error) {
         console.error(`[Courier] ❌ Error sending breaker confirmation to ${to}:`, error);
+        return false;
+    }
+}
+
+// ─── Scheduled announcement campaign (lib/launchCampaign.ts) ─────────────────
+
+/**
+ * One campaign email to one address. The body is a single Elemental `html`
+ * element (email-only) inside the Courier brand wrapper: the announcements
+ * need bold lead-ins, bullet lists and a hidden inbox-preview line, none of
+ * which the plain `text` elements used elsewhere in this file can carry.
+ *
+ * Inline content on purpose: a one-off campaign has no dashboard template to
+ * author or keep in sync. The subject goes through the Postmark override
+ * because every one is Thai and past the 48-byte cliff (see SUBJECTS).
+ * Returns false instead of throwing so the caller can release its claim.
+ */
+export async function sendCampaignEmail(
+    to: { userId: string; email: string },
+    msg: { type: string; subject: string; html: string },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+    try {
+        await courier.send.message({
+            message: {
+                // user_id for bounce traceability, same as the show blasts.
+                to: { ...buildRecipient(to.email, null), user_id: to.userId },
+                routing: buildRouting(true, false, 'inline'),
+                content: {
+                    version: '2022-01-01',
+                    elements: [
+                        { type: 'meta', title: msg.subject },
+                        { type: 'html', content: msg.html },
+                    ],
+                },
+                data: { type: msg.type },
+                providers: postmarkOverride(msg.subject),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Campaign email ${msg.type} failed for ${to.userId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * One campaign push to one device. `type` rides in `data` for the tap
+ * deep-link (hooks/usePushNotifications.ts). Inline routing, so the push is
+ * pinned to FCM (see buildRouting).
+ */
+export async function sendCampaignPush(
+    to: { userId: string; fcmToken: string },
+    msg: { type: string; title: string; body: string },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(null, to.fcmToken), user_id: to.userId },
+                routing: buildRouting(false, true, 'inline'),
+                content: { title: msg.title, body: msg.body },
+                data: { type: msg.type },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Campaign push ${msg.type} failed for ${to.userId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * One-off HTML email to a fixed address (reports, alerts to the team).
+ * Same Elemental envelope the first-sale email uses; no user lookup, no
+ * notification preference — the recipient is ours, not a customer's.
+ */
+export async function sendHtmlEmail(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    data?: Record<string, unknown>;
+}): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping HTML email'); return false; }
+    if (!opts.to) return false;
+    try {
+        await courier.send.message({
+            message: {
+                to: { email: opts.to },
+                content: {
+                    version: '2022-01-01',
+                    elements: [
+                        { type: 'meta', title: opts.subject },
+                        { type: 'html', content: opts.html },
+                    ],
+                },
+                data: opts.data ?? {},
+                routing: { method: 'all', channels: ['email'] },
+                providers: postmarkOverride(opts.subject),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+        console.log(`[Courier] ✅ HTML email "${opts.subject}" → ${opts.to}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ HTML email "${opts.subject}" → ${opts.to} failed:`, error);
         return false;
     }
 }

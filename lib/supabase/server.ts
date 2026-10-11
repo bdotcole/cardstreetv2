@@ -17,9 +17,19 @@ export async function createClient() {
                     return cookieStore.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        cookieStore.set(name, value, options)
-                    )
+                    // Server Components may not write cookies, and Next throws if
+                    // they try. A signed-in visitor whose access token expired makes
+                    // the client refresh it mid-render (card, set and seller pages),
+                    // which threw here. Route Handlers and Server Actions still
+                    // persist the refresh; in a render the browser client refreshes
+                    // its own session on the next load.
+                    try {
+                        cookiesToSet.forEach(({ name, value, options }) =>
+                            cookieStore.set(name, value, options)
+                        )
+                    } catch {
+                        // Called from a Server Component render.
+                    }
                 }
             }
         }

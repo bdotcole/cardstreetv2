@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
-import { buildMatcher } from '../_shared/cardMatch.ts'
+import { buildMatcher, printingScore } from '../_shared/cardMatch.ts'
+import { hotSetIds } from '../_shared/hotSets.ts'
 
 // =====================================================================
 // batch-price-english Edge Function (JustTCG)
@@ -100,11 +101,12 @@ Deno.serve(async (req) => {
             } else {
                 const { data, error } = await supabase
                     .from('pokemon_sets')
-                    .select('id')
+                    .select('id, release_date')
                     .eq('game', 'pokemon')
                     .eq('language', 'en');
                 if (error) throw new Error(`DB query failed: ${error.message}`);
                 dbSetIds = (data ?? []).map((r: any) => r.id);
+                const hotIds = hotSetIds(data ?? []);
 
                 // Stalest-first ordering (the same fix batch-price-games got in
                 // v11): never-priced sets lead, then sets ordered by their oldest
@@ -161,6 +163,16 @@ Deno.serve(async (req) => {
                 } catch (e) {
                     console.warn('stalest-first probe failed; using default order:', (e as Error).message);
                 }
+
+                // Hot sets go in front of EVERYTHING, including the never-priced
+                // bucket: a newly released set is priced every night until the next
+                // one ships (see _shared/hotSets.ts for why created_at/staleness
+                // cannot express that). Applied outside the try so a failed probe
+                // still honours it. A handful of sets at ~3 calls each, so it never
+                // crowds the rotation.
+                const hot = new Set(hotIds);
+                dbSetIds = [...hotIds, ...dbSetIds.filter((id) => !hot.has(id))];
+                console.log(`[${jobId}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
             }
             console.log(`[${jobId}] ${dbSetIds.length} English sets to price`);
 
@@ -194,8 +206,10 @@ Deno.serve(async (req) => {
             //
             // So a single night was never going to cover the catalog; what matters
             // is that the ~60 slots go to the sets that need them. That is the
-            // stalest-first ordering above, and pricing a set stamps it fresh and
-            // drops it to the back, so the queue rotates instead of starving.
+            // hot-set head + stalest-first ordering above: newly released sets
+            // take the first few slots every night, and for the rest pricing a
+            // set stamps it fresh and drops it to the back, so the queue rotates
+            // instead of starving.
             // Raising this number does not buy coverage -- the clock still stops
             // the run at the same place.
             const MAX_API_CALLS = 250;
@@ -292,16 +306,16 @@ Deno.serve(async (req) => {
                             else if (b.condition === 'Lightly Played' || b.condition === 'LP') scoreB += 200;
 
                             // Printing priority. We keep ONE row per card, so the price must be
-                            // the card's canonical printing: Normal when the card has one, else
-                            // Holofoil (holo-only cards), never Reverse Holofoil. Preferring the
-                            // premium printing here priced the reverse holo as if it were the
-                            // base card -- Legendary Collection Magikarp read $699.99 instead of
-                            // $7.95, and ~46% of the English catalog was inflated the same way.
-                            if (a.printing === 'Normal') scoreA += 60;
-                            else if (a.printing === 'Holofoil') scoreA += 40;
-
-                            if (b.printing === 'Normal') scoreB += 60;
-                            else if (b.printing === 'Holofoil') scoreB += 40;
+                            // the card's canonical printing: Normal/Unlimited when the card has
+                            // one, else Holofoil, never Reverse Holofoil and never 1st Edition
+                            // over Unlimited. Preferring the premium printing here priced the
+                            // reverse holo as if it were the base card -- Legendary Collection
+                            // Magikarp read $699.99 instead of $7.95, and ~46% of the English
+                            // catalog was inflated the same way. The table lives in
+                            // _shared/cardMatch.ts (printingScore) so batch-price-games scores
+                            // identically; see there for the 1st Edition incident.
+                            scoreA += printingScore(a.printing);
+                            scoreB += printingScore(b.printing);
 
                             // Tie-breaker: prioritize lower price if both have 0 sales, to avoid $5000 troll outliers
                             if (scoreA === scoreB && a.avgPrice === 0 && b.avgPrice === 0) {
@@ -312,7 +326,20 @@ Deno.serve(async (req) => {
                         });
 
                         const bestVariant = sortedVariants[0] ?? (jCard.variants ?? [])[0];
-                        const price = bestVariant?.avgPrice || bestVariant?.price || 0;
+                        // `price` is the LIVE market price (TCGplayer's Market Price, what a
+                        // buyer sees). `avgPrice` is JustTCG's rolling mean, and reading it
+                        // first meant we published a lagging average as the market value.
+                        // On a settled set the two agree and it never showed: me05 Pitch Black
+                        // measured 2026-09-22 had ZERO cards where avgPrice exceeded price by
+                        // 2x, and the whole set summed 1.03x. On a set that is still moving it
+                        // is badly wrong, because a new set collapses after launch week --
+                        // me05.5 (released 2026-09-16) had 78 of 163 cards over 2x and summed
+                        // 1.79x, with Pikachu 023/128 stored at $12.87 against a live $1.88
+                        // after a 96% seven-day drop.
+                        // avgPrice stays as the variant-SELECTION signal above (avgPrice > 0
+                        // still means "this printing actually trades"); it just no longer
+                        // decides the number we publish.
+                        const price = bestVariant?.price || bestVariant?.avgPrice || 0;
                         if (price <= 0) continue;
 
                         // Same variant the headline price comes from, so the series

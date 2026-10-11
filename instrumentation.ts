@@ -22,11 +22,20 @@ export async function register() {
     // 10% transaction sampling: full tracing at launch-traffic volume burns the
     // Sentry quota that error events need. Errors are always captured; this
     // only samples performance transactions.
+    //
+    // sendClientReports off: the SDK flushes after EVERY request on Vercel
+    // (waitUntil(flushSafelyWithTimeout) in each wrapper), and with client
+    // reports on, every UNSAMPLED request still shipped a "dropped event"
+    // envelope — one outbound POST to Sentry per invocation, carrying no
+    // error data. Vercel bills each of those as an Observability event: 62K
+    // per 12h on 2026-09-17, about a sixth of the whole invoice line. Error
+    // capture is untouched by this flag.
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         Sentry.init({
             dsn,
             environment,
             tracesSampleRate: 0.1,
+            sendClientReports: false,
         });
     }
 
@@ -35,6 +44,7 @@ export async function register() {
             dsn,
             environment,
             tracesSampleRate: 0.1,
+            sendClientReports: false,
         });
     }
 }

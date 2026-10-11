@@ -1,4 +1,4 @@
-// Single source of truth for the trading-card games CardStreet supports.
+// Single source of truth for the trading-card games Cardstreet supports.
 //
 // Every game-aware surface (Marketplace filter, Explore dropdowns, Master Set
 // picker) reads from GAMES so adding/enabling a game is a one-line change here
@@ -164,6 +164,21 @@ export function getGame(id: string | null | undefined): GameConfig {
 export function getGameLabel(id: string | null | undefined, locale: 'en' | 'th'): string {
   const game = GAMES.find((g) => g.id === id);
   return game ? game.localizedName[locale] : (id ?? '');
+}
+
+/**
+ * Thai noun phrase for "<game> cards" — "การ์ดโปเกมอน", "การ์ด Disney Lorcana".
+ *
+ * Thai puts no space between a noun and its modifier, so the Thai-script labels
+ * concatenate directly; lorcana and riftbound legitimately carry a Latin
+ * localizedName.th, which ran the scripts together as "การ์ดDisney Lorcana"
+ * before the guard. Lives here beside the labels themselves rather than in a
+ * page, because more than one surface now builds this phrase.
+ */
+export function thaiCardNoun(id: string | null | undefined): string {
+  const label = getGameLabel(id, 'th');
+  if (!label) return 'การ์ด';
+  return /^[\u0E00-\u0E7F]/.test(label) ? `การ์ด${label}` : `การ์ด ${label}`;
 }
 
 export function getGameLanguages(id: string | null | undefined): GameLanguage[] {

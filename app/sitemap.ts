@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { BASE_URL, sitemapAlternates } from '@/lib/i18nRouting';
+import { GUIDES } from '@/lib/guides';
 
 // Public, indexable routes. The marketplace homepage plus the evergreen content
 // pages — the surfaces search engines and AI answer engines should crawl. Each
@@ -32,6 +33,8 @@ const ROUTES: {
   { path: '/riftbound', lastModified: '2026-08-13', changeFrequency: 'weekly', priority: 0.9 },
   // Set index — the crawl entry point to all ~1k set pages.
   { path: '/sets', lastModified: '2026-08-07', changeFrequency: 'weekly', priority: 0.8 },
+  // Seller shop directory — the crawl path to every shop with live inventory.
+  { path: '/shops', lastModified: '2026-09-01', changeFrequency: 'daily', priority: 0.8 },
   // Price-check landing — targets เช็คราคาการ์ดโปเกม่อน, the best-ranking query.
   { path: '/prices', lastModified: '2026-08-14', changeFrequency: 'weekly', priority: 0.8 },
   // Graded-cards landing — targets การ์ดเกรด / ราคาการ์ดเกรด / PSA 10 ราคา.
@@ -41,6 +44,16 @@ const ROUTES: {
   { path: '/sell-cards', lastModified: '2026-08-14', changeFrequency: 'monthly', priority: 0.7 },
   // Breaker application landing — the intake funnel for Cardstreet Live hosts.
   { path: '/become-a-breaker', lastModified: '2026-08-10', changeFrequency: 'monthly', priority: 0.7 },
+  // Guides index — the crawl entry point to the long-form articles.
+  { path: '/guides', lastModified: '2026-08-30', changeFrequency: 'weekly', priority: 0.8 },
+  // One entry per guide. lastModified comes from each guide's own `updated`,
+  // so editing one article does not falsely re-date the rest.
+  ...GUIDES.map((g) => ({
+    path: `/guides/${g.slug}`,
+    lastModified: g.updated,
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  })),
   { path: '/faq', lastModified: '2026-08-12', changeFrequency: 'monthly', priority: 0.8 },
   // /help is deliberately absent: it duplicates the /faq accordion and
   // canonicalizes there (app/help/page.tsx) — sitemaps list canonicals only.
@@ -51,12 +64,28 @@ const ROUTES: {
   { path: '/breaker-terms', lastModified: '2026-08-10', changeFrequency: 'yearly', priority: 0.3 },
 ];
 
+// ONE <url> PER LOCALE VARIANT, not one Thai entry carrying hreflang hints.
+// Google's documented pattern is a <loc> for every variant, each repeating the
+// full alternate set. Until 2026-09-01 this emitted only the bare Thai URL, so
+// the whole /en tree had no sitemap presence at all and — with the language
+// control still a <button> — no internal links either. hreflang is a hint about
+// a page a crawler already found; it is not a way to find one.
+const variantUrl = (path: string, locale: 'th' | 'en'): string => {
+  const clean = path === '/' ? '' : path;
+  // The Thai form is kept byte-identical to what has been in the sitemap since
+  // 2026-08-14 (homepage = bare origin, no trailing slash). Rewriting an already
+  // indexed <loc> for cosmetic consistency is churn with no upside.
+  return locale === 'en' ? `${BASE_URL}/en${clean}` : `${BASE_URL}${clean}` || `${BASE_URL}/`;
+};
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  return ROUTES.map(({ path, lastModified, changeFrequency, priority }) => ({
-    url: `${BASE_URL}${path === '/' ? '' : path}` || `${BASE_URL}/`,
-    lastModified: new Date(lastModified),
-    changeFrequency,
-    priority,
-    alternates: { languages: sitemapAlternates(path) },
-  }));
+  return ROUTES.flatMap(({ path, lastModified, changeFrequency, priority }) =>
+    (['th', 'en'] as const).map((locale) => ({
+      url: variantUrl(path, locale),
+      lastModified: new Date(lastModified),
+      changeFrequency,
+      priority,
+      alternates: { languages: sitemapAlternates(path) },
+    })),
+  );
 }

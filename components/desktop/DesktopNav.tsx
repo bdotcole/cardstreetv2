@@ -8,9 +8,16 @@ import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/AuthModal';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import { isEntryPointHidden } from '@/lib/betaFeatures';
+import RewardsChip from '@/components/rewards/RewardsChip';
+import AvatarFrame from '@/components/rewards/AvatarFrame';
+import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { trackSearch } from '@/lib/searchEvents';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
@@ -48,6 +55,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // the whole desktop shell instead of one per component (multiple
     // concurrent getUser() calls were contending on the gotrue auth lock).
     const { items: cartItems, openCart, user } = useDesktopCart();
+    // Collector Pass chip. Shares one cached summary fetch with the hub host in
+    // the desktop layout; null (hidden) when signed out or the flag is off.
+    const { summary: rewards } = useRewardsSummary(!!user);
     const [query, setQuery] = useState('');
     const [authOpen, setAuthOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -56,9 +66,16 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // are served to phones too — see middleware.ts).
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [results, setResults] = useState<Card[]>([]);
+    // The query `results` were found for. The dropdown keeps showing the last
+    // results while the next search runs, so the live input is not it.
+    const resultsQueryRef = useRef('');
     const [searching, setSearching] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Latest search wins: each keystroke bumps the id and aborts the request
+    // still in flight, so a slow earlier query (a typo pass, a cold dictionary
+    // load) can never replace the dropdown under a newer one.
+    const searchReqIdRef = useRef(0);
 
     // Full-catalog search (not just marketplace listings): debounce the query
     // and hit the same client-side catalog search the sell/explore flows use,
@@ -74,38 +91,50 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // lib/desktopCardData.ts).
     useEffect(() => {
         const q = query.trim();
+        const reqId = ++searchReqIdRef.current;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         if (q.length < 2) {
             setResults([]);
+            resultsQueryRef.current = '';
             setSearchOpen(false);
             setSearching(false);
             return;
         }
         setSearching(true);
         setSearchOpen(true);
+        // Aborted by the cleanup below: on the next keystroke, and on unmount.
+        const controller = new AbortController();
         debounceRef.current = setTimeout(async () => {
             try {
                 // Independent catalogs — one failing must not blank the other.
                 const [cards, sealed] = await Promise.all([
-                    pokemonService.searchCards(q, false, undefined, 'all').catch(() => [] as Card[]),
+                    pokemonService.searchCards(q, false, undefined, 'all', { signal: controller.signal }).catch(() => [] as Card[]),
                     pokemonService.fetchSealedProducts({ game: 'all', q }).catch(() => []),
                 ]);
+                if (reqId !== searchReqIdRef.current) return;
                 // Reserve room for sealed rather than letting 8 singles crowd
                 // them out — a box search is often the whole intent.
                 const sealedCards = sealed.slice(0, 3).map(sealedProductToCard);
                 setResults([...cards.slice(0, sealedCards.length ? 6 : 8), ...sealedCards]);
+                resultsQueryRef.current = q;
             } catch {
+                if (reqId !== searchReqIdRef.current) return;
                 setResults([]);
+                resultsQueryRef.current = q;
             } finally {
-                setSearching(false);
+                if (reqId === searchReqIdRef.current) setSearching(false);
             }
         }, 250);
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
+            controller.abort();
         };
     }, [query]);
 
     const goToCard = (id: string) => {
+        // GA4 `search` on a pick, not per keystroke: the term is the query the
+        // picked row was found for.
+        trackSearch({ term: resultsQueryRef.current || query, resultsCount: results.length, surface: 'desktop_nav' });
         setSearchOpen(false);
         setQuery('');
         setResults([]);
@@ -117,6 +146,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
     const goToListings = () => {
         const q = query.trim();
         if (q.length < 2) return;
+        // No `search` event here: the /?q= page this opens sends it
+        // (desktop_marketplace), with the listings count the user actually
+        // sees. Sending one here too counted every Enter search twice.
         setSearchOpen(false);
         setQuery('');
         setResults([]);
@@ -133,13 +165,29 @@ export default function DesktopNav({ pathPrefix = '' }: {
         await createClient().auth.signOut();
     };
 
-    const toggleLanguage = async () => {
+    // The /en tree had ZERO inbound internal links from anywhere on the site:
+    // this control was a <button>, so hreflang was the only signal pointing at it,
+    // and hreflang is a hint about a page a crawler already found, not a way to
+    // find one. It is an <a href> now, and the click actually navigates to the
+    // other locale's URL so the address bar, the canonical and the UI language
+    // stay in agreement instead of the language flipping underneath a Thai URL.
+    //
+    // Derived from the pathname so it stays correct even where pathPrefix is not
+    // passed. usePathname() reports the browser URL and is typed nullable, and
+    // middleware rewrites /en to the bare route — so normalise once, then tolerate
+    // either form.
+    const currentPath = pathname || '/';
+    const isEnPath = pathPrefix === '/en' || currentPath === '/en' || currentPath.startsWith('/en/');
+    const barePath = currentPath.startsWith('/en/') ? currentPath.slice(3) : currentPath === '/en' ? '/' : currentPath;
+    const otherLocaleHref = isEnPath ? barePath : `/en${barePath === '/' ? '' : barePath}`;
+
+    const toggleLanguage = async (e?: React.MouseEvent) => {
+        e?.preventDefault();
         const next = language === 'TH' ? 'EN' : 'TH';
         await updateLanguage(next);
-        // Client chrome re-renders instantly via useTranslation; refresh so the
-        // server-rendered desktop pages (/sets, /card, /collection) re-read the
-        // updated cs_lang cookie via the x-cs-lang header and flip locale too.
-        router.refresh();
+        // Navigating (rather than router.refresh()) means the server pages re-read
+        // the locale from the URL prefix, which is also what drives the canonical.
+        router.push(otherLocaleHref);
     };
 
     const displayName =
@@ -153,8 +201,8 @@ export default function DesktopNav({ pathPrefix = '' }: {
         <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur">
             <div className="max-w-screen-2xl mx-auto px-4 md:px-8 h-16 flex items-center gap-3 md:gap-8">
                 <Link href={pathPrefix || '/'} className="flex items-center gap-3 shrink-0">
-                    <Image src="/logo.png" alt="CardStreet" width={40} height={40} priority className="object-contain" />
-                    <span className="hidden sm:block text-lg font-black text-white tracking-tight">CardStreet</span>
+                    <Image src="/logo.png" alt="Cardstreet" width={40} height={40} priority className="object-contain" />
+                    <span className="hidden sm:block text-lg font-black text-white tracking-tight">Cardstreet</span>
                 </Link>
 
                 <div className="flex-1 max-w-xl relative">
@@ -167,7 +215,12 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            onFocus={() => { if (results.length > 0) setSearchOpen(true); }}
+                            onFocus={() => {
+                                // Start the name-dictionary download now, so the
+                                // first query doesn't wait on it.
+                                preloadSearchDictionary();
+                                if (results.length > 0) setSearchOpen(true);
+                            }}
                             placeholder={t('desktop.searchPlaceholder')}
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
                         />
@@ -187,6 +240,11 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             ) : (
                                 results.map((card) => {
                                     const thumb = getThumbnailUrl(card.images?.small || card.imageUrl);
+                                    // thaiName holds the ENGLISH name of a JA/TH
+                                    // print (historical naming). Showing it is what
+                                    // makes a コイキング row readable to someone who
+                                    // typed "magikarp".
+                                    const englishName = card.thaiName && card.thaiName !== card.name ? card.thaiName : '';
                                     return (
                                         <button
                                             key={card.id}
@@ -202,7 +260,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                                 )}
                                             </span>
                                             <span className="min-w-0">
-                                                <span className="block text-sm font-bold text-white truncate">{card.name}</span>
+                                                {/* With the extra line, name and English name
+                                                    tighten their leading so the three lines
+                                                    (18 + 13 + 16.5px) still fit inside the 48px
+                                                    thumbnail and the row height doesn't change. */}
+                                                <span className={`block text-sm font-bold text-white truncate ${englishName ? 'leading-[18px]' : ''}`}>{card.name}</span>
+                                                {englishName && (
+                                                    <span className="block text-[11px] leading-[13px] text-slate-400 truncate">{englishName}</span>
+                                                )}
                                                 <span className="block text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate">
                                                     {card.game && card.game !== 'pokemon' ? `${getGame(card.game).shortName} · ` : ''}
                                                     {card.set}
@@ -232,11 +297,11 @@ export default function DesktopNav({ pathPrefix = '' }: {
                 <nav className="hidden lg:flex items-center gap-6 text-sm font-bold ml-auto shrink-0">
                     {([
                         ['/', t('desktop.navMarketplace')],
-                        ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                        ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
-                        ['/premium', t('desktop.navPro')],
+                        ...(CONSUMER_PRO_ENABLED ? [['/premium', t('desktop.navPro')]] : []),
                     ] as [string, string][]).map(([href, label]) => {
                         const current = normalizePath(pathname);
                         const active = current === href;
@@ -252,8 +317,10 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     })}
                 </nav>
 
-                <button
+                <a
+                    href={otherLocaleHref}
                     onClick={toggleLanguage}
+                    hrefLang={language === 'TH' ? 'en' : 'th'}
                     className="hidden lg:flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
                     title={language === 'TH' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
                     aria-label={language === 'TH' ? 'Switch to English' : 'Switch to Thai'}
@@ -261,7 +328,18 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     <span className="text-[11px] font-black text-slate-300 group-hover:text-white transition-colors">
                         {language}
                     </span>
-                </button>
+                </a>
+
+                {rewards && (
+                    <div className="shrink-0">
+                        <RewardsChip
+                            coins={rewards.coins}
+                            unclaimed={!rewards.checkinClaimedToday}
+                            onClick={() => window.dispatchEvent(new Event('cs:openRewards'))}
+                            label={t('rewards.title') || 'Rewards'}
+                        />
+                    </div>
+                )}
 
                 <button
                     onClick={openCart}
@@ -282,14 +360,15 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             onClick={() => setMenuOpen((open) => !open)}
                             className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 rounded-xl pl-1.5 pr-3 py-1.5 transition-colors"
                         >
-                            <span className="w-7 h-7 rounded-full bg-slate-700 overflow-hidden flex items-center justify-center text-[11px] font-black text-white">
+                            {/* Worn Collector Pass frame at nav scale: 2px ring, no glow. */}
+                            <AvatarFrame frame={rewards?.equippedFrame} size={28} ringWidth={2} gap={1} noGlow className="text-[11px] font-black text-white">
                                 {avatarUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     displayName.charAt(0).toUpperCase()
                                 )}
-                            </span>
+                            </AvatarFrame>
                             <span className="text-sm font-bold text-white max-w-[140px] truncate">{displayName}</span>
                             <i className="fa-solid fa-chevron-down text-[10px] text-slate-500"></i>
                         </button>
@@ -379,11 +458,11 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     <nav className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-col text-sm font-bold">
                         {([
                             ['/', t('desktop.navMarketplace')],
-                            ...(hasBeta('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                            ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
                             ['/sets', t('desktop.navSets')],
                             ['/sell', t('desktop.navSell')],
                             ['/orders', t('desktop.navOrders')],
-                            ['/premium', t('desktop.navPro')],
+                            ...(CONSUMER_PRO_ENABLED ? [['/premium', t('desktop.navPro')]] : []),
                         ] as [string, string][]).map(([href, label]) => {
                             const current = normalizePath(pathname);
                             const active = current === href;
@@ -417,12 +496,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
                             </Link>
                         )}
                         <div className="flex items-center gap-3 pt-3 mt-1 border-t border-white/5">
-                            <button
-                                onClick={toggleLanguage}
+                            <a
+                                href={otherLocaleHref}
+                                onClick={(e) => { setMobileNavOpen(false); toggleLanguage(e); }}
+                                hrefLang={language === 'TH' ? 'en' : 'th'}
                                 className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] font-black text-slate-300 transition-colors"
                             >
                                 {language === 'TH' ? 'EN' : 'ไทย'}
-                            </button>
+                            </a>
                             {user ? (
                                 <button
                                     onClick={() => { setMobileNavOpen(false); handleSignOut(); }}

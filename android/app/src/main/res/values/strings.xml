@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">CardStreet</string>
-    <string name="title_activity_main">CardStreet</string>
+    <string name="app_name">Cardstreet</string>
+    <string name="title_activity_main">Cardstreet</string>
     <string name="package_name">com.cardstreet.tcg</string>
     <string name="custom_url_scheme">com.cardstreet.tcg</string>
     <!-- Meta (Facebook) SDK credentials. App ID is public; the client token is

@@ -138,9 +138,9 @@ function check(name: string, cond: boolean, detail = '') {
 }
 
 async function run() {
-    // Ensure env doesn't leak a template ID into the assertion below.
-    delete process.env.COURIER_FIRST_TIME_SALE_TEMPLATE_ID;
+    // Ensure env doesn't leak into the assertions below.
     delete process.env.YOUTUBE_PACKAGING_GUIDE_URL;
+    delete process.env.CARDSTREET_SUPPORT_EMAIL;
 
     // 1. First valid sale → email sends.
     {
@@ -155,14 +155,21 @@ async function run() {
         check('exactly one message sent', courier.sent.length === 1, `got ${courier.sent.length}`);
         check('timestamp now set (claimed)', state.profile.first_sale_email_sent_at !== null);
         const msg = courier.sent[0]?.message;
-        check('uses event-alias template fallback', msg?.template === 'seller_first_sale', msg?.template);
+        // Inline Elemental content, never the dashboard template (its merge
+        // tokens rendered literally — see TEMPLATES in lib/courier.ts).
+        check('does not reference a dashboard template', msg?.template === undefined, msg?.template);
+        const html: string = (msg?.content?.elements ?? []).find((e: any) => e.type === 'html')?.content ?? '';
+        check('body is an Elemental html element', html.length > 0);
         check('sent to seller email', msg?.to?.email === 'seller@example.com');
         check('routes to email channel', JSON.stringify(msg?.routing?.channels) === '["email"]');
-        check('seller_first_name = first token of display_name', msg?.data?.seller_first_name === 'Somchai', msg?.data?.seller_first_name);
-        check('order_number = orderId', msg?.data?.order_number === ORDER);
-        check('order_link points at /profile', String(msg?.data?.order_link).endsWith('/profile'), msg?.data?.order_link);
-        check('support_email present', !!msg?.data?.support_email);
-        check('youtube link omitted when unset', msg?.data?.youtube_packaging_link === undefined);
+        check('first name = first token of display_name', html.includes('Congratulations on your first sale, Somchai!'));
+        check('Thai greeting carries the name too', html.includes('ยินดีด้วยกับการขายครั้งแรกของคุณ Somchai!'));
+        check('no literal merge token survives', !/\{[a-z_]+\}/.test(html), html.match(/\{[a-z_]+\}/)?.[0]);
+        check('short order number (#XXXXXXXX)', html.includes(`#${ORDER.slice(0, 8).toUpperCase()}`));
+        check('order link points at /orders/<id>', html.includes(`/orders/${ORDER}"`));
+        check('support email present', html.includes('info@cardstreet.app'));
+        check('packing video linked by default', html.includes('https://youtu.be/'));
+        check('full bilingual subject forced via Postmark override', typeof msg?.providers?.postmark?.override?.body?.Subject === 'string' && msg.providers.postmark.override.body.Subject.includes('Cardstreet'));
     }
 
     // 2. Same order status update runs again → does NOT send again.
@@ -232,6 +239,21 @@ async function run() {
         check('returns "skipped"', result === 'skipped', result);
         check('nothing sent', courier.sent.length === 0, `got ${courier.sent.length}`);
         check('slot NOT claimed (no email)', state.profile.first_sale_email_sent_at === null);
+    }
+
+    // 7b. Display name is user-controlled: it must be HTML-escaped in the body.
+    {
+        console.log('\n[7b] HTML in the display name is escaped');
+        const state = makeState();
+        state.profile.display_name = '<img src=x onerror=alert(1)> Jaidee';
+        const courier = makeCourier();
+        await sendFirstTimeSaleEmail(
+            SELLER, { orderId: ORDER },
+            { courier: courier.client, supabaseAdmin: makeSupabaseMock(state) },
+        );
+        const html: string = (courier.sent[0]?.message?.content?.elements ?? []).find((e: any) => e.type === 'html')?.content ?? '';
+        check('raw tag never reaches the email', !html.includes('<img src=x'));
+        check('escaped form is present', html.includes('&lt;img'));
     }
 
     // 7. Bonus: a DB error on the CAS claim → "error", never sends.

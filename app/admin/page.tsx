@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper'
+import StatGrid, { type Deltas, type StatCardData } from './_StatGrid'
 import WishlistBoard, { type WishlistBoardRow } from './_WishlistBoard'
 
 // The admin dashboard queries Supabase at render time via the service-role
@@ -8,17 +9,47 @@ import WishlistBoard, { type WishlistBoardRow } from './_WishlistBoard'
 // components. Force dynamic so this page is only ever rendered per request.
 export const dynamic = 'force-dynamic'
 
-interface StatCard {
-    label: string
-    value: string | number
-    icon: string
-    color: string
-    sub?: string
+// Growth windows behind each tile's corner badge. All three are computed on
+// every render and shipped to the client together, so switching between them
+// is instant. The tile's headline figure stays the running total either way.
+const DELTA_WINDOWS = [
+    { key: 'h24', hours: 24 },
+    { key: 'd7', hours: 24 * 7 },
+    { key: 'd30', hours: 24 * 30 },
+] as const
+
+const NO_GROWTH: Deltas = { h24: 0, d7: 0, d30: 0 }
+
+/**
+ * Rows created inside each window, counted per window.
+ *
+ * Counted by the database (head request, `count: 'exact'`) rather than by
+ * fetching the rows and bucketing them here: a PostgREST select silently caps
+ * at 1000 rows, so a busy 30-day window would quietly under-report.
+ */
+async function growthCounts(build: () => any, tsColumn: string): Promise<Deltas> {
+    const pairs = await Promise.all(
+        DELTA_WINDOWS.map(async (w) => {
+            const since = new Date(Date.now() - w.hours * 3600e3).toISOString()
+            const { count } = await build().gte(tsColumn, since)
+            return [w.key, count ?? 0] as const
+        }),
+    )
+    return Object.fromEntries(pairs) as Deltas
 }
 
 // An order counts as a sale once payment lands; pending_payment carts and
 // cancellations are excluded (see the abandoned-checkout phantom-sale fix).
 const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
+
+/**
+ * Every paid order counts, whoever sold it.
+ *
+ * This used to exclude any seller whose profile role is 'admin' as "seeded",
+ * which swept up Ari_shop — a real shop shipping real cards to real buyers —
+ * and reported 1 order / 130 baht against an actual 21 orders / ~1,095 baht.
+ * There is no seller filter here now. Cancellations are the only exclusion.
+ */
 
 async function getOverviewStats() {
     const supabase = createAdminClient()
@@ -32,19 +63,44 @@ async function getOverviewStats() {
         supabase.from('card_requests').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
     ])
 
+    // collection_items timestamps with `added_at`; everything else `created_at`.
+    const [userGrowth, collectionGrowth, listingGrowth, ticketGrowth, reportGrowth, requestGrowth] = await Promise.all([
+        growthCounts(() => supabase.from('profiles').select('id', { count: 'exact', head: true }), 'created_at'),
+        growthCounts(() => supabase.from('collection_items').select('id', { count: 'exact', head: true }), 'added_at'),
+        growthCounts(() => supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'), 'created_at'),
+        growthCounts(() => supabase.from('support_tickets').select('id', { count: 'exact', head: true }).neq('status', 'Resolved'), 'created_at'),
+        growthCounts(() => supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'), 'created_at'),
+        growthCounts(() => supabase.from('card_requests').select('id', { count: 'exact', head: true }).eq('status', 'Open'), 'created_at'),
+    ])
+
     // Paid-order count + GMV. total_amount is the item value in baht (shipping
     // fee is a separate column). Paged because a single select caps at 1000 rows.
+    // Orders and GMV take their growth off this same scan rather than six more
+    // round trips — every paid order is already in hand here.
     const PAGE = 1000
+    const cutoffs = DELTA_WINDOWS.map((w) => ({ key: w.key, at: Date.now() - w.hours * 3600e3 }))
     let paidOrders = 0
     let gmvBaht = 0
+    const orderGrowth: Deltas = { ...NO_GROWTH }
+    const gmvGrowth: Deltas = { ...NO_GROWTH }
     for (let from = 0; ; from += PAGE) {
-        const { data, count } = await supabase
+        const { data } = await supabase
             .from('orders')
-            .select('total_amount', { count: 'exact' })
+            .select('total_amount, created_at')
             .in('status', PAID_ORDER_STATUSES)
             .range(from, from + PAGE - 1)
-        if (count != null) paidOrders = count
-        for (const row of data ?? []) gmvBaht += Number(row.total_amount) || 0
+        for (const row of data ?? []) {
+            const amount = Number(row.total_amount) || 0
+            paidOrders++
+            gmvBaht += amount
+            const placedAt = Date.parse(String(row.created_at))
+            for (const cutoff of cutoffs) {
+                if (placedAt >= cutoff.at) {
+                    orderGrowth[cutoff.key]++
+                    gmvGrowth[cutoff.key] += amount
+                }
+            }
+        }
         if (!data || data.length < PAGE) break
     }
 
@@ -57,6 +113,14 @@ async function getOverviewStats() {
         openTickets: ticketsRes.count ?? 0,
         openReports: reportsRes.count ?? 0,
         openCardRequests: requestsRes.count ?? 0,
+        userGrowth,
+        collectionGrowth,
+        listingGrowth,
+        orderGrowth,
+        gmvGrowth,
+        ticketGrowth,
+        reportGrowth,
+        requestGrowth,
     }
 }
 
@@ -83,10 +147,13 @@ async function getTopPartners() {
 
 async function getRecentSales() {
     const supabase = createAdminClient()
+    // No seller filter: a real shop run by an admin is still a real sale, and
+    // dropping those left this list all but empty. The 10 most recent paid
+    // orders are the 10 most recent paid orders.
     const { data } = await supabase
         .from('orders')
         .select(`
-            id, total_amount, status, created_at,
+            id, total_amount, status, created_at, seller_id,
             listing:listings(card_data),
             buyer:profiles!orders_buyer_id_fkey(display_name),
             seller:profiles!orders_seller_id_fkey(display_name)
@@ -158,7 +225,7 @@ async function getWishlistBoard() {
         const slice = ids.slice(i, i + CHUNK)
         const { data: cards } = await supabase
             .from('pokemon_cards')
-            .select('id, name, english_name, set_id, number, rarity, language, game, image_small, image_large, tcgplayer:raw_data->tcgplayer, types:raw_data->types, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
+            .select('id, name, english_name, set_id, number, rarity, language, game, image_small, image_large, tcgplayer:raw_data->tcgplayer, types:raw_data->types, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)')
             .in('id', slice)
         for (const r of (cards ?? []) as any[]) catalog.set(r.id, r)
 
@@ -253,37 +320,21 @@ export default async function AdminOverviewPage() {
         getWishlistBoard(),
     ])
 
-    const statCards: StatCard[] = [
-        { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts' },
-        { label: 'Collections', value: stats.collectionItems.toLocaleString(), icon: 'fa-solid fa-layer-group', color: 'text-brand-purple', sub: 'Cards in collections' },
-        { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace' },
-        { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid and later' },
-        { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'Paid order value, excl. shipping' },
-        { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention' },
-        { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review' },
-        { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests' },
+    const statCards: StatCardData[] = [
+        { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts', deltas: stats.userGrowth },
+        { label: 'Collections', value: stats.collectionItems.toLocaleString(), icon: 'fa-solid fa-layer-group', color: 'text-brand-purple', sub: 'Cards in collections', deltas: stats.collectionGrowth },
+        { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace', deltas: stats.listingGrowth },
+        { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid, excl. cancelled', deltas: stats.orderGrowth },
+        { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'All paid orders', deltas: stats.gmvGrowth, deltaPrefix: '฿' },
+        { label: 'Open Tickets', value: stats.openTickets.toLocaleString(), icon: 'fa-solid fa-ticket', color: 'text-brand-red', sub: 'Needs attention', deltas: stats.ticketGrowth, href: '/admin/tickets' },
+        { label: 'Open Reports', value: stats.openReports.toLocaleString(), icon: 'fa-solid fa-flag', color: 'text-brand-purple', sub: 'Needs review', deltas: stats.reportGrowth, href: '/admin/reports' },
+        { label: 'Card Requests', value: stats.openCardRequests.toLocaleString(), icon: 'fa-solid fa-inbox', color: 'text-brand-cyan', sub: 'Open requests', deltas: stats.requestGrowth, href: '/admin/sets#card-requests' },
     ]
 
     return (
         <div className="space-y-8 animate-fadeIn">
-            <div>
-                <h1 className="text-2xl font-black text-white italic skew-x-[-3deg]">Admin Overview</h1>
-                <p className="text-slate-500 text-sm mt-1">Welcome to the CardStreet Admin Console</p>
-            </div>
-
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {statCards.map((card) => (
-                    <div key={card.label} className="glass rounded-2xl p-5 border border-white/10 relative overflow-hidden group hover:border-white/20 transition-all">
-                        <div className="absolute top-3 right-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <i className={`${card.icon} text-3xl ${card.color}`} />
-                        </div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{card.label}</p>
-                        <p className={`text-3xl font-black ${card.color}`}>{card.value}</p>
-                        {card.sub && <p className="text-[10px] text-slate-600 mt-1 font-semibold">{card.sub}</p>}
-                    </div>
-                ))}
-            </div>
+            {/* Heading + growth window picker + stat cards */}
+            <StatGrid cards={statCards} />
 
             {/* Sold Listings */}
             <div className="glass rounded-2xl border border-white/10 overflow-hidden">

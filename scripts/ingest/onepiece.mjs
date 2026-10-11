@@ -42,13 +42,18 @@ async function ingestSet(setId, setName) {
     return;
   }
   const setRowId = `op-${setId.toLowerCase()}`;
+  // optcgapi returns one row per PRINTING, so a card with parallels appears more
+  // than once (OP-17 ships 169 rows for 130 distinct cards). Counting rows
+  // overstated total, so every One Piece set read as permanently incomplete in
+  // the UI. Count distinct card_set_id — the same key the row dedupe below uses.
+  const distinctCards = new Set(cards.map((c) => c.card_set_id).filter(Boolean)).size;
   const { error: setErr } = await supabase.from('pokemon_sets').upsert(
     {
       id: setRowId,
       name: setName || cards[0].set_name,
       series: 'One Piece Card Game',
-      printed_total: cards.length,
-      total: cards.length,
+      printed_total: distinctCards,
+      total: distinctCards,
       language: 'en',
       game: 'onepiece',
     },

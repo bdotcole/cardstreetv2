@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import React, { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import PremiumHub from '@/components/PremiumHub';
 
 async function resolveLang(): Promise<'EN' | 'TH'> {
@@ -15,19 +16,25 @@ export async function generateMetadata(): Promise<Metadata> {
   const lang = await resolveLang();
   const title =
     lang === 'EN'
-      ? 'CardStreet Pro — Premium Collector Tools & Price History'
-      : 'CardStreet Pro — เครื่องมือสะสมการ์ดและกราฟราคาระดับพรีเมียม';
+      ? 'Cardstreet Pro — Premium Collector Tools & Price History'
+      : 'Cardstreet Pro — เครื่องมือสะสมการ์ดและกราฟราคาระดับพรีเมียม';
   const description =
     lang === 'EN'
-      ? 'Upgrade to CardStreet Pro for extended 180-day and 1-year price history charts and premium collector tools on Thailand’s trading card marketplace.'
-      : 'อัปเกรดเป็น CardStreet Pro เพื่อดูกราฟราคาย้อนหลัง 180 วันและ 1 ปี พร้อมเครื่องมือสะสมการ์ดระดับพรีเมียมบนตลาดซื้อขายการ์ดของไทย';
+      ? 'Upgrade to Cardstreet Pro for extended 180-day and 1-year price history charts and premium collector tools on Thailand’s trading card marketplace.'
+      : 'อัปเกรดเป็น Cardstreet Pro เพื่อดูกราฟราคาย้อนหลัง 180 วันและ 1 ปี พร้อมเครื่องมือสะสมการ์ดระดับพรีเมียมบนตลาดซื้อขายการ์ดของไทย';
   const pathLocale = await requestPathLocale();
   return {
     metadataBase: new URL(BASE_URL),
     title,
     description,
     alternates: buildAlternates('/premium', pathLocale),
-    openGraph: { title, description, type: 'website', siteName: 'CardStreet', url: localizedUrl('/premium', pathLocale) },
+    openGraph: { title, description, type: 'website', siteName: 'Cardstreet', url: localizedUrl('/premium', pathLocale) },
+    // Noindex while the plan is withdrawn (lib/entitlements.ts
+    // CONSUMER_PRO_ENABLED). The page stays reachable — an existing subscriber
+    // needs Manage, and the app stores deep-link here — but it must not keep
+    // ranking as a marketed offer that cannot be bought. Restored to indexable
+    // by flipping that flag.
+    ...(CONSUMER_PRO_ENABLED ? {} : { robots: { index: false, follow: true } }),
   };
 }
 

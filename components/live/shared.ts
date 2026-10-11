@@ -351,6 +351,10 @@ export interface LiveChatMessage {
     is_system: boolean;
     created_at: string;
     sender?: { display_name: string | null; avatar_url: string | null } | null;
+    /** Collector Pass level, attached by the chat GET route from
+     *  public_profiles (null pre-migration / for realtime rows — the viewer
+     *  falls back to its own public_profiles hydration map). */
+    sender_level?: number | null;
 }
 
 /** Spot/lot money is INTEGER SATANG everywhere in the live schema; the UI is
@@ -377,6 +381,22 @@ export function formatCountdown(msLeft: number): string {
     const s = Math.max(0, Math.ceil(msLeft / 1000));
     const m = Math.floor(s / 60);
     return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Phone-shaped device? UA first (the reliable signal for the three names that
+ * matter here), then a coarse pointer on a narrow viewport for everything
+ * that lies about its UA. Used to pick the console's default camera mode and
+ * to keep desktop-only capture APIs off phones — see MusicPanel.
+ */
+export function isPhoneLikeDevice(): boolean {
+    if (typeof window === 'undefined') return false;
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
+    return (
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches &&
+        window.innerWidth < 900
+    );
 }
 
 /**

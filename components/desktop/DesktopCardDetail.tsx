@@ -9,6 +9,7 @@ import { marketplaceService, MarketplaceListing } from '@/services/marketplaceSe
 import { getOptimizedImageUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
 import { Card, SiblingCard } from '@/types';
 import { formatTHB, listingToCartItem } from '@/components/desktop/DesktopMarketplace';
+import { groupSiblingListings, listingUnits, pickSiblingIds } from '@/lib/listingSiblings';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
@@ -23,7 +24,7 @@ import PriceHistoryChart from '@/components/PriceHistoryChart';
 // OBO best-offer is dark-launched behind this flag; nothing renders when off.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
-// Real graded market prices for a card (PriceCharting market + actual CardStreet
+// Real graded market prices for a card (PriceCharting market + actual Cardstreet
 // sales), served by /api/cards/[cardId]/graded-prices. Prices are already in THB.
 interface GradedPrice {
     company: string;   // PSA | BGS | CGC | SGC | ARS
@@ -31,6 +32,7 @@ interface GradedPrice {
     label: string;     // e.g. "PSA 10"
     price: number;     // THB
     source: 'app_sale' | 'market' | 'thai_estimate';
+    basis?: 'jp_twin' | 'en_name';
 }
 
 type SortKey = 'lowest' | 'highest' | 'best' | 'condition';
@@ -46,7 +48,19 @@ const GRADED_COMPANY_COLOR: Record<string, string> = {
 // One grid template shared by the listings header and every row so prices read
 // straight down a single right-aligned column. Collapses to a wrapped flex row
 // below sm (rare on the desktop shell, but must never scroll the page body).
-const ROW_GRID = 'sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_7rem_auto] sm:items-center sm:gap-4';
+// The leading 3.5rem column is the seller condition photo.
+const ROW_GRID = 'sm:grid sm:grid-cols-[3.5rem_6.5rem_minmax(0,1fr)_5.5rem_7rem_auto] sm:items-center sm:gap-4';
+
+// The seller photographs the exact copy on sale, front and optionally back.
+// Catalog art is identical across every listing of a card, so these shots are
+// the only per-listing visual -- and the only way a desktop buyer can judge
+// centering, edges and surface before paying. Mobile has shown them since
+// launch (components/ListingDetails.tsx); desktop rendered them nowhere.
+function listingPhotos(listing: MarketplaceListing): string[] {
+    return [listing.image_front_url, listing.image_back_url].filter(
+        (u): u is string => typeof u === 'string' && u.trim().length > 0,
+    );
+}
 
 export default function DesktopCardDetail({
     cardId,
@@ -79,7 +93,11 @@ export default function DesktopCardDetail({
 }) {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
-    const { addItem, user } = useDesktopCart();
+    const { addItem, user, items: cartItems } = useDesktopCart();
+    // Each Add to Cart click takes the next copy of a multi-unit listing that
+    // is not in the cart yet; with every copy taken the button rests.
+    const nextUnitId = (listing: MarketplaceListing): string | undefined =>
+        pickSiblingIds(listing, 1, cartItems.map((i) => i.id))[0];
     const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const { collections, addCollection, addCardToCollection } = useUserCollections();
@@ -106,6 +124,8 @@ export default function DesktopCardDetail({
     // optimistically after a successful submit (no refetch), so each per-listing
     // "Make an Offer" button greys out to reflect the 409-OFFER_ALREADY_LIVE state.
     const [pendingOfferListingIds, setPendingOfferListingIds] = useState<Set<string>>(new Set());
+    // The listing whose seller photos are open full-size (null = viewer closed).
+    const [photoListing, setPhotoListing] = useState<MarketplaceListing | null>(null);
 
     const handleAddToCollection = async () => {
         if (!card) return;
@@ -142,6 +162,24 @@ export default function DesktopCardDetail({
         }
     };
 
+    // Wishlisting IS the listing alert (lib/wishlistAlerts), so this is the
+    // heart button's toggle with toasts that say what was asked for.
+    const handleToggleListingAlert = async () => {
+        if (!card) return;
+        if (!user) { setAuthOpen(true); return; }
+        try {
+            if (isInWishlist(card.id)) {
+                await removeFromWishlist(card.id);
+                showToast(t('desktop.card.notifyOnListingOffToast'), 'success');
+            } else {
+                await addToWishlist(card);
+                showToast(t('desktop.card.notifyOnListingOn'), 'success');
+            }
+        } catch {
+            showToast(t('desktop.collection.addFailed'), 'error');
+        }
+    };
+
     useEffect(() => {
         // Server already supplied the data — nothing to fetch.
         if (initialCard) return;
@@ -156,7 +194,7 @@ export default function DesktopCardDetail({
                 const supabase = createClient();
                 const { data } = await supabase
                     .from('pokemon_cards')
-                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, market_avg, currency, last_updated)')
+                    .select('id, name, english_name, set_id, number, rarity, image_small, image_large, language, raw_data->tcgplayer, pokemon_sets(name, printed_total, total), market_values(condition, language, market_avg, currency, last_updated)')
                     .eq('id', cardId)
                     .maybeSingle();
                 if (data) resolved = mapSupabaseCardToInternal(data);
@@ -210,6 +248,15 @@ export default function DesktopCardDetail({
         };
     }, [user]);
 
+    // Escape closes the photo viewer. Registered only while it is open so the
+    // page keeps no stray key listener.
+    useEffect(() => {
+        if (!photoListing) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPhotoListing(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [photoListing]);
+
     // ─── Derived market stats (all real, straight off the live listings array) ──
     const marketPrice = card?.marketPrice ?? 0;
     const lowest = listings.length ? Math.min(...listings.map((l) => l.price)) : 0;
@@ -241,7 +288,9 @@ export default function DesktopCardDetail({
     const gradedEstimateShown = gradedPrices.some((g) => g.source === 'thai_estimate');
 
     const visibleListings = useMemo(() => {
-        let arr = listings;
+        // Identical copies from one seller collapse into a single row with a
+        // unit count (lib/listingSiblings.ts).
+        let arr = groupSiblingListings(listings);
         if (showFilter && condFilter === 'raw') arr = arr.filter((l) => !l.is_graded);
         else if (showFilter && condFilter === 'graded') arr = arr.filter((l) => l.is_graded);
         const sorted = [...arr];
@@ -303,11 +352,11 @@ export default function DesktopCardDetail({
 
     const microLabel = 'text-[10px] text-slate-500 font-black uppercase tracking-widest';
 
-    const gradedSourceLabel = (source: GradedPrice['source']) =>
-        source === 'app_sale'
+    const gradedSourceLabel = (g: GradedPrice) =>
+        g.source === 'app_sale'
             ? t('desktop.card.gradedSourceSale')
-            : source === 'thai_estimate'
-                ? t('desktop.card.gradedSourceEstimate')
+            : g.source === 'thai_estimate'
+                ? t(g.basis === 'jp_twin' ? 'desktop.card.gradedSourceEstimateJp' : 'desktop.card.gradedSourceEstimate')
                 : t('desktop.card.gradedSourceMarket');
 
     return (
@@ -441,7 +490,7 @@ export default function DesktopCardDetail({
                                             >
                                                 <span className={`text-xs font-black ${GRADED_COMPANY_COLOR[g.company] || 'text-white'}`}>{g.label}</span>
                                                 <span className="text-sm font-black text-white">{formatTHB(g.price)}</span>
-                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{gradedSourceLabel(g.source)}</span>
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{gradedSourceLabel(g)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -505,11 +554,36 @@ export default function DesktopCardDetail({
                     </div>
 
                     {listings.length === 0 ? (
-                        <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                            <p className="text-slate-500 text-sm">{t('desktop.card.noListings')}</p>
+                            {/* Stays a button when on: a static line that ignores
+                                clicks reads as broken. */}
+                            {isInWishlist(card.id) ? (
+                                <button
+                                    onClick={handleToggleListingAlert}
+                                    className="group inline-flex items-center gap-2 bg-brand-green/10 hover:bg-white/10 border border-brand-green/25 text-brand-green text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+                                >
+                                    <i className="fa-solid fa-bell text-xs"></i>
+                                    {t('desktop.card.notifyOnListingOn')}
+                                    <span className="text-slate-500 group-hover:text-white font-semibold underline underline-offset-2 transition-colors">
+                                        {t('desktop.card.notifyOnListingOff')}
+                                    </span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleToggleListingAlert}
+                                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-brand-cyan text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+                                >
+                                    <i className="fa-regular fa-bell text-xs"></i>
+                                    {t('desktop.card.notifyOnListing')}
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         <div>
                             {/* Column labels — aligned to the same grid as the rows (sm+ only). */}
                             <div className={`hidden ${ROW_GRID} px-4 pb-2 ${microLabel}`}>
+                                <span>{t('desktop.card.photoColumn')}</span>
                                 <span>{t('desktop.card.conditionColumn')}</span>
                                 <span>{t('desktop.card.sellerColumn')}</span>
                                 <span className="text-right">{t('desktop.card.dealColumn')}</span>
@@ -524,6 +598,8 @@ export default function DesktopCardDetail({
                                     const top = isTopCondition(listing);
                                     const dealPct = marketPrice > 0 ? getDealPercent(listing.price, marketPrice) : null;
                                     const isBest = listings.length > 1 && listing.id === bestId;
+                                    const photos = listingPhotos(listing);
+                                    const photoThumb = getOptimizedImageUrl(photos[0], 120, 75);
                                     const badgeClass = graded
                                         ? 'bg-brand-cyan/15 text-brand-cyan border-brand-cyan/30'
                                         : top
@@ -534,6 +610,44 @@ export default function DesktopCardDetail({
                                             key={listing.id}
                                             className={`rounded-xl border px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 transition-colors ${ROW_GRID} ${isBest ? 'bg-brand-green/[0.05] border-brand-green/30 border-l-2 border-l-brand-green' : 'bg-slate-800/40 border-white/5 hover:border-white/10'}`}
                                         >
+                                            {/* The seller's own shot of this copy. Opens full
+                                                size; a listing with no photo keeps the column
+                                                aligned with a placeholder instead of shifting
+                                                every following cell left. */}
+                                            {photos.length > 0 ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPhotoListing(listing)}
+                                                    aria-label={t('desktop.card.viewPhotos')}
+                                                    className="group/photo relative w-12 h-16 rounded-md overflow-hidden border border-white/10 bg-brand-darker hover:border-brand-cyan/60 transition-colors shrink-0"
+                                                >
+                                                    <Image
+                                                        src={photoThumb}
+                                                        alt=""
+                                                        fill
+                                                        sizes="48px"
+                                                        loading="lazy"
+                                                        unoptimized={shouldSkipNextOptimization(photoThumb)}
+                                                        className="object-cover"
+                                                    />
+                                                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/45 transition-colors">
+                                                        <i className="fa-solid fa-up-right-and-down-left-from-center text-white text-[10px] opacity-0 group-hover/photo:opacity-100 transition-opacity"></i>
+                                                    </span>
+                                                    {photos.length > 1 && (
+                                                        <span className="absolute bottom-0 right-0 px-1 rounded-tl bg-black/75 text-[9px] font-black text-slate-200">
+                                                            {photos.length}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ) : (
+                                                <span
+                                                    title={t('desktop.card.noPhoto')}
+                                                    className="w-12 h-16 rounded-md border border-dashed border-white/10 flex items-center justify-center shrink-0"
+                                                >
+                                                    <i className="fa-regular fa-image text-slate-700 text-xs"></i>
+                                                </span>
+                                            )}
+
                                             {/* Condition (+ best-price marker) */}
                                             <div className="flex flex-col gap-1">
                                                 {isBest && (
@@ -598,6 +712,11 @@ export default function DesktopCardDetail({
                                             {/* Price */}
                                             <div className="text-right shrink-0">
                                                 <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
+                                                {listingUnits(listing) > 1 && (
+                                                    <span className="block text-[10px] text-slate-400 font-bold whitespace-nowrap">
+                                                        {t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Actions */}
@@ -622,8 +741,12 @@ export default function DesktopCardDetail({
                                                     )
                                                 )}
                                                 <button
-                                                    onClick={() => addItem(listingToCartItem(listing))}
-                                                    className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                    onClick={() => {
+                                                        const id = nextUnitId(listing);
+                                                        if (id) addItem({ ...listingToCartItem(listing), id });
+                                                    }}
+                                                    disabled={!nextUnitId(listing)}
+                                                    className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     {t('desktop.card.addToCart')}
                                                 </button>
@@ -641,10 +764,15 @@ export default function DesktopCardDetail({
                 client: its whole purpose is to be in the initial HTML, where it
                 takes the page from one outlink (the breadcrumb) to thirteen and
                 adds a few hundred characters of card-specific text. */}
-            {siblings.length >= 2 && (
+            {siblings.length >= 1 && (
                 <section className="mt-12 border-t border-white/10 pt-8">
                     <div className="flex items-baseline justify-between gap-4">
-                        <h2 className="text-lg font-black text-white">{t('desktop.card.moreFromSet')}</h2>
+                        {/* A block topped up from the wider game is not "more from
+                            this set", and mislabelling it would be a claim the
+                            tiles themselves contradict. */}
+                        <h2 className="text-lg font-black text-white">
+                            {t(siblings.some((s) => s.fromOtherSet) ? 'desktop.card.moreFromGame' : 'desktop.card.moreFromSet')}
+                        </h2>
                         {setId && card.set && (
                             <Link
                                 href={`${pathPrefix}/sets/${setId}`}
@@ -710,6 +838,70 @@ export default function DesktopCardDetail({
                         showToast(t('offer.submitted'), 'success');
                     }}
                 />
+            )}
+
+            {/* Full-size seller photos. The buy control rides along so inspecting
+                the actual card and adding it to the cart is one flow, not two. */}
+            {photoListing && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setPhotoListing(null)}></div>
+
+                    <div className="relative w-full max-w-3xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto">
+                        <div className="bg-brand-darker/50 px-5 py-4 border-b border-white/5 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                                <h3 className="text-white font-black uppercase tracking-widest text-xs">
+                                    {t('desktop.card.sellerPhotos')}
+                                </h3>
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                    {photoListing.seller?.display_name || photoListing.seller?.username || t('desktop.unknownSeller')}
+                                    {' · '}
+                                    {conditionBadgeLabel(photoListing)}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setPhotoListing(null)}
+                                aria-label={t('desktop.card.closePhotos')}
+                                className="text-slate-400 hover:text-white shrink-0"
+                            >
+                                <i className="fa-solid fa-xmark text-lg"></i>
+                            </button>
+                        </div>
+
+                        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {listingPhotos(photoListing).map((url, i) => (
+                                <figure key={url} className="min-w-0">
+                                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/10 bg-black/40">
+                                        <Image
+                                            src={getOptimizedImageUrl(url, 640, 85)}
+                                            alt={i === 0 ? t('desktop.card.photoFront') : t('desktop.card.photoBack')}
+                                            fill
+                                            sizes="(min-width: 640px) 340px, 90vw"
+                                            unoptimized={shouldSkipNextOptimization(getOptimizedImageUrl(url, 640, 85))}
+                                            className="object-contain"
+                                        />
+                                    </div>
+                                    <figcaption className={`mt-2 ${microLabel}`}>
+                                        {i === 0 ? t('desktop.card.photoFront') : t('desktop.card.photoBack')}
+                                    </figcaption>
+                                </figure>
+                            ))}
+                        </div>
+
+                        <div className="px-5 pb-5 flex items-center justify-between gap-4">
+                            <span className="text-2xl font-black text-brand-cyan">{formatTHB(photoListing.price)}</span>
+                            <button
+                                onClick={() => {
+                                    const id = nextUnitId(photoListing);
+                                    if (id) addItem({ ...listingToCartItem(photoListing), id });
+                                    setPhotoListing(null);
+                                }}
+                                className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-5 py-2.5 rounded-lg transition-colors"
+                            >
+                                {t('desktop.card.addToCart')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

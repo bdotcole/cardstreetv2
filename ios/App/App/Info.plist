@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>CardStreet</string>
+        <string>Cardstreet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -46,7 +46,7 @@
 	<key>FacebookClientToken</key>
 	<string>460a3a499015935ac8c86c2007f63ffc</string>
 	<key>FacebookDisplayName</key>
-	<string>CardStreet</string>
+	<string>Cardstreet</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
@@ -59,13 +59,13 @@
 		</dict>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>CardStreet uses the camera to scan trading cards so you can identify them and add them to your collection or marketplace listings.</string>
+	<string>Cardstreet uses the camera to scan trading cards so you can identify them and add them to your collection or marketplace listings.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>CardStreet uses your microphone so you can talk to buyers while broadcasting a live break.</string>
+	<string>Cardstreet uses your microphone so you can talk to buyers while broadcasting a live break.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CardStreet accesses your photo library so you can choose existing card photos to scan or attach to listings.</string>
+	<string>Cardstreet accesses your photo library so you can choose existing card photos to scan or attach to listings.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>CardStreet saves card images you capture to your photo library.</string>
+	<string>Cardstreet saves card images you capture to your photo library.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

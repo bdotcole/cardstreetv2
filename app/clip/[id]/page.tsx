@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isFeatureDisabledInCode } from '@/lib/betaFeatures';
 import ClipPlayer from '@/components/live/ClipPlayer';
 
 /**
@@ -42,6 +44,9 @@ const CLIP_COLS =
     'profiles!streams_seller_id_fkey(display_name))';
 
 async function loadClip(id: string): Promise<ClipRow | null> {
+    // Clips are windows into a live show, so they go dark with the rest of the
+    // Live section -- no stranded share link pointing at a 404 hub.
+    if (isFeatureDisabledInCode('live_streams')) return null;
     try {
         const admin = createAdminClient();
         const { data } = await admin
@@ -63,15 +68,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
     const { id } = await params;
     const clip = await loadClip(id);
-    if (!clip) return { title: 'คลิป | CardStreet' };
-    const show = clip.streams?.title ?? 'CardStreet Live';
+    if (!clip) return { title: 'คลิป | Cardstreet' };
+    const show = clip.streams?.title ?? 'Cardstreet Live';
     const seller = clip.streams?.profiles?.display_name;
     const title = clip.title ? `${clip.title} — ${show}` : `คลิปจาก ${show}`;
     return {
-        title: `${title} | CardStreet`,
+        title: `${title} | Cardstreet`,
         description: seller
-            ? `ไฮไลต์จากไลฟ์เปิดการ์ดของ ${seller} — ดูคลิปบน CardStreet`
-            : 'ไฮไลต์จากไลฟ์เปิดการ์ดบน CardStreet',
+            ? `ไฮไลต์จากไลฟ์เปิดการ์ดของ ${seller} — ดูคลิปบน Cardstreet`
+            : 'ไฮไลต์จากไลฟ์เปิดการ์ดบน Cardstreet',
         openGraph: {
             title,
             images: clip.streams?.cover_image_url ? [clip.streams.cover_image_url] : undefined,
@@ -81,6 +86,7 @@ export async function generateMetadata({
 }
 
 export default async function ClipPage({ params }: { params: Promise<{ id: string }> }) {
+    if (isFeatureDisabledInCode('live_streams')) notFound();
     const { id } = await params;
     const clip = await loadClip(id);
 
@@ -102,7 +108,7 @@ export default async function ClipPage({ params }: { params: Promise<{ id: strin
     const src = clip.vod_url ?? clip.streams?.vod_url ?? null;
     const expired =
         !!clip.streams?.vod_expires_at && Date.parse(clip.streams.vod_expires_at) < Date.now();
-    const show = clip.streams?.title ?? 'CardStreet Live';
+    const show = clip.streams?.title ?? 'Cardstreet Live';
     const seller = clip.streams?.profiles?.display_name;
 
     return (

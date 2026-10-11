@@ -15,7 +15,7 @@ interface AddCardProps {
 type AddView = 'options' | 'manual';
 
 const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning = false }) => {
-  const { t } = useTranslation();
+  const { t, isThai } = useTranslation();
   const [view, setView] = useState<AddView>('options');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<Card[]>([]);
@@ -23,16 +23,23 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
   const [isAiResolving, setIsAiResolving] = useState(false);
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const searchTimeout = useRef<number | null>(null);
+  // The search still in flight. A newer keystroke aborts it, so a superseded
+  // term stops at its next stage and can never overwrite the newer results.
+  const searchAbort = useRef<AbortController | null>(null);
 
   const performSearch = async (val: string) => {
     if (val.length > 2) {
+      searchAbort.current?.abort();
+      const controller = new AbortController();
+      searchAbort.current = controller;
       setIsSearching(true);
       const needsAi = /[\u0E00-\u0E7F]/.test(val) || val.split(' ').length > 1;
       if (needsAi) setIsAiResolving(true);
 
       // Universal search: every game and language, so adding e.g. a One Piece
       // or Thai card by name works without a game picker.
-      const data = await pokemonService.searchCards(val, false, undefined, 'all');
+      const data = await pokemonService.searchCards(val, false, undefined, 'all', { signal: controller.signal });
+      if (controller.signal.aborted) return;
 
       setResults(data);
       setIsSearching(false);
@@ -47,6 +54,13 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
 
     if (searchTimeout.current) {
       window.clearTimeout(searchTimeout.current);
+    }
+    // A shorter or changed term supersedes whatever is still running.
+    if (searchAbort.current) {
+      searchAbort.current.abort();
+      searchAbort.current = null;
+      setIsSearching(false);
+      setIsAiResolving(false);
     }
 
     if (val.length > 2) {
@@ -68,7 +82,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
           <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
         </button>
         <div>
-          <h3 className="text-white text-lg font-black tracking-tight uppercase">Registry Search</h3>
+          <h3 className="text-white text-lg font-black tracking-tight uppercase">{t('scan.registrySearch')}</h3>
         </div>
       </div>
 
@@ -78,7 +92,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
           <input
             type="text"
             autoFocus
-            placeholder="Search name, set, number..."
+            placeholder={t('scan.searchPlaceholder')}
             className="w-full h-14 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl focus:border-brand-cyan/50 outline-none text-sm font-medium text-white placeholder:text-slate-600 transition-all"
             value={searchQuery}
             onChange={(e) => handleManualSearchChange(e.target.value)}
@@ -88,7 +102,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
         {isAiResolving && (
           <div className="flex items-center gap-2 px-4 animate-pulse">
             <div className="w-1.5 h-1.5 rounded-full bg-brand-cyan"></div>
-            <span className="text-[8px] text-brand-cyan/80 font-black uppercase tracking-[0.2em]">Syncing Multilingual Database...</span>
+            <span className={`text-[8px] text-brand-cyan/80 font-black ${isThai ? 'tracking-normal' : 'uppercase tracking-[0.2em]'}`}>{t('scan.syncingDatabase')}</span>
           </div>
         )}
       </div>
@@ -127,7 +141,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
                 </div>
                 <div className="text-right">
                   <p className="text-white text-sm font-black">฿{card.marketPrice.toLocaleString()}</p>
-                  <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Market</p>
+                  <p className={`text-[8px] text-slate-600 font-bold ${isThai ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{t('scan.marketLabel')}</p>
                 </div>
               </button>
             ))}
@@ -146,7 +160,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
         ) : (
           <div className="text-center py-20 opacity-10">
             <i className="fa-solid fa-keyboard text-5xl mb-6"></i>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em]">Search Live Archives</p>
+            <p className={`text-[10px] font-black ${isThai ? 'tracking-normal' : 'uppercase tracking-[0.4em]'}`}>{t('scan.searchEmpty')}</p>
           </div>
         )}
       </div>
@@ -157,7 +171,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
     <div className="space-y-8 animate-fadeIn pt-12 pb-12">
       <div className="text-center space-y-3 mb-12 px-4">
         <h2 className="text-3xl font-black text-white tracking-tight uppercase italic skew-x-[-10deg]">{t('scan.registryEntry')}</h2>
-        <p className="text-xs text-slate-600 font-black tracking-[0.3em] uppercase">TRACK YOUR TCG COLLECTION</p>
+        <p className={`text-xs text-slate-600 font-black ${isThai ? 'tracking-normal' : 'tracking-[0.3em] uppercase'}`}>{t('scan.trackCollection')}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
@@ -202,8 +216,8 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
             <div className="absolute -inset-4 border-2 border-brand-cyan/30 rounded-[2rem] animate-ping opacity-30"></div>
           </div>
           <div className="text-center space-y-2">
-            <p className="text-white text-lg font-black uppercase tracking-widest">Analyzing Card</p>
-            <p className="text-[10px] text-brand-cyan/60 font-black uppercase tracking-[0.4em] animate-pulse">AI Vision Processing...</p>
+            <p className={`text-white text-lg font-black ${isThai ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{t('scan.analyzingCard')}</p>
+            <p className={`text-[10px] text-brand-cyan/60 font-black animate-pulse ${isThai ? 'tracking-normal' : 'uppercase tracking-[0.4em]'}`}>{t('scan.aiVisionProcessing')}</p>
           </div>
         </div>
       )}

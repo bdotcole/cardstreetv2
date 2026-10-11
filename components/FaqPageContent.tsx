@@ -2,7 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 import FaqList from '@/components/FaqList';
 
 interface PageStrings {
@@ -17,7 +19,7 @@ interface PageStrings {
 const EN: PageStrings = {
   pageTitle: 'Frequently Asked Questions',
   introBefore:
-    "Everything you need to know about buying, selling, scanning, and shipping trading cards on CardStreet. Can't find your answer? ",
+    "Everything you need to know about buying, selling, scanning, and shipping trading cards on Cardstreet. Can't find your answer? ",
   introLink: 'Contact us',
   introAfter: '.',
   stillStuck: 'Still have a question?',
@@ -27,7 +29,7 @@ const EN: PageStrings = {
 const TH: PageStrings = {
   pageTitle: 'คำถามที่พบบ่อย',
   introBefore:
-    'รวมทุกเรื่องที่ควรรู้เกี่ยวกับการซื้อ ขาย สแกน และจัดส่งการ์ดสะสมบน CardStreet หากหาคำตอบไม่เจอ ',
+    'รวมทุกเรื่องที่ควรรู้เกี่ยวกับการซื้อ ขาย สแกน และจัดส่งการ์ดสะสมบน Cardstreet หากหาคำตอบไม่เจอ ',
   introLink: 'ติดต่อเรา',
   introAfter: ' ได้เลย',
   stillStuck: 'ยังมีคำถามอยู่ใช่ไหม?',
@@ -50,6 +52,7 @@ export default function FaqPageContent({ prefix }: { prefix: '' | '/en' }) {
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t.pageTitle}</h1>
+          <LocaleSwitchLink prefix={prefix} path="/faq" />
         </div>
 
         <p className="text-sm text-slate-300 leading-relaxed mb-10">
@@ -70,6 +73,7 @@ export default function FaqPageContent({ prefix }: { prefix: '' | '/en' }) {
           >
             {t.emailSupport}
           </a>
+          <CommercialLinks prefix={prefix} current="/faq" />
         </div>
       </div>
     </div>

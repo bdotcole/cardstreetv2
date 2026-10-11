@@ -1,10 +1,14 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardCondition } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { calculateRecommendedPrice } from '@/lib/utils/priceCalculator';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { usePremium } from '@/lib/hooks/usePremium';
 import { minListingPriceThb } from '@/lib/pricingFloors';
+import { clampRecommendation, evaluatePrice, isUsableMarketValue } from '@/lib/listingPriceGuidance';
+import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
+import { marketplaceService } from '@/services/marketplaceService';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
@@ -22,7 +26,7 @@ interface ListingFormProps {
 }
 
 const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
   // Admins may seed the marketplace below the standard 20-baht floor (e.g. a
   // 1-baht test/seed listing); everyone else keeps the 20 minimum. This is UX
   // only -- usePremium fails closed, so a lookup miss safely keeps the 20 floor,
@@ -47,6 +51,16 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recommendedPrice, setRecommendedPrice] = useState<number>(0);
+  // Cheapest active listing for this same card, for the "lowest active listing
+  // ฿Y" line. Undefined until loaded / when there are none — a seller who is
+  // the first to list must not be shown a comparison to nothing.
+  const [lowestActive, setLowestActive] = useState<number | undefined>(undefined);
+  // Second tap for a price far above market (see OVER_MARKET_CONFIRM_RATIO).
+  const [overpriceAcknowledged, setOverpriceAcknowledged] = useState(false);
+  // Copies of this exact card. Creates N identical listing rows, so each can
+  // sell independently (see createListing's `quantity`).
+  const [quantity, setQuantity] = useState(1);
+  const [useCatalogArt, setUseCatalogArt] = useState(false);
   
   // Photo states
   const [frontImageBlob, setFrontImageBlob] = useState<Blob | null>(null);
@@ -70,6 +84,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     setShowSellerInfo(false);
   };
 
+  // Portal target is document.body, which only exists after mount. See the
+  // note above the return for why the form is portaled at all.
+  const [mounted, setMounted] = useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   const isSubmittingRef = useRef(false);
   const frontFileInputRef = useRef<HTMLInputElement>(null);
   const backFileInputRef = useRef<HTMLInputElement>(null);
@@ -83,8 +102,39 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
       gradingCompany: isGraded ? gradingCompany : undefined,
       grade: isGraded ? grade : undefined
     });
-    setRecommendedPrice(rec);
-  }, [card.marketPrice, condition, isGraded, gradingCompany, grade]);
+    // Clamped to the public floor: a recommendation the form would then reject
+    // is a bug the seller has to diagnose. Admins keep their own lower floor,
+    // so only clamp when the seller is held to 20.
+    setRecommendedPrice(isAdmin ? Math.round(rec) : clampRecommendation(rec));
+  }, [card.marketPrice, condition, isGraded, gradingCompany, grade, isAdmin]);
+
+  // Lowest active listing on the same card. Best-effort: a failure just hides
+  // that half of the guidance rather than blocking the form.
+  React.useEffect(() => {
+    if (!card?.id) return;
+    let cancelled = false;
+    marketplaceService
+      .getListingsForCard(card.id)
+      .then((rows) => {
+        if (cancelled) return;
+        const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
+        setLowestActive(prices.length ? Math.min(...prices) : undefined);
+      })
+      .catch(() => { /* guidance degrades to market-only */ });
+    return () => { cancelled = true; };
+  }, [card?.id]);
+
+  // Any edit re-arms the confirm tap, so an acknowledged 3x price cannot be
+  // silently edited up to 10x and published on the already-spent confirmation.
+  const guidance = evaluatePrice(parseFloat(price), card.marketPrice, lowestActive);
+  React.useEffect(() => { setOverpriceAcknowledged(false); }, [price]);
+
+  const canUseCatalogArt = catalogArtAllowed(parseFloat(price), condition);
+  // Untick automatically when the seller edits past the threshold, so the
+  // option can never be silently in force for a card it does not cover.
+  React.useEffect(() => {
+    if (!canUseCatalogArt) setUseCatalogArt(false);
+  }, [canUseCatalogArt]);
 
   const takePhoto = async (side: 'front' | 'back') => {
     try {
@@ -131,14 +181,34 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Sealed products need one photo of the item; the second angle is optional.
-    // Raw cards still require both faces for condition assessment.
-    if (!frontImageBlob || (!isSealed && !backImageBlob)) {
+    // Raw cards still require both faces for condition assessment — UNLESS the
+    // card is cheap and near-mint enough for the catalog image to stand in
+    // (lib/listingPhotoPolicy.ts; never for sealed). Two photographs per
+    // 40-baht common is why bulk never gets listed.
+    if (!useCatalogArt && (!frontImageBlob || (!isSealed && !backImageBlob))) {
       setError(isThai
         ? (isSealed ? 'กรุณาอัปโหลดรูปถ่ายสินค้า' : 'กรุณาอัปโหลดรูปภาพด้านหน้าและด้านหลังของการ์ด')
         : (isSealed ? 'Please provide a photo of the sealed product.' : 'Please provide both front and back photos of the card.'));
       return;
     }
+    // The checkbox can be left ticked while the price or condition is edited
+    // past the threshold — re-check against the values being submitted, not
+    // against what was true when it was ticked.
+    if (useCatalogArt && !canUseCatalogArt) {
+      setError(t('listingPhotos.photosRequired'));
+      return;
+    }
     
+    // A price far above market takes a second, deliberate tap. Not a modal:
+    // the seller may have a good reason (a graded card the catalog undervalues,
+    // a print the market row does not distinguish), so this must be a speed
+    // bump, not a wall. Any edit to the price re-arms it.
+    if (guidance.requiresConfirm && !overpriceAcknowledged) {
+      setOverpriceAcknowledged(true);
+      setError(t('listingPrice.confirmPrompt'));
+      return;
+    }
+
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -153,17 +223,23 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
       let back_url: string | null = null;
       const supabase = createClient();
 
-      // Upload Front Image
-      const frontPath = `listings/${card.id}/${Date.now()}_front.jpg`;
-      const { data: frontData, error: frontError } = await supabase.storage
-        .from('listing-images')
-        .upload(frontPath, frontImageBlob, { contentType: 'image/jpeg' });
-      
-      if (frontError) throw new Error("Failed to upload front image: " + frontError.message);
-      front_url = supabase.storage.from('listing-images').getPublicUrl(frontData.path).data.publicUrl;
+      // Catalog art: leave both URLs null. The listing tile already falls back
+      // to card_data.images when image_front_url is absent, so nothing needs a
+      // placeholder written into it — and a null keeps "this seller supplied a
+      // photo" answerable later.
+      if (!useCatalogArt && frontImageBlob) {
+        // Upload Front Image
+        const frontPath = `listings/${card.id}/${Date.now()}_front.jpg`;
+        const { data: frontData, error: frontError } = await supabase.storage
+          .from('listing-images')
+          .upload(frontPath, frontImageBlob, { contentType: 'image/jpeg' });
+
+        if (frontError) throw new Error("Failed to upload front image: " + frontError.message);
+        front_url = supabase.storage.from('listing-images').getPublicUrl(frontData.path).data.publicUrl;
+      }
 
       // Upload Back Image (optional for sealed products)
-      if (backImageBlob) {
+      if (!useCatalogArt && backImageBlob) {
         const backPath = `listings/${card.id}/${Date.now()}_back.jpg`;
         const { data: backData, error: backError } = await supabase.storage
           .from('listing-images')
@@ -175,6 +251,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
       const listingData = {
         card_id: card.id,
+        quantity,
         price: parseFloat(price),
         condition,
         is_graded: isGraded,
@@ -194,21 +271,37 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!mounted) return null;
+
+  // Portaled to document.body. The mobile shell's <main> is its own stacking
+  // context (z-10) with the bottom tab bar as a z-40 sibling, so a modal
+  // rendered in place always paints beneath the tab bar no matter its own
+  // z-index; the old pb-40 on the scroll body only papered over that. The
+  // portal escapes the shell's safe-area padding, so the insets are
+  // re-applied here. Same trap as AuthModal (fdc92af) and SellerInfoModal.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+      }}
+    >
       <SellerInfoModal isOpen={showSellerInfo} onClose={dismissSellerInfo} />
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
+      {/* dvh, not vh: on mobile browsers 100vh is the URL-bar-hidden height.
+          The header never shrinks; only the body scrolls, capped to the panel. */}
+      <div className="relative w-full max-w-md max-h-[90dvh] flex flex-col bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
         {/* Header */}
-        <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center">
+        <div className="bg-brand-darker/50 p-4 border-b border-white/5 flex justify-between items-center flex-shrink-0">
           <h3 className="text-white font-black italic skew-x-[-5deg] text-lg uppercase">{isThai ? 'รายการขาย' : 'List for Sale'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[80vh] pb-40">
+        <div className="p-6 pb-8 overflow-y-auto overscroll-contain min-h-0">
           {/* Card Preview */}
           <div className="flex gap-4 mb-6">
             <div className="w-20 h-28 bg-brand-darker rounded-lg border border-white/10 overflow-hidden flex-shrink-0">
@@ -232,9 +325,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                   <button
                     type="button"
                     onClick={() => setPrice(recommendedPrice.toString())}
-                    className="text-[10px] text-brand-cyan hover:text-white font-bold uppercase transition-colors"
+                    className={`text-[10px] text-brand-cyan hover:text-white font-bold transition-colors ${isThai ? '' : 'uppercase'}`}
                   >
-                    Use Recommended: ฿{recommendedPrice.toLocaleString()}
+                    {t('listingPrice.useRecommended')}: ฿{recommendedPrice.toLocaleString()}
                   </button>
                 )}
               </div>
@@ -246,9 +339,66 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                   min={minPrice}
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 text-white font-bold focus:border-brand-cyan outline-none transition-colors placeholder-slate-600"
-                  placeholder={recommendedPrice > 0 ? `Recommended: ${recommendedPrice.toLocaleString()}` : "0.00"}
+                  className={`w-full h-12 bg-white/5 border rounded-xl pl-8 pr-4 text-white font-bold outline-none transition-colors placeholder-slate-600 ${
+                    guidance.warn ? 'border-amber-400/60 focus:border-amber-400' : 'border-white/10 focus:border-brand-cyan'
+                  }`}
+                  placeholder={recommendedPrice > 0 ? `${t('listingPrice.useRecommended')}: ${recommendedPrice.toLocaleString()}` : '0.00'}
                 />
+              </div>
+              {/* Buyers pay this number and nothing more: checkout adds no
+                  shipping line, so shipping has to be inside the price. */}
+              <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">{t('listingPrice.includeShipping')}</p>
+
+              {/* Price guidance. Silent when the catalog's market value is the
+                  10-baht placeholder daily-market-update writes for a card it
+                  has no real price for (52% of Thai rows) — comparing against
+                  that would be confidently wrong and would push a correct
+                  price down. isUsableMarketValue is the gate. */}
+              {(isUsableMarketValue(card.marketPrice) || guidance.lowestActive !== undefined) && (
+                <div className="mt-2 space-y-1">
+                  {guidance.percentFromMarket !== undefined && (
+                    <p className={`text-[11px] font-bold ${guidance.warn ? 'text-amber-400' : guidance.verdict === 'under' ? 'text-brand-green' : 'text-slate-400'}`}>
+                      {Math.abs(guidance.percentFromMarket) < 3
+                        ? t('listingPrice.atMarket')
+                        : `${Math.abs(guidance.percentFromMarket)}% ${guidance.percentFromMarket > 0 ? t('listingPrice.aboveMarket') : t('listingPrice.belowMarket')}`}
+                    </p>
+                  )}
+                  {guidance.lowestActive !== undefined && (
+                    <p className="text-[11px] text-slate-500">
+                      {t('listingPrice.lowestActive')}: ฿{guidance.lowestActive.toLocaleString()}
+                    </p>
+                  )}
+                  {guidance.warn && (
+                    <p className="text-[11px] text-amber-400/80 leading-snug">{t('listingPrice.highWarning')}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Copies. One listing row per copy — see createListing's quantity. */}
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{t('listingPhotos.quantity')}</label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={quantity <= 1}
+                  className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                >
+                  −
+                </button>
+                <span className="w-12 text-center text-white font-black tabular-nums text-lg">{quantity}</span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+                  disabled={quantity >= 20}
+                  className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                >
+                  +
+                </button>
+                {quantity > 1 && (
+                  <span className="text-[11px] text-slate-500 leading-snug flex-1">{t('listingPhotos.quantityHint')}</span>
+                )}
               </div>
             </div>
 
@@ -344,12 +494,46 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               </div>
             )}
 
-            {/* Mandatory Photos Section */}
+            {/* Photos. Required, except for cheap near-mint singles where the
+                catalog image may stand in — see lib/listingPhotoPolicy.ts. */}
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                {isThai ? 'รูปถ่ายจริง (บังคับ)' : (isSealed ? 'Real Photo (Required)' : 'Real Photos (Required)')}
+                {useCatalogArt
+                  ? (isThai ? 'รูปการ์ด' : 'Card photo')
+                  : (isThai ? 'รูปถ่ายจริง (บังคับ)' : (isSealed ? 'Real Photo (Required)' : 'Real Photos (Required)'))}
               </label>
-              
+
+              {/* Only offered once the price and condition actually qualify, so
+                  the checkbox never appears next to a card it cannot cover. */}
+              {canUseCatalogArt && (
+                <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useCatalogArt}
+                    onChange={(e) => setUseCatalogArt(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-brand-cyan"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-white">{t('listingPhotos.useCatalogArt')}</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{t('listingPhotos.useCatalogArtHint')}</span>
+                  </span>
+                </label>
+              )}
+
+              {useCatalogArt ? (
+                <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <img
+                    src={getThumbnailUrl(card.images?.small || card.imageUrl)}
+                    alt={card.name}
+                    className={`w-14 h-20 rounded-lg ${isSealed ? 'object-contain' : 'object-cover'}`}
+                  />
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    {isThai
+                      ? `ใช้รูปแคตตาล็อกได้เพราะราคาต่ำกว่า ฿${PHOTOS_REQUIRED_FROM_THB} และสภาพ NM`
+                      : `Catalog image is allowed here: near-mint and under ฿${PHOTOS_REQUIRED_FROM_THB}.`}
+                  </p>
+                </div>
+              ) : (
               <div className="flex gap-4">
                 {/* Front Photo */}
                 <div className="flex-1">
@@ -409,6 +593,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
             {error && (
@@ -435,7 +620,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

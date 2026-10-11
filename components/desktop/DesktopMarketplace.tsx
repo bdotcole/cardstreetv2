@@ -1,19 +1,28 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marketplaceService, MarketplaceListing } from '@/services/marketplaceService';
-import { getOptimizedImageUrl, getPreviewUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
+import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { isFailedResult } from '@/lib/search/failedResult';
+import { trackSearch } from '@/lib/searchEvents';
+import type { Card } from '@/types';
+import { getOptimizedImageUrl, getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
+import MarketMovers, { MARKET_MOVERS_ENABLED } from '@/components/MarketMovers';
 import OfferModal from '@/components/OfferModal';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import ShippingNote from '@/components/ShippingNote';
+import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
+import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import { formatTHB } from '@/lib/currency';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
@@ -69,17 +78,31 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
 
     // OBO: the offer-email CTA deep-links to /?view=offers; on desktop the
     // middleware rewrites that to the desktop home. Forward it to the Offers
-    // inbox tab (the desktop offers inbox lives under /orders). Gated on the
-    // offers flag so it's inert when off.
+    // inbox tab (the desktop offers inbox lives under /orders). The accepted-
+    // offer pay link (/pay/<id> -> /?payOffer=<id>) lands here the same way and
+    // used to stop at the homepage; it rides along so DesktopOrders can open
+    // the payment. Gated on the offers flag so it's inert when off.
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_ENABLE_OFFERS !== '1') return;
-        if (searchParams?.get('view') === 'offers') {
+        const payOffer = searchParams?.get('payOffer');
+        if (payOffer) {
+            router.replace(`${pathPrefix}/orders?tab=offers&payOffer=${encodeURIComponent(payOffer)}`);
+        } else if (searchParams?.get('view') === 'offers') {
             router.replace(`${pathPrefix}/orders?tab=offers`);
         }
     }, [searchParams, router, pathPrefix]);
 
-    const [game, setGame] = useState('all');
+    // ?game=<id> seeds the filter so the game landing pages can send a visitor
+    // straight to that game's listings ("Browse Pokémon listings"). Validated
+    // against GAMES — an unknown id falls back to 'all' rather than filtering
+    // the grid down to nothing. Seed only: the chips own it from then on, so a
+    // later chip click is not fought by the URL.
+    const gameParam = searchParams?.get('game') ?? '';
+    const [game, setGame] = useState(
+        GAMES.some((g) => g.id === gameParam) ? gameParam : 'all',
+    );
     const [language, setLanguage] = useState('all');
+    const [section, setSection] = useState<'singles' | 'sealed'>('singles');
 
     // Game-first flow (mirrors the sets browser): the language sub-filter only
     // appears once a specific multi-language game is picked. games.ts declares
@@ -100,21 +123,65 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
 
+    // Demand capture on a dead end: a /?q= search with no listings shows the
+    // catalog cards it matched, each linking to its card page where the
+    // visitor can wishlist it (alerted when a seller lists) or sell their own.
+    //
+    // Only once the listings fetch for the term has come back empty: a catalog
+    // search is several catalog queries per term, and running it alongside
+    // every listings search paid for a panel only an empty result shows.
+    const [emptySearch, setEmptySearch] = useState<string | null>(null);
+    const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
+    useEffect(() => {
+        const term = (emptySearch ?? '').trim();
+        // Drop the previous term's matches up front, so the empty state never
+        // shows them under the new term's heading while its search runs.
+        setCatalogMatches([]);
+        if (term.length < 3) return;
+        // Aborted when the term changes, so a superseded search stops at its
+        // next stage instead of running every catalog query to completion.
+        const controller = new AbortController();
+        pokemonService.searchCards(term, false, undefined, 'all', { signal: controller.signal })
+            .then((cards) => { if (!controller.signal.aborted) setCatalogMatches(cards.slice(0, 4)); })
+            .catch(() => { if (!controller.signal.aborted) setCatalogMatches([]); });
+        return () => controller.abort();
+    }, [emptySearch]);
+
+    // GA4 `search` fires once per distinct /?q= term, not again when only a
+    // filter chip or the sort changes.
+    const lastTrackedSearchRef = useRef('');
+
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
+        // A /?q= page opened cold (a shared link, the SearchAction) has not
+        // loaded the name dictionary the nav box preloads on focus. Start it,
+        // typo index included, for the listings search and its fallbacks.
+        if (q.trim()) preloadSearchDictionary();
         marketplaceService
             .getActiveListings({
                 search: q || undefined,
                 game,
+                kind: section,
                 language: language === 'all' ? undefined : language,
                 sort,
                 limit: PAGE_SIZE,
             })
             .then((rows) => {
                 if (cancelled) return;
-                setListings(rows);
+                // Identical copies fold into one tile with a unit count
+                // (lib/listingSiblings.ts); hasMore reads the raw page size.
+                setListings(groupSiblingListings(rows));
                 setHasMore(rows.length === PAGE_SIZE);
+                const term = q.trim();
+                setEmptySearch(term && rows.length === 0 ? term : null);
+                if (!term) {
+                    lastTrackedSearchRef.current = '';
+                } else if (term !== lastTrackedSearchRef.current) {
+                    lastTrackedSearchRef.current = term;
+                    // A failed fetch shows the same empty grid as a miss, but is not one.
+                    trackSearch({ term, resultsCount: isFailedResult(rows) ? null : rows.length, surface: 'desktop_marketplace' });
+                }
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -122,7 +189,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         return () => {
             cancelled = true;
         };
-    }, [q, game, language, sort]);
+    }, [q, game, language, section, sort]);
 
     const loadMore = async () => {
         setLoadingMore(true);
@@ -130,6 +197,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             const rows = await marketplaceService.getActiveListings({
                 search: q || undefined,
                 game,
+                kind: section,
                 language: language === 'all' ? undefined : language,
                 sort,
                 limit: PAGE_SIZE,
@@ -138,8 +206,8 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             // Offset pagination over a live list: a listing created mid-browse
             // shifts the pages, so drop anything already rendered.
             setListings((prev) => {
-                const seen = new Set(prev.map((l) => l.id));
-                return [...prev, ...rows.filter((r) => !seen.has(r.id))];
+                const seen = new Set(prev.flatMap((l) => l.siblingIds ?? [l.id]));
+                return groupSiblingListings([...prev, ...rows.filter((r) => !seen.has(r.id))]);
             });
             setHasMore(rows.length === PAGE_SIZE);
         } finally {
@@ -174,6 +242,24 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-6">
+                {/* Singles / Sealed, matching the mobile shop screen. A section,
+                    not a filter chip — see ListingKind in marketplaceService. */}
+                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-full p-1 mr-2">
+                    {([
+                        { id: 'singles' as const, label: t('marketplace.sectionSingles') },
+                        { id: 'sealed' as const, label: t('marketplace.sectionSealed') },
+                    ]).map(({ id, label }) => (
+                        <button
+                            key={id}
+                            onClick={() => setSection(id)}
+                            className={`px-4 py-1 rounded-full text-xs font-bold transition-colors ${
+                                section === id ? 'bg-brand-cyan text-brand-darker' : 'text-slate-300 hover:text-white'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
                 <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => selectGame('all')} />
                 {GAMES.filter((g) => g.enabled).map((g) => (
                     <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => selectGame(g.id)} />
@@ -219,6 +305,35 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     </div>
                     <h2 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.noListingsTitle')}</h2>
                     <p className="text-slate-500 text-sm">{t('desktop.noListingsDesc')}</p>
+                    {catalogMatches.length > 0 && (
+                        <div className="mt-8 text-left max-w-md mx-auto">
+                            <p className="text-slate-300 text-sm font-bold mb-1">{t('searchFallback.title').replace('{q}', q.trim())}</p>
+                            <p className="text-slate-500 text-xs mb-3">{t('searchFallback.hint')}</p>
+                            <div className="space-y-2">
+                                {catalogMatches.map((card) => (
+                                    <Link
+                                        key={card.id}
+                                        href={`${pathPrefix}/card/${card.id}`}
+                                        className="flex items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                                    >
+                                        <span className="w-10 h-14 rounded-md overflow-hidden bg-brand-darker flex-shrink-0">
+                                            {card.images?.small && (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={getThumbnailUrl(card.images.small)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                            )}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-white text-sm font-bold truncate">{card.name}</span>
+                                            <span className="block text-slate-500 text-[11px] truncate">
+                                                {card.set}{card.marketPrice ? ` · ${formatTHB(card.marketPrice)}` : ''}
+                                            </span>
+                                        </span>
+                                        <span className="text-brand-cyan text-[10px] font-black uppercase tracking-widest">{t('searchFallback.viewCard')}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <>
@@ -241,6 +356,10 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     )}
                 </>
             )}
+
+            {/* Homepage only, like the FAQ teaser: hidden once the visitor searches.
+                Off for everyone until a better UI exists; see MARKET_MOVERS_ENABLED. */}
+            {MARKET_MOVERS_ENABLED && !q && section === 'singles' && <MarketMovers game={game} pathPrefix={pathPrefix} className="mt-12" />}
 
             {/* Homepage only: the FAQ teaser is a marketing/SEO surface, not a
                 search result. Hidden once the visitor is actively searching. */}
@@ -333,6 +452,14 @@ function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing
                             -{dealPct}%
                         </span>
                     )}
+                    {listingUnits(listing) > 1 && (
+                        <span
+                            title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                            className="absolute bottom-2 left-2 z-10 text-[10px] font-black px-2 py-0.5 rounded-md bg-black/60 text-white border border-white/10 backdrop-blur-sm"
+                        >
+                            ×{listingUnits(listing)}
+                        </span>
+                    )}
                 </div>
                 {isSnipeListing(listing.price) && (
                     <SnipeBadge className="absolute -bottom-3 right-2 z-10 h-14 w-auto" />
@@ -356,6 +483,8 @@ function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing
                         </p>
                     )}
                 </div>
+                {/* Cheap cards only — same threshold and reason as the mobile grid. */}
+                {showShippingNoteOnTile(listing.price) && <ShippingNote variant="short" className="block" />}
                 <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
                     <span className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden shrink-0">
                         {listing.seller?.avatar_url && (

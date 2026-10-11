@@ -28,19 +28,16 @@ async function pool<T, R>(items: T[], size: number, fn: (item: T, i: number) => 
 }
 
 export async function POST(request: NextRequest) {
-  // --- Auth + partner gate (admins allowed through for testing) ---------------
+  // --- Auth only -------------------------------------------------------------
+  // Resolution is a read: it matches pasted text against the public catalog and
+  // writes nothing. The partner gate here was doing no security work the
+  // /api/collection/bulk-import gate does not already do, and it made the
+  // importer's preview step unusable for the ordinary sellers that route now
+  // serves. Keep it signed-in (the endpoint is not free to run) and let the
+  // write path be the thing that gates.
   const server = await createServerClient();
   const { data: { user } } = await server.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await server
-    .from('profiles')
-    .select('partner_joined_at, role')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (!profile?.partner_joined_at && profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Partner access required', code: 'NOT_PARTNER' }, { status: 403 });
-  }
 
   let body: any;
   try {

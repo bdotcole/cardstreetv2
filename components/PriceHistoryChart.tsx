@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
 import { usePremium } from '@/lib/hooks/usePremium';
 
 // recharts is ~100KB; defer until the chart actually renders.
@@ -184,15 +185,21 @@ const PriceHistoryChart: React.FC<Props> = ({
                     );
                 })}
             </div>
+            {/* The upgrade chip is dropped while the plan is off — a locked
+                range with no way to unlock it is just an advert for nothing.
+                The explanatory note stays: the range IS still locked, and
+                saying why beats an unexplained dead control. */}
             {showUpsell ? (
                 <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2">
                     <span className="text-[11px] text-amber-200/90">{t('priceHistory.proNote')}</span>
-                    <a
-                        href="/premium"
-                        className="shrink-0 rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300 hover:bg-amber-400/30"
-                    >
-                        {t('priceHistory.upgrade')}
-                    </a>
+                    {CONSUMER_PRO_ENABLED && (
+                        <a
+                            href="/premium"
+                            className="shrink-0 rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300 hover:bg-amber-400/30"
+                        >
+                            {t('priceHistory.upgrade')}
+                        </a>
+                    )}
                 </div>
             ) : null}
             <div className={`${chartClassName} transition-opacity ${fetching ? 'opacity-60' : 'opacity-100'}`}>

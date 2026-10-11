@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requirePremium } from '@/lib/premiumAuth';
+import { requireFeature } from '@/lib/premiumAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   buildEvenTrades,
@@ -175,7 +175,7 @@ async function runMatch(
 }
 
 export async function GET(request: Request) {
-  const gate = await requirePremium();
+  const gate = await requireFeature('trade_finder');
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
 
@@ -193,7 +193,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const gate = await requirePremium();
+  const gate = await requireFeature('trade_finder');
   if (gate instanceof NextResponse) return gate;
   const { user } = gate;
 

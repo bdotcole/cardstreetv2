@@ -5,6 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { CartItem, Offer } from '@/types';
+import { trackAddToCart } from '@/lib/commerceEvents';
 
 interface DesktopCartContextValue {
     user: User | null;
@@ -132,6 +133,7 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
             if (!replace) return;
             setItems([item]);
             setIsOpen(true);
+            trackAddToCart([item], 'THB', 1);
             return;
         }
         setItems((cur) => {
@@ -140,6 +142,10 @@ export default function DesktopCartProvider({ children }: { children: React.Reac
             return [...cur, item];
         });
         setIsOpen(true);
+        // Reported from the ref, not the updater (which must stay pure): a
+        // duplicate add re-opens the drawer but adds nothing, so it is not an
+        // add_to_cart. Desktop prices are THB-only (formatTHB throughout).
+        if (!prev.find((i) => i.id === item.id)) trackAddToCart([item], 'THB', 1);
     }, [t]);
 
     const removeItem = useCallback((id: string) => {

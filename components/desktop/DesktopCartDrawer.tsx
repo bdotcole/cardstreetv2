@@ -17,8 +17,12 @@ import PurchaseRegionModal from '@/components/PurchaseRegionModal';
 import ThaiAddressFields from '@/components/ThaiAddressFields';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import type { CartItem } from '@/types';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
+import { trackPurchaseRegionBlocked } from '@/lib/commerceEvents';
 import { isValidThaiPhone } from '@/lib/utils/phone';
+import { fetchSellerMinOrders, minOrderShortfall, minOrderMessage } from '@/lib/minOrder';
+import { fetchPublicSellers } from '@/lib/publicProfiles';
 
 // Stripe Elements only loads when checkout actually opens — same lazy-load
 // the mobile shell uses.
@@ -50,7 +54,7 @@ const ADDRESS_FIELD_LABEL_KEYS: Record<BuyerRequiredField, string> = {
 export default function DesktopCartDrawer() {
     const router = useRouter();
     const { showToast } = useToast();
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const {
         user, items, isOpen, removeItem, clear, closeCart,
         acceptedOfferId, pendingOfferCheckout, clearPendingOfferCheckout,
@@ -67,6 +71,61 @@ export default function DesktopCartDrawer() {
     const [regionBlocked, setRegionBlocked] = useState(false);
 
     const subtotal = items.reduce((sum, i) => sum + i.price, 0);
+
+    // Shop minimum orders (lib/minOrder.ts). Checkout refuses a cart below a
+    // shop's minimum, so the drawer says how much is missing while the buyer
+    // can still add to it. Keyed on seller ids so removing a card does not
+    // refetch. An accepted offer is exempt, exactly as on the server.
+    // Fail-soft: no answer means nothing is blocked here and the server gate
+    // decides.
+    const sellerKey = [...new Set(items.map((i) => i.sellerId).filter(Boolean))].sort().join(',');
+    const [minOrders, setMinOrders] = useState<Record<string, number>>({});
+    useEffect(() => {
+        if (!isOpen || !sellerKey) {
+            setMinOrders({});
+            return;
+        }
+        let cancelled = false;
+        void fetchSellerMinOrders(createClient(), sellerKey.split(',')).then((found) => {
+            if (!cancelled) setMinOrders(found);
+        });
+        return () => { cancelled = true; };
+    }, [isOpen, sellerKey]);
+    const minOrderBlock = (() => {
+        if (acceptedOfferId) return null;
+        const totals = new Map<string, number>();
+        for (const item of items) totals.set(item.sellerId, (totals.get(item.sellerId) ?? 0) + item.price);
+        for (const [sellerId, total] of totals) {
+            const min = minOrders[sellerId] ?? 0;
+            const shortfall = minOrderShortfall(total, min);
+            if (shortfall > 0) return { sellerId, min, shortfall };
+        }
+        return null;
+    })();
+
+    // Below a shop's minimum the fix is in that shop: take the buyer to the
+    // seller's page (its header shows the live shortfall) instead of leaving
+    // them on a disabled button. The seller page is keyed by username, which
+    // the cart line does not carry, so one public_profiles read resolves it.
+    const browseShop = useCallback(async (sellerId: string) => {
+        const seller = (await fetchPublicSellers(createClient(), [sellerId])).get(sellerId);
+        if (!seller?.username) return;
+        closeCart();
+        router.push(`/seller/${seller.username}`);
+    }, [closeCart, router]);
+
+    // Identical copies (sibling listings, lib/listingSiblings.ts) read as one
+    // line with a count; each keeps its own listing id underneath.
+    const lines = (() => {
+        const map = new Map<string, { item: CartItem; ids: string[] }>();
+        for (const item of items) {
+            const key = `${item.cardId}|${item.price}|${item.condition}`;
+            const line = map.get(key);
+            if (line) line.ids.push(item.id);
+            else map.set(key, { item, ids: [item.id] });
+        }
+        return [...map.values()];
+    })();
 
     const close = () => {
         setPhase('cart');
@@ -85,6 +144,7 @@ export default function DesktopCartDrawer() {
         // OBO pay-an-accepted-offer flow routes through it too.
         const region = await ensurePurchaseRegion();
         if (!region.purchaseAllowed) {
+            trackPurchaseRegionBlocked({ country: region.country, entry: 'desktop_cart', items });
             setRegionBlocked(true);
             return;
         }
@@ -104,6 +164,8 @@ export default function DesktopCartDrawer() {
             // Also require a valid TH phone (not just non-empty) so a junk value
             // can't slip past to Flash — mirrors the /api/orders/checkout gate.
             if (completeness.complete && isValidThaiPhone(profile?.phone_number)) {
+                // GA4 begin_checkout fires inside PaymentModal, so the
+                // fail-open path below is counted too.
                 setPhase('payment');
             } else {
                 setAddressForm({
@@ -130,8 +192,27 @@ export default function DesktopCartDrawer() {
     useEffect(() => {
         if (!pendingOfferCheckout) return;
         clearPendingOfferCheckout();
-        void beginCheckout();
-    }, [pendingOfferCheckout, clearPendingOfferCheckout, beginCheckout]);
+        // Buy Now on a card under its shop's minimum: the minimums above are
+        // still loading when this fires, so ask directly. Below the minimum
+        // the card stays in the cart and the buyer goes to the shop to add
+        // more, with the reason in a toast; nothing is sent to the payment
+        // sheet that /api/orders/checkout would refuse after the fact. An
+        // accepted offer is exempt, as on the server.
+        void (async () => {
+            const sellerId = items[0]?.sellerId;
+            if (!acceptedOfferId && sellerId) {
+                const minOrders = await fetchSellerMinOrders(createClient(), [sellerId]);
+                const min = minOrders[sellerId] ?? 0;
+                const shortfall = minOrderShortfall(items.reduce((sum, i) => sum + i.price, 0), min);
+                if (shortfall > 0) {
+                    showToast(minOrderMessage(isThai, min, shortfall), 'info');
+                    await browseShop(sellerId);
+                    return;
+                }
+            }
+            await beginCheckout();
+        })();
+    }, [pendingOfferCheckout, clearPendingOfferCheckout, beginCheckout, acceptedOfferId, items, browseShop, showToast, isThai]);
 
     const saveAddress = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -167,10 +248,18 @@ export default function DesktopCartDrawer() {
         }
     };
 
-    const handlePaymentSuccess = () => {
+    const handlePaymentSuccess = (details: { orderId?: string; processing?: boolean }) => {
         clear();
         close();
         showToast(t('desktop.cart.toastPaymentReceived'), 'success');
+        // The order itself, not the list — status, ship-by date and where
+        // tracking will appear. ?confirming=1 covers the PromptPay window where
+        // the row still reads pending_payment (see the mobile shell for the
+        // full reasoning). Falls back to the list when no id came back.
+        if (details?.orderId) {
+            router.push(`/orders/${details.orderId}${details.processing ? '?confirming=1' : ''}`);
+            return;
+        }
         router.push('/orders');
     };
 
@@ -255,8 +344,8 @@ export default function DesktopCartDrawer() {
                         ) : (
                             <>
                                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-                                    {items.map((item) => (
-                                        <div key={item.id} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                                    {lines.map(({ item, ids }) => (
+                                        <div key={ids[0]} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl p-3">
                                             <span className="w-12 h-16 rounded-md bg-brand-darker overflow-hidden shrink-0 border border-white/10">
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
@@ -271,10 +360,25 @@ export default function DesktopCartDrawer() {
                                                 <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide truncate">
                                                     {item.condition} · {item.sellerName}
                                                 </p>
-                                                <p className="text-sm font-black text-brand-cyan mt-0.5">{formatTHB(item.price)}</p>
+                                                {ids.length > 1 ? (
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <p className="text-sm font-black text-brand-cyan">{formatTHB(item.price * ids.length)}</p>
+                                                        <p className="text-[11px] text-slate-500 font-bold">{formatTHB(item.price)} × {ids.length}</p>
+                                                        <button
+                                                            onClick={() => removeItem(ids[ids.length - 1])}
+                                                            aria-label={t('cart.removeOne')}
+                                                            title={t('cart.removeOne')}
+                                                            className="w-6 h-6 rounded-md bg-white/5 border border-white/10 text-slate-300 text-xs font-black hover:bg-white/10 transition-colors"
+                                                        >
+                                                            −
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm font-black text-brand-cyan mt-0.5">{formatTHB(item.price)}</p>
+                                                )}
                                             </div>
                                             <button
-                                                onClick={() => removeItem(item.id)}
+                                                onClick={() => ids.forEach((id) => removeItem(id))}
                                                 className="w-8 h-8 rounded-lg bg-white/5 hover:bg-brand-red/20 text-slate-500 hover:text-rose-300 transition-colors shrink-0"
                                                 aria-label={`Remove ${item.card.name}`}
                                             >
@@ -290,9 +394,22 @@ export default function DesktopCartDrawer() {
                                         <span className="text-xl font-black text-white">{formatTHB(subtotal)}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 mb-4">{t('desktop.cart.shippingAtCheckout')}</p>
+                                    {minOrderBlock && (
+                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 mb-3">
+                                            <p className="text-[11px] text-amber-300 font-bold leading-snug">
+                                                {minOrderMessage(isThai, minOrderBlock.min, minOrderBlock.shortfall)}
+                                            </p>
+                                            <button
+                                                onClick={() => { void browseShop(minOrderBlock.sellerId); }}
+                                                className="mt-2 w-full bg-amber-400 hover:bg-amber-300 text-brand-darker text-xs font-black py-2.5 rounded-lg transition-colors"
+                                            >
+                                                {t('desktop.cart.browseShop')} →
+                                            </button>
+                                        </div>
+                                    )}
                                     <button
                                         onClick={beginCheckout}
-                                        disabled={checkingProfile}
+                                        disabled={checkingProfile || !!minOrderBlock}
                                         className="w-full bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black py-3.5 rounded-xl transition-colors disabled:opacity-50"
                                     >
                                         {checkingProfile ? t('desktop.cart.oneMoment') : user ? t('desktop.cart.checkout') : t('desktop.cart.signInToCheckout')}
@@ -304,7 +421,10 @@ export default function DesktopCartDrawer() {
                 </div>
             )}
 
-            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            {/* Sign-UP first: this wall only ever opens from checkout, and
+                someone buying for the first time usually has no account yet.
+                Matches the mobile Buy Now gate in components/MobileHome.tsx. */}
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode="signup" />
 
             <PurchaseRegionModal isOpen={regionBlocked} onClose={() => setRegionBlocked(false)} />
 
@@ -316,6 +436,7 @@ export default function DesktopCartDrawer() {
                 items={items}
                 apiEndpoint="/api/checkout"
                 extraData={{ buyerId: user?.id }}
+                buyerEmail={user?.email}
                 // OBO: when an accepted offer is being paid, the server reads the
                 // discounted price from the offer; the client never sends it.
                 acceptedOfferId={acceptedOfferId ?? undefined}

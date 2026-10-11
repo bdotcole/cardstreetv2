@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { awardFirst } from '@/lib/rewards';
 
 // FCM tokens are opaque strings, ~140-180 chars in practice. Cap at 4kB to
 // keep abuse small but not reject valid future-format tokens.
@@ -35,6 +37,11 @@ export async function POST(req: Request) {
             console.error('Failed to save FCM token:', upsertError);
             return NextResponse.json({ error: 'Failed to save FCM token' }, { status: 500 });
         }
+
+        // Collector Pass: push enabled is a Journey step. The token save is
+        // server-verified (not a client claim); the ledger UNIQUE makes every
+        // subsequent token refresh a no-op. Fail-soft.
+        await awardFirst(createAdminClient(), user.id, 'first_push');
 
         return NextResponse.json({ success: true });
     } catch (err: any) {

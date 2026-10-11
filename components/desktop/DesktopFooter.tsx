@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import { PLAY_STORE_URL, IOS_APP_STORE_URL } from '@/lib/appLinks';
 
 // Game landing pages (see middleware GAME_LANDING_PATHS). Sitewide footer links
 // are the primary internal-link path search engines use to discover them.
@@ -32,8 +33,41 @@ export default function DesktopFooter({ pathPrefix = '' }: {
                     ))}
                     <Link href={`${pathPrefix}/sets`} className="hover:text-slate-300 transition-colors">{t('desktop.navSets')}</Link>
                 </nav>
+                {/* Commercial + seller-acquisition links, sitewide.
+                    Measured 2026-09-01: /sell-cards had THREE inbound internal links and none
+                    from the homepage, and the seller shops holding the entire active inventory
+                    had ZERO links from any content page. With 222 active listings against
+                    117,322 card pages, supply is the binding constraint — so a seller-intent
+                    click is worth more than a buyer-intent one, and these belong on every page
+                    rather than on three. */}
+                <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2" aria-label={language === 'TH' ? 'ซื้อขายการ์ด' : 'Buy and sell'}>
+                    <Link href={`${pathPrefix}/prices`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'เช็คราคาการ์ด' : 'Check card prices'}</Link>
+                    <Link href={`${pathPrefix}/graded`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ราคาการ์ดเกรด' : 'Graded card prices'}</Link>
+                    <Link href={`${pathPrefix}/shops`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ร้านขายการ์ด' : 'Card shops'}</Link>
+                    <Link href={`${pathPrefix}/sell-cards`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'ขายการ์ดของคุณ' : 'Sell your cards'}</Link>
+                    <Link href={`${pathPrefix}/guides`} className="hover:text-slate-300 transition-colors">{language === 'TH' ? 'คู่มือและบทความ' : 'Guides'}</Link>
+                </nav>
+                {/* App-store links. Sitewide because the public content pages
+                    (card / set / seller / game landings) are where search drops
+                    people, and until now none of them offered the app at all —
+                    the only download paths were the /download QR and a partner
+                    referral link, neither of which an organic visitor ever sees. */}
+                <nav
+                    className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+                    aria-label={language === 'TH' ? 'ดาวน์โหลดแอป' : 'Get the app'}
+                >
+                    <span className="font-bold text-slate-400">
+                        {language === 'TH' ? 'โหลดแอป Cardstreet' : 'Get the Cardstreet app'}
+                    </span>
+                    <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">
+                        <i className="fa-brands fa-google-play mr-1.5"></i>Google Play
+                    </a>
+                    <a href={IOS_APP_STORE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">
+                        <i className="fa-brands fa-apple mr-1.5"></i>App Store
+                    </a>
+                </nav>
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p>© {new Date().getFullYear()} CardStreet TCG</p>
+                    <p>© {new Date().getFullYear()} Cardstreet TCG</p>
                     <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                         <Link href={`${pathPrefix}/faq`} className="hover:text-slate-300 transition-colors">{t('desktop.footerFaq')}</Link>
                         <Link href={`${pathPrefix}/help`} className="hover:text-slate-300 transition-colors">{t('desktop.footerHelp')}</Link>

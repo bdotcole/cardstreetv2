@@ -17,14 +17,14 @@ import { useEffect, useState } from 'react';
 const COPY = {
     EN: {
         title: 'Something went wrong',
-        body: "This page didn't load. The rest of CardStreet is still working.",
+        body: "This page didn't load. The rest of Cardstreet is still working.",
         retry: 'Try again',
         home: 'Return home',
         ref: 'Reference',
     },
     TH: {
         title: 'เกิดข้อผิดพลาด',
-        body: 'โหลดหน้านี้ไม่สำเร็จ ส่วนอื่นของ CardStreet ยังใช้งานได้ตามปกติ',
+        body: 'โหลดหน้านี้ไม่สำเร็จ ส่วนอื่นของ Cardstreet ยังใช้งานได้ตามปกติ',
         retry: 'ลองอีกครั้ง',
         home: 'กลับหน้าแรก',
         ref: 'รหัสอ้างอิง',

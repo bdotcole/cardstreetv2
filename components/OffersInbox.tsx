@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
+import { isListingGone } from '@/lib/offerPolicy';
 import { Offer } from '@/types';
 
 interface OffersInboxProps {
@@ -53,8 +54,12 @@ const statusLabel = (status: string, isThai: boolean): string => {
 };
 
 const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) => {
-  const { isThai } = useTranslation();
+  const { t, isThai } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
+  // Declared with the other hooks, not beside sharePayLink where it is used:
+  // this component returns early while loading, so a hook further down the body
+  // is a conditional hook and React refuses it.
+  const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,14 +89,23 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
 
   if (!enabled) return null;
 
-  const act = async (offerId: string, action: 'accept' | 'reject' | 'withdraw') => {
-    setBusyId(offerId);
+  const act = async (o: Offer, action: 'accept' | 'reject' | 'withdraw') => {
+    setBusyId(o.id);
     setError(null);
     try {
-      const res = await fetch(`/api/offers/${offerId}/${action}`, { method: 'POST' });
+      const res = await fetch(`/api/offers/${o.id}/${action}`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Action failed');
       notifyOffersChanged();
+      // A buyer accepting the seller's counter has just agreed a price, and
+      // paying is the only step left — open the payment sheet now rather than
+      // leave a Pay button to be found. Both counters buyers accepted on
+      // 2026-10-03 went unpaid from this list.
+      if (action === 'accept' && o.viewerRole === 'buyer' && onPayOffer) {
+        onPayOffer({ offer: { ...o, status: 'accepted' } });
+        void load();
+        return;
+      }
       await load();
     } catch (e: any) {
       setError(e?.message || (isThai ? 'ดำเนินการไม่สำเร็จ' : 'Action failed.'));
@@ -100,16 +114,26 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
   };
 
-  const submitCounter = async (offerId: string) => {
+  const submitCounter = async (o: Offer) => {
     const value = parseFloat(counterAmount);
     if (!Number.isFinite(value) || value <= 0) {
       setError(isThai ? 'กรุณาระบุจำนวนเงินที่ถูกต้อง' : 'Please enter a valid amount.');
       return;
     }
-    setBusyId(offerId);
+    // Mirrors the server ceiling: above the ask, Buy Now is the better deal.
+    const asking = o.listing?.price != null ? Number(o.listing.price) : null;
+    if (asking != null && value > asking) {
+      setError(
+        isThai
+          ? `ข้อเสนอต้องไม่เกินราคาขาย ฿${asking.toLocaleString()}`
+          : `Offers can't be above the asking price of ฿${asking.toLocaleString()}.`,
+      );
+      return;
+    }
+    setBusyId(o.id);
     setError(null);
     try {
-      const res = await fetch(`/api/offers/${offerId}/counter`, {
+      const res = await fetch(`/api/offers/${o.id}/counter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: value }),
@@ -127,11 +151,40 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
     }
   };
 
+  // Native share sheet where it exists — the destination is LINE and the sheet
+  // is how a phone gets there. Clipboard elsewhere, with the button confirming
+  // the copy so a silent no-op is impossible to mistake for success.
+  const sharePayLink = async (offerId: string) => {
+    const url = `${window.location.origin}/pay/${offerId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ url });
+        return;
+      }
+    } catch {
+      // Sheet dismissed or blocked — fall through to the clipboard.
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedOfferId(offerId);
+      setTimeout(() => setCopiedOfferId(null), 2000);
+    } catch {
+      // Clipboard denied — nothing further to offer here.
+    }
+  };
+
   // Actions available depend on who made the pending row (actor_role) vs. the
   // viewer's role on this offer (viewerRole), matching the server's state machine.
   const renderActions = (o: Offer) => {
     const isViewerActor = o.viewerRole === o.actor_role;
     const busy = busyId === o.id;
+
+    // The seller took the listing down (or moderation removed it): Pay,
+    // Accept and the pay link would all end at a checkout that refuses. The
+    // hourly expire-offers sweep closes the offer itself.
+    if ((o.status === 'accepted' || o.status === 'pending') && isListingGone(o.listing?.status)) {
+      return <p className="text-[10px] text-slate-400 font-bold">{t('offer.payUnavailable')}</p>;
+    }
 
     if (o.status === 'accepted') {
       if (o.viewerRole === 'buyer') {
@@ -156,10 +209,23 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       }
       // Seller side: an accepted offer is NOT a completed sale — the buyer
       // still has to pay. Saying nothing here read as "sold" to sellers.
+      // The share button exists because the chase happens in LINE, not in the
+      // app: without a link to paste, "have you paid yet" is all the seller
+      // has, and the link is the only version of that message that converts.
       return (
-        <p className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wide">
-          {isThai ? 'รอผู้ซื้อชำระเงิน' : 'Waiting for buyer to pay'}
-        </p>
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wide">
+            {isThai ? 'รอผู้ซื้อชำระเงิน' : 'Waiting for buyer to pay'}
+          </p>
+          <button
+            onClick={() => sharePayLink(o.id)}
+            className="w-full sm:w-auto h-10 px-4 bg-white/5 border border-white/10 text-slate-200 font-black text-[10px] tracking-widest rounded-lg uppercase"
+          >
+            <i className="fa-solid fa-paper-plane mr-2 text-[9px]"></i>
+            {copiedOfferId === o.id ? t('offer.payLinkCopied') : t('offer.sharePayLink')}
+          </button>
+          <p className="text-[10px] text-slate-500">{t('offer.expiresIn48h')}</p>
+        </div>
       );
     }
 
@@ -170,7 +236,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       return (
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'withdraw')}
+          onClick={() => act(o, 'withdraw')}
           className="w-full sm:w-auto h-10 px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ถอนข้อเสนอ' : 'Withdraw'}
@@ -192,7 +258,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
           />
           <button
             disabled={busy}
-            onClick={() => submitCounter(o.id)}
+            onClick={() => submitCounter(o)}
             className="h-10 px-4 bg-brand-cyan text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
           >
             {isThai ? 'ส่ง' : 'Send'}
@@ -211,7 +277,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
       <div className="flex items-stretch gap-2">
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'accept')}
+          onClick={() => act(o, 'accept')}
           className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-brand-green text-brand-darker font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ตอบรับ' : 'Accept'}
@@ -225,7 +291,7 @@ const OffersInbox: React.FC<OffersInboxProps> = ({ onPayOffer, onViewListing }) 
         </button>
         <button
           disabled={busy}
-          onClick={() => act(o.id, 'reject')}
+          onClick={() => act(o, 'reject')}
           className="flex-1 sm:flex-none h-10 px-2 sm:px-4 bg-white/5 border border-white/10 text-slate-300 font-black text-[10px] tracking-widest rounded-lg uppercase disabled:opacity-50"
         >
           {isThai ? 'ปฏิเสธ' : 'Decline'}

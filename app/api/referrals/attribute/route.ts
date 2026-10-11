@@ -21,6 +21,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { REF_COOKIE, ATTRIBUTION_WINDOW_DAYS, isValidSlugFormat, isValidInstallId } from '@/lib/referrals';
+import { awardEvent, awardFirst } from '@/lib/rewards';
+import { EARN } from '@/lib/rewardTiers';
 
 function clearCookie(response: NextResponse): NextResponse {
     response.cookies.set(REF_COOKIE, '', { maxAge: 0, path: '/' });
@@ -67,11 +69,16 @@ export async function POST(request: NextRequest) {
             return clearCookie(NextResponse.json({ attributed: false, reason: 'account_too_old' }));
         }
 
+        // No partner_joined_at filter — see the same change in
+        // app/join/[slug]/route.ts. Referral slugs are minted for every
+        // account, so an invite from an ordinary collector must attribute.
+        // The seller-fee ladder is unaffected: app/api/orders/checkout keys the
+        // partner fee off partner_joined_at, not off total_downloads, so
+        // referrals earned by a non-partner never discount their fee.
         const { data: partner } = await admin
             .from('profiles')
             .select('id')
             .eq('partner_qr_slug', slug)
-            .not('partner_joined_at', 'is', null)
             .maybeSingle();
 
         if (!partner || partner.id === user.id) {
@@ -103,6 +110,20 @@ export async function POST(request: NextRequest) {
             country: request.headers.get('x-vercel-ip-country') || null,
         });
         if (eventErr) console.error('[Referrals/Attribute] signup event insert failed:', eventErr);
+
+        // Collector Pass: XP for the referrer at signup (once per referred user
+        // — ref_id is the referred account's id). The 100-coin half is deferred
+        // to the referred user's first SETTLED order (release-funds), matching
+        // the anti-farming posture: bare signups are cheap to fake, settled
+        // orders are not. Fail-soft.
+        await awardEvent(admin, {
+            userId: partner.id,
+            rule: EARN.REFERRAL_SIGNUP.rule,
+            ref: user.id,
+            xp: EARN.REFERRAL_SIGNUP.xp,
+            coins: 0,
+        });
+        await awardFirst(admin, partner.id, 'first_referral');
 
         // Android devices report their install via /api/referrals/install, which
         // already incremented total_downloads. When this signup comes from such a

@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
-import { buildMatcher } from '../_shared/cardMatch.ts'
+import { buildMatcher, printingScore } from '../_shared/cardMatch.ts'
+import { hotSetIds } from '../_shared/hotSets.ts'
+import { buildSlugIndex, resolveSetSlug } from '../_shared/setSlug.ts'
 
 // =====================================================================
 // batch-price-games Edge Function (JustTCG)
@@ -76,27 +78,98 @@ const JP_SLUG_OVERRIDES: Record<string, string> = {
   PMCG1: 'expansion-pack-pokemon-japan', PMCG2: 'pokemon-jungle-pokemon-japan', PMCG3: 'mystery-of-the-fossils-pokemon-japan', PMCG4: 'rocket-gang-pokemon-japan', PMCG5: 'leaders-stadium-pokemon-japan', PMCG6: 'challenge-from-the-darkness-pokemon-japan',
 };
 
-// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id).
-// byName below is an exact normalized-name lookup, so any spelling gap between our
-// catalog source and JustTCG leaves the set permanently unpriced rather than fuzzy-
-// matched. mtg-hoc: Scryfall calls it "The Hobbit Eternal", JustTCG "The Hobbit:
-// Eternal-Legal" — normalizing to "the hobbit eternal" vs "the hobbit eternal legal".
+// Name-resolved sets whose JustTCG name differs from ours (keyed by our set id), for
+// the differences that are ARBITRARY rather than mechanical. The mechanical ones —
+// prefix/suffix inversion, dropped "(POR)"/"(TCG)" markers, a leading "The" — are
+// handled generically by _shared/setSlug.ts, which is why this table does not need a
+// line per Yu-Gi-Oh Structure Deck. An entry here always wins over that resolver, so
+// anything pinned by hand stays pinned. A set that resolves to nothing can never be
+// priced, so the run now logs every one of them.
+// mtg-hoc: Scryfall calls it "The Hobbit Eternal", JustTCG "The Hobbit: Eternal-Legal".
 const NAME_SLUG_OVERRIDES: Record<string, string> = {
   'lorcana-8': 'reign-of-jafar-disney-lorcana',
   'mtg-hoc': 'the-hobbit-eternal-legal-magic-the-gathering',
+  // Scryfall spins The Big Score out as its own set; JustTCG keeps it under its parent.
+  'mtg-big': 'outlaws-of-thunder-junction-the-big-score-magic-the-gathering',
+
+  // MTG Commander and Art Series products. Scryfall names them "<Set> Commander" /
+  // "<Set> Art Series"; JustTCG names them "Commander: <Set>" / "Art Series: <Set>".
+  // setSlug.ts now inverts that automatically, but these stay pinned: they were
+  // verified by hand, and a pin cannot drift if upstream adds a colliding name.
+  'mtg-onc': 'commander-phyrexia-all-will-be-one-magic-the-gathering',
+  'mtg-moc': 'commander-march-of-the-machine-magic-the-gathering',
+  'mtg-ltc': 'commander-the-lord-of-the-rings-tales-of-middle-earth-magic-the-gathering',
+  'mtg-woc': 'commander-wilds-of-eldraine-magic-the-gathering',
+  'mtg-lcc': 'commander-the-lost-caverns-of-ixalan-magic-the-gathering',
+  'mtg-mkc': 'commander-murders-at-karlov-manor-magic-the-gathering',
+  'mtg-otc': 'commander-outlaws-of-thunder-junction-magic-the-gathering',
+  'mtg-m3c': 'commander-modern-horizons-3-magic-the-gathering',
+  'mtg-blc': 'commander-bloomburrow-magic-the-gathering',
+  'mtg-dsc': 'commander-duskmourn-house-of-horror-magic-the-gathering',
+  'mtg-fdc': 'commander-foundations-magic-the-gathering',
+  'mtg-drc': 'commander-aetherdrift-magic-the-gathering',
+  'mtg-tdc': 'commander-tarkir-dragonstorm-magic-the-gathering',
+  'mtg-fic': 'commander-final-fantasy-magic-the-gathering',
+  'mtg-eoc': 'commander-edge-of-eternities-magic-the-gathering',
+  'mtg-ecc': 'commander-lorwyn-eclipsed-magic-the-gathering',
+  'mtg-soc': 'commander-secrets-of-strixhaven-magic-the-gathering',
+  'mtg-msc': 'commander-marvel-super-heroes-magic-the-gathering',
+  'mtg-frc': 'commander-reality-fracture-magic-the-gathering',
+  'mtg-trc': 'commander-star-trek-magic-the-gathering',
+  // Fallout and Doctor Who carry no "Commander" in the JustTCG name at all.
+  'mtg-pip': 'universes-beyond-fallout-magic-the-gathering',
+  'mtg-who': 'universes-beyond-doctor-who-magic-the-gathering',
+  'mtg-aone': 'art-series-phyrexia-all-will-be-one-magic-the-gathering',
+  'mtg-amom': 'art-series-march-of-the-machine-magic-the-gathering',
+  'mtg-altr': 'art-series-universes-beyond-the-lord-of-the-rings-tales-of-middle-earth-magic-the-gathering',
+  'mtg-acmm': 'art-series-commander-masters-magic-the-gathering',
+  'mtg-awoe': 'art-series-wilds-of-eldraine-magic-the-gathering',
+  'mtg-alci': 'art-series-the-lost-caverns-of-ixalan-magic-the-gathering',
+  'mtg-amkm': 'art-series-murders-at-karlov-manor-magic-the-gathering',
+  'mtg-aotj': 'art-series-outlaws-of-thunder-junction-magic-the-gathering',
+  'mtg-amh3': 'art-series-modern-horizons-3-magic-the-gathering',
+  'mtg-aacr': 'art-series-universes-beyond-assassin-s-creed-magic-the-gathering',
+  'mtg-ablb': 'art-series-bloomburrow-magic-the-gathering',
+  'mtg-adsk': 'art-series-duskmourn-house-of-horror-magic-the-gathering',
+  'mtg-afdn': 'art-series-foundations-magic-the-gathering',
+  'mtg-ainr': 'art-series-innistrad-remastered-magic-the-gathering',
+  'mtg-adft': 'art-series-aetherdrift-magic-the-gathering',
+  'mtg-atdm': 'art-series-tarkir-dragonstorm-magic-the-gathering',
+  'mtg-afin': 'art-series-final-fantasy-magic-the-gathering',
+  'mtg-aeoe': 'art-series-edge-of-eternities-magic-the-gathering',
+  'mtg-aspm': 'art-series-marvel-s-spider-man-magic-the-gathering',
+  'mtg-atla': 'art-series-avatar-the-last-airbender-magic-the-gathering',
+  'mtg-aecl': 'art-series-lorwyn-eclipsed-magic-the-gathering',
+  'mtg-atmt': 'art-series-teenage-mutant-ninja-turtles-magic-the-gathering',
+  'mtg-asos': 'art-series-secrets-of-strixhaven-magic-the-gathering',
+  'mtg-amsh': 'art-series-marvel-super-heroes-magic-the-gathering',
+  // mtg-atle (Avatar Eternal Art Series) is deliberately absent: JustTCG has a single
+  // Avatar art-series set, already claimed by mtg-atla, and the two number their cards
+  // from 1 for different art. Mapping both invites the number-collision misprice.
 };
 
-// Set-name key for resolving JustTCG set slugs. Card-level matching lives in
+// Set-name resolution lives in _shared/setSlug.ts. Card-level matching lives in
 // _shared/cardMatch.ts — the old numOf() that reduced "319z"/"R05b"/"OP01-078" to a
 // bare integer is gone; collapsing those suffixes is what mispriced parallels.
-const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-async function jtcgFetch(path: string) {
-  const r = await fetch(`${JUSTTCG_BASE}${path}`, {
-    headers: { 'x-api-key': JUSTTCG_API_KEY, 'Content-Type': 'application/json' },
-  });
-  if (!r.ok) throw new Error(`JustTCG ${r.status}: ${await r.text()}`);
-  return r.json();
+// `retries` is opt-in per call site. Paging a set is already safe to abandon (the
+// next run picks the set up again), but the per-game /sets listing is not: losing it
+// loses the night, so that one call asks for retries.
+async function jtcgFetch(path: string, retries = 0) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(`${JUSTTCG_BASE}${path}`, {
+        headers: { 'x-api-key': JUSTTCG_API_KEY, 'Content-Type': 'application/json' },
+      });
+      if (!r.ok) throw new Error(`JustTCG ${r.status}: ${await r.text()}`);
+      return await r.json();
+    } catch (e) {
+      if (attempt >= retries) throw e;
+      // Linear, not exponential: DELAY_MS already keeps us under 50 req/min, so a
+      // couple of extra seconds is enough to clear a rate-limit window.
+      await new Promise((r) => setTimeout(r, DELAY_MS * (attempt + 2)));
+    }
+  }
 }
 
 function bestNmVariant(jCard: any): any | null {
@@ -107,13 +180,12 @@ function bestNmVariant(jCard: any): any | null {
     if (b.avgPrice > 0) sb += 1000;
     if (a.condition === 'Near Mint' || a.condition === 'NM') sa += 500;
     if (b.condition === 'Near Mint' || b.condition === 'NM') sb += 500;
-    // Canonical printing for the single row we keep per card: Normal when the card
-    // has one, else Holofoil. Without the Holofoil tier a holo-only card scored a
-    // flat tie and fell through to Reverse Holofoil.
-    if (a.printing === 'Normal') sa += 60;
-    else if (a.printing === 'Holofoil') sa += 40;
-    if (b.printing === 'Normal') sb += 60;
-    else if (b.printing === 'Holofoil') sb += 40;
+    // Canonical printing for the single row we keep per card: Normal/Unlimited when
+    // the card has one, else Holofoil, never 1st Edition over Unlimited. Shared with
+    // batch-price-english (printingScore in _shared/cardMatch.ts) so the two crons
+    // cannot drift; see there for the 1st Edition incident.
+    sa += printingScore(a.printing);
+    sb += printingScore(b.printing);
     if (sa === sb && a.avgPrice === 0 && b.avgPrice === 0) return (a.price || 99999) - (b.price || 99999);
     return sb - sa;
   });
@@ -174,12 +246,14 @@ Deno.serve(async (req) => {
 
       const { data: ourSets, error: setErr } = await supabase
         .from('pokemon_sets')
-        .select('id, name, created_at')
+        .select('id, name, created_at, release_date')
         .eq('game', grp.game)
         .eq('language', grp.cardLang === 'ja' ? 'ja' : 'en');
       if (setErr) { console.error(`[${grp.game}] set query: ${setErr.message}`); continue; }
 
-      // Set order: recently-ingested head, then STALEST-FIRST tail.
+      // Set order: HOT head (newly RELEASED — priced every night until the next set
+      // ships, see _shared/hotSets.ts), then never-priced, then recently-ingested,
+      // then STALEST-FIRST tail.
       //
       // A plain created_at DESC ordering starves games with more sets than the
       // MAX_API_CALLS budget can cover. Yu-Gi-Oh has ~636 set rows against a
@@ -187,14 +261,37 @@ Deno.serve(async (req) => {
       // frozen for over a month while the cron still reported success (measured
       // 2026-08-02: 1 of the 40 newest YGO sets refreshed, the other 39 stuck at
       // 2026-06-29). Ordering the tail stalest-first is self-balancing: pricing a
-      // set stamps last_updated = now, which drops it to the back of the queue,
-      // so every set rotates in instead of the same head repeating.
+      // set stamps last_updated = now on the rows that matched, which drops it to
+      // the back of the queue, so every set rotates in instead of the same head
+      // repeating. (Rows that did NOT match keep their old stamp — that is the
+      // wrinkle the next paragraph exists to handle, and it is why the tail is
+      // ordered by how MANY rows are stale rather than by how old the oldest is.)
       //
-      // The staleness probe reads the oldest Raw_NM rows for this game and takes
-      // the order in which their sets first appear. Ties (a bulk backfill stamps
-      // thousands of rows at the same instant) break arbitrarily, but progress is
-      // still monotonic — a set that gets priced leaves the stale pool for good.
-      const staleRank = new Map<string, number>();
+      // The staleness probe reads the oldest Raw_NM rows for this game and counts
+      // HOW MANY each set holds. Sets with the most stale rows go first.
+      //
+      // COUNT, NOT THE OLDEST ROW'S RANK. Ordering by the position of a set's single
+      // oldest row — what this did until 2026-09-16 — assumed "a set that gets priced
+      // leaves the stale pool for good". That is false for any row JustTCG will never
+      // match: the matcher refuses ambiguous cards by design (see _shared/cardMatch.ts),
+      // and a refused row is never rewritten, so its timestamp is frozen forever. One
+      // such row pinned its whole set to the head of the queue for good, and the run
+      // re-priced that set every single night to chase a row that cannot move.
+      //
+      // Measured on live Yu-Gi-Oh EN, 2026-09-16: SEVEN of the top TEN sets had been
+      // priced the previous night and were back at the head on the strength of 1-48
+      // frozen rows (ygo-dr2 ranked 3rd on ONE row; ygo-gfp2 1st on five rows last
+      // written 96 days earlier). Meanwhile 270 of 350 sets had gone 30+ days without
+      // a visit and 19,884 of 25,683 rows were stale, while the cron reported success
+      // nightly. Counting instead of ranking sinks a frozen-row set to its true weight
+      // (5 rows scores 5) and floats genuinely unvisited sets (200-270 rows) to the
+      // top. Simulated over 14 nights at the observed throughput: 8.4x more stale rows
+      // refreshed, 53 sets reached instead of 27.
+      //
+      // Self-balancing either way: pricing a set empties its stale rows, dropping its
+      // count to (at most) its frozen residue, so it falls behind sets that still hold
+      // real backlog. Ties break arbitrarily and harmlessly.
+      const staleRows = new Map<string, number>();
       for (let p = 0; p < STALE_PROBE_PAGES; p++) {
         const { data: probe, error: probeErr } = await supabase
           .from('market_values')
@@ -208,7 +305,7 @@ Deno.serve(async (req) => {
         if (!probe?.length) break;
         for (const r of probe) {
           const sid = (r as any).pokemon_cards?.set_id;
-          if (sid && !staleRank.has(sid)) staleRank.set(sid, staleRank.size);
+          if (sid) staleRows.set(sid, (staleRows.get(sid) ?? 0) + 1);
         }
         if (probe.length < STALE_PROBE_PAGE) break;
       }
@@ -227,12 +324,16 @@ Deno.serve(async (req) => {
       //
       // Sets with zero coverage now go FIRST: no price at all is worse than a stale
       // one. A set leaves this bucket as soon as it is priced, so the backlog drains.
+      //
+      // The same sweep records each set's LAST VISIT — the newest stamp among its
+      // rows — which is what the tail is ordered by. See the sort below for why.
       const pricedSetIds = new Set<string>();
+      const lastVisit = new Map<string, string>();
       let sweepComplete = false;
       for (let p = 0; p < COVERAGE_SWEEP_PAGES; p++) {
         const { data, error } = await supabase
           .from('market_values')
-          .select('card_id, pokemon_cards!inner(set_id)')
+          .select('card_id, last_updated, pokemon_cards!inner(set_id)')
           .eq('game', grp.game)
           .eq('language', grp.storeLang)
           .eq('condition', 'Raw_NM')
@@ -241,7 +342,11 @@ Deno.serve(async (req) => {
         if (error) { console.error(`[${grp.game}] coverage sweep: ${error.message}`); break; }
         for (const r of data ?? []) {
           const sid = (r as any).pokemon_cards?.set_id;
-          if (sid) pricedSetIds.add(sid);
+          if (!sid) continue;
+          pricedSetIds.add(sid);
+          // ISO timestamps from one column compare chronologically as strings.
+          const stamp = String((r as any).last_updated ?? '');
+          if (stamp > (lastVisit.get(sid) ?? '')) lastVisit.set(sid, stamp);
         }
         if (!data || data.length < STALE_PROBE_PAGE) { sweepComplete = true; break; }
       }
@@ -251,23 +356,86 @@ Deno.serve(async (req) => {
 
       const createdMs = (s: any) => Date.parse(s.created_at ?? '') || 0;
       const isNew = (s: any) => Date.now() - createdMs(s) < NEW_SET_WINDOW_MS;
+      // Hot = newly released, keyed on release_date rather than created_at: the
+      // isNew head below expires NEW_SET_WINDOW_MS after INGEST, which for a set
+      // ingested on launch day is while it is still the current set and its prices
+      // are still settling. Hot sets outrank even the never-priced bucket — a few
+      // sets at ~3 calls each, and no price at all on the current set is the worst
+      // outcome of all. hotRank preserves newest-first within the head.
+      const hotIds = hotSetIds(ourSets ?? []);
+      const hotRank = new Map(hotIds.map((id, i) => [id, i]));
+      const isHot = (s: any) => hotRank.has(s.id);
       const orderedSets = [...(ourSets ?? [])].sort((a, b) => {
+        if (isHot(a) !== isHot(b)) return isHot(a) ? -1 : 1;
+        if (isHot(a)) return hotRank.get(a.id)! - hotRank.get(b.id)!;
         if (neverPriced(a) !== neverPriced(b)) return neverPriced(a) ? -1 : 1;
         if (neverPriced(a)) return createdMs(b) - createdMs(a);
         if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
         if (isNew(a)) return createdMs(b) - createdMs(a);
-        const ra = staleRank.has(a.id) ? staleRank.get(a.id)! : Number.MAX_SAFE_INTEGER;
-        const rb = staleRank.has(b.id) ? staleRank.get(b.id)! : Number.MAX_SAFE_INTEGER;
-        return ra !== rb ? ra - rb : createdMs(b) - createdMs(a);
+        // LEAST RECENTLY VISITED FIRST, keyed on each set's NEWEST row.
+        //
+        // The stale-row count alone starves mid-sized sets in a game with a few very
+        // large ones. The probe window is a fixed 8k rows, so once the real backlog
+        // is smaller than that the window fills up with rows priced only nights ago,
+        // and a 1,000-row set priced three nights back outscores a 370-row set nobody
+        // has priced in six weeks. Measured on live Magic, 2026-09-29: 20 sets (4,795
+        // rows, up to 46 days old, among them Outlaws of Thunder Junction and every
+        // older Commander set) sat behind Fallout, Foundations and Aetherdrift, which
+        // were re-priced again and again; four of nine consecutive catch-up passes
+        // refreshed thousands of rows and cleared no stale row at all. The last of
+        // those 20 sets stood at queue position 61 behind 12,512 rows; ordered by
+        // last visit it stands at 26 behind 6,116.
+        //
+        // A set's newest stamp is when it was last successfully visited. Frozen rows
+        // (the ones the matcher refuses, see above) are old by definition, so they
+        // cannot drag it: this is the staleness signal the oldest-row ranking wanted,
+        // without its pinning bug. The one set this cannot move is one where NO row
+        // matches any more; it costs a fetch per night, and the head= log line below
+        // shows it as the same id with the same old date on consecutive nights.
+        //
+        // The count stays as the tie-break, and as the whole ordering whenever the
+        // sweep was truncated and the stamps are therefore incomplete.
+        if (sweepComplete) {
+          const va = lastVisit.get(a.id) ?? '';
+          const vb = lastVisit.get(b.id) ?? '';
+          if (va !== vb) return va < vb ? -1 : 1;
+        }
+        const ca = staleRows.get(a.id) ?? 0;
+        const cb = staleRows.get(b.id) ?? 0;
+        return ca !== cb ? cb - ca : createdMs(b) - createdMs(a);
       });
       const zeroCoverage = orderedSets.filter(neverPriced).length;
-      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRank.size} ranked stale, head=${orderedSets.slice(0, 5).map((s) => s.id).join(',')}`);
+      // head carries each set's stale-row count, so a regression to the frozen-row
+      // starvation is visible in the logs as a head full of low counts.
+      const staleBacklog = [...staleRows.values()].reduce((a, n) => a + n, 0);
+      console.log(`[${grp.game}] hot sets (priced nightly): ${hotIds.join(', ') || 'none'}`);
+      console.log(`[${grp.game}] ${orderedSets.length} sets, ${zeroCoverage} with NO prices yet (sweep ${sweepComplete ? 'complete' : 'TRUNCATED - ordering falls back to stale-first'}), ${staleRows.size} sets holding ${staleBacklog} stale rows, head=${orderedSets.slice(0, 5).map((s) => `${s.id}(${staleRows.get(s.id) ?? 0}, last ${(lastVisit.get(s.id) ?? 'never').slice(0, 10)})`).join(',')}`);
 
-      // JustTCG sets for this game (one call), build resolver
+      // JustTCG sets for this game (one call), build resolver.
+      // This ONE call gates the entire night for this game: with no listing nothing
+      // resolves, every set is skipped, and the cron still records success. A single
+      // transient 429/5xx therefore used to cost a whole night silently. Retried now.
       let jtcgSets: any[] = [];
-      try { jtcgSets = ((await jtcgFetch(`/sets?game=${grp.justtcgGame}`)).data) ?? []; apiCalls++; }
-      catch (e) { console.error(`[${grp.game}] /sets: ${(e as Error).message}`); continue; }
-      const byName = new Map(jtcgSets.map((s: any) => [norm(s.name), s.id]));
+      try { jtcgSets = ((await jtcgFetch(`/sets?game=${grp.justtcgGame}`, 2)).data) ?? []; apiCalls++; }
+      catch (e) { console.error(`[${grp.game}] /sets FAILED - skipping game for tonight: ${(e as Error).message}`); continue; }
+      const slugIndex = buildSlugIndex(jtcgSets as { id: string; name: string }[]);
+      const resolveFor = (set: { id: string; name: string }): string | undefined =>
+        grp.matchById
+          ? (JP_SLUG_OVERRIDES[set.id]
+              ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id)
+          // Exact name first, then the mechanical rewrites in _shared/setSlug.ts.
+          // NAME_SLUG_OVERRIDES still wins over both.
+          : resolveSetSlug(set, slugIndex, NAME_SLUG_OVERRIDES);
+
+      // A set that resolves to no slug is not stale, it is UNREACHABLE: it can never
+      // be priced, however long it waits, and the loop skips it without an API call
+      // or a log line. That silence hid 341 of Yu-Gi-Oh's 644 sets until 2026-09-22.
+      // Name them once per run so the next naming drift shows up in the logs instead
+      // of quietly parking a few hundred sets.
+      const unresolved = orderedSets.filter((s) => !resolveFor(s)).map((s) => s.id);
+      if (unresolved.length) {
+        console.warn(`[${grp.game}] ${unresolved.length}/${orderedSets.length} sets resolve to NO JustTCG slug and can never be priced: ${unresolved.slice(0, 40).join(', ')}${unresolved.length > 40 ? ` ...+${unresolved.length - 40}` : ''}`);
+      }
 
       for (const set of orderedSets) {
         if (apiCalls >= MAX_API_CALLS) break;
@@ -275,18 +443,20 @@ Deno.serve(async (req) => {
         // this, a 426-set backlog (Yu-Gi-Oh's, 2026-08-13) would consume every run
         // for days and let live prices go stale — and any set that resolves upstream
         // but yields no usable price would sit at the head burning calls nightly.
-        if (neverPriced(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
+        // Hot sets are exempt: they sit at the head, so the budget is never hit
+        // by the time they run, and a never-priced hot set must not be skipped.
+        if (neverPriced(set) && !isHot(set) && apiCalls >= ZERO_COVERAGE_BUDGET) continue;
 
-        let slug: string | undefined;
-        if (grp.matchById) {
-          slug = JP_SLUG_OVERRIDES[set.id]
-            ?? jtcgSets.find((s: any) => s.id.toLowerCase().startsWith(set.id.toLowerCase() + '-'))?.id;
-        } else {
-          // LorcanaJSON names set 8 "The Reign of Jafar"; JustTCG drops the "The".
-          slug = NAME_SLUG_OVERRIDES[set.id] ?? byName.get(norm(set.name));
-        }
+        const slug = resolveFor(set);
         if (!slug) continue;
 
+        // One set must not be able to end the night. Everything below — the matcher,
+        // the history parse, the upserts — runs against whatever upstream returns, and
+        // an unguarded throw here rejected run() and silently abandoned every set still
+        // queued behind this one, leaving the cron reporting success. Isolate per set
+        // and carry on; the abandoned set keeps its stale rows and comes back up the
+        // rotation tomorrow.
+        try {
         // our cards for this set
         const { data: ourCards } = await supabase
           .from('pokemon_cards')
@@ -330,7 +500,10 @@ Deno.serve(async (req) => {
             if (!hit) { unmatched++; continue; }
             const our = hit.card;
             const variant = bestNmVariant(jc);
-            const price = variant?.avgPrice || variant?.price || 0;
+            // Live market price, not JustTCG's rolling mean — same fix as
+            // batch-price-english; see the comment there for the measurements.
+            // avgPrice remains the variant-selection signal inside bestNmVariant.
+            const price = variant?.price || variant?.avgPrice || 0;
             if (price <= 0) continue;
             // Same variant the headline price comes from, so the series joins the
             // live "Now" point without a seam. Keyed like the price-snapshots cron:
@@ -383,6 +556,9 @@ Deno.serve(async (req) => {
           if (snapErr) { console.error(`[${set.id}] snapshots: ${snapErr.message}`); break; }
         }
         console.log(`[${grp.game}] ${set.id} <- ${slug}: ${rows.length} priced, ${snapshotRows.length} history pts, ${unmatched}/${jtcgSingles.length} upstream cards unmatched (api=${apiCalls})`);
+        } catch (e) {
+          console.error(`[${grp.game}] ${set.id} THREW, continuing with the rest: ${(e as Error).message}`);
+        }
       }
     }
     console.log(`[${jobId}] DONE api_calls=${apiCalls} priced=${totalPriced}`);

@@ -2,7 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import CommercialLinks from '@/components/CommercialLinks';
 
 interface TermsBlock {
   label?: string;
@@ -198,6 +200,7 @@ export default function TermsContent({ prefix }: { prefix: '' | '/en' }) {
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </Link>
           <h1 className="text-2xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{content.pageTitle}</h1>
+          <LocaleSwitchLink prefix={prefix} path="/terms" />
         </div>
 
         <div className="space-y-8 text-sm text-slate-300 leading-relaxed">
@@ -220,6 +223,7 @@ export default function TermsContent({ prefix }: { prefix: '' | '/en' }) {
               )}
             </section>
           ))}
+          <CommercialLinks prefix={prefix} />
         </div>
       </div>
     </div>

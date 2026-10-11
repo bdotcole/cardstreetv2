@@ -1,11 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isPremium } from '@/lib/entitlements';
 import { sendWishlistListingAlert } from '@/lib/courier';
 
 /**
- * Wishlist listing alerts (CardStreet Pro perk).
+ * Wishlist listing alerts.
  *
- * When a listing goes active, tell every Pro user who has that card on their
+ * When a listing goes active, tell every user who has that card on their
  * wishlist. Server-only (service role + Courier) -- reached from the two
  * listing-creation paths:
  *   - app/api/listings/route.ts POST        (fires post-response via after())
@@ -66,29 +65,24 @@ export async function notifyWishlistersOfListing(listingId: string): Promise<{ s
     .limit(500);
   if (wishErr || !wishRows?.length) return { sent: 0 };
 
-  const userIds = [...new Set(wishRows.map((r: any) => r.user_id as string))];
-
-  // Pro-only perk: same entitlement rule as lib/premiumAuth getEntitlement
-  // (active subscription OR admin role).
-  const { data: profiles } = await admin
-    .from('profiles')
-    .select('id, role, premium_until')
-    .in('id', userIds);
-  const proIds = (profiles || [])
-    .filter((p: any) => p.role === 'admin' || isPremium(p.premium_until))
-    .map((p: any) => p.id as string);
-  if (proIds.length === 0) return { sent: 0 };
+  // Every wishlister, not just Pro ones. This was gated on the same
+  // entitlement rule as lib/premiumAuth getEntitlement until 2026-09-05; see
+  // lib/entitlements.ts FEATURE_TIERS.wishlist_alerts for why it was opened up.
+  // The alert is the only thing that turns a wishlist into a return visit, and
+  // gating it meant the wishlists of ~1,070 free accounts were inert.
+  const targetIds = [...new Set(wishRows.map((r: any) => r.user_id as string))];
+  if (targetIds.length === 0) return { sent: 0 };
 
   const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
   const { data: recent } = await admin
     .from('wishlist_alert_log')
     .select('user_id')
     .eq('card_id', listing.card_id)
-    .in('user_id', proIds)
+    .in('user_id', targetIds)
     .gte('sent_at', since);
   const alreadyAlerted = new Set((recent || []).map((r: any) => r.user_id as string));
 
-  const targets = proIds.filter((id) => !alreadyAlerted.has(id)).slice(0, MAX_ALERTS_PER_LISTING);
+  const targets = targetIds.filter((id) => !alreadyAlerted.has(id)).slice(0, MAX_ALERTS_PER_LISTING);
   if (targets.length === 0) return { sent: 0 };
 
   const cardData = (listing.card_data || {}) as Record<string, any>;
@@ -119,7 +113,7 @@ export async function notifyWishlistersOfListing(listingId: string): Promise<{ s
   }
 
   console.log(
-    `[WishlistAlerts] listing ${listingId} (${payload.cardName}): alerted ${sentTo.length}/${proIds.length} Pro wishlisters` +
+    `[WishlistAlerts] listing ${listingId} (${payload.cardName}): alerted ${sentTo.length}/${targetIds.length} wishlisters` +
     (alreadyAlerted.size ? ` (${alreadyAlerted.size} deduped)` : ''),
   );
   return { sent: sentTo.length };

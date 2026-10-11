@@ -18,19 +18,22 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-    estimateRateWithCityFallback,
-    isRegionError,
-    fallbackShippingSatang,
-    estimateParcelWeightGramsForItems,
-    estimateParcelDimsCmForItems,
-} from '@/lib/flashExpress';
+    fetchSellerMinOrders,
+    minOrderShortfall,
+    minOrderMessage,
+    MIN_ORDER_NOT_MET_ERROR_CODE,
+} from '@/lib/minOrder';
 import {
     BUYER_REQUIRED_PROFILE_FIELDS,
     checkBuyerProfileComplete,
     BUYER_PROFILE_INCOMPLETE_TOAST,
     BUYER_PROFILE_INCOMPLETE_ERROR_CODE,
+    SELLER_PAUSED_TOAST,
+    SELLER_PAUSED_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { getStripeForRegion, isRegionConfigured } from '@/lib/stripe';
+import { ensurePaymentMethodDomainsWithin } from '@/lib/stripePaymentDomains';
 
 const EstimateBodySchema = z.object({
     items: z
@@ -124,6 +127,14 @@ export async function POST(req: Request) {
         if (!listings || listings.length !== items.length) {
             return NextResponse.json({ error: 'One or more listings no longer exist' }, { status: 400 });
         }
+        // Seller paused their shop (vacation mode): tell the buyer the card is
+        // coming back rather than gone. Mirrors /api/orders/checkout.
+        if (listings.some(l => l.status === 'paused')) {
+            return NextResponse.json(
+                { error: SELLER_PAUSED_TOAST, code: SELLER_PAUSED_ERROR_CODE },
+                { status: 409 },
+            );
+        }
         if (listings.some(l => l.status !== 'active')) {
             return NextResponse.json({ error: 'One or more listings are no longer available' }, { status: 409 });
         }
@@ -160,65 +171,46 @@ export async function POST(req: Request) {
             .eq('id', user.id)
             .single();
 
-        // Per-seller shipping. One charge per seller, regardless of how many
-        // of their cards are in the cart — matches /api/orders/checkout.
-        const sellerShipping = new Map<string, number>();
-        const sellerShippingIsFallback = new Map<string, boolean>();
+        // Shipping is inside every listing price (seller-set, since 2026-09-27):
+        // the buyer pays the list price and nothing more. No courier quote is
+        // made here, so the payment form never waits on Flash. The per-seller
+        // fields stay in the response shape for older clients, all zero.
+        const sellerShipping = new Map<string, number>(sellerIds.map((id) => [id, 0]));
+        const sellerShippingIsFallback = new Map<string, boolean>(sellerIds.map((id) => [id, false]));
 
-        for (const sellerId of sellerIds) {
-            const sellerProfile = sellerProfiles?.find(p => p.id === sellerId);
-            // Same sealed-aware weight/dims as /api/orders/checkout so the
-            // displayed shipping matches the charged shipping.
-            const sellerItems = listings
-                .filter(l => l.seller_id === sellerId)
-                .map(l => ({
-                    isSealed: (l.card_data as any)?.isSealed === true,
-                    productType: (l.card_data as any)?.productType ?? null,
-                }));
-            let baseSatang: number;
-            let isFallback: boolean;
-            try {
-                const quote = await estimateRateWithCityFallback({
-                    srcProvinceName: sellerProfile?.province || 'กรุงเทพมหานคร',
-                    srcCityName: sellerProfile?.state || sellerProfile?.district || 'เขตบางรัก',
-                    srcPostalCode: sellerProfile?.postcode || '10500',
-                    dstProvinceName: buyerProfile?.province || 'กรุงเทพมหานคร',
-                    dstCityName: buyerProfile?.state || buyerProfile?.district || 'เขตบางรัก',
-                    dstPostalCode: buyerProfile?.postcode || '10110',
-                    weight: estimateParcelWeightGramsForItems(sellerItems),
-                    ...estimateParcelDimsCmForItems(sellerItems),
-                });
-                baseSatang = quote.estimatePrice + quote.upCountryAmount;
-                isFallback = false;
-                if (quote.usedCanonicalCity) {
-                    // Live quote recovered via the canonical-district retry —
-                    // a profile involved has a city field Flash can't match.
-                    console.warn(`[Orders/Estimate] Canonical-city retry used for seller ${sellerId} — ฿${baseSatang / 100}`);
-                }
-            } catch (err) {
-                baseSatang = fallbackShippingSatang(sellerProfile?.province, buyerProfile?.province);
-                isFallback = true;
-                if (isRegionError(err)) {
-                    console.warn(
-                        `[Orders/Estimate] Flash region mismatch for seller ${sellerId} — fallback ฿${baseSatang / 100}`,
+        // The shop's minimum order, identical to the gate in
+        // /api/orders/checkout so the payment form never opens on a cart that
+        // checkout would refuse. Accepted offers are exempt; fail-soft read.
+        if (!acceptedOfferId) {
+            const minOrders = await fetchSellerMinOrders(supabase, sellerIds, 'profiles');
+            for (const sellerId of sellerIds) {
+                const minOrder = minOrders[sellerId] ?? 0;
+                if (minOrder <= 0) continue;
+                const sellerSubtotal = listings
+                    .filter(l => l.seller_id === sellerId)
+                    .reduce((sum, l) => sum + Number(l.price || 0), 0);
+                const shortfall = minOrderShortfall(sellerSubtotal, minOrder);
+                if (shortfall > 0) {
+                    return NextResponse.json(
+                        {
+                            error: minOrderMessage(false, minOrder, shortfall),
+                            code: MIN_ORDER_NOT_MET_ERROR_CODE,
+                            minOrder,
+                            shortfall,
+                        },
+                        { status: 409 },
                     );
-                } else {
-                    console.error(`[Orders/Estimate] Flash estimate error for seller ${sellerId} — using fallback ฿${baseSatang / 100}:`, err);
                 }
             }
-            // Matches /api/orders/checkout exactly so the shown total equals the
-            // charged total.
-            sellerShipping.set(sellerId, baseSatang / 100);
-            sellerShippingIsFallback.set(sellerId, isFallback);
         }
 
         const subtotal = listings.reduce(
             (sum, l) => sum + (offerPriceByListing?.get(l.id) ?? Number(l.price || 0)),
             0,
         );
-        const shipping = Array.from(sellerShipping.values()).reduce((s, n) => s + n, 0);
-        const total = subtotal + shipping;
-        const shippingIsEstimate = Array.from(sellerShippingIsFallback.values()).some(Boolean);
+        const shipping = 0;
+        const total = subtotal;
+        const shippingIsEstimate = false;
 
         // For Thailand direct charges the buyer's card must be tokenized in the
         // SELLER's connected-account context (Stripe.js `stripeAccount`), or the
@@ -243,6 +235,13 @@ export async function POST(req: Request) {
                 sellerPayoutReady = ready;
                 if (ready) sellerStripeAccountId = seller.stripe_account_id!;
             }
+        }
+
+        // The payment form mounts as soon as this responds, and Apple Pay /
+        // Google Pay only render if cardstreet.app is registered on the
+        // seller's account by then. Bounded so Stripe can't stall checkout.
+        if (sellerStripeAccountId && isRegionConfigured('th')) {
+            await ensurePaymentMethodDomainsWithin(getStripeForRegion('th'), sellerStripeAccountId, 2500);
         }
 
         return NextResponse.json({

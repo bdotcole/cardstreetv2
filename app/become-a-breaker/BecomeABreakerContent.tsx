@@ -3,10 +3,10 @@
 import React, { useCallback } from 'react';
 import Link from 'next/link';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { trackBreakerEvent } from '@/lib/breakerEvents';
 import { getBreakerCopy } from './content';
 import LiveMockup from './LiveMockup';
+import LocaleSwitchLink from '@/components/LocaleSwitchLink';
 import BreakerApplicationForm, { type BreakerFormPrefill } from './BreakerApplicationForm';
 
 /**
@@ -36,7 +36,6 @@ export default function BecomeABreakerContent({
     prefill: BreakerFormPrefill;
 }) {
     const { isThai } = useTranslation();
-    const { updateLanguage } = useUserSettings();
     const copy = getBreakerCopy(isThai);
 
     const handleApplyClick = useCallback(
@@ -54,13 +53,6 @@ export default function BecomeABreakerContent({
     }, []);
 
     // Uses the site's existing locale-in-URL scheme (Thai = bare path, English
-    // = /en) plus the global language setting, so the choice sticks sitewide
-    // rather than being a toggle that only exists on this page.
-    const switchLanguage = useCallback(async () => {
-        const next = isThai ? 'EN' : 'TH';
-        await updateLanguage(next);
-        window.location.assign(next === 'EN' ? '/en/become-a-breaker' : '/become-a-breaker');
-    }, [isThai, updateLanguage]);
 
     return (
         <main className="min-h-screen bg-brand-darker pb-24 text-white">
@@ -74,14 +66,12 @@ export default function BecomeABreakerContent({
                     <span className="hidden sm:inline">{copy.backToHome}</span>
                     <span className="sr-only sm:hidden">{copy.backToHome}</span>
                 </Link>
-                <button
-                    type="button"
-                    onClick={() => void switchLanguage()}
+                <LocaleSwitchLink
+                    prefix={prefix}
+                    path="/become-a-breaker"
+                    label={copy.langToggleLabel}
                     className="glass ml-auto inline-flex h-10 items-center rounded-xl border-white/10 px-3.5 text-xs font-black text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan"
-                    lang={isThai ? 'en' : 'th'}
-                >
-                    {copy.langToggleLabel}
-                </button>
+                />
             </div>
 
             {/* ── Hero ── */}

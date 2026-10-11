@@ -6,7 +6,17 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import type { Stripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { trackMetaEvent } from '@/lib/metaEvents';
+import {
+    trackAddPaymentInfo,
+    trackAddShippingInfo,
+    trackBeginCheckout,
+    trackCheckoutError,
+    trackCheckoutFormReady,
+    trackPurchase,
+} from '@/lib/commerceEvents';
 import { CURRENCY_SYMBOLS } from '@/constants';
+import { PARTNER_LOGIN_EMAIL_DOMAIN } from '@/lib/referrals';
+import { declinedCard, isCardDecline, isForeignCard } from '@/lib/cardDecline';
 
 // Publishable key, region-aware to match the dual-platform server setup.
 // The server reads STRIPE_SECRET_KEY_TH for the Thailand platform; its client
@@ -68,7 +78,13 @@ interface PaymentModalProps {
      * from the offer server-side. The client never sends the offer price.
      */
     acceptedOfferId?: string;
-    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
+    /**
+     * The signed-in buyer's email. Stripe requires one for PromptPay and asks
+     * for it in the form; passing it here prefills that field so a PromptPay
+     * buyer can press Pay without typing anything.
+     */
+    buyerEmail?: string | null;
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
 }
 
@@ -94,18 +110,48 @@ const PaymentElementForm: React.FC<{
     apiEndpoint?: string;
     extraData?: any;
     acceptedOfferId?: string;
-    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string }) => void;
+    onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
     /** Fired once orders are created + inventory reserved (before the charge),
      *  so the modal can release the reservation if the buyer then abandons. */
     onOrderReserved?: (transferGroup: string) => void;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved }) => {
+    /** Collector Pass voucher to apply (validated + clamped server-side). */
+    voucherId?: string | null;
+    /** Prefills the email PromptPay requires. See PaymentModalProps. */
+    buyerEmail?: string | null;
+    /** The PaymentElement rendered: the buyer can see the form and Pay. */
+    onFormReady?: () => void;
+    /** The PaymentElement could not load, so there is no form to pay with. */
+    onFormLoadError?: (code: string) => void;
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId, buyerEmail, onFormReady, onFormLoadError }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [ready, setReady] = useState(false);
+    // Set after a card is declined. Only used for the inline explanation now —
+    // PromptPay already leads at every amount (see paymentMethodOrder), so the
+    // ordering does not need to change on a decline; the buyer needs to be TOLD
+    // why, not silently re-ordered. 'foreign' = the card was issued outside
+    // Thailand, where PromptPay is no help (lib/cardDecline.ts).
+    const [declineKind, setDeclineKind] = useState<'thai' | 'foreign' | null>(null);
+
+    // PromptPay first. Always, at every amount.
+    //
+    // It is a bank push: no issuer authorisation step, so no decline path, no
+    // card limit, no cross-border interchange. Cards have all three, and that is
+    // where the money has actually been lost — 5 of 8 payments failed over
+    // Aug 9-23 (฿39,055), three `insufficient_funds` and two `try_again_later`.
+    //
+    // This was originally gated above ฿1,500 on the theory that small orders are
+    // safe on card. That theory protects the wrong thing: the ceiling that
+    // matters is the one a Thai bank sets by DEFAULT on online/international
+    // spend, which the cardholder has to raise in their banking app and mostly
+    // has not — and a first-time buyer who bounces on a ฿300 order is lost just
+    // as completely as one who bounces on ฿8,536. PromptPay is also simply the
+    // rail this market prefers. Card is still right there in the second tab.
+    const paymentMethodOrder = ['promptpay', 'card'];
 
     // A declined card (or 3DS failure) leaves the listings already reserved
     // (`sold`) and a re-confirmable PaymentIntent already created. Cache the
@@ -115,6 +161,11 @@ const PaymentElementForm: React.FC<{
     // retrying their own purchase. Reset naturally when Elements remounts (amount
     // /currency/account change) or the modal reopens.
     const retryRef = useRef<{ transferGroup?: string; clientSecret: string | null } | null>(null);
+    // First order id from /api/orders/checkout, for the post-payment redirect.
+    const firstOrderIdRef = useRef<string | undefined>(undefined);
+    // The tab the buyer has selected in the PaymentElement, for add_payment_info.
+    // Null until Stripe reports a selection.
+    const selectedTypeRef = useRef<string | null>(null);
 
     const handlePay = async () => {
         if (!stripe || !elements) {
@@ -135,10 +186,15 @@ const PaymentElementForm: React.FC<{
             // Step 1: validate the entered payment details.
             const { error: submitError } = await elements.submit();
             if (submitError) {
+                trackCheckoutError('payment_details', submitError.code || submitError.type || 'invalid');
                 onPaymentFailed(submitError.message || 'Please check your payment details.');
                 setLoading(false);
                 return;
             }
+            // GA4 funnel step 3. After submit() rather than on the click, so a
+            // Pay press with an incomplete card number does not count as
+            // payment details entered.
+            trackAddPaymentInfo({ items, valueThb: amountThb, paymentType: selectedTypeRef.current || 'unknown' });
 
             const isMarketplace = apiEndpoint === '/api/checkout';
 
@@ -164,10 +220,11 @@ const PaymentElementForm: React.FC<{
                     // gets charged.
                     // acceptedOfferId (OBO): the server reads the discounted
                     // price from the accepted offer; we never send a price.
-                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb, ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
+                    body: JSON.stringify({ items, paymentMethod: 'credit_card', expectedTotal: amountThb, ...(acceptedOfferId ? { acceptedOfferId } : {}), ...(voucherId ? { voucherId } : {}) }),
                 });
                 const orderData = await orderRes.json();
                 if (!orderRes.ok || !orderData.success) {
+                    trackCheckoutError('order', orderData.code || `http_${orderRes.status}`);
                     if (orderData.code === 'TOTAL_CHANGED' && typeof orderData.total === 'number') {
                         onTotalChanged?.(orderData.total);
                         onPaymentFailed(
@@ -180,6 +237,10 @@ const PaymentElementForm: React.FC<{
                     return;
                 }
                 transferGroup = orderData.transferGroup;
+                // Keep the first order id: after payment the buyer is sent to
+                // its order page, and this is the only point where the id is in
+                // hand on the client.
+                firstOrderIdRef.current = Array.isArray(orderData.orderIds) ? orderData.orderIds[0] : undefined;
                 // Orders now exist at `pending_payment` and the listings are
                 // reserved (`sold`). Remember the group so a retry reuses it, and
                 // tell the modal so it can release them if the buyer abandons.
@@ -208,6 +269,7 @@ const PaymentElementForm: React.FC<{
                 });
                 const piData = await piRes.json();
                 if (!piRes.ok || !piData.client_secret) {
+                    trackCheckoutError('payment_intent', piData.code || `http_${piRes.status}`);
                     throw new Error(piData.error || 'Could not start payment');
                 }
                 clientSecret = piData.client_secret;
@@ -238,7 +300,27 @@ const PaymentElementForm: React.FC<{
                 // Reservation + PaymentIntent are retained (retryRef untouched)
                 // so the buyer can fix their card and click Pay again without
                 // re-reserving their own listings.
-                onPaymentFailed(error.message || 'Payment failed');
+                //
+                // On a card decline, name PromptPay rather than dead-ending.
+                // The issuer has already refused; "try a different card" is the
+                // advice that lost the ฿8,536 order three times across two days.
+                // PromptPay has no issuer authorisation step to refuse. A card
+                // issued abroad is different: its holder has no Thai bank for
+                // PromptPay, and the usual cause is their bank blocking
+                // overseas online payments, which they can switch on.
+                const card = declinedCard(error);
+                trackCheckoutError(
+                    'confirm',
+                    error.decline_code || error.code || error.type || 'unknown',
+                    card,
+                );
+                if (isCardDecline(error)) {
+                    const foreign = isForeignCard(card);
+                    setDeclineKind(foreign ? 'foreign' : 'thai');
+                    onPaymentFailed(t(foreign ? 'paymentFlow.foreignCardDeclined' : 'paymentFlow.cardDeclinedTryPromptPay'));
+                } else {
+                    onPaymentFailed(error.message || 'Payment failed');
+                }
                 setLoading(false);
                 return;
             }
@@ -274,12 +356,20 @@ const PaymentElementForm: React.FC<{
                     content_type: 'product',
                     num_items: items.length,
                 });
-                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
+                trackPurchase({ transactionId: paymentIntent!.id, valueThb: amountThb, items, paymentMethod: method, paymentStatus: 'succeeded' });
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current });
             } else if (status === 'processing') {
                 // PromptPay (and other async methods): the buyer has authorized;
                 // funds settle shortly and the webhook fulfills on succeeded.
-                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup });
+                // `processing` is passed through so the order page can say
+                // "confirming payment" rather than "awaiting payment" — the
+                // buyer has paid and their banking app says so.
+                // GA4 purchase fires here too (unlike Meta) — see
+                // lib/commerceEvents.ts for why PromptPay must not be dropped.
+                trackPurchase({ transactionId: paymentIntent!.id, valueThb: amountThb, items, paymentMethod: method, paymentStatus: 'processing' });
+                onPaymentSuccess({ paymentMethod: method, paymentId: paymentIntent!.id, transferGroup, orderId: firstOrderIdRef.current, processing: true });
             } else {
+                trackCheckoutError('confirm', `status_${status || 'unknown'}`);
                 onPaymentFailed('Payment not completed: ' + (status || 'unknown'));
             }
         } catch (e: any) {
@@ -291,21 +381,58 @@ const PaymentElementForm: React.FC<{
 
     return (
         <>
+            {declineKind && (
+                <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 flex items-start gap-3">
+                    <i className="fa-solid fa-circle-info text-amber-400 mt-0.5" aria-hidden="true"></i>
+                    <p className="text-[13px] leading-snug text-amber-100">
+                        {t(declineKind === 'foreign' ? 'paymentFlow.foreignCardHint' : 'paymentFlow.promptPayFallbackHint')}
+                    </p>
+                </div>
+            )}
             <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 min-h-[44px]">
-                <PaymentElement onReady={() => setReady(true)} options={{ layout: 'tabs' }} />
+                <PaymentElement
+                    onReady={() => { setReady(true); onFormReady?.(); }}
+                    // Without this a PaymentElement that fails to load leaves an
+                    // empty box over a Pay button that stays grey forever, with
+                    // no message and nothing reported.
+                    onLoadError={(e) => onFormLoadError?.(e.error?.code || e.error?.type || 'unknown')}
+                    onChange={(e) => { selectedTypeRef.current = e.value?.type || null; }}
+                    options={{
+                        layout: 'tabs',
+                        paymentMethodOrder,
+                        // PromptPay leads, and Stripe will not confirm it
+                        // without an email, so the form opens on an empty
+                        // required field: a buyer who came to scan a QR is
+                        // asked to type an address on a phone first. They are
+                        // signed in, so we already have it. Prefilled rather
+                        // than hidden so they can still change it.
+                        ...(buyerEmail ? { defaultValues: { billingDetails: { email: buyerEmail } } } : {}),
+                    }}
+                />
             </div>
-            <button
-                onClick={handlePay}
-                disabled={loading || !stripe || !ready}
-                className={`mt-4 w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading || !stripe || !ready
-                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                    : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
-                    }`}
-            >
-                {loading
-                    ? (t('paymentFlow.processing') || 'Processing…')
-                    : `${t('paymentFlow.pay') || 'Pay'} ${formatAmount(amountThb)}`}
-            </button>
+            {/* Pinned to the bottom of the modal's scroll area. The form above
+                is roughly 760px tall with the PromptPay tab open and the modal
+                is capped at 90dvh, so on any viewport under about 840px the
+                button fell below the fold of an inner scroll with nothing to
+                say it was there — entirely out of view under about 750px,
+                which is most phones in a mobile browser. The negative margin
+                spans the modal body's p-6 so the form scrolls behind a solid
+                strip; the shadow is the modal's own colour and only softens
+                the edge. */}
+            <div className="sticky bottom-0 z-10 -mx-6 px-6 pt-2 pb-3 bg-slate-900 shadow-[0_-10px_12px_-2px_#0f172a]">
+                <button
+                    onClick={handlePay}
+                    disabled={loading || !stripe || !ready}
+                    className={`w-full h-12 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all ${loading || !stripe || !ready
+                        ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                        : 'bg-brand-cyan text-brand-darker hover:bg-white hover:scale-[1.02]'
+                        }`}
+                >
+                    {loading
+                        ? (t('paymentFlow.processing') || 'Processing…')
+                        : `${t('paymentFlow.pay') || 'Pay'} ${formatAmount(amountThb)}`}
+                </button>
+            </div>
         </>
     );
 };
@@ -321,10 +448,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     apiEndpoint,
     extraData,
     acceptedOfferId,
+    buyerEmail,
     onPaymentSuccess,
     onPaymentFailed
 }) => {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
+
+    // A provisioned partner signs in with a synthetic address until they finish
+    // setup. It reaches nobody, so it is never offered to Stripe as the billing
+    // email; that buyer gets the empty field, as before.
+    const prefillEmail =
+        buyerEmail && !buyerEmail.toLowerCase().endsWith(`@${PARTNER_LOGIN_EMAIL_DOMAIN}`) ? buyerEmail : null;
 
     // ─── Abandoned-checkout cleanup ───
     // /api/orders/checkout reserves inventory (listings → `sold`) and creates
@@ -372,6 +506,22 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         reservedGroupRef.current = transferGroup;
     }, []);
 
+    // ─── GA4 checkout funnel ───
+    // One flag per step per open, so a re-render, a TOTAL_CHANGED re-quote or a
+    // Stripe retry cannot fire a step twice. Reset when the modal closes.
+    const funnelRef = useRef({ began: false, shipping: false, formReady: false, estimateError: false, sellerNotReady: false, stripeLoad: false });
+    useEffect(() => {
+        if (!isOpen) {
+            funnelRef.current = { began: false, shipping: false, formReady: false, estimateError: false, sellerNotReady: false, stripeLoad: false };
+            return;
+        }
+        if (funnelRef.current.began || !items?.length) return;
+        funnelRef.current.began = true;
+        // Step 1, here rather than in the shells: see lib/commerceEvents.ts.
+        // Display currency, as begin_checkout has always reported.
+        trackBeginCheckout(items, currency, exchangeRate);
+    }, [isOpen, items, currency, exchangeRate]);
+
     const handlePaymentSuccess = useCallback(
         (details: { paymentMethod: string; paymentId: string; transferGroup?: string }) => {
             settledRef.current = true;      // payment settled/settling — do not release
@@ -409,6 +559,49 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     } | null>(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [estimateError, setEstimateError] = useState<string | null>(null);
+
+    // ─── Collector Pass vouchers ───
+    // Quoted server-side per cart: the discount clamp depends on the seller's
+    // fee tier, which the client can't know. The quoted figure is EXACTLY what
+    // /api/orders/checkout will apply (same rules, same rows), so the total
+    // shown here is the total charged. Silent no-op while the rewards/voucher
+    // flags are dark or the buyer has no vouchers. Never combined with an
+    // accepted offer.
+    interface VoucherQuote {
+        id: string;
+        key: string;
+        amountSatang: number;
+        discountSatang: number;
+        eligible: boolean;
+    }
+    const [vouchers, setVouchers] = useState<VoucherQuote[]>([]);
+    const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
+    useEffect(() => {
+        if (!isOpen || apiEndpoint !== '/api/checkout' || !items || items.length === 0 || acceptedOfferId) {
+            setVouchers([]);
+            setSelectedVoucherId(null);
+            return;
+        }
+        let cancelled = false;
+        fetch('/api/rewards/vouchers/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ items: items.map((i) => ({ id: i.id })) }),
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+                if (cancelled || !d?.enabled) return;
+                setVouchers(
+                    ((d.vouchers ?? []) as VoucherQuote[]).filter((v) => v.eligible && v.discountSatang > 0),
+                );
+            })
+            .catch(() => { /* vouchers simply don't render */ });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, apiEndpoint, acceptedOfferId]);
+    const voucherDiscountThb =
+        (vouchers.find((v) => v.id === selectedVoucherId)?.discountSatang ?? 0) / 100;
 
     useEffect(() => {
         if (!isOpen) {
@@ -460,6 +653,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
     const effectiveAmount = estimate?.total ?? amount;
+    // What the buyer actually pays: the estimate total minus the exact quoted
+    // voucher discount (fee-funded; can only lower the charge).
+    const displayedTotal = Math.max(0, effectiveAmount - voucherDiscountThb);
     const effectiveShipping = estimate?.shipping ?? shippingFee;
 
     // For the marketplace checkout we must wait for the estimate before
@@ -497,6 +693,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
         let cancelled = false;
         setStripeLoadFailed(false);
+        // Reported from the load itself, not from the stripeLoadFailed state:
+        // that flag outlives a close, and would replay a stale failure into the
+        // next open before this effect had cleared it.
+        const reportLoadFailure = (code: string) => {
+            if (funnelRef.current.stripeLoad) return;
+            funnelRef.current.stripeLoad = true;
+            trackCheckoutError('stripe_load', code);
+        };
         promise.then(
             (loaded) => {
                 if (cancelled) return;
@@ -504,11 +708,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 // A null resolve means an invalid/blank publishable key —
                 // same dead-field outcome as a failed script load.
                 setStripeLoadFailed(!loaded);
+                if (!loaded) reportLoadFailure('stripe_key_rejected');
             },
             () => {
                 if (cancelled) return;
                 setStripe(null);
                 setStripeLoadFailed(true);
+                reportLoadFailure('stripe_js_failed');
             },
         );
         return () => { cancelled = true; };
@@ -516,11 +722,53 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
     const stripeInstance = stripe && stripe.account === stripeAccountForElements ? stripe.instance : null;
 
+    // The form itself reports in. Ready is counted once per open (the form
+    // remounts when the total changes). A load error is routed into the same
+    // "couldn't load the payment form" state as a blocked Stripe.js: it tells
+    // the buyer what happened and its retry remounts <Elements>, which loads
+    // the form again.
+    const handleFormReady = useCallback(() => {
+        if (funnelRef.current.formReady) return;
+        funnelRef.current.formReady = true;
+        trackCheckoutFormReady();
+    }, []);
+    const handleFormLoadError = useCallback((code: string) => {
+        if (!funnelRef.current.stripeLoad) {
+            funnelRef.current.stripeLoad = true;
+            trackCheckoutError('stripe_load', `element_${code}`);
+        }
+        setStripeLoadFailed(true);
+    }, []);
+
     // List-first: a seller may list before finishing Stripe verification, but a
     // buyer can't pay until that seller's account can receive charges. Block the
     // pay step up front so the buyer never submits a checkout the server would
     // reject. The authoritative block is server-side in /api/orders/checkout.
     const sellerNotReady = isMarketplaceCheckout && !!estimate && !estimate.sellerPayoutReady;
+
+    // Funnel step 2, and the ways the modal itself can stop a purchase before
+    // the buyer is ever offered a Pay button. (A failed Stripe.js load is
+    // reported where it happens, above.)
+    useEffect(() => {
+        if (!isOpen) return;
+        const fired = funnelRef.current;
+        if (estimate && !fired.shipping && items?.length) {
+            fired.shipping = true;
+            trackAddShippingInfo({ items, valueThb: estimate.total, shippingThb: estimate.shipping });
+        }
+        if (estimateError && !fired.estimateError) {
+            fired.estimateError = true;
+            trackCheckoutError('estimate', 'estimate_failed');
+        }
+        if (sellerNotReady && !fired.sellerNotReady) {
+            fired.sellerNotReady = true;
+            trackCheckoutError('seller_not_ready', 'seller_payouts_disabled');
+        }
+        if (!PUBLISHABLE_KEY && !fired.stripeLoad) {
+            fired.stripeLoad = true;
+            trackCheckoutError('stripe_load', 'publishable_key_missing');
+        }
+    }, [isOpen, items, estimate, estimateError, sellerNotReady]);
 
     // Deferred PaymentElement options. amount is in satang and is only used to
     // render eligible methods + wallet amounts; the authoritative charge
@@ -529,7 +777,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // /api/checkout creates, and mounting Elements in the user's *display*
     // currency would both mismatch the PI and hide PromptPay (THB-only).
     // Dark theme to match the modal.
-    const amountMinor = Math.max(1, Math.round(effectiveAmount * 100));
+    const amountMinor = Math.max(1, Math.round(displayedTotal * 100));
     const elementsCurrency = isMarketplaceCheckout ? 'thb' : (currency || 'thb').toLowerCase();
     const elementsOptions = useMemo<StripeElementsOptions>(() => ({
         mode: 'payment',
@@ -565,32 +813,62 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Shipping</span>
-                            <span className="text-sm font-bold text-brand-cyan">
-                                {estimateLoading
-                                    ? 'Calculating…'
-                                    : effectiveShipping > 0
-                                        ? `+${formatAmount(effectiveShipping)}`
-                                        : formatAmount(0)}
-                            </span>
+                            <span className="text-xs font-bold text-brand-green">{t('shipping.included')}</span>
                         </div>
                         {estimateError && (
                             <p className="text-[10px] text-amber-400 italic">
-                                Could not calculate shipping — showing subtotal only. Final amount will reflect actual shipping.
+                                {isThai ? t('paymentFlow.estimateFailed') : 'Could not confirm your total. Close and try again.'}
                             </p>
                         )}
-                        {!estimateError && estimate?.shippingIsEstimate && (
-                            <p className="text-[10px] text-slate-500 italic">
-                                {t('paymentFlow.shippingEstimate') || "Flat-rate shipping for this address — you'll be charged exactly the total shown above."}
-                            </p>
+                        {vouchers.length > 0 && (
+                            <div className="pt-1">
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1.5">
+                                    {t('rewards.voucherApply') || 'Voucher'}
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                        onClick={() => setSelectedVoucherId(null)}
+                                        className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase transition-colors ${
+                                            selectedVoucherId === null
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-white/5 text-slate-400'
+                                        }`}
+                                    >
+                                        {t('rewards.voucherNone') || 'None'}
+                                    </button>
+                                    {vouchers.map((v) => (
+                                        <button
+                                            key={v.id}
+                                            onClick={() => setSelectedVoucherId(v.id)}
+                                            className={`px-2.5 h-7 rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 ${
+                                                selectedVoucherId === v.id
+                                                    ? 'bg-amber-400 text-slate-900'
+                                                    : 'bg-amber-400/10 text-amber-300 border border-amber-400/30'
+                                            }`}
+                                        >
+                                            <i className="fa-solid fa-ticket text-[9px]"></i>
+                                            -฿{(v.discountSatang / 100).toLocaleString()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {voucherDiscountThb > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                    {t('rewards.discount') || 'Voucher discount'}
+                                </span>
+                                <span className="text-sm font-bold text-amber-300">-{formatAmount(voucherDiscountThb)}</span>
+                            </div>
                         )}
                         <div className="h-[1px] w-full bg-white/10 my-2"></div>
                         <div className="flex justify-between items-center">
                             <span className="text-white text-sm font-black uppercase tracking-wider">Total</span>
-                            <span className="text-2xl font-black text-white">{formatAmount(effectiveAmount)}</span>
+                            <span className="text-2xl font-black text-white">{formatAmount(displayedTotal)}</span>
                         </div>
                         {!isThbDisplay && (
                             <p className="text-[10px] text-slate-500 text-right">
-                                {t('paymentFlow.chargedInThb') || 'Charged in Thai Baht as'} ฿{effectiveAmount.toLocaleString()}.{' '}
+                                {t('paymentFlow.chargedInThb') || 'Charged in Thai Baht as'} ฿{displayedTotal.toLocaleString()}.{' '}
                                 {t('paymentFlow.bankRateNote') || 'Your bank sets the final exchange rate.'}
                             </p>
                         )}
@@ -648,12 +926,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     key={`${amountMinor}-${elementsCurrency}-${estimate?.sellerStripeAccountId || 'platform'}`}
                                 >
                                     <PaymentElementForm
-                                        amountThb={effectiveAmount}
+                                        amountThb={displayedTotal}
                                         formatAmount={formatAmount}
                                         items={items}
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
                                         acceptedOfferId={acceptedOfferId}
+                                        voucherId={selectedVoucherId}
+                                        buyerEmail={prefillEmail}
+                                        onFormReady={handleFormReady}
+                                        onFormLoadError={handleFormLoadError}
                                         onOrderReserved={handleOrderReserved}
                                         onPaymentSuccess={handlePaymentSuccess}
                                         onPaymentFailed={onPaymentFailed}

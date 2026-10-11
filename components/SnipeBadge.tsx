@@ -14,7 +14,7 @@ export default function SnipeBadge({ className = '' }: { className?: string }) {
     return (
         <Image
             src="/promo/snipe-badge.webp"
-            alt="สายปาด — CardStreet snipe deal"
+            alt="สายปาด — Cardstreet snipe deal"
             width={254}
             height={256}
             unoptimized

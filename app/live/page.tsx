@@ -286,7 +286,7 @@ export default function LiveHubPage() {
                                     </h2>
                                     <p className="text-sm text-slate-400 leading-relaxed max-w-sm mx-auto mb-6">
                                         {t('live.hub.noLiveDesc') ||
-                                            'Want to be the show? Apply to become a CardStreet breaker.'}
+                                            'Want to be the show? Apply to become a Cardstreet breaker.'}
                                     </p>
                                     <Link
                                         href="/become-a-breaker"

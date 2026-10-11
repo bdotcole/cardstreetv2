@@ -4,11 +4,19 @@ import { createPortal } from 'react-dom';
 import { CURRENCY_SYMBOLS } from '@/constants';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { useTranslation } from '@/lib/hooks/useTranslation';
+import MarketMovers, { MARKET_MOVERS_ENABLED } from '@/components/MarketMovers';
+import ShippingNote from '@/components/ShippingNote';
+import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { MarketplaceListing, marketplaceService, ListingSort } from '@/services/marketplaceService';
+import { pokemonService } from '@/services/pokemonService';
+import { preloadSearchDictionary } from '@/lib/search/dictionary';
+import { isFailedResult } from '@/lib/search/failedResult';
+import { flushSettledSearch, trackSettledSearch } from '@/lib/searchEvents';
 import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
 
@@ -26,6 +34,12 @@ interface MarketplaceProps {
   listings?: MarketplaceListing[];   // used only for Explore price overlay, marketplace fetches its own
   currency?: string;
   exchangeRate?: number;
+  /**
+   * Opens Live Breaks. When omitted the Live section is not rendered at all —
+   * the shell only passes it behind the 'live_streams' beta grant, so a tab
+   * that leads nowhere never appears.
+   */
+  onLive?: () => void;
 }
 
 // OBO offers are behind a single build-time flag; when off, every tile shows
@@ -72,8 +86,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   currentUserId = null,
   currency = 'THB',
   exchangeRate = 1,
+  onLive,
 }) => {
-  const { t } = useTranslation();
+  const { t, isThai } = useTranslation();
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,6 +158,38 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   }, [sheetOpen]);
 
   // ── Data state ──────────────────────────────────────────────────────────────
+  // Singles / Sealed. Not a filter chip inside the sheet but a top-level
+  // section: buying a sealed box and buying a single card are different
+  // errands, and burying sealed behind a filter is why exactly 1 of 222
+  // listings is sealed. 'Live' is the third section and is a navigation, not a
+  // listing query — it only appears when the shell passes onLive (beta grant).
+  const [section, setSection] = useState<'singles' | 'sealed'>('singles');
+
+  // Demand capture on a dead end: when a search finds no listings, show the
+  // catalog cards it matched so the buyer can open one, wishlist it (which now
+  // alerts them when a seller lists it), or ask for it. Before this, "Signal
+  // Lost" plus a reset button was the whole answer and the intent evaporated.
+  //
+  // Only once the listings fetch for the term has come back empty (singles
+  // section): a catalog search is several catalog queries per term, and
+  // running it on every marketplace search paid for a panel that only an empty
+  // result ever shows.
+  const [emptySearch, setEmptySearch] = useState<string | null>(null);
+  const [catalogMatches, setCatalogMatches] = useState<Card[]>([]);
+  useEffect(() => {
+    const q = (emptySearch ?? '').trim();
+    // Drop the previous term's matches up front, so the empty state never
+    // shows them under the new term's heading while its search runs.
+    setCatalogMatches([]);
+    if (q.length < 3) return;
+    // Aborted when the term changes, so a superseded search stops at its next
+    // stage instead of running every catalog query to completion.
+    const controller = new AbortController();
+    pokemonService.searchCards(q, false, undefined, 'all', { signal: controller.signal })
+      .then((cards) => { if (!controller.signal.aborted) setCatalogMatches(cards.slice(0, 3)); })
+      .catch(() => { if (!controller.signal.aborted) setCatalogMatches([]); });
+    return () => controller.abort();
+  }, [emptySearch]);
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -155,8 +202,23 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Every reset starts a new generation; a fetch that resolves after a newer
+  // reset is dropped. A search waits on the dictionary chunk (first search
+  // only) and may retry once with a typo reading, so a superseded term's
+  // response can land after the current one's — and would otherwise overwrite
+  // the grid and the empty-state fallback with the old term's results.
+  const listingsGenRef = useRef(0);
+  // GA4 `search` fires once per distinct settled term, not again when only a
+  // filter or the sort changes. The 400 ms debounce above is about the pause
+  // between keystrokes on a phone, so trackSettledSearch also waits for the
+  // typing to stop: "pik", "pikac", "pikachu" are one search, not three.
+  const lastTrackedSearchRef = useRef('');
+  // Leaving the tab unmounts the shop: send the term still waiting to settle.
+  useEffect(() => () => flushSettledSearch('marketplace'), []);
+
   // ── Fetch listings whenever filters change ──────────────────────────────────
   const fetchListings = useCallback(async (reset = false) => {
+    const gen = reset ? ++listingsGenRef.current : listingsGenRef.current;
     setIsLoading(true);
     const currentOffset = reset ? 0 : offset;
 
@@ -164,30 +226,46 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       search: debouncedSearch,
       language: selectedLanguage === 'all' ? undefined : selectedLanguage,
       game: selectedGame === 'all' ? undefined : selectedGame,
+      kind: section,
       minPrice: priceRange[0],
       maxPrice: priceRange[1],
       sort: sortOrder,
       limit: PAGE_SIZE,
       offset: currentOffset,
     });
+    if (gen !== listingsGenRef.current) return;
 
+    // Identical copies (createListing's quantity) fold into one tile carrying a
+    // unit count; hasMore still reads the raw page size.
     if (reset) {
-      setListings(data);
+      setListings(groupSiblingListings(data));
       setOffset(PAGE_SIZE);
+      const term = debouncedSearch.trim();
+      // The catalog fallback is a singles-only panel (sealed has no catalog
+      // counterpart), so a sealed result never arms it.
+      setEmptySearch(term && data.length === 0 && section !== 'sealed' ? term : null);
+      if (!term) {
+        // Cleared box: searching the same term again is a new search.
+        lastTrackedSearchRef.current = '';
+      } else if (term !== lastTrackedSearchRef.current) {
+        lastTrackedSearchRef.current = term;
+        // A failed fetch shows the same empty grid as a miss, but is not one.
+        trackSettledSearch({ term, resultsCount: isFailedResult(data) ? null : data.length, surface: 'marketplace' });
+      }
     } else {
-      setListings(prev => [...prev, ...data]);
+      setListings(prev => groupSiblingListings([...prev, ...data]));
       setOffset(prev => prev + PAGE_SIZE);
     }
     setHasMore(data.length === PAGE_SIZE);
     setIsLoading(false);
-  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder, offset]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder, offset]);
 
   // When filters change, reset and re-fetch
   useEffect(() => {
     setOffset(0);
     fetchListings(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedLanguage, selectedGame, priceRange, sortOrder]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder]);
 
   // ── Infinite scroll observer ─────────────────────────────────────────────────
   const observerRef = useRef<HTMLDivElement | null>(null);
@@ -224,7 +302,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   return (
     <div className="flex flex-col h-full animate-fadeIn -mx-6 w-[calc(100%+48px)]">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 px-6 pt-6 pb-2 space-y-4 bg-brand-darker">
+      <div className="flex-shrink-0 px-3 pt-3 pb-2 space-y-4 bg-brand-darker">
         <div>
           <div className="flex justify-between items-end mb-2">
             <div>
@@ -245,12 +323,46 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 className="w-full bg-transparent text-white text-xs font-bold focus:outline-none placeholder:text-slate-600 h-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                // Start the name-dictionary download now: the listings search
+                // waits up to 800 ms for it and goes literal-only after that,
+                // so a cold first search ("koiking") would otherwise miss.
+                onFocus={preloadSearchDictionary}
               />
               {debouncedSearch !== searchQuery && (
                 <div className="w-3 h-3 border-2 border-brand-cyan/60 border-t-transparent rounded-full animate-spin mr-3" />
               )}
             </div>
           </div>
+        </div>
+
+        {/* Section switch: Singles / Sealed / Live. Above the filters because
+            it is not a filter — each is a different thing to shop for, and the
+            filter sheet's own state (game, language, price) applies within
+            whichever section is selected. */}
+        <div className="flex w-full bg-white/5 rounded-full p-1 border border-white/10 mb-3">
+          {([
+            { id: 'singles' as const, label: t('marketplace.sectionSingles') },
+            { id: 'sealed' as const, label: t('marketplace.sectionSealed') },
+          ]).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setSection(id)}
+              className={`flex-1 h-9 rounded-full text-[11px] font-black transition-all ${
+                section === id ? 'bg-brand-cyan text-brand-darker' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {onLive && (
+            <button
+              onClick={onLive}
+              className="flex-1 h-9 rounded-full text-[11px] font-black text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-red"></span>
+              {t('marketplace.sectionLive')}
+            </button>
+          )}
         </div>
 
         {/* Filter & Sort Bar */}
@@ -306,7 +418,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
 
           {/* Applied filters — removable without reopening the sheet */}
           {activeFilterCount > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto -mx-6 px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="flex items-center gap-2 overflow-x-auto -mx-3 px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {selectedGame !== 'all' && (
                 <AppliedChip label={getGame(selectedGame).shortName} onRemove={() => setSelectedGame('all')} />
               )}
@@ -322,8 +434,21 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       </div>
 
       {/* Scrollable Listings Grid */}
-      <div className="flex-1 overflow-y-auto px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
-        <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-3'}`}>
+      <div className="flex-1 overflow-y-auto px-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)' }}>
+        {/* Market movers above the listings, while browsing (not searching) singles.
+            Off for everyone until a better UI exists; see MARKET_MOVERS_ENABLED. */}
+        {MARKET_MOVERS_ENABLED && !debouncedSearch && section === 'singles' && (
+          <MarketMovers
+            game={selectedGame}
+            onSelectCard={onSelectCard}
+            formatPrice={(thb) => {
+              const v = thb * exchangeRate;
+              return `${CURRENCY_SYMBOLS[currency] || currency}${v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
+            }}
+            className="mb-4"
+          />
+        )}
+        <div className={`grid ${gridCols === 3 ? 'grid-cols-3 gap-1.5' : 'grid-cols-2 gap-3'}`}>
           {listings.length > 0 ? listings.map((listing, idx) => {
             const dealPct = getDealPercent(listing.price, listing.card_data.marketPrice);
             const thumbUrl = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
@@ -331,6 +456,11 @@ const Marketplace: React.FC<MarketplaceProps> = ({
             // shows "PSA 10", so the condition badge is dropped and the deal
             // badge drops below the label.
             const slabbed = !!listing.is_graded && !!listing.grading_company;
+            // 3-column tiles are image-first: the price rides the bottom edge
+            // of the art and the details strip keeps only what has no other
+            // home. With six rows of chrome under a ~110px-wide thumbnail the
+            // strip was as tall as the card itself.
+            const compact = gridCols === 3;
             // Show "Make Offer" only on offer-accepting listings, and only to a
             // signed-in buyer who isn't the seller. Everyone else (incl. guests
             // and the flag-off case) gets "Buy Now".
@@ -377,35 +507,82 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                         {conditionBadgeLabel(listing)}
                       </span>
                     )}
+                    {/* Compact price strip over the card's text box (never its
+                        artwork). Pointer events pass through so the tap still
+                        opens the listing. */}
+                    {compact && (
+                      <div className="absolute inset-x-0 bottom-0 z-10 px-1.5 pb-1.5 pt-7 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+                        <div className="flex items-baseline gap-1 min-w-0">
+                          <span className="text-[13px] font-black text-brand-cyan leading-none whitespace-nowrap">
+                            {formatPrice(listing.price)}
+                          </span>
+                          {dealPct !== null && (
+                            <span className="text-[8px] text-slate-400 font-bold line-through truncate">
+                              {formatPrice(listing.card_data.marketPrice)}
+                            </span>
+                          )}
+                          {listingUnits(listing) > 1 && (
+                            <span
+                              title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                              className="ml-auto text-[8px] font-black px-1 py-px rounded bg-white/15 text-white whitespace-nowrap"
+                            >
+                              ×{listingUnits(listing)}
+                            </span>
+                          )}
+                        </div>
+                        {showShippingNoteOnTile(listing.price) && (
+                          <ShippingNote variant="short" tone="light" className="block leading-none mt-1" />
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {!compact && listingUnits(listing) > 1 && (
+                    <span
+                      title={t('cart.available').replace('{n}', String(listingUnits(listing)))}
+                      className="absolute bottom-1.5 left-1.5 z-10 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-black/60 text-white border border-white/10 backdrop-blur-sm"
+                    >
+                      ×{listingUnits(listing)}
+                    </span>
+                  )}
                   {isSnipeListing(listing.price) && (
                     <SnipeBadge className="absolute -bottom-3 right-1.5 z-10 h-12 w-auto" />
                   )}
                 </div>
 
                 {/* Card Details */}
-                <div className="p-2 flex flex-col flex-1 min-w-0">
-                  <h3 className="text-white font-bold text-xs truncate">{listing.card_data.name}</h3>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">{listing.card_data.set}</p>
+                <div className={`${compact ? 'p-1.5' : 'p-2'} flex flex-col flex-1 min-w-0`}>
+                  <h3 className={`text-white font-bold truncate ${compact ? 'text-[11px] leading-tight' : 'text-xs'}`}>{listing.card_data.name}</h3>
+                  <p className={`text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5 ${compact ? 'text-[8px] leading-tight' : 'text-[9px]'}`}>{listing.card_data.set}</p>
 
-                  {/* Price — asking price with the market price struck through beside it */}
-                  <div className="flex items-baseline gap-1.5 mt-auto pt-1.5 min-w-0">
-                    <p className="text-base font-black text-brand-cyan leading-none whitespace-nowrap">
-                      {formatPrice(listing.price)}
-                    </p>
-                    {dealPct !== null && (
-                      <p className="text-[9px] text-slate-500 font-bold line-through truncate">
-                        {formatPrice(listing.card_data.marketPrice)}
-                      </p>
-                    )}
-                  </div>
+                  {/* Comfortable grid only: the compact grid shows these on the art */}
+                  {!compact && (
+                    <>
+                      {/* Price — asking price with the market price struck through beside it */}
+                      <div className="flex items-baseline gap-1.5 mt-auto pt-1.5 min-w-0">
+                        <p className="text-base font-black text-brand-cyan leading-none whitespace-nowrap">
+                          {formatPrice(listing.price)}
+                        </p>
+                        {dealPct !== null && (
+                          <p className="text-[9px] text-slate-500 font-bold line-through truncate">
+                            {formatPrice(listing.card_data.marketPrice)}
+                          </p>
+                        )}
+                      </div>
+                      {/* Cheap cards only: below ฿200 the shipping is a large share
+                          of the total and finding it at the payment screen is a
+                          bait. Above that it is noise on a tile. */}
+                      {showShippingNoteOnTile(listing.price) && (
+                        <ShippingNote variant="short" className="block mt-0.5" />
+                      )}
+                    </>
+                  )}
 
                   {/* Seller */}
                   <div
                     onClick={(e) => { e.stopPropagation(); if (listing.seller) onSellerClick(listing.seller); }}
-                    className="flex items-center gap-1 mt-1.5 cursor-pointer hover:bg-white/5 rounded-md p-0.5 -m-0.5 transition-colors"
+                    className={`flex items-center gap-1 cursor-pointer hover:bg-white/5 rounded-md p-0.5 -m-0.5 transition-colors ${compact ? 'mt-auto pt-1' : 'mt-1.5'}`}
                   >
-                    <div className="w-3.5 h-3.5 rounded-full bg-slate-700 overflow-hidden flex-shrink-0">
+                    <div className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} rounded-full bg-slate-700 overflow-hidden flex-shrink-0`}>
                       {listing.seller?.avatar_url && (
                         <img
                           src={listing.seller.avatar_url}
@@ -433,19 +610,19 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                   {showMakeOffer ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); onMakeOffer?.(listing); }}
-                      className="mt-2 w-full h-8 rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      className={`${compact ? 'mt-1.5 h-7 text-[9px]' : 'mt-2 h-8 text-[10px]'} w-full rounded-lg bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/20 font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all`}
                       aria-label={`Make an offer on ${listing.card_data.name}`}
                     >
-                      {gridCols === 2 && <i className="fa-solid fa-hand-holding-dollar"></i>}
+                      {!compact && <i className="fa-solid fa-hand-holding-dollar"></i>}
                       {t('offer.makeOffer')}
                     </button>
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); onBuyNow?.(listing); }}
-                      className="mt-2 w-full h-8 rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all"
+                      className={`${compact ? 'mt-1.5 h-7 text-[9px]' : 'mt-2 h-8 text-[10px]'} w-full rounded-lg bg-brand-green text-brand-darker hover:bg-brand-green/90 font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-brand-green/20 active:scale-95 transition-all`}
                       aria-label={`Buy ${listing.card_data.name} now`}
                     >
-                      {gridCols === 2 && <i className="fa-solid fa-bolt"></i>}
+                      {!compact && <i className="fa-solid fa-bolt"></i>}
                       {t('marketplace.buyNow')}
                     </button>
                   )}
@@ -457,8 +634,41 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <i className="fa-solid fa-satellite-dish text-2xl text-slate-600"></i>
               </div>
-              <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-1">Signal Lost</h3>
-              <p className="text-slate-500 text-xs">No active listings found in this sector.</p>
+              <h3 className={`text-white font-bold text-sm mb-1 ${isThai ? '' : 'uppercase tracking-widest'}`}>{t('marketplace.emptyTitle')}</h3>
+              <p className="text-slate-500 text-xs">
+                {section === 'sealed' ? t('marketplace.sealedEmpty') : t('marketplace.emptyBody')}
+              </p>
+              {catalogMatches.length > 0 && section !== 'sealed' && (
+                <div className="mt-6 text-left max-w-sm mx-auto">
+                  <p className={`text-[10px] text-slate-400 font-black mb-1 ${isThai ? '' : 'uppercase tracking-[0.2em]'}`}>
+                    {t('searchFallback.title').replace('{q}', debouncedSearch.trim())}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-3">{t('searchFallback.hint')}</p>
+                  <div className="space-y-2">
+                    {catalogMatches.map((card) => (
+                      <button
+                        key={card.id}
+                        onClick={() => onSelectCard(card)}
+                        className="w-full flex items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 active:scale-[0.99] transition-all text-left"
+                      >
+                        <span className="w-10 h-14 rounded-md overflow-hidden bg-brand-darker flex-shrink-0">
+                          {card.images?.small && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={getThumbnailUrl(card.images.small)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-white text-sm font-bold truncate">{card.name}</span>
+                          <span className="block text-slate-500 text-[11px] truncate">
+                            {card.set}{card.marketPrice ? ` · ฿${Math.round(card.marketPrice).toLocaleString()}` : ''}
+                          </span>
+                        </span>
+                        <span className={`text-brand-cyan text-[10px] font-black ${isThai ? '' : 'uppercase tracking-widest'}`}>{t('searchFallback.viewCard')}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"

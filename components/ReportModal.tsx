@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import BodyPortal from './BodyPortal';
 import { createClient } from '@/lib/supabase/client';
 import { ReportEntityType } from '@/types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -83,7 +84,8 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <BodyPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
             <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto animate-scaleIn">
                 <div className="p-6 border-b border-white/5">
@@ -164,6 +166,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
                 )}
             </div>
         </div>
+        </BodyPortal>
     );
 };
 

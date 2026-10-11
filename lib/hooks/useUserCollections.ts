@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, UserCollectionItem, CardCondition, CustomCollection } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
+import { trackEngagement } from '@/lib/engagementEvents';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 
 interface UseUserCollectionsReturn {
@@ -49,25 +50,42 @@ export function useUserCollections(): UseUserCollectionsReturn {
 
             if (collectionsError) throw collectionsError;
 
-            // Fetch all collection items for this user
+            // Fetch all collection items for this user, paging past PostgREST's
+            // 1,000-row default so a large vault (partner bulk imports) is never
+            // silently truncated into "missing" cards the seller then re-adds.
             const collectionIds = collectionsData?.map(c => c.id) || [];
 
-            const { data: itemsData, error: itemsError } = await supabase
-                .from('collection_items')
-                .select('*')
-                .in('collection_id', collectionIds);
+            const fetchAllItems = async () => {
+                const all: any[] = [];
+                if (collectionIds.length === 0) return all;
+                for (let from = 0; ; from += 1000) {
+                    const { data, error } = await supabase
+                        .from('collection_items')
+                        .select('*')
+                        .in('collection_id', collectionIds)
+                        .order('added_at', { ascending: true })
+                        .range(from, from + 999);
+                    if (error) throw error;
+                    all.push(...(data || []));
+                    if (!data || data.length < 1000) break;
+                }
+                return all;
+            };
 
-            if (itemsError) throw itemsError;
-
-            // Fetch user's active + draft listings to map them to vault items.
+            // Items and listings do not depend on each other: run them together
+            // instead of as a third and fourth sequential round trip to Singapore.
             // Drafts (created before Stripe onboarding finished) must count as
             // "listed" here, else the Vault shows the card as unlisted and the
             // seller re-lists it into a duplicate.
-            const { data: listingsData, error: listingsError } = await supabase
-                .from('listings')
-                .select('*')
-                .eq('seller_id', user.id)
-                .in('status', ['active', 'draft']);
+            const [itemsData, listingsResult] = await Promise.all([
+                fetchAllItems(),
+                supabase
+                    .from('listings')
+                    .select('*')
+                    .eq('seller_id', user.id)
+                    .in('status', ['active', 'draft', 'paused']),
+            ]);
+            const { data: listingsData, error: listingsError } = listingsResult;
 
             if (listingsError) throw listingsError;
 
@@ -276,6 +294,11 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 .single();
 
             if (error) throw error;
+
+            // After the insert succeeds, so the GA count matches the ledger's:
+            // the vault_add reward is granted by a row trigger, and a failed
+            // insert grants nothing.
+            trackEngagement('vault_add', { card_id: safeCard.id, game: safeCard.game ?? '' });
 
             // Update local state
             setCollections(prev => prev.map(col => {

@@ -7,10 +7,14 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
 import OffersInbox from '@/components/OffersInbox';
+import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
+import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
+import ReportProblemSheet from '@/components/ReportProblemSheet';
 
 // OBO best-offer is dark-launched behind this flag; the Offers tab is hidden
 // entirely when off.
@@ -23,6 +27,10 @@ interface OrderRow {
     status: string;
     created_at: string;
     total_amount: number;
+    delivered_at?: string | null;
+    completed_at?: string | null;
+    // The buyer's review of this order (one per order), from /api/profile/orders.
+    review?: OrderReview | null;
     // One row per listing; a multi-item checkout shares one transfer_group
     // (one payment, one parcel). Tabs render one row per group.
     transfer_group?: string | null;
@@ -32,6 +40,9 @@ interface OrderRow {
     // replaced by a passive notice for them.
     break_spot_id?: string | null;
     break_context?: { title: string; imageSmall: string | null } | null;
+    // Seller shipments only: who the parcel goes to (see /api/profile/shipments).
+    buyer_id?: string | null;
+    buyer?: { display_name: string | null } | null;
     listing: { card_data: any; condition: string } | null;
     shipping_labels?: {
         tracking_number?: string | null;
@@ -139,6 +150,36 @@ export default function DesktopOrders() {
         setTab(key);
         router.replace(`/orders?tab=${key}`, { scroll: false });
     };
+
+    // The accepted-offer pay link (/pay/<id>), forwarded by the desktop home as
+    // ?payOffer=<id>. Held until there is a session — the link is opened from
+    // email, often signed out — then handed to the same payOffer as the inbox's
+    // Pay button. A ref, not state: one shot per id, and clearing it must not
+    // re-run the effect and drop the lookup in flight.
+    const pendingPayOfferId = useRef<string | null>(searchParams?.get('payOffer') ?? null);
+    useEffect(() => {
+        const id = pendingPayOfferId.current;
+        if (!OFFERS_ENABLED || !id || !user) return;
+        pendingPayOfferId.current = null;
+        router.replace('/orders?tab=offers', { scroll: false });
+        void (async () => {
+            try {
+                const res = await fetch('/api/offers?state=active', { cache: 'no-store' });
+                const data = res.ok ? await res.json() : null;
+                const list: Offer[] = Array.isArray(data?.offers) ? data.offers : [];
+                const offer = list.find((o) => o.id === id);
+                if (offer && offer.status === 'accepted' && offer.viewerRole === 'buyer') {
+                    payOffer(offer);
+                } else {
+                    // Paid, expired, withdrawn, or someone else's — the Offers
+                    // tab underneath shows the truth.
+                    showToast(t('offer.payUnavailable'), 'error');
+                }
+            } catch {
+                showToast(t('offer.payUnavailable'), 'error');
+            }
+        })();
+    }, [user, payOffer, router, showToast, t]);
     const [orders, setOrders] = useState<OrderRow[]>([]);
     const [shipments, setShipments] = useState<OrderRow[]>([]);
     const [sales, setSales] = useState<SaleRow[]>([]);
@@ -151,6 +192,10 @@ export default function DesktopOrders() {
     const [reviewScore, setReviewScore] = useState(5);
     const [reviewComment, setReviewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
+    // Stand-alone review (an order that completed on its own) and the
+    // report-a-problem sheet, both keyed on the group's primary order.
+    const [reviewSheetOrder, setReviewSheetOrder] = useState<OrderRow | null>(null);
+    const [reportSheetOrder, setReportSheetOrder] = useState<OrderRow | null>(null);
 
     // Viewing purchases self-heals stale statuses: /api/orders/track polls
     // Flash and advances the order server-side (webhooks can drop, the
@@ -244,6 +289,33 @@ export default function DesktopOrders() {
         } catch {
             showToast(t('desktop.orders.toastClearFailed'), 'error');
             fetchTab('shipments');
+        }
+    };
+
+    // Labels are minted when the seller is ready (lib/parcels), so the seller
+    // decides which of a buyer's orders travel together. One handler serves
+    // all three buttons: create for one checkout, combine several checkouts,
+    // or add to a waybill Flash has not scanned yet. On success the tab
+    // refreshes and the label opens (any order id in the parcel works).
+    const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
+    const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+        setLabelBusyIds(orderIds);
+        try {
+            const res = await fetch('/api/orders/label/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderIds, attachToTrackingNumber }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'label create failed');
+            showToast(t('parcel.created'), 'success');
+            await fetchTab('shipments');
+            if (data?.manual !== true) await openLabel(orderIds[0]);
+        } catch (err) {
+            console.error('Create label failed:', err);
+            showToast(t('parcel.createFailed'), 'error');
+        } finally {
+            setLabelBusyIds([]);
         }
     };
 
@@ -415,6 +487,37 @@ export default function DesktopOrders() {
                                                         {t('desktop.orders.confirmDelivery')}
                                                     </button>
                                                 )}
+                                                {/* Review and report live here so a buyer whose order
+                                                    completed on its own still has both paths. */}
+                                                {canReviewOrder(order) && order.status !== 'disputed' && (
+                                                    order.review ? (
+                                                        <button
+                                                            onClick={() => setReviewSheetOrder(order)}
+                                                            className="text-amber-300 text-xs font-bold hover:underline"
+                                                            title={t('orderActions.editReview')}
+                                                        >
+                                                            {'★'.repeat(order.review.rating)} · {t('orderActions.editReview')}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setReviewSheetOrder(order)}
+                                                            className="border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                        >
+                                                            {t('orderActions.reviewSeller')}
+                                                        </button>
+                                                    )
+                                                )}
+                                                {order.status !== 'disputed' && canReportOrder(order) && (
+                                                    <button
+                                                        onClick={() => setReportSheetOrder(order)}
+                                                        className="text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
+                                                    >
+                                                        {t('orderActions.reportProblem')}
+                                                    </button>
+                                                )}
+                                                {order.status === 'disputed' && (
+                                                    <span className="text-[11px] text-rose-300 max-w-[220px]">{t('orderActions.disputeOpen')}</span>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -428,13 +531,33 @@ export default function DesktopOrders() {
                             <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
                         ) : (
                             <div className="space-y-2">
-                                {/* One row per checkout — the group ships as one
-                                    Flash parcel under one waybill, so it gets one
-                                    label button / one Clear. The primary order's
-                                    id drives both (fulfillment keys the label to
-                                    it); Clear stamps every row in the group. */}
-                                {groupByTransferGroup(shipments).map((group) => {
+                                {/* One row per PARCEL (waybill). A checkout ships as
+                                    one Flash parcel, and two checkouts share one when
+                                    the seller labels them together (lib/parcels), so the row
+                                    lists every card for that envelope under its one
+                                    label button / one Clear. The primary order's id
+                                    drives both (every row carries the same waybill);
+                                    Clear stamps every row in the group. */}
+                                {groupByParcel(shipments).map((group, _i, parcels) => {
                                     const order = group[0];
+                                    const pno = order.shipping_labels?.[0]?.tracking_number;
+                                    const checkouts = countCheckouts(group);
+                                    const buyerName = order.buyer?.display_name || null;
+                                    // No label yet: the seller mints it here. The buyer's
+                                    // other unlabelled checkouts can go in the same parcel,
+                                    // and a parcel Flash has not collected yet can take
+                                    // these cards too (no new waybill, nothing cancelled).
+                                    const awaitingLabel = group.every(isAwaitingLabel);
+                                    const buyerKey = order.buyer_id || '';
+                                    const otherUnlabelled = awaitingLabel
+                                        ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
+                                        : [];
+                                    const openParcel = awaitingLabel
+                                        ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
+                                        : undefined;
+                                    const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
+                                    const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                                    const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
                                     // Delivered/completed rows linger as a delivery
                                     // notice until cleared — label printing no longer
                                     // applies to them.
@@ -447,17 +570,90 @@ export default function DesktopOrders() {
                                     return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <div className="space-y-2 min-w-0">
-                                            {group.map((o) => (
-                                                <CardCell key={o.id} row={o} />
+                                            {/* Parcel header: who it goes to, the waybill,
+                                                and how many checkouts it holds. */}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide">
+                                                    {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
+                                                </span>
+                                                {isRealWaybill(pno) && (
+                                                    <span className="font-mono text-[11px] text-slate-500">{pno}</span>
+                                                )}
+                                                {checkouts > 1 && (
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-md px-2 py-0.5">
+                                                        {t('parcel.combined').replace('{count}', String(checkouts))}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {checkouts > 1 && !isDelivered && (
+                                                <p className="text-xs font-semibold text-brand-cyan">{t('parcel.packTogether')}</p>
+                                            )}
+                                            {/* A combined parcel keeps each checkout's cards
+                                                under an "Order n" caption so the seller can
+                                                match them to the sale notifications. */}
+                                            {groupByTransferGroup(group).map((checkout, idx) => (
+                                                <div key={checkout[0].id} className="space-y-2">
+                                                    {checkouts > 1 && (
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-wide">
+                                                            {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    )}
+                                                    {checkout.map((o) => (
+                                                        <CardCell key={o.id} row={o} />
+                                                    ))}
+                                                </div>
                                             ))}
                                             {group.length > 1 && (
                                                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
                                                     {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
                                                 </p>
                                             )}
+                                            {/* The buyer's other unlabelled checkouts can ship
+                                                in this parcel; a parcel Flash has not collected
+                                                yet can take these cards too. */}
+                                            {!isBreakOrder && awaitingLabel && otherUnlabelled.length > 0 && (
+                                                <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 px-3 py-2 space-y-2 max-w-md">
+                                                    <p className="text-xs font-bold text-brand-cyan">
+                                                        {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => createLabel(combineIds)}
+                                                        disabled={labelBusy}
+                                                        className="bg-brand-cyan/15 hover:bg-brand-cyan/25 border border-brand-cyan/30 text-brand-cyan text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        <i className="fa-solid fa-box mr-2"></i>
+                                                        {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {!isBreakOrder && awaitingLabel && openParcelPno && (
+                                                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 space-y-2 max-w-md">
+                                                    <p className="text-xs font-bold text-amber-300">{t('parcel.hasOpenParcel')}</p>
+                                                    <button
+                                                        onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
+                                                        disabled={labelBusy}
+                                                        className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        <i className="fa-solid fa-box-open mr-2"></i>
+                                                        {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
+                                            {/* The handling promise the buyer already read on the card
+                                                page; overdue once it has passed. */}
+                                            {!isDelivered && !isBreakOrder && ['paid', 'label_generated', 'processing'].includes(order.status) && (() => {
+                                                const due = shipByDate(order.created_at);
+                                                if (!due) return null;
+                                                const overdue = due.getTime() < Date.now();
+                                                return (
+                                                    <span className={`text-[11px] font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                                                        {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                    </span>
+                                                );
+                                            })()}
                                             <StatusChip status={isDelivered ? 'delivered' : order.status} />
                                             <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
                                             {isDelivered ? (
@@ -473,6 +669,15 @@ export default function DesktopOrders() {
                                                     <i className="fa-solid fa-box-open mr-2"></i>
                                                     {t('desktop.orders.liveBreakShipsWithParcel')}
                                                 </span>
+                                            ) : awaitingLabel ? (
+                                                <button
+                                                    onClick={() => createLabel(group.map((o) => o.id))}
+                                                    disabled={labelBusy}
+                                                    className="bg-brand-green/20 hover:bg-brand-green/30 border border-brand-green/30 text-brand-green text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                                                >
+                                                    <i className="fa-solid fa-tag mr-2"></i>
+                                                    {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                                                </button>
                                             ) : (
                                                 <button
                                                     onClick={() => openLabel(order.id)}
@@ -591,6 +796,30 @@ export default function DesktopOrders() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {reviewSheetOrder && (
+                <ReviewSheet
+                    orderId={reviewSheetOrder.id}
+                    initial={reviewSheetOrder.review ?? null}
+                    onClose={() => setReviewSheetOrder(null)}
+                    onSaved={(r) => {
+                        setOrders((prev) => prev.map((o) => o.id === reviewSheetOrder.id ? { ...o, review: r } : o));
+                        setReviewSheetOrder(null);
+                        showToast(t('orderActions.reviewSaved'), 'success');
+                    }}
+                />
+            )}
+            {reportSheetOrder && (
+                <ReportProblemSheet
+                    orderId={reportSheetOrder.id}
+                    onClose={() => setReportSheetOrder(null)}
+                    onReported={() => {
+                        setReportSheetOrder(null);
+                        showToast(t('orderActions.reportSent'), 'success');
+                        fetchTab('purchases');
+                    }}
+                />
             )}
         </div>
     );

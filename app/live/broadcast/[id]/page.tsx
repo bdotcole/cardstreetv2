@@ -6,13 +6,21 @@ import QRCode from 'qrcode';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
-import { useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
+import { listVideoInputs, useLiveKitRoom } from '@/lib/hooks/useLiveKitRoom';
 import MusicPanel from '@/components/live/MusicPanel';
+import MultistreamPanel, {
+    DEFAULT_EGRESS_PREFS,
+    loadEgressPrefs,
+    saveEgressPrefs,
+    type EgressPrefs,
+} from '@/components/live/MultistreamPanel';
 import VodReview from '@/components/live/VodReview';
 import { CroppedTrackVideo } from '@/components/live/CroppedTrackVideo';
 import { TrackStatsBadge } from '@/components/live/TrackStatsBadge';
 import CustomSelect from '@/components/CustomSelect';
 import { ShareShowButton } from '@/components/live/ShareShowButton';
+import RankChip from '@/components/rewards/rankChip';
+import { ChatBody } from '@/components/rewards/emotes';
 import {
     AUCTION_DURATION_CHOICES,
     AUCTION_DURATION_DEFAULT,
@@ -30,6 +38,7 @@ import {
     formatSatang,
     isHoldLapsed,
     isNativeShell,
+    isPhoneLikeDevice,
     MIN_CHARGE_SATANG,
     nameInitials,
     pollTotalVotes,
@@ -128,6 +137,14 @@ function cameraModeStorageKey(streamId: string): string {
     return `cs_live_camera_mode:${streamId}`;
 }
 
+/**
+ * Which camera this MACHINE should use — localStorage, not sessionStorage and
+ * not per-stream: "the USB webcam on this desk" is a fact about the hardware,
+ * true for every future show, unlike the camera MODE which is a per-session,
+ * per-device choice.
+ */
+const CAMERA_DEVICE_KEY = 'cs_live_camera_device';
+
 function panelCollapsedStorageKey(streamId: string): string {
     return `cs_live_panel_collapsed:${streamId}`;
 }
@@ -142,16 +159,6 @@ function facingForMode(mode: 'main' | 'table'): 'user' | 'environment' {
  * cards. Desktops default to the classic face-cam console. UA first; the
  * coarse-pointer + narrow-viewport check catches UA-less browsers.
  */
-function isPhoneLikeDevice(): boolean {
-    if (typeof window === 'undefined') return false;
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
-    return (
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(pointer: coarse)').matches &&
-        window.innerWidth < 900
-    );
-}
-
 /** Map a getUserMedia failure to a message the seller can act on. */
 function classifyCameraError(err: unknown): CameraIssue {
     const name = (err as { name?: string } | null)?.name ?? '';
@@ -214,6 +221,16 @@ export default function BroadcastConsolePage() {
     const [chat, setChat] = useState<LiveChatMessage[]>([]);
 
     const [goingLive, setGoingLive] = useState(false);
+    // Multistream egress preferences (canvas orientation + branded overlay),
+    // a per-device convenience sent with go-live — see MultistreamPanel.
+    const [egressPrefs, setEgressPrefs] = useState<EgressPrefs>(DEFAULT_EGRESS_PREFS);
+    useEffect(() => {
+        setEgressPrefs(loadEgressPrefs());
+    }, []);
+    const updateEgressPrefs = useCallback((next: EgressPrefs) => {
+        setEgressPrefs(next);
+        saveEgressPrefs(next);
+    }, []);
     const [confirm, setConfirm] = useState<ConfirmState | null>(null);
     const [confirmBusy, setConfirmBusy] = useState(false);
     const [hitText, setHitText] = useState('');
@@ -237,6 +254,38 @@ export default function BroadcastConsolePage() {
     const modeInitRef = useRef(false);
     // Manage-only consoles offer BOTH invite QRs; table first.
     const [inviteSlotChoice, setInviteSlotChoice] = useState<InviteSlot>('table');
+
+    // ─── Camera device ───
+    // facingMode alone picks the right lens on a phone but says nothing on a
+    // desktop, where an external webcam reports no facing at all and the
+    // browser just hands over whatever it considers default. The picker is
+    // how a breaker with two cameras gets the one pointed at the cards.
+    const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([]);
+    const [cameraDeviceId, setCameraDeviceId] = useState<string | null>(null);
+    const [switchingCamera, setSwitchingCamera] = useState(false);
+
+    const refreshVideoInputs = useCallback(async () => {
+        setVideoInputs(await listVideoInputs());
+    }, []);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(CAMERA_DEVICE_KEY);
+            if (saved) setCameraDeviceId(saved);
+        } catch {
+            // Storage unavailable — the browser default still applies.
+        }
+        void refreshVideoInputs();
+    }, [refreshVideoInputs]);
+
+
+    useEffect(() => {
+        const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
+        if (!md?.addEventListener) return;
+        const onChange = () => void refreshVideoInputs();
+        md.addEventListener('devicechange', onChange);
+        return () => md.removeEventListener('devicechange', onChange);
+    }, [refreshVideoInputs]);
     // ─── Layout-panel collapse (pure UI) ───
     // Collapsed shrinks the monitor to a strip thumbnail so the queue, spots,
     // chat and polls get the room — publishing/subscribing is untouched, and
@@ -382,6 +431,13 @@ export default function BroadcastConsolePage() {
         publishExtraAudio,
         unpublishExtraAudio,
     } = useLiveKitRoom();
+
+    // Device labels stay EMPTY until camera permission lands, so the list is
+    // rebuilt once a camera is actually open — otherwise the picker reads
+    // "Camera 1 / Camera 2" forever. Hot-plugging re-lists too.
+    useEffect(() => {
+        if (localVideo) void refreshVideoInputs();
+    }, [localVideo, refreshVideoInputs]);
 
     const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
     const [previewStarting, setPreviewStarting] = useState(false);
@@ -646,14 +702,18 @@ export default function BroadcastConsolePage() {
         if (cameraMode !== 'main' && cameraMode !== 'table') return;
         setPreviewStarting(true);
         try {
-            await startPreview({ facingMode: facingForMode(cameraMode), audio: true });
+            await startPreview({
+                facingMode: facingForMode(cameraMode),
+                audio: true,
+                deviceId: cameraDeviceId,
+            });
             clearCameraIssue();
         } catch (err) {
             noteCameraFailure(err);
         } finally {
             setPreviewStarting(false);
         }
-    }, [previewStarting, cameraMode, startPreview, clearCameraIssue, noteCameraFailure]);
+    }, [previewStarting, cameraMode, cameraDeviceId, startPreview, clearCameraIssue, noteCameraFailure]);
 
     // The show ending (locally or via realtime) releases the previewed camera.
     useEffect(() => {
@@ -902,13 +962,30 @@ export default function BroadcastConsolePage() {
         if (goingLive) return;
         setGoingLive(true);
         try {
-            const res = await fetch(`/api/live/streams/${streamId}/go-live`, { method: 'POST' });
+            const res = await fetch(`/api/live/streams/${streamId}/go-live`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orientation: egressPrefs.orientation,
+                    overlay: egressPrefs.overlay,
+                }),
+            });
             const data = await res.json();
             if (!res.ok || !data.success) {
                 showToast(data.error || t('live.console.goLiveError') || 'Could not go live', 'error');
                 return;
             }
             setStream((prev) => (prev ? { ...prev, status: 'live' } : prev));
+            // Multistream feedback: which social destinations rode along on the
+            // egress. Their connecting/live state follows in the panel.
+            if (!data.alreadyLive && Array.isArray(data.simulcast) && data.simulcast.length > 0) {
+                showToast(
+                    `${t('live.console.multistream.pushingTo') || 'Pushing to'} ${data.simulcast
+                        .map((s: { label: string }) => s.label)
+                        .join(', ')}`,
+                    'success',
+                );
+            }
             // Idempotent when the console staged pre-live: this device is
             // already in the room per its mode, so go-live was just the
             // status flip + recording start — reconnecting here would tear
@@ -926,7 +1003,11 @@ export default function BroadcastConsolePage() {
                 } else if (cameraMode) {
                     try {
                         // Adopts the preview's tracks when up (no re-prompt).
-                        await publishCamera({ facingMode: facingForMode(cameraMode), audio: true });
+                        await publishCamera({
+                            facingMode: facingForMode(cameraMode),
+                            audio: true,
+                            deviceId: cameraDeviceId,
+                        });
                         publishedHereRef.current = true;
                         clearCameraIssue();
                     } catch (err) {
@@ -939,7 +1020,7 @@ export default function BroadcastConsolePage() {
         } finally {
             setGoingLive(false);
         }
-    }, [goingLive, streamId, cameraMode, connected, localVideo, stageCameras, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
+    }, [goingLive, streamId, cameraMode, connected, localVideo, egressPrefs, cameraDeviceId, stageCameras, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast, t]);
 
     const goLive = useCallback(() => {
         // Displacement guard: the show is live but not from this session, and
@@ -984,7 +1065,11 @@ export default function BroadcastConsolePage() {
         if (retryingCamera || (cameraMode !== 'main' && cameraMode !== 'table')) return;
         setRetryingCamera(true);
         try {
-            await publishCamera({ facingMode: facingForMode(cameraMode), audio: true });
+            await publishCamera({
+                facingMode: facingForMode(cameraMode),
+                audio: true,
+                deviceId: cameraDeviceId,
+            });
             publishedHereRef.current = true;
             clearCameraIssue();
         } catch (err) {
@@ -992,7 +1077,50 @@ export default function BroadcastConsolePage() {
         } finally {
             setRetryingCamera(false);
         }
-    }, [retryingCamera, cameraMode, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast]);
+    }, [retryingCamera, cameraMode, cameraDeviceId, publishCamera, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast]);
+
+    /**
+     * Swap the camera. Mid-broadcast is the normal case, not the exception:
+     * staging publishes as soon as the console connects, so by the time the
+     * breaker notices the wrong lens they are already live in the room.
+     * publishCamera retires the previous track before publishing, so viewers
+     * see a swap rather than two feeds.
+     */
+    const changeCameraDevice = useCallback(async (deviceId: string) => {
+        const next = deviceId || null;
+        setCameraDeviceId(next);
+        try {
+            if (next) localStorage.setItem(CAMERA_DEVICE_KEY, next);
+            else localStorage.removeItem(CAMERA_DEVICE_KEY);
+        } catch {
+            // The choice still applies to this session.
+        }
+        if (cameraMode !== 'main' && cameraMode !== 'table') return;
+        setSwitchingCamera(true);
+        try {
+            if (connected) {
+                await publishCamera({
+                    facingMode: facingForMode(cameraMode),
+                    audio: true,
+                    deviceId: next,
+                });
+                publishedHereRef.current = true;
+            } else {
+                stopPreview();
+                await startPreview({
+                    facingMode: facingForMode(cameraMode),
+                    audio: true,
+                    deviceId: next,
+                });
+            }
+            clearCameraIssue();
+            void refreshVideoInputs();
+        } catch (err) {
+            showToast(cameraIssueText(noteCameraFailure(err)), 'error');
+        } finally {
+            setSwitchingCamera(false);
+        }
+    }, [cameraMode, connected, publishCamera, startPreview, stopPreview, refreshVideoInputs, cameraIssueText, clearCameraIssue, noteCameraFailure, showToast]);
 
     // ─── Companion-cam QR ───
     // The block opens immediately in a loading state and the token is fetched
@@ -1902,6 +2030,22 @@ export default function BroadcastConsolePage() {
                     </div>
                 </div>
 
+                {/* Multistream: social destinations + the branded overlay the
+                    egress composes. Set up before go-live (keys, on/off,
+                    orientation); mid-show it shows per-channel status and
+                    start/stop. */}
+                {!isEnded && (
+                    <div className="mb-4">
+                        <MultistreamPanel
+                            streamId={streamId}
+                            isLive={isLive}
+                            visibility={stream.visibility}
+                            prefs={egressPrefs}
+                            onPrefsChange={updateEgressPrefs}
+                        />
+                    </div>
+                )}
+
                 {/* Background music — visible whenever the show is not over, so the
                     playlist can be cued during staging before going live. */}
                 {!isEnded && (
@@ -1987,6 +2131,51 @@ export default function BroadcastConsolePage() {
                                     </button>
                                 </div>
                             </div>
+                            {/* Camera picker — only when this console publishes a
+                                camera AND the machine has more than one, so the
+                                common phone case gains no clutter. */}
+                            {!isEnded &&
+                                !panelCollapsed &&
+                                (cameraMode === 'main' || cameraMode === 'table') &&
+                                videoInputs.length > 1 && (
+                                    <div className="mb-3">
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                                            {t('live.console.cameraDevice') || 'Camera'}
+                                            {switchingCamera && (
+                                                <span className="ml-2 normal-case tracking-normal font-bold text-brand-cyan">
+                                                    {t('live.console.cameraSwitching') || 'Switching...'}
+                                                </span>
+                                            )}
+                                        </label>
+                                        <CustomSelect
+                                            value={
+                                                videoInputs.some((d) => d.deviceId === cameraDeviceId)
+                                                    ? (cameraDeviceId as string)
+                                                    : ''
+                                            }
+                                            onChange={(v) => void changeCameraDevice(v)}
+                                            disabled={switchingCamera}
+                                            ariaLabel={t('live.console.cameraDevice') || 'Camera'}
+                                            triggerClassName="w-full h-10 bg-black/30 border border-white/10 rounded-xl px-3 text-sm font-semibold text-white outline-none focus:border-brand-cyan"
+                                            options={[
+                                                {
+                                                    value: '',
+                                                    label:
+                                                        t('live.console.cameraDeviceDefault') ||
+                                                        'Browser default',
+                                                },
+                                                ...videoInputs.map((d, i) => ({
+                                                    value: d.deviceId,
+                                                    // Labels are blank until permission lands.
+                                                    label:
+                                                        d.label ||
+                                                        `${t('live.console.cameraDeviceUnnamed') || 'Camera'} ${i + 1}`,
+                                                })),
+                                            ]}
+                                        />
+                                    </div>
+                                )}
+
                             {/* The camera came up but the mic was refused, so this
                                 device is publishing video-only (see captureTracks in
                                 useLiveKitRoom). Said out loud and kept on screen: a
@@ -3503,10 +3692,13 @@ export default function BroadcastConsolePage() {
                                 ) : (
                                     <div key={m.id} className="group flex items-start gap-2 text-sm py-0.5">
                                         <p className="flex-1 leading-snug break-words">
-                                            <span className="font-black text-brand-cyan mr-1.5">
+                                            {typeof m.sender_level === 'number' && (
+                                                <RankChip level={m.sender_level} className="mr-1" />
+                                            )}
+                                            <span className="font-black mr-1.5 text-brand-cyan">
                                                 {m.sender?.display_name || '...'}
                                             </span>
-                                            <span className="text-white/90">{m.body}</span>
+                                            <span className="text-white/90"><ChatBody body={m.body} /></span>
                                         </p>
                                         {m.sender_id !== stream.seller_id && (
                                             <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">

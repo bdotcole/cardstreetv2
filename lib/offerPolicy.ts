@@ -6,7 +6,10 @@
  * drift. Enforced server-side in POST /api/offers unless noted.
  */
 
-/** Offer must be >= 60% of the list price. Offers ABOVE list price are allowed. */
+/**
+ * Offer must be >= 60% of the list price. Offers and counters ABOVE the list
+ * price are refused (OFFER_ABOVE_ASKING): Buy Now already beats them.
+ */
 export const OFFER_MIN_FLOOR_FRACTION = 0.6;
 
 /** Global cap on live (pending, buyer-made) offers per buyer. */
@@ -20,6 +23,24 @@ export const OFFER_CREATE_RATE_PER_MIN = 5;
 
 /** Offer lifetime. Mirrors the SQL `expires_at` default in 20260707_offers.sql. */
 export const OFFER_EXPIRY_HOURS = 48;
+
+/**
+ * How long a buyer has to pay once an offer is accepted. The accept route
+ * stamps it into `expires_at`; the hourly expire-offers cron enforces it.
+ */
+export const ACCEPTED_PAY_WINDOW_MS = OFFER_EXPIRY_HOURS * 3_600_000;
+
+/**
+ * Listing states that end every open offer on the listing: the seller took it
+ * down, or moderation removed it. Not 'sold' — that is voided after payment
+ * (lib/voidOffersForListing.ts), and a reservation can still fall through —
+ * and not 'paused', which a shop reopens from.
+ */
+export const LISTING_GONE_STATUSES = ['cancelled', 'removed'];
+
+export function isListingGone(status: string | null | undefined): boolean {
+    return !!status && LISTING_GONE_STATUSES.includes(status);
+}
 
 /** Whether the OBO feature is enabled. Single flag, read on client and server. */
 export const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';

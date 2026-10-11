@@ -2,7 +2,7 @@
  * Live-stream off-session payment rail (TH platform, server-only).
  *
  * Live bidding requires a card on file: the buyer saves a card via a
- * SetupIntent(usage='off_session') on a CardStreet PLATFORM customer, and at
+ * SetupIntent(usage='off_session') on a Cardstreet PLATFORM customer, and at
  * hammer-fall / Buy-It-Now the saved payment method is cloned onto the seller's
  * connected account and charged off-session as a DIRECT charge (seller is
  * merchant of record on TH — see CLAUDE.md Payments). The platform takes an

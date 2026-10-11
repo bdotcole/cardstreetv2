@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -8,6 +8,8 @@ import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useSearchResolution } from '@/lib/hooks/useSearchResolution';
+import { cardMatchesQuery, prepareCardKeys, prepareQueryKeys } from '@/lib/search/clientMatch';
 import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
@@ -357,11 +359,23 @@ function CollectionPanel({
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState<SortKey>('date_desc');
 
+    // Search keys per card, folded once per collection change instead of on
+    // every keystroke: a big collection re-filters on each character typed.
+    const cardKeys = useMemo(() => items.map(({ card }) => prepareCardKeys(card)), [items]);
+
+    // The filter trails the input so typing stays responsive on a large
+    // collection. The resolution lets the box match a species by any of its
+    // names (Magikarp finds コイキング and คอยคิง cards); exact names only.
+    const deferredSearch = useDeferredValue(search);
+    const queryKeys = useMemo(() => prepareQueryKeys(deferredSearch), [deferredSearch]);
+    const resolution = useSearchResolution(search);
+
     const processed = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        const filtered = items.filter(({ card }) =>
-            !q || card.name.toLowerCase().includes(q) || (card.set || '').toLowerCase().includes(q) || (card.number || '').includes(q),
-        );
+        // Copy even when unfiltered: the sort below works in place and must
+        // not reorder the caller's items array.
+        const filtered = queryKeys.key
+            ? items.filter((_, i) => cardMatchesQuery(cardKeys[i], queryKeys, resolution))
+            : items.slice();
         return filtered.sort((a, b) => {
             switch (sort) {
                 case 'name_asc': return a.card.name.localeCompare(b.card.name);
@@ -370,7 +384,7 @@ function CollectionPanel({
                 default: return new Date(b.item.addedAt).getTime() - new Date(a.item.addedAt).getTime();
             }
         });
-    }, [items, search, sort]);
+    }, [items, cardKeys, queryKeys, resolution, sort]);
 
     const remove = async (colId: string, itemId: string) => {
         if (!confirm(t('desktop.collection.removeConfirm'))) return;

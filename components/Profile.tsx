@@ -11,10 +11,16 @@ import {
 } from 'lucide-react';
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
+import CurrencySwitcher from './CurrencySwitcher';
+import RankChip from './rewards/rankChip';
+import AvatarFrame from './rewards/AvatarFrame';
+import { FRAME_STYLES } from '@/lib/rewardTiers';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
 import StripeConnectSection from './StripeConnectSection';
+import ShopPauseSection from './ShopPauseSection';
+import ShopMinOrderSection from './ShopMinOrderSection';
 import GooglePlacesAddressInput from './GooglePlacesAddressInput';
 import ThaiAddressFields from './ThaiAddressFields';
 import type { ParsedThaiAddress } from '@/lib/utils/parseGoogleAddress';
@@ -25,11 +31,25 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
+import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import ReviewSheet from '@/components/ReviewSheet';
+import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
+import AttributionSurvey from '@/components/AttributionSurvey';
+import SellerChecklist from '@/components/SellerChecklist';
+import { resolveSellerState, type SellerState } from '@/lib/sellerState';
+import { CONSUMER_PRO_ENABLED } from '@/lib/entitlements';
+import { SELLER_REQUIRED_PROFILE_FIELDS } from '@/lib/profileValidation';
 
 interface ProfileProps {
   user: UserProfile | null;
+  // Collector Pass level from the shell's rewards summary (null while the
+  // system is dark or the user is signed out) — renders the header rank chip.
+  rewardsLevel?: number | null;
+  // Equipped Collector Pass frame key — worn around the header avatar so the
+  // owner sees exactly what the seller page shows.
+  rewardsFrame?: string | null;
   onNavigatePartner?: () => void;
   onGuestLogin?: () => void;
   // Notifies the parent shell whether a slide-in sub-panel is open, so the
@@ -44,6 +64,9 @@ interface ProfileProps {
   // renders above this panel (it's a sibling of <main>), so closing it drops
   // the user right back on the Offers panel. Undefined when offers are off.
   onViewListing?: (offer: Offer) => void;
+  // Hands a saved display name up so the shell's user.name (seeded from the
+  // OAuth full_name, which never changes) shows it everywhere else too.
+  onDisplayNameChange?: (name: string) => void;
 }
 
 // Slide panel animation variants
@@ -110,19 +133,16 @@ interface UserSettings {
   show_live_push: boolean;
 }
 
-interface Rewards {
-  points_balance: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-  lifetime_points: number;
-  tier_progress: number;
-}
-
 interface Order {
   id: string;
   status: 'pending' | 'paid' | 'label_generated' | 'processing' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
+  delivered_at?: string | null;
+  completed_at?: string | null;
+  // The buyer's review of this order (one per order), from /api/profile/orders.
+  review?: { rating: number; comment: string | null } | null;
   // One row per listing; a multi-item checkout shares one transfer_group
   // (one payment, one parcel). The panels render one card per group.
   transfer_group?: string | null;
@@ -132,6 +152,10 @@ interface Order {
   // hidden for them.
   break_spot_id?: string | null;
   break_context?: { title: string; imageSmall: string | null } | null;
+  // Seller shipments only: who the parcel goes to, so parcels for the same
+  // buyer can be spotted (and combined) at a glance.
+  buyer_id?: string | null;
+  buyer?: { display_name: string | null } | null;
   listing: {
     card_data: any;
     condition: string;
@@ -181,14 +205,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'rewards' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
-
-const tierConfig = {
-  bronze: { color: 'from-amber-700 to-amber-900', icon: Star, next: 'silver', pointsNeeded: 500 },
-  silver: { color: 'from-slate-400 to-slate-600', icon: Crown, next: 'gold', pointsNeeded: 2000 },
-  gold: { color: 'from-yellow-400 to-amber-500', icon: Crown, next: 'platinum', pointsNeeded: 5000 },
-  platinum: { color: 'from-purple-400 to-indigo-600', icon: Zap, next: null, pointsNeeded: null }
-};
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -301,12 +318,12 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onDisplayNameChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
   // user_settings state below.
-  const { settings: appSettings, updateTheme } = useUserSettings();
+  const { settings: appSettings, updateTheme, updateCurrency } = useUserSettings();
   // Live-breaks beta (fails closed — no grant, no menu item, zero hint).
   const { hasBeta } = useBetaFeatures();
   // Count for the "My Offers" row badge — offers accepted and awaiting the
@@ -328,12 +345,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     notify_marketing: false,
     show_live_email: true,
     show_live_push: true
-  });
-  const [rewards, setRewards] = useState<Rewards>({
-    points_balance: 0,
-    tier: 'bronze',
-    lifetime_points: 0,
-    tier_progress: 0
   });
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -360,6 +371,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   // multi-item purchase arrives as one parcel), so the modal holds every
   // order id in the group; the review itself rides only the first.
   const [reviewModalOrderIds, setReviewModalOrderIds] = useState<string[] | null>(null);
+  // Stand-alone review (an order that completed on its own) and the
+  // report-a-problem sheet, both keyed on the group's primary order.
+  const [reviewSheetOrder, setReviewSheetOrder] = useState<Order | null>(null);
+  const [reportSheetOrder, setReportSheetOrder] = useState<Order | null>(null);
   // Seller-side delivery tracking. Holds the order id whose tracking timeline
   // is open in the full-screen tracking modal — reached from a pending
   // shipment card or from the "Track Order" affordance on the label-saved
@@ -416,11 +431,65 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   // The shell dispatches this when the hardware back button is pressed while a
   // sub-panel is open — close the panel rather than letting the shell navigate.
+  // Sales History is reached from inside Seller Account, so back from it
+  // returns there rather than jumping to the Profile root.
+  const activePanelRef = useRef<ActivePanel>('none');
+  activePanelRef.current = activePanel;
   useEffect(() => {
-    const handler = () => setActivePanel('none');
+    const handler = () => setActivePanel(activePanelRef.current === 'sales' ? 'payouts' : 'none');
     window.addEventListener('profile-panel-back', handler);
     return () => window.removeEventListener('profile-panel-back', handler);
   }, []);
+
+  // An order to land on, from an email link (cardstreet.app/orders/<id>, via
+  // the shell's appUrlOpen) or a push tap: which panel depends on which side
+  // of the order this user is on. The seller's "View your order" must end on
+  // the shipment with its Print Shipping Label button, not the Profile root —
+  // Android App Links intercept every cardstreet.app URL, so without this the
+  // path was dropped and sellers landed on home with no way to the label.
+  const [focusOrderId, setFocusOrderId] = useState<string | null>(null);
+  const focusOrder = async (orderId: string) => {
+    let seller = false;
+    try {
+      // Orders RLS admits buyer and seller, so a missing row means neither.
+      const { data } = await supabase
+        .from('orders')
+        .select('seller_id')
+        .eq('id', orderId)
+        .maybeSingle<{ seller_id: string }>();
+      seller = !!data && data.seller_id === user?.id;
+    } catch { /* unknown side: the buyer panel is the safer default */ }
+    setFocusOrderId(orderId);
+    openPanel(seller ? 'shipments' : 'orders');
+  };
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const pending = sessionStorage.getItem('cs_focus_order');
+      if (pending && /^[0-9a-f-]{36}$/i.test(pending)) {
+        sessionStorage.removeItem('cs_focus_order');
+        void focusOrder(pending);
+      }
+    } catch { /* storage unavailable (private mode) */ }
+    // Already-mounted case (user was on this tab): the shell's tab switch is
+    // a no-op and nothing remounts, so the flag read above never re-runs.
+    const onOpenOrder = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      try { sessionStorage.removeItem('cs_focus_order'); } catch { /* mount-time read handles it */ }
+      if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) void focusOrder(id);
+    };
+    window.addEventListener('cs-open-order', onOpenOrder);
+    return () => window.removeEventListener('cs-open-order', onOpenOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  // Bring the focused card into view once its list has loaded, then let the
+  // highlight go when the panel closes.
+  useEffect(() => {
+    if (!focusOrderId) return;
+    if (activePanel === 'none') { setFocusOrderId(null); return; }
+    const el = document.getElementById(`order-card-${focusOrderId}`);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusOrderId, activePanel, orders, shipments]);
 
   // Auto-open the payouts panel when Stripe redirects back from Connect
   // onboarding. The StripeConnectSection's own useEffect strips the query
@@ -433,6 +502,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       setActivePanel('payouts');
     }
   }, []);
+
+  // Post-Stripe-return checklist. Resolved once, from the same helper both
+  // shells use, and only when the URL says we just came back from onboarding —
+  // it is a "here is what's left" card, not a permanent fixture.
+  const [sellerChecklistState, setSellerChecklistState] = useState<SellerState | null>(null);
+  const [hasAnyListing, setHasAnyListing] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const cn = new URLSearchParams(window.location.search).get('stripe_connect');
+    if (cn !== 'complete' || !user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const [{ data: profile }, statusRes, { count }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select(SELLER_REQUIRED_PROFILE_FIELDS.join(','))
+            .eq('id', user.id)
+            .single<Record<string, string | boolean | null>>(),
+          fetch('/api/stripe/connect/status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+          supabase
+            .from('listings')
+            .select('id', { count: 'exact', head: true })
+            .eq('seller_id', user.id),
+        ]);
+        if (cancelled) return;
+        setHasAnyListing((count ?? 0) > 0);
+        setSellerChecklistState(resolveSellerState(true, profile, statusRes));
+      } catch {
+        // Best-effort card — silence beats a broken one.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // Opened from the shell's stalled-payout banner: the shell sets this flag
   // and switches to the profile tab (remounting us) — land on payouts.
@@ -458,6 +562,31 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     } catch { /* storage unavailable (private mode) */ }
   }, []);
 
+  // Bounced here from a desktop-only URL on a phone: middleware rewrites
+  // /orders -> /?tab=orders and /settings -> /?tab=settings, and the shell
+  // turns those into a flag + the profile tab (see TAB_ALIASES in
+  // components/MobileHome.tsx). Land on the panel the URL actually named
+  // instead of the profile root.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('cs_open_orders') === '1') {
+        sessionStorage.removeItem('cs_open_orders');
+        setActivePanel('orders');
+        return;
+      }
+      if (sessionStorage.getItem('cs_open_settings') === '1') {
+        sessionStorage.removeItem('cs_open_settings');
+        setActivePanel('settings');
+        return;
+      }
+      // Support-reply email CTA (/?tab=support) or push tap.
+      if (sessionStorage.getItem('cs_open_support') === '1') {
+        sessionStorage.removeItem('cs_open_support');
+        setActivePanel('support');
+      }
+    } catch { /* storage unavailable (private mode) */ }
+  }, []);
+
   // Offer push tap while Profile is already mounted (user was on this tab):
   // the shell's tab switch is a no-op and nothing remounts, so the flag read
   // above never re-runs — open the panel directly and clear the flag so it
@@ -468,7 +597,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       setActivePanel('offers');
     };
     window.addEventListener('cs-open-offers', onOpenOffers);
-    return () => window.removeEventListener('cs-open-offers', onOpenOffers);
+    const onOpenSupport = () => {
+      try { sessionStorage.removeItem('cs_open_support'); } catch { /* mount-time read handles it */ }
+      setActivePanel('support');
+    };
+    window.addEventListener('cs-open-support', onOpenSupport);
+    return () => {
+      window.removeEventListener('cs-open-offers', onOpenOffers);
+      window.removeEventListener('cs-open-support', onOpenSupport);
+    };
   }, []);
 
   // Fetch profile data on mount
@@ -491,7 +628,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
         const data = await res.json();
         if (data.profile) setProfileData(data.profile);
         if (data.settings) setSettings(data.settings);
-        if (data.rewards) setRewards(data.rewards);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -606,6 +742,35 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     } catch {
       showToast(t('profile.shipmentClearFailed'), 'error');
       fetchShipments();
+    }
+  };
+
+  // Labels are minted when the seller is ready (lib/parcels), so the seller
+  // decides which of a buyer's orders travel together. One handler serves
+  // all three buttons: create for one checkout, combine several checkouts,
+  // or add to a waybill Flash has not scanned yet. On success the list
+  // refreshes and the label opens for printing (any order id in the parcel
+  // works: every row carries the same waybill).
+  const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
+  const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+    setLabelBusyIds(orderIds);
+    try {
+      const res = await fetch('/api/orders/label/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ orderIds, attachToTrackingNumber }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'label create failed');
+      showToast(t('parcel.created'), 'success');
+      await fetchShipments();
+      if (data?.manual !== true) await openLabel(orderIds[0]);
+    } catch (err) {
+      console.error('Create label failed:', err);
+      showToast(t('parcel.createFailed'), 'error');
+    } finally {
+      setLabelBusyIds([]);
     }
   };
 
@@ -738,7 +903,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     }
   };
 
-  const openSavedLabel = async () => {
+  // Hand the saved PDF to the system share sheet (Android lists Print there).
+  const shareSavedLabel = async () => {
     if (!labelModal.savedUri) return;
     try {
       const { Share } = await import('@capacitor/share');
@@ -752,10 +918,33 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       // User cancelling the share sheet throws; ignore that and only
       // surface real failures.
       if (err?.message && !/cancel/i.test(err.message)) {
-        console.error('[Label] Share/open failed:', err);
+        console.error('[Label] Share failed:', err);
         showToast(err.message, 'error');
       }
     }
+  };
+
+  // Open / Print: an ACTION_VIEW chooser ("Open with...") for the saved PDF,
+  // so the tap lands in the seller's PDF viewer, where Print lives. The share
+  // sheet used here before read as "send this somewhere", and sellers could
+  // not find the label. openWithDefault:false forces the chooser even when a
+  // default viewer is set — the popup IS the affordance. Falls back to the
+  // share sheet on a binary that predates the plugin (UNIMPLEMENTED) or a
+  // phone with no PDF viewer (plugin code '8'), so the label stays reachable.
+  const openSavedLabel = async () => {
+    if (!labelModal.savedUri) return;
+    try {
+      const { FileOpener } = await import('@capacitor-community/file-opener');
+      await FileOpener.open({
+        filePath: labelModal.savedUri,
+        contentType: 'application/pdf',
+        openWithDefault: false,
+      });
+      return;
+    } catch (err: any) {
+      console.warn('[Label] File opener unavailable, falling back to share:', err?.code || err?.message || err);
+    }
+    await shareSavedLabel();
   };
 
   const closeLabel = () => {
@@ -868,6 +1057,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             bio: editBio,
             ...editAddress
           }));
+          onDisplayNameChange?.(editName);
           showToast('Profile updated successfully', 'success');
       } else {
           showToast(data.error || 'Failed to update profile', 'error');
@@ -935,10 +1125,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
     if (panel === 'orders') fetchOrders().then(syncInFlightOrders);
-    if (panel === 'sales') fetchSales();
+    // Seller Account shows earnings + recent sales; Sales History is its
+    // sub-panel, so both need the list.
+    if (panel === 'sales' || panel === 'payouts') fetchSales();
     if (panel === 'shipments') fetchShipments();
     if (panel === 'account' && user) {
-      setEditName(user.name);
+      // profiles.display_name is the saved name; user.name can still be the
+      // Google full_name, and seeding from it made the next save revert the
+      // user's chosen name.
+      setEditName(profileData?.display_name || user.name);
       setEditUsername(profileData?.username || '');
       setEditPhone(profileData?.phone_number || '');
       setEditBio(profileData?.bio || '');
@@ -954,16 +1149,21 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
 
   // Menu sections
   const baseMenuSections = [
+    // Collector Pass entry — opens the shell's Rewards Hub sheet (which
+    // renders above these z-[200] panels) via the window event MobileHome
+    // listens for. Beta-gated so nothing shows while the system is dark.
+    ...(hasBeta('rewards')
+      ? [{
+          title: t('rewards.menuSection'),
+          items: [
+            { name: t('rewards.menuTitle'), icon: Gift, action: () => { window.dispatchEvent(new Event('cs:openRewards')); }, color: 'text-amber-400' }
+          ]
+        }]
+      : []),
     {
       title: t('profile.account'),
       items: [
         { name: t('profile.editProfile'), icon: User, panel: 'account' as ActivePanel, color: 'text-brand-cyan' }
-      ]
-    },
-    {
-      title: t('profile.securityNotifications'),
-      items: [
-        { name: t('profile.settings'), icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
       ]
     },
     {
@@ -981,8 +1181,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           ? [{ name: t('live.myShows.menuTitle'), icon: Radio, panel: 'liveShows' as ActivePanel, color: 'text-brand-red' }]
           : []),
         { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
-        { name: t('profile.salesHistory'), icon: History, panel: 'sales' as ActivePanel, color: 'text-green-400' },
+        // Sales History lives inside Seller Account (earnings + recent sales
+        // there, the full list one tap deeper) — no separate menu row.
         { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
+      ]
+    },
+    // Settings sits directly above Support: the day-to-day sections (account,
+    // orders, sales) come first, the rarely-touched ones last.
+    {
+      title: t('profile.securityNotifications'),
+      items: [
+        { name: t('profile.settings'), icon: Settings, panel: 'settings' as ActivePanel, color: 'text-purple-400' }
       ]
     },
     {
@@ -996,21 +1205,30 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
       items: [
         // Standalone route (not a slide panel) — premium features live at
         // /premium, /grade, /trade, /insights outside the tab shell.
-        { name: t('profile.cardstreetPro'), icon: Crown, action: () => { window.location.href = '/premium'; }, color: 'text-brand-cyan', special: true }
+        // Hidden while the plan is off (lib/entitlements.ts). Kept in the array
+        // shape rather than deleted so restoring it is one flag.
+        ...(CONSUMER_PRO_ENABLED
+            ? [{ name: t('profile.cardstreetPro'), icon: Crown, action: () => { window.location.href = '/premium'; }, color: 'text-brand-cyan', special: true }]
+            : [])
       ]
     }
   ];
 
   const isPartner = user?.isPartner || profileData?.role === 'partner' || !!profileData?.partner_joined_at;
+  // Operations slots in just before Settings + Support + Pro (the last three
+  // sections), so Settings stays directly above Support for partners too;
+  // index computed rather than hardcoded because the Rewards section above is
+  // conditional and would shift a fixed slice point.
+  const opsInsertAt = baseMenuSections.length - 3;
   const menuSections = isPartner ? [
-    ...baseMenuSections.slice(0, 3),
+    ...baseMenuSections.slice(0, opsInsertAt),
     {
       title: t('profile.operations'),
       items: [
         { name: t('profile.partnerDashboard'), icon: ShoppingBag, action: onNavigatePartner, color: 'text-brand-green', special: true }
       ]
     },
-    ...baseMenuSections.slice(3)
+    ...baseMenuSections.slice(opsInsertAt)
   ] : baseMenuSections;
 
   // Guest/Logged out view
@@ -1029,7 +1247,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             </div>
             <div className="space-y-2 px-4">
               <h2 className="text-3xl font-black text-white tracking-tight uppercase leading-tight italic skew-x-[-10deg]">
-                {t('profile.joinCardStreet')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">CardStreet</span>
+                {t('profile.joinCardStreet')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-cyan to-brand-green">Cardstreet</span>
               </h2>
               <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-[280px] mx-auto">
                 {t('profile.createAccountDesc')}
@@ -1060,8 +1278,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
     );
   }
 
-  const TierIcon = tierConfig[rewards.tier].icon;
-
   return (
     <div className="relative min-h-screen pb-20">
       {/* Main Profile View */}
@@ -1075,14 +1291,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
             exit="exit"
             className="space-y-8 py-6"
           >
+            {/* Back from Stripe's hosted onboarding. Same card as /sell, shown
+                on the return only: this is the moment the seller has finished
+                something effortful and has no idea what is left. */}
+            {sellerChecklistState && (
+              <SellerChecklist
+                state={sellerChecklistState}
+                hasListing={hasAnyListing}
+                onFixShipping={() => setActivePanel('account')}
+                onSetupPayouts={() => setActivePanel('payouts')}
+                onList={() => window.dispatchEvent(new Event('cs-open-vault'))}
+                onDismiss={() => setSellerChecklistState(null)}
+              />
+            )}
+
+            {/* "How did you hear about us" — renders only for accounts whose
+                acquisition channel the cookie never captured, once, dismissible.
+                Here rather than in the shell chrome: it must not compete with a
+                task the user is mid-way through. */}
+            <AttributionSurvey />
+
             {/* Profile Header */}
             <div className="text-center pb-4">
               <div className="relative w-24 h-24 mx-auto mb-5">
-                <div className="w-24 h-24 rounded-[2.8rem] glass flex items-center justify-center p-1.5 border border-brand-cyan/20 group overflow-hidden shadow-2xl">
-                  <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
-                    <img src={avatarOverride || user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+                {rewardsFrame && FRAME_STYLES[rewardsFrame] ? (
+                  /* A worn frame is round everywhere else, so it is round here too. */
+                  <AvatarFrame frame={rewardsFrame} size={96} gap={3}>
+                    <img src={avatarOverride || user.avatar} className="w-full h-full object-cover" alt={user.name} />
+                  </AvatarFrame>
+                ) : (
+                  <div className="w-24 h-24 rounded-[2.8rem] glass flex items-center justify-center p-1.5 border border-brand-cyan/20 group overflow-hidden shadow-2xl">
+                    <div className="w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center overflow-hidden border border-white/10">
+                      <img src={avatarOverride || user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
+                    </div>
                   </div>
-                </div>
+                )}
                 {user.provider !== 'guest' && (
                   <>
                     <button
@@ -1105,10 +1348,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 )}
               </div>
               <div className="space-y-1">
-                <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{user.name}</h3>
+                <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{profileData?.display_name || user.name}</h3>
                 {user.provider !== 'guest' ? (
-                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem]">
-                     {profileData?.username ? `@${profileData.username}` : ' '}
+                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem] flex items-center gap-2">
+                     <span>{profileData?.username ? `@${profileData.username}` : ' '}</span>
+                     {typeof rewardsLevel === 'number' && <RankChip level={rewardsLevel} />}
                    </p>
                 ) : (
                    <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">
@@ -1354,71 +1598,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           </motion.div>
         )}
 
-        {/* Payment Methods Panel */}
-        {/* Rewards Panel */}
-        {activePanel === 'rewards' && (
-          <motion.div
-            key="rewards"
-            variants={slideVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
-          >
-            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-              <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-slate-400" />
-                </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">Rewards</h2>
-              </div>
-
-              {/* Points Balance Card */}
-              <div className={`glass p-6 rounded-3xl border border-white/10 bg-gradient-to-br ${tierConfig[rewards.tier].color} relative overflow-hidden`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-4">
-                    <TierIcon className="w-6 h-6 text-white" />
-                    <span className="text-white/80 text-xs uppercase tracking-widest font-bold">{rewards.tier} Member</span>
-                  </div>
-                  <p className="text-5xl font-black text-white mb-1">{rewards.points_balance.toLocaleString()}</p>
-                  <p className="text-white/60 text-sm">Available Points</p>
-                </div>
-              </div>
-
-              {/* Tier Progress */}
-              {tierConfig[rewards.tier].next && (
-                <div className="glass p-4 rounded-2xl border border-white/5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs uppercase tracking-wider font-bold">Progress to {tierConfig[rewards.tier].next}</span>
-                    <span className="text-white font-bold text-sm">{rewards.lifetime_points} / {tierConfig[rewards.tier].pointsNeeded}</span>
-                  </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min((rewards.lifetime_points / (tierConfig[rewards.tier].pointsNeeded || 1)) * 100, 100)}%` }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className={`h-full rounded-full bg-gradient-to-r ${tierConfig[rewards.tier].color}`}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="glass p-4 rounded-2xl border border-white/5 text-center">
-                  <p className="text-2xl font-black text-white">{rewards.lifetime_points.toLocaleString()}</p>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider">Lifetime Points</p>
-                </div>
-                <div className="glass p-4 rounded-2xl border border-white/5 text-center">
-                  <p className="text-2xl font-black text-brand-green">฿{(rewards.points_balance * 0.5).toFixed(0)}</p>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider">Points Value</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* Settings Panel */}
         {activePanel === 'settings' && (
           <motion.div
@@ -1458,6 +1637,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                       {label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Preferences: display currency (moved here from the header —
+                  its old slot now holds the Rewards coin chip) */}
+              <div className="space-y-3">
+                <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest px-1">{t('profile.preferences')}</h4>
+                <div className="glass rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Wallet className="w-5 h-5 text-brand-cyan shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-white font-semibold text-sm">{t('profile.displayCurrency')}</p>
+                      <p className="text-slate-500 text-xs truncate">{t('profile.displayCurrencyHint')}</p>
+                    </div>
+                  </div>
+                  <CurrencySwitcher
+                    currentCurrency={appSettings.currency}
+                    onCurrencyChange={(c) => updateCurrency(c)}
+                  />
                 </div>
               </div>
 
@@ -1577,7 +1775,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                     const order = group[0];
                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                     return (
-                    <div key={order.id} className="glass p-4 rounded-2xl border border-white/5 space-y-4">
+                    <div
+                      key={order.id}
+                      id={group.some((o) => o.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
+                      className={`glass p-4 rounded-2xl border space-y-4 ${
+                        group.some((o) => o.id === focusOrderId)
+                          ? 'border-brand-cyan/60 ring-2 ring-brand-cyan/40'
+                          : 'border-white/5'
+                      }`}
+                    >
                       {/* Order Header — one row per item in the parcel */}
                       {group.map((item) => {
                         const itemImage = rowDisplayImage(item);
@@ -1623,6 +1829,37 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           className="w-full h-10 mt-2 bg-brand-cyan text-brand-darker font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white transition-colors"
                         >
                           {isThai ? 'ยืนยันการรับพัสดุและรีวิว' : 'Confirm Delivery & Review'}
+                        </button>
+                      )}
+
+                      {/* Review and report live here too, so an order that completed
+                          on its own (the 48h auto-release) still has both paths. */}
+                      {canReviewOrder(order) && order.status !== 'disputed' && (
+                        order.review ? (
+                          <button
+                            onClick={() => setReviewSheetOrder(order)}
+                            className="w-full mt-2 text-left text-amber-300 text-xs font-bold"
+                          >
+                            {t('orderActions.yourReview')}: {'★'.repeat(order.review.rating)} · {t('orderActions.editReview')}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setReviewSheetOrder(order)}
+                            className="w-full h-10 mt-2 border border-amber-500/40 text-amber-300 font-bold rounded-xl text-xs uppercase hover:bg-amber-500/10 transition-colors"
+                          >
+                            <Star className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                            {t('orderActions.reviewSeller')}
+                          </button>
+                        )
+                      )}
+                      {order.status === 'disputed' ? (
+                        <p className="text-xs text-rose-300 mt-2">{t('orderActions.disputeOpen')}</p>
+                      ) : canReportOrder(order) && (
+                        <button
+                          onClick={() => setReportSheetOrder(order)}
+                          className="w-full mt-1 py-1 text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase transition-colors"
+                        >
+                          {t('orderActions.reportProblem')}
                         </button>
                       )}
                     </div>
@@ -1699,7 +1936,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                {/* Sub-panel of Seller Account: back returns there. */}
+                <button onClick={() => setActivePanel('payouts')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
                 <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.salesHistory')}</h2>
@@ -1711,8 +1949,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
               </div>
 
-              {/* Stripe Connect payout onboarding */}
-              <StripeConnectSection />
+              {/* Payout onboarding sits one level up, in Seller Account. */}
 
               <div className="space-y-3">
                 {sales.length === 0 ? (
@@ -1827,13 +2064,33 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
-                  {groupByTransferGroup(shipments).map((group) => {
-                    // One card per checkout: the group's rows ship as a single
-                    // Flash parcel under one waybill (see lib/fulfillOrder), so
-                    // it gets one status, one label, one swipe. `shipment` is
-                    // the primary order — the same row fulfillment keys the
-                    // label to — and its id drives the label/track actions.
+                  {groupByParcel(shipments).map((group, _i, parcels) => {
+                    // One card per PARCEL (waybill). A checkout is one parcel,
+                    // and several of a buyer's checkouts share one when the
+                    // seller labels them together (lib/parcels), so the card
+                    // lists every card going into that envelope under its
+                    // single label. `shipment` is the primary order; its id
+                    // drives the label/track actions (every row carries the
+                    // same waybill).
                     const shipment = group[0];
+                    const pno = shipment.shipping_labels?.[0]?.tracking_number;
+                    const checkouts = countCheckouts(group);
+                    const buyerName = shipment.buyer?.display_name || null;
+                    // No label yet: the seller mints it here. The buyer's other
+                    // unlabelled checkouts can go in the same parcel, and a
+                    // parcel Flash has not collected yet can take these cards
+                    // too (no new waybill, nothing cancelled).
+                    const awaitingLabel = group.every(isAwaitingLabel);
+                    const buyerKey = shipment.buyer_id || '';
+                    const otherUnlabelled = awaitingLabel
+                      ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
+                      : [];
+                    const openParcel = awaitingLabel
+                      ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
+                      : undefined;
+                    const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
+                    const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                    const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
                     // Finished shipments stay in the panel as a delivery
                     // notice until the seller swipes them away (see
                     // clearShipments). Active ones can't be dismissed.
@@ -1865,42 +2122,80 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           clearShipments(group.map((s) => s.id));
                         }
                       }}
-                      className="glass p-4 rounded-2xl border border-white/5 space-y-4"
+                      id={group.some((s) => s.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
+                      className={`glass p-4 rounded-2xl border space-y-4 ${
+                        group.some((s) => s.id === focusOrderId)
+                          ? 'border-brand-green/60 ring-2 ring-brand-green/40'
+                          : 'border-white/5'
+                      }`}
                     >
-                      {/* Shipment Header — one row per item in the parcel */}
-                      {group.map((item) => {
-                        const itemImage = rowDisplayImage(item);
-                        return (
-                        <div key={item.id} className="flex items-start gap-3">
-                          <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                            {itemImage && (
-                              <img
-                                src={getThumbnailUrl(itemImage)}
-                                alt="Card"
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-semibold text-sm truncate">
-                              {rowDisplayName(item, t, 'profile.cardOrder')}
-                            </p>
-                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
-                            {group.length === 1 && statusLine}
-                          </div>
+                      {/* Parcel header: who it goes to, the waybill, and how
+                          many checkouts were folded into it. */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider truncate">
+                            {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
+                          </p>
+                          {isRealWaybill(pno) && (
+                            <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
+                          )}
                         </div>
-                        );
-                      })}
+                        {checkouts > 1 && (
+                          <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
+                            {t('parcel.combined').replace('{count}', String(checkouts))}
+                          </span>
+                        )}
+                      </div>
+                      {checkouts > 1 && !isDeliveredCard && (
+                        <p className="text-brand-cyan text-xs font-semibold">{t('parcel.packTogether')}</p>
+                      )}
+
+                      {/* One row per card in the parcel. A combined parcel keeps
+                          each checkout's cards under an "Order n" caption so the
+                          seller can match them to the sale notifications. */}
+                      {groupByTransferGroup(group).map((checkout, idx) => (
+                        <div key={checkout[0].id} className="space-y-3">
+                          {checkouts > 1 && (
+                            <p className="text-slate-500 text-[10px] uppercase tracking-wider">
+                              {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                          {checkout.map((item) => {
+                            const itemImage = rowDisplayImage(item);
+                            return (
+                            <div key={item.id} className="flex items-start gap-3">
+                              <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                                {itemImage && (
+                                  <img
+                                    src={getThumbnailUrl(itemImage)}
+                                    alt="Card"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-semibold text-sm truncate">
+                                  {rowDisplayName(item, t, 'profile.cardOrder')}
+                                </p>
+                                <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                                {group.length === 1 && statusLine}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                       {group.length > 1 && (
                         <div className="flex items-end justify-between gap-2">
                           {statusLine}
                           <span className="text-slate-500 text-[10px] uppercase tracking-wider pb-1">
-                            {isThai ? `${group.length} รายการ · พัสดุเดียว` : `${group.length} items · one parcel`}
+                            {t('parcel.itemsOne').replace('{count}', String(group.length))}
                           </span>
                         </div>
                       )}
+
 
                       {/* Delivery notice for sellers not opted into push or
                           email — the card lingers here until swiped away. */}
@@ -1922,15 +2217,60 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                           {t('profile.liveBreakShipsWithParcel')}
                         </div>
                       )}
-                      {/* Status hint while Flash is preparing the label.
-                          Labels are generated automatically after payment — no
-                          seller action is needed. If the order sticks at 'paid'
-                          for long, fulfillment hit an error and support is on it. */}
-                      {!isBreakOrder && (shipment.status === 'paid' || shipment.status === 'pending') && (
-                        <div className="w-full h-10 bg-slate-800 text-slate-400 border border-white/5 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center">
-                          {t('profile.labelBeingPrepared')}
+                      {/* No waybill yet: the seller mints it here, alone or
+                          combined with the buyer's other unlabelled orders, or
+                          adds these cards to a parcel Flash has not collected. */}
+                      {!isBreakOrder && awaitingLabel && (
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => createLabel(group.map((o) => o.id))}
+                            disabled={labelBusy}
+                            className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {labelBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                          </button>
+                          {otherUnlabelled.length > 0 && (
+                            <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-3 space-y-2">
+                              <p className="text-brand-cyan text-xs font-bold">
+                                {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
+                              </p>
+                              <button
+                                onClick={() => createLabel(combineIds)}
+                                disabled={labelBusy}
+                                className="w-full h-9 bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/25 transition-colors disabled:opacity-50"
+                              >
+                                {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
+                              </button>
+                            </div>
+                          )}
+                          {openParcelPno && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+                              <p className="text-amber-300 text-xs font-bold">{t('parcel.hasOpenParcel')}</p>
+                              <button
+                                onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
+                                disabled={labelBusy}
+                                className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                              >
+                                {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
+                      {/* The handling promise the buyer already read on the card
+                          page; turns red once it has passed. Reminders go out
+                          at 24h and 48h (app/api/cron/ship-reminders). */}
+                      {!isBreakOrder && !isDeliveredCard && ['paid', 'label_generated', 'processing'].includes(shipment.status) && (() => {
+                        const due = shipByDate(shipment.created_at);
+                        if (!due) return null;
+                        const overdue = due.getTime() < Date.now();
+                        return (
+                          <p className={`text-xs font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                            {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' })}
+                          </p>
+                        );
+                      })()}
                       {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
                         <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
                           {t('profile.manualLabelRequired')}
@@ -2001,6 +2341,63 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <StripeConnectSection />
+
+              {/* Sales: lifetime earnings and the latest sales, with the full
+                  Sales History one tap deeper. Moved in here from its own
+                  menu row (2026-10-09) — it is seller-account information. */}
+              <div className="space-y-3">
+                <div className="glass p-4 rounded-2xl border border-brand-green/20 bg-brand-green/5">
+                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">{t('profile.totalEarnings')}</p>
+                  <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
+                </div>
+                {sales.length === 0 ? (
+                  <p className="text-slate-500 text-xs text-center py-2">{t('profile.noSalesYet')}</p>
+                ) : (
+                  <div className="glass rounded-2xl border border-white/5 divide-y divide-white/5">
+                    <p className="px-3 pt-3 pb-1 text-slate-400 text-[10px] uppercase tracking-wider">{t('profile.recentSales')}</p>
+                    {sales.slice(0, 3).map((sale) => {
+                      const saleImage = rowDisplayImage(sale);
+                      return (
+                        <div key={sale.id} className="p-3 flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0">
+                            {saleImage && (
+                              <img
+                                src={getThumbnailUrl(saleImage)}
+                                alt="Card"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
+                            <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
+                          </div>
+                          <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <button
+                  onClick={() => openPanel('sales')}
+                  className="w-full glass p-4 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                >
+                  <History className="w-5 h-5 text-green-400" />
+                  <span className="flex-1 text-left text-white font-semibold text-sm">{t('profile.salesHistory')}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+
+              {/* Vacation mode: pause the whole shop (hides + blocks every
+                  listing) and reopen it later. Hidden until its migration runs. */}
+              <ShopPauseSection />
+
+              {/* Smallest order the shop accepts: what makes ฿10 commons
+                  worth listing now that shipping is inside the price. Hidden
+                  until its migration runs. */}
+              <ShopMinOrderSection />
             </div>
           </motion.div>
         )}
@@ -2048,7 +2445,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
               </div>
 
               <div className="text-center pt-8">
-                <p className="text-slate-600 text-xs">CardStreet TCG v1.0.0</p>
+                <p className="text-slate-600 text-xs">Cardstreet TCG v1.0.0</p>
                 <p className="text-slate-700 text-[10px] mt-1">Made with ❤️ in Thailand</p>
               </div>
             </div>
@@ -2125,6 +2522,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                   >
                     {t('profile.labelOpenPrint')}
                   </button>
+                  <p className="text-slate-500 text-[11px] leading-relaxed -mt-1">
+                    {t('profile.labelOpenHint')}
+                  </p>
+                  {/* The share sheet stays reachable on its own button — it is
+                      the route to a printer app or to sending the PDF on. */}
+                  <button
+                    onClick={shareSavedLabel}
+                    className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
+                  >
+                    {t('profile.labelShare')}
+                  </button>
                   {/* Track Order — opens the same delivery timeline the buyer
                       sees. Layered above this modal (higher z-index), so
                       closing it returns to the label-saved screen. */}
@@ -2178,7 +2586,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 40px)' }}>
+              {/* 120px like the other Profile panels: this page renders inside
+                  the shell's <main>, so the bottom tab bar overlaps its last
+                  ~80px and the timeline's final entry needs room to scroll
+                  clear of it. */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
                 {!trackingOrder ? (
                   <div className="flex flex-col items-center justify-center gap-3 text-slate-400 py-16 text-center">
                     <Package className="w-10 h-10 text-slate-700" />
@@ -2294,6 +2706,30 @@ const Profile: React.FC<ProfileProps> = ({ user, onNavigatePartner, onGuestLogin
           </motion.div>
         )}
       </AnimatePresence>
+
+      {reviewSheetOrder && (
+        <ReviewSheet
+          orderId={reviewSheetOrder.id}
+          initial={reviewSheetOrder.review ?? null}
+          onClose={() => setReviewSheetOrder(null)}
+          onSaved={(r) => {
+            setOrders(prev => prev.map(o => o.id === reviewSheetOrder.id ? { ...o, review: r } : o));
+            setReviewSheetOrder(null);
+            showToast(t('orderActions.reviewSaved'), 'success');
+          }}
+        />
+      )}
+      {reportSheetOrder && (
+        <ReportProblemSheet
+          orderId={reportSheetOrder.id}
+          onClose={() => setReportSheetOrder(null)}
+          onReported={() => {
+            setReportSheetOrder(null);
+            showToast(t('orderActions.reportSent'), 'success');
+            fetchOrders();
+          }}
+        />
+      )}
     </div>
   );
 };

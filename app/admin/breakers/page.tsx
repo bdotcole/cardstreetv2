@@ -506,7 +506,7 @@ export default function BreakerApplicationsPage() {
                                             <span className="text-yellow-400">
                                                 {account?.lookupTruncated
                                                     ? 'Account lookup did not complete — reopen this application to retry.'
-                                                    : 'No CardStreet account found for this email.'}
+                                                    : 'No Cardstreet account found for this email.'}
                                             </span>
                                             <p className="text-xs text-slate-500 mt-1">
                                                 Broadcast access is a flag on an account, so the applicant has to sign up
@@ -542,7 +542,7 @@ export default function BreakerApplicationsPage() {
                                             </ul>
                                         ) : <span className="text-slate-500">—</span>}
                                     </Field>
-                                    <Field label="CardStreet username"><Text value={selected.cardstreet_username} /></Field>
+                                    <Field label="Cardstreet username"><Text value={selected.cardstreet_username} /></Field>
                                 </Section>
 
                                 {/* Experience */}

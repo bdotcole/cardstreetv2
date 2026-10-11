@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
-import { NextResponse } from 'next/server'
+import { notifyCustomerOfReply } from '@/lib/supportEmail'
+import { NextResponse, after } from 'next/server'
 
 // GET /api/admin/tickets/[id] — ticket + full message thread
 export async function GET(
@@ -37,7 +38,15 @@ export async function GET(
         .eq('ticket_id', id)
         .order('created_at', { ascending: true })
 
-    return NextResponse.json({ ticket, messages: messages ?? [] })
+    // A buyer problem report links its order here (20260907_order_disputes.sql).
+    // Fails soft to null before that migration; the pane then shows no dispute panel.
+    const { data: disputeRow } = await supabase
+        .from('orders')
+        .select('id, status, total_amount, dispute_reason, dispute_details, dispute_opened_at, dispute_outcome, dispute_resolved_at')
+        .eq('dispute_ticket_id', id)
+        .maybeSingle()
+
+    return NextResponse.json({ ticket, messages: messages ?? [], dispute: disputeRow ?? null })
 }
 
 // PATCH /api/admin/tickets/[id] — update status and/or send an admin reply.
@@ -97,6 +106,7 @@ export async function PATCH(
             .select('id, ticket_id, sender_id, sender_role, body, created_at')
             .single()
         message = inserted ?? null
+        after(() => notifyCustomerOfReply(id, reply))
     }
 
     return NextResponse.json({ ticket: data, message })

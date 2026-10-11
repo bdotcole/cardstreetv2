@@ -27,6 +27,7 @@ import {
     type StripeRegion,
 } from '@/lib/stripe';
 import type Stripe from 'stripe';
+import { ensurePaymentMethodDomainsWithin } from '@/lib/stripePaymentDomains';
 
 function regionForCurrency(currency: string | null | undefined): StripeRegion {
     return currency === 'thb' ? 'th' : 'us';
@@ -41,7 +42,7 @@ function regionForCurrency(currency: string | null | undefined): StripeRegion {
  * `cardstreet.app` is always permitted because that's the host the Android
  * Capacitor app registers via App Links (autoVerify in AndroidManifest.xml).
  * Sending Stripe there means the post-onboarding click on "Return to
- * CardStreet" deep-links straight into the native app instead of bouncing
+ * Cardstreet" deep-links straight into the native app instead of bouncing
  * the seller to a browser tab on the Vercel preview URL.
  */
 function isPermittedReturnOrigin(url: string): boolean {
@@ -244,10 +245,10 @@ export async function POST(request: Request) {
                 business_profile: {
                     // Pre-filled so individual sellers without a website
                     // aren't blocked on a required URL field. The seller's
-                    // CardStreet profile page is the closest analog to a
+                    // Cardstreet profile page is the closest analog to a
                     // business URL.
                     url: sellerPublicUrl,
-                    product_description: 'Trading card sales on CardStreet marketplace',
+                    product_description: 'Trading card sales on Cardstreet marketplace',
                     // 5945 = Hobby, Toy, and Game Shops — closest MCC for TCG
                     // sales. Influences Stripe risk scoring and the buyer's
                     // statement descriptor.
@@ -296,6 +297,12 @@ export async function POST(request: Request) {
             if (saveErr) {
                 console.error('[Connect/Start] Failed to persist stripe_account_id:', saveErr);
                 throw new Error('Failed to save Stripe account');
+            }
+
+            // Direct charges run on this account, so Apple Pay / Google Pay
+            // need cardstreet.app registered on it (lib/stripePaymentDomains).
+            if (region === 'th') {
+                await ensurePaymentMethodDomainsWithin(stripe, account.id, 2500);
             }
 
             return account.id;

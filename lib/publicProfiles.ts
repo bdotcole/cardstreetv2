@@ -30,10 +30,24 @@ export interface PublicSeller {
     // Owner/official-account flag derived in the view from role='admin'. Replaces
     // the raw `role` in cross-user reads so admin identity isn't enumerable.
     is_official?: boolean;
+    // Collector Pass display columns (20260828 + 20260829 migrations).
+    // Optional because the view may predate them — see the fallback in
+    // fetchPublicSellers.
+    reward_level?: number | null;
+    displayed_badges?: string[] | null;
+    equipped_frame?: string | null;
 }
 
-const PUBLIC_SELLER_COLUMNS =
+const PUBLIC_SELLER_COLUMNS_LEGACY =
     'id, username, display_name, avatar_url, partner_tier, partner_joined_at, rating, review_count, is_verified_shop, is_official';
+const PUBLIC_SELLER_COLUMNS =
+    `${PUBLIC_SELLER_COLUMNS_LEGACY}, reward_level, displayed_badges, equipped_frame`;
+
+// Set after the first "column does not exist" failure so every later fetch
+// goes straight to the legacy list. PostgREST rejects the WHOLE select when
+// one column is unknown, and chat sender names ride this query — the rewards
+// columns must never be able to break name hydration.
+let rewardColumnsUnavailable = false;
 
 /** Fetch public seller rows for a set of ids, keyed by id. Deduped, fail-soft. */
 export async function fetchPublicSellers(
@@ -44,10 +58,18 @@ export async function fetchPublicSellers(
     const unique = [...new Set(ids.filter((x): x is string => !!x))];
     if (unique.length === 0) return map;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('public_profiles')
-        .select(PUBLIC_SELLER_COLUMNS)
+        .select(rewardColumnsUnavailable ? PUBLIC_SELLER_COLUMNS_LEGACY : PUBLIC_SELLER_COLUMNS)
         .in('id', unique);
+
+    if (error && !rewardColumnsUnavailable) {
+        rewardColumnsUnavailable = true;
+        ({ data, error } = await supabase
+            .from('public_profiles')
+            .select(PUBLIC_SELLER_COLUMNS_LEGACY)
+            .in('id', unique));
+    }
 
     if (error) {
         console.error('[publicProfiles] seller fetch failed:', error.message);
