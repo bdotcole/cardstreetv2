@@ -26,10 +26,11 @@ import { verifyLabelToken } from '@/lib/labelToken';
 import { embedArray } from '@/lib/utils/embed';
 
 // Statuses where a Flash label should exist (or be recoverable). 'paid' is
-// included so a seller can self-recover an order that was charged but whose
-// Flash shipment failed during fulfillment (see the recover-unshipped-orders
-// cron, which normally beats them to it).
-const LABEL_EXPECTED_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
+// deliberately absent: since labels are minted by the seller (lib/parcels), a
+// paid order with no label is the normal resting state, and minting here for
+// that one order would skip the seller's choice of what ships together. The
+// seller creates it via POST /api/orders/label/create instead.
+const LABEL_EXPECTED_STATUSES = ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'];
 
 export async function GET(
     req: NextRequest,
@@ -117,6 +118,19 @@ export async function GET(
         const labels = embedArray(order.shipping_labels as { tracking_number: string | null }[] | { tracking_number: string | null } | null);
         let trackingNumber = labels[0]?.tracking_number || null;
 
+        if (!trackingNumber && order.status === 'paid') {
+            return NextResponse.json(
+                { error: 'Create the shipping label first.', code: 'NEEDS_LABEL' },
+                { status: 409 }
+            );
+        }
+        if (trackingNumber === 'PENDING') {
+            return NextResponse.json(
+                { error: 'The shipping label is still being created. Try again in a moment.', code: 'LABEL_IN_PROGRESS' },
+                { status: 409 }
+            );
+        }
+
         // ─── Recovery path ───
         // If the order has reached a status where a label should exist but
         // shipping_labels has no usable row (e.g. an earlier fulfillment failed
@@ -130,8 +144,12 @@ export async function GET(
         // now persists the pno up front, so this path should almost never fire;
         // we still re-read directly (bypassing the possibly-stale joined SELECT)
         // right before creating, and never overwrite an existing real pno.
+        // A MANUAL placeholder is not retried here: lib/parcels refuses it
+        // (the order is already label_generated), so the retry could only
+        // fail with a misleading Flash error. It falls through to the
+        // "manual handling" 404 below and support re-mints it.
         const needsRecovery =
-            (!trackingNumber || trackingNumber === 'MANUAL') &&
+            !trackingNumber &&
             LABEL_EXPECTED_STATUSES.includes(order.status);
 
         if (needsRecovery) {

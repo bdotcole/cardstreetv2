@@ -197,11 +197,15 @@ async function loadUnlabelledOrders(
     if (buyers.size !== 1) return fail(409, 'DIFFERENT_BUYERS', 'Only orders for the same buyer can share a parcel');
 
     if (staleClaims.length > 0) {
+        // Re-check staleness in the delete itself: a racer that read the same
+        // stale claim may already have replaced it with a fresh one, and
+        // deleting that would let both requests mint a waybill.
         await admin
             .from('shipping_labels')
             .delete()
             .in('order_id', staleClaims)
-            .eq('tracking_number', PENDING_WAYBILL);
+            .eq('tracking_number', PENDING_WAYBILL)
+            .lt('created_at', new Date(Date.now() - CLAIM_STALE_MS).toISOString());
     }
 
     orders.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));

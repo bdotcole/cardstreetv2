@@ -351,9 +351,15 @@ async function reconcileFreight(
     if (actualSatang !== null) {
         const actualFee = actualSatang / 100
         const charged = Number(order.shipping_fee || 0)
-        delta = Number((actualFee - charged).toFixed(2))
         update.actual_shipping_fee = actualFee
-        update.shipping_fee_delta = delta
+        // Since 2026-09-27 shipping is inside the listing price and checkout
+        // writes shipping_fee 0, so there is no quote to compare against:
+        // a delta would be the whole freight, recorded as an under-quote and
+        // paged to Sentry on every parcel. Older orders still carry a quote.
+        if (charged > 0) {
+            delta = Number((actualFee - charged).toFixed(2))
+            update.shipping_fee_delta = delta
+        }
     }
 
     const { error } = await supabase.from('orders').update(update).eq('id', order.id)

@@ -70,8 +70,10 @@ const STATUS: Record<string, { tone: string; en: string; th: string }> = {
     disputed: { tone: 'bg-brand-red/10 text-rose-300 border-brand-red/30', en: 'Disputed', th: 'มีข้อพิพาท' },
 };
 
-// Statuses where a seller can still pull the shipping label.
-const SHIPPABLE = new Set(['paid', 'label_generated', 'processing', 'shipped', 'out_for_delivery']);
+// Statuses where a seller can still pull the shipping label. A 'paid' order
+// has no label yet: the seller creates it from the shipments tab, where they
+// also choose which of the buyer's orders share the parcel.
+const SHIPPABLE = new Set(['label_generated', 'processing', 'shipped', 'out_for_delivery']);
 
 /**
  * Seller handling window, in days. Matches the Product JSON-LD's handlingTime
@@ -170,6 +172,15 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
         } finally {
             setLabelBusy(false);
         }
+    };
+
+    // Labels are created where the seller can also combine this buyer's other
+    // orders into the same parcel. Phones get the SPA's Pending Shipments card
+    // for this order (the ?order= contract in MobileHome); desktop gets the
+    // To ship tab. Same UA test as middleware.ts isDesktopClient.
+    const goCreateLabel = () => {
+        const isPhone = /Android|iPhone|iPod|iPad|Mobile|Mobi/i.test(navigator.userAgent);
+        router.push(isPhone ? `/?order=${orderId}` : '/orders?tab=shipments');
     };
 
     const L = isThai
@@ -336,6 +347,15 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         >
                             <i className="fa-solid fa-print mr-2"></i>
                             {labelBusy ? L.preparing : L.printLabel}
+                        </button>
+                    )}
+                    {isSeller && !order.isBreakOrder && order.status === 'paid' && (
+                        <button
+                            onClick={goCreateLabel}
+                            className="w-full bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all"
+                        >
+                            <i className="fa-solid fa-print mr-2"></i>
+                            {t('parcel.createLabel')}
                         </button>
                     )}
                     {labelError && <p className="text-xs text-rose-300 text-center">{labelError}</p>}
