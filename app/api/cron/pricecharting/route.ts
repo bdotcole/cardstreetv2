@@ -792,16 +792,25 @@ export async function GET(request: NextRequest) {
     console.log('[pricecharting] graded pass done', JSON.stringify(snapshot()));
 
     // --- Sealed: stalest sealed products ---------------------------------------
+    // Same freshness window as the singles: without it the midday catch-up runs
+    // re-fetched products priced hours earlier, one rate-limited call each.
     const { data: sealed } = await supabase
         .from('sealed_products')
         .select('id, pricecharting_id, currency, product_type')
         .not('pricecharting_id', 'is', null)
+        .or(`last_updated.is.null,last_updated.lt.${freshCutoff}`)
         .order('last_updated', { ascending: true, nullsFirst: true })
         .limit(SEALED_CAP);
 
-    await pool(sealed || [], SEALED_CONCURRENCY, overBudget, async (s) => {
+    // The per-product API sits behind Cloudflare and, since 2026-10-13, answers
+    // with a 403 challenge page while the CSV export keeps working. Once the
+    // block is evident, stop instead of spending the sealed reserve on it.
+    const SEALED_BLOCKED_STOP = 5;
+    let sealedBlockedStreak = 0;
+    const sealedStop = () => overBudget() || sealedBlockedStreak >= SEALED_BLOCKED_STOP;
+
+    await pool(sealed || [], SEALED_CONCURRENCY, sealedStop, async (s) => {
         try {
-            const product = await fetchProduct(s.pricecharting_id);
             if (s.currency === 'THB') {
                 // Feature B: if this Thai sealed product already sold, its price is
                 // learned from a realized sale — don't overwrite it with the JP-box
@@ -813,6 +822,9 @@ export async function GET(request: NextRequest) {
                 // (lib/pricingFloors.ts), so they must not block the estimate either —
                 // otherwise a 1-baht seed sale would freeze the product on whatever
                 // stale estimate it happened to carry.
+                //
+                // Checked before the vendor call: a sold product is skipped either
+                // way, so fetching it first only spends a rate-limited slot.
                 const { data: sold } = await supabase
                     .from('market_value_sales')
                     .select('order_id')
@@ -823,7 +835,16 @@ export async function GET(request: NextRequest) {
                     .limit(1)
                     .maybeSingle();
                 if (sold) { return; }
-
+            }
+            let product: any;
+            try {
+                product = await fetchProduct(s.pricecharting_id);
+                sealedBlockedStreak = 0;
+            } catch (e: any) {
+                if (e?.message === 'PriceCharting 403') sealedBlockedStreak++;
+                throw e;
+            }
+            if (s.currency === 'THB') {
                 // Thai estimate row: pricecharting_id points at the JP TWIN's box.
                 // Re-derive the THB estimate from the JP box market; never write the
                 // JP USD price into a THB row.
