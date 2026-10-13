@@ -55,8 +55,8 @@
             "schedule": "0 9 * * *"
         },
         {
-            "path": "/api/cron/pricecharting?game=yugioh",
-            "schedule": "20 9 * * *"
+            "path": "/api/cron/pricecharting?game=onepiece",
+            "schedule": "0 10 * * *"
         },
         {
             "path": "/api/cron/pricecharting?game=pokemon",
