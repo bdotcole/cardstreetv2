@@ -15,22 +15,45 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { clipQuery, sanitizeTerm } from '@/lib/search/normalize';
+import { clipQuery, widthFold } from '@/lib/search/normalize';
 import { SHOP_SEARCH_MIN_CHARS, type ShopSearchResult } from '@/lib/shopSearch';
 
 export const dynamic = 'force-dynamic';
 
-const MAX_MATCHES = 40;
+// Name matches are mostly buyers; this has to be wide enough that the shops
+// among them survive a short query ("ar"), since only shops are returned.
+const MAX_MATCHES = 200;
 const MAX_RESULTS = 6;
+// Seller ids per listings lookup, so the .in() list keeps the URL short.
+const ID_CHUNK = 50;
+
+// Everything that is not a letter, digit or combining mark (Thai vowels and
+// tone marks are marks). That covers separators people type differently
+// ("Ari_shop", "ari shop", "Ari-shop") and every character PostgREST's or()
+// syntax or LIKE treats specially.
+const NON_WORD = /[^\p{L}\p{N}\p{M}]+/gu;
+
+/**
+ * The query's words joined by LIKE wildcards, so any separator, or none,
+ * matches. Not sanitizeTerm: that turns "_" into a space, and "Ari shop" then
+ * misses the shop actually named "Ari_shop".
+ */
+function namePattern(q: string): string | null {
+    const words = widthFold(q).split(NON_WORD).filter(Boolean);
+    if (words.join('').length < SHOP_SEARCH_MIN_CHARS) return null;
+    return `%${words.join('%')}%`;
+}
+
+const looseName = (s: string) => widthFold(s).toLowerCase().replace(NON_WORD, '');
 
 export async function GET(request: NextRequest) {
-    const term = sanitizeTerm(clipQuery(request.nextUrl.searchParams.get('q')));
-    if (term.length < SHOP_SEARCH_MIN_CHARS) {
+    const raw = clipQuery(request.nextUrl.searchParams.get('q'));
+    const pattern = namePattern(raw);
+    if (!pattern) {
         return NextResponse.json({ shops: [] });
     }
 
     const supabase = createAdminClient();
-    const pattern = `%${term}%`;
     const { data: profiles, error } = await supabase
         .from('public_profiles')
         .select('id, username, display_name, avatar_url, rating, review_count, is_verified_shop, partner_joined_at')
@@ -45,24 +68,30 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ shops: [] }, { headers: cacheHeaders() });
     }
 
-    // Which matches are shops. Site-wide stock is well under PostgREST's
-    // 1000-row page, and only existence + a rough count matter here.
-    const { data: listings } = await supabase
-        .from('listings')
-        .select('seller_id, status')
-        .in('seller_id', matches.map((m) => m.id))
-        .in('status', ['active', 'paused'])
-        .limit(1000);
+    // Which matches are shops. Only existence + a rough count matter, and each
+    // chunk's stock is well under PostgREST's 1000-row page.
+    const ids = matches.map((m) => m.id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += ID_CHUNK) chunks.push(ids.slice(i, i + ID_CHUNK));
+    const pages = await Promise.all(chunks.map(async (chunk) => {
+        const { data } = await supabase
+            .from('listings')
+            .select('seller_id, status')
+            .in('seller_id', chunk)
+            .in('status', ['active', 'paused'])
+            .limit(1000);
+        return (data ?? []) as { seller_id: string; status: string }[];
+    }));
     const active = new Map<string, number>();
     const paused = new Set<string>();
-    for (const l of (listings ?? []) as { seller_id: string; status: string }[]) {
+    for (const l of pages.flat()) {
         if (l.status === 'active') active.set(l.seller_id, (active.get(l.seller_id) ?? 0) + 1);
         else paused.add(l.seller_id);
     }
 
-    const needle = term.toLowerCase();
+    const needle = looseName(raw);
     const rank = (m: { display_name: string | null; username: string | null }) => {
-        const names = [m.display_name, m.username].filter(Boolean).map((n) => (n as string).toLowerCase());
+        const names = [m.display_name, m.username].filter(Boolean).map((n) => looseName(n as string));
         if (names.some((n) => n === needle)) return 0;
         if (names.some((n) => n.startsWith(needle))) return 1;
         return 2;

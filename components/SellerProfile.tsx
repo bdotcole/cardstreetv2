@@ -192,9 +192,6 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                             {t(follow.isFollowing ? 'seller.following' : 'seller.follow')}
                         </button>
                     )}
-                    <button className="h-10 w-10 glass rounded-xl flex items-center justify-center text-brand-cyan hover:bg-brand-cyan/10 transition-colors">
-                        <i className="fa-regular fa-comment-dots"></i>
-                    </button>
                     <button 
                         onClick={() => setIsReportModalOpen(true)}
                         title="Report Seller"
