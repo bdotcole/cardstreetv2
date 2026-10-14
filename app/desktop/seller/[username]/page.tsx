@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSellerPageData } from '@/lib/sellerPageData';
-import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
+import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
 import SellerMinOrderNotice from '@/components/desktop/SellerMinOrderNotice';
 import SellerFollowButton from '@/components/desktop/SellerFollowButton';
@@ -66,6 +66,7 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
     if (!seller) notFound();
 
     const lang = await resolveLang();
+    const pathPrefix = localePrefix(await requestPathLocale());
     const name = seller.display_name || seller.username || 'Seller';
     const memberSince = seller.created_at ? new Date(seller.created_at).getFullYear() : null;
 
@@ -121,7 +122,7 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
                     <div className="mt-3">
-                        <SellerFollowButton sellerId={seller.id} sellerName={name} />
+                        <SellerFollowButton sellerId={seller.id} sellerName={name} pathPrefix={pathPrefix} />
                     </div>
                     {/* Said on the shop itself, so a buyer filling a cart here
                         knows the target before checkout refuses them; reads

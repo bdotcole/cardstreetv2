@@ -847,7 +847,8 @@
             "replaceSellerConfirm": "Your cart has cards from {seller}. Checkout is one seller at a time — replace the cart with this card?",
             "browseShop": "Browse this shop"
         },
-        "searchListingsFor": "See marketplace listings for"
+        "searchListingsFor": "See marketplace listings for",
+        "viewProfile": "View my profile"
     },
     "passwordPolicy": {
         "hint": "At least 6 characters, with a lowercase letter, an uppercase letter, and a number.",

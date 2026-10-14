@@ -22,6 +22,8 @@ export function useFollow(sellerId: string | null | undefined, { sellerName, vie
     const [summary, setSummary] = useState<FollowSummary | null>(null);
     const [busy, setBusy] = useState(false);
     const busyRef = useRef(false);
+    // Bumped to re-read the counts, e.g. after unfollowing from a list.
+    const [reloadKey, setReloadKey] = useState(0);
     const { showToast } = useToast();
     const { t } = useTranslation();
 
@@ -32,7 +34,7 @@ export function useFollow(sellerId: string | null | undefined, { sellerName, vie
             if (!controller.signal.aborted) setSummary(found);
         });
         return () => controller.abort();
-    }, [sellerId, viewerId]);
+    }, [sellerId, viewerId, reloadKey]);
 
     const toggle = useCallback(async () => {
         if (!sellerId || busyRef.current) return;
@@ -74,11 +76,16 @@ export function useFollow(sellerId: string | null | undefined, { sellerName, vie
         showToast(t(next ? 'seller.followedToast' : 'seller.unfollowedToast').replace('{name}', sellerName), 'success');
     }, [sellerId, viewerId, summary, sellerName, onRequireAuth, showToast, t]);
 
+    const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+
     return {
         isFollowing: !!summary?.isFollowing,
         /** Null until known, or before the migration: callers hide the count. */
         followers: summary?.available ? summary.followers : null,
+        /** How many shops this profile follows; shown on your own shop page. */
+        following: summary?.available ? summary.following : null,
         busy,
         toggle,
+        reload,
     };
 }

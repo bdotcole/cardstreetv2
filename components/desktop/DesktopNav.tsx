@@ -22,6 +22,7 @@ import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import { searchShops, type ShopSearchResult } from '@/lib/shopSearch';
+import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { Card } from '@/types';
 
 /**
@@ -70,6 +71,18 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // Shops whose seller name matches, listed above the cards. Only shops with
     // a username: the seller page is addressed by it.
     const [shopResults, setShopResults] = useState<ShopSearchResult[]>([]);
+    // The signed-in user's own public row: the shop name and uploaded avatar
+    // (auth metadata only carries the Google name and photo) and the username
+    // their shop page is addressed by, for "View my profile".
+    const [ownProfile, setOwnProfile] = useState<PublicSeller | null>(null);
+    useEffect(() => {
+        if (!user?.id) { setOwnProfile(null); return; }
+        let cancelled = false;
+        void fetchPublicSellers(createClient(), [user.id]).then((map) => {
+            if (!cancelled) setOwnProfile(map.get(user.id) ?? null);
+        });
+        return () => { cancelled = true; };
+    }, [user?.id]);
     // The query `results` were found for. The dropdown keeps showing the last
     // results while the next search runs, so the live input is not it.
     const resultsQueryRef = useRef('');
@@ -207,11 +220,16 @@ export default function DesktopNav({ pathPrefix = '' }: {
     };
 
     const displayName =
+        ownProfile?.display_name ||
         (user?.user_metadata?.display_name as string) ||
         (user?.user_metadata?.name as string) ||
         user?.email ||
         '';
-    const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+    const avatarUrl = ownProfile?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined);
+    // Without a username there is no shop page yet; Edit profile is where one is set.
+    const ownProfileHref = ownProfile?.username
+        ? `${pathPrefix}/seller/${encodeURIComponent(ownProfile.username)}`
+        : `${pathPrefix}/settings?tab=profile`;
 
     return (
         <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur">
@@ -425,6 +443,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)}></div>
                                 <div className="absolute right-0 top-full mt-2 w-56 bg-brand-dark border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50">
                                     <Link
+                                        href={ownProfileHref}
+                                        onClick={() => setMenuOpen(false)}
+                                        className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                                    >
+                                        <i className="fa-solid fa-store mr-2.5 text-slate-500 w-4 text-center"></i>
+                                        {t('desktop.viewProfile')}
+                                    </Link>
+                                    <Link
                                         href={`${pathPrefix}/collection`}
                                         onClick={() => setMenuOpen(false)}
                                         className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
@@ -524,6 +550,15 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 </Link>
                             );
                         })}
+                        {user && (
+                            <Link
+                                href={ownProfileHref}
+                                onClick={() => setMobileNavOpen(false)}
+                                className="py-2.5 text-white hover:text-brand-cyan transition-colors"
+                            >
+                                {t('desktop.viewProfile')}
+                            </Link>
+                        )}
                         {user && (
                             <Link
                                 href={`${pathPrefix}/collection`}

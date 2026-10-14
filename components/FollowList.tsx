@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import { fetchFollowList, setFollowing, type FollowListEntry, type FollowListKind } from '@/lib/follows';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -11,6 +11,8 @@ interface FollowListProps {
     onBack: () => void;
     /** Opens a followed shop's page (Following list only). */
     onOpenSeller?: (sellerId: string, hint: { display_name: string | null; username: string | null; avatar_url: string | null }) => void;
+    /** Inside a desktop modal: no phone safe-area padding, and a close X instead of Back. */
+    compact?: boolean;
 }
 
 /**
@@ -18,7 +20,7 @@ interface FollowListProps {
  * shop they liked, so each row opens the shop, and Unfollow stays a toggle
  * (the row remains, now with Follow) so a mis-tap can be undone in place.
  */
-export default function FollowList({ kind, onBack, onOpenSeller }: FollowListProps) {
+export default function FollowList({ kind, onBack, onOpenSeller, compact = false }: FollowListProps) {
     const { t, isThai } = useTranslation();
     const { showToast } = useToast();
     const [users, setUsers] = useState<FollowListEntry[] | null>(null);
@@ -60,12 +62,22 @@ export default function FollowList({ kind, onBack, onOpenSeller }: FollowListPro
     const title = t(kind === 'following' ? 'follows.followingTitle' : 'follows.followersTitle');
 
     return (
-        <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={onBack} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors" aria-label="Back">
-                    <ChevronLeft className="w-5 h-5 text-slate-400" />
-                </button>
+        <div
+            className={compact ? 'p-5 space-y-5' : 'p-4 pt-16 space-y-6'}
+            style={compact ? undefined : { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
+        >
+            <div className={`flex items-center gap-4 ${compact ? 'justify-between' : 'mb-6'}`}>
+                {!compact && (
+                    <button onClick={onBack} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors" aria-label="Back">
+                        <ChevronLeft className="w-5 h-5 text-slate-400" />
+                    </button>
+                )}
                 <h2 className={`text-lg font-black text-white uppercase ${isThai ? 'tracking-normal' : 'tracking-wide'}`}>{title}</h2>
+                {compact && (
+                    <button onClick={onBack} className="p-2 -mr-2 hover:bg-white/5 rounded-xl transition-colors" aria-label="Close">
+                        <X className="w-5 h-5 text-slate-400" />
+                    </button>
+                )}
             </div>
 
             {users === null ? (
