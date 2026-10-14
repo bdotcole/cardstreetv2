@@ -5,9 +5,12 @@
  * 'paid' order with no waybill is the normal resting state of a fresh sale,
  * not a failure. This cron only steps in after PAID_GRACE_MS: for each
  * seller it mints ONE waybill per buyer covering everything that seller still
- * has unlabelled from that buyer, books the pickup, advances the orders and
- * emails the label, so a buyer is never stranded behind a seller who never
- * opened the app. The grace window is long on purpose: a buyer topping a cart
+ * has unlabelled from that buyer, advances the orders and emails the label,
+ * so a buyer is never stranded behind a seller who never opened the app. It
+ * books no courier: a seller who has not opened the app would not be home
+ * with the parcel packed, and an unannounced pickup is exactly what Flash
+ * ends up cancelling. The label email tells them to drop it off or book a
+ * pickup in the app. The grace window is long on purpose: a buyer topping a cart
  * up to a shop minimum does so within minutes, and the seller should be the
  * one choosing what travels together.
  *
@@ -96,7 +99,7 @@ export async function GET(request: NextRequest) {
             const todo = orderIds.filter(id => !handled.has(id));
             if (todo.length === 0) { summary.skipped++; continue; }
 
-            const result = await mintParcel(supabase, { sellerId, orderIds: todo });
+            const result = await mintParcel(supabase, { sellerId, orderIds: todo, shipMethod: 'dropoff' });
             if (!result.ok) {
                 if (result.code === 'IN_PROGRESS' || result.code === 'ALREADY_LABELLED') { summary.skipped++; continue; }
                 summary.errors++;

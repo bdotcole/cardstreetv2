@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { embedArray } from '@/lib/utils/embed'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { attachBreakContext } from '@/lib/breakOrderContext'
+import { SHIPPING_PROFILE_COLS, formatPickupAddress } from '@/lib/parcels'
 
 // GET - List user's active sales/shipments
 export async function GET(request: NextRequest) {
@@ -75,8 +76,20 @@ export async function GET(request: NextRequest) {
             buyer: { display_name: buyerNames.get(s.buyer_id) ?? null },
         }))
 
+        // Where a Flash courier would collect from, shown before the seller
+        // books one so nobody is surprised by who turns up where.
+        const { data: me } = await admin
+            .from('profiles')
+            .select(SHIPPING_PROFILE_COLS)
+            .eq('id', user.id)
+            .maybeSingle()
+
         return NextResponse.json({
             shipments: withBuyer,
+            pickup: {
+                address: formatPickupAddress(me),
+                phone: me?.phone_number || null,
+            },
             pagination: {
                 page,
                 limit,

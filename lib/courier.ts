@@ -375,6 +375,11 @@ export interface LabelReadyDetails {
     trackingNumber?: string | null;
     /** Cards in the parcel; above one, the copy says to pack them together. */
     itemCount?: number | null;
+    /**
+     * How the parcel reaches Flash (lib/parcels). Null when cards are added
+     * to an existing parcel, whose arrangement this email does not restate.
+     */
+    shipMethod?: 'pickup' | 'dropoff' | null;
 }
 
 /**
@@ -386,24 +391,36 @@ export interface LabelReadyDetails {
 export function labelReadyNotificationContent(d: LabelReadyDetails) {
     const pno = d.trackingNumber ? ` (${d.trackingNumber})` : '';
     const many = (d.itemCount ?? 1) > 1;
+    const packTh = many ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้า ` : 'แพ็กการ์ด ติดใบปะหน้า ';
+    const packEn = many ? `Pack all ${d.itemCount} cards for this parcel in one envelope and attach the label` : 'Pack the card and attach the label';
+    // Say plainly whether a courier is coming: sellers who were never told a
+    // pickup had been booked missed the courier, and Flash cancelled it.
+    const handoffTh =
+        d.shipMethod === 'pickup'
+            ? 'แล้วรอพนักงาน Flash เข้ามารับที่ที่อยู่ในโปรไฟล์ของคุณ ส่วนใหญ่ภายในวันนี้หรือวันทำการถัดไป ถ้าไม่สะดวกรอ นำไปส่งที่สาขา Flash ใดก็ได้โดยใช้ใบปะหน้าเดิม'
+            : d.shipMethod === 'dropoff'
+              ? 'แล้วนำไปส่งที่สาขา Flash Express หรือร้าน Flash Home ใดก็ได้ ถ้าต้องการให้พนักงานมารับ กดเรียกพนักงานเข้ารับได้ในแอป'
+              : 'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา';
+    const handoffEn =
+        d.shipMethod === 'pickup'
+            ? '. A Flash courier will collect it from the address on your profile, usually today or the next working day. Not home? Drop it at any Flash branch with the same label.'
+            : d.shipMethod === 'dropoff'
+              ? ', then drop it at any Flash Express branch or Flash Home shop. Want a courier to collect it instead? Book a pickup in the app.'
+              : ', and hand it to Flash at pickup or at a branch.';
     return emailPlusPushContent({
         title: SUBJECTS.labelGenerated!,
         emailParagraphs: [
             {
                 text:
                     `ใบปะหน้าพัสดุ Flash Express ของคุณพร้อมแล้ว${pno} ไฟล์ PDF แนบมากับอีเมลนี้ หรือพิมพ์จากแอปได้ที่ รายการรอจัดส่ง ` +
-                    (many
-                        ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้า `
-                        : 'แพ็กการ์ด ติดใบปะหน้า ') +
-                    'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา',
+                    packTh +
+                    handoffTh,
             },
             {
                 text:
                     `Your Flash Express label is ready${pno}. The PDF is attached, or print it from Pending Shipments in the app. ` +
-                    (many
-                        ? `Pack all ${d.itemCount} cards for this parcel in one envelope, attach the label, `
-                        : 'Pack the card, attach the label, ') +
-                    'and hand it to Flash at pickup or at a branch.',
+                    packEn +
+                    handoffEn,
                 muted: true,
             },
         ],

@@ -247,7 +247,8 @@
         "payoutNudgeBanner": "Finish payout setup to start selling — about 2 minutes left",
         "payoutNudgeDismiss": "Dismiss",
         "firstListingBanner": "You're all set to sell — list your first card from your Vault",
-        "firstListingDismiss": "Dismiss"
+        "firstListingDismiss": "Dismiss",
+        "pickupAddressHint": "When you sell, Flash collects from this address, but only if you book a courier pickup."
     },
     "authLinkError": {
         "title": "That link didn't work",
@@ -407,7 +408,7 @@
         "buyerTitle": "What the buyer pays",
         "buyerBody": "At checkout the buyer pays your item price plus shipping. The full amount is sent to your connected Stripe account.",
         "shippingTitle": "Your part: shipping",
-        "shippingBody": "After a sale you'll get a Flash Express label. Pack the card in a small padded mailer, then pay Flash for the shipment when they collect it — covered by the shipping the buyer already paid you. Oversized boxes cost more, and the extra is on you.",
+        "shippingBody": "After a sale, create the Flash Express label from Pending Shipments. Pack the card in a small padded mailer, then drop it at any Flash branch or book a courier pickup, and pay Flash for the shipment when you hand it over — covered by the shipping the buyer already paid you. Oversized boxes cost more, and the extra is on you.",
         "gotIt": "Got it — list my card"
     },
     "seller": {
@@ -680,7 +681,8 @@
             "liveShowPush": "Live show alerts",
             "liveShowPushDesc": "Push notifications when a live break goes live.",
             "sellerPayouts": "Seller payouts",
-            "deleteAccount": "Delete account"
+            "deleteAccount": "Delete account",
+            "pickupAddressHint": "When you sell, Flash collects from this address, but only if you book a courier pickup."
         },
         "sell": {
             "title": "Sell",
@@ -1851,7 +1853,31 @@
         "moreUnlabelled": "This buyer has {count} more unlabelled orders.",
         "combineAndPrint": "Combine {count} orders into one parcel",
         "hasOpenParcel": "This buyer has a parcel Flash has not collected yet.",
-        "addToParcel": "Add to parcel {pno}"
+        "addToParcel": "Add to parcel {pno}",
+        "createdDropoff": "Label created. Print it, pack the cards and drop the parcel at a Flash branch.",
+        "createdPickup": "Label created and courier booked. Print it and pack the cards.",
+        "createdPickupFailed": "Label created, but Flash didn't accept the pickup. Drop it at a branch, or book again from the parcel card.",
+        "methodTitle": "How will Flash get this parcel?",
+        "methodIntro": "The label is the same either way. You only choose who takes the parcel to Flash.",
+        "dropoffTitle": "I'll drop it at a Flash branch",
+        "dropoffBody": "Take the packed parcel to any Flash Express branch or Flash Home shop when it suits you. No courier comes to you.",
+        "pickupTitle": "A Flash courier picks it up",
+        "pickupBody": "The courier is booked as soon as you tap. They come to this address, usually today or the next working day, and may call first. Pack the parcel now and make sure someone is there.",
+        "pickupAddress": "Pickup address",
+        "pickupPhone": "Courier calls",
+        "noPickupAddress": "Add your address to your profile to book a pickup.",
+        "editAddress": "Change address",
+        "bookPickup": "Book a courier pickup",
+        "bookPickupConfirm": "Book pickup",
+        "bookingPickup": "Booking…",
+        "rebookPickup": "Courier didn't come? Book again",
+        "pickupBooked": "Courier pickup booked {when}. Not home when they come? Drop it at any Flash branch with the same label.",
+        "dropoffPlanned": "Drop it at any Flash Express branch or Flash Home shop.",
+        "pickupNotBooked": "We couldn't book a courier. Drop it at a Flash branch, or try booking again.",
+        "findBranch": "Find a Flash branch",
+        "pickupBookedToast": "Pickup booked. A Flash courier will come to your address.",
+        "pickupFailed": "Couldn't book the pickup. Try again, or drop it at a branch.",
+        "pickupRecent": "A courier was booked recently. Give them until the next working day, or drop it at a branch."
     },
     "orderActions": {
         "reviewSeller": "Review seller",

@@ -45,7 +45,9 @@ export async function recoverShipmentForOrder(
         return { ok: true, trackingNumber: existing, created: false };
     }
 
-    const result = await mintParcel(admin, { sellerId: order.seller_id, orderIds: [order.id] });
+    // No courier: the seller never chose one here. The parcel card offers a
+    // pickup booking once the label exists.
+    const result = await mintParcel(admin, { sellerId: order.seller_id, orderIds: [order.id], shipMethod: 'dropoff' });
     if (result.ok) {
         return { ok: true, trackingNumber: result.trackingNumber, created: true };
     }

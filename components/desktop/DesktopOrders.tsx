@@ -10,7 +10,8 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { ShipMethodSheet, ParcelHandoffNote, type PickupInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
@@ -49,6 +50,9 @@ interface OrderRow {
         carrier_name?: string | null;
         courier_tracking_url?: string | null;
         status?: string | null;
+        // Seller side: drop-off or a booked courier (components/ParcelHandoff).
+        pickup_status?: string | null;
+        updated_at?: string | null;
     }[];
 }
 
@@ -254,7 +258,10 @@ export default function DesktopOrders() {
             } else if (which === 'shipments') {
                 const res = await fetch('/api/profile/shipments?limit=50');
                 const data = await res.json();
-                if (res.ok) setShipments(data.shipments || []);
+                if (res.ok) {
+                    setShipments(data.shipments || []);
+                    setPickupInfo(data.pickup ?? null);
+                }
             } else {
                 const res = await fetch('/api/profile/sales?limit=50');
                 const data = await res.json();
@@ -298,17 +305,31 @@ export default function DesktopOrders() {
     // or add to a waybill Flash has not scanned yet. On success the tab
     // refreshes and the label opens (any order id in the parcel works).
     const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
-    const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+    // A new label first asks how the parcel reaches Flash (components/ParcelHandoff):
+    // a courier is booked only when the seller says so. Adding cards to an
+    // existing parcel skips the question; that parcel is already arranged.
+    const [shipSheet, setShipSheet] = useState<
+        { mode: 'create'; orderIds: string[] } | { mode: 'pickup'; trackingNumber: string } | null
+    >(null);
+    const [pickupInfo, setPickupInfo] = useState<PickupInfo | null>(null);
+    const [pickupBusyPno, setPickupBusyPno] = useState<string | null>(null);
+    const createLabel = async (orderIds: string[], attachToTrackingNumber?: string, shipMethod?: ShipMethod) => {
         setLabelBusyIds(orderIds);
         try {
             const res = await fetch('/api/orders/label/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderIds, attachToTrackingNumber }),
+                body: JSON.stringify({ orderIds, attachToTrackingNumber, shipMethod }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data?.error || 'label create failed');
-            showToast(t('parcel.created'), 'success');
+            showToast(
+                attachToTrackingNumber ? t('parcel.created')
+                    : shipMethod !== 'pickup' ? t('parcel.createdDropoff')
+                    : data?.pickupBooked ? t('parcel.createdPickup')
+                    : t('parcel.createdPickupFailed'),
+                shipMethod === 'pickup' && !attachToTrackingNumber && !data?.pickupBooked ? 'error' : 'success',
+            );
             await fetchTab('shipments');
             if (data?.manual !== true) await openLabel(orderIds[0]);
         } catch (err) {
@@ -316,6 +337,31 @@ export default function DesktopOrders() {
             showToast(t('parcel.createFailed'), 'error');
         } finally {
             setLabelBusyIds([]);
+        }
+    };
+
+    // Book a Flash courier for a parcel that already has its label: the seller
+    // chose drop-off and changed their mind, or the booked courier never came.
+    const bookPickup = async (trackingNumber: string) => {
+        setPickupBusyPno(trackingNumber);
+        try {
+            const res = await fetch('/api/orders/label/pickup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackingNumber }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(t(data?.code === 'PICKUP_RECENT' ? 'parcel.pickupRecent' : 'parcel.pickupFailed'), 'error');
+            } else {
+                showToast(t('parcel.pickupBookedToast'), 'success');
+            }
+            await fetchTab('shipments');
+        } catch (err) {
+            console.error('Book pickup failed:', err);
+            showToast(t('parcel.pickupFailed'), 'error');
+        } finally {
+            setPickupBusyPno(null);
         }
     };
 
@@ -617,7 +663,7 @@ export default function DesktopOrders() {
                                                         {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
                                                     </p>
                                                     <button
-                                                        onClick={() => createLabel(combineIds)}
+                                                        onClick={() => setShipSheet({ mode: 'create', orderIds: combineIds })}
                                                         disabled={labelBusy}
                                                         className="bg-brand-cyan/15 hover:bg-brand-cyan/25 border border-brand-cyan/30 text-brand-cyan text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                                                     >
@@ -637,6 +683,18 @@ export default function DesktopOrders() {
                                                         <i className="fa-solid fa-box-open mr-2"></i>
                                                         {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
                                                     </button>
+                                                </div>
+                                            )}
+                                            {/* Labelled, not yet scanned by Flash: what was
+                                                arranged (drop-off or a booked courier) and a
+                                                way to book one. */}
+                                            {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (
+                                                <div className="max-w-md">
+                                                    <ParcelHandoffNote
+                                                        labels={group.map((o) => o.shipping_labels?.[0])}
+                                                        busy={pickupBusyPno === pno}
+                                                        onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
+                                                    />
                                                 </div>
                                             )}
                                         </div>
@@ -671,7 +729,7 @@ export default function DesktopOrders() {
                                                 </span>
                                             ) : awaitingLabel ? (
                                                 <button
-                                                    onClick={() => createLabel(group.map((o) => o.id))}
+                                                    onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
                                                     disabled={labelBusy}
                                                     className="bg-brand-green/20 hover:bg-brand-green/30 border border-brand-green/30 text-brand-green text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                                                 >
@@ -818,6 +876,25 @@ export default function DesktopOrders() {
                         setReportSheetOrder(null);
                         showToast(t('orderActions.reportSent'), 'success');
                         fetchTab('purchases');
+                    }}
+                />
+            )}
+            {shipSheet && (
+                <ShipMethodSheet
+                    mode={shipSheet.mode}
+                    pickup={pickupInfo}
+                    onClose={() => setShipSheet(null)}
+                    onEditAddress={() => {
+                        setShipSheet(null);
+                        const path = window.location.pathname;
+                        const prefix = path === '/en' || path.startsWith('/en/') ? '/en' : '';
+                        router.push(`${prefix}/settings?tab=profile`);
+                    }}
+                    onChoose={(method) => {
+                        const sheet = shipSheet;
+                        setShipSheet(null);
+                        if (sheet.mode === 'create') createLabel(sheet.orderIds, undefined, method);
+                        else bookPickup(sheet.trackingNumber);
                     }}
                 />
             )}

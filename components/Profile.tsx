@@ -31,7 +31,8 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { ShipMethodSheet, ParcelHandoffNote, type PickupInfo } from '@/components/ParcelHandoff';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
@@ -170,6 +171,9 @@ interface Order {
     courier_tracking_url?: string | null;
     estimated_delivery_date?: string | null;
     status?: string | null;
+    // Seller side: drop-off or a booked courier (components/ParcelHandoff).
+    pickup_status?: string | null;
+    updated_at?: string | null;
   }[];
 }
 
@@ -716,6 +720,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       if (res.ok) {
         const data = await res.json();
         setShipments(data.shipments);
+        setPickupInfo(data.pickup ?? null);
       }
     } catch (error) {
       console.error('Error fetching shipments:', error);
@@ -752,18 +757,32 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
   // refreshes and the label opens for printing (any order id in the parcel
   // works: every row carries the same waybill).
   const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
-  const createLabel = async (orderIds: string[], attachToTrackingNumber?: string) => {
+  // A new label first asks how the parcel reaches Flash (components/ParcelHandoff):
+  // a courier is booked only when the seller says so. Adding cards to an
+  // existing parcel skips the question; that parcel is already arranged.
+  const [shipSheet, setShipSheet] = useState<
+    { mode: 'create'; orderIds: string[] } | { mode: 'pickup'; trackingNumber: string } | null
+  >(null);
+  const [pickupInfo, setPickupInfo] = useState<PickupInfo | null>(null);
+  const [pickupBusyPno, setPickupBusyPno] = useState<string | null>(null);
+  const createLabel = async (orderIds: string[], attachToTrackingNumber?: string, shipMethod?: ShipMethod) => {
     setLabelBusyIds(orderIds);
     try {
       const res = await fetch('/api/orders/label/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ orderIds, attachToTrackingNumber }),
+        body: JSON.stringify({ orderIds, attachToTrackingNumber, shipMethod }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'label create failed');
-      showToast(t('parcel.created'), 'success');
+      showToast(
+        attachToTrackingNumber ? t('parcel.created')
+          : shipMethod !== 'pickup' ? t('parcel.createdDropoff')
+          : data?.pickupBooked ? t('parcel.createdPickup')
+          : t('parcel.createdPickupFailed'),
+        shipMethod === 'pickup' && !attachToTrackingNumber && !data?.pickupBooked ? 'error' : 'success',
+      );
       await fetchShipments();
       if (data?.manual !== true) await openLabel(orderIds[0]);
     } catch (err) {
@@ -771,6 +790,32 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
       showToast(t('parcel.createFailed'), 'error');
     } finally {
       setLabelBusyIds([]);
+    }
+  };
+
+  // Book a Flash courier for a parcel that already has its label: the seller
+  // chose drop-off and changed their mind, or the booked courier never came.
+  const bookPickup = async (trackingNumber: string) => {
+    setPickupBusyPno(trackingNumber);
+    try {
+      const res = await fetch('/api/orders/label/pickup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ trackingNumber }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(t(data?.code === 'PICKUP_RECENT' ? 'parcel.pickupRecent' : 'parcel.pickupFailed'), 'error');
+      } else {
+        showToast(t('parcel.pickupBookedToast'), 'success');
+      }
+      await fetchShipments();
+    } catch (err) {
+      console.error('Book pickup failed:', err);
+      showToast(t('parcel.pickupFailed'), 'error');
+    } finally {
+      setPickupBusyPno(null);
     }
   };
 
@@ -1540,6 +1585,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <MapPin className="w-3 h-3" /> {t('profile.shippingAddress')}
                   </label>
+                  <p className="text-[10px] text-slate-600">{t('profile.pickupAddressHint')}</p>
 
                   <GooglePlacesAddressInput
                     id="profile-address-autocomplete"
@@ -2223,7 +2269,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                       {!isBreakOrder && awaitingLabel && (
                         <div className="space-y-2">
                           <button
-                            onClick={() => createLabel(group.map((o) => o.id))}
+                            onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
                             disabled={labelBusy}
                             className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
@@ -2236,7 +2282,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                                 {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
                               </p>
                               <button
-                                onClick={() => createLabel(combineIds)}
+                                onClick={() => setShipSheet({ mode: 'create', orderIds: combineIds })}
                                 disabled={labelBusy}
                                 className="w-full h-9 bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/25 transition-colors disabled:opacity-50"
                               >
@@ -2271,6 +2317,15 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
                           </p>
                         );
                       })()}
+                      {/* Labelled, not yet scanned by Flash: what was arranged
+                          (drop-off or a booked courier) and a way to book one. */}
+                      {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (
+                        <ParcelHandoffNote
+                          labels={group.map((o) => o.shipping_labels?.[0])}
+                          busy={pickupBusyPno === pno}
+                          onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
+                        />
+                      )}
                       {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
                         <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
                           {t('profile.manualLabelRequired')}
@@ -2727,6 +2782,23 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
             setReportSheetOrder(null);
             showToast(t('orderActions.reportSent'), 'success');
             fetchOrders();
+          }}
+        />
+      )}
+      {shipSheet && (
+        <ShipMethodSheet
+          mode={shipSheet.mode}
+          pickup={pickupInfo}
+          onClose={() => setShipSheet(null)}
+          onEditAddress={() => {
+            setShipSheet(null);
+            openPanel('account');
+          }}
+          onChoose={(method) => {
+            const sheet = shipSheet;
+            setShipSheet(null);
+            if (sheet.mode === 'create') createLabel(sheet.orderIds, undefined, method);
+            else bookPickup(sheet.trackingNumber);
           }}
         />
       )}

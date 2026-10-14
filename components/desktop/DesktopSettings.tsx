@@ -367,7 +367,8 @@ export default function DesktopSettings() {
                     </Field>
 
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">{t('desktop.settings.shippingAddress')}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{t('desktop.settings.shippingAddress')}</p>
+                        <p className="text-xs text-slate-500 mb-2">{t('desktop.settings.pickupAddressHint')}</p>
                         <div className="space-y-2">
                             <input value={form.address} onChange={(e) => setField('address', e.target.value)} className={inputCls} placeholder={t('desktop.settings.streetPlaceholder')} />
                             <ThaiAddressFields

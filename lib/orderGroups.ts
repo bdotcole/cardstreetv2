@@ -108,6 +108,45 @@ export function isUnscannedParcel(row: ShipmentRow): boolean {
     return !label.status || label.status === 'created';
 }
 
+/**
+ * How a labelled parcel reaches Flash. Sellers choose when they create the
+ * label: a courier pickup was booked for every label until 2026-10, without
+ * the seller being told, and Flash cancelled 6 of 7 of those pickups because
+ * the courier found nobody home or nothing packed. A pickup is now booked
+ * only when the seller asks for one.
+ */
+export type ShipMethod = 'pickup' | 'dropoff';
+
+/**
+ * Flash never tells us when it cancels a pickup (shipping_labels.pickup_status
+ * stays 'scheduled'), so a parcel still unscanned this long after its booking
+ * may book another. Long enough that a courier on today's round is not
+ * double-booked; short enough to rebook for tomorrow. Enforced server-side by
+ * lib/parcels bookPickup.
+ */
+export const PICKUP_REBOOK_AFTER_MS = 6 * 60 * 60 * 1000;
+
+interface PickupLabel {
+    pickup_status?: string | null;
+    updated_at?: string | null;
+}
+
+/**
+ * When the parcel's courier pickup was booked (ms), or null if none is.
+ * Rows added to a parcel later copy its pickup fields with a newer
+ * updated_at, so the earliest booked row is the booking itself.
+ */
+export function pickupBookedAt(labels: (PickupLabel | null | undefined)[]): number | null {
+    let earliest: number | null = null;
+    for (const label of labels) {
+        if (label?.pickup_status !== 'scheduled') continue;
+        const at = Date.parse(label.updated_at || '');
+        if (Number.isNaN(at)) continue;
+        if (earliest === null || at < earliest) earliest = at;
+    }
+    return earliest;
+}
+
 /** Buyer id -> the parcel groups whose every row satisfies `predicate`. */
 export function parcelsByBuyer<T extends ShipmentRow>(
     parcels: T[][],

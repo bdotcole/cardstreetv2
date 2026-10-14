@@ -12,10 +12,14 @@
  *
  *   - mintParcel: one waybill for a set of this seller's unlabelled orders
  *     from ONE buyer (one checkout, or several combined). Shipment, label
- *     PDF, pickup, label rows, status flip, label email.
+ *     PDF, a courier pickup only if the seller chose one, label rows, status
+ *     flip, label email.
  *   - attachToParcel: add unlabelled orders to a waybill of the same buyer
  *     that Flash has not scanned yet. No new waybill, nothing cancelled; the
  *     seller just puts more cards in the envelope.
+ *   - bookPickup: book a Flash courier for a parcel that already has its
+ *     label (the seller chose drop-off and changed their mind, or the courier
+ *     never came).
  *
  * Both claim the orders first by inserting a PENDING shipping_labels row per
  * order (plain insert, so the UNIQUE order_id makes a concurrent second click
@@ -38,12 +42,14 @@ import {
     type ParcelItemInfo,
 } from '@/lib/flashExpress';
 import { sendLabelGeneratedNotification } from '@/lib/courier';
-import { isRealWaybill } from '@/lib/orderGroups';
+import { isRealWaybill, pickupBookedAt, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
 
 export const SHIPPING_PROFILE_COLS =
     'id, display_name, phone_number, province, state, district, sub_district, postcode, address';
 export const PENDING_WAYBILL = 'PENDING';
 const CLAIM_STALE_MS = 2 * 60 * 1000;
+// pickup_status while bookPickup is talking to Flash; arbitrates double taps.
+const PICKUP_REQUESTING = 'requesting';
 // Statuses an order can be labelled from. 'processing' is a legacy resting
 // state some old rows still carry.
 const LABEL_READY_STATUSES = ['paid', 'processing'];
@@ -75,7 +81,7 @@ export function waybillRowFor(orderId: string, waybill: WaybillFields) {
 }
 
 export type ParcelResult =
-    | { ok: true; trackingNumber: string; orderIds: string[]; manual: boolean }
+    | { ok: true; trackingNumber: string; orderIds: string[]; manual: boolean; pickupBooked?: boolean }
     | { ok: false; status: number; code: string; error: string };
 
 type Fail = Extract<ParcelResult, { ok: false }>;
@@ -135,6 +141,21 @@ function senderOf(p: ProfileRow) {
         srcPostalCode: p.postcode || '10500',
         srcDetailAddress: p.address || 'Cardstreet Platform',
     };
+}
+
+/**
+ * The address a Flash courier collects from, as one line the seller can
+ * check before booking. senderOf fills blanks with placeholders Flash
+ * accepts; this shows only what the profile really holds.
+ */
+export function formatPickupAddress(p: Partial<ProfileRow> | null | undefined): string | null {
+    if (!p) return null;
+    const parts: string[] = [];
+    for (const part of [p.address, p.sub_district || p.district, p.state, p.province, p.postcode]) {
+        const v = (part || '').trim();
+        if (v && !parts.includes(v)) parts.push(v);
+    }
+    return parts.length > 0 ? parts.join(', ') : null;
 }
 
 function recipientOf(p: ProfileRow) {
@@ -250,12 +271,12 @@ async function notifyLabelReady(
     sellerId: string,
     primaryOrderId: string,
     pdfBase64: string | null,
-    parcel: { trackingNumber: string; itemCount: number },
+    parcel: { trackingNumber: string; itemCount: number; shipMethod?: ShipMethod | null },
 ) {
     try {
         await sendLabelGeneratedNotification(
             sellerId,
-            { id: primaryOrderId, trackingNumber: parcel.trackingNumber, itemCount: parcel.itemCount },
+            { id: primaryOrderId, trackingNumber: parcel.trackingNumber, itemCount: parcel.itemCount, shipMethod: parcel.shipMethod },
             pdfBase64,
         );
     } catch (e) {
@@ -263,16 +284,27 @@ async function notifyLabelReady(
     }
 }
 
+async function requestSellerPickup(seller: ProfileRow): Promise<string> {
+    const pickup = await requestPickup({
+        ...senderOf(seller),
+        estimateParcelNumber: 1,
+        remark: 'Cardstreet order pickup',
+    });
+    return String(pickup.ticketPickupId);
+}
+
 /**
  * Mint one Flash waybill for `orderIds` (this seller's unlabelled orders from
- * one buyer): shipment, label PDF, pickup, label rows, status flip, email.
- * A Flash region error becomes a MANUAL placeholder (support handles it), as
- * fulfilment used to do; any other Flash error releases the claim so the
- * seller can simply try again.
+ * one buyer): shipment, label PDF, label rows, status flip, email, and a
+ * courier pickup only when `shipMethod` is 'pickup'. A failed pickup booking
+ * does not fail the label: the row says 'manual' and the seller can drop the
+ * parcel off or book again. A Flash region error becomes a MANUAL placeholder
+ * (support handles it), as fulfilment used to do; any other Flash error
+ * releases the claim so the seller can simply try again.
  */
 export async function mintParcel(
     admin: SupabaseClient,
-    params: { sellerId: string; orderIds: string[]; notify?: boolean },
+    params: { sellerId: string; orderIds: string[]; shipMethod: ShipMethod; notify?: boolean },
 ): Promise<ParcelResult> {
     const loaded = await loadUnlabelledOrders(admin, params.sellerId, params.orderIds);
     if (!loaded.ok) return loaded;
@@ -384,19 +416,16 @@ export async function mintParcel(
         console.error('[Parcels] Label generation error (non-fatal):', labelErr);
     }
 
-    let pickupId = '';
-    let pickupStatus = 'pending';
-    try {
-        const pickup = await requestPickup({
-            ...senderOf(seller),
-            estimateParcelNumber: 1,
-            remark: 'Cardstreet order pickup',
-        });
-        pickupId = String(pickup.ticketPickupId);
-        pickupStatus = 'scheduled';
-    } catch (pickupErr) {
-        console.error('[Parcels] Pickup request error (non-fatal):', pickupErr);
-        pickupStatus = 'manual';
+    let pickupId: string | null = null;
+    let pickupStatus = 'dropoff';
+    if (params.shipMethod === 'pickup') {
+        try {
+            pickupId = await requestSellerPickup(seller);
+            pickupStatus = 'scheduled';
+        } catch (pickupErr) {
+            console.error('[Parcels] Pickup request error (non-fatal):', pickupErr);
+            pickupStatus = 'manual';
+        }
     }
 
     const { error: fullErr } = await admin.from('shipping_labels').upsert(
@@ -405,6 +434,9 @@ export async function mintParcel(
             label_url: labelUrl || 'N/A',
             pickup_id: pickupId,
             pickup_status: pickupStatus,
+            // The booking time: the parcel card and bookPickup read it to
+            // decide when a courier who never came may be booked again.
+            updated_at: new Date().toISOString(),
         })),
         { onConflict: 'order_id' },
     );
@@ -425,10 +457,14 @@ export async function mintParcel(
     }
 
     if (params.notify !== false) {
-        await notifyLabelReady(params.sellerId, primary.id, labelPdfBase64, { trackingNumber: flashOrder.pno, itemCount: orderIds.length });
+        await notifyLabelReady(params.sellerId, primary.id, labelPdfBase64, {
+            trackingNumber: flashOrder.pno,
+            itemCount: orderIds.length,
+            shipMethod: pickupStatus === 'scheduled' ? 'pickup' : 'dropoff',
+        });
     }
     console.log(`[Parcels] Waybill ${flashOrder.pno} covers ${orderIds.length} order(s) for seller ${params.sellerId}`);
-    return { ok: true, trackingNumber: flashOrder.pno, orderIds, manual: false };
+    return { ok: true, trackingNumber: flashOrder.pno, orderIds, manual: false, pickupBooked: pickupStatus === 'scheduled' };
 }
 
 /**
@@ -497,4 +533,112 @@ export async function attachToParcel(
     }
     console.log(`[Parcels] ${orderIds.length} order(s) added to waybill ${waybill.tracking_number} for seller ${params.sellerId}`);
     return { ok: true, trackingNumber: waybill.tracking_number, orderIds, manual: false };
+}
+
+export type PickupResult = { ok: true; trackingNumber: string; pickupId: string } | Fail;
+
+type PickupOrder = { id: string; seller_id: string; status: string; break_spot_id: string | null };
+
+interface PickupRow {
+    order_id: string;
+    status: string | null;
+    pickup_status: string | null;
+    updated_at: string | null;
+    orders: PickupOrder | PickupOrder[] | null;
+}
+
+/**
+ * Book a Flash courier pickup for `trackingNumber`, a labelled parcel of this
+ * seller's that Flash has not scanned. Flash never reports a cancelled pickup
+ * to us, so a parcel whose last booking is older than PICKUP_REBOOK_AFTER_MS
+ * may book again; a fresher booking is refused so two couriers are not sent
+ * for one envelope. The rows are claimed with PICKUP_REQUESTING first so a
+ * double tap books once.
+ */
+export async function bookPickup(
+    admin: SupabaseClient,
+    params: { sellerId: string; trackingNumber: string },
+): Promise<PickupResult> {
+    if (!isRealWaybill(params.trackingNumber)) return fail(400, 'BAD_WAYBILL', 'Not a waybill');
+
+    const { data, error } = await admin
+        .from('shipping_labels')
+        .select('order_id, status, pickup_status, updated_at, orders!inner(id, seller_id, status, break_spot_id)')
+        .eq('tracking_number', params.trackingNumber);
+    if (error) return fail(500, 'LOOKUP_FAILED', error.message);
+    const rows = (data ?? []) as unknown as PickupRow[];
+    if (rows.length === 0) return fail(404, 'PARCEL_NOT_FOUND', 'That parcel was not found');
+
+    for (const row of rows) {
+        const o = one(row.orders);
+        if (!o || o.seller_id !== params.sellerId) return fail(403, 'FORBIDDEN', 'Not your parcel');
+        if (o.break_spot_id) return fail(409, 'LIVE_BREAK', 'Live-break parcels are collected after the show');
+        if (o.status !== 'label_generated' || (row.status && row.status !== 'created')) {
+            return fail(409, 'PARCEL_CLOSED', 'Flash has already collected this parcel');
+        }
+    }
+
+    const bookedAt = pickupBookedAt(rows);
+    if (bookedAt !== null && Date.now() - bookedAt < PICKUP_REBOOK_AFTER_MS) {
+        return fail(409, 'PICKUP_RECENT', 'A courier pickup was booked recently');
+    }
+
+    // Claim: a concurrent second request re-evaluates this WHERE after the
+    // first commits, finds every row already 'requesting', and updates none.
+    // A 'requesting' row older than CLAIM_STALE_MS is a crashed attempt.
+    const staleClaim = new Date(Date.now() - CLAIM_STALE_MS).toISOString();
+    const { data: claimed, error: claimErr } = await admin
+        .from('shipping_labels')
+        .update({ pickup_status: PICKUP_REQUESTING, updated_at: new Date().toISOString() })
+        .eq('tracking_number', params.trackingNumber)
+        .or(`pickup_status.is.null,pickup_status.neq.${PICKUP_REQUESTING},updated_at.lt."${staleClaim}"`)
+        .select('order_id');
+    if (claimErr) return fail(500, 'CLAIM_FAILED', claimErr.message);
+    if (!claimed || claimed.length === 0) return fail(409, 'IN_PROGRESS', 'A pickup is already being booked');
+
+    // Put each row back as it was, booking time included, so a failed
+    // attempt neither blocks nor fakes the rebook window.
+    const restore = async () => {
+        for (const row of rows) {
+            await admin
+                .from('shipping_labels')
+                .update({ pickup_status: row.pickup_status, updated_at: row.updated_at })
+                .eq('order_id', row.order_id)
+                .eq('pickup_status', PICKUP_REQUESTING);
+        }
+    };
+
+    const { data: seller } = await admin
+        .from('profiles')
+        .select(SHIPPING_PROFILE_COLS)
+        .eq('id', params.sellerId)
+        .maybeSingle();
+    if (!seller) {
+        await restore();
+        return fail(409, 'PROFILE_MISSING', 'Seller profile is missing');
+    }
+
+    let pickupId: string;
+    try {
+        pickupId = await requestSellerPickup(seller as ProfileRow);
+    } catch (err: any) {
+        await restore();
+        console.error(`[Parcels] Pickup booking failed for ${params.trackingNumber}:`, err);
+        return fail(502, 'FLASH_ERROR', err?.message || 'Flash pickup booking failed');
+    }
+
+    const { error: saveErr } = await admin
+        .from('shipping_labels')
+        .update({ pickup_id: pickupId, pickup_status: 'scheduled', updated_at: new Date().toISOString() })
+        .eq('tracking_number', params.trackingNumber);
+    if (saveErr) {
+        // The courier is booked either way; only our record lags.
+        Sentry.captureMessage('Flash pickup booked but not recorded', {
+            level: 'warning',
+            tags: { handler: 'parcels' },
+            extra: { pno: params.trackingNumber, pickupId, error: saveErr.message },
+        });
+    }
+    console.log(`[Parcels] Pickup ${pickupId} booked for waybill ${params.trackingNumber} (seller ${params.sellerId})`);
+    return { ok: true, trackingNumber: params.trackingNumber, pickupId };
 }
