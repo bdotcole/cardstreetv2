@@ -264,7 +264,8 @@
         "list": "Sign in to list cards for sale",
         "partner": "Sign in to apply as a partner",
         "offer": "Sign in to make an offer",
-        "follow": "Sign in to follow shops"
+        "follow": "Sign in to follow shops",
+        "chat": "Sign in to message shops"
     },
     "vault": {
         "myPortfolio": "My Portfolio",
@@ -1941,5 +1942,24 @@
         "title": "Shops",
         "listings": "{n} listings",
         "paused": "Shop paused"
+    },
+    "chat": {
+        "title": "Messages",
+        "message": "Message",
+        "placeholder": "Write a message...",
+        "send": "Send",
+        "emptyInbox": "No messages yet. Open a shop and tap Message to ask about a card.",
+        "emptyThread": "Ask {name} about a card, its condition or shipping.",
+        "safety": "Pay only through Cardstreet. Payments made outside the app are not protected.",
+        "sendFailed": "Message not sent. Please try again.",
+        "rateLimited": "You are sending messages too fast. Wait a moment and try again.",
+        "banned": "Your account cannot send messages.",
+        "unavailable": "Messages are not available yet.",
+        "loadFailed": "Could not load messages.",
+        "you": "You: ",
+        "report": "Report",
+        "viewShop": "View shop",
+        "back": "Back",
+        "close": "Close"
     }
 }

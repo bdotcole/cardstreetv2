@@ -15,6 +15,7 @@ import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
 import { fetchSellerMinOrders, minOrderMessage, minOrderNote, minOrderShortfall } from '@/lib/minOrder';
 import { useFollow } from '@/lib/hooks/useFollow';
+import ChatOverlay from './chat/ChatOverlay';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -32,13 +33,14 @@ interface SellerProfileProps {
     exchangeRate?: number;
     /** Signed-in viewer (null for signed out or guest): drives Follow, and hides it on your own shop. */
     viewerId?: string | null;
-    /** Opens the shell's sign-in wall when a signed-out viewer taps Follow. */
-    onRequireAuth?: () => void;
+    /** Opens the shell's sign-in wall (with this message) when a signed-out viewer taps Follow or Message. */
+    onRequireAuth?: (message: string) => void;
 }
 
 const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, cartTotalForShop = 0, onOpenCart, currency = 'THB', exchangeRate = 1, viewerId = null, onRequireAuth }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [chatOpen, setChatOpen] = useState(false);
     const { t, isThai } = useTranslation();
 
     // Shop minimum order (lib/minOrder.ts). A buyer sent here from a refused
@@ -99,7 +101,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
     const follow = useFollow(seller?.id, {
         sellerName: seller.name,
         viewerId,
-        onRequireAuth: () => onRequireAuth?.(),
+        onRequireAuth: () => onRequireAuth?.(t('authGate.follow')),
     });
 
     // Stats
@@ -190,6 +192,19 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                         >
                             {follow.isFollowing && <i className="fa-solid fa-check text-[11px]"></i>}
                             {t(follow.isFollowing ? 'seller.following' : 'seller.follow')}
+                        </button>
+                    )}
+                    {!isOwnShop && (
+                        <button
+                            onClick={() => {
+                                if (!viewerId) { onRequireAuth?.(t('authGate.chat')); return; }
+                                setChatOpen(true);
+                            }}
+                            aria-label={t('chat.message')}
+                            title={t('chat.message')}
+                            className="h-10 w-10 glass rounded-xl flex items-center justify-center text-brand-cyan hover:bg-brand-cyan/10 transition-colors"
+                        >
+                            <i className="fa-regular fa-comment-dots"></i>
                         </button>
                     )}
                     <button 
@@ -348,6 +363,15 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                     </div>
                 )}
             </div>
+            {chatOpen && viewerId && (
+                <ChatOverlay
+                    other={{ id: seller.id, username: null, display_name: seller.name, avatar_url: seller.avatar }}
+                    viewerId={viewerId}
+                    onClose={() => setChatOpen(false)}
+                    // Already on this shop: "View shop" just closes the chat.
+                    onViewShop={() => setChatOpen(false)}
+                />
+            )}
             <ReportModal 
                 isOpen={isReportModalOpen} 
                 onClose={() => setIsReportModalOpen(false)} 

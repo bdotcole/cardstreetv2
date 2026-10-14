@@ -9,6 +9,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useFollow } from '@/lib/hooks/useFollow';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import type { FollowListKind } from '@/lib/follows';
+import { CHAT_OPEN_EVENT, type ChatOpenDetail } from '@/lib/chat';
 
 // Follow on the (server-rendered) seller page, with the shop's follower count
 // beside it. Mirrors the mobile SellerProfile button: Following stays a
@@ -20,23 +21,28 @@ import type { FollowListKind } from '@/lib/follows';
 export default function SellerFollowButton({
     sellerId,
     sellerName,
+    sellerUsername = null,
+    sellerAvatarUrl = null,
     pathPrefix = '',
 }: {
     sellerId: string;
     sellerName: string;
+    sellerUsername?: string | null;
+    sellerAvatarUrl?: string | null;
     /** '' on the Thai canonical, '/en' under the English prefix. */
     pathPrefix?: string;
 }) {
     const { user } = useDesktopCart();
     const { t, isThai } = useTranslation();
     const router = useRouter();
-    const [authOpen, setAuthOpen] = useState(false);
+    // The sign-in wall's reason: whichever of Follow / Message was tapped.
+    const [authMessage, setAuthMessage] = useState<string | null>(null);
     const [openList, setOpenList] = useState<FollowListKind | null>(null);
     const viewerId = user?.id ?? null;
     const follow = useFollow(sellerId, {
         sellerName,
         viewerId,
-        onRequireAuth: () => setAuthOpen(true),
+        onRequireAuth: () => setAuthMessage(t('authGate.follow')),
     });
     const { reload } = follow;
 
@@ -119,12 +125,25 @@ export default function SellerFollowButton({
                 {follow.isFollowing && <i className="fa-solid fa-check text-[11px]"></i>}
                 {t(follow.isFollowing ? 'seller.following' : 'seller.follow')}
             </button>
+            <button
+                onClick={() => {
+                    if (!viewerId) { setAuthMessage(t('authGate.chat')); return; }
+                    const detail: ChatOpenDetail = {
+                        user: { id: sellerId, username: sellerUsername, display_name: sellerName, avatar_url: sellerAvatarUrl },
+                    };
+                    window.dispatchEvent(new CustomEvent(CHAT_OPEN_EVENT, { detail }));
+                }}
+                className={`h-9 px-4 rounded-lg text-xs font-black uppercase ${isThai ? 'tracking-normal' : 'tracking-widest'} flex items-center gap-2 border border-white/15 text-slate-200 hover:border-brand-cyan/50 hover:text-white transition-colors`}
+            >
+                <i className="fa-regular fa-comment-dots text-[12px]"></i>
+                {t('chat.message')}
+            </button>
             {follow.followers !== null && (
                 <span className="text-sm text-slate-400">
                     <span className="font-black text-white">{follow.followers.toLocaleString()}</span> {t('seller.followers')}
                 </span>
             )}
-            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} contextMessage={t('authGate.follow')} />
+            <AuthModal isOpen={!!authMessage} onClose={() => setAuthMessage(null)} contextMessage={authMessage ?? undefined} />
         </div>
     );
 }

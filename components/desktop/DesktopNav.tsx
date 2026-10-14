@@ -23,6 +23,9 @@ import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
 import { searchShops, type ShopSearchResult } from '@/lib/shopSearch';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
+import DesktopChatHost from '@/components/desktop/DesktopChatHost';
+import { useChatUnread } from '@/lib/hooks/useChatUnread';
+import { CHAT_OPEN_EVENT } from '@/lib/chat';
 import { Card } from '@/types';
 
 /**
@@ -75,6 +78,8 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // (auth metadata only carries the Google name and photo) and the username
     // their shop page is addressed by, for "View my profile".
     const [ownProfile, setOwnProfile] = useState<PublicSeller | null>(null);
+    const chatUnread = useChatUnread(!!user);
+    const openMessages = () => window.dispatchEvent(new CustomEvent(CHAT_OPEN_EVENT));
     useEffect(() => {
         if (!user?.id) { setOwnProfile(null); return; }
         let cancelled = false;
@@ -435,6 +440,11 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 )}
                             </AvatarFrame>
                             <span className="text-sm font-bold text-white max-w-[140px] truncate">{displayName}</span>
+                            {chatUnread.unread > 0 && (
+                                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center" aria-label={`${chatUnread.unread} unread`}>
+                                    {chatUnread.unread}
+                                </span>
+                            )}
                             <i className="fa-solid fa-chevron-down text-[10px] text-slate-500"></i>
                         </button>
 
@@ -450,6 +460,20 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                         <i className="fa-solid fa-store mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.viewProfile')}
                                     </Link>
+                                    {chatUnread.available && (
+                                        <button
+                                            onClick={() => { setMenuOpen(false); openMessages(); }}
+                                            className="w-full flex items-center px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <i className="fa-solid fa-comment-dots mr-2.5 text-slate-500 w-4 text-center"></i>
+                                            <span className="flex-1">{t('chat.title')}</span>
+                                            {chatUnread.unread > 0 && (
+                                                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center">
+                                                    {chatUnread.unread}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )}
                                     <Link
                                         href={`${pathPrefix}/collection`}
                                         onClick={() => setMenuOpen(false)}
@@ -559,6 +583,19 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 {t('desktop.viewProfile')}
                             </Link>
                         )}
+                        {user && chatUnread.available && (
+                            <button
+                                onClick={() => { setMobileNavOpen(false); openMessages(); }}
+                                className="py-2.5 text-left text-white hover:text-brand-cyan transition-colors flex items-center gap-2"
+                            >
+                                {t('chat.title')}
+                                {chatUnread.unread > 0 && (
+                                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center">
+                                        {chatUnread.unread}
+                                    </span>
+                                )}
+                            </button>
+                        )}
                         {user && (
                             <Link
                                 href={`${pathPrefix}/collection`}
@@ -607,6 +644,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
             )}
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            <DesktopChatHost pathPrefix={pathPrefix} />
         </header>
     );
 }

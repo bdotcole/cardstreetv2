@@ -7,7 +7,7 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio
+  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio, MessageCircle
 } from 'lucide-react';
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
@@ -19,6 +19,10 @@ import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
 import FollowList from './FollowList';
 import { fetchFollowSummary } from '@/lib/follows';
+import ChatInbox from './chat/ChatInbox';
+import ChatOverlay from './chat/ChatOverlay';
+import { useChatUnread } from '@/lib/hooks/useChatUnread';
+import type { ChatUser } from '@/lib/chat';
 import StripeConnectSection from './StripeConnectSection';
 import ShopPauseSection from './ShopPauseSection';
 import ShopMinOrderSection from './ShopMinOrderSection';
@@ -209,7 +213,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers';
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers' | 'messages';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -337,6 +341,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   );
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
+  // Messages row badge + the open conversation (a body-portaled overlay above
+  // the Messages panel, so its composer is never under the tab bar).
+  const chatUnread = useChatUnread(!!user && user.provider !== 'guest');
+  const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null } | null>(null);
   const supabase = createClient();
 
   // Profile data state
@@ -603,6 +611,16 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       if (sessionStorage.getItem('cs_open_support') === '1') {
         sessionStorage.removeItem('cs_open_support');
         setActivePanel('support');
+        return;
+      }
+      // Chat push tap or email CTA (/?tab=messages&thread=<id>).
+      const chatThread = sessionStorage.getItem('cs_open_chat_thread');
+      const openMessages = sessionStorage.getItem('cs_open_messages') === '1';
+      if (chatThread || openMessages) {
+        sessionStorage.removeItem('cs_open_chat_thread');
+        sessionStorage.removeItem('cs_open_messages');
+        setActivePanel('messages');
+        if (chatThread) setOpenChat({ threadId: chatThread });
       }
     } catch { /* storage unavailable (private mode) */ }
   }, []);
@@ -622,9 +640,21 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       setActivePanel('support');
     };
     window.addEventListener('cs-open-support', onOpenSupport);
+    const onOpenChat = () => {
+      let threadId: string | null = null;
+      try {
+        threadId = sessionStorage.getItem('cs_open_chat_thread');
+        sessionStorage.removeItem('cs_open_chat_thread');
+        sessionStorage.removeItem('cs_open_messages');
+      } catch { /* mount-time read handles it */ }
+      setActivePanel('messages');
+      if (threadId) setOpenChat({ threadId });
+    };
+    window.addEventListener('cs-open-chat', onOpenChat);
     return () => {
       window.removeEventListener('cs-open-offers', onOpenOffers);
       window.removeEventListener('cs-open-support', onOpenSupport);
+      window.removeEventListener('cs-open-chat', onOpenChat);
     };
   }, []);
 
@@ -1231,6 +1261,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       title: t('profile.ordersSales'),
       items: [
         { name: t('profile.trackOrders'), icon: Package, panel: 'orders' as ActivePanel, color: 'text-blue-400' },
+        // Buyer to seller chat. Hidden only when the server says the chat
+        // tables do not exist yet.
+        ...(chatUnread.available
+          ? [{ name: t('chat.title'), icon: MessageCircle, panel: 'messages' as ActivePanel, color: 'text-brand-green', badge: chatUnread.unread }]
+          : []),
         // OBO offers inbox (received as seller + made as buyer). Flag-gated so
         // nothing appears while the feature is dark.
         ...(process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1'
@@ -2005,6 +2040,28 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
             <MyLiveShows onBack={() => setActivePanel('none')} />
+          </motion.div>
+        )}
+
+        {/* Messages inbox. A conversation opens in ChatOverlay, below. */}
+        {activePanel === 'messages' && (
+          <motion.div
+            key="messages"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+          >
+            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
+              <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-slate-400" />
+                </button>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('chat.title')}</h2>
+              </div>
+              <ChatInbox onOpenThread={(thread) => setOpenChat({ threadId: thread.id, other: thread.other })} />
+            </div>
           </motion.div>
         )}
 
@@ -2841,6 +2898,20 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             setReportSheetOrder(null);
             showToast(t('orderActions.reportSent'), 'success');
             fetchOrders();
+          }}
+        />
+      )}
+      {openChat && viewerId && (
+        <ChatOverlay
+          key={openChat.threadId ?? openChat.other?.id ?? 'chat'}
+          threadId={openChat.threadId}
+          other={openChat.other}
+          viewerId={viewerId}
+          onClose={() => setOpenChat(null)}
+          onViewShop={(peer) => {
+            setOpenChat(null);
+            setActivePanel('none');
+            onOpenSeller?.(peer.id, { display_name: peer.display_name, username: peer.username, avatar_url: peer.avatar_url });
           }}
         />
       )}

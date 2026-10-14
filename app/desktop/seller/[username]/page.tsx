@@ -122,7 +122,13 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
                     <div className="mt-3">
-                        <SellerFollowButton sellerId={seller.id} sellerName={name} pathPrefix={pathPrefix} />
+                        <SellerFollowButton
+                            sellerId={seller.id}
+                            sellerName={name}
+                            sellerUsername={seller.username}
+                            sellerAvatarUrl={seller.avatar_url}
+                            pathPrefix={pathPrefix}
+                        />
                     </div>
                     {/* Said on the shop itself, so a buyer filling a cart here
                         knows the target before checkout refuses them; reads

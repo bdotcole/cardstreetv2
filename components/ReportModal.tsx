@@ -9,6 +9,8 @@ interface ReportModalProps {
     isOpen: boolean;
     onClose: () => void;
     entityType: ReportEntityType;
+    /** Stacking layer; a chat overlay (z-[90]) needs the report sheet above it. */
+    zIndexClass?: string;
     entityId: string;
     entityName?: string;
 }
@@ -22,7 +24,7 @@ const REPORT_REASONS = [
     "Other"
 ];
 
-const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, entityId, entityName }) => {
+const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, entityId, entityName, zIndexClass = 'z-50' }) => {
     const { t } = useTranslation();
     const [selectedReason, setSelectedReason] = useState(REPORT_REASONS[0]);
     const [description, setDescription] = useState('');
@@ -85,7 +87,7 @@ const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, entityType, 
 
     return (
         <BodyPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
+        <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
             <div className="relative w-full max-w-md glass border border-white/10 rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto animate-scaleIn">
                 <div className="p-6 border-b border-white/5">

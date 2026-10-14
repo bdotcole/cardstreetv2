@@ -71,6 +71,8 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
+import { useChatUnread } from '@/lib/hooks/useChatUnread';
+import { CHAT_BACK_EVENT } from '@/components/chat/ChatOverlay';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { isEntryPointHidden } from '@/lib/betaFeatures';
 const LiveShopChooser = dynamic(() => import('@/components/live/LiveShopChooser'), { ssr: false });
@@ -115,6 +117,8 @@ const TAB_ALIASES: Record<string, { tab: LandingTab; profileFlag?: string }> = {
     settings: { tab: 'profile', profileFlag: 'cs_open_settings' },
     // The support-reply email's CTA (lib/courier.ts sendSupportReplyNotification).
     support: { tab: 'profile', profileFlag: 'cs_open_support' },
+    // The chat email's CTA (sendChatMessageNotification); &thread= picks the conversation.
+    messages: { tab: 'profile', profileFlag: 'cs_open_messages' },
 };
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
@@ -385,6 +389,11 @@ export default function HomePage() {
             if (alias?.profileFlag) {
                 try { sessionStorage.setItem(alias.profileFlag, '1'); } catch { /* opens Profile root instead */ }
             }
+            const chatThread = tab === 'messages' ? params.get('thread') : null;
+            if (chatThread) {
+                try { sessionStorage.setItem('cs_open_chat_thread', chatThread); } catch { /* opens the inbox instead */ }
+                params.delete('thread');
+            }
             setActiveTab(alias ? alias.tab : (tab as LandingTab));
             params.delete('tab');
             const rest = params.toString();
@@ -425,12 +434,15 @@ export default function HomePage() {
         window.addEventListener('cs-open-offers', onOpenOffers);
         // Support-reply push tap: same contract, cs_open_support flag.
         window.addEventListener('cs-open-support', onOpenOffers);
+        // Chat push tap: same contract, cs_open_chat_thread flag.
+        window.addEventListener('cs-open-chat', onOpenOffers);
         // Order push tap / order App Link: same contract, cs_focus_order flag
         // (Profile reads the id and picks the shipment or order panel).
         window.addEventListener('cs-open-order', onOpenOffers);
         return () => {
             window.removeEventListener('cs-open-offers', onOpenOffers);
             window.removeEventListener('cs-open-support', onOpenOffers);
+            window.removeEventListener('cs-open-chat', onOpenOffers);
             window.removeEventListener('cs-open-order', onOpenOffers);
         };
     }, []);
@@ -729,6 +741,9 @@ export default function HomePage() {
     const offerBadge = useOfferBadge(
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
     );
+    // Unread chats share the profile-tab badge: Messages lives under Profile.
+    const chatUnread = useChatUnread(!!user && user.provider !== 'guest');
+    const profileBadge = offerBadge.actionable + chatUnread.unread;
     // Collector Pass rewards: the header coin chip replaced the currency
     // switcher (currency now lives in Profile > Settings). Beta-gated + signed
     // in only; the summary hook fails closed so the chip simply doesn't render
@@ -2160,6 +2175,10 @@ export default function HomePage() {
             backListener = await App.addListener('backButton', () => {
                 const state = stateRef.current;
 
+                // Layer 0: an open chat (a body-portaled overlay) closes first.
+                // dispatchEvent returns false when ChatOverlay consumed it.
+                if (!window.dispatchEvent(new CustomEvent(CHAT_BACK_EVENT, { cancelable: true }))) return;
+
                 // Layer 1: Modals & Overlays
                 if (state.isPaymentModalOpen) {
                     setIsPaymentModalOpen(false);
@@ -2340,6 +2359,20 @@ export default function HomePage() {
                     // ?view=vault): straight into the Vault.
                     if (appLink.searchParams.get('view') === 'vault') {
                         setActiveTab('vault');
+                        return;
+                    }
+                    // Chat email CTA (cardstreet.app/?tab=messages&thread=<id>):
+                    // the App Link skips the web ?tab= landing, so hand the
+                    // thread to Profile here. Flag for a Profile that mounts on
+                    // the tab switch, event for one that is already mounted.
+                    if (appLink.searchParams.get('tab') === 'messages') {
+                        const chatThread = appLink.searchParams.get('thread');
+                        try {
+                            sessionStorage.setItem('cs_open_messages', '1');
+                            if (chatThread) sessionStorage.setItem('cs_open_chat_thread', chatThread);
+                        } catch { /* opens Profile root instead */ }
+                        setActiveTab('profile');
+                        window.dispatchEvent(new CustomEvent('cs-open-chat', { cancelable: true }));
                         return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
@@ -2741,7 +2774,7 @@ export default function HomePage() {
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                                 viewerId={user && user.provider !== 'guest' ? user.id : null}
-                                onRequireAuth={() => { requireAuth(t('authGate.follow')); }}
+                                onRequireAuth={(message) => { requireAuth(message); }}
                             />
                         )}
                         {activeTab === 'add' && <AddCard onScanClick={handleScanCard} onSelectCard={setSelectedCard} isScanning={isAiLoading} />}
@@ -2863,9 +2896,9 @@ export default function HomePage() {
                             {/* Offers needing action (mostly: accepted, awaiting your payment).
                                 The inbox is three taps deep, so this is the only thing a buyer
                                 who missed the email will ever see. */}
-                            {offerBadge.actionable > 0 && (
+                            {profileBadge > 0 && (
                                 <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[9px] font-black flex items-center justify-center shadow-lg shadow-brand-cyan/30">
-                                    {offerBadge.actionable}
+                                    {profileBadge}
                                 </span>
                             )}
                         </span>

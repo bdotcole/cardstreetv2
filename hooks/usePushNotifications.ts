@@ -95,6 +95,16 @@ function routeNotificationTap(data: unknown) {
         if (unconsumed) window.location.assign('/?tab=support');
         return;
     }
+    if (type === 'chat_message') {
+        // The conversation opens over Profile -> Messages. Same handoff as
+        // support replies, with the thread id as the flag's value.
+        const d = data as { threadId?: unknown };
+        const threadId = typeof d?.threadId === 'string' ? d.threadId : '';
+        try { if (threadId) sessionStorage.setItem('cs_open_chat_thread', threadId); } catch { /* landing fallback still opens Messages */ }
+        const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-chat', { cancelable: true }));
+        if (unconsumed) window.location.assign(`/?tab=messages${threadId ? `&thread=${encodeURIComponent(threadId)}` : ''}`);
+        return;
+    }
     if (!type.startsWith('offer_')) return;
     // An ACCEPTED offer has exactly one next step, so its tap goes straight to
     // payment rather than to the Offers list. Every other offer push (received,

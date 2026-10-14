@@ -3100,6 +3100,58 @@ export async function sendSupportReplyNotification(
     }
 }
 
+// ─── Buyer to seller chat (lib/chat.server.ts notifyChatRecipient) ──────────
+
+/**
+ * A new chat message. Push for every message; email only when the caller says
+ * so (lib/chat.server.ts throttles it to one per unread conversation). The push
+ * deep-links to the thread; the email CTA opens it via /?tab=messages.
+ */
+export async function sendChatMessageNotification(
+    userId: string,
+    msg: { threadId: string; senderName: string; body: string; allowEmail: boolean },
+): Promise<{ pushed: boolean; emailed: boolean }> {
+    const courier = getCourier();
+    if (!courier) return { pushed: false, emailed: false };
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantPush = !!fcmToken && prefs.chat_push !== false;
+    const wantEmail = msg.allowEmail && !!email && prefs.chat_email !== false;
+    if (!wantPush && !wantEmail) return { pushed: false, emailed: false };
+
+    const name = msg.senderName.length > 40 ? `${msg.senderName.slice(0, 37)}...` : msg.senderName;
+    const title = `ข้อความใหม่จาก ${name} · New message from ${name}`;
+    const flat = msg.body.replace(/\s+/g, ' ').trim();
+    const pushBody = flat.length > 140 ? `${flat.slice(0, 137)}...` : flat;
+    const lines = msg.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const url = `${appBaseUrl()}/?tab=messages&thread=${encodeURIComponent(msg.threadId)}&utm_source=courier&utm_medium=email&utm_campaign=chat_message`;
+
+    try {
+        await courier.send.message({
+            message: {
+                to: { ...buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null), user_id: userId },
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: wantEmail ? postmarkOverride(title) : undefined,
+                data: { type: 'chat_message', threadId: msg.threadId },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        { text: `${name}:`, muted: true },
+                        ...lines.map((text) => ({ text })),
+                    ],
+                    cta: { label: 'ตอบกลับในแอป · Reply in the app', url },
+                    emailFooter: 'ชำระเงินผ่าน Cardstreet เท่านั้น การโอนเงินนอกแอปจะไม่ได้รับการคุ้มครอง · Pay only through Cardstreet. Payments made outside the app are not protected.',
+                    pushBody,
+                }),
+            } as any,
+        });
+        return { pushed: wantPush, emailed: wantEmail };
+    } catch (error) {
+        console.error(`[Courier] chat message notification to ${userId} failed:`, error);
+        return { pushed: false, emailed: false };
+    }
+}
+
 // ─── Seller ship-by reminder (app/api/cron/ship-reminders) ───────────────────
 
 /**
