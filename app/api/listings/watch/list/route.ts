@@ -29,12 +29,20 @@ export async function GET() {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: watches, error } = await supabase
+    type WatchRow = { listing_id: string; price_at_watch?: number | string | null; created_at: string };
+    const readWatches = (columns: string) => supabase
         .from('listing_watches')
-        .select('listing_id, price_at_watch, created_at')
+        .select(columns)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(MAX_ROWS);
+    let { data: watches, error } = await readWatches('listing_id, price_at_watch, created_at');
+    // 42703: the table exists without price_at_watch (the first cut of the
+    // migration ran in production without it); the list still works, just
+    // without the "was" price.
+    if (error?.code === '42703') {
+        ({ data: watches, error } = await readWatches('listing_id, created_at'));
+    }
     if (error) {
         if (MISSING_SCHEMA_CODES.has(error.code ?? '')) {
             return NextResponse.json({ available: false, items: [] });
@@ -43,8 +51,7 @@ export async function GET() {
         return NextResponse.json({ error: 'Failed to load watchlist' }, { status: 500 });
     }
 
-    type WatchRow = { listing_id: string; price_at_watch: number | string | null; created_at: string };
-    const rows = (watches ?? []) as WatchRow[];
+    const rows = ((watches ?? []) as unknown) as WatchRow[];
     if (rows.length === 0) {
         return NextResponse.json({ available: true, items: [] }, { headers: { 'Cache-Control': 'no-store' } });
     }
@@ -75,7 +82,7 @@ export async function GET() {
             return {
                 ...listing,
                 watched_at: w.created_at,
-                price_at_watch: w.price_at_watch === null ? null : Number(w.price_at_watch),
+                price_at_watch: w.price_at_watch === null || w.price_at_watch === undefined ? null : Number(w.price_at_watch),
             };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);

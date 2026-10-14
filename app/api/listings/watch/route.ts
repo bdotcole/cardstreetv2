@@ -90,9 +90,17 @@ export async function POST(request: NextRequest) {
 
     // The price at watch time lets the Watching list show how far a card has
     // come down since.
-    const { error: insertErr } = await supabase
+    let { error: insertErr } = await supabase
         .from('listing_watches')
         .insert({ user_id: user.id, listing_id: listingId, price_at_watch: Number(listing.price) || null });
+    // 42703: the table exists without price_at_watch (the first cut of the
+    // migration ran in production without it). The watch itself must not
+    // depend on a nicety column — insert without it.
+    if (insertErr?.code === '42703') {
+        ({ error: insertErr } = await supabase
+            .from('listing_watches')
+            .insert({ user_id: user.id, listing_id: listingId }));
+    }
     // 23505: already watching (a double tap, or a second device) — same outcome.
     if (insertErr && insertErr.code !== '23505') {
         if (isMissingSchema(insertErr)) {

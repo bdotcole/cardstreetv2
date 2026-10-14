@@ -298,48 +298,61 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                         <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{card.set} • {card.rarity}</p>
                     </div>
 
-                    {/* Listing Specifics */}
-                    <div className="glass p-6 rounded-3xl border border-brand-green/20 space-y-4">
-                        <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                            <div>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{isThai ? 'ราคาขาย' : 'Asking Price'}</p>
-                                <p className="text-4xl font-black text-brand-cyan">
-                                    {CURRENCY_SYMBOLS[currency] || currency}{' '}
-                                    {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
-                                </p>
-                                {/* Shipping, before checkout rather than at the
-                                    payment screen. On a cheap card it is most of
-                                    what the buyer pays. */}
-                                <ShippingNote className="mt-1.5" />
+                    {/* Listing Specifics: three full-width strips (price,
+                        watch, seller). The old two-column layout squeezed the
+                        shipping line and the Watch button into each other on
+                        a phone and left the condition pill floating alone. */}
+                    <div className="glass rounded-3xl border border-brand-green/20 overflow-hidden">
+                        <div className="px-5 pt-5 pb-4">
+                            <div className="flex items-end justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1.5">{isThai ? 'ราคาขาย' : 'Asking Price'}</p>
+                                    <p className="text-4xl font-black text-brand-cyan leading-none tracking-tight">
+                                        {CURRENCY_SYMBOLS[currency] || currency}
+                                        {(listing.price * exchangeRate) < 1 ? (listing.price * exchangeRate).toFixed(2) : Math.round(listing.price * exchangeRate).toLocaleString()}
+                                    </p>
+                                </div>
+                                <span className="shrink-0 bg-brand-green/15 text-brand-green px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest border border-brand-green/25">
+                                    {gradedLabel ?? listing.condition}
+                                </span>
+                            </div>
+                            {/* Shipping, before checkout rather than at the payment
+                                screen. On a cheap card it is most of what the buyer
+                                pays. Full width, so it never wraps against a column. */}
+                            <div className="mt-3 space-y-1">
+                                <ShippingNote />
                                 {sellerMinOrder > 0 && (
-                                    <p className="text-[11px] text-amber-300/90 font-bold mt-1">
+                                    <p className="text-[11px] text-amber-300/90 font-bold">
                                         {minOrderNote(isThai, sellerMinOrder)}
                                     </p>
                                 )}
                             </div>
-                            <div className="text-right flex flex-col items-end gap-2.5">
-                                <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">
-                                    {gradedLabel ?? listing.condition}
-                                </span>
-                                {/* Watch, with how many others already do: the
-                                    same count the tile shows, spelled out. */}
+                        </div>
+
+                        {/* Watch, with how many others already do: the same count
+                            the tile shows. The seller gets no strip on their own
+                            listing (the tile carries their count). */}
+                        {!(currentUserId && currentUserId === sellerId) && (
+                            <div className="px-5 py-3 border-t border-white/5">
                                 <ListingWatchButton
                                     listing={{ ...listing, seller_id: sellerId }}
                                     onRequireAuth={onRequireAuth}
+                                    layout="wide"
                                 />
                             </div>
-                        </div>
+                        )}
 
-                        <div
-                            className="flex items-center gap-4 pt-2 cursor-pointer group"
+                        <button
+                            type="button"
                             onClick={() => onSellerClick(listing.seller)}
+                            className="w-full px-5 py-4 border-t border-white/5 flex items-center gap-4 text-left group active:bg-white/[0.03] transition-colors"
                         >
-                            <div className="w-12 h-12 rounded-2xl bg-slate-800 overflow-hidden border border-white/10 group-hover:border-brand-cyan transition-colors relative z-10">
-                                <Image src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} alt="Seller Avatar" width={48} height={48} className="w-full h-full object-cover" />
+                            <div className="w-11 h-11 rounded-xl bg-slate-800 overflow-hidden border border-white/10 group-hover:border-brand-cyan transition-colors shrink-0">
+                                <Image src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} alt="Seller Avatar" width={44} height={44} className="w-full h-full object-cover" />
                             </div>
-                            <div>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest group-hover:text-brand-cyan transition-colors">{isThai ? 'ผู้ขาย' : 'Seller'}</p>
-                                <p className="text-white font-bold group-hover:text-brand-cyan transition-colors">{listing.seller.display_name}</p>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'ผู้ขาย' : 'Seller'}</p>
+                                <p className="text-white font-bold truncate group-hover:text-brand-cyan transition-colors">{listing.seller.display_name}</p>
                                 {(() => {
                                     const trust = getSellerTrust(listing.seller);
                                     if (trust.kind === 'partner')
@@ -359,7 +372,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                     );
                                 })()}
                             </div>
-                        </div>
+                            <i className="fa-solid fa-chevron-right text-xs text-slate-600 group-hover:text-brand-cyan transition-colors shrink-0"></i>
+                        </button>
                     </div>
 
                     {/* Market data for the underlying card, as on the card database page */}

@@ -96,15 +96,20 @@ export default ListingWatchBadge;
  * count spelled out ("3 watching"). Same state as the tile badge, so a tap
  * here moves the tile behind the sheet too.
  */
-export const ListingWatchButton: React.FC<Omit<Props, 'size'>> = ({ listing, onRequireAuth, className = '' }) => {
+export const ListingWatchButton: React.FC<Omit<Props, 'size'> & {
+    /** 'wide' fills its row: the action on the left, the count on the right. */
+    layout?: 'inline' | 'wide';
+}> = ({ listing, onRequireAuth, className = '', layout = 'inline' }) => {
     const { viewerId, isWatching, watchers, toggle } = useListingWatch();
     const { t } = useTranslation();
     const watching = isWatching(listing);
     const count = watchers(listing);
     const own = !!viewerId && viewerId === listing.seller_id;
     const countLabel = t('watch.watchers').replace('{n}', String(count));
+    const wide = layout === 'wide';
 
     if (own) {
+        if (count === 0) return null;
         return (
             <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 ${className}`}>
                 <i className="fa-regular fa-eye"></i>
@@ -128,16 +133,21 @@ export const ListingWatchButton: React.FC<Omit<Props, 'size'>> = ({ listing, onR
                 });
             }}
             aria-pressed={watching}
-            className={`inline-flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${watching
+            className={`inline-flex items-center rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all active:scale-[0.98] ${wide ? 'w-full h-11 px-4 justify-between gap-3' : 'h-9 pl-3 pr-3.5 gap-2'} ${watching
                 ? 'bg-brand-cyan text-brand-darker border-brand-cyan shadow-lg shadow-brand-cyan/20'
                 : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
             } ${className}`}
         >
-            <i className={`${watching ? 'fa-solid' : 'fa-regular'} fa-eye`}></i>
-            {watching ? t('watch.watching') : t('watch.cta')}
-            <span className={`text-[10px] font-bold normal-case tracking-normal ${watching ? 'text-brand-darker/70' : 'text-slate-400'}`}>
-                · {countLabel}
+            <span className="inline-flex items-center gap-2">
+                <i className={`${watching ? 'fa-solid' : 'fa-regular'} fa-eye`}></i>
+                {watching ? t('watch.watching') : t('watch.cta')}
             </span>
+            {/* The count only once there is one: "0 watching" is noise. */}
+            {count > 0 && (
+                <span className={`text-[10px] font-bold normal-case tracking-normal ${watching ? 'text-brand-darker/70' : 'text-slate-400'}`}>
+                    {countLabel}
+                </span>
+            )}
         </button>
     );
 };
