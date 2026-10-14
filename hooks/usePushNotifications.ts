@@ -105,6 +105,24 @@ function routeNotificationTap(data: unknown) {
         if (unconsumed) window.location.assign(`/?tab=messages${threadId ? `&thread=${encodeURIComponent(threadId)}` : ''}`);
         return;
     }
+    if (type === 'watch_price_drop') {
+        // The new price is on the Watching list (Profile), next to what it was
+        // when they started watching. Same flag + event handoff as offers.
+        try { sessionStorage.setItem('cs_open_watching', '1'); } catch { /* landing fallback still opens Profile */ }
+        const unconsumed = window.dispatchEvent(new CustomEvent('cs-open-watching', { cancelable: true }));
+        if (unconsumed) window.location.assign('/?tab=watching&utm_source=courier&utm_medium=push&utm_campaign=watch_price_drop');
+        return;
+    }
+    if (type === 'watch_sold') {
+        // The watched copy is gone; the card page lists the other copies.
+        // ?card= is the SPA's card deep link (middleware uses it for /card/*).
+        const d = data as { cardId?: unknown };
+        const cardId = typeof d?.cardId === 'string' ? d.cardId : '';
+        window.location.assign(
+            `/?${cardId ? `card=${encodeURIComponent(cardId)}&` : 'tab=watching&'}utm_source=courier&utm_medium=push&utm_campaign=watch_sold`,
+        );
+        return;
+    }
     if (!type.startsWith('offer_')) return;
     // An ACCEPTED offer has exactly one next step, so its tap goes straight to
     // payment rather than to the Offers list. Every other offer push (received,

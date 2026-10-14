@@ -15,10 +15,20 @@ import { flushSettledSearch, trackSettledSearch } from '@/lib/searchEvents';
 import { Card } from '@/types';
 import { gamesAvailableInLanguage, getGame, CATALOG_LANGUAGES } from '@/lib/games';
 import { getSellerTrust } from '@/lib/sellerTrust';
-import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+import {
+  getDealPercent,
+  LISTING_GRADING_COMPANIES,
+  MIN_GRADE_OPTIONS,
+  minGradeLabel,
+  NO_GRADING_FILTER,
+  isGradingFilterActive,
+  gradingFilterLabel,
+  type GradingFilter,
+} from '@/lib/listingDisplay';
 import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
+import ListingWatchBadge from '@/components/ListingWatchBadge';
 import ShopSearchResults from '@/components/ShopSearchResults';
 import { useShopSearch } from '@/lib/hooks/useShopSearch';
 import type { ShopSearchResult } from '@/lib/shopSearch';
@@ -36,6 +46,8 @@ interface MarketplaceProps {
   onMakeOffer?: (listing: MarketplaceListing) => void;
   /** Signed-in buyer id (null for guests) — gates which tiles show "Make Offer". */
   currentUserId?: string | null;
+  /** Opens the sign-in wall when a guest taps Watch on a tile. */
+  onRequireAuth?: () => void;
   listings?: MarketplaceListing[];   // used only for Explore price overlay, marketplace fetches its own
   currency?: string;
   exchangeRate?: number;
@@ -90,6 +102,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   onBuyNow,
   onMakeOffer,
   currentUserId = null,
+  onRequireAuth,
   currency = 'THB',
   exchangeRate = 1,
   onLive,
@@ -105,6 +118,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   // Best deals first: discount vs. market snapshot is the default browse order.
   const [sortOrder, setSortOrder] = useState<ListingSort>('best_deals');
   const [priceRange, setPriceRange] = useState<[number, number]>([0, PRICE_MAX]);
+  // Raw / graded, grading company, grade floor. Singles only: the sheet
+  // hides the section on Sealed and the service ignores it there.
+  const [gradingFilter, setGradingFilter] = useState<GradingFilter>(NO_GRADING_FILTER);
 
   // ── Filter sheet ────────────────────────────────────────────────────────────
   // Selections inside the sheet are drafts; they only hit the query (one fetch,
@@ -113,6 +129,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   const [draftGame, setDraftGame] = useState('all');
   const [draftLanguage, setDraftLanguage] = useState('all');
   const [draftPrice, setDraftPrice] = useState<[number, number]>([0, PRICE_MAX]);
+  const [draftGrading, setDraftGrading] = useState<GradingFilter>(NO_GRADING_FILTER);
   // Portal target only exists in the browser; gate on mount so SSR is clean.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -138,6 +155,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     setDraftGame(selectedGame);
     setDraftLanguage(selectedLanguage);
     setDraftPrice(priceRange);
+    setDraftGrading(gradingFilter);
     setSheetOpen(true);
   };
 
@@ -148,7 +166,15 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     setSelectedGame(draftGame);
     setSelectedLanguage(draftLanguage);
     setPriceRange(ordered);
+    setGradingFilter(draftGrading);
     setSheetOpen(false);
+  };
+
+  const resetDrafts = () => {
+    setDraftGame('all');
+    setDraftLanguage('all');
+    setDraftPrice([0, PRICE_MAX]);
+    setDraftGrading(NO_GRADING_FILTER);
   };
 
   // Lock the page behind the sheet and allow Escape to dismiss it.
@@ -236,6 +262,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       kind: section,
       minPrice: priceRange[0],
       maxPrice: priceRange[1],
+      grading: gradingFilter.grading === 'any' ? undefined : gradingFilter.grading,
+      gradingCompany: gradingFilter.gradingCompany || undefined,
+      minGrade: gradingFilter.minGrade || undefined,
       sort: sortOrder,
       limit: PAGE_SIZE,
       offset: currentOffset,
@@ -265,14 +294,14 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     }
     setHasMore(data.length === PAGE_SIZE);
     setIsLoading(false);
-  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder, offset]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, gradingFilter, sortOrder, offset]);
 
   // When filters change, reset and re-fetch
   useEffect(() => {
     setOffset(0);
     fetchListings(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, sortOrder]);
+  }, [debouncedSearch, selectedLanguage, selectedGame, section, priceRange, gradingFilter, sortOrder]);
 
   // ── Infinite scroll observer ─────────────────────────────────────────────────
   const observerRef = useRef<HTMLDivElement | null>(null);
@@ -285,12 +314,21 @@ const Marketplace: React.FC<MarketplaceProps> = ({
     return () => io.disconnect();
   }, [hasMore, isLoading, fetchListings]);
 
+  // Grading only counts (and shows) while the grid can honour it.
+  const gradingApplies = section !== 'sealed' && isGradingFilterActive(gradingFilter);
+
   // Count active filters
   const activeFilterCount = [
     selectedGame !== 'all',
     selectedLanguage !== 'all',
     priceRange[0] > 0 || priceRange[1] < PRICE_MAX,
+    gradingApplies,
   ].filter(Boolean).length;
+
+  const gradingWords = {
+    raw: t('marketplace.gradingRaw') || 'Raw',
+    graded: t('marketplace.gradingGraded') || 'Graded',
+  };
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
   const formatFilterPrice = (n: number) => `${currencySymbol}${n.toLocaleString()}`;
@@ -438,6 +476,12 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               {(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
                 <AppliedChip label={priceRangeLabel(priceRange)} onRemove={() => setPriceRange([0, PRICE_MAX])} />
               )}
+              {gradingApplies && (
+                <AppliedChip
+                  label={gradingFilterLabel(gradingFilter, gradingWords)}
+                  onRemove={() => setGradingFilter(NO_GRADING_FILTER)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -512,11 +556,16 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                         -{dealPct}%
                       </span>
                     )}
-                    {!slabbed && (
-                      <span className={`absolute top-1.5 right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-md border backdrop-blur-sm ${isTopCondition(listing) ? 'bg-brand-green/20 text-brand-green border-brand-green/30' : 'bg-black/50 text-slate-300 border-white/10'}`}>
-                        {conditionBadgeLabel(listing)}
-                      </span>
-                    )}
+                    {/* Watchers, where the condition badge used to be: how
+                        many people have their eye on this card is the nudge;
+                        the condition still reads on the listing sheet. Below
+                        the slab label on graded tiles, like the deal badge. */}
+                    <ListingWatchBadge
+                      listing={listing}
+                      onRequireAuth={onRequireAuth}
+                      className={`absolute right-1.5 z-10 ${slabbed ? 'top-11' : 'top-1.5'}`}
+                    />
+
                     {/* Compact price strip over the card's text box (never its
                         artwork). Pointer events pass through so the tap still
                         opens the listing. */}
@@ -680,7 +729,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
               )}
               <button
-                onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setSearchQuery(''); }}
+                onClick={() => { setSelectedGame('all'); setSelectedLanguage('all'); setPriceRange([0, PRICE_MAX]); setGradingFilter(NO_GRADING_FILTER); setSearchQuery(''); }}
                 className="mt-4 text-brand-cyan text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
               >
                 {t('marketplace.clearFilters') || 'Reset Filters'}
@@ -747,7 +796,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                     {t('marketplace.filters') || 'Filters'}
                   </h3>
                   <button
-                    onClick={() => { setDraftGame('all'); setDraftLanguage('all'); setDraftPrice([0, PRICE_MAX]); }}
+                    onClick={resetDrafts}
                     className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                   >
                     {t('marketplace.reset') || 'Reset'}
@@ -796,6 +845,79 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                       ))}
                     </div>
                   </section>
+
+                  {/* Grading — singles only; a sealed product is never graded.
+                      Company and grade floor appear once "Graded" is picked, so
+                      the common case (any card) stays a three-chip row. */}
+                  {section !== 'sealed' && (
+                    <section>
+                      <label className={sheetSectionLabelClass}>{t('marketplace.grading') || 'Grading'}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          { id: 'any' as const, label: t('marketplace.gradingAny') || 'Any', icon: 'fa-layer-group' },
+                          { id: 'raw' as const, label: gradingWords.raw, icon: 'fa-clone' },
+                          { id: 'graded' as const, label: gradingWords.graded, icon: 'fa-certificate' },
+                        ]).map(({ id, label, icon }) => (
+                          <button
+                            key={id}
+                            onClick={() => setDraftGrading(id === 'graded' ? { ...draftGrading, grading: 'graded' } : { ...NO_GRADING_FILTER, grading: id })}
+                            className={sheetChipClass(draftGrading.grading === id)}
+                          >
+                            <i className={`fa-solid ${icon} text-[11px]`}></i>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {draftGrading.grading === 'graded' && (
+                        <div className="mt-4 space-y-4 animate-fadeIn">
+                          <div>
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">
+                              {t('marketplace.gradingCompany') || 'Grading company'}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => setDraftGrading({ ...draftGrading, gradingCompany: '' })}
+                                className={sheetChipClass(!draftGrading.gradingCompany)}
+                              >
+                                {t('marketplace.anyCompany') || 'Any company'}
+                              </button>
+                              {LISTING_GRADING_COMPANIES.map((company) => (
+                                <button
+                                  key={company}
+                                  onClick={() => setDraftGrading({ ...draftGrading, gradingCompany: company })}
+                                  className={sheetChipClass(draftGrading.gradingCompany === company)}
+                                >
+                                  {company}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 block">
+                              {t('marketplace.minGrade') || 'Minimum grade'}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => setDraftGrading({ ...draftGrading, minGrade: 0 })}
+                                className={sheetChipClass(draftGrading.minGrade === 0)}
+                              >
+                                {t('marketplace.anyGrade') || 'Any grade'}
+                              </button>
+                              {MIN_GRADE_OPTIONS.map((grade) => (
+                                <button
+                                  key={grade}
+                                  onClick={() => setDraftGrading({ ...draftGrading, minGrade: grade })}
+                                  className={sheetChipClass(draftGrading.minGrade === grade)}
+                                >
+                                  {minGradeLabel(grade)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
 
                   {/* Price */}
                   <section>

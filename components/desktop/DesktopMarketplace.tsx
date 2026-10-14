@@ -21,11 +21,21 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { getSellerTrust } from '@/lib/sellerTrust';
-import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
+import {
+    getDealPercent,
+    conditionBadgeLabel,
+    LISTING_GRADING_COMPANIES,
+    MIN_GRADE_OPTIONS,
+    minGradeLabel,
+    NO_GRADING_FILTER,
+    type GradingFilter,
+} from '@/lib/listingDisplay';
 import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import { formatTHB } from '@/lib/currency';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
+import ListingWatchBadge from '@/components/ListingWatchBadge';
+import AuthModal from '@/components/AuthModal';
 import { CartItem } from '@/types';
 
 const PAGE_SIZE = 60;
@@ -103,6 +113,11 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     );
     const [language, setLanguage] = useState('all');
     const [section, setSection] = useState<'singles' | 'sealed'>('singles');
+    // Raw / graded, grading company, grade floor. Singles only: the row
+    // hides on Sealed and the service ignores it there.
+    const [grading, setGrading] = useState<GradingFilter>(NO_GRADING_FILTER);
+    // Sign-in wall for a signed-out Watch tap on a tile.
+    const [authOpen, setAuthOpen] = useState(false);
 
     // Game-first flow (mirrors the sets browser): the language sub-filter only
     // appears once a specific multi-language game is picked. games.ts declares
@@ -151,6 +166,12 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     // filter chip or the sort changes.
     const lastTrackedSearchRef = useRef('');
 
+    const gradingParams = {
+        grading: grading.grading === 'any' ? undefined : grading.grading,
+        gradingCompany: grading.gradingCompany || undefined,
+        minGrade: grading.minGrade || undefined,
+    };
+
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
@@ -164,6 +185,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                 game,
                 kind: section,
                 language: language === 'all' ? undefined : language,
+                ...gradingParams,
                 sort,
                 limit: PAGE_SIZE,
             })
@@ -189,7 +211,8 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         return () => {
             cancelled = true;
         };
-    }, [q, game, language, section, sort]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [q, game, language, section, grading, sort]);
 
     const loadMore = async () => {
         setLoadingMore(true);
@@ -199,6 +222,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                 game,
                 kind: section,
                 language: language === 'all' ? undefined : language,
+                ...gradingParams,
                 sort,
                 limit: PAGE_SIZE,
                 offset: listings.length,
@@ -292,6 +316,70 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                 </div>
             )}
 
+            {/* Grading — singles only; a sealed product is never graded. The
+                company and grade-floor chips appear once Graded is picked. */}
+            {section === 'singles' && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mr-1">
+                        {t('marketplace.grading')}
+                    </span>
+                    {([
+                        { id: 'any' as const, label: t('marketplace.gradingAny') },
+                        { id: 'raw' as const, label: t('marketplace.gradingRaw') },
+                        { id: 'graded' as const, label: t('marketplace.gradingGraded') },
+                    ]).map(({ id, label }) => (
+                        <FilterChip
+                            key={id}
+                            label={label}
+                            active={grading.grading === id}
+                            tone="green"
+                            small
+                            onClick={() => setGrading(id === 'graded' ? { ...grading, grading: 'graded' } : { ...NO_GRADING_FILTER, grading: id })}
+                        />
+                    ))}
+                    {grading.grading === 'graded' && (
+                        <>
+                            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true"></span>
+                            <FilterChip
+                                label={t('marketplace.anyCompany')}
+                                active={!grading.gradingCompany}
+                                tone="green"
+                                small
+                                onClick={() => setGrading({ ...grading, gradingCompany: '' })}
+                            />
+                            {LISTING_GRADING_COMPANIES.map((company) => (
+                                <FilterChip
+                                    key={company}
+                                    label={company}
+                                    active={grading.gradingCompany === company}
+                                    tone="green"
+                                    small
+                                    onClick={() => setGrading({ ...grading, gradingCompany: company })}
+                                />
+                            ))}
+                            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true"></span>
+                            <FilterChip
+                                label={t('marketplace.anyGrade')}
+                                active={grading.minGrade === 0}
+                                tone="green"
+                                small
+                                onClick={() => setGrading({ ...grading, minGrade: 0 })}
+                            />
+                            {MIN_GRADE_OPTIONS.map((g) => (
+                                <FilterChip
+                                    key={g}
+                                    label={minGradeLabel(g)}
+                                    active={grading.minGrade === g}
+                                    tone="green"
+                                    small
+                                    onClick={() => setGrading({ ...grading, minGrade: g })}
+                                />
+                            ))}
+                        </>
+                    )}
+                </div>
+            )}
+
             {loading ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
                     {Array.from({ length: 12 }).map((_, i) => (
@@ -339,7 +427,14 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
                         {listings.map((listing, idx) => (
-                            <ListingTile key={listing.id} listing={listing} eager={idx < 6} onMakeOffer={setOfferListing} pathPrefix={pathPrefix} />
+                            <ListingTile
+                                key={listing.id}
+                                listing={listing}
+                                eager={idx < 6}
+                                onMakeOffer={setOfferListing}
+                                onRequireAuth={() => setAuthOpen(true)}
+                                pathPrefix={pathPrefix}
+                            />
                         ))}
                     </div>
 
@@ -374,6 +469,8 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     onSubmitted={() => showToast(t('offer.submitted'), 'success')}
                 />
             )}
+
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} contextMessage={t('authGate.watch')} />
         </div>
     );
 }
@@ -404,7 +501,13 @@ function FilterChip({
     );
 }
 
-function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing: MarketplaceListing; eager: boolean; onMakeOffer: (listing: MarketplaceListing) => void; pathPrefix?: string }) {
+function ListingTile({ listing, eager, onMakeOffer, onRequireAuth, pathPrefix = '' }: {
+    listing: MarketplaceListing;
+    eager: boolean;
+    onMakeOffer: (listing: MarketplaceListing) => void;
+    onRequireAuth: () => void;
+    pathPrefix?: string;
+}) {
     const { buyNow, user } = useDesktopCart();
     const { t } = useTranslation();
     // Catalog art is the default; if its host is unreachable (TCGdex outages
@@ -452,6 +555,14 @@ function ListingTile({ listing, eager, onMakeOffer, pathPrefix = '' }: { listing
                             -{dealPct}%
                         </span>
                     )}
+                    {/* Watchers in the top-right corner: the nudge for a buyer on
+                        the fence. Below the slab label on graded tiles. */}
+                    <ListingWatchBadge
+                        listing={listing}
+                        onRequireAuth={onRequireAuth}
+                        size="md"
+                        className={`absolute right-2 z-10 ${slabbed ? 'top-16' : 'top-2'}`}
+                    />
                     {listingUnits(listing) > 1 && (
                         <span
                             title={t('cart.available').replace('{n}', String(listingUnits(listing)))}

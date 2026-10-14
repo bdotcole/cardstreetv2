@@ -7,9 +7,11 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio, MessageCircle
+  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio, MessageCircle, Eye
 } from 'lucide-react';
-import { UserProfile, Offer } from '@/types';
+import { UserProfile, Offer, Card } from '@/types';
+import type { WatchedListing } from '@/lib/listingWatches';
+import WatchList from './WatchList';
 import AuthModal from './AuthModal';
 import CurrencySwitcher from './CurrencySwitcher';
 import AvatarFrame from './rewards/AvatarFrame';
@@ -69,6 +71,10 @@ interface ProfileProps {
   // renders above this panel (it's a sibling of <main>), so closing it drops
   // the user right back on the Offers panel. Undefined when offers are off.
   onViewListing?: (offer: Offer) => void;
+  /** Watching list: opens a live listing's sheet. */
+  onOpenListing?: (listing: WatchedListing) => void;
+  /** Watching list: opens the card for a listing that has sold or gone. */
+  onOpenCard?: (card: Card) => void;
   // Hands a saved display name up so the shell's user.name (seeded from the
   // OAuth full_name, which never changes) shows it everywhere else too.
   onDisplayNameChange?: (name: string) => void;
@@ -213,7 +219,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers' | 'messages';
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers' | 'messages' | 'watching';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -326,7 +332,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner, onOpenSeller, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onDisplayNameChange }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner, onOpenSeller, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onOpenListing, onOpenCard, onDisplayNameChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -621,6 +627,12 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
         sessionStorage.removeItem('cs_open_messages');
         setActivePanel('messages');
         if (chatThread) setOpenChat({ threadId: chatThread });
+        return;
+      }
+      // Watched-listing push tap (/?tab=watching).
+      if (sessionStorage.getItem('cs_open_watching') === '1') {
+        sessionStorage.removeItem('cs_open_watching');
+        setActivePanel('watching');
       }
     } catch { /* storage unavailable (private mode) */ }
   }, []);
@@ -651,10 +663,16 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       if (threadId) setOpenChat({ threadId });
     };
     window.addEventListener('cs-open-chat', onOpenChat);
+    const onOpenWatching = () => {
+      try { sessionStorage.removeItem('cs_open_watching'); } catch { /* mount-time read handles it */ }
+      setActivePanel('watching');
+    };
+    window.addEventListener('cs-open-watching', onOpenWatching);
     return () => {
       window.removeEventListener('cs-open-offers', onOpenOffers);
       window.removeEventListener('cs-open-support', onOpenSupport);
       window.removeEventListener('cs-open-chat', onOpenChat);
+      window.removeEventListener('cs-open-watching', onOpenWatching);
     };
   }, []);
 
@@ -1266,6 +1284,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
         ...(chatUnread.available
           ? [{ name: t('chat.title'), icon: MessageCircle, panel: 'messages' as ActivePanel, color: 'text-brand-green', badge: chatUnread.unread }]
           : []),
+        // Listings the buyer is watching (the eye on a tile).
+        { name: t('watch.listTitle'), icon: Eye, panel: 'watching' as ActivePanel, color: 'text-brand-cyan' },
         // OBO offers inbox (received as seller + made as buyer). Flag-gated so
         // nothing appears while the feature is dark.
         ...(process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1'
@@ -2081,6 +2101,32 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
               onOpenSeller={(sellerId, hint) => {
                 setActivePanel('none');
                 onOpenSeller?.(sellerId, hint);
+              }}
+            />
+          </motion.div>
+        )}
+
+        {/* Watching list. A row opens the listing sheet (or the card, once
+            sold) at the shell level, which sits under this panel, so the
+            panel closes first, like the Following list does for shops. */}
+        {activePanel === 'watching' && (
+          <motion.div
+            key="watching"
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+          >
+            <WatchList
+              onBack={() => setActivePanel('none')}
+              onOpenListing={(listing) => {
+                setActivePanel('none');
+                onOpenListing?.(listing);
+              }}
+              onOpenCard={(card) => {
+                setActivePanel('none');
+                onOpenCard?.(card);
               }}
             />
           </motion.div>

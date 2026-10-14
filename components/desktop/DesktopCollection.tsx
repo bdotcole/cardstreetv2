@@ -4,6 +4,8 @@ import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import WatchList from '@/components/WatchList';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -25,8 +27,11 @@ const PriceChart = dynamic(() => import('@/components/PriceChart'), {
     loading: () => <div className="w-full h-full rounded-lg bg-brand-darker/40 animate-pulse" />,
 });
 
-type Tab = 'overview' | 'collection' | 'wishlist' | 'master';
+type Tab = 'overview' | 'collection' | 'wishlist' | 'watching' | 'master';
 type SortKey = 'date_desc' | 'name_asc' | 'price_desc' | 'price_asc';
+
+const TAB_IDS: readonly Tab[] = ['overview', 'collection', 'wishlist', 'watching', 'master'];
+const isTab = (v: string | null | undefined): v is Tab => !!v && (TAB_IDS as readonly string[]).includes(v);
 
 interface FlatItem {
     colId: string;
@@ -39,8 +44,15 @@ export default function DesktopCollection() {
     // Shared auth state from the cart provider (single gotrue subscription
     // for the whole desktop shell).
     const { user, authChecked } = useDesktopCart();
+    const router = useRouter();
+    // ?tab=watching from the account menu (and the watch-alert emails) opens
+    // that tab directly. Seed only; the chips own it from then on.
+    const searchParams = useSearchParams();
     const [authOpen, setAuthOpen] = useState(false);
-    const [tab, setTab] = useState<Tab>('overview');
+    const [tab, setTab] = useState<Tab>(() => {
+        const wanted = searchParams?.get('tab');
+        return isTab(wanted) ? wanted : 'overview';
+    });
     const [bulkOpen, setBulkOpen] = useState(false);
     const [canBulkImport, setCanBulkImport] = useState(false);
 
@@ -135,6 +147,7 @@ export default function DesktopCollection() {
         ['overview', t('desktop.collection.tabOverview')],
         ['collection', t('desktop.collection.tabCollection')],
         ['wishlist', t('desktop.collection.tabWishlist')],
+        ['watching', t('desktop.collection.tabWatching')],
         ['master', t('desktop.collection.tabMaster')],
     ];
 
@@ -191,6 +204,15 @@ export default function DesktopCollection() {
                 )}
                 {tab === 'wishlist' && (
                     <WishlistPanel wishlist={wishlist} loading={wlLoading} onRemove={removeFromWishlist} />
+                )}
+                {tab === 'watching' && (
+                    <div className="max-w-3xl">
+                        <WatchList
+                            variant="embedded"
+                            onOpenListing={(listing) => router.push(`/card/${encodeURIComponent(listing.card_id)}`)}
+                            onOpenCard={(card) => router.push(`/card/${encodeURIComponent(card.id)}`)}
+                        />
+                    </div>
                 )}
                 {tab === 'master' && (
                     <MasterSetsPanel ownedCardIds={ownedCardIds} ownedCountBySet={ownedCountBySet} />

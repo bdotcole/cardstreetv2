@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { MarketplaceListing } from '@/services/marketplaceService';
@@ -8,6 +9,9 @@ import { formatTHB } from '@/lib/currency';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { listingToCartItem } from '@/components/desktop/DesktopMarketplace';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
+import ListingWatchBadge from '@/components/ListingWatchBadge';
+import AuthModal from '@/components/AuthModal';
+import { useTranslation } from '@/lib/hooks/useTranslation';
 
 // Client tile for the (server-rendered) seller shop page. Mirrors the shop
 // page's original card markup and adds the same one-tap add-to-cart control the
@@ -15,47 +19,61 @@ import GradedSlabFrame from '@/components/GradedSlabFrame';
 // through each card page.
 export default function SellerListingTile({ listing }: { listing: MarketplaceListing }) {
     const { addItem } = useDesktopCart();
+    const { t } = useTranslation();
+    // Sign-in wall for a signed-out Watch tap. AuthModal renders nothing while
+    // closed, so one per tile costs nothing.
+    const [authOpen, setAuthOpen] = useState(false);
     const thumb = getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl);
     const slabbed = !!listing.is_graded && !!listing.grading_company;
 
     return (
-        <Link
-            href={`/card/${listing.card_id}`}
-            className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
-        >
-            <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md" title={listing.card_data.name} subtitle={listing.card_data.set}>
-                    <Image
-                        src={thumb}
-                        alt={listing.card_data.name || 'Card'}
-                        fill
-                        sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                        loading="lazy"
-                        unoptimized={shouldSkipNextOptimization(thumb)}
-                        className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : slabbed ? 'object-contain' : 'object-cover'}`}
+        <>
+            <Link
+                href={`/card/${listing.card_id}`}
+                className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all"
+            >
+                <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
+                    <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade} size="md" title={listing.card_data.name} subtitle={listing.card_data.set}>
+                        <Image
+                            src={thumb}
+                            alt={listing.card_data.name || 'Card'}
+                            fill
+                            sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
+                            loading="lazy"
+                            unoptimized={shouldSkipNextOptimization(thumb)}
+                            className={`group-hover:scale-[1.03] transition-transform duration-300 ${listing.card_data.isSealed ? 'object-contain p-3' : slabbed ? 'object-contain' : 'object-cover'}`}
+                        />
+                    </GradedSlabFrame>
+                    {/* Watchers in the top-right corner, as on the marketplace grid. */}
+                    <ListingWatchBadge
+                        listing={listing}
+                        onRequireAuth={() => setAuthOpen(true)}
+                        size="md"
+                        className={`absolute right-2 z-10 ${slabbed ? 'top-16' : 'top-2'}`}
                     />
-                </GradedSlabFrame>
-            </div>
-            <div className="p-3">
-                <h2 className="text-sm font-bold text-white truncate">{listing.card_data.name}</h2>
-                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                    {listing.card_data.set}
-                </p>
-                <div className="flex items-center justify-between gap-2 mt-1.5">
-                    <p className="text-lg font-black text-brand-cyan truncate">{formatTHB(listing.price)}</p>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            addItem(listingToCartItem(listing));
-                        }}
-                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-brand-cyan text-brand-cyan hover:text-brand-darker flex items-center justify-center transition-colors shrink-0"
-                        aria-label={`Add ${listing.card_data.name} to cart`}
-                    >
-                        <i className="fa-solid fa-cart-plus text-xs"></i>
-                    </button>
                 </div>
-            </div>
-        </Link>
+                <div className="p-3">
+                    <h2 className="text-sm font-bold text-white truncate">{listing.card_data.name}</h2>
+                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
+                        {listing.card_data.set}
+                    </p>
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                        <p className="text-lg font-black text-brand-cyan truncate">{formatTHB(listing.price)}</p>
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                addItem(listingToCartItem(listing));
+                            }}
+                            className="w-8 h-8 rounded-full bg-white/5 hover:bg-brand-cyan text-brand-cyan hover:text-brand-darker flex items-center justify-center transition-colors shrink-0"
+                            aria-label={`Add ${listing.card_data.name} to cart`}
+                        >
+                            <i className="fa-solid fa-cart-plus text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </Link>
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} contextMessage={t('authGate.watch')} />
+        </>
     );
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { attachSellers, fetchPublicSellers } from '@/lib/publicProfiles';
+import { attachWatchCounts } from '@/lib/listingWatches';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
 export interface SellerInfo {
@@ -109,10 +110,14 @@ export const getSellerPageData = cache(
             .eq('status', 'active')
             .order('created_at', { ascending: false });
 
-        const listings = await attachSellers(supabase, ((rows || []) as any[]).map((r) => ({
+        const listingRows = ((rows || []) as any[]).map((r) => ({
             ...r,
             card_data: normalizeCard(r.card_data, r.card_id),
-        })) as MarketplaceListing[]);
+        })) as MarketplaceListing[];
+        const [listings] = await Promise.all([
+            attachSellers(supabase, listingRows),
+            attachWatchCounts(supabase, listingRows),
+        ]);
 
         return { seller, listings };
     }

@@ -13,6 +13,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { LISTING_GRADING_COMPANIES } from '@/lib/listingDisplay';
 
 // Shown once per device the first time the listing form opens, so a new seller
 // understands the fees and that they pay Flash for shipping at pickup.
@@ -454,12 +455,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                     ariaLabel="Company"
                     value={gradingCompany}
                     onChange={setGradingCompany}
-                    options={[
-                      { value: 'PSA', label: 'PSA' },
-                      { value: 'BGS', label: 'BGS' },
-                      { value: 'CGC', label: 'CGC' },
-                      { value: 'TAG', label: 'TAG' },
-                    ]}
+                    options={LISTING_GRADING_COMPANIES.map((company) => ({ value: company, label: company }))}
                     triggerClassName="w-full h-10 bg-brand-darker border border-white/10 rounded-lg px-3 text-white text-sm"
                   />
                 </div>

@@ -12,6 +12,7 @@ import { getSellerTrust } from '@/lib/sellerTrust';
 import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import OfferModal from './OfferModal';
 import GradedSlabFrame from './GradedSlabFrame';
+import { ListingWatchButton } from './ListingWatchBadge';
 
 // Gallery slide with pinch/double-tap zoom. One-finger drag is left to the
 // scroll-snap gallery until the image is actually zoomed in — otherwise the
@@ -66,6 +67,8 @@ interface ListingDetailsProps {
         // sheet shows a quantity stepper and passes the chosen count along.
         units?: number;
         siblingIds?: string[];
+        // People watching this listing (lib/listingWatches.ts).
+        watch_count?: number;
     };
     onClose: () => void;
     onBuyNow: (quantity: number) => void;
@@ -77,6 +80,8 @@ interface ListingDetailsProps {
     currentUserId?: string | null;
     /** Fired after an offer is submitted, so the shell can toast. */
     onOfferSubmitted?: () => void;
+    /** Opens the sign-in wall when a guest taps Watch. */
+    onRequireAuth?: () => void;
 }
 
 const ListingDetails: React.FC<ListingDetailsProps> = ({
@@ -88,7 +93,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
     currency = 'THB',
     exchangeRate = 1,
     currentUserId = null,
-    onOfferSubmitted
+    onOfferSubmitted,
+    onRequireAuth,
 }) => {
     const { t, isThai } = useTranslation();
     const card = listing.card_data;
@@ -311,10 +317,16 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                                     </p>
                                 )}
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex flex-col items-end gap-2.5">
                                 <span className="bg-brand-green/20 text-brand-green px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-brand-green/20">
                                     {gradedLabel ?? listing.condition}
                                 </span>
+                                {/* Watch, with how many others already do: the
+                                    same count the tile shows, spelled out. */}
+                                <ListingWatchButton
+                                    listing={{ ...listing, seller_id: sellerId }}
+                                    onRequireAuth={onRequireAuth}
+                                />
                             </div>
                         </div>
 

@@ -169,6 +169,10 @@ async function getUserNotifContext(userId: string): Promise<{
         digest_email: true, digest_push: true,
         demand_email: true, demand_push: true,
         stale_listing_email: true, stale_listing_push: true,
+        // Watched-listing alerts (price drop, sold). No columns yet; the
+        // master switch is user_settings.notify_price_drops, which the caller
+        // (lib/watchAlerts.ts) checks before sending.
+        watch_email: true, watch_push: true,
     };
 
     return {
@@ -1808,6 +1812,105 @@ export async function sendWishlistListingAlert(
         return true;
     } catch (error) {
         console.error(`[Courier] ❌ Error sending wishlist alert to ${userId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * Price drop on a listing the user watches (lib/watchAlerts.ts decides who
+ * gets it and honours the Settings toggle). Email + push, inline content;
+ * the CTA opens the card page, which lists the listing with its new price
+ * and, in the app, deep-links into the SPA.
+ */
+export async function sendWatchPriceDropAlert(
+    userId: string,
+    d: { listingId: string; cardId: string; cardName: string; oldPrice: number; newPrice: number },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping watch price-drop alert'); return false; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantEmail = prefs.watch_email !== false && !!email;
+    const wantPush = prefs.watch_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const was = `฿${Number(d.oldPrice).toLocaleString('en-US')}`;
+    const now = `฿${Number(d.newPrice).toLocaleString('en-US')}`;
+    const title = `${d.cardName} dropped to ${now} (was ${was})`;
+    const url = `${appBaseUrl()}/card/${encodeURIComponent(d.cardId)}?utm_source=courier&utm_medium=alert&utm_campaign=watch_price_drop`;
+    const content = emailPlusPushContent({
+        title,
+        emailParagraphs: [
+            { text: `การ์ดที่คุณเฝ้าดูอยู่ ${d.cardName} ลดราคาจาก ${was} เหลือ ${now} แล้ว ใครมาก่อนได้ก่อน` },
+            { text: `A listing you are watching, ${d.cardName}, just dropped from ${was} to ${now}. First come, first served.`, muted: true },
+        ],
+        cta: { label: 'View listing · ดูรายการ', url },
+        pushBody: `รายการที่คุณเฝ้าดูลดราคาเหลือ ${now} — แตะเพื่อดู · A listing you watch just dropped its price — tap to see it.`,
+    });
+
+    try {
+        const sendResult = await courier.send.message({
+            message: {
+                to: buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null),
+                content,
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: postmarkOverride(title),
+                // Push deep-link payload (hooks/usePushNotifications routeNotificationTap).
+                data: { type: 'watch_price_drop', listingId: d.listingId, cardId: d.cardId },
+            } as any,
+        });
+        console.log(`[Courier] ✅ Watch price-drop alert sent to ${userId} for listing ${d.listingId}. Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending watch price-drop alert to ${userId}:`, error);
+        return false;
+    }
+}
+
+/**
+ * A listing the user watched has sold to someone else. The useful next step
+ * is the card page, where other copies are listed, so that is where both
+ * channels send them.
+ */
+export async function sendWatchSoldAlert(
+    userId: string,
+    d: { listingId: string; cardId: string; cardName: string; price: number },
+): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping watch sold alert'); return false; }
+
+    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const wantEmail = prefs.watch_email !== false && !!email;
+    const wantPush = prefs.watch_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const price = `฿${Number(d.price).toLocaleString('en-US')}`;
+    const title = `${d.cardName} just sold`;
+    const url = `${appBaseUrl()}/card/${encodeURIComponent(d.cardId)}?utm_source=courier&utm_medium=alert&utm_campaign=watch_sold`;
+    const content = emailPlusPushContent({
+        title,
+        emailParagraphs: [
+            { text: `${d.cardName} ที่คุณเฝ้าดูอยู่ขายไปแล้วในราคา ${price} ยังมีการ์ดใบนี้จากผู้ขายรายอื่น ลองดูได้เลย` },
+            { text: `The ${d.cardName} you were watching just sold for ${price}. Other sellers may still have one — take a look.`, muted: true },
+        ],
+        cta: { label: 'See other listings · ดูรายการอื่น', url },
+        pushBody: `การ์ดที่คุณเฝ้าดูขายไปแล้ว — แตะเพื่อดูรายการอื่น · The listing you were watching is gone — tap to see other listings.`,
+    });
+
+    try {
+        const sendResult = await courier.send.message({
+            message: {
+                to: buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null),
+                content,
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: postmarkOverride(title),
+                data: { type: 'watch_sold', listingId: d.listingId, cardId: d.cardId },
+            } as any,
+        });
+        console.log(`[Courier] ✅ Watch sold alert sent to ${userId} for listing ${d.listingId}. Request ID: ${(sendResult as { requestId?: string })?.requestId ?? 'n/a'}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending watch sold alert to ${userId}:`, error);
         return false;
     }
 }

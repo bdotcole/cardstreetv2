@@ -14,6 +14,7 @@ import {
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation';
 import { attachSellers } from '@/lib/publicProfiles';
+import { attachWatchCounts } from '@/lib/listingWatches';
 import { trackEngagement } from '@/lib/engagementEvents';
 
 /**
@@ -29,6 +30,14 @@ export class ProfileIncompleteError extends Error {
         this.name = 'ProfileIncompleteError';
         this.missing = missing;
     }
+}
+
+// After a price save: drain the price-drop alert queue the DB trigger fills
+// (20261015b_listing_price_drops.sql). Fire-and-forget — the save is already
+// done, and the sweep catches anything a lost ping missed on the next one.
+function pingPriceDropSweep(): void {
+    if (typeof fetch === 'undefined') return;
+    void fetch('/api/alerts/listing-price-drop', { method: 'POST', credentials: 'include' }).catch(() => { /* best-effort */ });
 }
 
 // Coerce a raw listing row's `card_data` JSONB into a fully-populated Card so
@@ -86,9 +95,15 @@ export interface MarketplaceListing {
     // their listing ids. Absent on rows that were never grouped.
     units?: number;
     siblingIds?: string[];
+    // People watching this listing (lib/listingWatches.ts:attachWatchCounts).
+    // Absent when the counts could not be read; the tile then shows no number.
+    watch_count?: number;
 }
 
 export type ListingSort = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
+
+/** Raw (ungraded) cards only, or graded cards only. Absent = both. */
+export type ListingGrading = 'raw' | 'graded';
 
 /**
  * Singles vs sealed product. Sealed is a different purchase with different
@@ -105,6 +120,12 @@ export interface ListingFilters {
     kind?: ListingKind;
     minPrice?: number;
     maxPrice?: number;
+    // Grading filters, singles only (a sealed product is never graded). A
+    // company or a minimum grade implies 'graded' on its own.
+    grading?: ListingGrading;
+    gradingCompany?: string;
+    /** Grade floor, inclusive: 9 shows 9, 9.5 and 10. */
+    minGrade?: number;
     sort?: ListingSort;
     limit?: number;
     offset?: number;
@@ -124,6 +145,9 @@ export const marketplaceService = {
             kind = 'all',
             minPrice,
             maxPrice,
+            grading,
+            gradingCompany,
+            minGrade,
             sort = 'newest',
             limit = 50,
             offset = 0,
@@ -221,6 +245,21 @@ export const marketplaceService = {
                     query = query.lte('price', maxPrice);
                 }
 
+                // Grading. Ignored for sealed, which is never graded: a
+                // "graded" filter left on while switching to the Sealed
+                // section would otherwise empty it. is_graded is nullable on
+                // legacy rows, so "raw" accepts null like the singles test.
+                if (kind !== 'sealed') {
+                    const wantsGraded = grading === 'graded' || !!gradingCompany || (minGrade !== undefined && minGrade > 0);
+                    if (grading === 'raw') {
+                        query = query.or('is_graded.is.null,is_graded.eq.false');
+                    } else if (wantsGraded) {
+                        query = query.eq('is_graded', true);
+                        if (gradingCompany) query = query.eq('grading_company', gradingCompany);
+                        if (minGrade !== undefined && minGrade > 0) query = query.gte('grade', minGrade);
+                    }
+                }
+
                 // Server-side sort
                 switch (sortKey) {
                     case 'price_asc':
@@ -301,7 +340,13 @@ export const marketplaceService = {
             }
 
             const listings = rows.map(normalizeListing);
-            return attachSellers(supabase, listings);
+            // Sellers and watcher counts are independent lookups; one round
+            // trip for both.
+            const [withSellers] = await Promise.all([
+                attachSellers(supabase, listings),
+                attachWatchCounts(supabase, listings),
+            ]);
+            return withSellers;
         } catch (error) {
             console.error('Error fetching active listings:', error);
             return markFailedResult([]);
@@ -474,7 +519,8 @@ export const marketplaceService = {
                 .order('price', { ascending: true });
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
-            return attachSellers(supabase, listings);
+            const [withSellers] = await Promise.all([attachSellers(supabase, listings), attachWatchCounts(supabase, listings)]);
+            return withSellers;
         } catch (error) {
             console.error('Error fetching listings for card:', error);
             return [];
@@ -547,7 +593,8 @@ export const marketplaceService = {
                 .limit(limit);
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
-            return attachSellers(supabase, listings);
+            const [withSellers] = await Promise.all([attachSellers(supabase, listings), attachWatchCounts(supabase, listings)]);
+            return withSellers;
         } catch (error) {
             console.error('Error fetching seller listings:', error);
             return [];
@@ -590,7 +637,9 @@ export const marketplaceService = {
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const listings = ((data || []) as unknown as MarketplaceListing[]).map(normalizeListing);
-            return attachSellers(supabase, listings);
+            // Watcher counts on your own listings: the interest each card drew.
+            const [withSellers] = await Promise.all([attachSellers(supabase, listings), attachWatchCounts(supabase, listings)]);
+            return withSellers;
         } catch (error) {
             console.error('Error fetching my listings:', error);
             return [];
@@ -620,7 +669,9 @@ export const marketplaceService = {
                 .select('id');
 
             if (error) throw error;
-            return (data?.length ?? 0) > 0;
+            const changed = (data?.length ?? 0) > 0;
+            if (changed) pingPriceDropSweep();
+            return changed;
         } catch (error) {
             console.error('Error updating listing price:', error);
             throw error;
@@ -657,7 +708,9 @@ export const marketplaceService = {
                 .select('id');
 
             if (error) throw error;
-            return (data?.length ?? 0) > 0;
+            const changed = (data?.length ?? 0) > 0;
+            if (changed) pingPriceDropSweep();
+            return changed;
         } catch (error) {
             console.error('Error updating listing price for card:', error);
             throw error;

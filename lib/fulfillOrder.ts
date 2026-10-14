@@ -19,6 +19,7 @@ import {
     sendFirstTimeSaleEmail,
 } from '@/lib/courier';
 import { voidOffersForSoldListing } from '@/lib/voidOffersForListing';
+import { notifyWatchersOfSale } from '@/lib/watchAlerts';
 import { recordInternalSales } from '@/lib/internalPricing';
 import { awardEvent, awardFirst } from '@/lib/rewards';
 import { orderXp } from '@/lib/rewardTiers';
@@ -281,15 +282,26 @@ export async function fulfillOrdersByTransferGroup(
                 .map(o => o.listing_id)
                 .filter((v): v is string => typeof v === 'string');
             if (settledListingIds.length > 0) {
-                const { error: soldAtErr } = await supabase
+                const { data: stamped, error: soldAtErr } = await supabase
                     .from('listings')
                     .update({ sold_at: new Date().toISOString() })
                     .in('id', settledListingIds)
-                    .is('sold_at', null);
+                    .is('sold_at', null)
+                    .select('id');
                 // 42703 = column missing (migration not applied yet) — expected,
                 // quiet, by the same convention as the rewards RPCs.
                 if (soldAtErr && soldAtErr.code !== '42703') {
                     console.warn('[Fulfillment] sold_at stamp failed (non-fatal):', soldAtErr.message);
+                }
+                // Tell the watchers, once: only the listings stamped on THIS
+                // call, so a retried webhook (which stamps nothing) stays quiet.
+                const justSold = (stamped ?? []).map((r) => r.id as string);
+                if (justSold.length > 0) {
+                    try {
+                        await notifyWatchersOfSale(justSold, orders[0]?.buyer_id ?? null);
+                    } catch (watchErr) {
+                        console.warn('[Fulfillment] watcher sold alerts failed (non-fatal):', (watchErr as Error)?.message);
+                    }
                 }
             }
         } catch (soldAtErr) {

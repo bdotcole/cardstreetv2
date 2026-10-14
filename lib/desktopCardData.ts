@@ -5,6 +5,7 @@ import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { mapSealedRowToProduct, sealedProductToCard, SealedProductRow } from '@/lib/sealedProduct';
 import { attachSellers } from '@/lib/publicProfiles';
+import { attachWatchCounts } from '@/lib/listingWatches';
 import type { Card, SiblingCard } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
@@ -176,10 +177,14 @@ export const getCardPageData = cache(
             .eq('status', 'active')
             .order('price', { ascending: true });
 
-        const listings = await attachSellers(supabase, ((rows || []) as any[]).map((r) => ({
+        const listingRows = ((rows || []) as any[]).map((r) => ({
             ...r,
             card_data: normalizeCard(r.card_data, r.card_id),
-        })) as MarketplaceListing[]);
+        })) as MarketplaceListing[];
+        const [listings] = await Promise.all([
+            attachSellers(supabase, listingRows),
+            attachWatchCounts(supabase, listingRows),
+        ]);
 
         // The card resolves from (in order) the cheapest active listing's frozen
         // card_data snapshot, then the live catalog, then the sealed catalog.

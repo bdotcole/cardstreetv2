@@ -65,7 +65,15 @@
         "sectionSingles": "Singles",
         "sectionSealed": "Sealed",
         "sectionLive": "Live",
-        "sealedEmpty": "No sealed products listed yet."
+        "sealedEmpty": "No sealed products listed yet.",
+        "grading": "Grading",
+        "gradingAny": "Any",
+        "gradingRaw": "Raw",
+        "gradingGraded": "Graded",
+        "gradingCompany": "Grading company",
+        "anyCompany": "Any company",
+        "minGrade": "Minimum grade",
+        "anyGrade": "Any grade"
     },
     "common": {
         "loading": "Loading...",
@@ -265,7 +273,8 @@
         "partner": "Sign in to apply as a partner",
         "offer": "Sign in to make an offer",
         "follow": "Sign in to follow shops",
-        "chat": "Sign in to message shops"
+        "chat": "Sign in to message shops",
+        "watch": "Sign in to watch listings"
     },
     "vault": {
         "myPortfolio": "My Portfolio",
@@ -527,6 +536,7 @@
         "navLive": "Live",
         "navSets": "Sets",
         "navCollection": "Collection",
+        "navWatching": "Watching",
         "navSell": "Sell",
         "navOrders": "Orders",
         "navPro": "Pro",
@@ -579,6 +589,7 @@
             "tabOverview": "Overview",
             "tabCollection": "Collection",
             "tabWishlist": "Wishlist",
+            "tabWatching": "Watching",
             "tabMaster": "Master Sets",
             "totalValue": "Collection value",
             "unrealizedPl": "unrealized P/L",
@@ -680,7 +691,7 @@
             "notEnabled": "Not enabled",
             "notifications": "Notifications",
             "priceDrops": "Price drop alerts",
-            "priceDropsDesc": "When cards on your wishlist drop in price.",
+            "priceDropsDesc": "When a listing you are watching drops its price or sells.",
             "orderUpdates": "Order updates",
             "orderUpdatesDesc": "Shipping and delivery status for your orders.",
             "marketing": "News & offers",
@@ -1961,5 +1972,23 @@
         "viewShop": "View shop",
         "back": "Back",
         "close": "Close"
+    },
+    "watch": {
+        "cta": "Watch",
+        "stop": "Stop watching",
+        "watching": "Watching",
+        "watchers": "{n} watching",
+        "watchedToast": "Watching {name}",
+        "unwatchedToast": "Stopped watching {name}",
+        "failed": "Could not update. Please try again.",
+        "unavailable": "Watching listings is not available yet.",
+        "ownListing": "You cannot watch your own listing.",
+        "listTitle": "Watching",
+        "listEmpty": "You are not watching any listings yet. Tap the eye on a listing and it will show up here.",
+        "loadFailed": "Could not load your watching list.",
+        "soldBadge": "Sold",
+        "goneBadge": "No longer available",
+        "dropBadge": "Price drop",
+        "wasPrice": "was {price}"
     }
 }

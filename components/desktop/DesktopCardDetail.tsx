@@ -14,6 +14,7 @@ import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getSellerTrust } from '@/lib/sellerTrust';
 import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listingDisplay';
+import ListingWatchBadge from '@/components/ListingWatchBadge';
 import { useUserCollections } from '@/lib/hooks/useUserCollections';
 import { useWishlist } from '@/lib/hooks/useWishlist';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -648,7 +649,7 @@ export default function DesktopCardDetail({
                                                 </span>
                                             )}
 
-                                            {/* Condition (+ best-price marker) */}
+                                            {/* Condition (+ best-price marker, + watchers) */}
                                             <div className="flex flex-col gap-1">
                                                 {isBest && (
                                                     <span className="text-[9px] text-brand-green font-black uppercase tracking-widest">{t('desktop.card.bestPrice')}</span>
@@ -656,6 +657,12 @@ export default function DesktopCardDetail({
                                                 <span className={`self-start text-[10px] font-black px-2 py-1 rounded border ${badgeClass}`}>
                                                     {conditionBadgeLabel(listing)}
                                                 </span>
+                                                <ListingWatchBadge
+                                                    listing={listing}
+                                                    onRequireAuth={() => setAuthOpen(true)}
+                                                    size="md"
+                                                    className="self-start"
+                                                />
                                             </div>
 
                                             {/* Seller cluster */}

@@ -119,6 +119,9 @@ const TAB_ALIASES: Record<string, { tab: LandingTab; profileFlag?: string }> = {
     support: { tab: 'profile', profileFlag: 'cs_open_support' },
     // The chat email's CTA (sendChatMessageNotification); &thread= picks the conversation.
     messages: { tab: 'profile', profileFlag: 'cs_open_messages' },
+    // Watched-listing push taps (hooks/usePushNotifications) land on the
+    // Watching list inside Profile.
+    watching: { tab: 'profile', profileFlag: 'cs_open_watching' },
 };
 const ACTIVE_TAB_STORAGE_KEY = 'cs_active_tab';
 const USER_SNAPSHOT_STORAGE_KEY = 'cs_user_snapshot';
@@ -439,11 +442,14 @@ export default function HomePage() {
         // Order push tap / order App Link: same contract, cs_focus_order flag
         // (Profile reads the id and picks the shipment or order panel).
         window.addEventListener('cs-open-order', onOpenOffers);
+        // Watched-listing push tap: same contract, cs_open_watching flag.
+        window.addEventListener('cs-open-watching', onOpenOffers);
         return () => {
             window.removeEventListener('cs-open-offers', onOpenOffers);
             window.removeEventListener('cs-open-support', onOpenOffers);
             window.removeEventListener('cs-open-chat', onOpenOffers);
             window.removeEventListener('cs-open-order', onOpenOffers);
+            window.removeEventListener('cs-open-watching', onOpenOffers);
         };
     }, []);
 
@@ -2756,6 +2762,7 @@ export default function HomePage() {
                                 onBuyNow={handleBuyNow}
                                 onMakeOffer={handleMakeOfferListing}
                                 currentUserId={user && user.provider !== 'guest' ? user.id : null}
+                                onRequireAuth={() => { requireAuth(t('authGate.watch')); }}
                                 listings={activeListings}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
@@ -2818,6 +2825,10 @@ export default function HomePage() {
                                 onOpenSeller={(sellerId, hint) => { void openSellerShop(sellerId, hint); }}
                                 onPayOffer={handlePayOffer}
                                 onViewListing={handleViewOfferListing}
+                                // Watching list rows: a live listing opens its
+                                // sheet, a sold one opens the card (other copies).
+                                onOpenListing={setSelectedListing}
+                                onOpenCard={setSelectedCard}
                                 onGuestLogin={() => {
                                     setUser({
                                         id: 'guest',
@@ -2962,6 +2973,7 @@ export default function HomePage() {
                     <ListingDetails
                         listing={selectedListing}
                         onClose={() => setSelectedListing(null)}
+                        onRequireAuth={() => { requireAuth(t('authGate.watch')); }}
                         onBuyNow={(quantity) => handleBuyNow(undefined, quantity)}
                         onAddToCart={(quantity) => {
                             const ids = pickSiblingIds(selectedListing, quantity, cart.map((i) => i.id));

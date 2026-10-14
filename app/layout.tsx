@@ -4,6 +4,7 @@ import './globals.css'
 import { localizedUrl, requestPathLocale } from '@/lib/i18nRouting'
 import { UserSettingsProvider } from '@/lib/contexts/UserSettingsContext'
 import { ToastProvider } from '@/lib/contexts/ToastContext'
+import { ListingWatchProvider } from '@/lib/contexts/ListingWatchContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
 import ActivityPinger from '@/components/ActivityPinger'
 import HtmlLangSync from '@/components/HtmlLangSync'
@@ -226,10 +227,12 @@ fbq('track', 'PageView');`,
                 )}
                 <UserSettingsProvider initialLanguage={lang} initialTheme={theme}>
                     <ToastProvider>
-                        <HtmlLangSync />
-                        <PushNotificationManager />
-                        <ActivityPinger />
-                        {children}
+                        <ListingWatchProvider>
+                            <HtmlLangSync />
+                            <PushNotificationManager />
+                            <ActivityPinger />
+                            {children}
+                        </ListingWatchProvider>
                     </ToastProvider>
                 </UserSettingsProvider>
 

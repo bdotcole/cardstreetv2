@@ -7,6 +7,7 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import GradedSlabFrame from './GradedSlabFrame';
+import ListingWatchBadge from './ListingWatchBadge';
 import RankChip from './rewards/rankChip';
 import AvatarFrame from './rewards/AvatarFrame';
 import BadgePill from './rewards/BadgePill';
@@ -293,11 +294,14 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     <GradedSlabFrame company={slabbed ? listing.grading_company : null} grade={listing.grade}>
                                         <img src={getThumbnailUrl(listing.card_data.images?.small || listing.card_data.imageUrl)} loading="lazy" decoding="async" className={`w-full h-full ${listing.card_data.isSealed ? 'object-contain p-1' : slabbed ? 'object-contain' : 'object-cover'}`} />
                                     </GradedSlabFrame>
-                                    {!slabbed && (
-                                        <span className="absolute top-1 right-1 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                                            {listing.condition}
-                                        </span>
-                                    )}
+                                    {/* Watchers in place of the condition, as on the
+                                        marketplace grid. z-10 lifts it over the tile's
+                                        full-size overlay button. */}
+                                    <ListingWatchBadge
+                                        listing={listing}
+                                        onRequireAuth={() => onRequireAuth?.(t('authGate.watch'))}
+                                        className={`absolute right-1 z-10 ${slabbed ? 'top-11' : 'top-1'}`}
+                                    />
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>
                                 <div className="flex items-center justify-between gap-1">
