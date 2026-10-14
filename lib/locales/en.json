@@ -263,7 +263,8 @@
         "purchase": "Sign in to complete your purchase",
         "list": "Sign in to list cards for sale",
         "partner": "Sign in to apply as a partner",
-        "offer": "Sign in to make an offer"
+        "offer": "Sign in to make an offer",
+        "follow": "Sign in to follow shops"
     },
     "vault": {
         "myPortfolio": "My Portfolio",
@@ -430,7 +431,14 @@
         "avgShipTime": "Avg Ship Time",
         "newMember": "New Member",
         "minOrderMet": "Minimum order met",
-        "inYourCart": "฿{amount} from this shop in your cart"
+        "inYourCart": "฿{amount} from this shop in your cart",
+        "following": "Following",
+        "followers": "Followers",
+        "followedToast": "Following {name}",
+        "unfollowedToast": "Unfollowed {name}",
+        "followFailed": "Could not update. Please try again.",
+        "followUnavailable": "Following shops is not available yet.",
+        "followOwnShop": "This is your shop"
     },
     "report": {
         "reportSeller": "Report Seller",
@@ -1916,5 +1924,21 @@
         "title": "No listings for “{q}” yet",
         "hint": "These cards are in the catalog. Open one to wishlist it and get told when a seller lists it, or to ask for it.",
         "viewCard": "Open card"
+    },
+    "follows": {
+        "followingTitle": "Following",
+        "followersTitle": "Followers",
+        "emptyFollowing": "You are not following any shops yet. Tap Follow on a shop page and it will show up here.",
+        "emptyFollowers": "No followers yet. Buyers who follow your shop will show up here.",
+        "unfollow": "Unfollow",
+        "follow": "Follow",
+        "listings": "{n} listings",
+        "noListings": "No listings right now",
+        "loadFailed": "Could not load this list."
+    },
+    "shopSearch": {
+        "title": "Shops",
+        "listings": "{n} listings",
+        "paused": "Shop paused"
     }
 }

@@ -21,6 +21,7 @@ import { trackSearch } from '@/lib/searchEvents';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { getGame } from '@/lib/games';
+import { searchShops, type ShopSearchResult } from '@/lib/shopSearch';
 import { Card } from '@/types';
 
 /**
@@ -66,6 +67,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // are served to phones too — see middleware.ts).
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [results, setResults] = useState<Card[]>([]);
+    // Shops whose seller name matches, listed above the cards. Only shops with
+    // a username: the seller page is addressed by it.
+    const [shopResults, setShopResults] = useState<ShopSearchResult[]>([]);
     // The query `results` were found for. The dropdown keeps showing the last
     // results while the next search runs, so the live input is not it.
     const resultsQueryRef = useRef('');
@@ -95,6 +99,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         if (q.length < 2) {
             setResults([]);
+            setShopResults([]);
             resultsQueryRef.current = '';
             setSearchOpen(false);
             setSearching(false);
@@ -107,11 +112,13 @@ export default function DesktopNav({ pathPrefix = '' }: {
         debounceRef.current = setTimeout(async () => {
             try {
                 // Independent catalogs — one failing must not blank the other.
-                const [cards, sealed] = await Promise.all([
+                const [cards, sealed, shops] = await Promise.all([
                     pokemonService.searchCards(q, false, undefined, 'all', { signal: controller.signal }).catch(() => [] as Card[]),
                     pokemonService.fetchSealedProducts({ game: 'all', q }).catch(() => []),
+                    searchShops(q, controller.signal),
                 ]);
                 if (reqId !== searchReqIdRef.current) return;
+                setShopResults(shops.filter((s) => !!s.username).slice(0, 3));
                 // Reserve room for sealed rather than letting 8 singles crowd
                 // them out — a box search is often the whole intent.
                 const sealedCards = sealed.slice(0, 3).map(sealedProductToCard);
@@ -120,6 +127,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
             } catch {
                 if (reqId !== searchReqIdRef.current) return;
                 setResults([]);
+                setShopResults([]);
                 resultsQueryRef.current = q;
             } finally {
                 if (reqId === searchReqIdRef.current) setSearching(false);
@@ -139,6 +147,14 @@ export default function DesktopNav({ pathPrefix = '' }: {
         setQuery('');
         setResults([]);
         router.push(`${pathPrefix}/card/${id}`);
+    };
+
+    const goToShop = (username: string) => {
+        setSearchOpen(false);
+        setQuery('');
+        setResults([]);
+        setShopResults([]);
+        router.push(`${pathPrefix}/seller/${encodeURIComponent(username)}`);
     };
 
     // Marketplace listings search (the /?q= mode) — dropdown rows deep-link to
@@ -219,7 +235,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 // Start the name-dictionary download now, so the
                                 // first query doesn't wait on it.
                                 preloadSearchDictionary();
-                                if (results.length > 0) setSearchOpen(true);
+                                if (results.length > 0 || shopResults.length > 0) setSearchOpen(true);
                             }}
                             placeholder={t('desktop.searchPlaceholder')}
                             className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-cyan/50 transition-colors"
@@ -228,17 +244,46 @@ export default function DesktopNav({ pathPrefix = '' }: {
 
                     {searchOpen && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-brand-dark border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden max-h-[70vh] overflow-y-auto">
-                            {searching && results.length === 0 ? (
+                            {searching && results.length === 0 && shopResults.length === 0 ? (
                                 <div className="px-4 py-6 text-center text-sm text-slate-500">
                                     <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>
                                     {language === 'TH' ? 'กำลังค้นหา…' : 'Searching…'}
                                 </div>
-                            ) : results.length === 0 ? (
+                            ) : results.length === 0 && shopResults.length === 0 ? (
                                 <div className="px-4 py-6 text-center text-sm text-slate-500">
                                     {language === 'TH' ? 'ไม่พบผลลัพธ์' : 'No results found'}
                                 </div>
                             ) : (
-                                results.map((card) => {
+                                <>
+                                {shopResults.length > 0 && (
+                                    <div className={results.length > 0 ? 'border-b border-white/5' : ''}>
+                                        <p className="px-4 pt-3 pb-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('shopSearch.title')}</p>
+                                        {shopResults.map((shop) => (
+                                            <button
+                                                key={shop.id}
+                                                onClick={() => goToShop(shop.username as string)}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                            >
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src={shop.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${shop.id}`}
+                                                    alt=""
+                                                    className="w-9 h-9 rounded-full object-cover bg-brand-darker border border-white/10 shrink-0"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="flex items-center gap-1.5 text-sm font-bold text-white truncate">
+                                                        <span className="truncate">{shop.display_name || shop.username}</span>
+                                                        {shop.is_verified_shop && <i className="fa-solid fa-circle-check text-brand-cyan text-[11px] shrink-0"></i>}
+                                                    </span>
+                                                    <span className="block text-[11px] text-slate-500 truncate">
+                                                        {shop.paused ? t('shopSearch.paused') : t('shopSearch.listings').replace('{n}', shop.listing_count.toLocaleString())}
+                                                    </span>
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {results.map((card) => {
                                     const thumb = getThumbnailUrl(card.images?.small || card.imageUrl);
                                     // thaiName holds the ENGLISH name of a JA/TH
                                     // print (historical naming). Showing it is what
@@ -277,7 +322,8 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                             </span>
                                         </button>
                                     );
-                                })
+                                })}
+                                </>
                             )}
                             {query.trim().length >= 2 && (
                                 <button
@@ -334,6 +380,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     <div className="shrink-0">
                         <RewardsChip
                             coins={rewards.coins}
+                            level={rewards.level}
                             unclaimed={!rewards.checkinClaimedToday}
                             onClick={() => window.dispatchEvent(new Event('cs:openRewards'))}
                             label={t('rewards.title') || 'Rewards'}

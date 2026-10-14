@@ -12,6 +12,9 @@ import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getThumbnailUrl, getSetLogoUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
+import ShopSearchResults from '@/components/ShopSearchResults';
+import { useShopSearch } from '@/lib/hooks/useShopSearch';
+import type { ShopSearchResult } from '@/lib/shopSearch';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
@@ -21,6 +24,8 @@ interface ExploreProps {
   exchangeRate?: number;
   // Enables Add to Vault on sealed products (cards get it via CardDetails).
   onAddToCollection?: (card: Card) => void;
+  // Opens a shop that matched the search by seller name.
+  onSelectShop?: (shop: ShopSearchResult) => void;
 }
 
 /**
@@ -37,7 +42,7 @@ function preferredLanguageForGame(gameId: string, uiIsThai: boolean): GameLangua
   return defaultLanguageForGame(gameId);
 }
 
-const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection }) => {
+const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection, onSelectShop }) => {
   const { t, isThai } = useTranslation();
   const [selectedGame, setSelectedGame] = useState<string>('pokemon');
   // Seeded from the UI language (see preferredLanguageForGame). Lazy initial
@@ -322,6 +327,9 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
   // track the query the fetches actually ran (>2 chars, debounced) or they'd
   // report stale numbers for the first couple of keystrokes.
   const hasSearchResults = debouncedSearchTerm.length > 2;
+  // Seller names are searched alongside the catalog, so a buyer can get back
+  // to a shop they left (there is no other way to find one by name).
+  const matchingShops = useShopSearch(debouncedSearchTerm);
 
   // Sealed mode only lists sets that actually have sealed products.
   const visibleSets = useMemo(
@@ -389,6 +397,10 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
             onFocus={preloadSearchDictionary}
           />
         </div>
+
+        {isSearching && onSelectShop && (
+          <ShopSearchResults shops={matchingShops} onSelect={onSelectShop} />
+        )}
 
         {/* Cards / Sealed toggle — switches the catalog between individual cards
             and sealed products. While a search is running both catalogs are

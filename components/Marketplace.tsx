@@ -19,12 +19,17 @@ import { getDealPercent, conditionBadgeLabel, isTopCondition } from '@/lib/listi
 import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
 import GradedSlabFrame from '@/components/GradedSlabFrame';
+import ShopSearchResults from '@/components/ShopSearchResults';
+import { useShopSearch } from '@/lib/hooks/useShopSearch';
+import type { ShopSearchResult } from '@/lib/shopSearch';
 
 interface MarketplaceProps {
   initialGame?: string;
   onSelectCard: (card: Card) => void;
   onSelectListing?: (listing: any) => void;
   onSellerClick: (seller: any) => void;
+  /** Opens a shop that matched the search by seller name. */
+  onSelectShop?: (shop: ShopSearchResult) => void;
   /** Straight-to-payment purchase of a single listing (skips the cart). */
   onBuyNow?: (listing: MarketplaceListing) => void;
   /** Opens the OBO "Make an offer" modal for an offer-accepting listing. */
@@ -81,6 +86,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   onSelectCard,
   onSelectListing,
   onSellerClick,
+  onSelectShop,
   onBuyNow,
   onMakeOffer,
   currentUserId = null,
@@ -93,6 +99,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   // ── Filter state ────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const matchingShops = useShopSearch(debouncedSearch);
   const [selectedGame, setSelectedGame] = useState(initialGame || 'all');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   // Best deals first: discount vs. market snapshot is the default browse order.
@@ -333,6 +340,9 @@ const Marketplace: React.FC<MarketplaceProps> = ({
               )}
             </div>
           </div>
+          {searchQuery.trim() && onSelectShop && (
+            <ShopSearchResults shops={matchingShops} onSelect={onSelectShop} className="mt-3" />
+          )}
         </div>
 
         {/* Section switch: Singles / Sealed / Live. Above the filters because

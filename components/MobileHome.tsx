@@ -464,6 +464,12 @@ export default function HomePage() {
     const [viewingSeller, setViewingSeller] = useState<UserProfile | null>(null);
     const [viewingSellerReviews, setViewingSellerReviews] = useState<Review[]>([]);
     const [viewingSellerListings, setViewingSellerListings] = useState<MarketplaceListing[]>([]);
+    // The tab a shop page was opened from, so Back returns there (Profile's
+    // Following list, a search in Explore) rather than always to the market.
+    const sellerReturnTabRef = useRef<typeof activeTab>('marketplace');
+    useEffect(() => {
+        if (activeTab !== 'seller_profile') sellerReturnTabRef.current = activeTab === 'home' ? 'marketplace' : activeTab;
+    }, [activeTab]);
     const [scanCandidates, setScanCandidates] = useState<Card[]>([]);
     // Last scan's server event id + the candidate ids it returned. Confirm/reject
     // feedback (candidate pick, add-to-vault, bail to search) references this so the
@@ -2203,6 +2209,12 @@ export default function HomePage() {
                 // to history (popstate owns the restore) so the entry pushed on
                 // the way in is consumed too — direct restore only when the
                 // push never happened.
+                // Layer 2.4: a shop page goes back to wherever it was opened from.
+                if (state.activeTab === 'seller_profile') {
+                    setActiveTab(sellerReturnTabRef.current);
+                    return;
+                }
+
                 if (state.activeTab === 'marketplace' && state.marketplaceFromChooser) {
                     if (shopHistoryRef.current) {
                         window.history.back();
@@ -2615,6 +2627,7 @@ export default function HomePage() {
                             {rewardsSummary && (
                                 <RewardsChip
                                     coins={rewardsSummary.coins}
+                                    level={rewardsSummary.level}
                                     unclaimed={!rewardsSummary.checkinClaimedToday}
                                     onClick={() => { setIsRewardsOpen(true); void refreshRewards(); }}
                                     label={t('rewards.title')}
@@ -2672,6 +2685,7 @@ export default function HomePage() {
                         {activeTab === 'explore' && (
                             <Explore
                                 onSelectCard={setSelectedCard}
+                                onSelectShop={(shop) => { void openSellerShop(shop.id, shop); }}
                                 searchRequest={searchRequest}
                                 localListings={activeListings}
                                 currency={currency}
@@ -2691,6 +2705,7 @@ export default function HomePage() {
                                 onLive={hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') ? () => { window.location.assign('/live'); } : undefined}
                                 onSelectCard={setSelectedCard}
                                 onSelectListing={setSelectedListing}
+                                onSelectShop={(shop) => { void openSellerShop(shop.id, shop); }}
                                 onSellerClick={(seller) => {
                                     setViewingSeller({
                                         id: seller.id || 'mock-id',
@@ -2718,13 +2733,15 @@ export default function HomePage() {
                                 seller={viewingSeller}
                                 listings={viewingSellerListings}
                                 reviews={viewingSellerReviews}
-                                onBack={() => setActiveTab('marketplace')}
+                                onBack={() => setActiveTab(sellerReturnTabRef.current)}
                                 onSelectListing={setSelectedListing}
                                 onAddToCart={handleAddToCart}
                                 cartTotalForShop={cartTotalForViewingSeller}
                                 onOpenCart={() => setIsCartOpen(true)}
                                 currency={currency}
                                 exchangeRate={exchangeRate}
+                                viewerId={user && user.provider !== 'guest' ? user.id : null}
+                                onRequireAuth={() => { requireAuth(t('authGate.follow')); }}
                             />
                         )}
                         {activeTab === 'add' && <AddCard onScanClick={handleScanCard} onSelectCard={setSelectedCard} isScanning={isAiLoading} />}
@@ -2758,7 +2775,6 @@ export default function HomePage() {
                         {activeTab === 'profile' && (
                             <Profile
                                 user={user}
-                                rewardsLevel={rewardsSummary?.level ?? null}
                                 rewardsFrame={rewardsSummary?.equippedFrame ?? null}
                                 onPanelStateChange={(open) => { profilePanelOpenRef.current = open; }}
                                 onDisplayNameChange={(name) => {
@@ -2766,6 +2782,7 @@ export default function HomePage() {
                                     if (trimmed) setUser(prev => (prev ? { ...prev, name: trimmed } : prev));
                                 }}
                                 onNavigatePartner={() => setActiveTab('partner')}
+                                onOpenSeller={(sellerId, hint) => { void openSellerShop(sellerId, hint); }}
                                 onPayOffer={handlePayOffer}
                                 onViewListing={handleViewOfferListing}
                                 onGuestLogin={() => {

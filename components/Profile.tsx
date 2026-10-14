@@ -12,12 +12,13 @@ import {
 import { UserProfile, Offer } from '@/types';
 import AuthModal from './AuthModal';
 import CurrencySwitcher from './CurrencySwitcher';
-import RankChip from './rewards/rankChip';
 import AvatarFrame from './rewards/AvatarFrame';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
 import OffersInbox from './OffersInbox';
 import SupportTickets from './SupportTickets';
 import MyLiveShows from './live/MyLiveShows';
+import FollowList from './FollowList';
+import { fetchFollowSummary } from '@/lib/follows';
 import StripeConnectSection from './StripeConnectSection';
 import ShopPauseSection from './ShopPauseSection';
 import ShopMinOrderSection from './ShopMinOrderSection';
@@ -45,13 +46,12 @@ import { SELLER_REQUIRED_PROFILE_FIELDS } from '@/lib/profileValidation';
 
 interface ProfileProps {
   user: UserProfile | null;
-  // Collector Pass level from the shell's rewards summary (null while the
-  // system is dark or the user is signed out) — renders the header rank chip.
-  rewardsLevel?: number | null;
   // Equipped Collector Pass frame key — worn around the header avatar so the
   // owner sees exactly what the seller page shows.
   rewardsFrame?: string | null;
   onNavigatePartner?: () => void;
+  // Opens a followed shop from the Following list (the shell owns the shop page).
+  onOpenSeller?: (sellerId: string, hint: { display_name: string | null; username: string | null; avatar_url: string | null }) => void;
   onGuestLogin?: () => void;
   // Notifies the parent shell whether a slide-in sub-panel is open, so the
   // Android hardware back button can close the panel instead of falling
@@ -209,7 +209,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows';
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -322,7 +322,7 @@ const OrderTrackingTimeline: React.FC<{ order: Order; isThai: boolean }> = ({ or
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onNavigatePartner, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onDisplayNameChange }) => {
+const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner, onOpenSeller, onGuestLogin, onPanelStateChange, onPayOffer, onViewListing, onDisplayNameChange }) => {
   const { t, isThai } = useTranslation();
   const { showToast } = useToast();
   // App-level settings (theme); renamed to avoid clashing with the local
@@ -444,6 +444,22 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
     window.addEventListener('profile-panel-back', handler);
     return () => window.removeEventListener('profile-panel-back', handler);
   }, []);
+
+  // Following / Followers under the shop name. Re-read whenever the user is
+  // back on the Profile root, so an unfollow in the Following list shows.
+  // Null hides the row (signed out, guest, or before the follows migration).
+  const [followCounts, setFollowCounts] = useState<{ followers: number; following: number } | null>(null);
+  const viewerId = user && user.provider !== 'guest' ? user.id : null;
+  useEffect(() => {
+    if (!viewerId) { setFollowCounts(null); return; }
+    if (activePanel !== 'none') return;
+    const controller = new AbortController();
+    void fetchFollowSummary(viewerId, controller.signal).then((found) => {
+      if (controller.signal.aborted) return;
+      setFollowCounts(found?.available ? { followers: found.followers, following: found.following } : null);
+    });
+    return () => controller.abort();
+  }, [viewerId, activePanel]);
 
   // An order to land on, from an email link (cardstreet.app/orders/<id>, via
   // the shell's appUrlOpen) or a push tap: which panel depends on which side
@@ -1394,11 +1410,33 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
               </div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-white tracking-tight italic skew-x-[-10deg]">{profileData?.display_name || user.name}</h3>
+                {/* The shop name is the identity here; the @username only
+                    lives on in the shop's web address. The rank chip moved
+                    into the coins pill in the header. */}
                 {user.provider !== 'guest' ? (
-                   <p className="text-sm text-brand-cyan font-bold leading-none min-h-[1.25rem] flex items-center gap-2">
-                     <span>{profileData?.username ? `@${profileData.username}` : ' '}</span>
-                     {typeof rewardsLevel === 'number' && <RankChip level={rewardsLevel} />}
-                   </p>
+                   <div className="min-h-[1.75rem] pt-2 flex items-center justify-center gap-4">
+                     {followCounts && (
+                       <>
+                         <button
+                           type="button"
+                           onClick={() => openPanel('following')}
+                           className="flex items-baseline gap-1.5 active:scale-95 transition-transform"
+                         >
+                           <span className="text-base font-black text-white tabular-nums">{followCounts.following.toLocaleString()}</span>
+                           <span className="text-xs font-bold text-slate-400">{t('seller.following')}</span>
+                         </button>
+                         <span className="w-px h-4 bg-white/10" aria-hidden="true"></span>
+                         <button
+                           type="button"
+                           onClick={() => openPanel('followers')}
+                           className="flex items-baseline gap-1.5 active:scale-95 transition-transform"
+                         >
+                           <span className="text-base font-black text-white tabular-nums">{followCounts.followers.toLocaleString()}</span>
+                           <span className="text-xs font-bold text-slate-400">{t('seller.followers')}</span>
+                         </button>
+                       </>
+                     )}
+                   </div>
                 ) : (
                    <p className="text-[10px] uppercase tracking-[0.4em] text-brand-cyan font-black">
                      Temporary Director
@@ -1967,6 +2005,27 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsLevel, rewardsFrame, onN
             className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
             <MyLiveShows onBack={() => setActivePanel('none')} />
+          </motion.div>
+        )}
+
+        {/* Following / Followers lists, opened from the counts under the name. */}
+        {(activePanel === 'following' || activePanel === 'followers') && (
+          <motion.div
+            key={activePanel}
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+          >
+            <FollowList
+              kind={activePanel}
+              onBack={() => setActivePanel('none')}
+              onOpenSeller={(sellerId, hint) => {
+                setActivePanel('none');
+                onOpenSeller?.(sellerId, hint);
+              }}
+            />
           </motion.div>
         )}
 

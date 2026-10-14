@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
 import { fetchSellerMinOrders, minOrderMessage, minOrderNote, minOrderShortfall } from '@/lib/minOrder';
+import { useFollow } from '@/lib/hooks/useFollow';
 
 interface SellerProfileProps {
     seller: UserProfile;
@@ -29,9 +30,13 @@ interface SellerProfileProps {
     onOpenCart?: () => void;
     currency?: string;
     exchangeRate?: number;
+    /** Signed-in viewer (null for signed out or guest): drives Follow, and hides it on your own shop. */
+    viewerId?: string | null;
+    /** Opens the shell's sign-in wall when a signed-out viewer taps Follow. */
+    onRequireAuth?: () => void;
 }
 
-const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, cartTotalForShop = 0, onOpenCart, currency = 'THB', exchangeRate = 1 }) => {
+const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews, onBack, onSelectListing, onAddToCart, cartTotalForShop = 0, onOpenCart, currency = 'THB', exchangeRate = 1, viewerId = null, onRequireAuth }) => {
     const [activeTab, setActiveTab] = useState<'shop' | 'reviews' | 'about'>('shop');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const { t, isThai } = useTranslation();
@@ -89,6 +94,13 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
         : null;
 
     const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+
+    const isOwnShop = !!viewerId && viewerId === seller.id;
+    const follow = useFollow(seller?.id, {
+        sellerName: seller.name,
+        viewerId,
+        onRequireAuth: () => onRequireAuth?.(),
+    });
 
     // Stats
     const totalSales = seller.totalSales || 0;
@@ -151,14 +163,35 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                             <p className="text-lg font-black text-white">{totalSales}</p>
                             <p className="text-[8px] font-bold text-slate-500 uppercase">{t('seller.sales')}</p>
                         </div>
+                        {follow.followers !== null && (
+                            <>
+                                <div className="w-[1px] h-8 bg-white/10"></div>
+                                <div className="text-center">
+                                    <p className="text-lg font-black text-white">{follow.followers.toLocaleString()}</p>
+                                    <p className="text-[8px] font-bold text-slate-500 uppercase">{t('seller.followers')}</p>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 justify-center">
-                    <button className="h-10 px-6 bg-white text-brand-darker font-black text-xs uppercase tracking-widest rounded-xl hover:scale-105 transition-transform">
-                        {t('seller.follow')}
-                    </button>
+                    {/* Following stays a button: tapping it unfollows, with a toast
+                        either way. Hidden on your own shop. */}
+                    {!isOwnShop && (
+                        <button
+                            onClick={() => { void follow.toggle(); }}
+                            disabled={follow.busy}
+                            aria-pressed={follow.isFollowing}
+                            className={`h-10 px-6 rounded-xl font-black text-xs uppercase ${isThai ? 'tracking-normal' : 'tracking-widest'} flex items-center gap-2 active:scale-95 transition-all disabled:opacity-70 ${follow.isFollowing
+                                ? 'glass border border-brand-cyan/40 text-brand-cyan'
+                                : 'bg-white text-brand-darker hover:scale-105'}`}
+                        >
+                            {follow.isFollowing && <i className="fa-solid fa-check text-[11px]"></i>}
+                            {t(follow.isFollowing ? 'seller.following' : 'seller.follow')}
+                        </button>
+                    )}
                     <button className="h-10 w-10 glass rounded-xl flex items-center justify-center text-brand-cyan hover:bg-brand-cyan/10 transition-colors">
                         <i className="fa-regular fa-comment-dots"></i>
                     </button>

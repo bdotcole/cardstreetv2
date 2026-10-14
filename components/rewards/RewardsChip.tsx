@@ -1,23 +1,33 @@
 'use client';
 
 import React from 'react';
+import RankChip, { MIN_CHIP_LEVEL } from './rankChip';
 
 /**
  * Header entry point for the Rewards Hub — sits where the currency switcher
  * used to (currency moved to Profile > Settings). Shows the coin balance with
- * a red dot while today's check-in is unclaimed, Whatnot-style.
+ * a red dot while today's check-in is unclaimed, Whatnot-style. The owner's
+ * Collector Pass rank rides in front of the coins: it used to sit beside the
+ * @username on Profile, which no longer shows the username.
  */
 const RewardsChip: React.FC<{
     coins: number;
     unclaimed: boolean;
     onClick: () => void;
     label: string;
-}> = ({ coins, unclaimed, onClick, label }) => (
+    level?: number | null;
+}> = ({ coins, unclaimed, onClick, label, level }) => (
     <button
         onClick={onClick}
         aria-label={label}
         className="glass h-9 pl-2.5 pr-3 rounded-xl flex items-center gap-1.5 border border-white/10 hover:bg-white/5 transition-all relative"
     >
+        {typeof level === 'number' && level >= MIN_CHIP_LEVEL && (
+            <>
+                <RankChip level={level} />
+                <span className="w-px h-3.5 bg-white/10" aria-hidden="true"></span>
+            </>
+        )}
         <i className="fa-solid fa-coins text-[12px] text-amber-400"></i>
         <span className="text-[10px] font-black text-amber-300 tabular-nums">
             {coins >= 10000 ? `${Math.floor(coins / 1000)}k` : coins.toLocaleString()}

@@ -6,6 +6,7 @@ import { getSellerPageData } from '@/lib/sellerPageData';
 import { buildAlternates, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import SellerListingTile from '@/components/desktop/SellerListingTile';
 import SellerMinOrderNotice from '@/components/desktop/SellerMinOrderNotice';
+import SellerFollowButton from '@/components/desktop/SellerFollowButton';
 import RankChip from '@/components/rewards/rankChip';
 import AvatarFrame from '@/components/rewards/AvatarFrame';
 import BadgePill, { badgeLabel } from '@/components/rewards/BadgePill';
@@ -119,6 +120,9 @@ export default async function DesktopSellerPage({ params }: { params: Promise<{ 
                         {seller.partner_joined_at ? ` · ${lang === 'EN' ? 'Official Partner' : 'พาร์ทเนอร์ทางการ'}` : ''}
                         {memberSince ? ` · ${lang === 'EN' ? 'since' : 'ตั้งแต่'} ${memberSince}` : ''}
                     </p>
+                    <div className="mt-3">
+                        <SellerFollowButton sellerId={seller.id} sellerName={name} />
+                    </div>
                     {/* Said on the shop itself, so a buyer filling a cart here
                         knows the target before checkout refuses them; reads
                         the live cart to say how much is still missing. */}
