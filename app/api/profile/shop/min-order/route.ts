@@ -1,13 +1,15 @@
 /**
  * Shop minimum order — Profile > Seller Account.
  *
- *   GET  → { available, minOrderThb, max }
+ *   GET  → { available, minOrderThb, isDefault, defaultMinOrderThb, max }
  *   POST { minOrderThb: number } → { minOrderThb }
  *
  * The seller's own setting for the smallest order their shop accepts (see
- * lib/minOrder.ts for the rule and why it exists). The write goes through the
- * service-role client but only ever touches the caller's own row and this one
- * column, so there is no id in the body to spoof.
+ * lib/minOrder.ts for the rule and why it exists). GET reports the minimum the
+ * shop actually enforces; `isDefault` means the seller never saved one. Any
+ * POST, 0 included, is an explicit choice and ends the default. The write goes
+ * through the service-role client but only ever touches the caller's own row
+ * and this one column, so there is no id in the body to spoof.
  *
  * Fails soft before 20260929_shop_min_order.sql runs: GET reports
  * `available: false` and the card hides itself; POST answers 503.
@@ -16,7 +18,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { MIN_ORDER_MAX_THB, normalizeMinOrder } from '@/lib/minOrder';
+import {
+    DEFAULT_MIN_ORDER_THB,
+    MIN_ORDER_MAX_THB,
+    effectiveMinOrder,
+    isMinOrderUnset,
+} from '@/lib/minOrder';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,9 +57,14 @@ export async function GET() {
         return NextResponse.json({ error: 'Failed to load minimum order' }, { status: 500 });
     }
 
+    // No row is impossible for a signed-in user (profiles is 1:1 with auth),
+    // but it must not read as "never set" and show a default nobody enforces.
+    const stored = data ? data.min_order_thb : 0;
     return NextResponse.json({
         available: true,
-        minOrderThb: normalizeMinOrder(data?.min_order_thb),
+        minOrderThb: effectiveMinOrder(stored),
+        isDefault: isMinOrderUnset(stored),
+        defaultMinOrderThb: DEFAULT_MIN_ORDER_THB,
         max: MIN_ORDER_MAX_THB,
     });
 }

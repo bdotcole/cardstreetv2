@@ -18,9 +18,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, ShoppingBasket } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { useToast } from '@/lib/contexts/ToastContext';
-import { MIN_ORDER_MAX_THB } from '@/lib/minOrder';
+import { DEFAULT_MIN_ORDER_THB, MIN_ORDER_MAX_THB } from '@/lib/minOrder';
 
-const PRESETS = [0, 50, 100, 200];
+const PRESETS = [0, DEFAULT_MIN_ORDER_THB, 100, 200];
 
 export default function ShopMinOrderSection({ className = '' }: { className?: string }) {
     const { isThai } = useTranslation();
@@ -28,6 +28,9 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
     const [available, setAvailable] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saved, setSaved] = useState(0);
+    // The seller never saved a minimum, so the shop runs on the platform
+    // default (lib/minOrder.ts). Saving any value, 0 included, ends it.
+    const [isDefault, setIsDefault] = useState(false);
     const [draft, setDraft] = useState('0');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -39,6 +42,7 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
             label: 'ยอดขั้นต่ำ (฿)',
             off: 'ปิด',
             hint: 'ใส่ 0 เพื่อปิด ข้อเสนอราคาที่คุณกดรับจะไม่ติดขั้นต่ำ',
+            defaultNote: `คุณยังไม่ได้ตั้งค่า ร้านของคุณจึงใช้ยอดขั้นต่ำเริ่มต้น ฿${DEFAULT_MIN_ORDER_THB}`,
             save: 'บันทึก',
             savedToast: 'บันทึกยอดสั่งซื้อขั้นต่ำแล้ว',
             invalid: `กรุณาใส่จำนวนตั้งแต่ 0 ถึง ${MIN_ORDER_MAX_THB.toLocaleString()}`,
@@ -51,6 +55,7 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
             label: 'Minimum order (฿)',
             off: 'Off',
             hint: '0 turns it off. Offers you accept are exempt.',
+            defaultNote: `You haven't set one, so your shop uses the ฿${DEFAULT_MIN_ORDER_THB} default.`,
             save: 'Save',
             savedToast: 'Minimum order saved',
             invalid: `Enter a number from 0 to ${MIN_ORDER_MAX_THB.toLocaleString()}`,
@@ -66,6 +71,7 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
             setAvailable(!!data.available);
             const value = typeof data.minOrderThb === 'number' ? data.minOrderThb : 0;
             setSaved(value);
+            setIsDefault(data.isDefault === true);
             setDraft(String(value));
         } catch {
             // A failed read hides the card rather than showing a broken field.
@@ -79,7 +85,8 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
 
     const parsed = Number(draft);
     const valid = draft.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 && parsed <= MIN_ORDER_MAX_THB;
-    const dirty = valid && Math.floor(parsed) !== saved;
+    // A shop on the default may save the same number to make it its own.
+    const dirty = valid && (isDefault || Math.floor(parsed) !== saved);
 
     const save = async () => {
         if (!valid) { setError(copy.invalid); return; }
@@ -96,6 +103,7 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
             if (!res.ok) throw new Error(data.error || copy.failed);
             const value = typeof data.minOrderThb === 'number' ? data.minOrderThb : Math.floor(parsed);
             setSaved(value);
+            setIsDefault(false);
             setDraft(String(value));
             showToast(copy.savedToast, 'success');
         } catch (e) {
@@ -171,6 +179,7 @@ export default function ShopMinOrderSection({ className = '' }: { className?: st
                         </button>
                     ))}
                 </div>
+                {isDefault && <p className="text-xs text-amber-300/90 mt-2">{copy.defaultNote}</p>}
                 <p className="text-xs text-slate-500 mt-2">{copy.hint}</p>
             </div>
         </div>

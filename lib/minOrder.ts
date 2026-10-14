@@ -11,12 +11,20 @@
  * The rule: the buyer's total FROM THAT SHOP must reach the shop's minimum.
  * An accepted offer is exempt — the seller agreed to that sale at that price.
  *
+ * A shop that never set a minimum (profiles.min_order_thb IS NULL) gets
+ * DEFAULT_MIN_ORDER_THB; an explicit 0 is the seller turning it off. Sellers
+ * left at "no minimum" were selling single ฿20 cards and paying the Flash
+ * freight out of the sale (founder decision, 2026-10-14).
+ *
  * Pure module apart from fetchSellerMinOrders, which takes whatever Supabase
  * client the caller already has (browser, server or service-role).
  */
 
 /** Upper bound on a shop's minimum, mirrored by the CHECK in the migration. */
 export const MIN_ORDER_MAX_THB = 5000;
+
+/** The minimum for a shop whose seller never chose one. */
+export const DEFAULT_MIN_ORDER_THB = 60;
 
 export const MIN_ORDER_NOT_MET_ERROR_CODE = 'MIN_ORDER_NOT_MET';
 
@@ -25,6 +33,16 @@ export function normalizeMinOrder(value: unknown): number {
     const n = typeof value === 'string' ? Number(value) : value;
     if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return 0;
     return Math.min(MIN_ORDER_MAX_THB, Math.floor(n));
+}
+
+/** True when the seller has never saved a minimum (the column is NULL). */
+export function isMinOrderUnset(stored: unknown): boolean {
+    return stored === null || stored === undefined;
+}
+
+/** The minimum a shop actually enforces, from its stored profiles.min_order_thb. */
+export function effectiveMinOrder(stored: unknown): number {
+    return isMinOrderUnset(stored) ? DEFAULT_MIN_ORDER_THB : normalizeMinOrder(stored);
 }
 
 /** Baht still missing before checkout is allowed; 0 when there is no minimum or it is met. */
@@ -40,10 +58,11 @@ export function minOrderShortfall(subtotalThb: number, minOrderThb: unknown): nu
 type QueryableClient = { from: (table: string) => any };
 
 /**
- * Minimums for a set of sellers, keyed by seller id. Sellers with no minimum
- * are simply absent. Fails soft to "no minimums" on any error, including the
- * column not existing yet — a display helper must never block a purchase, and
- * the server gate reads through this same function.
+ * Minimums for a set of sellers, keyed by seller id, with the default already
+ * applied to shops that never set one. Sellers with no minimum are simply
+ * absent. Fails soft to "no minimums" on any error, including the column not
+ * existing yet — a display helper must never block a purchase, and the server
+ * gate reads through this same function.
  *
  * `table` is 'public_profiles' for cross-user reads from the browser and
  * 'profiles' for the service-role server routes.
@@ -63,7 +82,7 @@ export async function fetchSellerMinOrders(
         if (error || !Array.isArray(data)) return {};
         const out: Record<string, number> = {};
         for (const row of data as { id: string; min_order_thb: unknown }[]) {
-            const min = normalizeMinOrder(row?.min_order_thb);
+            const min = effectiveMinOrder(row?.min_order_thb);
             if (min > 0) out[row.id] = min;
         }
         return out;
