@@ -563,7 +563,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
                     <ListingWatchBadge
                       listing={listing}
                       onRequireAuth={onRequireAuth}
-                      className={`absolute right-1.5 z-10 ${slabbed ? 'top-11' : 'top-1.5'}`}
+                      className={`absolute right-0 z-10 ${slabbed ? 'top-9' : 'top-0'}`}
                     />
 
                     {/* Compact price strip over the card's text box (never its

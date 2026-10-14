@@ -49,7 +49,7 @@ export default function SellerListingTile({ listing }: { listing: MarketplaceLis
                         listing={listing}
                         onRequireAuth={() => setAuthOpen(true)}
                         size="md"
-                        className={`absolute right-2 z-10 ${slabbed ? 'top-16' : 'top-2'}`}
+                        className={`absolute right-0.5 z-10 ${slabbed ? 'top-14' : 'top-0.5'}`}
                     />
                 </div>
                 <div className="p-3">

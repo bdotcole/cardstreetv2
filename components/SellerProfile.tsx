@@ -300,7 +300,7 @@ const SellerProfile: React.FC<SellerProfileProps> = ({ seller, listings, reviews
                                     <ListingWatchBadge
                                         listing={listing}
                                         onRequireAuth={() => onRequireAuth?.(t('authGate.watch'))}
-                                        className={`absolute right-1 z-10 ${slabbed ? 'top-11' : 'top-1'}`}
+                                        className={`absolute right-0 z-10 ${slabbed ? 'top-9' : 'top-0'}`}
                                     />
                                 </div>
                                 <h4 className="text-[10px] font-bold text-white truncate">{listing.card_data.name}</h4>

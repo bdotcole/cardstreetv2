@@ -561,7 +561,7 @@ function ListingTile({ listing, eager, onMakeOffer, onRequireAuth, pathPrefix = 
                         listing={listing}
                         onRequireAuth={onRequireAuth}
                         size="md"
-                        className={`absolute right-2 z-10 ${slabbed ? 'top-16' : 'top-2'}`}
+                        className={`absolute right-0.5 z-10 ${slabbed ? 'top-14' : 'top-0.5'}`}
                     />
                     {listingUnits(listing) > 1 && (
                         <span
