@@ -81,7 +81,7 @@ export async function fetchChatMessages(threadId: string, after?: string): Promi
 
 export type SendChatResult =
     | { ok: true; threadId: string; message: ChatMessage }
-    | { ok: false; code: 'UNAUTHORIZED' | 'RATE_LIMITED' | 'BANNED' | 'NOT_AVAILABLE' | 'FAILED' };
+    | { ok: false; code: 'UNAUTHORIZED' | 'RATE_LIMITED' | 'BANNED' | 'NOT_AVAILABLE' | 'OFF_PLATFORM' | 'FAILED' };
 
 export async function sendChatMessage(args: { threadId?: string | null; toUserId?: string; body: string }): Promise<SendChatResult> {
     try {
@@ -95,6 +95,8 @@ export async function sendChatMessage(args: { threadId?: string | null; toUserId
         if (res.status === 429) return { ok: false, code: 'RATE_LIMITED' };
         if (res.status === 403) return { ok: false, code: 'BANNED' };
         if (res.status === 503) return { ok: false, code: 'NOT_AVAILABLE' };
+        // Contact details, an outside link or an off-app deal (lib/chatPolicy).
+        if (res.status === 422) return { ok: false, code: 'OFF_PLATFORM' };
         if (!res.ok) return { ok: false, code: 'FAILED' };
         const data = await res.json();
         return { ok: true, threadId: data.thread_id, message: data.message };

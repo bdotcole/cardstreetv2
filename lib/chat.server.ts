@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { sendChatMessageNotification } from '@/lib/courier';
 import type { ChatThreadSummary, ChatUser } from '@/lib/chat';
+import { maskOffPlatform } from '@/lib/chatPolicy';
 
 // Server side of buyer to seller chat: thread lookups, the read/unread rule,
 // and the recipient notification. Used only by /api/chat/*, always with the
@@ -62,7 +63,7 @@ export function summarize(t: ThreadRow, me: string, profiles: Map<string, Public
         id: t.id,
         other: toChatUser(otherId, profiles.get(otherId)),
         lastMessageAt: t.last_message_at,
-        lastMessagePreview: t.last_message_preview,
+        lastMessagePreview: t.last_message_preview ? maskOffPlatform(t.last_message_preview) : null,
         lastSenderIsMe: t.last_sender_id === me,
         unread: isUnread(t, me),
     };

@@ -47,6 +47,9 @@ export default function ChatThreadView({ other = null, viewerId, threadId: initi
     const [draft, setDraft] = useState('');
     const [sending, setSending] = useState(false);
     const [reportOpen, setReportOpen] = useState(false);
+    // The server refused the draft for contact details or an off-app deal; it
+    // stays in the box with the reason until they edit it.
+    const [refused, setRefused] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const [peer, setPeer] = useState<ChatUser | null>(other);
@@ -119,6 +122,10 @@ export default function ChatThreadView({ other = null, viewerId, threadId: initi
         if (!result.ok) {
             setMessages((prev) => prev.filter((m) => m.id !== tempId));
             setDraft(body);
+            if (result.code === 'OFF_PLATFORM') {
+                setRefused(true);
+                return;
+            }
             const key = result.code === 'RATE_LIMITED' ? 'chat.rateLimited'
                 : result.code === 'BANNED' ? 'chat.banned'
                 : result.code === 'NOT_AVAILABLE' ? 'chat.unavailable'
@@ -239,12 +246,19 @@ export default function ChatThreadView({ other = null, viewerId, threadId: initi
                 )}
             </div>
 
+            {refused && (
+                <p role="alert" className="shrink-0 mx-3 mb-1 rounded-xl bg-brand-red/10 border border-brand-red/30 px-3 py-2 text-[11px] leading-snug text-red-200 flex gap-2">
+                    <i className="fa-solid fa-ban mt-0.5 text-brand-red"></i>
+                    <span>{t('chat.offPlatform')}</span>
+                </p>
+            )}
+
             {/* Composer */}
             <div className="shrink-0 border-t border-white/5 px-3 py-2.5 flex items-end gap-2">
                 <textarea
                     ref={inputRef}
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value.slice(0, CHAT_MAX_CHARS))}
+                    onChange={(e) => { setDraft(e.target.value.slice(0, CHAT_MAX_CHARS)); setRefused(false); }}
                     onKeyDown={onKeyDown}
                     rows={1}
                     placeholder={t('chat.placeholder')}

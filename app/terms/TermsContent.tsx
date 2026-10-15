@@ -24,7 +24,7 @@ interface TermsContentData {
 
 const EN: TermsContentData = {
   pageTitle: 'Terms of Service',
-  lastUpdated: 'Last Updated: March 21, 2026',
+  lastUpdated: 'Last Updated: October 15, 2026',
   sections: [
     {
       heading: '1. Acceptance of Terms',
@@ -61,6 +61,10 @@ const EN: TermsContentData = {
         {
           label: 'Condition Accuracy:',
           body: 'Sellers must accurately describe the condition of cards (e.g., Near Mint, Lightly Played).',
+        },
+        {
+          label: 'Off-Platform Transactions:',
+          body: 'Every purchase between users must go through Cardstreet. Using chat, listings or your profile to share phone numbers, LINE IDs, social media accounts or other contact details, to post outside links, or to arrange a payment or a deal outside Cardstreet is strictly prohibited. Messages that do so are blocked, and repeated attempts can lead to account suspension. Payments made outside Cardstreet are not protected.',
         },
       ],
     },
@@ -107,7 +111,7 @@ const EN: TermsContentData = {
 
 const TH: TermsContentData = {
   pageTitle: 'ข้อกำหนดการให้บริการ',
-  lastUpdated: 'อัปเดตล่าสุด: 21 มีนาคม 2026',
+  lastUpdated: 'อัปเดตล่าสุด: 15 ตุลาคม 2026',
   sections: [
     {
       heading: '1. การยอมรับข้อกำหนด',
@@ -144,6 +148,10 @@ const TH: TermsContentData = {
         {
           label: 'ความถูกต้องของสภาพการ์ด:',
           body: 'ผู้ขายต้องระบุสภาพการ์ดตามความเป็นจริง (เช่น Near Mint, Lightly Played)',
+        },
+        {
+          label: 'การซื้อขายนอกแพลตฟอร์ม:',
+          body: 'การซื้อขายระหว่างผู้ใช้ทุกครั้งต้องทำผ่าน Cardstreet ห้ามใช้แชท รายการสินค้า หรือโปรไฟล์ เพื่อแลกเบอร์โทร ไอดีไลน์ บัญชีโซเชียลมีเดีย หรือช่องทางติดต่ออื่น ส่งลิงก์ภายนอก หรือนัดชำระเงินหรือซื้อขายนอก Cardstreet โดยเด็ดขาด ข้อความลักษณะนี้จะถูกบล็อก และผู้ที่ฝ่าฝืนซ้ำอาจถูกระงับบัญชี การชำระเงินนอก Cardstreet จะไม่ได้รับความคุ้มครอง',
         },
       ],
     },

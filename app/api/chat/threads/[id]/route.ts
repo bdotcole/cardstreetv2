@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchPublicSellers } from '@/lib/publicProfiles';
 import { THREAD_COLUMNS, UUID_RE, isMissingSchema, isParticipant, otherOf, roleOf, summarize, type ThreadRow } from '@/lib/chat.server';
+import { maskOffPlatform } from '@/lib/chatPolicy';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +71,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(
         {
             thread: summarize(thread, me, profiles),
-            messages: ordered.map((m) => ({ id: m.id, senderId: m.sender_id, body: m.body, createdAt: m.created_at })),
+            // Masked: messages from before contact details were refused at send.
+            messages: ordered.map((m) => ({ id: m.id, senderId: m.sender_id, body: maskOffPlatform(m.body), createdAt: m.created_at })),
         },
         { headers: { 'Cache-Control': 'no-store' } },
     );
