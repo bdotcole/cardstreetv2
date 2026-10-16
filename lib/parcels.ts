@@ -41,7 +41,7 @@ import {
     estimateParcelDimsCmForItems,
     type ParcelItemInfo,
 } from '@/lib/flashExpress';
-import { sendLabelGeneratedNotification } from '@/lib/courier';
+import { sendLabelGeneratedNotification, sendShippedNotification } from '@/lib/courier';
 import { isRealWaybill, pickupBookedAt, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
 
 export const SHIPPING_PROFILE_COLS =
@@ -53,6 +53,15 @@ const PICKUP_REQUESTING = 'requesting';
 // Statuses an order can be labelled from. 'processing' is a legacy resting
 // state some old rows still carry.
 const LABEL_READY_STATUSES = ['paid', 'processing'];
+// handOffParcel: only a labelled order (label_generated) can leave another
+// way, and only while Flash has not touched the waybill. The label statuses
+// that mean "no scan yet": a fresh waybill, or the MANUAL placeholder a region
+// error leaves behind; every later status is written by a Flash scan (the
+// webhook, reconcile-shipments, the track route).
+const HANDOFF_FROM_STATUSES = ['label_generated'];
+const UNSCANNED_LABEL_STATUSES = ['created', 'awaiting_manual'];
+export const HANDOFF_CARRIER_MAX = 60;
+export const HANDOFF_TRACKING_MAX = 60;
 
 export interface WaybillFields {
     tracking_number: string;
@@ -641,4 +650,166 @@ export async function bookPickup(
     }
     console.log(`[Parcels] Pickup ${pickupId} booked for waybill ${params.trackingNumber} (seller ${params.sellerId})`);
     return { ok: true, trackingNumber: params.trackingNumber, pickupId };
+}
+
+export type HandoffResult =
+    | { ok: true; orderIds: string[]; carrier: string; trackingNumber: string | null; recorded: boolean }
+    | Fail;
+
+interface HandoffOrderRow {
+    id: string;
+    seller_id: string;
+    buyer_id: string;
+    status: string;
+    break_spot_id: string | null;
+    created_at: string;
+    shipping_labels: HandoffLabelStub | HandoffLabelStub[] | null;
+}
+
+interface HandoffLabelStub {
+    tracking_number: string | null;
+    status: string | null;
+    handed_off_at?: string | null;
+}
+
+/** PostgREST's two ways of saying a column in the request does not exist. */
+function isMissingColumn(err: { code?: string } | null | undefined): boolean {
+    return err?.code === 'PGRST204' || err?.code === '42703';
+}
+
+function isUnscannedLabel(status: string | null | undefined): boolean {
+    return !status || UNSCANNED_LABEL_STATUSES.includes(status);
+}
+
+/**
+ * The seller says the parcel left outside our Flash waybill: handed to Flash
+ * staff who keyed it in as a walk-in (a printer-less seller; the counter
+ * prints a new number and our label is never scanned), sent with another
+ * courier, or delivered by hand. Flash will never scan the waybill, so
+ * without this the order sits at label_generated forever while the ship
+ * reminders nag the seller and the buyer cannot confirm receipt (order
+ * fe7a1567, 2026-10-16; three parcels weeks old on 2026-11-01).
+ *
+ * `orderIds` is one parcel: this seller's label_generated orders for one
+ * buyer whose label rows (a real waybill or the MANUAL placeholder) Flash has
+ * not scanned and nobody has handed off. The rows already exist, so the claim
+ * that arbitrates a double tap is a CAS on them rather than mintParcel's
+ * insert: the update touches only rows still unscanned and not handed off,
+ * and a second click (or a Flash scan landing in between) matches zero rows
+ * and gets 409. The claimed rows take the seller's carrier and number and
+ * `handed_off_at` (reconcile-shipments and reconcile-pickups skip them, and
+ * the Flash webhook sends no second "shipped" push), the orders move to
+ * 'shipped' (CAS), and the buyer gets the shipped notification naming that
+ * carrier. On TH, money already sits with the seller (direct charge), so this
+ * changes status and notifications only. Without migration
+ * 20261016_shipping_label_handoff.sql the carrier and number are dropped
+ * (recorded: false) and the orders still move.
+ */
+export async function handOffParcel(
+    admin: SupabaseClient,
+    params: { sellerId: string; orderIds: string[]; carrier: string; trackingNumber?: string | null; notify?: boolean },
+): Promise<HandoffResult> {
+    const carrier = params.carrier.replace(/\s+/g, ' ').trim();
+    const trackingNumber = (params.trackingNumber || '').replace(/\s+/g, ' ').trim() || null;
+    if (!carrier) return fail(400, 'BAD_CARRIER', 'Name the carrier the parcel left with');
+    if (carrier.length > HANDOFF_CARRIER_MAX) return fail(400, 'BAD_CARRIER', 'Carrier name is too long');
+    if (trackingNumber && trackingNumber.length > HANDOFF_TRACKING_MAX) {
+        return fail(400, 'BAD_TRACKING', 'Tracking number is too long');
+    }
+
+    const ids = [...new Set(params.orderIds.filter((id) => typeof id === 'string' && id.length > 0))];
+    if (ids.length === 0 || ids.length > 100) return fail(400, 'NO_ORDERS', 'No orders given');
+
+    const selectOrders = (labelCols: string) => admin
+        .from('orders')
+        .select(`id, seller_id, buyer_id, status, break_spot_id, created_at, shipping_labels(${labelCols})`)
+        .in('id', ids);
+    let { data, error } = await selectOrders('tracking_number, status, handed_off_at');
+    if (error && isMissingColumn(error)) ({ data, error } = await selectOrders('tracking_number, status'));
+    if (error) return fail(500, 'LOOKUP_FAILED', error.message);
+    const orders = (data ?? []) as unknown as HandoffOrderRow[];
+    if (orders.length !== ids.length) return fail(404, 'NOT_FOUND', 'Order not found');
+
+    const buyers = new Set<string>();
+    for (const o of orders) {
+        if (o.seller_id !== params.sellerId) return fail(403, 'FORBIDDEN', 'Not your order');
+        if (o.break_spot_id) return fail(409, 'LIVE_BREAK', 'Live-break orders ship as one consolidated parcel after the show');
+        if (!HANDOFF_FROM_STATUSES.includes(o.status)) {
+            return fail(409, 'NOT_HANDOFFABLE', `Order is ${o.status.replace(/_/g, ' ')}, not waiting to ship`);
+        }
+        const label = one(o.shipping_labels);
+        if (!label?.tracking_number) return fail(409, 'NO_LABEL', 'Create the label first');
+        if (label.tracking_number === PENDING_WAYBILL) {
+            return fail(409, 'IN_PROGRESS', 'A label is still being created for this order');
+        }
+        if (label.handed_off_at) return fail(409, 'ALREADY_HANDED_OFF', 'This parcel is already marked as shipped');
+        if (!isUnscannedLabel(label.status)) {
+            return fail(409, 'ALREADY_SCANNED', 'Flash has already scanned this parcel; its status updates on its own');
+        }
+        buyers.add(o.buyer_id);
+    }
+    if (buyers.size !== 1) return fail(409, 'DIFFERENT_BUYERS', 'One parcel goes to one buyer');
+    const buyerId = [...buyers][0];
+    orders.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const orderIds = orders.map((o) => o.id);
+
+    // The claim: label rows first, and only the rows still unscanned and not
+    // handed off, so a double tap or a Flash scan that lands in between is
+    // refused instead of overwritten. handed_off_at is what the crons read to
+    // leave the parcel alone; the carrier is what the buyer's card shows.
+    const now = new Date().toISOString();
+    const stillUnscanned = `status.is.null,status.in.(${UNSCANNED_LABEL_STATUSES.join(',')})`;
+    const baseFields = { status: 'picked_up', pickup_status: 'manual', updated_at: now };
+    const handoffFields = { handoff_carrier: carrier, handoff_tracking_number: trackingNumber, handed_off_at: now };
+    let recorded = true;
+    let claim = await admin
+        .from('shipping_labels')
+        .update({ ...baseFields, ...handoffFields })
+        .in('order_id', orderIds)
+        .is('handed_off_at', null)
+        .or(stillUnscanned)
+        .select('order_id');
+    if (claim.error && isMissingColumn(claim.error)) {
+        recorded = false;
+        claim = await admin
+            .from('shipping_labels')
+            .update(baseFields)
+            .in('order_id', orderIds)
+            .or(stillUnscanned)
+            .select('order_id');
+        Sentry.captureMessage('Parcel handed off but migration 20261016_shipping_label_handoff.sql is not applied', {
+            level: 'warning',
+            tags: { handler: 'parcels', kind: 'handoff_unrecorded' },
+            extra: { orderIds, carrier, trackingNumber },
+        });
+    }
+    if (claim.error) return fail(500, 'LABEL_WRITE_FAILED', claim.error.message);
+    const claimedIds = new Set((claim.data ?? []).map((r: { order_id: string }) => r.order_id));
+    if (claimedIds.size === 0) {
+        return fail(409, 'IN_PROGRESS', 'This parcel was already marked as shipped, or Flash has just scanned it');
+    }
+    const claimed = orders.filter((o) => claimedIds.has(o.id));
+
+    // CAS on label_generated: a Flash scan that lands in between moves the
+    // order itself, and the webhook's own notification covers it.
+    const { data: flipped, error: flipErr } = await admin
+        .from('orders')
+        .update({ status: 'shipped', updated_at: now })
+        .in('id', claimed.map((o) => o.id))
+        .in('status', HANDOFF_FROM_STATUSES)
+        .select('id');
+    if (flipErr) return fail(500, 'STATUS_FLIP_FAILED', flipErr.message);
+    const flippedIds = new Set((flipped ?? []).map((r: { id: string }) => r.id));
+    const moved = claimed.filter((o) => flippedIds.has(o.id));
+
+    // One parcel, one push, deep-linked to the earliest order on it.
+    if (params.notify !== false && moved.length > 0) {
+        try {
+            await sendShippedNotification(buyerId, { id: moved[0].id, total_amount: 0 }, trackingNumber || '', { carrier });
+        } catch (e) {
+            console.error('[Parcels] handoff shipped notification failed (non-fatal):', (e as Error).message);
+        }
+    }
+    console.log(`[Parcels] ${moved.length} order(s) handed off via ${carrier} by seller ${params.sellerId}`);
+    return { ok: true, orderIds: moved.map((o) => o.id), carrier, trackingNumber, recorded };
 }

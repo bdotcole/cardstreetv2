@@ -3,7 +3,10 @@
  *
  * Called by the buyer to confirm receipt of an order. This:
  *   1. Verifies the caller is the buyer
- *   2. Verifies the order is in a confirmable state (shipped / out_for_delivery / delivered)
+ *   2. Verifies the order is in a confirmable state (shipped / out_for_delivery /
+ *      delivered, or label_generated with a label row: a parcel that left
+ *      outside our Flash waybill never gets the scan that would move it, and
+ *      the buyer holding it is the one person who knows it arrived)
  *   3. Marks the order completed — immediately, so the buyer's UI reflects the
  *      confirmation on the very next fetch (both clients key the confirm button
  *      and the status pill off orders.status)
@@ -22,6 +25,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { embedArray } from '@/lib/utils/embed';
+import { hasShippingLabel } from '@/lib/orderGroups';
+
+// A Flash scan has moved the parcel: the buyer may confirm at any point after.
+const CONFIRMABLE_STATUSES = ['shipped', 'out_for_delivery', 'delivered'];
 
 export async function POST(request: NextRequest) {
     const supabase = await createClient();
@@ -38,10 +46,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
         }
 
-        // Verify ownership as buyer
+        // Verify ownership as buyer. The label embed rides the buyer's own
+        // RLS (shipping_labels has a buyer SELECT policy).
         const { data: order, error: orderError } = await supabase
             .from('orders')
-            .select('id, listing_id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee, delivered_at')
+            .select('id, listing_id, buyer_id, seller_id, status, escrow_status, total_amount, platform_fee, delivered_at, shipping_labels(tracking_number)')
             .eq('id', orderId)
             .single();
 
@@ -53,7 +62,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized to modify this order' }, { status: 403 });
         }
 
-        if (!['shipped', 'out_for_delivery', 'delivered'].includes(order.status)) {
+        // label_generated counts once a label exists: the seller may have
+        // handed the parcel to Flash staff, another courier or the buyer
+        // directly, and no scan of our waybill will ever follow. Before a
+        // label there is nothing the buyer could have received.
+        const labelled = hasShippingLabel({ shipping_labels: embedArray(order.shipping_labels) });
+        const confirmable = CONFIRMABLE_STATUSES.includes(order.status)
+            || (order.status === 'label_generated' && labelled);
+        if (!confirmable) {
             return NextResponse.json(
                 { error: 'Order is not ready to be completed' },
                 { status: 400 }
@@ -102,6 +118,19 @@ export async function POST(request: NextRequest) {
                 { error: 'Order was already processed — refresh to see latest state' },
                 { status: 409 }
             );
+        }
+
+        // The buyer has the parcel, so the label is delivered too. Flash's
+        // own delivered scan writes the same value; for a parcel that left
+        // outside our waybill this is the only thing that ever will.
+        // Best-effort: the order is what the UI and the payout key on.
+        if (labelled) {
+            const { error: labelError } = await admin
+                .from('shipping_labels')
+                .update({ status: 'delivered', updated_at: new Date().toISOString() })
+                .eq('order_id', orderId)
+                .neq('status', 'delivered');
+            if (labelError) console.warn('[Orders/Complete] label status update failed (non-fatal):', labelError.message);
         }
 
         // Sanity-check that the seller can actually be paid out. If not, log

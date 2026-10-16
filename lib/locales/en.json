@@ -1903,7 +1903,20 @@
         "pickupRecent": "A courier was booked recently. Give them until the next working day, or drop it at a branch.",
         "courierCancelled": "Courier cancelled",
         "pickupCancelled": "Flash cancelled the courier pickup, so nobody is coming for this parcel. Book again once it is packed and someone is home, or drop it at any Flash branch with the same label.",
-        "bookAgain": "Book the courier again"
+        "bookAgain": "Book the courier again",
+        "shippedElsewhere": "Shipped another way",
+        "shippedElsewhereTitle": "Shipped another way?",
+        "shippedElsewhereIntro": "Use this when the parcel left without a Flash scan of this label: handed to Flash staff who keyed it in themselves, sent with another courier, or delivered by hand. The buyer is told it is on the way and can confirm receipt.",
+        "carrierLabel": "Carrier",
+        "carrierPlaceholder": "e.g. Kerry Express",
+        "handoffTrackingLabel": "Tracking number (optional)",
+        "handoffTrackingPlaceholder": "The number the carrier gave you",
+        "shippedElsewhereConfirm": "Mark as shipped",
+        "shippedElsewhereBusy": "Saving…",
+        "shippedElsewhereDone": "Marked as shipped. The buyer has been told.",
+        "shippedElsewhereFailed": "Couldn't mark it as shipped. Please try again.",
+        "shippedVia": "Shipped via {carrier}",
+        "anotherCarrier": "another carrier"
     },
     "orderActions": {
         "reviewSeller": "Review seller",
@@ -1931,7 +1944,8 @@
         "cancel": "Cancel",
         "sending": "Sending…",
         "shipBy": "Ship by",
-        "overdue": "Overdue since"
+        "overdue": "Overdue since",
+        "receivedEarly": "Already have it? Confirm receipt"
     },
     "movers": {
         "title": "Market movers this week",

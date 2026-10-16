@@ -75,11 +75,59 @@ export function countCheckouts(group: TransferGroupableRow[]): number {
     return new Set(group.map((r) => r.transfer_group || r.id)).size;
 }
 
+/**
+ * What the seller told us when the parcel left outside our Flash waybill
+ * (migration 20261016_shipping_label_handoff.sql; written by lib/parcels
+ * handOffParcel). All null for a parcel that travels under the waybill.
+ */
+export interface HandoffFields {
+    handoff_carrier?: string | null;
+    handoff_tracking_number?: string | null;
+    handed_off_at?: string | null;
+}
+
 export interface ShipmentRow extends ParcelGroupableRow {
     status: string;
     buyer_id?: string | null;
     break_spot_id?: string | null;
-    shipping_labels?: { tracking_number?: string | null; status?: string | null }[] | null;
+    shipping_labels?: ({ tracking_number?: string | null; status?: string | null } & HandoffFields)[] | null;
+}
+
+/** A label row exists and is not a half-made PENDING claim. */
+export function hasShippingLabel(row: { shipping_labels?: { tracking_number?: string | null }[] | null }): boolean {
+    const pno = row.shipping_labels?.[0]?.tracking_number;
+    return !!pno && pno !== 'PENDING';
+}
+
+/**
+ * The seller may say this parcel left another way: label_generated with a
+ * label row (a real waybill or the MANUAL placeholder; a PENDING claim is not
+ * a label yet) that Flash has not scanned and nobody has handed off. Mirrors
+ * the server rule in lib/parcels handOffParcel. Any pickup_status qualifies:
+ * a cancelled courier or a planned drop-off is exactly the parcel a seller
+ * carries to a Flash counter, where staff key it in under a new number.
+ */
+export function isHandoffable(row: ShipmentRow): boolean {
+    if (row.break_spot_id) return false;
+    if (row.status !== 'label_generated') return false;
+    if (!hasShippingLabel(row)) return false;
+    const label = row.shipping_labels?.[0];
+    if (label?.handed_off_at) return false;
+    return !label?.status || label.status === 'created' || label.status === 'awaiting_manual';
+}
+
+/**
+ * The carrier and number a handed-off parcel travels under, for the buyer's
+ * tracking line and the seller's card; null while the parcel is Flash's.
+ */
+export function handoffOf(
+    label: HandoffFields | null | undefined,
+): { carrier: string | null; trackingNumber: string | null } | null {
+    if (!label?.handed_off_at && !label?.handoff_carrier) return null;
+    return {
+        carrier: label.handoff_carrier || null,
+        trackingNumber: label.handoff_tracking_number || null,
+    };
 }
 
 /**

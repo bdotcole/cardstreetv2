@@ -145,10 +145,13 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 
 /**
  * Parcels with a courier booked that Flash has not scanned: order still
- * label_generated, label row still 'created', pickup_status 'scheduled'.
- * One entry per waybill (its rows share the booking). Needs the
- * 20261016_pickup_cancelled.sql columns; before that migration the query
- * fails with 42703 and callers exit clean.
+ * label_generated, label row still 'created', pickup_status 'scheduled', and
+ * not handed off by the seller (lib/parcels handOffParcel; such a parcel has
+ * left, and a cancellation notice for it would send the seller to a branch
+ * with nothing). One entry per waybill (its rows share the booking). Needs
+ * the 20261016_pickup_cancelled.sql and 20261016_shipping_label_handoff.sql
+ * columns; before those migrations the query fails with 42703 and callers
+ * exit clean.
  */
 export async function loadScheduledParcels(
     admin: SupabaseClient,
@@ -157,6 +160,7 @@ export async function loadScheduledParcels(
         .from('shipping_labels')
         .select('order_id, tracking_number, status, pickup_id, pickup_status, updated_at, pickup_cancelled_notified_at, orders!inner(id, seller_id, status, break_spot_id, created_at)')
         .eq('pickup_status', 'scheduled')
+        .is('handed_off_at', null)
         .eq('orders.status', 'label_generated')
         .limit(500);
     if (error) return { parcels: [], error: { code: error.code, message: error.message } };

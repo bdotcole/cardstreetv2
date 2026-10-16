@@ -616,7 +616,40 @@ export async function sendPickupCancelledNotification(sellerId: string, d: Picku
  * email as a plain line and a Flash link; the push carries the waybill and
  * nothing else. Exported for render checks.
  */
-export function shippedNotificationContent(orderId: string, trackingNumber: string) {
+export function shippedNotificationContent(orderId: string, trackingNumber: string, carrier?: string | null) {
+    // The seller marked the parcel as shipped another way (lib/parcels
+    // handOffParcel): no scan of our waybill, maybe no number at all. Say
+    // what the seller told us and point at the order, where the buyer
+    // confirms receipt. A number handed over at a Flash counter still gets
+    // the Flash tracking link.
+    if (carrier) {
+        const number = trackingNumber.trim();
+        const flashLink = number && /flash/i.test(carrier)
+            ? `Flash Express: https://www.flashexpress.com/fle/tracking?se=${encodeURIComponent(number)}`
+            : undefined;
+        return emailPlusPushContent({
+            title: SUBJECTS.shipped!,
+            emailParagraphs: [
+                {
+                    text:
+                        `ผู้ขายส่งพัสดุของคุณแล้วผ่าน ${carrier}` +
+                        (number ? ` หมายเลขพัสดุ ${number}` : '') +
+                        ' เมื่อได้รับของแล้ว กดยืนยันรับสินค้าในแอป',
+                },
+                {
+                    text:
+                        `The seller has sent your parcel with ${carrier}` +
+                        (number ? ` (tracking ${number})` : '') +
+                        '. Once it arrives, confirm receipt in the app.',
+                    muted: true,
+                },
+            ],
+            cta: { label: 'View order · ดูคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+            emailFooter: flashLink,
+            pushBody:
+                `ผู้ขายส่งพัสดุผ่าน ${carrier}${number ? ` (${number})` : ''} กำลังเดินทางถึงคุณ · Sent with ${carrier}.`,
+        });
+    }
     const trackingLink = `https://www.flashexpress.com/fle/tracking?se=${encodeURIComponent(trackingNumber)}`;
     return emailPlusPushContent({
         title: SUBJECTS.shipped!,
@@ -639,7 +672,14 @@ export function shippedNotificationContent(orderId: string, trackingNumber: stri
     });
 }
 
-export async function sendShippedNotification(buyerId: string, orderDetails: any, trackingUrl: string) {
+export async function sendShippedNotification(
+    buyerId: string,
+    orderDetails: any,
+    trackingUrl: string,
+    // Set when the seller shipped outside our Flash waybill; the copy then
+    // names that carrier instead of Flash.
+    opts?: { carrier?: string | null },
+) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping shipped notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
@@ -662,7 +702,7 @@ export async function sendShippedNotification(buyerId: string, orderDetails: any
             message: {
                 to: recipient,
                 // `trackingUrl` is the raw waybill number (legacy parameter name).
-                content: shippedNotificationContent(String(orderDetails.id), trackingUrl),
+                content: shippedNotificationContent(String(orderDetails.id), trackingUrl, opts?.carrier),
                 routing,
                 providers: postmarkOverride(SUBJECTS.shipped),
                 // Push deep-link payload (unchanged contract: raw tracking number).

@@ -50,6 +50,26 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'No carrier tracking for this order' }, { status: 404 })
         }
 
+        // The seller shipped this parcel outside our waybill (lib/parcels
+        // handOffParcel): Flash has nothing to say about it, so report what
+        // the seller told us instead of a permanent state 0. Same shape as
+        // the unscanned branch below so the client sweeps stay unchanged.
+        if (label.handed_off_at) {
+            return NextResponse.json({
+                tracking: null,
+                order: { status: order.status },
+                label: {
+                    carrier: label.handoff_carrier || label.carrier_name,
+                    trackingNumber: label.handoff_tracking_number || null,
+                    labelUrl: label.label_url,
+                    trackingUrl: null,
+                    status: label.status,
+                    pickupStatus: label.pickup_status,
+                    handedOffAt: label.handed_off_at,
+                },
+            })
+        }
+
         // Call Flash Express tracking API
         const tracking = await trackShipment(label.tracking_number)
 

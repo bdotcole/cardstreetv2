@@ -3,7 +3,7 @@
 import React from 'react';
 import BodyPortal from './BodyPortal';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
+import { handoffOf, pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type HandoffFields, type ShipMethod } from '@/lib/orderGroups';
 
 /**
  * How a seller's parcel reaches Flash, for both shells (mobile Pending
@@ -15,6 +15,12 @@ import { pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type ShipMet
  * cancelled 6 of 7 such pickups (2026-10). Now the seller chooses when they
  * create the label (ShipMethodSheet), and the parcel card says what was
  * arranged and lets them book a courier later (ParcelHandoffNote).
+ *
+ * A parcel can also leave without any Flash scan of our label (handed to
+ * Flash staff who key it in themselves, another courier, by hand). The order
+ * would then sit at label_generated forever, so the seller says so in
+ * ShippedElsewhereSheet (POST /api/orders/label/handoff) and HandoffSummary
+ * shows what they told us.
  */
 
 export interface PickupInfo {
@@ -146,10 +152,12 @@ interface HandoffLabel {
  * 'scheduled', the seller may book again after PICKUP_REBOOK_AFTER_MS
  * (lib/parcels bookPickup enforces the same window).
  */
-export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
+export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhere }: {
     labels: (HandoffLabel | null | undefined)[];
     busy: boolean;
     onBookPickup: () => void;
+    /** The parcel already left without a Flash scan of this label. */
+    onShippedElsewhere?: () => void;
 }) {
     const { t, isThai } = useTranslation();
     const statuses = labels.map((l) => l?.pickup_status || null);
@@ -202,7 +210,146 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
                 >
                     {t('parcel.findBranch')}
                 </button>
+                {onShippedElsewhere && (
+                    <button
+                        onClick={onShippedElsewhere}
+                        className="text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                    >
+                        {t('parcel.shippedElsewhere')}
+                    </button>
+                )}
             </div>
         </div>
+    );
+}
+
+// Carriers a Thai seller is likely to have used instead of our waybill;
+// tapping one fills the field, and free text covers everything else.
+const HANDOFF_CARRIERS = ['Flash Express', 'Kerry Express', 'Thailand Post', 'J&T Express'];
+export const HANDOFF_FIELD_MAX = 60;
+
+/**
+ * "Shipped another way": the seller names the carrier the parcel left with
+ * and, if they have one, its tracking number. Submitting moves the order to
+ * shipped and tells the buyer (lib/parcels handOffParcel).
+ */
+export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
+    busy: boolean;
+    onSubmit: (carrier: string, trackingNumber: string) => void;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    const [carrier, setCarrier] = React.useState('');
+    const [trackingNumber, setTrackingNumber] = React.useState('');
+    const canSubmit = carrier.trim().length > 0 && !busy;
+    const inputClass =
+        'w-full h-11 rounded-xl bg-black/30 border border-white/10 px-3 text-sm text-white placeholder:text-slate-600 outline-none focus:border-brand-cyan/50';
+
+    return (
+        <BodyPortal>
+        <div
+            className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-brand-darker/90 backdrop-blur-sm"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))', paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}
+            onClick={busy ? undefined : onClose}
+        >
+            <form
+                className="w-full max-w-sm max-h-full overflow-y-auto glass rounded-3xl p-6 border border-white/10 relative bg-slate-900 space-y-4"
+                onClick={(e) => e.stopPropagation()}
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    if (canSubmit) onSubmit(carrier.trim(), trackingNumber.trim());
+                }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="shipped-elsewhere-title"
+            >
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-green to-brand-cyan"></div>
+                <div className="flex justify-between items-start gap-3">
+                    <h3 id="shipped-elsewhere-title" className="text-lg font-black text-white leading-tight">
+                        {t('parcel.shippedElsewhereTitle')}
+                    </h3>
+                    <button type="button" onClick={onClose} disabled={busy} aria-label={t('orderActions.cancel')} className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+                        <i className="fa-solid fa-xmark text-slate-400"></i>
+                    </button>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed">{t('parcel.shippedElsewhereIntro')}</p>
+
+                <div className="space-y-2">
+                    <label htmlFor="handoff-carrier" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {t('parcel.carrierLabel')}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        {HANDOFF_CARRIERS.map((name) => (
+                            <button
+                                key={name}
+                                type="button"
+                                onClick={() => setCarrier(name)}
+                                className={`h-8 px-3 rounded-full border text-xs font-bold transition-colors ${
+                                    carrier === name
+                                        ? 'bg-brand-cyan/20 border-brand-cyan/40 text-brand-cyan'
+                                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                                }`}
+                            >
+                                {name}
+                            </button>
+                        ))}
+                    </div>
+                    <input
+                        id="handoff-carrier"
+                        value={carrier}
+                        onChange={(e) => setCarrier(e.target.value)}
+                        maxLength={HANDOFF_FIELD_MAX}
+                        placeholder={t('parcel.carrierPlaceholder')}
+                        className={inputClass}
+                        autoComplete="off"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <label htmlFor="handoff-tracking" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {t('parcel.handoffTrackingLabel')}
+                    </label>
+                    <input
+                        id="handoff-tracking"
+                        value={trackingNumber}
+                        onChange={(e) => setTrackingNumber(e.target.value)}
+                        maxLength={HANDOFF_FIELD_MAX}
+                        placeholder={t('parcel.handoffTrackingPlaceholder')}
+                        className={`${inputClass} font-mono`}
+                        autoComplete="off"
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="w-full h-11 rounded-xl bg-brand-cyan text-black font-bold text-sm hover:bg-brand-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {busy ? t('parcel.shippedElsewhereBusy') : t('parcel.shippedElsewhereConfirm')}
+                </button>
+            </form>
+        </div>
+        </BodyPortal>
+    );
+}
+
+/**
+ * What the seller told us about a parcel that left outside our waybill:
+ * "Shipped via Kerry Express · KEX123". Renders nothing for a Flash parcel.
+ */
+export function HandoffSummary({ label, className }: { label: HandoffFields | null | undefined; className?: string }) {
+    const { t } = useTranslation();
+    const handoff = handoffOf(label);
+    if (!handoff) return null;
+    return (
+        <p className={`text-xs text-slate-300 flex gap-2 items-start ${className || ''}`}>
+            <i className="fa-solid fa-truck-fast mt-0.5 opacity-70"></i>
+            <span>
+                {t('parcel.shippedVia').replace('{carrier}', handoff.carrier || t('parcel.anotherCarrier'))}
+                {handoff.trackingNumber && (
+                    <> · <span className="font-mono text-white">{handoff.trackingNumber}</span></>
+                )}
+            </span>
+        </p>
     );
 }

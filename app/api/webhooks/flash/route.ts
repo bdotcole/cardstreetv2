@@ -140,6 +140,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ errorCode: '1', state: 'success' })
         }
 
+        // The seller already marked this parcel as shipped another way
+        // (lib/parcels handOffParcel) and the buyer was told then. A Flash
+        // scan that follows anyway (the counter used our label after all)
+        // still moves the order, but must not send a second "shipped" push;
+        // the delivered push is new information and still goes out.
+        const handedOff = (labels ?? []).some(l => !!(l as any).handed_off_at)
+
         // ─── Status transition (code 0) ───
         const flashState = parseInt(data.state, 10)
 
@@ -229,7 +236,7 @@ export async function POST(request: NextRequest) {
                             pno
                         )
                         notified = true
-                    } else if (orderStatus === 'out_for_delivery') {
+                    } else if (orderStatus === 'out_for_delivery' && !handedOff) {
                         // Keep using shipped notification for 'out for delivery' as a fallback
                         await sendShippedNotification(
                             order.buyer_id,

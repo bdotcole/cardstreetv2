@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { embedArray } from '@/lib/utils/embed';
+import { handoffOf, hasShippingLabel } from '@/lib/orderGroups';
 import { resolveBreakOrderContexts } from '@/lib/breakOrderContext';
 import OrderDetailContent, { type OrderDetailData } from './OrderDetailContent';
 
@@ -42,13 +43,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     // (same reason app/api/profile/orders uses the admin client).
     const admin = createAdminClient();
     // `*` rather than a column list: the dispute columns arrive with migration
-    // 20260907_order_disputes.sql and a named select would 42703 before it runs.
+    // 20260907_order_disputes.sql (and the label handoff columns with
+    // 20261016_shipping_label_handoff.sql); a named select would 42703
+    // before they run.
     const { data: order } = await admin
         .from('orders')
         .select(`
             *,
             listing:listings(card_data, condition, is_graded, grading_company, grade, price),
-            shipping_labels(tracking_number, carrier_name, courier_tracking_url, status)
+            shipping_labels(*)
         `)
         .eq('id', id)
         .single();
@@ -65,6 +68,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     const trackingNumber = label?.tracking_number && label.tracking_number !== 'MANUAL'
         ? String(label.tracking_number)
         : null;
+    // A parcel the seller shipped outside our Flash waybill travels under
+    // whatever carrier and number they entered (lib/parcels handOffParcel);
+    // the Flash waybill and its tracking link no longer describe it.
+    const handoff = handoffOf(label);
+    const tracking: OrderDetailData['tracking'] = handoff
+        ? { number: handoff.trackingNumber, url: null, carrier: handoff.carrier }
+        : trackingNumber
+            ? { number: trackingNumber, url: label?.courier_tracking_url ?? null, carrier: null }
+            : null;
 
     // Live-break spot orders have no listing snapshot — resolve stream/lot/
     // spot context so this page (the email deep-link target) shows
@@ -102,9 +114,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             gradingCompany: listing?.grading_company ?? null,
             grade: listing?.grade ?? null,
         },
-        tracking: trackingNumber
-            ? { number: trackingNumber, url: label?.courier_tracking_url ?? null }
-            : null,
+        tracking,
+        hasLabel: hasShippingLabel({ shipping_labels: label ? [label] : [] }),
     };
 
     return <OrderDetailContent order={data} role={role} orderId={id} />;

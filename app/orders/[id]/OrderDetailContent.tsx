@@ -34,7 +34,14 @@ export interface OrderDetailData {
         gradingCompany: string | null;
         grade: string | null;
     };
-    tracking: { number: string; url: string | null } | null;
+    // `carrier` is set when the seller shipped outside our Flash waybill
+    // (lib/parcels handOffParcel): then `number` is whatever that carrier
+    // gave them, possibly nothing, and there is no tracking link.
+    tracking: { number: string | null; url: string | null; carrier: string | null } | null;
+    // A label row exists: the parcel may have left even if no Flash scan
+    // ever moved the status, so the buyer can confirm receipt from
+    // label_generated.
+    hasLabel?: boolean;
 }
 
 interface Props {
@@ -184,12 +191,15 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     };
 
     const L = isThai
-        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า', confirmDelivery: 'ยืนยันว่าได้รับพัสดุแล้ว', confirming: 'กำลังยืนยัน…' }
-        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.', confirmDelivery: 'Confirm I received it', confirming: 'Confirming…' };
+        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า', confirmDelivery: 'ยืนยันว่าได้รับพัสดุแล้ว', confirming: 'กำลังยืนยัน…', shippedVia: 'ผู้ขายส่งผ่าน', anotherCarrier: 'ขนส่งอื่น', noNumber: 'ผู้ขายไม่ได้ระบุเลขพัสดุ', receivedEarly: 'ได้รับของแล้ว? กดยืนยันรับสินค้า' }
+        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.', confirmDelivery: 'Confirm I received it', confirming: 'Confirming…', shippedVia: 'Shipped via', anotherCarrier: 'another carrier', noNumber: 'No tracking number given', receivedEarly: 'Already have it? Confirm receipt' };
 
     const isBuyer = role === 'buyer';
     const effectiveForActions = reported ? 'disputed' : order.status;
     const showConfirm = isBuyer && ['shipped', 'out_for_delivery', 'delivered'].includes(effectiveForActions);
+    // Labelled but never scanned: a parcel that left outside our waybill
+    // arrives without the status moving (/api/orders/complete accepts this).
+    const showConfirmEarly = isBuyer && effectiveForActions === 'label_generated' && !!order.hasLabel;
     const showReview = isBuyer && canReviewOrder({ status: effectiveForActions });
     const showReport = isBuyer && effectiveForActions !== 'disputed'
         && canReportOrder({ status: effectiveForActions, delivered_at: order.deliveredAt ?? null, completed_at: order.completedAt });
@@ -304,8 +314,12 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                 {order.tracking ? (
                     <div className="glass rounded-2xl border border-white/10 p-5 flex items-center justify-between gap-4">
                         <div className="min-w-0">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{L.tracking}</p>
-                            <p className="font-mono text-sm text-white truncate">{order.tracking.number}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                {order.tracking.carrier ? `${L.shippedVia} ${order.tracking.carrier}` : L.tracking}
+                            </p>
+                            {order.tracking.number
+                                ? <p className="font-mono text-sm text-white truncate">{order.tracking.number}</p>
+                                : <p className="text-sm text-slate-400">{L.noNumber}</p>}
                         </div>
                         {order.tracking.url && (
                             <a
@@ -376,6 +390,15 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                             className="w-full bg-brand-cyan text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60"
                         >
                             {confirmBusy ? L.confirming : L.confirmDelivery}
+                        </button>
+                    )}
+                    {showConfirmEarly && (
+                        <button
+                            onClick={confirmDelivery}
+                            disabled={confirmBusy}
+                            className="w-full glass border border-brand-cyan/30 text-brand-cyan font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60"
+                        >
+                            {confirmBusy ? L.confirming : L.receivedEarly}
                         </button>
                     )}
                     {showReview && (

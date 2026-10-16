@@ -1904,7 +1904,20 @@
         "pickupRecent": "เพิ่งเรียกพนักงานไป รอได้ถึงวันทำการถัดไป หรือนำไปส่งที่สาขา",
         "courierCancelled": "Flash ยกเลิกเข้ารับ",
         "pickupCancelled": "Flash ยกเลิกการเข้ารับพัสดุนี้แล้ว จะไม่มีพนักงานมารับ เรียกพนักงานใหม่เมื่อแพ็กเสร็จและมีคนอยู่รับ หรือนำไปส่งที่สาขา Flash ใดก็ได้โดยใช้ใบปะหน้าเดิม",
-        "bookAgain": "เรียกพนักงานใหม่"
+        "bookAgain": "เรียกพนักงานใหม่",
+        "shippedElsewhere": "ส่งด้วยวิธีอื่นแล้ว",
+        "shippedElsewhereTitle": "ส่งด้วยวิธีอื่นแล้วใช่ไหม",
+        "shippedElsewhereIntro": "ใช้เมื่อพัสดุถูกส่งออกไปโดยไม่ได้สแกนใบปะหน้านี้ เช่น ฝากพนักงาน Flash คีย์ให้เอง ส่งกับขนส่งอื่น หรือนำไปส่งถึงมือเอง ผู้ซื้อจะได้รับแจ้งว่าพัสดุกำลังเดินทาง และกดยืนยันรับของได้",
+        "carrierLabel": "ขนส่ง",
+        "carrierPlaceholder": "เช่น Kerry Express",
+        "handoffTrackingLabel": "เลขพัสดุ (ไม่บังคับ)",
+        "handoffTrackingPlaceholder": "เลขที่ได้รับจากขนส่ง",
+        "shippedElsewhereConfirm": "ยืนยันว่าส่งแล้ว",
+        "shippedElsewhereBusy": "กำลังบันทึก…",
+        "shippedElsewhereDone": "บันทึกว่าส่งแล้ว แจ้งผู้ซื้อเรียบร้อย",
+        "shippedElsewhereFailed": "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+        "shippedVia": "ส่งผ่าน {carrier}",
+        "anotherCarrier": "ขนส่งอื่น"
     },
     "orderActions": {
         "reviewSeller": "รีวิวผู้ขาย",
@@ -1932,7 +1945,8 @@
         "cancel": "ยกเลิก",
         "sending": "กำลังส่ง…",
         "shipBy": "ส่งภายใน",
-        "overdue": "เลยกำหนดตั้งแต่"
+        "overdue": "เลยกำหนดตั้งแต่",
+        "receivedEarly": "ได้รับของแล้ว? กดยืนยันรับสินค้า"
     },
     "movers": {
         "title": "การ์ดราคาขยับแรงสัปดาห์นี้",

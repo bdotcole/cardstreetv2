@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
         const offset = (page - 1) * limit
 
+        // shipping_labels(*) rather than a column list: the handoff columns
+        // (carrier and number of a parcel that left outside our Flash
+        // waybill) arrive with 20261016_shipping_label_handoff.sql, and a
+        // named select would 42703 the whole panel before it runs.
         let query = supabaseAdmin
             .from('orders')
             .select(`
@@ -38,14 +42,7 @@ export async function GET(request: NextRequest) {
                     card_data,
                     condition
                 ),
-                shipping_labels(
-                    tracking_number,
-                    carrier_name,
-                    label_url,
-                    courier_tracking_url,
-                    estimated_delivery_date,
-                    status
-                ),
+                shipping_labels(*),
                 reviews(rating, comment)
             `, { count: 'exact' })
             .eq('buyer_id', user.id)

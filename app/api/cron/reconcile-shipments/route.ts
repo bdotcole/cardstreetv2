@@ -44,15 +44,24 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const started = Date.now();
-    const summary = { scanned: 0, advanced: 0, delivered: 0, errors: 0 };
+    const summary = { scanned: 0, advanced: 0, delivered: 0, handedOff: 0, errors: 0 };
 
     // In-flight orders that carry a shipping label. Inner join so we only get
     // orders with a label row; we filter out placeholder/MANUAL pnos below.
-    const { data: orders, error } = await supabase
+    // handed_off_at arrives with 20261016_shipping_label_handoff.sql; before
+    // it runs the column is unknown (42703) and the sweep selects without it.
+    type LabelStub = { tracking_number: string | null; status: string | null; handed_off_at?: string | null };
+    type InFlightRow = { id: string; status: string; buyer_id: string; seller_id: string; shipping_labels: LabelStub[] | LabelStub | null };
+    const selectInFlight = (labelCols: string) => supabase
         .from('orders')
-        .select('id, status, buyer_id, seller_id, shipping_labels!inner(tracking_number, status)')
+        .select(`id, status, buyer_id, seller_id, shipping_labels!inner(${labelCols})`)
         .in('status', IN_FLIGHT)
-        .limit(MAX_ORDERS);
+        .limit(MAX_ORDERS)
+        .returns<InFlightRow[]>();
+    let { data: orders, error } = await selectInFlight('tracking_number, status, handed_off_at');
+    if (error?.code === '42703') {
+        ({ data: orders, error } = await selectInFlight('tracking_number, status'));
+    }
 
     if (error) {
         Sentry.captureException(new Error(`reconcile-shipments query failed: ${error.message}`));
@@ -65,9 +74,14 @@ export async function GET(request: NextRequest) {
         // shipping_labels.order_id is UNIQUE, so PostgREST returns this embed
         // as a bare object — a raw [0] here comes back undefined and the whole
         // sweep silently no-ops. embedArray tolerates both shapes.
-        const label = embedArray(order.shipping_labels as { tracking_number: string | null; status: string | null }[] | { tracking_number: string | null; status: string | null } | null)[0];
+        const label = embedArray(order.shipping_labels)[0];
         const pno = label?.tracking_number;
         if (!pno || pno === 'MANUAL') continue;
+        // The seller marked this parcel as shipped outside our waybill
+        // (lib/parcels handOffParcel): Flash will never scan it, so polling
+        // would return state 0 every hour until the buyer confirms receipt.
+        // A late Flash scan still reaches the order through the webhook.
+        if (label?.handed_off_at) { summary.handedOff++; continue; }
 
         summary.scanned++;
 
@@ -150,11 +164,13 @@ export async function GET(request: NextRequest) {
 
     // Watchdog: in-flight orders exist but none were scanned. That is exactly
     // how the original ?.[0] embed-shape bug looked from the outside — the
-    // cron ran green while every order was skipped. Only MANUAL-waybill
-    // orders legitimately produce this, so a warning is cheap and loud.
-    if ((orders?.length ?? 0) > 0 && summary.scanned === 0) {
+    // cron ran green while every order was skipped. Only MANUAL-waybill and
+    // handed-off orders legitimately produce this, so a warning is cheap and
+    // loud.
+    const pollable = (orders?.length ?? 0) - summary.handedOff;
+    if (pollable > 0 && summary.scanned === 0) {
         Sentry.captureMessage(
-            `reconcile-shipments scanned 0 of ${orders!.length} in-flight orders — label extraction may be broken`,
+            `reconcile-shipments scanned 0 of ${pollable} in-flight orders — label extraction may be broken`,
             { level: 'warning', extra: { inFlight: orders!.length, ...summary } },
         );
     }

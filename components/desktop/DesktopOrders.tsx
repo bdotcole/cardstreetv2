@@ -10,8 +10,8 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
-import { ShipMethodSheet, ParcelHandoffNote, type PickupInfo } from '@/components/ParcelHandoff';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
@@ -50,6 +50,11 @@ interface OrderRow {
         carrier_name?: string | null;
         courier_tracking_url?: string | null;
         status?: string | null;
+        // Set when the seller shipped outside our Flash waybill (lib/orderGroups
+        // HandoffFields): the carrier and number the buyer should look at.
+        handoff_carrier?: string | null;
+        handoff_tracking_number?: string | null;
+        handed_off_at?: string | null;
         // Seller side: drop-off or a booked courier (components/ParcelHandoff).
         pickup_status?: string | null;
         updated_at?: string | null;
@@ -365,6 +370,33 @@ export default function DesktopOrders() {
         }
     };
 
+    // The parcel left without a Flash scan of our label (handed to Flash
+    // staff, another courier, by hand): the seller says so here and the order
+    // moves to shipped, the buyer is told and can confirm receipt. Without it
+    // the order sat at label_generated forever (lib/parcels handOffParcel).
+    const [handoffSheet, setHandoffSheet] = useState<{ orderIds: string[] } | null>(null);
+    const [handoffBusy, setHandoffBusy] = useState(false);
+    const handOffParcel = async (orderIds: string[], carrier: string, trackingNumber: string) => {
+        setHandoffBusy(true);
+        try {
+            const res = await fetch('/api/orders/label/handoff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderIds, carrier, trackingNumber }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'handoff failed');
+            setHandoffSheet(null);
+            showToast(t('parcel.shippedElsewhereDone'), 'success');
+            await fetchTab('shipments');
+        } catch (err) {
+            console.error('Mark shipped elsewhere failed:', err);
+            showToast(t('parcel.shippedElsewhereFailed'), 'error');
+        } finally {
+            setHandoffBusy(false);
+        }
+    };
+
     const openLabel = async (orderId: string) => {
         try {
             const res = await fetch(`/api/orders/${orderId}/label/url`, { method: 'POST' });
@@ -490,6 +522,14 @@ export default function DesktopOrders() {
                                     const order = group[0];
                                     const label = order.shipping_labels?.[0];
                                     const canComplete = ['shipped', 'out_for_delivery', 'delivered'].includes(order.status);
+                                    // Labelled but never scanned: a parcel that left
+                                    // outside our waybill arrives without the status
+                                    // moving, so the buyer who holds it can still close
+                                    // the order. Quieter than the confirm above.
+                                    const canCompleteEarly = order.status === 'label_generated' && hasShippingLabel(order);
+                                    // The seller shipped outside our waybill: what they
+                                    // told us replaces the Flash waybill and its link.
+                                    const handoff = handoffOf(label);
                                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                                     return (
                                         <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
@@ -504,7 +544,15 @@ export default function DesktopOrders() {
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-5 flex-wrap">
-                                                {label?.tracking_number && label.tracking_number !== 'MANUAL' && (
+                                                {handoff && (
+                                                    <span className="text-xs text-slate-400">
+                                                        {t('parcel.shippedVia').replace('{carrier}', handoff.carrier || t('parcel.anotherCarrier'))}
+                                                        {handoff.trackingNumber && (
+                                                            <span className="font-mono text-white ml-2">{handoff.trackingNumber}</span>
+                                                        )}
+                                                    </span>
+                                                )}
+                                                {!handoff && label?.tracking_number && label.tracking_number !== 'MANUAL' && (
                                                     <span className="text-xs text-slate-400">
                                                         <span className="font-mono text-white">{label.tracking_number}</span>
                                                         {label.courier_tracking_url && (
@@ -531,6 +579,14 @@ export default function DesktopOrders() {
                                                         className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
                                                     >
                                                         {t('desktop.orders.confirmDelivery')}
+                                                    </button>
+                                                )}
+                                                {canCompleteEarly && (
+                                                    <button
+                                                        onClick={() => { setReviewOrderIds(group.map((o) => o.id)); setReviewScore(5); setReviewComment(''); }}
+                                                        className="border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 text-xs font-black px-4 py-2 rounded-lg transition-colors"
+                                                    >
+                                                        {t('orderActions.receivedEarly')}
                                                     </button>
                                                 )}
                                                 {/* Review and report live here so a buyer whose order
@@ -703,9 +759,24 @@ export default function DesktopOrders() {
                                                         labels={group.map((o) => o.shipping_labels?.[0])}
                                                         busy={pickupBusyPno === pno}
                                                         onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
+                                                        onShippedElsewhere={group.every(isHandoffable) ? () => setHandoffSheet({ orderIds: group.map((o) => o.id) }) : undefined}
                                                     />
                                                 </div>
                                             )}
+                                            {/* A MANUAL placeholder never gets a Flash scan
+                                                either; the seller who shipped it anyway can
+                                                still move the order on. */}
+                                            {!isBreakOrder && pno === 'MANUAL' && group.every(isHandoffable) && (
+                                                <button
+                                                    onClick={() => setHandoffSheet({ orderIds: group.map((o) => o.id) })}
+                                                    className="text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                                                >
+                                                    {t('parcel.shippedElsewhere')}
+                                                </button>
+                                            )}
+                                            {/* The seller said this parcel left another way:
+                                                the carrier and number they gave. */}
+                                            <HandoffSummary label={order.shipping_labels?.[0]} />
                                         </div>
                                         <div className="flex items-center gap-5 flex-wrap">
                                             <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
@@ -745,7 +816,8 @@ export default function DesktopOrders() {
                                                     <i className="fa-solid fa-tag mr-2"></i>
                                                     {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
                                                 </button>
-                                            ) : (
+                                            ) : handoffOf(order.shipping_labels?.[0]) ? null : (
+                                                // A parcel shipped another way never used this label.
                                                 <button
                                                     onClick={() => openLabel(order.id)}
                                                     className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
@@ -905,6 +977,13 @@ export default function DesktopOrders() {
                         if (sheet.mode === 'create') createLabel(sheet.orderIds, undefined, method);
                         else bookPickup(sheet.trackingNumber);
                     }}
+                />
+            )}
+            {handoffSheet && (
+                <ShippedElsewhereSheet
+                    busy={handoffBusy}
+                    onClose={() => setHandoffSheet(null)}
+                    onSubmit={(carrier, trackingNumber) => handOffParcel(handoffSheet.orderIds, carrier, trackingNumber)}
                 />
             )}
         </div>
