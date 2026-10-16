@@ -9,6 +9,7 @@
  *   4. Track Shipment  — POST /open/v1/orders/{pno}/routes
  *
  * Plus: Cancel Order   — POST /open/v1/orders/{pno}/cancel
+ *       Pickup tickets — POST /open/v1/notifications (read-only, per day)
  */
 
 import crypto from 'crypto';
@@ -724,6 +725,61 @@ export async function requestPickup(params: FlashPickupParams): Promise<FlashPic
         staffInfoPhone: response.data.staffInfoPhone || '',
         timeoutAtText: response.data.timeoutAtText || '',
     };
+}
+
+/**
+ * Pickup tickets — POST /open/v1/notifications (read-only)
+ *
+ * Lists every courier pickup our account booked on one Bangkok day: the
+ * ticket id requestPickup returned, its state, the courier assigned and how
+ * many parcels were collected. Flash never pushes pickup cancellations, so
+ * this list is the only way to learn that a booked courier is not coming
+ * (state 4; stateText "Cancelled" / "ยกเลิกแล้ว", courier assigned,
+ * parcelNumber 0). Flash may re-dispatch a cancelled booking under a NEW
+ * ticket id that copies the original's sender fields, and the original id
+ * then drops out of the list, so callers match on sender phone + postcode
+ * too (lib/pickupTickets). Observed 2026-10: one ticket per booking day,
+ * `data` a plain array, numbers already numeric.
+ */
+export const FLASH_PICKUP_STATE_CANCELLED = 4;
+
+export interface FlashPickupTicket {
+    ticketPickupId: number;
+    /** Unix seconds. */
+    createdAt: number;
+    state: number;
+    stateText: string;
+    srcName: string;
+    phone: string;
+    postalCode: string;
+    /** Parcels the courier actually collected. */
+    parcelNumber: number;
+    estimateParcelNumber: number;
+    staffInfoName: string;
+    staffInfoMobile: string;
+    remark: string;
+}
+
+export async function listPickupTickets(dateYmd: string): Promise<FlashPickupTicket[]> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+        throw new Error(`listPickupTickets: date must be YYYY-MM-DD, got "${dateYmd}"`);
+    }
+    const response = await makeFlashRequest('/open/v1/notifications', { date: dateYmd });
+    const rows: any[] = Array.isArray(response.data) ? response.data : [];
+    return rows.map((r) => ({
+        ticketPickupId: Number(r.ticketPickupId),
+        createdAt: Number(r.createdAt),
+        state: Number(r.state),
+        stateText: String(r.stateText ?? ''),
+        srcName: String(r.srcName ?? ''),
+        phone: String(r.phone ?? r.srcPhone ?? ''),
+        postalCode: String(r.postalCode ?? r.srcPostalCode ?? ''),
+        parcelNumber: Number(r.parcelNumber ?? 0),
+        estimateParcelNumber: Number(r.estimateParcelNumber ?? 0),
+        staffInfoName: String(r.staffInfoName ?? ''),
+        staffInfoMobile: String(r.staffInfomobile ?? r.staffInfoMobile ?? ''),
+        remark: String(r.remark ?? ''),
+    }));
 }
 
 /**

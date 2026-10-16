@@ -528,6 +528,86 @@ export async function sendLabelGeneratedNotification(
     }
 }
 
+export interface PickupCancelledDetails {
+    /** The parcel's primary order: the push and the email CTA land on its card. */
+    id: string;
+    trackingNumber: string;
+    itemCount?: number | null;
+}
+
+// Thai first, so the subject rides the Postmark override (see SUBJECTS).
+export const PICKUP_CANCELLED_SUBJECT = 'Flash ยกเลิกการเข้ารับพัสดุของคุณ — Flash cancelled your courier pickup';
+
+/**
+ * The seller's "the courier is not coming" copy. Fires once per booking from
+ * app/api/cron/reconcile-pickups when Flash's ticket list shows the pickup
+ * cancelled (lib/pickupTickets). Two ways out, both on the parcel card the
+ * CTA opens: book the courier again, or drop the parcel at a Flash branch
+ * with the same label. Exported for render checks.
+ */
+export function pickupCancelledNotificationContent(d: PickupCancelledDetails) {
+    const pno = ` (${d.trackingNumber})`;
+    const many = (d.itemCount ?? 1) > 1;
+    const parcelTh = many ? `พัสดุ ${d.itemCount} รายการ` : 'พัสดุ';
+    const parcelEn = many ? `your ${d.itemCount}-item parcel` : 'your parcel';
+    return emailPlusPushContent({
+        title: PICKUP_CANCELLED_SUBJECT,
+        emailParagraphs: [
+            {
+                text:
+                    `Flash Express ยกเลิกการเข้ารับ${parcelTh}${pno} ของคุณแล้ว พนักงานจะไม่มาตามนัดเดิม ` +
+                    'ส่วนใหญ่เกิดเพราะพนักงานมาแล้วไม่มีคนอยู่ หรือพัสดุยังไม่พร้อม ใบปะหน้าเดิมยังใช้ได้ ' +
+                    'เลือกได้สองทาง: กดเรียกพนักงานเข้ารับใหม่ในแอปเมื่อแพ็กพัสดุเสร็จและมีคนอยู่รับ ' +
+                    'หรือนำพัสดุไปส่งที่สาขา Flash Express หรือร้าน Flash Home ใดก็ได้',
+            },
+            {
+                text:
+                    `Flash Express cancelled the courier pickup for ${parcelEn}${pno}. The courier is not coming on that booking; ` +
+                    'this usually happens when nobody was home or the parcel was not ready. The label is still valid. ' +
+                    'Either book the courier again from the app once the parcel is packed and someone is there, ' +
+                    'or drop it at any Flash Express branch or Flash Home shop.',
+                muted: true,
+            },
+        ],
+        cta: { label: 'เปิดพัสดุ · Open the parcel', url: `${appBaseUrl()}/orders/${d.id}` },
+        pushBody: `Flash ยกเลิกการเข้ารับ${pno} กดเรียกใหม่ หรือนำไปส่งที่สาขา · Flash cancelled the pickup. Book again or drop it at a branch.`,
+    });
+}
+
+/**
+ * Tells the seller a booked courier was cancelled. Same channels and prefs
+ * as the label-ready notification (label_email / label_push) since it is
+ * the next step of the same errand; the push deep-links to the order card
+ * (type 'pickup_cancelled' in hooks/usePushNotifications). Returns whether
+ * a send was attempted, so the cron can stamp pickup_cancelled_notified_at.
+ */
+export async function sendPickupCancelledNotification(sellerId: string, d: PickupCancelledDetails): Promise<boolean> {
+    const courier = getCourier();
+    if (!courier) { console.warn('[Courier] Client not initialized — skipping pickup cancelled notification'); return false; }
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantEmail = !!prefs.label_email && !!email;
+    const wantPush = !!prefs.label_push && !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    const routing = buildRouting(wantEmail, wantPush, 'inline');
+    try {
+        const { requestId } = await courier.send.message({
+            message: {
+                to: { ...buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null), user_id: sellerId },
+                content: pickupCancelledNotificationContent(d),
+                routing,
+                providers: postmarkOverride(PICKUP_CANCELLED_SUBJECT),
+                data: { orderId: d.id, type: 'pickup_cancelled' },
+            } as any,
+        });
+        console.log(`[Courier] ✅ 'Pickup Cancelled' notification sent for ${d.trackingNumber}. Request ID: ${requestId}`);
+        return true;
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Pickup Cancelled' notification to ${sellerId}:`, error);
+        return false;
+    }
+}
+
 /**
  * Notifies the buyer that their item has shipped.
  */

@@ -1898,7 +1898,10 @@
         "findBranch": "Find a Flash branch",
         "pickupBookedToast": "Pickup booked. A Flash courier will come to your address.",
         "pickupFailed": "Couldn't book the pickup. Try again, or drop it at a branch.",
-        "pickupRecent": "A courier was booked recently. Give them until the next working day, or drop it at a branch."
+        "pickupRecent": "A courier was booked recently. Give them until the next working day, or drop it at a branch.",
+        "courierCancelled": "Courier cancelled",
+        "pickupCancelled": "Flash cancelled the courier pickup, so nobody is coming for this parcel. Book again once it is packed and someone is home, or drop it at any Flash branch with the same label.",
+        "bookAgain": "Book the courier again"
     },
     "orderActions": {
         "reviewSeller": "Review seller",

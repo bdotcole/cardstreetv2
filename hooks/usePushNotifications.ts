@@ -75,7 +75,7 @@ function routeNotificationTap(data: unknown) {
     // for the seller, Track Orders for the buyer; Profile resolves the side.
     // Before this branch every one of these taps opened the app to home.
     if (
-        type === 'sold' || type === 'label_generated' || type === 'ship_reminder' || type === 'unshipped_order' ||
+        type === 'sold' || type === 'label_generated' || type === 'ship_reminder' || type === 'unshipped_order' || type === 'pickup_cancelled' ||
         type === 'shipped' || type === 'order_confirmation' || type === 'purchase_completed' ||
         type === 'package_delivered' || type === 'payout_completed'
     ) {

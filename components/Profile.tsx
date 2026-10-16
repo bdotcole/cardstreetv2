@@ -38,7 +38,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, type PickupInfo } from '@/components/ParcelHandoff';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
@@ -2307,6 +2307,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                     // their parcel is consolidated at stream settle, so every
                     // label affordance is replaced by a passive notice.
                     const isBreakOrder = !!shipment.break_spot_id;
+                    // Flash cancelled the booked courier (reconcile-pickups cron):
+                    // flagged in the header so it is not missed in a long list.
+                    const courierCancelled = !isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel)
+                      && isPickupCancelled(group.map((o) => o.shipping_labels?.[0]));
                     const statusLine = (
                       <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
                         {/* 'completed' reads "Delivered" here — in a shipping
@@ -2348,11 +2352,18 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                             <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
                           )}
                         </div>
-                        {checkouts > 1 && (
-                          <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
-                            {t('parcel.combined').replace('{count}', String(checkouts))}
-                          </span>
-                        )}
+                        <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
+                          {courierCancelled && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
+                              {t('parcel.courierCancelled')}
+                            </span>
+                          )}
+                          {checkouts > 1 && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
+                              {t('parcel.combined').replace('{count}', String(checkouts))}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {checkouts > 1 && !isDeliveredCard && (
                         <p className="text-brand-cyan text-xs font-semibold">{t('parcel.packTogether')}</p>

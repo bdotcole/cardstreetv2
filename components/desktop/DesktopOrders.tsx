@@ -10,7 +10,7 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, type PickupInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
@@ -612,6 +612,10 @@ export default function DesktopOrders() {
                                     // label (parcels consolidate at stream settle) —
                                     // the label button becomes a passive notice.
                                     const isBreakOrder = !!order.break_spot_id;
+                                    // Flash cancelled the booked courier (reconcile-pickups
+                                    // cron): flagged in the header so it is not missed.
+                                    const courierCancelled = !isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel)
+                                        && isPickupCancelled(group.map((o) => o.shipping_labels?.[0]));
                                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                                     return (
                                     <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
@@ -628,6 +632,11 @@ export default function DesktopOrders() {
                                                 {checkouts > 1 && (
                                                     <span className="text-[10px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-md px-2 py-0.5">
                                                         {t('parcel.combined').replace('{count}', String(checkouts))}
+                                                    </span>
+                                                )}
+                                                {courierCancelled && (
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5">
+                                                        {t('parcel.courierCancelled')}
                                                     </span>
                                                 )}
                                             </div>

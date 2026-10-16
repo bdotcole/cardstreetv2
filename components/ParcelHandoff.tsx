@@ -3,7 +3,7 @@
 import React from 'react';
 import BodyPortal from './BodyPortal';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { pickupBookedAt, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
+import { pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
 
 /**
  * How a seller's parcel reaches Flash, for both shells (mobile Pending
@@ -140,9 +140,11 @@ interface HandoffLabel {
 
 /**
  * The line under a labelled parcel Flash has not scanned yet: what was
- * arranged, and the way out when it did not happen. Flash never tells us it
- * cancelled a pickup, so after PICKUP_REBOOK_AFTER_MS the seller may book
- * again (lib/parcels bookPickup enforces the same window).
+ * arranged, and the way out when it did not happen. A pickup Flash cancelled
+ * (found by the reconcile-pickups cron, pickup_status 'cancelled') says so
+ * plainly and offers Book again at once; while a booking still reads
+ * 'scheduled', the seller may book again after PICKUP_REBOOK_AFTER_MS
+ * (lib/parcels bookPickup enforces the same window).
  */
 export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
     labels: (HandoffLabel | null | undefined)[];
@@ -153,8 +155,10 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
     const statuses = labels.map((l) => l?.pickup_status || null);
     const bookedAt = pickupBookedAt(labels);
     const requesting = statuses.includes('requesting');
-    const failed = !bookedAt && statuses.includes('manual');
+    const cancelled = isPickupCancelled(labels);
+    const failed = !bookedAt && !cancelled && statuses.includes('manual');
     const canRebook = bookedAt !== null && Date.now() - bookedAt >= PICKUP_REBOOK_AFTER_MS;
+    const alert = cancelled || failed;
 
     let text: string;
     if (bookedAt !== null) {
@@ -162,6 +166,8 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
             day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
         });
         text = t('parcel.pickupBooked').replace('{when}', when);
+    } else if (cancelled) {
+        text = t('parcel.pickupCancelled');
     } else if (failed) {
         text = t('parcel.pickupNotBooked');
     } else {
@@ -169,11 +175,12 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
     }
 
     const showBook = !requesting && (bookedAt === null || canRebook);
+    const icon = cancelled ? 'fa-triangle-exclamation' : bookedAt !== null ? 'fa-truck' : 'fa-store';
 
     return (
-        <div className={`rounded-xl border p-3 space-y-2 ${failed ? 'border-amber-500/20 bg-amber-500/10' : 'border-white/10 bg-white/5'}`}>
-            <p className={`text-xs leading-relaxed flex gap-2 ${failed ? 'text-amber-200' : 'text-slate-300'}`}>
-                <i className={`fa-solid ${bookedAt !== null ? 'fa-truck' : 'fa-store'} mt-0.5 opacity-70`}></i>
+        <div className={`rounded-xl border p-3 space-y-2 ${alert ? 'border-amber-500/20 bg-amber-500/10' : 'border-white/10 bg-white/5'}`}>
+            <p className={`text-xs leading-relaxed flex gap-2 ${alert ? 'text-amber-200' : 'text-slate-300'}`}>
+                <i className={`fa-solid ${icon} mt-0.5 opacity-70`}></i>
                 <span>{text}</span>
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -185,6 +192,7 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup }: {
                     >
                         {busy || requesting
                             ? t('parcel.bookingPickup')
+                            : cancelled ? t('parcel.bookAgain')
                             : bookedAt !== null ? t('parcel.rebookPickup') : t('parcel.bookPickup')}
                     </button>
                 )}

@@ -118,17 +118,29 @@ export function isUnscannedParcel(row: ShipmentRow): boolean {
 export type ShipMethod = 'pickup' | 'dropoff';
 
 /**
- * Flash never tells us when it cancels a pickup (shipping_labels.pickup_status
- * stays 'scheduled'), so a parcel still unscanned this long after its booking
- * may book another. Long enough that a courier on today's round is not
- * double-booked; short enough to rebook for tomorrow. Enforced server-side by
- * lib/parcels bookPickup.
+ * Flash never pushes a pickup cancellation. The hourly cron
+ * app/api/cron/reconcile-pickups reads Flash's ticket list and flips a
+ * cancelled booking to pickup_status 'cancelled' (isPickupCancelled), which
+ * clears this wait. Until it has, a parcel still unscanned this long after
+ * its booking may book another: long enough that a courier on today's round
+ * is not double-booked, short enough to rebook for tomorrow. Enforced
+ * server-side by lib/parcels bookPickup.
  */
 export const PICKUP_REBOOK_AFTER_MS = 6 * 60 * 60 * 1000;
 
 interface PickupLabel {
     pickup_status?: string | null;
     updated_at?: string | null;
+}
+
+/**
+ * Flash cancelled the courier that was booked for this parcel (set by the
+ * reconcile-pickups cron). Nothing is booked any more, so the seller may
+ * book again at once or drop the parcel off; pickupBookedAt is null here,
+ * which is what lets bookPickup skip the rebook window.
+ */
+export function isPickupCancelled(labels: (PickupLabel | null | undefined)[]): boolean {
+    return labels.some((l) => l?.pickup_status === 'cancelled') && pickupBookedAt(labels) === null;
 }
 
 /**
