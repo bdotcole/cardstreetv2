@@ -421,6 +421,8 @@ serve(async (_req) => {
                                         body: 'โอนเข้าบัญชี Stripe ของคุณแล้ว · Sent to your Stripe account.',
                                     },
                                     routing: { method: "all", channels },
+                                    // Sender name; same value as EMAIL_FROM in lib/courier.ts.
+                                    providers: { postmark: { override: { body: { From: 'Cardstreet Official <info@cardstreet.app>' } } } },
                                     data: { orderId: order.id, type: 'payout_completed', amount: notifyNetCents / 100, currency: transferCurrency }
                                 }
                             })

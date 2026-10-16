@@ -15,9 +15,44 @@ function getCourier() {
         console.warn('[Courier] ⚠️  COURIER_AUTH_TOKEN is not set — all notification sends will be skipped.');
         _courier = null;
     } else {
-        _courier = new CourierClient({ apiKey: token });
+        const client = new CourierClient({ apiKey: token });
+        // Every send in this file goes through this client, so the sender name
+        // is stamped here once rather than at each of the ~35 call sites.
+        const sendMessage = client.send.message.bind(client.send);
+        client.send.message = (body, options) =>
+            sendMessage({ ...body, message: withSenderName(body.message) }, options);
+        _courier = client;
     }
     return _courier;
+}
+
+type CourierMessage = Parameters<InstanceType<typeof CourierClient>['send']['message']>[0]['message'];
+
+/**
+ * Sender on every outbound email, display name included. Courier's Postmark
+ * integration holds only the bare address, so inboxes showed the sender as
+ * "info@cardstreet.app" instead of a name (2026-10-16). Postmark accepts
+ * "Name <address>" in From; the address must stay a verified Postmark sender.
+ * supabase/functions/release-funds sends its payout email with its own copy.
+ */
+const EMAIL_FROM = 'Cardstreet Official <info@cardstreet.app>';
+
+/**
+ * Adds EMAIL_FROM to the message's Postmark override, keeping the Subject,
+ * ReplyTo or Attachments a call site already put there (postmarkOverride) and
+ * any From it set itself. Harmless on push-only sends: only Postmark reads it.
+ */
+function withSenderName(message: CourierMessage): CourierMessage {
+    const postmark = message.providers?.postmark ?? {};
+    const body = (postmark.override?.body ?? {}) as Record<string, unknown>;
+    if (body.From) return message;
+    return {
+        ...message,
+        providers: {
+            ...message.providers,
+            postmark: { ...postmark, override: { ...postmark.override, body: { From: EMAIL_FROM, ...body } } },
+        },
+    };
 }
 
 let _supabaseAdmin: SupabaseClient | null = null;
