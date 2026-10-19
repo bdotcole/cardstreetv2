@@ -3,7 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 // An order counts as a sale once payment lands; pending_payment carts and
 // cancellations are excluded (see the abandoned-checkout phantom-sale fix).
-export const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
+// A disputed order was paid and stays a sale until it is refunded, which moves
+// it to 'cancelled'. Leaving it out hid reported orders from the dashboard.
+export const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed', 'disputed']
 
 export const SOLD_LISTINGS_PAGE_SIZE = 20
 

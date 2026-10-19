@@ -3,8 +3,10 @@
 import { useRef, useState } from 'react'
 import type { SoldListingRow, SoldListingsPage } from '@/lib/adminSales.server'
 
-// Order fulfillment stages: yellow = awaiting shipment, cyan = moving, green = done.
+// Order fulfillment stages: yellow = awaiting shipment, cyan = moving, green = done,
+// red = the buyer reported a problem.
 const ORDER_STAGE_COLORS: Record<string, string> = {
+    disputed: 'bg-brand-red/20 text-brand-red',
     paid: 'bg-yellow-500/20 text-yellow-400',
     label_generated: 'bg-yellow-500/20 text-yellow-400',
     shipped: 'bg-brand-cyan/20 text-brand-cyan',
