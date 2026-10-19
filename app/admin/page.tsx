@@ -2,6 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper'
 import StatGrid, { type Deltas, type StatCardData } from './_StatGrid'
 import WishlistBoard, { type WishlistBoardRow } from './_WishlistBoard'
+import SoldListings from './_SoldListings'
+import { PAID_ORDER_STATUSES, getSoldListingsPage } from '@/lib/adminSales.server'
 
 // The admin dashboard queries Supabase at render time via the service-role
 // client. Prerendering it at build would require Supabase env vars to be
@@ -37,10 +39,6 @@ async function growthCounts(build: () => any, tsColumn: string): Promise<Deltas>
     )
     return Object.fromEntries(pairs) as Deltas
 }
-
-// An order counts as a sale once payment lands; pending_payment carts and
-// cancellations are excluded (see the abandoned-checkout phantom-sale fix).
-const PAID_ORDER_STATUSES = ['paid', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed']
 
 /**
  * Every paid order counts, whoever sold it.
@@ -142,25 +140,6 @@ async function getTopPartners() {
         .not('partner_joined_at', 'is', null)
         .order('total_downloads', { ascending: false })
         .limit(5)
-    return data ?? []
-}
-
-async function getRecentSales() {
-    const supabase = createAdminClient()
-    // No seller filter: a real shop run by an admin is still a real sale, and
-    // dropping those left this list all but empty. The 10 most recent paid
-    // orders are the 10 most recent paid orders.
-    const { data } = await supabase
-        .from('orders')
-        .select(`
-            id, total_amount, status, created_at, seller_id,
-            listing:listings(card_data),
-            buyer:profiles!orders_buyer_id_fkey(display_name),
-            seller:profiles!orders_seller_id_fkey(display_name)
-        `)
-        .in('status', PAID_ORDER_STATUSES)
-        .order('created_at', { ascending: false })
-        .limit(10)
     return data ?? []
 }
 
@@ -287,17 +266,6 @@ const STATUS_COLORS: Record<string, string> = {
     'Resolved': 'bg-brand-green/20 text-brand-green',
 }
 
-// Order fulfillment stages: yellow = awaiting shipment, cyan = moving, green = done.
-const ORDER_STAGE_COLORS: Record<string, string> = {
-    paid: 'bg-yellow-500/20 text-yellow-400',
-    label_generated: 'bg-yellow-500/20 text-yellow-400',
-    shipped: 'bg-brand-cyan/20 text-brand-cyan',
-    in_transit: 'bg-brand-cyan/20 text-brand-cyan',
-    out_for_delivery: 'bg-brand-cyan/20 text-brand-cyan',
-    delivered: 'bg-brand-green/20 text-brand-green',
-    completed: 'bg-brand-green/20 text-brand-green',
-}
-
 const OFFER_STATUS_COLORS: Record<string, string> = {
     pending: 'bg-yellow-500/20 text-yellow-400',
     accepted: 'bg-brand-green/20 text-brand-green',
@@ -307,15 +275,12 @@ const OFFER_STATUS_COLORS: Record<string, string> = {
     withdrawn: 'bg-white/10 text-slate-400',
 }
 
-const shortDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-
 export default async function AdminOverviewPage() {
-    const [stats, recentTickets, topPartners, recentSales, recentOffers, wishlist] = await Promise.all([
+    const [stats, recentTickets, topPartners, salesPage, recentOffers, wishlist] = await Promise.all([
         getOverviewStats(),
         getRecentTickets(),
         getTopPartners(),
-        getRecentSales(),
+        getSoldListingsPage(1),
         getRecentOffers(),
         getWishlistBoard(),
     ])
@@ -336,59 +301,8 @@ export default async function AdminOverviewPage() {
             {/* Heading + growth window picker + stat cards */}
             <StatGrid cards={statCards} />
 
-            {/* Sold Listings */}
-            <div className="glass rounded-2xl border border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-white/5">
-                    <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Sold Listings</h2>
-                </div>
-                {recentSales.length === 0 ? (
-                    <p className="px-6 py-8 text-center text-slate-500 text-sm">No sales yet</p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-white/5">
-                                    <th className="px-6 py-3">Card</th>
-                                    <th className="px-4 py-3">Seller</th>
-                                    <th className="px-4 py-3">Buyer</th>
-                                    <th className="px-4 py-3 text-right">Sold Price</th>
-                                    <th className="px-4 py-3">Order Stage</th>
-                                    <th className="px-6 py-3 text-right">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {recentSales.map((o: any) => {
-                                    const card = (o.listing as any)?.card_data
-                                    return (
-                                        <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                                            <td className="px-6 py-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    {card?.images?.small && (
-                                                        <img src={card.images.small} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
-                                                    )}
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-semibold text-slate-200 truncate max-w-[220px]">{card?.name ?? 'Unknown card'}</p>
-                                                        {card?.number && <p className="text-[10px] text-slate-500">#{card.number}</p>}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-slate-300 whitespace-nowrap">{(o.seller as any)?.display_name ?? 'Unknown'}</td>
-                                            <td className="px-4 py-3 text-sm text-slate-300 whitespace-nowrap">{(o.buyer as any)?.display_name ?? 'Unknown'}</td>
-                                            <td className="px-4 py-3 text-sm font-black text-brand-green text-right whitespace-nowrap">฿{Number(o.total_amount).toLocaleString()}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-block text-[9px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap ${ORDER_STAGE_COLORS[o.status] ?? 'bg-white/10 text-slate-400'}`}>
-                                                    {String(o.status).replace(/_/g, ' ')}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-3 text-[11px] text-slate-500 text-right whitespace-nowrap">{shortDate(o.created_at)}</td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+            {/* Sold Listings: the first page renders here, later pages load in place */}
+            <SoldListings initial={salesPage} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Recent Tickets */}
