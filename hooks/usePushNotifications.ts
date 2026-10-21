@@ -57,6 +57,12 @@ function routeNotificationTap(data: unknown) {
         );
         return;
     }
+    if (type === 'listings_removed') {
+        // Photo-less listings taken down by moderation: the cards to re-list
+        // with photos are in the Vault.
+        window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=listings_removed_no_photos');
+        return;
+    }
     if (type === 'shipping_launch') {
         // The Oct 9 shipping-in-price reminders go to sellers, whose prices
         // and listings are in the Vault (lib/launchCampaign.ts).

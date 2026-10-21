@@ -3081,6 +3081,97 @@ export async function sendStaleListingNudge(
     }
 }
 
+// Thai first, so the subject rides the Postmark override (see SUBJECTS).
+export const LISTINGS_REMOVED_NO_PHOTOS_SUBJECT =
+    'เรานำรายการขายที่ไม่มีรูปถ่ายออกแล้ว — Listings without photos removed';
+
+export interface RemovedListingSummary {
+    cardName: string;
+    setName?: string | null;
+    price: number;
+}
+
+/**
+ * The seller's "we took your photo-less listings down" copy. Names the cards
+ * (the first ten) so the seller knows exactly which to re-list, and says what
+ * a re-listing needs. Exported for render checks.
+ */
+export function listingsRemovedNoPhotosContent(listings: RemovedListingSummary[]) {
+    const n = listings.length;
+    const shown = listings
+        .slice(0, 10)
+        .map((l) => `${l.cardName}${l.setName ? ` (${l.setName})` : ''} ฿${Number(l.price || 0).toLocaleString('en-US')}`);
+    const more = n - shown.length;
+    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'info@cardstreet.app').trim();
+    return emailPlusPushContent({
+        title: LISTINGS_REMOVED_NO_PHOTOS_SUBJECT,
+        emailParagraphs: [
+            {
+                text:
+                    `เราได้นำรายการขายของคุณ ${n} รายการออกจากตลาดแล้ว เนื่องจากไม่มีรูปถ่ายการ์ดใบจริง ` +
+                    'ผู้ซื้อต้องเห็นสภาพของการ์ดใบที่จะได้รับก่อนตัดสินใจซื้อ ' +
+                    'หากต้องการขายการ์ดเหล่านี้ กรุณาลงขายใหม่ทีละใบพร้อมรูปถ่ายด้านหน้าและด้านหลัง',
+            },
+            {
+                text:
+                    `We removed ${n} of your listings from the market because they had no photos of the actual card. ` +
+                    'Buyers need to see the condition of the exact card they will receive before they buy. ' +
+                    'To sell these cards, list them again one at a time with front and back photos.',
+                muted: true,
+            },
+            {
+                text: shown.join(' · ') + (more > 0 ? ` · อีก ${more} รายการ / +${more} more` : ''),
+                muted: true,
+            },
+        ],
+        cta: {
+            label: 'ลงขายใหม่พร้อมรูป · List again with photos',
+            url: `${appBaseUrl()}/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=listings_removed_no_photos`,
+        },
+        emailFooter: `มีคำถาม? ติดต่อ ${supportEmail} · Questions? Contact ${supportEmail}`,
+        pushBody:
+            `นำรายการขาย ${n} รายการที่ไม่มีรูปถ่ายออกแล้ว ลงขายใหม่พร้อมรูปการ์ดจริง · ` +
+            `${n} listings without photos were removed. List them again with real photos.`,
+    });
+}
+
+/**
+ * Tells a seller that moderation removed their listings for having no photos
+ * (scripts/remove-photoless-listings.ts). A notice about their own account,
+ * not marketing, so it goes on every channel we have regardless of prefs: a
+ * seller whose stock vanished without a word would assume a bug and re-list
+ * the same way. The push opens the Vault (type 'listings_removed').
+ */
+export async function sendListingsRemovedNoPhotosNotification(
+    sellerId: string,
+    listings: RemovedListingSummary[],
+): Promise<{ email: boolean; push: boolean } | false> {
+    const courier = getCourier();
+    if (!courier || listings.length === 0) return false;
+
+    const { email, fcmToken } = await getUserNotifContext(sellerId);
+    const wantEmail = !!email;
+    const wantPush = !!fcmToken;
+    if (!wantEmail && !wantPush) return false;
+
+    try {
+        const { requestId } = await courier.send.message({
+            message: {
+                to: { ...buildRecipient(email, fcmToken), user_id: sellerId },
+                content: listingsRemovedNoPhotosContent(listings),
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: postmarkOverride(LISTINGS_REMOVED_NO_PHOTOS_SUBJECT),
+                data: { type: 'listings_removed', count: listings.length },
+            } as any,
+        });
+        console.log(`[Courier] 'Listings Removed' notification sent to ${sellerId}. Request ID: ${requestId}`);
+        return { email: wantEmail, push: wantPush };
+    } catch (error) {
+        console.error(`[Courier] 'Listings Removed' notification to ${sellerId} failed:`, error);
+        return false;
+    }
+}
+
 export async function sendBreakerApplicationAlert(application: {
     id: string;
     fullName: string;
