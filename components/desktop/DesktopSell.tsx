@@ -160,6 +160,13 @@ export default function DesktopSell() {
 
     const publishListing = async (listingData: any) => {
         if (!listingCard) return;
+        // null = ListingForm already created an auction itself (beta) — nothing
+        // to publish here, just reset and refresh.
+        if (!listingData) {
+            setListingCard(null);
+            refreshMyListings();
+            return;
+        }
         try {
             const created = await marketplaceService.createListing({
                 cardId: listingCard.id,

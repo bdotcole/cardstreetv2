@@ -367,6 +367,9 @@ export default function DesktopNav({ pathPrefix = '' }: {
                     {([
                         ['/', t('desktop.navMarketplace')],
                         ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                        // Timed auction house: GRANT_ONLY, so this entry exists
+                        // for explicitly granted accounts alone.
+                        ...(hasBeta('auctions') ? [['/auctions', t('auction.entryButton') || 'Auctions']] : []),
                         ['/sets', t('desktop.navSets')],
                         ['/sell', t('desktop.navSell')],
                         ['/orders', t('desktop.navOrders')],
@@ -564,6 +567,7 @@ export default function DesktopNav({ pathPrefix = '' }: {
                         {([
                             ['/', t('desktop.navMarketplace')],
                             ...(hasBeta('live_streams') && !isEntryPointHidden('live_streams') ? [['/live', t('desktop.navLive')]] : []),
+                            ...(hasBeta('auctions') ? [['/auctions', t('auction.entryButton') || 'Auctions']] : []),
                             ['/sets', t('desktop.navSets')],
                             ['/sell', t('desktop.navSell')],
                             ['/orders', t('desktop.navOrders')],

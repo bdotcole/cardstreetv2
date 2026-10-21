@@ -76,7 +76,7 @@ import { useChatUnread } from '@/lib/hooks/useChatUnread';
 import { CHAT_BACK_EVENT } from '@/components/chat/ChatOverlay';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { isEntryPointHidden } from '@/lib/betaFeatures';
-const LiveShopChooser = dynamic(() => import('@/components/live/LiveShopChooser'), { ssr: false });
+const ShopHub = dynamic(() => import('@/components/ShopHub'), { ssr: false });
 
 const PartnerPortal = dynamic(() => import('@/components/PartnerPortal'), { ssr: false });
 const PartnerRequest = dynamic(() => import('@/components/PartnerRequest'), { ssr: false });
@@ -184,18 +184,18 @@ export default function HomePage() {
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'marketplace' | 'add' | 'vault' | 'profile' | 'partner' | 'seller_profile'>('marketplace');
 
-    // Live-breaks beta: the Shop tab opens with a Live-vs-Marketplace chooser
-    // for 'live_streams' beta users only. hasBeta fails CLOSED while the status
-    // is loading (and on any lookup error), so non-beta users render the
-    // existing Marketplace path with no chooser flash and no live fetches.
-    // Component state (not storage) remembers a Marketplace pick, so returning
-    // from /live remounts the shell and lands on the chooser again.
+    // Shop hub (November layout): the Shop tab opens on a four-way switch —
+    // Marketplace / Auction House / Live Breaks / Digital Packs — for accounts
+    // holding the GRANT_ONLY 'shop_hub' flag (the founder's preview). hasBeta
+    // fails CLOSED while the status is loading (and on any lookup error), so
+    // everyone else renders the existing Marketplace path with no hub flash
+    // and no extra fetches. Component state (not storage) remembers a
+    // Marketplace pick, so returning from /live, /auctions or /packs remounts
+    // the shell and lands on the hub again.
     const { hasBeta: hasLiveBeta } = useBetaFeatures();
+    const hasShopHub = hasLiveBeta('shop_hub');
     const [shopChooserDismissed, setShopChooserDismissed] = useState(false);
-    // Hidden entry point (lib/betaFeatures HIDDEN_ENTRY_POINTS): Shop opens
-    // straight on the Marketplace while Live has no door, even for admins.
-    const showShopChooser =
-        hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') && !shopChooserDismissed;
+    const showShopChooser = hasShopHub && !shopChooserDismissed;
 
     // Picking Marketplace pushes a history entry so the phone's BACK gesture
     // (or button) returns to the chooser instead of leaving the Shop tab — the
@@ -244,7 +244,7 @@ export default function HomePage() {
     // consumed rather than left stale. Tapping Shop from ANOTHER tab is
     // unchanged: it restores the section the user last picked.
     const handleShopTab = useCallback(() => {
-        if (activeTab === 'marketplace' && shopChooserDismissed && hasLiveBeta('live_streams')) {
+        if (activeTab === 'marketplace' && shopChooserDismissed && hasShopHub) {
             if (shopHistoryRef.current) {
                 window.history.back();
             } else {
@@ -253,7 +253,7 @@ export default function HomePage() {
             return;
         }
         setActiveTab('marketplace');
-    }, [activeTab, shopChooserDismissed, hasLiveBeta]);
+    }, [activeTab, shopChooserDismissed, hasShopHub]);
 
     // Deep-link handling for Stripe Connect onboarding redirects.
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
@@ -2174,7 +2174,7 @@ export default function HomePage() {
         activeTab,
         // True while the Marketplace is showing BECAUSE the user picked it in
         // the Shop chooser — the state the back button must step out of.
-        marketplaceFromChooser: hasLiveBeta('live_streams') && shopChooserDismissed,
+        marketplaceFromChooser: hasShopHub && shopChooserDismissed,
     });
 
     // Update refs whenever state changes
@@ -2186,9 +2186,9 @@ export default function HomePage() {
             selectedListing,
             buylistCard,
             activeTab,
-            marketplaceFromChooser: hasLiveBeta('live_streams') && shopChooserDismissed,
+            marketplaceFromChooser: hasShopHub && shopChooserDismissed,
         };
-    }, [isPaymentModalOpen, isCartOpen, selectedCard, selectedListing, buylistCard, activeTab, hasLiveBeta, shopChooserDismissed]);
+    }, [isPaymentModalOpen, isCartOpen, selectedCard, selectedListing, buylistCard, activeTab, hasShopHub, shopChooserDismissed]);
 
     // Global Back Button Handling & Deep Links
     useEffect(() => {
@@ -2754,7 +2754,15 @@ export default function HomePage() {
                             />
                         )}
                         {activeTab === 'marketplace' && showShopChooser && (
-                            <LiveShopChooser onMarketplace={enterMarketplace} />
+                            <ShopHub
+                                onMarketplace={enterMarketplace}
+                                // Full navigations, like the Live pill below: these
+                                // sections are their own routes, and coming back
+                                // remounts the shell on the hub.
+                                onAuctions={() => { window.location.assign('/auctions'); }}
+                                onLive={() => { window.location.assign('/live'); }}
+                                onPacks={() => { window.location.assign('/packs'); }}
+                            />
                         )}
                         {activeTab === 'marketplace' && !showShopChooser && (
                             <Marketplace

@@ -14,6 +14,8 @@ import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import { LISTING_GRADING_COMPANIES } from '@/lib/listingDisplay';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
+import { AUCTION_DURATION_HOURS, thbToSatang } from '@/lib/auctionRules';
 
 // Shown once per device the first time the listing form opens, so a new seller
 // understands the fees and that they pay Flash for shipping at pickup.
@@ -62,7 +64,25 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   // sell independently (see createListing's `quantity`).
   const [quantity, setQuantity] = useState(1);
   const [useCatalogArt, setUseCatalogArt] = useState(false);
-  
+
+  // ── Auction mode (beta, GRANT_ONLY 'auctions') ──
+  // Visible only to granted accounts; the fixed-price flow is untouched for
+  // everyone else. In auction mode this form posts directly to /api/auctions
+  // (photos still uploaded the same way, and always required — the winning
+  // price is unknown up front, so catalog art can never stand in) and skips
+  // the parent's listing-publish path by resolving onSuccess(null). One item
+  // per auction: the copies control and the OBO toggle are hidden.
+  const { hasBeta } = useBetaFeatures();
+  const canAuction = hasBeta('auctions');
+  const [saleFormat, setSaleFormat] = useState<'fixed' | 'auction'>('fixed');
+  const isAuction = canAuction && saleFormat === 'auction';
+  const [reservePrice, setReservePrice] = useState<string>('');
+  const [buyNowPrice, setBuyNowPrice] = useState<string>('');
+  const [durationHours, setDurationHours] = useState<number>(72);
+  React.useEffect(() => {
+    if (isAuction) setUseCatalogArt(false);
+  }, [isAuction]);
+
   // Photo states
   const [frontImageBlob, setFrontImageBlob] = useState<Blob | null>(null);
   const [frontImagePreview, setFrontImagePreview] = useState<string | null>(null);
@@ -250,6 +270,37 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
         back_url = supabase.storage.from('listing-images').getPublicUrl(backData.path).data.publicUrl;
       }
 
+      if (isAuction) {
+        // Auction mode: this form owns the create call. Amounts go up as
+        // integer satang; the server validates ladder/duration rules.
+        const res = await fetch('/api/auctions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            card_id: card.id,
+            card_data: card,
+            condition,
+            is_graded: isGraded,
+            grading_company: isGraded ? gradingCompany : null,
+            grade: isGraded ? parseFloat(grade) : null,
+            image_front_url: front_url,
+            image_back_url: back_url,
+            starting_price_satang: thbToSatang(parseFloat(price)),
+            reserve_price_satang: reservePrice ? thbToSatang(parseFloat(reservePrice)) : null,
+            buy_now_price_satang: buyNowPrice ? thbToSatang(parseFloat(buyNowPrice)) : null,
+            duration_hours: durationHours,
+          }),
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(out?.error || (isThai ? 'สร้างการประมูลไม่สำเร็จ' : 'Failed to start the auction'));
+        }
+        // null = nothing for the parent to publish; it still resets its view.
+        await onSuccess(null);
+        onClose();
+        return;
+      }
+
       const listingData = {
         card_id: card.id,
         quantity,
@@ -318,10 +369,39 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Sale format — granted 'auctions' accounts only */}
+            {canAuction && (
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'รูปแบบการขาย' : 'Sale format'}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaleFormat('fixed')}
+                    className={`h-10 rounded-lg text-xs font-bold border transition-all ${!isAuction
+                      ? 'bg-brand-cyan text-brand-darker border-brand-cyan'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'}`}
+                  >
+                    <i className="fa-solid fa-tag mr-1.5"></i>{isThai ? 'ราคาตายตัว' : 'Fixed price'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSaleFormat('auction')}
+                    className={`h-10 rounded-lg text-xs font-bold border transition-all ${isAuction
+                      ? 'bg-amber-400 text-brand-darker border-amber-400'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'}`}
+                  >
+                    <i className="fa-solid fa-gavel mr-1.5"></i>{isThai ? 'ประมูล' : 'Auction'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Price Input */}
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase">{isThai ? 'ราคาขาย' : 'Asking Price'} (THB)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase">
+                  {isAuction ? (isThai ? 'ราคาเริ่มต้น' : 'Starting price') : (isThai ? 'ราคาขาย' : 'Asking Price')} (THB)
+                </label>
                 {recommendedPrice > 0 && (
                   <button
                     type="button"
@@ -376,7 +456,71 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
               )}
             </div>
 
-            {/* Copies. One listing row per copy — see createListing's quantity. */}
+            {/* Auction-only pricing + duration */}
+            {isAuction && (
+              <div className="space-y-4 bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 animate-fadeIn">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">
+                      {isThai ? 'ราคาขั้นต่ำ (ไม่บังคับ)' : 'Reserve (optional)'}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">฿</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={reservePrice}
+                        onChange={(e) => setReservePrice(e.target.value)}
+                        className="w-full h-11 bg-white/5 border border-white/10 rounded-xl pl-7 pr-2 text-white font-bold focus:border-amber-400 outline-none placeholder-slate-600 text-sm"
+                        placeholder="—"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">
+                      {isThai ? 'ซื้อเลย (ไม่บังคับ)' : 'Buy It Now (optional)'}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">฿</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={buyNowPrice}
+                        onChange={(e) => setBuyNowPrice(e.target.value)}
+                        className="w-full h-11 bg-white/5 border border-white/10 rounded-xl pl-7 pr-2 text-white font-bold focus:border-amber-400 outline-none placeholder-slate-600 text-sm"
+                        placeholder="—"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{isThai ? 'ระยะเวลา' : 'Duration'}</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {AUCTION_DURATION_HOURS.map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setDurationHours(h)}
+                        className={`h-10 rounded-lg text-xs font-bold border transition-all ${durationHours === h
+                          ? 'bg-amber-400 text-brand-darker border-amber-400'
+                          : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'}`}
+                      >
+                        {h / 24}{isThai ? ' วัน' : 'd'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {isThai
+                    ? 'ระบบจะบิดแทนผู้ซื้อแบบอัตโนมัติ การบิดใน 2 นาทีสุดท้ายจะต่อเวลาอีก 2 นาที ผู้ชนะต้องชำระภายใน 24 ชั่วโมง'
+                    : 'Bidders set a max and the system bids for them. Bids in the final 2 minutes extend the auction 2 minutes. The winner pays within 24 hours.'}
+                </p>
+              </div>
+            )}
+
+            {/* Copies. One listing row per copy — see createListing's quantity.
+                An auction is always a single item. */}
+            {!isAuction && (
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">{t('listingPhotos.quantity')}</label>
               <div className="flex items-center gap-3">
@@ -402,6 +546,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
                 )}
               </div>
             </div>
+            )}
 
             {/* Condition — sealed products are factory sealed by definition */}
             {isSealed ? (
@@ -475,7 +620,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
             )}
 
             {/* Accept offers (OBO) toggle — only while the offers feature is live */}
-            {process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && (
+            {!isAuction && process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && (
               <div className="flex items-center gap-3 py-2">
                 <button
                   type="button"
@@ -501,7 +646,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
 
               {/* Only offered once the price and condition actually qualify, so
                   the checkbox never appears next to a card it cannot cover. */}
-              {canUseCatalogArt && (
+              {canUseCatalogArt && !isAuction && (
                 <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 mb-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -606,6 +751,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
             >
               {isSubmitting ? (
                 <div className="w-5 h-5 border-2 border-brand-darker border-t-transparent rounded-full animate-spin"></div>
+              ) : isAuction ? (
+                <>
+                  <i className="fa-solid fa-gavel"></i>
+                  {isThai ? 'เริ่มการประมูล' : 'Start Auction'}
+                </>
               ) : (
                 <>
                   <i className="fa-solid fa-tag"></i>

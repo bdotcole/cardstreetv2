@@ -17,7 +17,7 @@
  *     because it requires a DB read.
  */
 
-export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewards' | 'rewards_vouchers';
+export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewards' | 'rewards_vouchers' | 'shop_hub';
 
 // 'live_streams' gates viewing/bidding/buying in a live show; 'live_broadcast'
 // is the invite-only broadcaster grant (a live seller is a Connect seller with
@@ -28,7 +28,12 @@ export type BetaFeature = 'auctions' | 'live_streams' | 'live_broadcast' | 'rewa
 // 2026-08-30).
 // 'rewards_vouchers' separately gates the checkout voucher rail (20260829) so
 // the money-touching half is independently killable.
-export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards', 'rewards_vouchers'];
+// 'shop_hub' gates the mobile Shop section switch (Marketplace / Auction House /
+// Live Breaks / Digital Packs) and the matching desktop nav entries. It is
+// GRANT_ONLY: the founder is previewing the November shop layout on his own
+// account before anyone else, admins included (kill-switch row seeded by
+// 20261021_auction_timed_scope.sql).
+export const BETA_FEATURES: readonly BetaFeature[] = ['auctions', 'live_streams', 'live_broadcast', 'rewards', 'rewards_vouchers', 'shop_hub'];
 
 /**
  * Features GRADUATED to general availability: every signed-in user passes the
@@ -94,6 +99,24 @@ export function isEntryPointHidden(feature: BetaFeature): boolean {
   return (HIDDEN_ENTRY_POINTS as readonly string[]).includes(feature);
 }
 
+/**
+ * Features that require an EXPLICIT profiles.beta_features grant: the admin
+ * role does NOT pass them. For every other feature "admin" is a blanket key,
+ * which is right for staff tooling but wrong for a per-person preview -- there
+ * are two admin accounts, and "only my account" has to mean exactly that.
+ * The DISABLED_FEATURES refusal and the DB kill switch still apply on top.
+ *
+ * - shop_hub / auctions (2026-10-21): the November shop layout and the timed
+ *   auction house, previewed on the founder's account alone until he decides
+ *   to launch. Grant:
+ *   UPDATE profiles SET beta_features = array_append(beta_features, '<name>') WHERE id = '<uuid>';
+ */
+export const GRANT_ONLY_FEATURES: readonly BetaFeature[] = ['shop_hub', 'auctions'];
+
+export function isGrantOnlyFeature(feature: BetaFeature): boolean {
+  return (GRANT_ONLY_FEATURES as readonly string[]).includes(feature);
+}
+
 export function isBetaFeature(value: unknown): value is BetaFeature {
   return typeof value === 'string' && (BETA_FEATURES as readonly string[]).includes(value);
 }
@@ -101,7 +124,8 @@ export function isBetaFeature(value: unknown): value is BetaFeature {
 /**
  * Does this user pass the beta gate for a feature, given their cached grants?
  * `betaFeatures` is profiles.beta_features (may be null on old rows); a feature in
- * DISABLED_FEATURES is refused outright, admins otherwise pass unconditionally,
+ * DISABLED_FEATURES is refused outright, a GRANT_ONLY feature needs the explicit
+ * grant (admin role does not count), admins otherwise pass unconditionally,
  * and GA features pass for everyone. The global kill switch is enforced
  * separately on the server -- a `true` here still yields no access while the
  * switch is off.
@@ -112,6 +136,9 @@ export function hasBeta(
   isAdmin: boolean,
 ): boolean {
   if (isFeatureDisabledInCode(feature)) return false;
+  if (isGrantOnlyFeature(feature)) {
+    return Array.isArray(betaFeatures) && betaFeatures.includes(feature);
+  }
   if (isAdmin) return true;
   if ((GA_FEATURES as readonly string[]).includes(feature)) return true;
   return Array.isArray(betaFeatures) && betaFeatures.includes(feature);

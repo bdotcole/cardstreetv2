@@ -79,6 +79,15 @@ interface PaymentModalProps {
      */
     acceptedOfferId?: string;
     /**
+     * Pay-existing-orders mode (auction wins): the pending_payment orders are
+     * already in the DB under this transfer_group, so the modal skips
+     * /api/orders/estimate + /api/orders/checkout and pays them directly
+     * through /api/checkout. Totals + the seller's connected account come from
+     * /api/orders/pay-context. Nothing is reserved by the modal, so closing it
+     * releases nothing — the auction's own payment window governs the order.
+     */
+    existingTransferGroup?: string | null;
+    /**
      * The signed-in buyer's email. Stripe requires one for PromptPay and asks
      * for it in the form; passing it here prefills that field so a PromptPay
      * buyer can press Pay without typing anything.
@@ -110,6 +119,7 @@ const PaymentElementForm: React.FC<{
     apiEndpoint?: string;
     extraData?: any;
     acceptedOfferId?: string;
+    existingTransferGroup?: string | null;
     onPaymentSuccess: (details: { paymentMethod: string, paymentId: string, transferGroup?: string; orderId?: string; processing?: boolean }) => void;
     onPaymentFailed: (error: string) => void;
     onTotalChanged?: (newTotal: number) => void;
@@ -124,7 +134,7 @@ const PaymentElementForm: React.FC<{
     onFormReady?: () => void;
     /** The PaymentElement could not load, so there is no form to pay with. */
     onFormLoadError?: (code: string) => void;
-}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId, buyerEmail, onFormReady, onFormLoadError }) => {
+}> = ({ amountThb, formatAmount, items, apiEndpoint = '/api/checkout', extraData = {}, acceptedOfferId, existingTransferGroup = null, onPaymentSuccess, onPaymentFailed, onTotalChanged, onOrderReserved, voucherId, buyerEmail, onFormReady, onFormLoadError }) => {
     const stripe = useStripe();
     const elements = useElements();
     const { t } = useTranslation();
@@ -176,7 +186,8 @@ const PaymentElementForm: React.FC<{
             onPaymentFailed('You must be signed in to complete a purchase.');
             return;
         }
-        if (!items || items.length === 0) {
+        // Pay-existing-orders mode has no cart — the orders are already in the DB.
+        if (!existingTransferGroup && (!items || items.length === 0)) {
             onPaymentFailed('Your cart is empty.');
             return;
         }
@@ -204,7 +215,8 @@ const PaymentElementForm: React.FC<{
             // transfer_group from the first attempt, so a declined-card retry
             // doesn't re-hit /api/orders/checkout and 409 on the buyer's own
             // now-`sold` listings.
-            let transferGroup: string | undefined = retryRef.current?.transferGroup;
+            // In pay-existing mode the group is handed in and nothing is created.
+            let transferGroup: string | undefined = retryRef.current?.transferGroup ?? existingTransferGroup ?? undefined;
             if (isMarketplace && !transferGroup) {
                 const orderRes = await fetch('/api/orders/checkout', {
                     method: 'POST',
@@ -448,6 +460,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     apiEndpoint,
     extraData,
     acceptedOfferId,
+    existingTransferGroup = null,
     buyerEmail,
     onPaymentSuccess,
     onPaymentFailed
@@ -577,7 +590,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const [vouchers, setVouchers] = useState<VoucherQuote[]>([]);
     const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
     useEffect(() => {
-        if (!isOpen || apiEndpoint !== '/api/checkout' || !items || items.length === 0 || acceptedOfferId) {
+        if (!isOpen || apiEndpoint !== '/api/checkout' || !items || items.length === 0 || acceptedOfferId || existingTransferGroup) {
             setVouchers([]);
             setSelectedVoucherId(null);
             return;
@@ -609,19 +622,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             setEstimateError(null);
             return;
         }
-        if (!items?.length) return;
+        if (!existingTransferGroup && !items?.length) return;
 
         let cancelled = false;
         setEstimateLoading(true);
         setEstimateError(null);
 
-        // Auth comes from cookie session. Only the listing ids are sent — the
-        // server re-derives sellers and prices from the DB.
-        fetch('/api/orders/estimate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: items.map(i => ({ id: i.id })), ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
-        })
+        // Pay-existing mode (auction wins): totals + connected account come off
+        // the already-created pending_payment orders, no simulation needed.
+        // Cart mode: /api/orders/estimate simulates the checkout. Either way,
+        // auth comes from the cookie session and the server derives prices
+        // from the DB — only listing ids are ever sent.
+        const contextPromise = existingTransferGroup
+            ? fetch(`/api/orders/pay-context?transferGroup=${encodeURIComponent(existingTransferGroup)}`)
+            : fetch('/api/orders/estimate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: items.map(i => ({ id: i.id })), ...(acceptedOfferId ? { acceptedOfferId } : {}) }),
+            });
+
+        contextPromise
             .then(r => r.json())
             .then(data => {
                 if (cancelled) return;
@@ -648,7 +668,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             });
 
         return () => { cancelled = true; };
-    }, [isOpen, items, acceptedOfferId]);
+    }, [isOpen, items, acceptedOfferId, existingTransferGroup]);
 
     // Effective display values — prefer the server estimate, fall back to the
     // prop amount (cart subtotal) before the estimate arrives.
@@ -932,6 +952,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         apiEndpoint={apiEndpoint}
                                         extraData={extraData}
                                         acceptedOfferId={acceptedOfferId}
+                                        existingTransferGroup={existingTransferGroup}
                                         voucherId={selectedVoucherId}
                                         buyerEmail={prefillEmail}
                                         onFormReady={handleFormReady}

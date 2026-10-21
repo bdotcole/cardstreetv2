@@ -46,7 +46,7 @@ const SPA_TAB_FOR_PATH: Record<string, string> = {
 // URLs that exist for BOTH experiences at the same path: desktop browsers get
 // the desktop-shell wrapper under /desktop/*, phones keep the standalone page
 // (never redirected — the native shells deep-link here).
-const DESKTOP_WRAPPED_PREFIXES = ['/premium']
+const DESKTOP_WRAPPED_PREFIXES = ['/premium', '/auctions']
 
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
@@ -327,6 +327,7 @@ export const config = {
         '/collection',
         '/settings',
         '/premium',
+        '/auctions',
         // Game landing pages (see GAME_LANDING_PATHS).
         '/pokemon',
         '/mtg',
