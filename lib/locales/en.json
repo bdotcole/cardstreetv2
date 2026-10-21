@@ -77,6 +77,7 @@
     },
     "common": {
         "loading": "Loading...",
+        "back": "Back",
         "buyFrom": "Buy from",
         "addToCart": "Add to Cart",
         "noResults": "No results found",
@@ -2082,7 +2083,7 @@
         "menu": {"title":"Preview settings","previewTitle":"Preview build","previewBody":"Only admins can see this. Credits are play money, the slabs are catalog cards at real market prices rather than stock we hold, and the other collectors in the feed are simulated. No real money moves.","credits":"Play credits","sound":"Sound","soundHint":"Rip, reveal and coin sounds","haptics":"Vibration","hapticsHint":"Android only for now","fast":"Fast reveals","fastHint":"Skip the build-up before each slab turns over","activity":"Simulated collectors","activityHint":"Other buyers draining the same series","reset":"Reset the preview","resetConfirm":"Tap again to wipe credits, vault and series","soundCheck":"Sound check","soundCheckHint":"Play any sound on its own. The class buttons run the whole build-up, flip and reveal.","sounds":{"rip":"Pack rip","packIn":"Pack lands","rise":"Slab out","slab":"Slab knock","coins":"Sell-back","keep":"Keep"}}
     },
     "shopHub": {
-        "title": "Shop",
+        "title": "Cardstreet",
         "subtitle": "Where to today?",
         "marketplace": "Marketplace",
         "marketplaceDesc": "Singles and sealed from verified sellers",

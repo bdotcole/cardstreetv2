@@ -57,6 +57,12 @@ interface MarketplaceProps {
    * that leads nowhere never appears.
    */
   onLive?: () => void;
+  /**
+   * Returns to the Shop hub. Rendered as a back button in place of the
+   * "Cardstreet's Market" wordmark; when omitted (no hub for this account)
+   * the wordmark stays, since there is nowhere to go back to.
+   */
+  onBack?: () => void;
 }
 
 // OBO offers are behind a single build-time flag; when off, every tile shows
@@ -106,6 +112,7 @@ const Marketplace: React.FC<MarketplaceProps> = ({
   currency = 'THB',
   exchangeRate = 1,
   onLive,
+  onBack,
 }) => {
   const { t, isThai } = useTranslation();
 
@@ -350,11 +357,27 @@ const Marketplace: React.FC<MarketplaceProps> = ({
       <div className="flex-shrink-0 px-3 pt-3 pb-2 space-y-4 bg-brand-darker">
         <div>
           <div className="flex justify-between items-end mb-2">
-            <div>
-              <h2 className="text-3xl font-black text-white tracking-tighter italic skew-x-[-6deg]">
-                {t('marketplace.market')} <span className="text-brand-green">{t('marketplace.live')}</span>
-              </h2>
-            </div>
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label={t('common.back')}
+                className="flex items-center gap-3 -ml-1 pr-3 rounded-xl text-slate-400 hover:text-white active:scale-95 transition-all"
+              >
+                <span className="w-10 h-10 rounded-xl glass flex items-center justify-center">
+                  <i className="fa-solid fa-arrow-left"></i>
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {t('marketplace.title')}
+                </span>
+              </button>
+            ) : (
+              <div>
+                <h2 className="text-3xl font-black text-white tracking-tighter italic skew-x-[-6deg]">
+                  {t('marketplace.market')} <span className="text-brand-green">{t('marketplace.live')}</span>
+                </h2>
+              </div>
+            )}
           </div>
 
           {/* Search Bar */}

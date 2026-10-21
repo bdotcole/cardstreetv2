@@ -200,10 +200,11 @@ export default function HomePage() {
     // Picking Marketplace pushes a history entry so the phone's BACK gesture
     // (or button) returns to the chooser instead of leaving the Shop tab — the
     // chooser is a real navigation step, and without this it was a one-way
-    // door. Deliberately no in-UI back button: the system gesture is the
-    // affordance. The ref proves OUR entry is the one on top, so the back
-    // handler never calls history.back() blind (which could walk the WebView
-    // off the app).
+    // door. The Marketplace header's back button and a re-tap of the Shop tab
+    // both go through returnToShopHub below, which consumes that entry rather
+    // than leaving it stale. The ref proves OUR entry is the one on top, so no
+    // path ever calls history.back() blind (which could walk the WebView off
+    // the app).
     const shopHistoryRef = useRef(false);
     const enterMarketplace = useCallback(() => {
         setShopChooserDismissed(true);
@@ -238,22 +239,26 @@ export default function HomePage() {
     // effect near handlePayOffer.
     const [payOfferId, setPayOfferId] = useState<string | null>(null);
 
+    // Back to the hub from the Marketplace: pops our history entry when it is
+    // on top (popstate then restores the chooser), else restores it directly.
+    const returnToShopHub = useCallback(() => {
+        if (shopHistoryRef.current) {
+            window.history.back();
+        } else {
+            setShopChooserDismissed(false);
+        }
+    }, []);
+
     // Shop tab press. Re-tapping the tab you're already on returns to that
-    // tab's root — here, the Live-vs-Marketplace chooser. Routed through
-    // history like the back button so the entry pushed on the way in is
-    // consumed rather than left stale. Tapping Shop from ANOTHER tab is
+    // tab's root — here, the Shop hub. Tapping Shop from ANOTHER tab is
     // unchanged: it restores the section the user last picked.
     const handleShopTab = useCallback(() => {
         if (activeTab === 'marketplace' && shopChooserDismissed && hasShopHub) {
-            if (shopHistoryRef.current) {
-                window.history.back();
-            } else {
-                setShopChooserDismissed(false);
-            }
+            returnToShopHub();
             return;
         }
         setActiveTab('marketplace');
-    }, [activeTab, shopChooserDismissed, hasShopHub]);
+    }, [activeTab, shopChooserDismissed, hasShopHub, returnToShopHub]);
 
     // Deep-link handling for Stripe Connect onboarding redirects.
     // Stripe returns the user to /?stripe_connect=complete (or =refresh) and
@@ -2771,6 +2776,9 @@ export default function HomePage() {
                                 // section never appears for users who cannot
                                 // reach live shows.
                                 onLive={hasLiveBeta('live_streams') && !isEntryPointHidden('live_streams') ? () => { window.location.assign('/live'); } : undefined}
+                                // The header back button only exists when there is
+                                // a hub to return to.
+                                onBack={hasShopHub ? returnToShopHub : undefined}
                                 onSelectCard={setSelectedCard}
                                 onSelectListing={setSelectedListing}
                                 onSelectShop={(shop) => { void openSellerShop(shop.id, shop); }}

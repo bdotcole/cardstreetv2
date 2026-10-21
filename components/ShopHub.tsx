@@ -98,7 +98,7 @@ function Tile({
     return (
         <button
             onClick={onClick}
-            className="group relative overflow-hidden glass rounded-[1.75rem] border-white/10 p-4 text-left min-h-[11.5rem] flex flex-col active:scale-[0.97] transition-all"
+            className="group relative overflow-hidden glass rounded-[1.75rem] border-white/10 px-4 py-5 text-left min-h-[12rem] flex flex-col active:scale-[0.97] transition-all"
         >
             <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.wash}`} />
             <span aria-hidden className={`pointer-events-none absolute -top-14 -right-10 w-40 h-40 rounded-full blur-3xl ${a.glow}`} />
@@ -106,27 +106,31 @@ function Tile({
             <span aria-hidden className="pointer-events-none absolute inset-0 holo-sheen" />
             <div className="relative flex flex-col flex-1">
                 <div className="flex items-start justify-between gap-2">
-                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ring-1 ${a.badge} flex items-center justify-center shrink-0`}>
-                        <i className={`fa-solid ${icon} ${a.icon} text-base`}></i>
+                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ring-1 ${a.badge} flex items-center justify-center shrink-0`}>
+                        <i className={`fa-solid ${icon} ${a.icon} text-xl`}></i>
                     </div>
                     {chip && (
                         chipLive ? (
                             <span className="mt-0.5 px-2 py-1 rounded-full bg-brand-red shadow-[0_0_14px_rgba(244,63,94,0.45)] flex items-center gap-1.5 shrink-0">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                <span className="text-[9px] font-black uppercase tracking-widest text-white">{chip}</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-white">{chip}</span>
                             </span>
                         ) : (
-                            <span className="mt-0.5 px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-300 shrink-0 max-w-[7.5rem] truncate">
+                            <span className="mt-0.5 px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-300 shrink-0 max-w-[7.5rem] truncate">
                                 {chip}
                             </span>
                         )
                     )}
                 </div>
-                <p className="mt-auto pt-4 text-[15px] leading-tight font-black text-white uppercase tracking-wide">{title}</p>
-                <p className="text-[11px] text-slate-400 mt-1 leading-snug line-clamp-2">{desc}</p>
-                <div className="mt-3 flex items-center">
-                    <span className="ml-auto w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                        <i className={`fa-solid fa-arrow-right ${a.icon} text-[10px]`}></i>
+                {/* Scaled to the tile, not fixed: two columns leave ~120px of
+                    text width on a 360-375px phone, where a 20px MARKETPLACE
+                    (one unbreakable word) clips. 4.35vw keeps that word on one
+                    line down to 360px and reaches the full 20px by ~460px. */}
+                <p className="mt-auto pt-5 text-[clamp(15px,4.35vw,20px)] leading-tight font-black text-white uppercase">{title}</p>
+                <p className="text-[13px] text-slate-400 mt-1.5 leading-snug line-clamp-3">{desc}</p>
+                <div className="mt-4 flex items-center">
+                    <span className="ml-auto w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                        <i className={`fa-solid fa-arrow-right ${a.icon} text-xs`}></i>
                     </span>
                 </div>
             </div>
@@ -203,22 +207,29 @@ export default function ShopHub({ onMarketplace, onAuctions, onLive, onPacks }: 
         : null;
 
     return (
-        <div className="relative flex-1 flex flex-col justify-center pb-10">
+        // Top-aligned with the tile grid stretching to the tab bar: the hub
+        // is the Shop tab's front door, so it fills the screen instead of
+        // floating as a small centred block with dead space above it. The
+        // bottom padding clears the absolutely positioned nav.
+        <div className="relative flex-1 flex flex-col min-h-0 pt-2 pb-28">
             {/* Ambient stage light behind everything — the tab body clips
                 overflow, so the blobs cost no scroll. */}
             <span aria-hidden className="pointer-events-none absolute -top-24 -left-20 w-72 h-72 rounded-full bg-brand-red/10 blur-3xl" />
             <span aria-hidden className="pointer-events-none absolute -bottom-28 -right-20 w-72 h-72 rounded-full bg-brand-cyan/10 blur-3xl" />
 
-            <h2 className="relative w-fit text-3xl font-black tracking-tight uppercase italic skew-x-[-10deg] bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-2">
-                {t('shopHub.title') || 'Shop'}
+            {/* The brand wordmark, not a section label: the Marketplace lost
+                its "Cardstreet's Market" title in favour of a back button, so
+                this is where the name lives now. */}
+            <h2 className="relative w-fit text-4xl font-black tracking-tighter italic skew-x-[-10deg] bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-2 pr-2">
+                {t('shopHub.title') || 'Cardstreet'}
             </h2>
             <span
                 aria-hidden
                 className="relative block w-14 h-1 rounded-full skew-x-[-10deg] bg-gradient-to-r from-brand-red via-brand-cyan to-brand-green mb-2"
             />
-            <p className="relative text-xs text-slate-400 mb-5">{t('shopHub.subtitle') || 'Where to today?'}</p>
+            <p className="relative text-sm text-slate-400 mb-5">{t('shopHub.subtitle') || 'Where to today?'}</p>
 
-            <div className="relative grid grid-cols-2 gap-3">
+            <div className="relative flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-3">
                 <Tile
                     accent="cyan"
                     icon="fa-shop"
