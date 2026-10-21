@@ -42,6 +42,7 @@ const WebLiveScanner = dynamic(() => import('@/components/WebLiveScanner'), { ss
 import { geminiService } from '@/services/geminiService';
 import { pokemonService } from '@/services/pokemonService';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
+import { ListingPhotosRequiredError, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
 import { pickSiblingIds } from '@/lib/listingSiblings';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
@@ -1995,7 +1996,17 @@ export default function HomePage() {
     ) => {
         let created = 0;
         let drafts = 0;
+        let needPhotos = 0;
         for (const row of rows) {
+            // Bulk listings carry no photos, so each row must be one the
+            // catalog image may stand in for (lib/listingPhotoPolicy.ts). The
+            // sheet filters these out; this is the write path, and until
+            // 2026-10-21 it listed whatever the sheet handed it — 18 photo-less
+            // Charizards at up to ฿220k in one tap.
+            if (!opts.useCatalogArt || !catalogArtAllowed(row.price, opts.condition)) {
+                needPhotos++;
+                continue;
+            }
             try {
                 const listing = await marketplaceService.createListing({
                     cardId: row.card.id,
@@ -2014,12 +2025,13 @@ export default function HomePage() {
                     listingStatus: listing?.status === 'draft' ? 'draft' : listing?.status === 'paused' ? 'paused' : 'active',
                 });
             } catch (error) {
+                if (error instanceof ListingPhotosRequiredError) needPhotos++;
                 console.error('[BulkList] failed for', row.card.id, error);
             }
         }
         await fetchGlobalListings();
         if (created === 0) {
-            showToast(t('paymentFlow.listingFailed'), 'error');
+            showToast(needPhotos > 0 ? t('listingPhotos.photosRequired') : t('paymentFlow.listingFailed'), 'error');
         } else if (drafts > 0) {
             showToast(`${created}/${rows.length} · ${t('paymentFlow.listingDraftSaved')}`, 'success');
         } else {
@@ -2083,6 +2095,10 @@ export default function HomePage() {
                 setActiveTab('profile');
                 return;
             }
+            if (error instanceof ListingPhotosRequiredError) {
+                showToast(t('listingPhotos.photosRequired'), 'error');
+                return;
+            }
             console.error('Failed to publish listing:', error);
             showToast(t('paymentFlow.listingFailed') || 'Failed to publish listing. Please try again.', 'error');
         }
@@ -2109,7 +2125,12 @@ export default function HomePage() {
             showToast(t('vault.priceUpdated'), 'success');
         } catch (error) {
             console.error('Failed to update listing price:', error);
-            showToast(t('vault.priceUpdateFailed'), 'error');
+            // Raising a catalog-art listing to the photo threshold is refused
+            // by the database; say so rather than "update failed".
+            showToast(
+                error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('vault.priceUpdateFailed'),
+                'error',
+            );
             throw error;
         }
     };

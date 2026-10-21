@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { marketplaceService, MarketplaceListing, ProfileIncompleteError } from '@/services/marketplaceService';
+import { ListingPhotosRequiredError } from '@/lib/listingPhotoPolicy';
 import { pokemonService } from '@/services/pokemonService';
 import { sealedProductToCard } from '@/lib/sealedProduct';
 import { getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
@@ -226,8 +227,13 @@ export default function DesktopSell() {
                 showToast(t('desktop.sell.toastPriceUpdateFailed'), 'error');
             }
             refreshMyListings();
-        } catch {
-            showToast(t('desktop.sell.toastPriceUpdateFailed'), 'error');
+        } catch (error) {
+            // Raising a catalog-art listing to the photo threshold is refused
+            // by the database; say so rather than "update failed".
+            showToast(
+                error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('desktop.sell.toastPriceUpdateFailed'),
+                'error',
+            );
         } finally {
             setSavingPrice(false);
         }

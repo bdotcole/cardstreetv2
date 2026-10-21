@@ -6,6 +6,7 @@ import { ImportRow } from '@/lib/collectionImport/types';
 import { SELLER_REQUIRED_PROFILE_FIELDS } from '@/lib/profileValidation';
 import { canListInState, listsAsDraftInState, resolveSellerState } from '@/lib/sellerState';
 import { PUBLIC_MIN_LISTING_PRICE_THB } from '@/lib/pricingFloors';
+import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
 
 // Writes confirmed importer rows into the partner's collection. Partner-gated;
 // verifies the target collection belongs to the caller, builds each card_data
@@ -189,6 +190,17 @@ export async function POST(request: NextRequest) {
     }
     const built = inserts.find((row) => row.card_id === it.cardId);
     if (!built) continue; // its collection insert failed; nothing to list
+    // A sheet carries no photos, so a row can only go on the market where the
+    // catalog image may stand in (lib/listingPhotoPolicy.ts). The card is still
+    // imported; the seller lists it from the vault with photos. The database
+    // refuses the insert anyway; saying so here keeps the rest of the batch.
+    if (!catalogArtAllowed(price, built.condition)) {
+      failed.push({
+        cardId: it.cardId,
+        reason: `Imported, not listed: listings at ฿${PHOTOS_REQUIRED_FROM_THB} or more, below near-mint, or sealed need photos of the item — list it from your vault with photos`,
+      });
+      continue;
+    }
     listingInserts.push({
       seller_id: user.id,
       card_id: built.card_id,

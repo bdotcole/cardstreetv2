@@ -61,17 +61,31 @@ export default function BulkListSheet({
         () =>
             entries
                 .map((e) => ({ ...e, price: parseFloat(prices[e.item.id] ?? '') }))
-                .filter((r) => Number.isFinite(r.price) && r.price >= PUBLIC_MIN_LISTING_PRICE_THB),
-        [entries, prices],
+                .filter(
+                    (r) =>
+                        Number.isFinite(r.price) &&
+                        r.price >= PUBLIC_MIN_LISTING_PRICE_THB &&
+                        catalogArtAllowed(r.price, condition),
+                ),
+        [entries, prices, condition],
     );
 
-    // Catalog art has to be allowed for EVERY row it would apply to. A mixed
-    // batch where it covers some cards and not others cannot be expressed by
-    // one checkbox, so the checkbox turns itself off rather than silently
-    // applying to a subset.
-    const catalogArtOkForAll =
-        rows.length > 0 && rows.every((r) => catalogArtAllowed(r.price, condition));
-    const effectiveCatalogArt = useCatalogArt && catalogArtOkForAll;
+    // Bulk has no camera, so the catalog image is the only picture it can give
+    // a listing, and the policy allows that only for a near-mint single under
+    // the threshold. Rows outside it stay in the vault (badged below) instead
+    // of being published without photos — which is what this sheet did until
+    // 2026-10-21: the checkbox switched itself off, the List button stayed on,
+    // and one tap listed ฿357k of Charizards on catalog art. The write path
+    // and the database refuse those too; filtering here is so the seller sees
+    // it before tapping.
+    const needsPhotos = useMemo(
+        () =>
+            entries.filter((e) => {
+                const p = parseFloat(prices[e.item.id] ?? '');
+                return Number.isFinite(p) && p >= PUBLIC_MIN_LISTING_PRICE_THB && !catalogArtAllowed(p, condition);
+            }).length,
+        [entries, prices, condition],
+    );
 
     const total = rows.reduce((sum, r) => sum + r.price, 0);
 
@@ -109,22 +123,25 @@ export default function BulkListSheet({
                             ))}
                     </div>
 
-                    <label className={`flex items-start gap-3 mt-3 ${catalogArtOkForAll ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <label className="flex items-start gap-3 mt-3 cursor-pointer">
                         <input
                             type="checkbox"
-                            checked={effectiveCatalogArt}
-                            disabled={!catalogArtOkForAll}
+                            checked={useCatalogArt}
                             onChange={(e) => setUseCatalogArt(e.target.checked)}
                             className="mt-0.5 w-4 h-4 accent-brand-cyan"
                         />
                         <span className="min-w-0">
                             <span className="block text-xs font-bold text-white">{t('listingPhotos.useCatalogArt')}</span>
                             <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">
-                                {catalogArtOkForAll
-                                    ? t('listingPhotos.useCatalogArtHint')
-                                    : isThai
-                                        ? `มีบางใบราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป หรือสภาพต่ำกว่า NM — ต้องลงขายทีละใบพร้อมรูปจริง`
-                                        : `Some of these are ฿${PHOTOS_REQUIRED_FROM_THB} or more, or below near-mint — list those individually with real photos.`}
+                                {!useCatalogArt
+                                    ? isThai
+                                        ? 'การลงขายหลายใบใช้รูปจากแคตตาล็อก ถ้าต้องการใส่รูปถ่ายของคุณเอง ให้ลงขายทีละใบ'
+                                        : 'Bulk listing uses the catalog image. To add your own photos, list the card on its own.'
+                                    : needsPhotos > 0
+                                        ? isThai
+                                            ? `${needsPhotos} ใบราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป หรือสภาพต่ำกว่า NM จะยังอยู่ใน Vault — ลงขายทีละใบพร้อมรูปถ่ายของจริง`
+                                            : `${needsPhotos} of these are ฿${PHOTOS_REQUIRED_FROM_THB} or more, or below near-mint, and stay in your vault — list them one at a time with real photos.`
+                                        : t('listingPhotos.useCatalogArtHint')}
                             </span>
                         </span>
                     </label>
@@ -143,8 +160,10 @@ export default function BulkListSheet({
                         const price = parseFloat(raw);
                         const guidance = evaluatePrice(price, e.card.marketPrice);
                         const belowFloor = Number.isFinite(price) && price > 0 && price < PUBLIC_MIN_LISTING_PRICE_THB;
+                        const needsOwnPhotos =
+                            Number.isFinite(price) && price >= PUBLIC_MIN_LISTING_PRICE_THB && !catalogArtAllowed(price, condition);
                         return (
-                            <div key={e.item.id} className="flex items-center gap-3">
+                            <div key={e.item.id} className={`flex items-center gap-3 ${needsOwnPhotos ? 'opacity-60' : ''}`}>
                                 <img
                                     src={getThumbnailUrl(e.card.images?.small || e.card.imageUrl)}
                                     alt=""
@@ -162,6 +181,11 @@ export default function BulkListSheet({
                                     {belowFloor && (
                                         <p className="text-[10px] font-bold text-brand-red">
                                             {isThai ? `ขั้นต่ำ ฿${PUBLIC_MIN_LISTING_PRICE_THB}` : `Minimum ฿${PUBLIC_MIN_LISTING_PRICE_THB}`}
+                                        </p>
+                                    )}
+                                    {needsOwnPhotos && (
+                                        <p className="text-[10px] font-bold text-brand-red">
+                                            {isThai ? 'ต้องใช้รูปถ่ายของจริง — ลงขายทีละใบ' : 'Needs photos — list it on its own'}
                                         </p>
                                     )}
                                 </div>
@@ -194,8 +218,8 @@ export default function BulkListSheet({
                             {t('report.cancel')}
                         </button>
                         <button
-                            onClick={() => onConfirm(rows, { condition, useCatalogArt: effectiveCatalogArt })}
-                            disabled={submitting || rows.length === 0}
+                            onClick={() => onConfirm(rows, { condition, useCatalogArt })}
+                            disabled={submitting || rows.length === 0 || !useCatalogArt}
                             className="flex-[1.4] h-12 rounded-xl bg-brand-green text-brand-darker font-black text-sm active:scale-95 transition-all disabled:opacity-40"
                         >
                             {submitting

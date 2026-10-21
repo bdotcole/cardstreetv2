@@ -15,6 +15,12 @@ import {
     PROFILE_INCOMPLETE_TOAST,
     PROFILE_INCOMPLETE_ERROR_CODE,
 } from '@/lib/profileValidation'
+import {
+    LISTING_PHOTOS_REQUIRED_CODE,
+    ListingPhotosRequiredError,
+    isListingPhotosDbError,
+    listingPhotosSatisfied,
+} from '@/lib/listingPhotoPolicy'
 
 const ListingBodySchema = z.object({
     card_id: z.string().min(1).max(128),
@@ -25,6 +31,10 @@ const ListingBodySchema = z.object({
     grading_company: z.enum(['PSA', 'BGS', 'CGC', 'SGC', 'ARS', 'TAG']).nullable().optional(),
     grade: z.number().min(1).max(10).nullable().optional(),
     accepts_offers: z.boolean().optional().default(false),
+    // Public URLs of the seller's own photos in the listing-images bucket;
+    // required unless the catalog image may stand in (lib/listingPhotoPolicy.ts).
+    image_front_url: z.string().url().max(2048).nullable().optional(),
+    image_back_url: z.string().url().max(2048).nullable().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -204,6 +214,22 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'You must connect a Stripe account in your Profile > Payouts & Bank before listing an item for sale.' }, { status: 400 })
         }
 
+        // Photo rule (lib/listingPhotoPolicy.ts). This route never carried
+        // photo URLs, so every listing it created was photo-less whatever the
+        // price. The database trigger refuses that now; this check turns the
+        // refusal into a structured 400 the client can act on.
+        if (!listingPhotosSatisfied({
+            price: body.price,
+            condition: body.condition,
+            image_front_url: body.image_front_url,
+            image_back_url: body.image_back_url,
+        })) {
+            return NextResponse.json(
+                { error: new ListingPhotosRequiredError().message, code: LISTING_PHOTOS_REQUIRED_CODE },
+                { status: 400 },
+            )
+        }
+
         const { data: listing, error } = await supabase
             .from('listings')
             .insert({
@@ -215,6 +241,8 @@ export async function POST(request: NextRequest) {
                 is_graded: body.is_graded || false,
                 grading_company: body.grading_company,
                 grade: body.grade,
+                image_front_url: body.image_front_url ?? null,
+                image_back_url: body.image_back_url ?? null,
                 accepts_offers: body.accepts_offers ?? false,
                 status: 'active'
             })
@@ -237,6 +265,12 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(listing)
     } catch (error: any) {
+        if (isListingPhotosDbError(error)) {
+            return NextResponse.json(
+                { error: new ListingPhotosRequiredError().message, code: LISTING_PHOTOS_REQUIRED_CODE },
+                { status: 400 },
+            )
+        }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

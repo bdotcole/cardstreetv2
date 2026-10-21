@@ -57,6 +57,12 @@ function routeNotificationTap(data: unknown) {
         );
         return;
     }
+    if (type === 'listing_removed') {
+        // Listings taken down for missing photos: the seller relists from the
+        // vault, with photos, so that is where the tap lands.
+        window.location.assign('/?tab=vault&utm_source=courier&utm_medium=push&utm_campaign=listing_removed');
+        return;
+    }
     if (type === 'shipping_launch') {
         // The Oct 9 shipping-in-price reminders go to sellers, whose prices
         // and listings are in the Vault (lib/launchCampaign.ts).

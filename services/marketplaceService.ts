@@ -16,6 +16,11 @@ import {
 import { attachSellers } from '@/lib/publicProfiles';
 import { attachWatchCounts } from '@/lib/listingWatches';
 import { trackEngagement } from '@/lib/engagementEvents';
+import {
+    ListingPhotosRequiredError,
+    isListingPhotosDbError,
+    listingPhotosSatisfied,
+} from '@/lib/listingPhotoPolicy';
 
 /**
  * Thrown when a seller tries to create a listing while their profile is
@@ -411,6 +416,21 @@ export const marketplaceService = {
             // required fields, even if the caller passed a partial Card.
             const safeCard = normalizeCard(params.cardData, params.cardId);
 
+            // The photo rule (lib/listingPhotoPolicy.ts): catalog art only for
+            // a near-mint single under the threshold, the seller's own photos
+            // otherwise. The forms check it before uploading; this is the
+            // write path, and the database trigger behind it is the authority.
+            // The bulk lister once skipped both and published 18 photo-less
+            // Charizards at up to ฿220k in one tap (2026-10-21).
+            if (!listingPhotosSatisfied({
+                price: params.price,
+                condition: params.condition,
+                image_front_url: params.image_front_url,
+                image_back_url: params.image_back_url,
+            })) {
+                throw new ListingPhotosRequiredError();
+            }
+
             // Bounded: a slip in a quantity field must not mint hundreds of
             // listings. 20 is well past any realistic stack of one card.
             const copies = Math.min(20, Math.max(1, Math.round(params.quantity ?? 1)));
@@ -452,6 +472,7 @@ export const marketplaceService = {
                 ) {
                     throw new ProfileIncompleteError(completeness.missing);
                 }
+                if (isListingPhotosDbError(error)) throw new ListingPhotosRequiredError();
                 throw error;
             }
             if (!data) throw new Error('Listing insert returned no rows');
@@ -668,7 +689,10 @@ export const marketplaceService = {
                 .in('status', ['active', 'draft', 'paused'])
                 .select('id');
 
-            if (error) throw error;
+            // Raising a catalog-art listing to the photo threshold is refused
+            // by the database (trg_enforce_listing_photos); surface it typed
+            // so the editor can say why instead of "update failed".
+            if (error) throw isListingPhotosDbError(error) ? new ListingPhotosRequiredError() : error;
             const changed = (data?.length ?? 0) > 0;
             if (changed) pingPriceDropSweep();
             return changed;
@@ -707,7 +731,10 @@ export const marketplaceService = {
                 .in('status', ['active', 'draft', 'paused'])
                 .select('id');
 
-            if (error) throw error;
+            // Raising a catalog-art listing to the photo threshold is refused
+            // by the database (trg_enforce_listing_photos); surface it typed
+            // so the editor can say why instead of "update failed".
+            if (error) throw isListingPhotosDbError(error) ? new ListingPhotosRequiredError() : error;
             const changed = (data?.length ?? 0) > 0;
             if (changed) pingPriceDropSweep();
             return changed;

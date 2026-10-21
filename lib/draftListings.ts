@@ -11,6 +11,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { notifyWishlistersOfListing } from '@/lib/wishlistAlerts';
 import { submitCardIdsToIndexNow } from '@/lib/indexNow';
+import { listingPhotosSatisfied } from '@/lib/listingPhotoPolicy';
+
+// PostgREST caps a response at 1,000 rows whatever the limit asks for.
+const PAGE = 1000;
 
 export async function publishDraftListings(
     admin: SupabaseClient,
@@ -19,10 +23,38 @@ export async function publishDraftListings(
 ): Promise<number> {
     if (sellerIds.length === 0) return 0;
 
+    // Only drafts that carry the photos the policy asks of them go live
+    // (lib/listingPhotoPolicy.ts). The database refuses a draft->active flip
+    // without them, and one such row would fail the whole UPDATE and strand
+    // every compliant draft with it. The rest stay drafts; the seller relists
+    // them from the vault with photos. Drafts from the collection importer are
+    // the usual case: a sheet carries list prices but never photos.
+    const publishable: string[] = [];
+    let held = 0;
+    for (let from = 0; ; from += PAGE) {
+        const { data, error } = await admin
+            .from('listings')
+            .select('id, price, condition, image_front_url, image_back_url')
+            .in('seller_id', sellerIds)
+            .eq('status', 'draft')
+            .order('id')
+            .range(from, from + PAGE - 1);
+        if (error) throw error;
+        for (const row of data ?? []) {
+            if (listingPhotosSatisfied({ ...row, price: Number(row.price) })) publishable.push(row.id);
+            else held++;
+        }
+        if ((data?.length ?? 0) < PAGE) break;
+    }
+    if (held > 0) {
+        console.log(`${logPrefix} Held ${held} draft listing(s) that need seller photos at their price/condition`);
+    }
+    if (publishable.length === 0) return 0;
+
     const { data, error } = await admin
         .from('listings')
         .update({ status: 'active', updated_at: new Date().toISOString() })
-        .in('seller_id', sellerIds)
+        .in('id', publishable)
         .eq('status', 'draft')
         .select('id, card_id');
 
