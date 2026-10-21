@@ -29,12 +29,23 @@ if (!args.includes('--seller') || !sellerArg || sellerArg.startsWith('--')) {
 
 // Same dotenv convention as the other scripts: strip the quotes Next.js
 // strips, or the service key reaches Supabase with literal quotes around it.
-for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+// No env file is fine when the variables are already in the environment
+// (a cloud session's environment settings).
+const envText = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+for (const line of envText.split('\n')) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (!m) continue;
     let v = m[2].trim();
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     if (process.env[m[1]] === undefined) process.env[m[1]] = v.trim();
+}
+// --commit needs Courier up front: removing listings and then failing to tell
+// the seller is the outcome this script exists to avoid.
+const missing = ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', ...(commit ? ['COURIER_AUTH_TOKEN'] : [])]
+    .filter((k) => !process.env[k]);
+if (missing.length) {
+    console.log(`Missing ${missing.join(', ')} (not in ${envPath} or the environment).`);
+    process.exit(1);
 }
 
 const VISIBLE_STATUSES = ['active', 'draft', 'paused'];
