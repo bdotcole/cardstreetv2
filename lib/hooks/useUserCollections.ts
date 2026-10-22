@@ -77,17 +77,45 @@ export function useUserCollections(): UseUserCollectionsReturn {
             // Drafts (created before Stripe onboarding finished) must count as
             // "listed" here, else the Vault shows the card as unlisted and the
             // seller re-lists it into a duplicate.
-            const [itemsData, listingsResult] = await Promise.all([
+            // The seller's timed auctions ride along for the same reason: a copy
+            // that is on the block (or sold and awaiting the winner's payment)
+            // must read as committed, not as a free card to list again. Only the
+            // 'auctions' beta can read the table (RLS), so everyone else simply
+            // gets no rows; a failure here degrades to "no auctions" rather than
+            // taking the whole Vault down with it.
+            const [itemsData, listingsResult, auctionsResult] = await Promise.all([
                 fetchAllItems(),
                 supabase
                     .from('listings')
                     .select('*')
                     .eq('seller_id', user.id)
                     .in('status', ['active', 'draft', 'paused']),
+                supabase
+                    .from('auctions')
+                    .select('id, card_id, condition, status, ends_at, order:orders!auctions_order_id_fkey(status)')
+                    .eq('seller_id', user.id)
+                    .in('status', ['live', 'sold']),
             ]);
             const { data: listingsData, error: listingsError } = listingsResult;
 
             if (listingsError) throw listingsError;
+
+            // A sold auction stays 'sold' forever; it only still commits the copy
+            // while the winner's order is unpaid (payment moves the copy to the
+            // buyer's collection, exactly like a marketplace sale).
+            type AuctionRow = { id: string; card_id: string; condition: string; status: string; order: { status: string } | { status: string }[] | null };
+            const committedAuctions: AuctionRow[] = auctionsResult.error
+                ? []
+                : ((auctionsResult.data ?? []) as unknown as AuctionRow[]).filter((a) => {
+                    if (a.status === 'live') return true;
+                    const order = Array.isArray(a.order) ? a.order[0] : a.order;
+                    return !order || order.status === 'pending_payment';
+                });
+            if (auctionsResult.error) console.warn('[useUserCollections] auctions lookup failed (ignored):', auctionsResult.error.message);
+            const userAuctionsMap: Record<string, AuctionRow[]> = {};
+            committedAuctions.forEach((a) => {
+                (userAuctionsMap[a.card_id] ||= []).push(a);
+            });
 
             // Map listings by card_id for easy consumption
             // If user has multiple listings for same card, we keep an array to match multiple items
@@ -123,6 +151,17 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             }
                         }
 
+                        // Same consume-one matching for auctions, so two copies of a
+                        // card can be one listed and one on the block. A copy that
+                        // already matched a listing is skipped: the auction belongs
+                        // to a different copy.
+                        let matchedAuction: AuctionRow | null = null;
+                        const potentialAuctions = matchedListing ? undefined : userAuctionsMap[item.card_id];
+                        if (potentialAuctions && potentialAuctions.length > 0) {
+                            const exactIdx = potentialAuctions.findIndex(a => a.condition === item.condition);
+                            matchedAuction = exactIdx !== -1 ? potentialAuctions.splice(exactIdx, 1)[0] : potentialAuctions.shift()!;
+                        }
+
                         return {
                             id: item.id,
                             cardId: item.card_id,
@@ -136,6 +175,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             isListing: !!matchedListing,
                             listingPrice: matchedListing ? parseFloat(matchedListing.price) : undefined,
                             listingStatus: matchedListing ? matchedListing.status : undefined,
+                            inAuction: !!matchedAuction,
+                            auctionId: matchedAuction?.id,
+                            auctionStatus: matchedAuction ? (matchedAuction.status as 'live' | 'sold') : undefined,
                             // Grading now lives on the collection_items row itself (bulk
                             // import / graded copies), so it shows even when not listed.
                             // Fall back to a matched listing for legacy rows without the columns.

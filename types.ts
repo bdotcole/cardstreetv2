@@ -73,6 +73,10 @@ export interface UserCollectionItem {
   listingPrice?: number;
   /** 'draft' = created before Stripe onboarding finished; goes live on completion. */
   listingStatus?: 'active' | 'draft' | 'paused';
+  /** The seller has this copy in a timed auction: running, or sold and awaiting the winner's payment (the copy moves to the buyer's collection at payment, like a marketplace sale). */
+  inAuction?: boolean;
+  auctionId?: string;
+  auctionStatus?: 'live' | 'sold';
   isGraded?: boolean;
   gradingCompany?: string;
   grade?: number;

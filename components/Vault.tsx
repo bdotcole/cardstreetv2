@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import { CustomCollection, Card, CardCondition, UserCollectionItem } from '../types';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
 import ListingForm from './ListingForm';
+import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { useWishlistDemand } from '@/lib/hooks/useWishlistDemand';
 import MostWantedList from './MostWantedList';
 import BulkListSheet, { type BulkListRow } from './BulkListSheet';
@@ -112,6 +113,18 @@ const Vault: React.FC<VaultProps> = ({
     setView('listings');
     setIsSelectingForListing(true);
   }, []);
+  // Auction actions render only for 'auctions' grant holders (GRANT_ONLY).
+  const { hasBeta } = useBetaFeatures();
+  const canAuction = hasBeta('auctions');
+  // A listed card being moved to auction. The fixed-price listing is retired
+  // only once the auction actually exists (see the ListingForm onSuccess), so
+  // dismissing the form leaves the card on the market untouched.
+  const switchFromListingRef = useRef<{ colId: string; item: UserCollectionItem; card: Card } | null>(null);
+  const switchToAuction = (colId: string, item: UserCollectionItem, card: Card) => {
+    switchFromListingRef.current = { colId, item, card };
+    setListingIntent('auction');
+    onListCard(colId, item, card);
+  };
   // Inline quick price edit on an active listing (one at a time, keyed by item id)
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState('');
@@ -564,12 +577,12 @@ const Vault: React.FC<VaultProps> = ({
             )}
           </div>
           <div className="space-y-3">
-            {allVaultItems.filter(({ item }) => !item.isListing).length === 0 ? (
+            {allVaultItems.filter(({ item }) => !item.isListing && !item.inAuction).length === 0 ? (
               <div className="py-20 text-center glass rounded-[2.5rem] border-dashed border-white/5">
                 <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest">{t('vault.noUnlisted')}</p>
               </div>
             ) : (
-              allVaultItems.filter(({ item }) => !item.isListing).map(({ colId, item, card }) => (
+              allVaultItems.filter(({ item }) => !item.isListing && !item.inAuction).map(({ colId, item, card }) => (
                 <button
                   key={item.id}
                   // Tap lists one card, as before. Long-press starts a
@@ -751,6 +764,14 @@ const Vault: React.FC<VaultProps> = ({
                   >
                     {t('vault.editPrice')}
                   </button>
+                  {canAuction && (
+                    <button
+                      onClick={() => switchToAuction(colId, item, card)}
+                      className="flex-1 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest bg-amber-400/15 border border-amber-400/30 text-amber-300 hover:bg-amber-400/25 transition-colors"
+                    >
+                      {t('auction.switchToAuctionShort') || 'Auction'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (confirm(isThai ? 'นำประกาศนี้ออกจากตลาดหรือไม่?' : 'Remove this listing from the market?')) {
@@ -793,10 +814,20 @@ const Vault: React.FC<VaultProps> = ({
           card={listingTarget.card}
           initialCondition={listingTarget.item.condition}
           initialSaleFormat={listingIntent}
-          onClose={onCancelListing}
+          onClose={() => { switchFromListingRef.current = null; setListingIntent('fixed'); onCancelListing(); }}
           onSuccess={async (data) => {
             if (data) {
               await onPublishListing(data);
+            } else {
+              // null = ListingForm created an auction itself. If this was a
+              // listed card being switched over, retire the fixed listing now
+              // that the auction exists, then land the seller on the Auction
+              // House's Selling tab where the new auction is.
+              const from = switchFromListingRef.current;
+              switchFromListingRef.current = null;
+              if (from) await onRemoveListing(from.colId, from.item, from.card);
+              window.location.assign('/auctions?scope=selling');
+              return;
             }
             setListingIntent('fixed');
             setIsSelectingForListing(false);
@@ -952,7 +983,11 @@ const Vault: React.FC<VaultProps> = ({
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex justify-between items-start">
                     <h4 className="text-white text-sm font-bold truncate pr-2">{card.name}</h4>
-                    {item.isListing && (
+                    {item.inAuction ? (
+                      <span className="text-[7px] bg-amber-400/20 text-amber-300 px-1.5 py-0.5 rounded font-black uppercase tracking-widest border border-amber-400/20">
+                        {item.auctionStatus === 'sold' ? (t('auction.soldUnpaid') || 'Sold · unpaid') : (t('auction.inAuction') || 'In auction')}
+                      </span>
+                    ) : item.isListing && (
                       <span className="text-[7px] bg-brand-cyan/20 text-brand-cyan px-1.5 py-0.5 rounded font-black uppercase tracking-widest border border-brand-cyan/20">Listed</span>
                     )}
                   </div>
@@ -1028,7 +1063,16 @@ const Vault: React.FC<VaultProps> = ({
           onAddToCollection={onAddToCollection}
           isVaultView={true}
           vaultActionButtons={
-            !viewingItem.item.isListing ? (
+            viewingItem.item.inAuction ? (
+              // Committed to an auction: no relisting; the auction is the place to act.
+              <button
+                onClick={() => { window.location.assign('/auctions?scope=selling'); }}
+                className="w-full h-14 mt-4 bg-amber-400 text-brand-darker font-black text-[10px] tracking-[0.2em] rounded-xl shadow-lg shadow-amber-400/20 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-gavel"></i>
+                {viewingItem.item.auctionStatus === 'sold' ? (t('auction.soldUnpaid') || 'Sold · unpaid') : (t('auction.viewAuction') || 'View auction')}
+              </button>
+            ) : !viewingItem.item.isListing ? (
               <button
                 onClick={() => {
                   onListCard(viewingItem.colId, viewingItem.item, viewingCard);
@@ -1043,9 +1087,44 @@ const Vault: React.FC<VaultProps> = ({
                 {t('vault.sellAsset')}
               </button>
             ) : (
-              <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs py-4">
-                <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
-                {t('vault.currentlyListed')}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-center gap-2 text-brand-cyan font-black uppercase tracking-widest text-xs py-2">
+                  <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
+                  {t('vault.currentlyListed')}
+                </div>
+                {/* Listed cards get the two moves sellers kept asking for:
+                    hand the copy to the Auction House, or pull it off the
+                    market. Both without leaving the card. */}
+                <div className="flex gap-2">
+                  {canAuction && (
+                    <button
+                      onClick={() => {
+                        const { colId, item } = viewingItem;
+                        setViewingCard(null);
+                        setViewingItem(null);
+                        setIsSelectingForListing(false);
+                        setView('listings');
+                        switchToAuction(colId, item, viewingCard);
+                      }}
+                      className="flex-1 h-12 bg-amber-400 text-brand-darker font-black text-[10px] tracking-widest rounded-xl active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-gavel"></i>
+                      {t('auction.switchToAuction') || 'Switch to auction'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!confirm(isThai ? 'นำประกาศนี้ออกจากตลาดหรือไม่?' : 'Remove this listing from the market?')) return;
+                      const { colId, item } = viewingItem;
+                      setViewingCard(null);
+                      setViewingItem(null);
+                      void onRemoveListing(colId, item, viewingCard);
+                    }}
+                    className="flex-1 h-12 glass border border-white/10 text-brand-red/80 font-black text-[10px] tracking-widest rounded-xl active:scale-95 transition-all uppercase"
+                  >
+                    {t('auction.removeListing') || 'Remove listing'}
+                  </button>
+                </div>
               </div>
             )
           }

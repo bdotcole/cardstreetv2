@@ -38,7 +38,16 @@ interface AuctionHubProps {
 
 const AuctionHub: React.FC<AuctionHubProps> = ({ isOpen, onClose, variant = 'overlay' }) => {
     const { t, isThai } = useTranslation();
-    const [scope, setScope] = useState<Scope>('live');
+    // /auctions?scope=selling lands on a tab directly (the Vault sends a seller
+    // here right after their auction is created).
+    const [scope, setScope] = useState<Scope>(() => {
+        try {
+            const s = new URLSearchParams(window.location.search).get('scope');
+            return s === 'bidding' || s === 'won' || s === 'selling' ? s : 'live';
+        } catch {
+            return 'live';
+        }
+    });
     const [auctions, setAuctions] = useState<AuctionRecord[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -249,6 +258,16 @@ const AuctionHub: React.FC<AuctionHubProps> = ({ isOpen, onClose, variant = 'ove
                             </>
                         )}
                     </div>
+                )}
+                {/* Selling always keeps a door to a new auction, not just when empty. */}
+                {scope === 'selling' && auctions.length > 0 && (
+                    <button
+                        onClick={startAuction}
+                        className="w-full h-12 rounded-2xl border border-dashed border-amber-400/40 bg-amber-400/5 text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                    >
+                        <i className="fa-solid fa-plus"></i>
+                        {t('auction.startAuction') || 'Start an auction'}
+                    </button>
                 )}
                 {auctions.map(renderTile)}
             </div>
