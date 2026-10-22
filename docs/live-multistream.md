@@ -51,7 +51,9 @@ egress-minutes as recording alone.
 5. Rehearse on an **unlisted** show first: unlisted go-live sends no notifications, and the panel shows each channel flip Connecting → Live within ~10 s. The social platforms show the branded frame with the QR.
 6. On the platforms, **start the broadcast** (Facebook / YouTube usually auto-detect the incoming stream and need a "Go live" click; Instagram Producer and TikTok show a preview first). Put `cardstreet.app/watch` in the post caption / pinned comment too.
 7. Go live in the console. The toast lists the channels it is pushing to; the panel shows per-channel status and lets you Stop / Start any of them mid-show.
-8. **Show day: unhide the Live section.** Remove `'live_streams'` from `HIDDEN_ENTRY_POINTS` in `lib/betaFeatures.ts` and push to main; the Shop chooser and the desktop "Live" item reappear once Vercel deploys (a few minutes). Until then everything works by link only: `/live/<id>`, `/live`, `/watch`, the console at `/live/broadcast/<id>`, and Profile > Live shows for broadcasters.
+8. **Once, before sellers save stream keys in numbers: set `LIVE_DESTINATION_SECRET` in Vercel** (any long random string, Production + Preview) and redeploy. Stream keys are encrypted under that secret when it exists, else under `SUPABASE_SERVICE_ROLE_KEY`; decryption tries both, so adding it keeps every key saved earlier readable, and a later service-role key rotation no longer bricks them. A destination whose key no longer decrypts shows "key needs re-entering" in the Multistream panel and is skipped at go-live, never fatal.
+
+9. **Show day: unhide the Live section.** Remove `'live_streams'` from `HIDDEN_ENTRY_POINTS` in `lib/betaFeatures.ts` and push to main; the Shop chooser and the desktop "Live" item reappear once Vercel deploys (a few minutes). Until then everything works by link only: `/live/<id>`, `/live`, `/watch`, the console at `/live/broadcast/<id>`, and Profile > Live shows for broadcasters.
 
 ## Show audio (music + desktop capture)
 
