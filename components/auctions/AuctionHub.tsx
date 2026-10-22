@@ -164,6 +164,20 @@ const AuctionHub: React.FC<AuctionHubProps> = ({ isOpen, onClose, variant = 'ove
 
     const isOverlay = variant === 'overlay';
 
+    // The seller's door. An auction is created from the SAME listing form as a
+    // fixed-price listing (ListingForm's Sale-format switch), which lives in
+    // the Vault on phones and on /sell on desktop — so this hands off to that
+    // picker with the auction tab pre-selected rather than duplicating the
+    // card chooser here. Full navigation on purpose (the hub is its own route).
+    const startAuction = () => {
+        if (isOverlay) {
+            try { sessionStorage.setItem('cs_start_auction', '1'); } catch { /* picker opens on the fixed tab */ }
+            window.location.assign('/?tab=vault');
+        } else {
+            window.location.assign('/sell');
+        }
+    };
+
     return (
         <div className={isOverlay
             ? 'fixed inset-0 z-[65] bg-brand-darker flex flex-col animate-fadeIn'
@@ -181,6 +195,13 @@ const AuctionHub: React.FC<AuctionHubProps> = ({ isOpen, onClose, variant = 'ove
                             {t('auction.hubTitle') || 'Auctions'} <span className="text-amber-400">{t('auction.hubBeta') || 'Beta'}</span>
                         </h2>
                     </div>
+                    <button
+                        onClick={startAuction}
+                        className="ml-auto h-10 px-4 rounded-xl bg-amber-400 text-brand-darker text-[10px] font-black uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all shrink-0"
+                    >
+                        <i className="fa-solid fa-plus"></i>
+                        {t('auction.startAuction') || 'Start an auction'}
+                    </button>
                 </div>
                 <div className="flex gap-2">
                     {tabs.map((tab) => (
@@ -216,7 +237,16 @@ const AuctionHub: React.FC<AuctionHubProps> = ({ isOpen, onClose, variant = 'ove
                         <i className="fa-solid fa-gavel text-3xl text-slate-700 mb-3"></i>
                         <p className="text-slate-500 text-sm font-bold">{t('auction.empty') || 'Nothing here yet'}</p>
                         {scope === 'selling' && (
-                            <p className="text-slate-600 text-xs mt-1">{t('auction.emptySelling') || 'Start an auction from your Vault — choose "Auction" when listing a card.'}</p>
+                            <>
+                                <p className="text-slate-600 text-xs mt-1">{t('auction.emptySelling') || 'Pick any card or sealed product from your Vault and run it as an auction.'}</p>
+                                <button
+                                    onClick={startAuction}
+                                    className="mt-5 h-11 px-6 rounded-xl bg-amber-400 text-brand-darker text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    <i className="fa-solid fa-plus mr-2"></i>
+                                    {t('auction.startAuction') || 'Start an auction'}
+                                </button>
+                            </>
                         )}
                     </div>
                 )}

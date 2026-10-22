@@ -24,11 +24,14 @@ const SELLER_INFO_ACK_KEY = 'cs_seller_info_ack_v1';
 interface ListingFormProps {
   card: Card;
   initialCondition?: CardCondition;
+  /** Open on the auction tab (the Auction House "Start an auction" door).
+   *  Only honoured for 'auctions' grant holders; others see the fixed form. */
+  initialSaleFormat?: 'fixed' | 'auction';
   onClose: () => void;
   onSuccess: (data?: any) => Promise<void> | void;
 }
 
-const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClose, onSuccess }) => {
+const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initialSaleFormat = 'fixed', onClose, onSuccess }) => {
   const { t, isThai } = useTranslation();
   // Admins may seed the marketplace below the standard 20-baht floor (e.g. a
   // 1-baht test/seed listing); everyone else keeps the 20 minimum. This is UX
@@ -74,7 +77,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, onClo
   // per auction: the copies control and the OBO toggle are hidden.
   const { hasBeta } = useBetaFeatures();
   const canAuction = hasBeta('auctions');
-  const [saleFormat, setSaleFormat] = useState<'fixed' | 'auction'>('fixed');
+  const [saleFormat, setSaleFormat] = useState<'fixed' | 'auction'>(initialSaleFormat);
   const isAuction = canAuction && saleFormat === 'auction';
   const [reservePrice, setReservePrice] = useState<string>('');
   const [buyNowPrice, setBuyNowPrice] = useState<string>('');

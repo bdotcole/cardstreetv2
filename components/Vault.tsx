@@ -95,6 +95,23 @@ const Vault: React.FC<VaultProps> = ({
   const [selectedSet, setSelectedSet] = useState<ApiSet | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'jp' | 'th'>('en');
   const [isSelectingForListing, setIsSelectingForListing] = useState(false);
+  // Which tab the listing form opens on. The Auction House's "Start an
+  // auction" door lands here via /?tab=vault with a one-shot flag (the
+  // cs_open_offers pattern), opens the card picker straight away and
+  // pre-selects the auction tab, so a seller never has to know the auction
+  // lives inside the ordinary listing form.
+  const [listingIntent, setListingIntent] = useState<'fixed' | 'auction'>('fixed');
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('cs_start_auction') !== '1') return;
+      sessionStorage.removeItem('cs_start_auction');
+    } catch {
+      return;
+    }
+    setListingIntent('auction');
+    setView('listings');
+    setIsSelectingForListing(true);
+  }, []);
   // Inline quick price edit on an active listing (one at a time, keyed by item id)
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState('');
@@ -506,19 +523,21 @@ const Vault: React.FC<VaultProps> = ({
           {/* While the asset picker is open, back steps out to the listings
               list (mirroring the hardware-back handler) instead of jumping
               to the Vault root. */}
-          <button onClick={() => isSelectingForListing ? setIsSelectingForListing(false) : setView('folders')} className="flex-shrink-0 w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
+          <button onClick={() => { if (isSelectingForListing) { setListingIntent('fixed'); setIsSelectingForListing(false); } else { setView('folders'); } }} className="flex-shrink-0 w-10 h-10 rounded-xl glass border-white/10 flex items-center justify-center active:scale-90 transition-all">
             <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
           </button>
           <h3 className="min-w-0 truncate text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">
             {isSelectingForListing
-              ? (isThai ? 'ประกาศขายใหม่' : 'New Listing')
+              ? (listingIntent === 'auction'
+                ? (t('auction.pickCardToAuction') || 'Pick a card to auction')
+                : (isThai ? 'ประกาศขายใหม่' : 'New Listing'))
               : (isThai ? 'กำลังประกาศขาย' : 'Active Listings')}
           </h3>
         </div>
         {/* Toggles the asset picker; reads as Cancel while it's open so the
             button is never a silent no-op. */}
         <button
-          onClick={() => setIsSelectingForListing(!isSelectingForListing)}
+          onClick={() => { if (isSelectingForListing) setListingIntent('fixed'); setIsSelectingForListing(!isSelectingForListing); }}
           className={`flex-shrink-0 px-6 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all whitespace-nowrap ${isSelectingForListing
             ? 'glass border border-white/10 text-slate-300'
             : 'bg-brand-cyan text-brand-darker shadow-lg shadow-brand-cyan/10'}`}
@@ -773,11 +792,13 @@ const Vault: React.FC<VaultProps> = ({
         <ListingForm
           card={listingTarget.card}
           initialCondition={listingTarget.item.condition}
+          initialSaleFormat={listingIntent}
           onClose={onCancelListing}
           onSuccess={async (data) => {
             if (data) {
               await onPublishListing(data);
             }
+            setListingIntent('fixed');
             setIsSelectingForListing(false);
             setView('listings');
           }}
