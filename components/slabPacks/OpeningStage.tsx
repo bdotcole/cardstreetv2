@@ -7,6 +7,7 @@ import { haptics } from '@/lib/slabPacks/haptics';
 import { getSlab, slabImage } from '@/lib/slabPacks/pool';
 import { previewActions } from '@/lib/slabPacks/previewStore';
 import { sfx, type ChargeHandle, type TearHandle } from '@/lib/slabPacks/sfx';
+import type { PaymentMethod } from '@/lib/slabPacks/previewStore';
 import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
 import type { HitClass, Pull, TierKey } from '@/lib/slabPacks/types';
 import FxCanvas, { type FxHandle } from './FxCanvas';
@@ -33,9 +34,10 @@ import { CountUp, RankBadge, baht, tierVars, useSp, useTween } from './ui';
  *   flip      a beat of dark, then the slab turns over
  *   revealed  class stamp, value counts up, keep or sell
  *
- * The slab was fixed when the series was sealed (lib/slabPacks/engine.ts) and
- * is already owned by the time this screen mounts; the sequence is theatre
- * over a result that cannot change, and it can be skipped at any point.
+ * The slab was drawn and committed to when the pack was bought
+ * (lib/slabPacks/engine.ts) and is already owned by the time this screen
+ * mounts; the sequence is theatre over a result that cannot change, and it
+ * can be skipped at any point.
  */
 
 export interface OpeningSession {
@@ -44,6 +46,8 @@ export interface OpeningSession {
     pulls: Pull[];
     /** Resuming unrevealed slabs from the vault: no pack to tear. */
     packless: boolean;
+    /** How these packs were paid for; "rip again" pays the same way. */
+    method: PaymentMethod;
 }
 
 type Phase = 'present' | 'ready' | 'tearing' | 'burst' | 'rise' | 'charge' | 'flip' | 'revealed' | 'leaving' | 'summary';
@@ -63,18 +67,18 @@ const MOTES: [number, number, number, number, number, number][] = [
 
 interface Props {
     session: OpeningSession;
+    /** Wallet credit, for the chip the sell-back coins fly to. */
     credits: number;
     fast: boolean;
     reduced: boolean;
     sound: boolean;
     onClose: () => void;
     onRipAgain: (count: number) => void;
-    onAddCredits: () => void;
     /** Development only: cut the pack open without a gesture. */
     autoRip?: boolean;
 }
 
-export default function OpeningStage({ session, credits, fast, reduced, sound, onClose, onRipAgain, onAddCredits, autoRip }: Props) {
+export default function OpeningStage({ session, credits, fast, reduced, sound, onClose, onRipAgain, autoRip }: Props) {
     const { t } = useSp();
     const tier = TIERS[session.tierKey];
     const pulls = session.pulls;
@@ -563,7 +567,7 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
         return { pulled, spent };
     }, [pulls]);
 
-    const packCount = pulls.filter((p) => !p.bonus).length;
+    const packCount = pulls.length;
     const againCost = packCount * tier.priceThb;
 
     return (
@@ -770,11 +774,6 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
 
                     {(phase === 'burst' || phase === 'rise' || phase === 'charge' || phase === 'flip') && (
                         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-                            {pull.bonus && (
-                                <div className="sp-pop-in sp-display rounded-full bg-white px-4 py-2 text-[14px] text-black">
-                                    {t('stage.bonus')}
-                                </div>
-                            )}
                             {phase === 'charge' && !quick && <div className="sp-label sp-breathe">{t('stage.tapToSkip')}</div>}
                         </div>
                     )}
@@ -786,7 +785,6 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                                 <span className="sp-display text-[19px]" style={{ color: def.color }}>
                                     {t(`class.${pull.cls}`)}
                                 </span>
-                                {pull.bonus && <span className="sp-label">{t('stage.bonus')}</span>}
                                 {multiple >= 1 && (
                                     <span className="sp-num ml-auto text-[16px]" style={{ color: def.color }}>
                                         {multiple >= 10 ? multiple.toFixed(0) : multiple.toFixed(1)}×
@@ -888,16 +886,11 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                     </div>
 
                     <div className="mt-4 grid gap-2.5">
-                        {credits >= againCost ? (
-                            <button className="sp-btn sp-btn-primary h-[58px] text-[18px]" onClick={() => onRipAgain(packCount)}>
-                                <span className="sp-display">{t('summary.ripAgain', { n: packCount })}</span>
-                                <span className="sp-num text-[17px] opacity-80">{baht(againCost)}</span>
-                            </button>
-                        ) : (
-                            <button className="sp-btn sp-btn-primary h-[58px] text-[18px]" onClick={onAddCredits}>
-                                <span className="sp-display">{t('summary.addCredits')}</span>
-                            </button>
-                        )}
+                        {/* Paid the same way as the packs just opened; the card never runs out. */}
+                        <button className="sp-btn sp-btn-primary h-[58px] text-[18px]" onClick={() => onRipAgain(packCount)}>
+                            <span className="sp-display">{t('summary.ripAgain', { n: packCount })}</span>
+                            <span className="sp-num text-[17px] opacity-80">{baht(againCost)}</span>
+                        </button>
                         <button
                             className="sp-btn sp-btn-ghost h-[50px] text-[15px]"
                             onClick={() => {

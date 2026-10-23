@@ -3,21 +3,23 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MotionGlobalConfig, animate, motion, useMotionValue, useTransform, type MotionValue } from 'framer-motion';
-import { Activity, ChevronLeft, ChevronRight, Coins, Gift, Minus, Package, Plus, Vault } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, Coins, CreditCard, Minus, Package, Plus, Vault, Wallet } from 'lucide-react';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { readDebug, type SlabPacksDebug } from '@/lib/slabPacks/debug';
-import { chaseBoard, summarizeSeries } from '@/lib/slabPacks/engine';
+import { topPulls } from '@/lib/slabPacks/engine';
 import { haptics } from '@/lib/slabPacks/haptics';
-import { getSlab, poolIndex } from '@/lib/slabPacks/pool';
-import { previewActions, usePreviewState } from '@/lib/slabPacks/previewStore';
+import { coinsForThb, type VerificationKind } from '@/lib/slabPacks/policy';
+import { getSlab } from '@/lib/slabPacks/pool';
+import { getTable, previewActions, usePreviewState, type PaymentMethod } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, HIT_ORDER, TIER_ORDER, TIERS } from '@/lib/slabPacks/tiers';
-import type { FeedEvent, Pull, SeriesSummary, TierKey } from '@/lib/slabPacks/types';
+import type { CardOdds, FeedEvent, PackTable, Pull, TierKey } from '@/lib/slabPacks/types';
+import { ListSheet, ShipSheet, VerifySheet, WalletSheet } from './MoneySheets';
 import OpeningStage, { type OpeningSession } from './OpeningStage';
 import PackArt from './PackArt';
 import { PullsScreen, VaultScreen } from './Screens';
-import { ChaseCard, OddsSheet, PreviewMenu, SlabSheet } from './Sheets';
-import { RankBadge, baht, classVars, tierVars, usePrefersReducedMotion, useSp, useTween } from './ui';
+import { OddsSheet, PreviewMenu, SlabSheet, TopPullCard, pct } from './Sheets';
+import { RankBadge, baht, tierVars, usePrefersReducedMotion, useSp, useTween } from './ui';
 
 /**
  * Slab Packs — the app shell: lobby, vault, pull feed, and the opening stage
@@ -43,10 +45,15 @@ export default function SlabPacksApp() {
     const [tab, setTab] = useState<Tab>('packs');
     const [tierKey, setTierKey] = useState<TierKey>('spark');
     const [qty, setQty] = useState(1);
+    const [method, setMethod] = useState<PaymentMethod>('card');
     const [session, setSession] = useState<OpeningSession | null>(null);
     const [oddsOpen, setOddsOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [walletOpen, setWalletOpen] = useState(false);
     const [slabPull, setSlabPull] = useState<Pull | null>(null);
+    const [listPull, setListPull] = useState<Pull | null>(null);
+    const [shipPull, setShipPull] = useState<Pull | null>(null);
+    const [verifyKind, setVerifyKind] = useState<VerificationKind | null>(null);
 
     const tier = TIERS[tierKey];
 
@@ -70,7 +77,7 @@ export default function SlabPacksApp() {
         if (!state.hydrated || !debug?.demo || demoStarted.current) return;
         demoStarted.current = true;
         setTierKey(debug.demo.tierKey);
-        setSession({ id: 'demo', tierKey: debug.demo.tierKey, pulls: debug.demo.pulls, packless: false });
+        setSession({ id: 'demo', tierKey: debug.demo.tierKey, pulls: debug.demo.pulls, packless: false, method: 'card' });
     }, [state.hydrated, debug]);
 
     useEffect(() => {
@@ -78,7 +85,7 @@ export default function SlabPacksApp() {
         haptics.setEnabled(state.settings.haptics);
     }, [state.settings.sound, state.settings.haptics]);
 
-    // Simulated collectors keep buying while the app is on screen.
+    // Simulated collectors keep pulling while the app is on screen.
     useEffect(() => {
         if (!state.hydrated) return;
         const id = setInterval(() => {
@@ -87,33 +94,36 @@ export default function SlabPacksApp() {
         return () => clearInterval(id);
     }, [state.hydrated]);
 
-    const series = state.series?.[tierKey] ?? null;
-    const summary = useMemo(() => (series ? summarizeSeries(series, tier, poolIndex()) : null), [series, tier]);
-    const chase = useMemo(() => (series ? chaseBoard(series, tier, poolIndex(), 8) : []), [series, tier]);
+    const table = useMemo(() => getTable(tierKey), [tierKey]);
+    const chase = useMemo(() => topPulls(table, 8), [table]);
 
-    // A quantity the series can no longer cover falls back to what is left.
-    const left = summary?.left ?? 0;
-    const effectiveQty = Math.max(1, Math.min(qty, left || 1));
+    // A method the balance cannot cover falls back to the card, which never
+    // runs out: the pack is paid for at purchase, like any order.
+    const total = qty * tier.priceThb;
+    const effectiveMethod: PaymentMethod =
+        method === 'wallet' && state.walletThb < total ? 'card'
+            : method === 'coins' && state.coins < coinsForThb(total) ? 'card'
+                : method;
 
     const openPacks = useCallback(
-        (key: TierKey, count: number) => {
+        (key: TierKey, count: number, pay: PaymentMethod) => {
             sfx.unlock();
-            const res = previewActions.buy(key, count);
+            const res = previewActions.buy(key, count, pay);
             if (!res.ok) {
                 sfx.deny();
                 haptics.deny();
-                if (res.reason === 'credits') {
-                    showToast(t('lobby.needCredits'), 'error');
-                    setMenuOpen(true);
-                } else if (res.reason === 'soldout') {
-                    showToast(t('lobby.soldOut'), 'info');
+                if (res.reason === 'wallet') {
+                    showToast(t('lobby.needWallet'), 'error');
+                    setWalletOpen(true);
+                } else if (res.reason === 'coins') {
+                    showToast(t('lobby.needCoins'), 'error');
                 }
                 return;
             }
             sfx.buy();
             haptics.tap();
             setOddsOpen(false);
-            setSession({ id: `${key}-${Date.now()}`, tierKey: key, pulls: res.pulls, packless: false });
+            setSession({ id: `${key}-${Date.now()}`, tierKey: key, pulls: res.pulls, packless: false, method: pay });
         },
         [showToast, t],
     );
@@ -126,14 +136,14 @@ export default function SlabPacksApp() {
         sfx.unlock();
         sfx.tap();
         const pulls = state.pulls.filter((p) => p.status === 'unrevealed' && p.tier === first.tier).reverse();
-        setSession({ id: `resume-${Date.now()}`, tierKey: first.tier, pulls, packless: true });
+        setSession({ id: `resume-${Date.now()}`, tierKey: first.tier, pulls, packless: true, method: 'card' });
     }, [state.pulls]);
 
     // Android's back button and the iOS back swipe should close what is on
     // top (a sheet, the opening) rather than leave the feature. One history
     // entry stands for "something is open": back pops it and we close; closing
     // from the UI takes the entry back out so it cannot be replayed.
-    const overlayOpen = !!session || oddsOpen || menuOpen || !!slabPull;
+    const overlayOpen = !!session || oddsOpen || menuOpen || walletOpen || !!slabPull || !!listPull || !!shipPull || !!verifyKind;
     const historyEntry = useRef(false);
     useEffect(() => {
         if (overlayOpen && !historyEntry.current) {
@@ -155,7 +165,11 @@ export default function SlabPacksApp() {
             historyEntry.current = false;
             setOddsOpen(false);
             setMenuOpen(false);
+            setWalletOpen(false);
             setSlabPull(null);
+            setListPull(null);
+            setShipPull(null);
+            setVerifyKind(null);
             setSession(null);
         };
         window.addEventListener('popstate', onPop);
@@ -180,7 +194,7 @@ export default function SlabPacksApp() {
             </div>
 
             <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden">
-                {!state.hydrated || !series || !summary ? (
+                {!state.hydrated ? (
                     <div className="flex h-full items-center justify-center">
                         <div className="sp-display sp-breathe text-[22px] text-white/70">{t('common.loading')}</div>
                     </div>
@@ -195,18 +209,23 @@ export default function SlabPacksApp() {
                                     haptics.tap();
                                     setTierKey(key);
                                 }}
-                                summary={summary}
-                                seriesNumber={series.number}
+                                table={table}
                                 chase={chase}
                                 feed={state.feed}
-                                credits={state.credits}
+                                walletThb={state.walletThb}
+                                coins={state.coins}
                                 reduced={reduced}
-                                qty={effectiveQty}
+                                qty={qty}
                                 onQty={(n) => {
                                     sfx.tap();
                                     setQty(n);
                                 }}
-                                onRip={() => openPacks(tierKey, effectiveQty)}
+                                method={effectiveMethod}
+                                onMethod={(m) => {
+                                    sfx.tap();
+                                    setMethod(m);
+                                }}
+                                onRip={() => openPacks(tierKey, qty, effectiveMethod)}
                                 onOdds={() => {
                                     sfx.sheet(true);
                                     setOddsOpen(true);
@@ -214,6 +233,10 @@ export default function SlabPacksApp() {
                                 onMenu={() => {
                                     sfx.sheet(true);
                                     setMenuOpen(true);
+                                }}
+                                onWallet={() => {
+                                    sfx.sheet(true);
+                                    setWalletOpen(true);
                                 }}
                                 onFeed={() => setTab('pulls')}
                                 simulated={state.settings.activity}
@@ -246,16 +269,12 @@ export default function SlabPacksApp() {
                             <OpeningStage
                                 key={session.id}
                                 session={session}
-                                credits={state.credits}
+                                credits={state.walletThb}
                                 fast={state.settings.fast}
                                 reduced={reduced}
                                 sound={state.settings.sound}
                                 onClose={() => setSession(null)}
-                                onRipAgain={(count) => openPacks(session.tierKey, count)}
-                                onAddCredits={() => {
-                                    setSession(null);
-                                    setMenuOpen(true);
-                                }}
+                                onRipAgain={(count) => openPacks(session.tierKey, count, session.method)}
                                 autoRip={!!debug?.auto}
                             />
                         )}
@@ -267,11 +286,32 @@ export default function SlabPacksApp() {
                                 setOddsOpen(false);
                             }}
                             tier={tier}
-                            series={series}
-                            summary={summary}
-                            sealed={state.sealed}
+                            table={table}
                         />
-                        <SlabSheet pull={shownSlabPull} onClose={() => setSlabPull(null)} />
+                        <SlabSheet
+                            pull={shownSlabPull}
+                            onClose={() => setSlabPull(null)}
+                            onList={(p) => {
+                                setSlabPull(null);
+                                setListPull(p);
+                            }}
+                            onShip={(p) => {
+                                setSlabPull(null);
+                                setShipPull(p);
+                            }}
+                        />
+                        <ListSheet pull={listPull} onClose={() => setListPull(null)} />
+                        <ShipSheet pull={shipPull} onClose={() => setShipPull(null)} state={state} onVerify={setVerifyKind} />
+                        <WalletSheet
+                            open={walletOpen}
+                            onClose={() => {
+                                sfx.sheet(false);
+                                setWalletOpen(false);
+                            }}
+                            state={state}
+                            onVerify={setVerifyKind}
+                        />
+                        <VerifySheet kind={verifyKind} onClose={() => setVerifyKind(null)} />
                         <PreviewMenu
                             open={menuOpen}
                             onClose={() => {
@@ -279,7 +319,6 @@ export default function SlabPacksApp() {
                                 setMenuOpen(false);
                             }}
                             settings={state.settings}
-                            credits={state.credits}
                         />
                     </>
                 )}
@@ -293,34 +332,41 @@ export default function SlabPacksApp() {
 interface LobbyProps {
     tierKey: TierKey;
     onTier: (key: TierKey) => void;
-    summary: SeriesSummary;
-    seriesNumber: number;
-    chase: ReturnType<typeof chaseBoard>;
+    table: PackTable;
+    chase: CardOdds[];
     feed: FeedEvent[];
-    credits: number;
+    walletThb: number;
+    coins: number;
     reduced: boolean;
     qty: number;
     onQty: (n: number) => void;
+    method: PaymentMethod;
+    onMethod: (m: PaymentMethod) => void;
     onRip: () => void;
     onOdds: () => void;
     onMenu: () => void;
+    onWallet: () => void;
     onFeed: () => void;
     simulated: boolean;
 }
 
 function Lobby({
-    tierKey, onTier, summary, seriesNumber, chase, feed, credits, reduced, qty, onQty, onRip, onOdds, onMenu, onFeed, simulated,
+    tierKey, onTier, table, chase, feed, walletThb, coins, reduced, qty, onQty, method, onMethod, onRip, onOdds, onMenu, onWallet, onFeed, simulated,
 }: LobbyProps) {
     const { t } = useSp();
     const tier = TIERS[tierKey];
-    const shownCredits = useTween(credits, reduced ? 0 : 600);
+    const shownWallet = useTween(walletThb, reduced ? 0 : 600);
     const qtyIndex = QUANTITIES.indexOf(qty);
     const nextQty = QUANTITIES[qtyIndex + 1];
     const prevQty = QUANTITIES[qtyIndex - 1];
     const total = qty * tier.priceThb;
-    const short = credits < total;
-    // The tail of a series: whoever takes the final pack also wins the bonus slab.
-    const lastPacks = summary.left <= Math.max(5, Math.round(summary.total * 0.12));
+    const coinsNeeded = coinsForThb(total);
+
+    const methods: { id: PaymentMethod; label: string; icon: React.ReactNode; ok: boolean }[] = [
+        { id: 'card', label: t('lobby.payCard'), icon: <CreditCard size={13} />, ok: true },
+        { id: 'wallet', label: t('lobby.payWallet', { amount: baht(walletThb) }), icon: <Wallet size={13} />, ok: walletThb >= total },
+        { id: 'coins', label: t('lobby.payCoins', { n: coins.toLocaleString('en-US') }), icon: <Coins size={13} />, ok: coins >= coinsNeeded },
+    ];
 
     return (
         <div className="flex h-full flex-col" style={{ paddingTop: 'var(--sat)' }}>
@@ -342,23 +388,20 @@ function Lobby({
                         <span className="truncate text-[10.5px] text-white/45">{t('lobby.previewNote')}</span>
                     </div>
                 </button>
-                {/* Balance, top-up and the preview settings all live behind this one control. */}
+                {/* The wallet: sell-back credit and coins, cash-out behind it. No top-up. */}
                 <button
-                    onClick={onMenu}
-                    aria-label={t('menu.title')}
-                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-1.5"
+                    onClick={onWallet}
+                    aria-label={t('wallet.title')}
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-white/10 px-3.5"
                 >
-                    <Coins size={15} className="text-amber-300" />
-                    <span className="sp-num text-[14px]">{baht(shownCredits)}</span>
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-black">
-                        <Plus size={15} strokeWidth={3} />
-                    </span>
+                    <Wallet size={15} className="text-amber-300" />
+                    <span className="sp-num text-[14px]">{baht(shownWallet)}</span>
                 </button>
             </div>
 
             <Ticker feed={feed} onOpen={onFeed} simulated={simulated} />
 
-            <div className="sp-scroll min-h-0 flex-1" style={{ paddingBottom: 'calc(var(--sab) + 176px)' }}>
+            <div className="sp-scroll min-h-0 flex-1" style={{ paddingBottom: 'calc(var(--sab) + 212px)' }}>
                 <Carousel tierKey={tierKey} onTier={onTier} subtitle={t('pack.subtitle')} />
 
                 {/* Name and price */}
@@ -376,35 +419,31 @@ function Lobby({
                     </div>
                 </div>
 
-                {/* The pool at a glance: what is still sealed, by class. Opens the odds. */}
+                {/* The pack in one line: what it returns on average and what it can reach. Opens the odds. */}
                 <div className="px-5">
-                    <button onClick={onOdds} className="sp-card sp-mini mt-3 flex h-11 w-full items-center gap-3 rounded-full pl-4 pr-2.5 text-left">
-                        <span className="sp-label shrink-0">{t('common.series', { n: seriesNumber })}</span>
-                        <span className="sp-pool min-w-0 flex-1" style={{ height: 6 }}>
-                            {HIT_ORDER.map((cls) => (
-                                <i key={cls} style={{ ...classVars(cls), flex: `${summary.byClass[cls].left} 0 0px` }} />
-                            ))}
-                            <i data-sold="true" style={{ flex: `${summary.total - summary.left} 0 0px` }} />
+                    <button onClick={onOdds} className="sp-card sp-mini mt-3 flex h-11 w-full items-center gap-2 rounded-full pl-4 pr-2.5 text-left">
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-white/55">
+                            {t('lobby.avgPill', { pct: pct(table.evThb / tier.priceThb) })}
+                            <span className="mx-1.5 text-white/25">·</span>
+                            {t('lobby.topPill', { amount: baht(table.topThb) })}
                         </span>
-                        <span className="shrink-0 text-[11.5px] text-white/55">
-                            <b className="sp-num text-[14px] text-white">{summary.left}</b>/{summary.total} {t('lobby.sealed')}
-                        </span>
+                        <span className="sp-mini shrink-0 text-[11.5px] font-bold text-white/70">{t('lobby.oddsCta')}</span>
                         <ChevronRight size={16} className="shrink-0 text-white/50" />
                     </button>
                 </div>
 
-                {/* Chase board: the best slabs of this series, and who has taken them */}
+                {/* Top pulls: the dearest cards this pack can hold, each with its chance */}
                 <div className="mt-4 flex items-center justify-between px-5">
-                    <span className="sp-label">{t('lobby.chase')}</span>
-                    <span className="text-[11px] text-white/45">{t('lobby.floor', { amount: baht(summary.floorThb) })}</span>
+                    <span className="sp-label">{t('lobby.topPulls')}</span>
+                    <span className="text-[11px] text-white/45">{t('lobby.floor', { amount: baht(table.floorThb) })}</span>
                 </div>
                 <div className="sp-strip mt-2 gap-3 px-5 pb-2 pt-2">
-                    {chase.map((entry) => (
-                        <ChaseCard key={`${entry.index}`} entry={entry} tier={tier} />
+                    {chase.map((c) => (
+                        <TopPullCard key={c.slab.key} c={c} tier={tier} />
                     ))}
                 </div>
 
-                {/* What the next pack can be, class by class */}
+                {/* What a pack can be, class by class. Fixed: the same before and after every pull. */}
                 <div className="mt-5 px-5">
                     <div className="flex items-center justify-between">
                         <span className="sp-label">{t('lobby.nextPack')}</span>
@@ -414,43 +453,49 @@ function Lobby({
                         </button>
                     </div>
                     <div className="mt-2.5 grid grid-cols-3 gap-2">
-                        {HIT_ORDER.slice().reverse().map((cls) => {
-                            const left = summary.byClass[cls].left;
-                            const odds = summary.oddsNext[cls] * 100;
-                            return (
-                                <button
-                                    key={cls}
-                                    onClick={onOdds}
-                                    className="sp-card sp-mini rounded-[18px] px-3 py-2.5 text-left"
-                                    style={{ opacity: left ? 1 : 0.4 }}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <RankBadge cls={cls} style={{ fontSize: 13 }} />
-                                        <span className="text-[10.5px] text-white/50">
-                                            {left}/{summary.byClass[cls].total}
-                                        </span>
-                                    </div>
-                                    <div className="sp-num mt-2 text-[18px] leading-none" style={{ color: left ? HIT_CLASSES[cls].color : undefined }}>
-                                        {left ? `${odds >= 10 ? odds.toFixed(0) : odds.toFixed(1)}%` : t('odds.gone')}
-                                    </div>
-                                    <div className="mt-1 truncate text-[10px] text-white/45">{t(`class.${cls}`)}</div>
-                                </button>
-                            );
-                        })}
+                        {HIT_ORDER.slice().reverse().map((cls) => (
+                            <button key={cls} onClick={onOdds} className="sp-card sp-mini rounded-[18px] px-3 py-2.5 text-left">
+                                <div className="flex items-center justify-between">
+                                    <RankBadge cls={cls} style={{ fontSize: 13 }} />
+                                    <span className="text-[10.5px] text-white/50">{t('odds.cardsShort', { n: table.byClass[cls].cards })}</span>
+                                </div>
+                                <div className="sp-num mt-2 text-[18px] leading-none" style={{ color: HIT_CLASSES[cls].color }}>
+                                    {pct(table.byClass[cls].odds)}
+                                </div>
+                                <div className="mt-1 truncate text-[10px] text-white/45">{t(`class.${cls}`)}</div>
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
 
             {/* Buy dock */}
             <div className="absolute inset-x-0 z-30 px-4" style={{ bottom: 'calc(var(--sab) + 82px)' }}>
-                {lastPacks && (
-                    <div className="sp-pop-in mb-2 flex items-center justify-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-black">
-                        <Gift size={14} strokeWidth={2.6} />
-                        {t('lobby.lastPacks', { n: summary.left })}
-                    </div>
-                )}
+                {/* How the pack is paid for: card by default, wallet credit or coins when they cover it. */}
+                <div className="mb-2 flex gap-1.5">
+                    {methods.map((m) => {
+                        const on = method === m.id;
+                        return (
+                            <button
+                                key={m.id}
+                                disabled={!m.ok}
+                                onClick={() => onMethod(m.id)}
+                                aria-pressed={on}
+                                className="sp-mini flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border px-2 text-[11px] font-extrabold transition-colors disabled:opacity-35"
+                                style={{
+                                    background: on ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.45)',
+                                    color: on ? '#000' : 'rgba(255,255,255,0.75)',
+                                    borderColor: on ? 'transparent' : 'rgba(255,255,255,0.12)',
+                                }}
+                            >
+                                {m.icon}
+                                <span className="truncate">{m.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
                 <div className="sp-panel flex items-center gap-2 rounded-[26px] p-2">
-                    {/* How many packs: steps through 1, 3, 5, 10, capped at what the series has left. */}
+                    {/* How many packs: steps through 1, 3, 5, 10. */}
                     <div className="flex h-[60px] shrink-0 items-center rounded-[20px] bg-white/[0.07] px-0.5">
                         <button
                             className="sp-mini flex h-[52px] w-8 items-center justify-center rounded-full text-white/80 disabled:opacity-25"
@@ -467,23 +512,18 @@ function Lobby({
                         <button
                             className="sp-mini flex h-[52px] w-8 items-center justify-center rounded-full text-white/80 disabled:opacity-25"
                             aria-label={t('lobby.more')}
-                            disabled={nextQty === undefined || nextQty > summary.left}
+                            disabled={nextQty === undefined}
                             onClick={() => nextQty !== undefined && onQty(nextQty)}
                         >
                             <Plus size={17} strokeWidth={3} />
                         </button>
                     </div>
-                    {short ? (
-                        <button className="sp-btn sp-btn-primary h-[60px] min-w-0 flex-1 flex-col gap-1 px-3" onClick={onRip}>
-                            <span className="sp-display max-w-full truncate text-[clamp(15px,4.8vw,19px)]">{t('lobby.addCredits')}</span>
-                            <span className="sp-num text-[12px] leading-none opacity-70">{baht(total)}</span>
-                        </button>
-                    ) : (
-                        <button className="sp-btn sp-btn-primary h-[60px] min-w-0 flex-1 justify-between gap-2 px-3.5" onClick={onRip}>
-                            <span className="sp-display truncate text-[clamp(17px,5.5vw,22px)]">{t('lobby.rip')}</span>
-                            <span className="sp-num shrink-0 text-[clamp(15px,4.7vw,19px)]">{baht(total)}</span>
-                        </button>
-                    )}
+                    <button className="sp-btn sp-btn-primary h-[60px] min-w-0 flex-1 justify-between gap-2 px-3.5" onClick={onRip}>
+                        <span className="sp-display truncate text-[clamp(17px,5.5vw,22px)]">{t('lobby.rip')}</span>
+                        <span className="sp-num shrink-0 text-[clamp(15px,4.7vw,19px)]">
+                            {method === 'coins' ? t('lobby.coinsAmount', { n: coinsNeeded.toLocaleString('en-US') }) : baht(total)}
+                        </span>
+                    </button>
                 </div>
             </div>
         </div>

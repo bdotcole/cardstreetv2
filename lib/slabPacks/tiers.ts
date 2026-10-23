@@ -1,11 +1,11 @@
 /**
  * Slab Packs — the single source of truth for the pack ladder and the hit
- * classes. Everything that prices, composes or displays a pack reads this
+ * classes. Everything that prices, rolls or displays a pack reads this
  * module (the engine, the preview store, the UI), so a number changed here
  * changes everywhere. Pure, like lib/partnerTiers.ts.
  *
- * All prices and compositions are WORKING DEFAULTS for the admin-wall
- * prototype — nothing here has been through pricing or legal review.
+ * All prices and odds are WORKING DEFAULTS for the admin-wall prototype —
+ * nothing here has been through pricing or legal review.
  */
 
 import type { HitClass, PackTier, TierKey } from './types';
@@ -39,28 +39,30 @@ export const HIT_CLASSES: Record<HitClass, HitClassDef> = {
     ss: { rank: 5, letter: 'SS', min: 8, max: 30, color: '#FF5FA2', color2: '#7DF9FF' },
 };
 
-/** Classes that get a named spot on the chase board and a claim record. */
+/** Classes shown on the lobby's top-pulls strip. */
 export const CHASE_CLASSES: readonly HitClass[] = ['s', 'ss'];
 
 /**
- * Mean slab value of a series as a share of the pack price. The series
- * builder steers each manifest toward this; the real figure is computed from
- * the manifest and shown to the buyer, never assumed.
+ * Mean pack value as a share of the pack price. The table builder leans the
+ * within-class card weights toward this; the real figure is computed from
+ * the table and shown to the buyer, never assumed.
  */
 export const TARGET_EV = 0.9;
 
-/** The last pack of a series carries an extra slab from this class. */
-export const LAST_PACK_BONUS_CLASS: HitClass = 'a';
-
 export const TIER_ORDER: readonly TierKey[] = ['spark', 'surge', 'nova', 'eclipse', 'apex'];
 
+/**
+ * Odds are fixed per tier and published as they are. The shape follows what
+ * the big digital-pack operators run: roughly four pulls in five land below
+ * the pack price, one in seven is a hit at or above it, and a grail sits
+ * under one percent. They sum to exactly 1 (checked by the engine).
+ */
 export const TIERS: Record<TierKey, PackTier> = {
     spark: {
         key: 'spark',
         name: 'Spark',
         priceThb: 1490,
-        seriesSize: 120,
-        composition: { d: 56, c: 38, b: 17, a: 6, s: 2, ss: 1 },
+        odds: { d: 0.465, c: 0.32, b: 0.14, a: 0.05, s: 0.018, ss: 0.007 },
         sellBackRate: 0.85,
         theme: { a: '#FFE9A8', b: '#FFA41B', c: '#B93A04', glow: '#FFB703', ink: '#2A1200' },
     },
@@ -68,8 +70,7 @@ export const TIERS: Record<TierKey, PackTier> = {
         key: 'surge',
         name: 'Surge',
         priceThb: 3490,
-        seriesSize: 100,
-        composition: { d: 47, c: 32, b: 14, a: 4, s: 2, ss: 1 },
+        odds: { d: 0.47, c: 0.32, b: 0.14, a: 0.04, s: 0.02, ss: 0.01 },
         sellBackRate: 0.85,
         theme: { a: '#A5F7FF', b: '#06B6D4', c: '#1338BE', glow: '#22D3EE', ink: '#021526' },
     },
@@ -77,8 +78,7 @@ export const TIERS: Record<TierKey, PackTier> = {
         key: 'nova',
         name: 'Nova',
         priceThb: 6990,
-        seriesSize: 80,
-        composition: { d: 38, c: 26, b: 11, a: 3, s: 1, ss: 1 },
+        odds: { d: 0.475, c: 0.325, b: 0.138, a: 0.037, s: 0.013, ss: 0.012 },
         sellBackRate: 0.85,
         theme: { a: '#F8C8FF', b: '#C026D3', c: '#4C1D95', glow: '#E879F9', ink: '#1B0530' },
     },
@@ -86,8 +86,7 @@ export const TIERS: Record<TierKey, PackTier> = {
         key: 'eclipse',
         name: 'Eclipse',
         priceThb: 14900,
-        seriesSize: 60,
-        composition: { d: 30, c: 18, b: 8, a: 2, s: 1, ss: 1 },
+        odds: { d: 0.5, c: 0.3, b: 0.134, a: 0.032, s: 0.017, ss: 0.017 },
         sellBackRate: 0.85,
         theme: { a: '#FFB3BE', b: '#F43F5E', c: '#3F0514', glow: '#FB7185', ink: '#22030B' },
     },
@@ -95,8 +94,7 @@ export const TIERS: Record<TierKey, PackTier> = {
         key: 'apex',
         name: 'Apex',
         priceThb: 34900,
-        seriesSize: 50,
-        composition: { d: 25, c: 16, b: 6, a: 1, s: 1, ss: 1 },
+        odds: { d: 0.5, c: 0.32, b: 0.12, a: 0.02, s: 0.02, ss: 0.02 },
         sellBackRate: 0.85,
         theme: { a: '#FFFFFF', b: '#B9C6FF', c: '#1A1740', glow: '#E0E7FF', ink: '#0B0B1A' },
     },
@@ -119,7 +117,7 @@ export function classify(valueThb: number, priceThb: number): HitClass | null {
     return null;
 }
 
-/** Credit paid for an instant sell-back, whole baht, rounded in the house's favour. */
+/** Wallet credit paid for an instant sell-back, whole baht, rounded in the house's favour. */
 export function sellBackThb(valueThb: number, tier: PackTier): number {
     return Math.floor(valueThb * tier.sellBackRate);
 }

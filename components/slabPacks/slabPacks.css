@@ -952,29 +952,6 @@
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 -3px 0 rgba(0, 0, 0, 0.18) inset, 0 12px 26px -12px #f59e0b;
 }
 
-/* ── Pool bar ────────────────────────────────────────────── */
-
-.sp-pool {
-  display: flex;
-  height: 8px;
-  border-radius: 99px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
-  gap: 1.5px;
-}
-
-.sp-pool > i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(180deg, var(--cls), var(--cls2));
-  transition: flex-grow 0.5s cubic-bezier(0.2, 0.9, 0.2, 1);
-  min-width: 0;
-}
-
-.sp-pool > i[data-sold='true'] {
-  background: repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.1) 0 3px, transparent 3px 6px);
-}
-
 /* ── Sheets ──────────────────────────────────────────────── */
 
 .sp-scrim {

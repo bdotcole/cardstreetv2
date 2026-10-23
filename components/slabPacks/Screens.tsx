@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { PackageOpen, Truck } from 'lucide-react';
+import Link from 'next/link';
+import { ExternalLink, PackageOpen, Tag, Truck } from 'lucide-react';
 import { getSlab, slabImage } from '@/lib/slabPacks/pool';
 import type { PreviewStats } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
@@ -41,6 +42,8 @@ function ScreenHeader({ title, right }: { title: string; right?: React.ReactNode
 
 // ── Vault ───────────────────────────────────────────────────────────────────
 
+const HELD: Pull['status'][] = ['vault', 'listed', 'shipping'];
+
 export function VaultScreen({
     pulls, onOpenSlab, onResume, onGoPacks,
 }: {
@@ -54,7 +57,7 @@ export function VaultScreen({
 
     const { holding, sold, unrevealed, value } = useMemo(() => {
         const byValue = (a: Pull, b: Pull) => (getSlab(b.slabKey)?.valueThb ?? 0) - (getSlab(a.slabKey)?.valueThb ?? 0);
-        const h = pulls.filter((p) => p.status === 'vault' || p.status === 'shipping').sort(byValue);
+        const h = pulls.filter((p) => HELD.includes(p.status)).sort(byValue);
         return {
             holding: h,
             sold: pulls.filter((p) => p.status === 'sold'),
@@ -85,6 +88,17 @@ export function VaultScreen({
                         { id: 'sold', label: `${t('vault.sold')} · ${sold.length}` },
                     ]}
                 />
+                {/* Every slab held here is also a row in the collector's
+                    Cardstreet collection, priced with the rest of it. */}
+                {holding.length > 0 && view === 'holding' && (
+                    <Link href="/?tab=vault" className="mt-3 flex items-center gap-2 text-[11.5px] text-white/55">
+                        <span className="min-w-0 flex-1 truncate">{t('vault.collectionLine', { n: holding.length })}</span>
+                        <span className="flex shrink-0 items-center gap-1 font-bold text-white/80">
+                            {t('vault.openCollection')}
+                            <ExternalLink size={11} />
+                        </span>
+                    </Link>
+                )}
             </div>
 
             <div className="sp-scroll mt-4 min-h-0 flex-1 px-5" style={{ paddingBottom: 'calc(var(--sab) + 100px)' }}>
@@ -135,11 +149,21 @@ export function VaultScreen({
                                                 <Truck size={13} strokeWidth={2.6} />
                                             </span>
                                         )}
+                                        {p.status === 'listed' && (
+                                            <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-black">
+                                                <Tag size={13} strokeWidth={2.6} />
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="mt-1.5 truncate text-[11px] font-bold leading-tight">{slab.name}</div>
                                     <div className="sp-num text-[13px] leading-tight">
-                                        {p.status === 'sold' ? baht(p.soldForThb ?? 0) : baht(slab.valueThb)}
+                                        {p.status === 'sold' ? baht(p.soldForThb ?? 0) : p.status === 'listed' ? baht(p.listPriceThb ?? slab.valueThb) : baht(slab.valueThb)}
                                     </div>
+                                    {(p.status === 'listed' || p.status === 'shipping') && (
+                                        <div className="mt-0.5 truncate text-[9.5px] font-black uppercase tracking-wider text-white/45">
+                                            {t(`pulls.status.${p.status}`)}
+                                        </div>
+                                    )}
                                 </button>
                             );
                         })}
@@ -152,8 +176,8 @@ export function VaultScreen({
 
 // ── Pulls ───────────────────────────────────────────────────────────────────
 
-function PullRow({ slabKey, cls, who, tierName, at, now, note }: {
-    slabKey: string; cls: Pull['cls']; who: string; tierName: string; at: number; now: number; note?: string;
+function PullRow({ slabKey, cls, who, tierName, at, now }: {
+    slabKey: string; cls: Pull['cls']; who: string; tierName: string; at: number; now: number;
 }) {
     const slab = getSlab(slabKey);
     if (!slab) return null;
@@ -171,7 +195,6 @@ function PullRow({ slabKey, cls, who, tierName, at, now, note }: {
                 <div className="truncate text-[13px] font-bold leading-tight">{slab.name}</div>
                 <div className="mt-0.5 truncate text-[11px] text-white/50">
                     {who} · {tierName} · PSA {slab.grade}
-                    {note ? ` · ${note}` : ''}
                 </div>
             </div>
             <div className="shrink-0 text-right">
@@ -239,7 +262,6 @@ export function PullsScreen({
                                 tierName={TIERS[e.tier].name}
                                 at={e.at}
                                 now={now}
-                                note={e.bonus ? t('pulls.bonus') : undefined}
                             />
                         ))}
                         {feed.length === 0 && <p className="py-12 text-center text-[13px] text-white/50">{t('pulls.emptyLive')}</p>}
@@ -278,7 +300,6 @@ export function PullsScreen({
                                     tierName={TIERS[p.tier].name}
                                     at={p.at}
                                     now={now}
-                                    note={p.bonus ? t('pulls.bonus') : undefined}
                                 />
                             ))}
                             {mine.length === 0 && <p className="py-12 text-center text-[13px] text-white/50">{t('pulls.emptyMine')}</p>}

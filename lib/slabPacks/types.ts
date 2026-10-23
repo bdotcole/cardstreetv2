@@ -14,7 +14,7 @@ export type TierKey = 'spark' | 'surge' | 'nova' | 'eclipse' | 'apex';
 export type HitClass = 'd' | 'c' | 'b' | 'a' | 's' | 'ss';
 
 export interface Slab {
-    /** `${cardId}:${grade}` — one slab type. A series may hold several copies. */
+    /** `${cardId}:${grade}` — one slab type. Stock may hold several copies. */
     key: string;
     cardId: string;
     grader: 'PSA';
@@ -43,60 +43,82 @@ export interface PackTier {
     key: TierKey;
     name: string;
     priceThb: number;
-    /** Packs in one sealed series. */
-    seriesSize: number;
-    /** Slabs of each hit class in one series. Must sum to seriesSize. */
-    composition: Record<HitClass, number>;
-    /** Share of a slab's market value paid as credit on an instant sell-back. */
+    /**
+     * Fixed, published chance that a pack of this tier is each hit class.
+     * Sums to 1. These never move: a pull does not change the odds of the
+     * next pull, and nothing is counted down or marked as gone.
+     */
+    odds: Record<HitClass, number>;
+    /** Share of a slab's market value paid as wallet credit on an instant sell-back. */
     sellBackRate: number;
     theme: TierTheme;
 }
 
-export interface SeriesClaim {
-    index: number;
-    slabKey: string;
+/** One card that a pack can contain, with its exact chance. */
+export interface CardOdds {
+    slab: Slab;
     cls: HitClass;
-    who: string;
-    me: boolean;
-    at: number;
+    /** Chance that a pack is this exact card. Sums to 1 over the whole table. */
+    odds: number;
 }
 
 /**
- * One sealed series: a fixed, pre-shuffled manifest of slabs. `next` is the
- * number of packs already sold, so manifest[next] is the slab inside the next
- * pack. Nothing about a pull is decided at purchase time.
+ * Everything a buyer is shown about a tier's packs: the class odds, every
+ * card the pack can contain with its own chance, and the numbers derived
+ * from those (average value, floor, top prize). Built from the tier and the
+ * pool; it only changes when the pool does.
  */
-export interface SeriesState {
+export interface PackTable {
     tier: TierKey;
-    number: number;
-    /** Secret until the series sells out, then published for verification. */
-    seed: string;
-    /** sha256 over seed + manifest + bonus, published when the series opens. */
-    commit: string;
-    manifest: string[];
-    next: number;
-    /** Extra slab awarded to whoever buys the last pack of the series. */
-    bonusKey: string | null;
-    /** Who pulled what, for S and SS slabs only (the chase board). */
-    claims: SeriesClaim[];
-    startedAt: number;
+    byClass: Record<HitClass, {
+        odds: number;
+        cards: number;
+        minThb: number;
+        maxThb: number;
+        /** Odds-weighted mean value of the class. */
+        meanThb: number;
+    }>;
+    /** Every card the pack can contain, most valuable first. */
+    cards: CardOdds[];
+    /** Mean value of a pack: sum of odds x value. */
+    evThb: number;
+    floorThb: number;
+    topThb: number;
 }
 
-export type PullStatus = 'unrevealed' | 'vault' | 'sold' | 'shipping';
+/**
+ * The fairness record of one pull. The commit (a hash of the secret seed) is
+ * shown before the pack is ripped; the seed itself is shown after. Anyone
+ * can hash the seed to check the commit and re-run the draw to check the
+ * result.
+ */
+export interface PullProof {
+    commit: string;
+    /** Secret until the pull is revealed, then published. */
+    seed: string;
+    /** A value the buyer contributed, so the house cannot pick the seed alone. */
+    clientSeed: string;
+}
+
+export type PullStatus = 'unrevealed' | 'vault' | 'listed' | 'sold' | 'shipping';
 
 export interface Pull {
     id: string;
     slabKey: string;
     tier: TierKey;
-    series: number;
-    /** Position in the series manifest; -1 for a last-pack bonus slab. */
-    index: number;
     cls: HitClass;
     pricePaidThb: number;
     at: number;
     status: PullStatus;
+    proof: PullProof;
+    /** Wallet credit received on sell-back. */
     soldForThb?: number;
-    bonus?: boolean;
+    /** Marketplace listing, while `status` is 'listed'. */
+    listPriceThb?: number;
+    listedAt?: number;
+    /** Shipping request, while `status` is 'shipping'. */
+    shipRequestedAt?: number;
+    shipFeeThb?: number;
 }
 
 export interface FeedEvent {
@@ -107,19 +129,4 @@ export interface FeedEvent {
     tier: TierKey;
     cls: HitClass;
     at: number;
-    /** A last-pack bonus slab rather than a pack pull. */
-    bonus?: boolean;
-}
-
-export interface SeriesSummary {
-    total: number;
-    left: number;
-    byClass: Record<HitClass, { total: number; left: number }>;
-    /** Chance the NEXT pack is each class, from what is still sealed. */
-    oddsNext: Record<HitClass, number>;
-    /** Mean slab value of the whole series / of the sealed remainder, in THB. */
-    evAllThb: number;
-    evLeftThb: number;
-    floorThb: number;
-    topThb: number;
 }

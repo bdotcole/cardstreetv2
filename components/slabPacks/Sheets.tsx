@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Coins, Gift, Lock, RotateCcw, ShieldCheck, Truck, Users, Vibrate, Volume2, X, Zap } from 'lucide-react';
-import { verifyCommit, type ChaseEntry } from '@/lib/slabPacks/engine';
+import Link from 'next/link';
+import { Check, Coins, ExternalLink, Lock, RotateCcw, ShieldCheck, Tag, Truck, Users, Vibrate, Volume2, X, Zap } from 'lucide-react';
+import { verifyDraw } from '@/lib/slabPacks/engine';
+import { MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, SHIP_FEE_THB, listingPayoutThb } from '@/lib/slabPacks/policy';
 import { getSlab } from '@/lib/slabPacks/pool';
-import { TOP_UP_THB, previewActions, type PreviewSettings, type SealedRecord } from '@/lib/slabPacks/previewStore';
+import { getTable, previewActions, type PreviewSettings } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
-import { HIT_CLASSES, HIT_ORDER, LAST_PACK_BONUS_CLASS, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
-import type { HitClass, PackTier, Pull, SeriesState, SeriesSummary } from '@/lib/slabPacks/types';
+import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
+import type { CardOdds, HitClass, PackTable, PackTier, Pull } from '@/lib/slabPacks/types';
 import SlabCard from './SlabCard';
 import { RankBadge, baht, classVars, tierVars, useSp } from './ui';
 
@@ -40,7 +42,7 @@ export function Sheet({ open, onClose, children }: { open: boolean; onClose: () 
     );
 }
 
-function SheetHeader({ title, sub, onClose }: { title: string; sub?: string; onClose: () => void }) {
+export function SheetHeader({ title, sub, onClose }: { title: string; sub?: string; onClose: () => void }) {
     const { t } = useSp();
     return (
         <div className="flex items-start gap-3 px-5 pb-3 pt-1">
@@ -59,101 +61,19 @@ function SheetHeader({ title, sub, onClose }: { title: string; sub?: string; onC
     );
 }
 
-// ── Odds & details ──────────────────────────────────────────────────────────
-
-const pct = (n: number) => {
+export const pct = (n: number) => {
     const v = n * 100;
-    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1)}%`;
+    if (v >= 10) return `${v.toFixed(0)}%`;
+    if (v >= 1) return `${v.toFixed(1)}%`;
+    return `${v.toFixed(2)}%`;
 };
+
+/** "1 in 140" reads better than "0.71%" for the long shots. */
+export const oneIn = (n: number) => (n > 0 ? `1 in ${Math.round(1 / n).toLocaleString('en-US')}` : '—');
 
 const shortHash = (h: string) => `${h.slice(0, 10)}…${h.slice(-8)}`;
 
-export function OddsSheet({
-    open, onClose, tier, series, summary, sealed,
-}: {
-    open: boolean;
-    onClose: () => void;
-    tier: PackTier;
-    series: SeriesState;
-    summary: SeriesSummary;
-    sealed: SealedRecord[];
-}) {
-    const { t } = useSp();
-    const bonus = series.bonusKey ? getSlab(series.bonusKey) : undefined;
-    const past = sealed.filter((s) => s.tier === tier.key).slice(0, 3);
-
-    return (
-        <Sheet open={open} onClose={onClose}>
-            <SheetHeader
-                title={t('odds.title', { tier: tier.name })}
-                sub={t('odds.sub', { n: series.number, left: summary.left, total: summary.total })}
-                onClose={onClose}
-            />
-            <div className="sp-scroll min-h-0 flex-1 px-5 pb-6" style={tierVars(tier)}>
-                <div className="grid grid-cols-3 gap-2">
-                    <Stat label={t('odds.avg')} value={baht(summary.evAllThb)} sub={t('odds.avgSub', { pct: pct(summary.evAllThb / tier.priceThb) })} />
-                    <Stat label={t('odds.floor')} value={baht(summary.floorThb)} sub={t('odds.floorSub')} />
-                    <Stat label={t('odds.sellBack')} value={pct(tier.sellBackRate)} sub={t('odds.sellBackSub')} />
-                </div>
-
-                <div className="sp-label mt-6">{t('odds.stillSealed')}</div>
-                <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
-                    {[...HIT_ORDER].reverse().map((cls, n) => (
-                        <ClassRow key={cls} cls={cls} tier={tier} summary={summary} first={n === 0} />
-                    ))}
-                </div>
-                <p className="mt-2.5 text-[11.5px] leading-relaxed text-white/50">{t('odds.liveNote')}</p>
-
-                {bonus && (
-                    <div className="sp-card mt-5 flex items-center gap-3.5 rounded-[20px] p-3.5">
-                        <div className="w-[58px] shrink-0">
-                            <SlabCard slab={bonus} tier={tier} art="small" flat foil={0.2} />
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 text-[13px] font-extrabold">
-                                <Gift size={15} style={{ color: tier.theme.glow }} />
-                                {t('odds.bonusTitle')}
-                            </div>
-                            <div className="mt-1 text-[12px] leading-snug text-white/60">
-                                {t('odds.bonusBody', { name: bonus.name, grade: bonus.grade, value: baht(bonus.valueThb) })}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="sp-card mt-5 rounded-[20px] p-4">
-                    <div className="flex items-center gap-2 text-[13px] font-extrabold">
-                        <ShieldCheck size={16} className="text-emerald-400" />
-                        {t('odds.fairTitle')}
-                    </div>
-                    <p className="mt-1.5 text-[12px] leading-relaxed text-white/60">{t('odds.fairBody')}</p>
-                    <div className="mt-3 flex items-center gap-2 rounded-xl bg-black/40 px-3 py-2.5">
-                        <Lock size={13} className="shrink-0 text-white/50" />
-                        <span className="sp-label shrink-0">{t('odds.seal')}</span>
-                        <code className="ml-auto truncate font-mono text-[11px] text-white/80">{shortHash(series.commit)}</code>
-                    </div>
-                    {past.map((rec) => (
-                        <PastSeries key={`${rec.tier}-${rec.number}`} rec={rec} />
-                    ))}
-                </div>
-
-                <div className="sp-label mt-6">{t('odds.howTitle')}</div>
-                <ol className="mt-2 grid gap-2">
-                    {(['how1', 'how2', 'how3', 'how4'] as const).map((k, n) => (
-                        <li key={k} className="flex gap-3 text-[12.5px] leading-relaxed text-white/70">
-                            <span className="sp-num mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px]">
-                                {n + 1}
-                            </span>
-                            <span>{t(`odds.${k}`, { floor: pct(HIT_CLASSES.d.min), rate: pct(tier.sellBackRate), bonus: HIT_CLASSES[LAST_PACK_BONUS_CLASS].letter })}</span>
-                        </li>
-                    ))}
-                </ol>
-            </div>
-        </Sheet>
-    );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+export function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
     return (
         <div className="sp-card rounded-[18px] px-3 py-3">
             <div className="sp-label">{label}</div>
@@ -163,16 +83,104 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
     );
 }
 
-function ClassRow({ cls, tier, summary, first }: { cls: HitClass; tier: PackTier; summary: SeriesSummary; first: boolean }) {
+// ── Odds & details ──────────────────────────────────────────────────────────
+
+const CARD_LIST_LIMIT = 40;
+
+export function OddsSheet({
+    open, onClose, tier, table,
+}: {
+    open: boolean;
+    onClose: () => void;
+    tier: PackTier;
+    table: PackTable;
+}) {
+    const { t } = useSp();
+    const [showAll, setShowAll] = useState(false);
+    useEffect(() => {
+        if (!open) setShowAll(false);
+    }, [open]);
+    const shown = showAll ? table.cards : table.cards.slice(0, CARD_LIST_LIMIT);
+
+    return (
+        <Sheet open={open} onClose={onClose}>
+            <SheetHeader title={t('odds.title', { tier: tier.name })} sub={t('odds.sub')} onClose={onClose} />
+            <div className="sp-scroll min-h-0 flex-1 px-5 pb-6" style={tierVars(tier)}>
+                <div className="grid grid-cols-3 gap-2">
+                    <Stat label={t('odds.avg')} value={baht(table.evThb)} sub={t('odds.avgSub', { pct: pct(table.evThb / tier.priceThb) })} />
+                    <Stat label={t('odds.floor')} value={baht(table.floorThb)} sub={t('odds.floorSub')} />
+                    <Stat label={t('odds.top')} value={baht(table.topThb)} sub={t('odds.topSub')} />
+                </div>
+
+                <div className="sp-label mt-6">{t('odds.byClass')}</div>
+                <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
+                    {[...HIT_ORDER].reverse().map((cls, n) => (
+                        <ClassRow key={cls} cls={cls} tier={tier} table={table} first={n === 0} />
+                    ))}
+                </div>
+                <p className="mt-2.5 text-[11.5px] leading-relaxed text-white/50">{t('odds.fixedNote')}</p>
+
+                <div className="mt-6 flex items-end justify-between">
+                    <span className="sp-label">{t('odds.everyCard')}</span>
+                    <span className="text-[11px] text-white/45">{t('odds.cardCount', { n: table.cards.length })}</span>
+                </div>
+                <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
+                    {shown.map((c, n) => (
+                        <CardRow key={c.slab.key} c={c} first={n === 0} />
+                    ))}
+                </div>
+                {!showAll && table.cards.length > CARD_LIST_LIMIT && (
+                    <button
+                        className="sp-btn sp-btn-ghost mt-2.5 h-[44px] w-full text-[13px]"
+                        onClick={() => {
+                            sfx.tap();
+                            setShowAll(true);
+                        }}
+                    >
+                        {t('odds.showAll', { n: table.cards.length - CARD_LIST_LIMIT })}
+                    </button>
+                )}
+
+                <div className="sp-card mt-5 rounded-[20px] p-4">
+                    <div className="flex items-center gap-2 text-[13px] font-extrabold">
+                        <ShieldCheck size={16} className="text-emerald-400" />
+                        {t('odds.fairTitle')}
+                    </div>
+                    <p className="mt-1.5 text-[12px] leading-relaxed text-white/60">{t('odds.fairBody')}</p>
+                </div>
+
+                <div className="sp-label mt-6">{t('odds.howTitle')}</div>
+                <ol className="mt-2 grid gap-2">
+                    {(['how1', 'how2', 'how3', 'how4'] as const).map((k, n) => (
+                        <li key={k} className="flex gap-3 text-[12.5px] leading-relaxed text-white/70">
+                            <span className="sp-num mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px]">
+                                {n + 1}
+                            </span>
+                            <span>
+                                {t(`odds.${k}`, {
+                                    floor: pct(HIT_CLASSES.d.min),
+                                    rate: pct(tier.sellBackRate),
+                                    fee: pct(PULL_MARKET_FEE_RATE),
+                                    stdFee: pct(MARKET_FEE_RATE),
+                                    ship: baht(SHIP_FEE_THB),
+                                    d1: SHIP_DAYS[0],
+                                    d2: SHIP_DAYS[1],
+                                })}
+                            </span>
+                        </li>
+                    ))}
+                </ol>
+            </div>
+        </Sheet>
+    );
+}
+
+function ClassRow({ cls, tier, table, first }: { cls: HitClass; tier: PackTier; table: PackTable; first: boolean }) {
     const { t } = useSp();
     const def = HIT_CLASSES[cls];
-    const c = summary.byClass[cls];
-    const gone = c.left === 0;
+    const c = table.byClass[cls];
     return (
-        <div
-            className={`flex items-center gap-3 px-3.5 py-3 ${first ? '' : 'border-t border-white/10'}`}
-            style={{ ...classVars(cls), opacity: gone ? 0.42 : 1 }}
-        >
+        <div className={`flex items-center gap-3 px-3.5 py-3 ${first ? '' : 'border-t border-white/10'}`} style={classVars(cls)}>
             <RankBadge cls={cls} style={{ fontSize: 15 }} />
             <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
@@ -181,44 +189,59 @@ function ClassRow({ cls, tier, summary, first }: { cls: HitClass; tier: PackTier
                         {baht(tier.priceThb * def.min)}–{baht(tier.priceThb * def.max)}
                     </span>
                 </div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-                    <div
-                        className="h-full rounded-full transition-[width] duration-500"
-                        style={{ width: `${c.total ? (c.left / c.total) * 100 : 0}%`, background: `linear-gradient(90deg, ${def.color2}, ${def.color})` }}
-                    />
-                </div>
+                <div className="mt-1 text-[10.5px] text-white/45">{t('odds.cardsInClass', { n: c.cards })}</div>
             </div>
             <div className="shrink-0 text-right">
-                <div className="sp-num text-[15px] leading-none" style={{ color: gone ? undefined : def.color }}>
-                    {gone ? t('odds.gone') : pct(summary.oddsNext[cls])}
-                </div>
-                <div className="mt-1 text-[10.5px] text-white/45">{t('odds.leftOf', { left: c.left, total: c.total })}</div>
+                <div className="sp-num text-[15px] leading-none" style={{ color: def.color }}>{pct(c.odds)}</div>
+                <div className="mt-1 text-[10.5px] text-white/45">{oneIn(c.odds)}</div>
             </div>
         </div>
     );
 }
 
-function PastSeries({ rec }: { rec: SealedRecord }) {
-    const { t } = useSp();
-    // Recompute the commit from the now-public seed: this is the check a
-    // buyer can run themselves once a series has sold out.
-    const ok = useMemo(() => verifyCommit(rec.seed, rec.manifest, rec.bonusKey, rec.commit), [rec]);
+function CardRow({ c, first }: { c: CardOdds; first: boolean }) {
     return (
-        <div className="mt-2 flex items-center gap-2 rounded-xl bg-black/40 px-3 py-2.5 text-[11px]">
-            <span className="font-bold text-white/80">{t('odds.pastSeries', { n: rec.number })}</span>
-            <code className="truncate font-mono text-white/45">{rec.seed.slice(0, 12)}…</code>
-            <span className={`ml-auto flex shrink-0 items-center gap-1 font-bold ${ok ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {ok && <Check size={13} strokeWidth={3} />}
-                {ok ? t('odds.verified') : t('odds.mismatch')}
-            </span>
+        <div className={`flex items-center gap-2.5 px-3.5 py-2 ${first ? '' : 'border-t border-white/10'}`}>
+            <RankBadge cls={c.cls} style={{ fontSize: 10 }} />
+            <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-bold leading-tight">{c.slab.name}</div>
+                <div className="truncate text-[10.5px] text-white/45">
+                    {c.slab.setName} · PSA {c.slab.grade}
+                </div>
+            </div>
+            <div className="shrink-0 text-right">
+                <div className="sp-num text-[12.5px] leading-none">{baht(c.slab.valueThb)}</div>
+                <div className="mt-0.5 text-[10px] text-white/45">{pct(c.odds)}</div>
+            </div>
+        </div>
+    );
+}
+
+/** One card of the lobby's top-pulls strip: what it is worth, and the chance of it. */
+export function TopPullCard({ c, tier }: { c: CardOdds; tier: PackTier }) {
+    return (
+        <div className="w-[86px] shrink-0">
+            <div className="relative">
+                <SlabCard slab={c.slab} tier={tier} art="small" flat foil={0.25} />
+                <RankBadge cls={c.cls} className="absolute -left-1.5 -top-1.5" style={{ fontSize: 12 }} />
+            </div>
+            <div className="sp-num mt-1.5 truncate text-[13px] leading-none">{baht(c.slab.valueThb)}</div>
+            <div className="mt-0.5 truncate text-[10px] text-white/50">{oneIn(c.odds)}</div>
         </div>
     );
 }
 
 // ── A slab from the vault ───────────────────────────────────────────────────
 
-export function SlabSheet({ pull, onClose }: { pull: Pull | null; onClose: () => void }) {
-    const { t } = useSp();
+export function SlabSheet({
+    pull, onClose, onList, onShip,
+}: {
+    pull: Pull | null;
+    onClose: () => void;
+    onList: (pull: Pull) => void;
+    onShip: (pull: Pull) => void;
+}) {
+    const { t, isThai } = useSp();
     // Hold the last pull so the sheet keeps its content while it slides away.
     const [shown, setShown] = useState<Pull | null>(pull);
     useEffect(() => {
@@ -228,6 +251,14 @@ export function SlabSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
     const p = shown;
     const slab = p ? getSlab(p.slabKey) : undefined;
     const tier = p ? TIERS[p.tier] : null;
+    // The check a buyer can run: the seed hashes to the commit shown before
+    // the rip, and re-running the draw with it lands on this card.
+    const verified = useMemo(
+        () => (p && !p.id.startsWith('demo-') ? verifyDraw(getTable(p.tier), p.proof.seed, p.proof.clientSeed, p.proof.commit, p.slabKey) : null),
+        [p],
+    );
+    const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
+    const inCollection = p && (p.status === 'vault' || p.status === 'listed' || p.status === 'shipping');
 
     return (
         <Sheet open={!!pull} onClose={onClose}>
@@ -247,9 +278,7 @@ export function SlabSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
                             <span className="sp-display text-[18px]" style={{ color: HIT_CLASSES[p.cls].color }}>
                                 {t(`class.${p.cls}`)}
                             </span>
-                            <span className="sp-label ml-auto">
-                                {tier.name} · {t('common.series', { n: p.series })}
-                            </span>
+                            <span className="sp-label ml-auto">{tier.name}</span>
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
@@ -258,43 +287,145 @@ export function SlabSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
                         <div className="sp-num mt-2 text-[34px] leading-none">{baht(slab.valueThb)}</div>
                         <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>
 
+                        {inCollection && (
+                            <Link
+                                href="/?tab=vault"
+                                className="sp-card mt-4 flex items-center gap-2.5 rounded-2xl p-3 text-[12px] text-white/70"
+                            >
+                                <Check size={15} className="shrink-0 text-emerald-400" strokeWidth={3} />
+                                <span className="min-w-0 flex-1">{t('vault.inCollection')}</span>
+                                <span className="flex shrink-0 items-center gap-1 font-bold text-white/85">
+                                    {t('vault.openCollection')}
+                                    <ExternalLink size={12} />
+                                </span>
+                            </Link>
+                        )}
+
                         {p.status === 'vault' && (
-                            <div className="mt-5 grid grid-cols-2 gap-3">
+                            <>
+                                <div className="mt-4 grid grid-cols-2 gap-3">
+                                    <button
+                                        className="sp-btn sp-btn-sell h-[54px] px-2 text-[15px]"
+                                        onClick={() => {
+                                            previewActions.sell([p.id]);
+                                            sfx.coins();
+                                            onClose();
+                                        }}
+                                    >
+                                        <Coins size={17} strokeWidth={2.6} />
+                                        <span>
+                                            {t('stage.sell')} {baht(sellBackThb(slab.valueThb, tier))}
+                                        </span>
+                                    </button>
+                                    <button
+                                        className="sp-btn sp-btn-primary h-[54px] px-2 text-[15px]"
+                                        onClick={() => {
+                                            sfx.tap();
+                                            onList(p);
+                                        }}
+                                    >
+                                        <Tag size={17} strokeWidth={2.4} />
+                                        {t('vault.list')}
+                                    </button>
+                                </div>
+                                <div className="mt-2 text-center text-[11px] text-white/45">
+                                    {t('vault.listFeeNote', { fee: pct(PULL_MARKET_FEE_RATE), std: pct(MARKET_FEE_RATE) })}
+                                </div>
                                 <button
-                                    className="sp-btn sp-btn-sell h-[54px] px-2 text-[15px]"
+                                    className="sp-btn sp-btn-ghost mt-3 h-[50px] w-full justify-between px-4 text-[14px]"
                                     onClick={() => {
-                                        previewActions.sell([p.id]);
-                                        sfx.coins();
-                                        onClose();
+                                        sfx.tap();
+                                        onShip(p);
                                     }}
                                 >
-                                    <Coins size={17} strokeWidth={2.6} />
-                                    <span>
-                                        {t('stage.sell')} {baht(sellBackThb(slab.valueThb, tier))}
+                                    <span className="flex items-center gap-2">
+                                        <Truck size={16} />
+                                        {t('vault.ship')}
+                                    </span>
+                                    <span className="text-[11.5px] text-white/55">
+                                        {t('vault.shipTerms', { fee: baht(SHIP_FEE_THB), d1: SHIP_DAYS[0], d2: SHIP_DAYS[1] })}
                                     </span>
                                 </button>
-                                <button
-                                    className="sp-btn sp-btn-ghost h-[54px] px-2 text-[15px]"
-                                    onClick={() => {
-                                        previewActions.requestShipping(p.id);
-                                        sfx.keep();
-                                        onClose();
-                                    }}
-                                >
-                                    <Truck size={17} />
-                                    {t('vault.ship')}
-                                </button>
-                            </div>
+                            </>
                         )}
-                        {p.status === 'shipping' && (
-                            <div className="sp-card mt-5 flex items-center gap-2.5 rounded-2xl p-3.5 text-[12.5px] text-white/70">
-                                <Truck size={16} className="shrink-0" style={{ color: tier.theme.glow }} />
-                                {t('vault.shippingNote')}
+                        {p.status === 'listed' && p.listPriceThb != null && (
+                            <>
+                                <div className="sp-card mt-4 rounded-2xl p-3.5 text-[12.5px] text-white/70">
+                                    <div className="flex items-center gap-2 font-extrabold text-white">
+                                        <Tag size={15} style={{ color: tier.theme.glow }} />
+                                        {t('vault.listedAt', { price: baht(p.listPriceThb) })}
+                                    </div>
+                                    <div className="mt-1">
+                                        {t('vault.listedPayout', { payout: baht(listingPayoutThb(p.listPriceThb)), fee: pct(PULL_MARKET_FEE_RATE) })}
+                                    </div>
+                                    <div className="mt-1 text-white/50">{t('vault.listedShipNote')}</div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-3">
+                                    <button
+                                        className="sp-btn sp-btn-sell h-[50px] px-2 text-[14px]"
+                                        onClick={() => {
+                                            previewActions.sell([p.id]);
+                                            sfx.coins();
+                                            onClose();
+                                        }}
+                                    >
+                                        <Coins size={16} strokeWidth={2.6} />
+                                        {t('stage.sell')} {baht(sellBackThb(slab.valueThb, tier))}
+                                    </button>
+                                    <button
+                                        className="sp-btn sp-btn-ghost h-[50px] px-2 text-[14px]"
+                                        onClick={() => {
+                                            previewActions.unlist(p.id);
+                                            sfx.tap();
+                                        }}
+                                    >
+                                        {t('vault.unlist')}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                        {p.status === 'shipping' && p.shipRequestedAt != null && (
+                            <div className="sp-card mt-4 flex items-start gap-2.5 rounded-2xl p-3.5 text-[12.5px] text-white/70">
+                                <Truck size={16} className="mt-0.5 shrink-0" style={{ color: tier.theme.glow }} />
+                                <div>
+                                    <div className="font-extrabold text-white">{t('vault.shippingTitle')}</div>
+                                    <div className="mt-0.5">
+                                        {t('vault.shippingWindow', {
+                                            from: fmtDate(p.shipRequestedAt + SHIP_DAYS[0] * 86_400_000),
+                                            to: fmtDate(p.shipRequestedAt + SHIP_DAYS[1] * 86_400_000),
+                                        })}
+                                    </div>
+                                    <div className="mt-0.5 text-white/50">{t('vault.shippingFeePaid', { fee: baht(p.shipFeeThb ?? SHIP_FEE_THB) })}</div>
+                                </div>
                             </div>
                         )}
                         {p.status === 'sold' && (
-                            <div className="sp-card mt-5 rounded-2xl p-3.5 text-[12.5px] text-white/70">
+                            <div className="sp-card mt-4 rounded-2xl p-3.5 text-[12.5px] text-white/70">
                                 {t('vault.soldNote', { amount: baht(p.soldForThb ?? 0) })}
+                            </div>
+                        )}
+
+                        {verified !== null && (
+                            <div className="mt-4 rounded-2xl bg-black/40 p-3.5">
+                                <div className="flex items-center gap-2 text-[12px] font-extrabold">
+                                    <Lock size={13} className="text-white/60" />
+                                    {t('proof.title')}
+                                    <span className={`ml-auto flex items-center gap-1 ${verified ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {verified && <Check size={13} strokeWidth={3} />}
+                                        {verified ? t('proof.verified') : t('proof.mismatch')}
+                                    </span>
+                                </div>
+                                <div className="mt-2 grid gap-1 text-[10.5px]">
+                                    <div className="flex gap-2">
+                                        <span className="w-14 shrink-0 text-white/45">{t('proof.commit')}</span>
+                                        <code className="truncate font-mono text-white/75">{shortHash(p.proof.commit)}</code>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <span className="w-14 shrink-0 text-white/45">{t('proof.seed')}</span>
+                                        <code className="truncate font-mono text-white/75">{shortHash(p.proof.seed)}</code>
+                                    </div>
+                                </div>
+                                <p className="mt-2 text-[10.5px] leading-snug text-white/45">{t('proof.body')}</p>
                             </div>
                         )}
                     </div>
@@ -307,12 +438,11 @@ export function SlabSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
 // ── Preview menu ────────────────────────────────────────────────────────────
 
 export function PreviewMenu({
-    open, onClose, settings, credits,
+    open, onClose, settings,
 }: {
     open: boolean;
     onClose: () => void;
     settings: PreviewSettings;
-    credits: number;
 }) {
     const { t } = useSp();
     const [confirmReset, setConfirmReset] = useState(false);
@@ -334,22 +464,6 @@ export function PreviewMenu({
                 <div className="rounded-[20px] border border-amber-300/30 bg-amber-300/10 p-4 text-[12.5px] leading-relaxed text-amber-100">
                     <div className="mb-1 font-extrabold uppercase tracking-wider text-amber-300">{t('menu.previewTitle')}</div>
                     {t('menu.previewBody')}
-                </div>
-
-                <div className="sp-card mt-4 flex items-center gap-3 rounded-[20px] p-4">
-                    <div className="min-w-0 flex-1">
-                        <div className="sp-label">{t('menu.credits')}</div>
-                        <div className="sp-num mt-1 text-[26px] leading-none">{baht(credits)}</div>
-                    </div>
-                    <button
-                        className="sp-btn sp-btn-sell h-[46px] px-4 text-[14px]"
-                        onClick={() => {
-                            previewActions.addCredits(TOP_UP_THB);
-                            sfx.coins();
-                        }}
-                    >
-                        + {baht(TOP_UP_THB)}
-                    </button>
                 </div>
 
                 <div className="mt-4 overflow-hidden rounded-[20px] border border-white/10">
@@ -438,31 +552,3 @@ const SOUND_CHECK: { id: string; cls?: HitClass; play: () => void }[] = [
     { id: 'keep', play: () => sfx.keep() },
     ...HIT_ORDER.map((cls) => ({ id: cls, cls, play: () => sfx.playTell(HIT_CLASSES[cls].rank) })),
 ];
-
-/** One row of the chase board, as a small card. Shared by the lobby strip. */
-export function ChaseCard({ entry, tier }: { entry: ChaseEntry; tier: PackTier }) {
-    const { t } = useSp();
-    return (
-        <div className="w-[86px] shrink-0">
-            <div className="relative">
-                <div style={{ opacity: entry.claimed ? 0.32 : 1, filter: entry.claimed ? 'grayscale(0.9)' : undefined }}>
-                    <SlabCard slab={entry.slab} tier={tier} art="small" flat foil={0.25} />
-                </div>
-                <RankBadge cls={entry.cls} className="absolute -left-1.5 -top-1.5" style={{ fontSize: 12 }} />
-                {entry.claimed && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="-rotate-12 rounded-md border border-white/40 bg-black/70 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
-                            {t('lobby.claimed')}
-                        </span>
-                    </div>
-                )}
-            </div>
-            <div className="sp-num mt-1.5 truncate text-[13px] leading-none" style={{ opacity: entry.claimed ? 0.45 : 1 }}>
-                {baht(entry.slab.valueThb)}
-            </div>
-            <div className="mt-0.5 truncate text-[10px] text-white/50">
-                {entry.claim ? (entry.claim.me ? t('common.you') : entry.claim.who) : entry.slab.name}
-            </div>
-        </div>
-    );
-}

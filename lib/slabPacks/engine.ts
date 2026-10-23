@@ -1,27 +1,28 @@
 /**
  * Slab Packs — the mechanics, as pure functions over plain data.
  *
- * The model is a SEALED SERIES, not a per-pull roll. A series is a fixed list
- * of real slabs, shuffled once when it opens. Buying a pack takes the next
- * slab off that list. Three things follow, and they are the reason for the
- * design:
+ * The model is FIXED, PUBLISHED ODDS, the way the large digital-pack
+ * operators run it. Each tier has a table: every card the pack can contain,
+ * each with its own chance, and the chances never move. A pull is one
+ * independent draw from that table. Nothing is counted down, nothing is
+ * marked as gone, and a buyer sees exactly the same odds before and after
+ * anyone else's pull.
  *
- *  1. Nothing is decided at purchase time. The slab in pack #37 was fixed
- *     when the series was sealed, and the commit hash published at that
- *     moment lets anyone check it afterwards (verifySeries).
- *  2. The odds shown are a count of what is still sealed, so they can never
- *     drift from the truth the way a published percentage does once a chase
- *     card has been pulled.
- *  3. The house's result on a series is known when it is built: packs sold
- *     x price, against the cost of exactly these slabs. No pull variance.
+ * Fairness is per pull, commit-then-reveal: before the pack is ripped the
+ * buyer is shown a hash of a secret seed; after the reveal the seed itself
+ * is shown. The draw is a pure function of (seed, the buyer's own client
+ * seed, the table), so hashing the seed checks the commit and re-running
+ * the draw checks the result. The house cannot pick the result once the
+ * commit is out, and cannot pick the seed alone because the client seed is
+ * mixed in.
  *
- * Everything here is deterministic given its inputs, so the same code can
- * run in the browser preview today and inside a route handler later, where
- * the manifest lives in a table and `next` moves under a row lock.
+ * Everything here is deterministic given its inputs, so the same code runs
+ * in the browser preview today and inside a route handler later, where the
+ * seed is generated and kept server-side until the pull is revealed.
  */
 
-import { CHASE_CLASSES, HIT_CLASSES, HIT_ORDER, LAST_PACK_BONUS_CLASS, TARGET_EV, classify } from './tiers';
-import type { HitClass, PackTier, SeriesClaim, SeriesState, SeriesSummary, Slab } from './types';
+import { HIT_CLASSES, HIT_ORDER, TARGET_EV, classify } from './tiers';
+import type { CardOdds, HitClass, PackTable, PackTier, Slab } from './types';
 
 // ── Hashing + seeded randomness ─────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ export function makeRng(seed: string): () => number {
     };
 }
 
-// ── Building a series ───────────────────────────────────────────────────────
+// ── The table ───────────────────────────────────────────────────────────────
 
 export function indexPool(pool: readonly Slab[]): Map<string, Slab> {
     const map = new Map<string, Slab>();
@@ -126,230 +127,140 @@ export function poolByClass(pool: readonly Slab[], tier: PackTier): Record<HitCl
 }
 
 /**
- * Take `n` slabs from one class. `bias` leans the draw toward the cheap end
- * of the band (0 = uniform). Copies of a slab only repeat once every distinct
- * candidate has been used, which is how real inventory behaves: several
- * PSA 10 copies of a common card, one of the chase.
+ * Relative weights of the cards in one class, cheapest first. `bias` leans
+ * the draw toward the cheap end of the band (0 = every card in the class is
+ * equally likely). The small constant keeps the dearest card reachable.
  */
-function sample(cands: readonly Slab[], n: number, bias: number, rng: () => number): Slab[] {
-    const out: Slab[] = [];
-    let bag: { slab: Slab; w: number }[] = [];
-    const span = Math.max(1, cands.length - 1);
-    while (out.length < n) {
-        if (bag.length === 0) {
-            bag = cands.map((slab, i) => ({ slab, w: Math.pow(1 - i / span, bias) + 0.04 }));
-        }
-        let total = 0;
-        for (const b of bag) total += b.w;
-        let r = rng() * total;
-        let idx = 0;
-        for (; idx < bag.length - 1; idx++) {
-            r -= bag[idx].w;
-            if (r <= 0) break;
-        }
-        out.push(bag[idx].slab);
-        bag.splice(idx, 1);
-    }
-    return out;
+function classWeights(n: number, bias: number): number[] {
+    const span = Math.max(1, n - 1);
+    const w: number[] = [];
+    for (let i = 0; i < n; i++) w.push(Math.pow(1 - i / span, bias) + 0.04);
+    return w;
 }
 
-/** How hard to lean cheap, tried in turn; the manifest nearest TARGET_EV wins. */
+/** How hard to lean cheap, tried in turn; the table nearest TARGET_EV wins. */
 const BIASES = [0, 0.5, 1, 1.6, 2.4, 3.5, 5, 8];
 
-function commitPayload(seed: string, manifest: readonly string[], bonusKey: string | null): string {
-    return `${seed}|${manifest.join(',')}|${bonusKey ?? ''}`;
-}
-
-/**
- * Seal a new series for a tier. Deterministic in (tier, pool, seed): the same
- * three inputs always produce the same manifest, in the same order, with the
- * same commit — which is what makes the commit checkable.
- */
-export function buildSeries(
-    tier: PackTier,
-    pool: readonly Slab[],
-    seed: string,
-    number: number,
-    now: number,
-): SeriesState {
-    const byClass = poolByClass(pool, tier);
-    for (const cls of HIT_ORDER) {
-        if (tier.composition[cls] > 0 && byClass[cls].length === 0) {
-            throw new Error(`[slabPacks] pool has no ${HIT_CLASSES[cls].letter} slabs for ${tier.key}`);
-        }
-    }
-
-    let best: { picked: Slab[]; gap: number } | null = null;
-    for (const bias of BIASES) {
-        const rng = makeRng(`${seed}|pick|${bias}`);
-        const picked: Slab[] = [];
-        for (const cls of HIT_ORDER) picked.push(...sample(byClass[cls], tier.composition[cls], bias, rng));
-        const ev = picked.reduce((sum, s) => sum + s.valueThb, 0) / picked.length / tier.priceThb;
-        const gap = Math.abs(ev - TARGET_EV);
-        if (!best || gap < best.gap) best = { picked, gap };
-    }
-
-    // Fisher-Yates with its own stream, so the order is independent of which
-    // bias won.
-    const manifest = best!.picked.map((s) => s.key);
-    const order = makeRng(`${seed}|order`);
-    for (let i = manifest.length - 1; i > 0; i--) {
-        const j = Math.floor(order() * (i + 1));
-        [manifest[i], manifest[j]] = [manifest[j], manifest[i]];
-    }
-
-    // The last-pack bonus comes from the cheaper half of its band: a real
-    // reason to finish a picked-over series without moving the series EV much.
-    const bonusCands = byClass[LAST_PACK_BONUS_CLASS];
-    const bonusRng = makeRng(`${seed}|bonus`);
-    const bonusKey = bonusCands.length
-        ? bonusCands[Math.floor(bonusRng() * Math.max(1, Math.ceil(bonusCands.length / 2)))].key
-        : null;
-
-    return {
-        tier: tier.key,
-        number,
-        seed,
-        commit: sha256Hex(commitPayload(seed, manifest, bonusKey)),
-        manifest,
-        next: 0,
-        bonusKey,
-        claims: [],
-        startedAt: now,
-    };
-}
-
-/** Does a published commit match this seed, manifest and bonus? */
-export function verifyCommit(seed: string, manifest: readonly string[], bonusKey: string | null, commit: string): boolean {
-    return sha256Hex(commitPayload(seed, manifest, bonusKey)) === commit;
-}
-
-export function verifySeries(series: SeriesState): boolean {
-    return verifyCommit(series.seed, series.manifest, series.bonusKey, series.commit);
-}
-
-// ── Reading a series ────────────────────────────────────────────────────────
-
-export function summarizeSeries(series: SeriesState, tier: PackTier, index: Map<string, Slab>): SeriesSummary {
-    const byClass = {} as SeriesSummary['byClass'];
-    for (const cls of HIT_ORDER) byClass[cls] = { total: 0, left: 0 };
-
-    let sumAll = 0;
-    let sumLeft = 0;
+function tableWithBias(tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: number): PackTable {
+    const cards: CardOdds[] = [];
+    const summary = {} as PackTable['byClass'];
+    let ev = 0;
     let floor = Infinity;
     let top = 0;
-    series.manifest.forEach((key, i) => {
-        const slab = index.get(key);
-        if (!slab) return;
-        const cls = classify(slab.valueThb, tier.priceThb) ?? 'd';
-        byClass[cls].total += 1;
-        sumAll += slab.valueThb;
-        floor = Math.min(floor, slab.valueThb);
-        top = Math.max(top, slab.valueThb);
-        if (i >= series.next) {
-            byClass[cls].left += 1;
-            sumLeft += slab.valueThb;
-        }
-    });
 
-    const total = series.manifest.length;
-    const left = total - series.next;
-    const oddsNext = {} as SeriesSummary['oddsNext'];
-    for (const cls of HIT_ORDER) oddsNext[cls] = left > 0 ? byClass[cls].left / left : 0;
+    for (const cls of HIT_ORDER) {
+        const cands = byClass[cls];
+        const clsOdds = tier.odds[cls];
+        const w = classWeights(cands.length, bias);
+        const total = w.reduce((s, x) => s + x, 0);
+        let mean = 0;
+        cands.forEach((slab, i) => {
+            const odds = clsOdds * (w[i] / total);
+            cards.push({ slab, cls, odds });
+            mean += slab.valueThb * (w[i] / total);
+            ev += slab.valueThb * odds;
+            if (clsOdds > 0) {
+                floor = Math.min(floor, slab.valueThb);
+                top = Math.max(top, slab.valueThb);
+            }
+        });
+        summary[cls] = {
+            odds: clsOdds,
+            cards: cands.length,
+            minThb: cands.length ? cands[0].valueThb : 0,
+            maxThb: cands.length ? cands[cands.length - 1].valueThb : 0,
+            meanThb: mean,
+        };
+    }
 
+    cards.sort((x, y) => y.slab.valueThb - x.slab.valueThb || x.slab.key.localeCompare(y.slab.key));
     return {
-        total,
-        left,
-        byClass,
-        oddsNext,
-        evAllThb: total > 0 ? sumAll / total : 0,
-        evLeftThb: left > 0 ? sumLeft / left : 0,
+        tier: tier.key,
+        byClass: summary,
+        cards,
+        evThb: ev,
         floorThb: Number.isFinite(floor) ? floor : 0,
         topThb: top,
     };
 }
 
-export interface ChaseEntry {
-    slab: Slab;
-    cls: HitClass;
-    index: number;
-    claimed: boolean;
-    claim: SeriesClaim | null;
+/**
+ * The published table for a tier: every card the pool can put in this pack,
+ * each with its exact chance. Deterministic in (tier, pool), so the client
+ * and the server compute the same table from the same inputs.
+ */
+export function buildTable(tier: PackTier, pool: readonly Slab[]): PackTable {
+    const sum = HIT_ORDER.reduce((s, cls) => s + tier.odds[cls], 0);
+    if (Math.abs(sum - 1) > 1e-6) throw new Error(`[slabPacks] ${tier.key} odds sum to ${sum}, not 1`);
+
+    const byClass = poolByClass(pool, tier);
+    for (const cls of HIT_ORDER) {
+        if (tier.odds[cls] > 0 && byClass[cls].length === 0) {
+            throw new Error(`[slabPacks] pool has no ${HIT_CLASSES[cls].letter} slabs for ${tier.key}`);
+        }
+    }
+
+    let best: PackTable | null = null;
+    for (const bias of BIASES) {
+        const table = tableWithBias(tier, byClass, bias);
+        const gap = Math.abs(table.evThb / tier.priceThb - TARGET_EV);
+        if (!best || gap < Math.abs(best.evThb / tier.priceThb - TARGET_EV)) best = table;
+    }
+    return best!;
 }
 
-/** The most valuable slabs of a series with their status, best first. */
-export function chaseBoard(
-    series: SeriesState,
-    tier: PackTier,
-    index: Map<string, Slab>,
-    limit: number,
-): ChaseEntry[] {
-    const entries: ChaseEntry[] = [];
-    series.manifest.forEach((key, i) => {
-        const slab = index.get(key);
-        if (!slab) return;
-        entries.push({
-            slab,
-            cls: classify(slab.valueThb, tier.priceThb) ?? 'd',
-            index: i,
-            claimed: i < series.next,
-            claim: series.claims.find((c) => c.index === i) ?? null,
-        });
-    });
-    entries.sort((x, y) => y.slab.valueThb - x.slab.valueThb || x.index - y.index);
-    return entries.slice(0, limit);
+/** The dearest cards of a table, best first: the lobby's top-pulls strip. */
+export function topPulls(table: PackTable, limit: number): CardOdds[] {
+    return table.cards.slice(0, limit);
 }
 
-// ── Opening packs ───────────────────────────────────────────────────────────
+// ── Pulling ─────────────────────────────────────────────────────────────────
 
-export interface DrawnSlab {
-    index: number;
+export interface Draw {
     slabKey: string;
     cls: HitClass;
-}
-
-export interface DrawResult {
-    series: SeriesState;
-    drawn: DrawnSlab[];
-    /** Set when this draw took the last pack and the series carries a bonus. */
-    bonusKey: string | null;
-    soldOut: boolean;
+    /** The uniform number in [0, 1) the card was read off the table at. */
+    roll: number;
 }
 
 /**
- * Sell the next `count` packs of a series to one buyer. Never over-draws: a
- * request for more packs than are left returns what is left. Returns a new
- * series object; the input is not mutated.
+ * The number the draw actually uses: the secret seed and the buyer's client
+ * seed, hashed together. Neither side can steer it alone.
  */
-export function drawNext(
-    series: SeriesState,
-    tier: PackTier,
-    index: Map<string, Slab>,
-    count: number,
-    who: string,
-    me: boolean,
-    now: number,
-): DrawResult {
-    const left = series.manifest.length - series.next;
-    const take = Math.max(0, Math.min(Math.floor(count), left));
-    const drawn: DrawnSlab[] = [];
-    const claims = series.claims.slice();
+export function drawSeed(seed: string, clientSeed: string): string {
+    return sha256Hex(`${seed}|${clientSeed}`);
+}
 
-    for (let i = 0; i < take; i++) {
-        const idx = series.next + i;
-        const slabKey = series.manifest[idx];
-        const slab = index.get(slabKey);
-        const cls = (slab && classify(slab.valueThb, tier.priceThb)) || 'd';
-        drawn.push({ index: idx, slabKey, cls });
-        if (CHASE_CLASSES.includes(cls)) claims.push({ index: idx, slabKey, cls, who, me, at: now });
+export function commitFor(seed: string): string {
+    return sha256Hex(`commit|${seed}`);
+}
+
+/**
+ * Read one card off the table at a uniform roll: walk the cumulative odds.
+ * Pure in (table, roll), so a verifier can repeat it.
+ */
+export function cardAt(table: PackTable, roll: number): CardOdds {
+    let acc = 0;
+    for (const c of table.cards) {
+        acc += c.odds;
+        if (roll < acc) return c;
     }
+    // Rounding at the very end of the walk: the last card.
+    return table.cards[table.cards.length - 1];
+}
 
-    const next = series.next + take;
-    const soldOut = next >= series.manifest.length;
-    return {
-        series: { ...series, next, claims },
-        drawn,
-        bonusKey: take > 0 && soldOut ? series.bonusKey : null,
-        soldOut,
-    };
+/** One pull from a tier's table, decided entirely by the two seeds. */
+export function draw(table: PackTable, seed: string, clientSeed: string): Draw {
+    const roll = makeRng(drawSeed(seed, clientSeed))();
+    const c = cardAt(table, roll);
+    return { slabKey: c.slab.key, cls: c.cls, roll };
+}
+
+/**
+ * The check a buyer can run after a reveal: the published seed hashes to the
+ * commit they were shown before the rip, and re-running the draw with it
+ * lands on the card they got.
+ */
+export function verifyDraw(table: PackTable, seed: string, clientSeed: string, commit: string, slabKey: string): boolean {
+    return commitFor(seed) === commit && draw(table, seed, clientSeed).slabKey === slabKey;
 }

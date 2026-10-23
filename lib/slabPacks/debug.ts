@@ -13,9 +13,11 @@
  *                                animation frame, where a tween would stall)
  *
  * A demo opening is built from the slab pool directly. It never touches the
- * series, the credits or the vault.
+ * wallet or the vault, and its proof is a placeholder (the slab sheet skips
+ * verification for demo pulls).
  */
 
+import { commitFor } from './engine';
 import { PREVIEW_POOL } from './pool';
 import { HIT_ORDER, TIER_ORDER, TIERS, classify } from './tiers';
 import type { HitClass, Pull, TierKey } from './types';
@@ -44,9 +46,11 @@ export function readDebug(): SlabPacksDebug {
             // The priciest slab of the class: the reveal at its most dressed.
             const slab = PREVIEW_POOL.filter((s) => classify(s.valueThb, tier.priceThb) === cls).pop();
             if (!slab) return;
+            const seed = `demo-seed-${i}`;
             pulls.push({
-                id: `demo-${i}`, slabKey: slab.key, tier: tierKey, series: 0, index: i, cls,
+                id: `demo-${i}`, slabKey: slab.key, tier: tierKey, cls,
                 pricePaidThb: tier.priceThb, at: Date.now(), status: 'unrevealed',
+                proof: { commit: commitFor(seed), seed, clientSeed: 'demo' },
             });
         });
         if (pulls.length) out.demo = { tierKey, pulls };
