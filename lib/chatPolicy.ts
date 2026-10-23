@@ -10,11 +10,17 @@
 // miss can cost a buyer an unprotected payment. Matching runs on a
 // normalized copy (full-width forms folded, Thai digits made ASCII,
 // invisible characters dropped) so the usual disguises do not slip past.
+//
+// Every refusal is a strike (lib/chatModeration.server.ts): a warning, then
+// chat suspensions of 48 hours, 7 days, and for good.
+//
+// Change the patterns with scripts/check-chat-policy.ts, not by feel.
 
-export type OffPlatformKind = 'contact' | 'link' | 'offplatform';
+export type OffPlatformKind = 'contact' | 'link' | 'offplatform' | 'solicit';
 
 export const CHAT_MASK = '•••';
 
+// Zero-width space/joiners, word joiner, BOM, soft hyphen, emoji selectors.
 const INVISIBLE = /[​-‍⁠﻿­️⃣]/;
 
 /**
@@ -46,6 +52,11 @@ function normalizeWithMap(text: string): { n: string; map: number[] } {
 // dates stay under nine; a run glued to letters (a waybill such as
 // EF123456789TH) is a code, not a contact.
 const DIGIT_RUN = /(?<![a-z0-9/#])\+?\d(?:[\s.\-]{0,2}\d){8,}(?![a-z0-9/])/g;
+// A number read out in words got past DIGIT_RUN two days after the rule
+// shipped ("zero nine eight zero one three one three two three"). Nine or
+// more digits in any mix of figures and English or Thai number words.
+const NUM_WORD = '(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ศูนย์|หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า)';
+const SPOKEN_DIGITS = new RegExp(String.raw`(?<![a-z0-9])(?:(?:\d|${NUM_WORD})(?![a-z])[\s,.\-]{0,3}){9,}`, 'g');
 const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/g;
 const URL = /(?:https?:\/\/|www\.)[^\s]+/g;
 const BARE_DOMAIN = /\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|me|ee|ly|gl|io|co|th|shop|store|link|page|site|xyz)\b(?:\/[^\s]*)?/g;
@@ -66,8 +77,12 @@ const CONTACT_WORDS = new RegExp(
     [
         String.raw`\b(?:facebook|fb|messenger|instagram|insta|ig|whatsapp|telegram|wechat|discord|tiktok|kakao|shopee|lazada)\b`,
         String.raw`\bline\s*(?:id|@|:)`,
-        String.raw`\b(?:add|dm|msg|message|text|chat)\s+(?:me\s+)?(?:on\s+|via\s+)?line\b`,
-        String.raw`\b(?:my|your|ur)\s+line\b`,
+        String.raw`\bline\s+(?:account|contact|number)\b`,
+        String.raw`\b(?:add|dm|msg|message|text|chat|contact|reach|find|talk|call)\s+(?:me\s+|you\s+|u\s+)?(?:on\s+|via\s+|through\s+|thru\s+|in\s+)?line\b`,
+        // "send you line", "give me your line", "do you have line?"
+        String.raw`\b(?:send|give|share|drop|pass|tell|have|got|use|using)\s+(?:me\s+|you\s+|u\s+)?(?:your\s+|ur\s+|my\s+|a\s+)?line\b`,
+        String.raw`\b(?:via|through|thru)\s+line\b`,
+        String.raw`\b(?:my|your|ur|you|u)\s+line\b`,
         String.raw`\bline\s+me\b`,
         '(?<!ออน)ไลน',
         'เฟซบุ๊ก', 'เฟสบุ๊ค', 'เฟสบุค', 'เฟซบุ้ค', 'เฟซ', 'เฟส',
@@ -87,6 +102,7 @@ const OFFPLATFORM_WORDS = new RegExp(
         String.raw`\b(?:bank\s*transfer|bank\s*account|account\s*number|prompt\s*pay|paypal|venmo|true\s*money|cash\s+on\s+delivery|cod)\b`,
         String.raw`\b(?:outside|off|without)\s+(?:of\s+)?(?:the\s+|this\s+)?(?:app|site|website|platform|cardstreet)\b`,
         String.raw`\bpay\s+(?:you|me)\s+direct(?:ly)?\b`,
+        String.raw`\b(?:buy|sell|deal|trade)\s+(?:with\s+you\s+|from\s+you\s+|to\s+you\s+)?direct(?:ly)?\b`,
         String.raw`\bdirect\s+(?:transfer|payment|deal)\b`,
         String.raw`\bmeet\s*up\b`,
         String.raw`\bmeet\s+in\s+person\b`,
@@ -95,6 +111,32 @@ const OFFPLATFORM_WORDS = new RegExp(
         'ซื้อขายกันเอง', 'ดีลกันเอง', 'ตกลงกันเอง',
         'เก็บเงินปลายทาง', 'นัดเจอ', 'นัดรับของ', 'นัดรับการ์ด',
         'ทรูมันนี่', 'ทรูวอลเล็ท',
+    ].join('|'),
+);
+
+// Selling outside a listing: offering the other person cards they cannot buy
+// on Cardstreet ("I have cards and I want to sell them, do you want to buy
+// them?" went to two shops in the first week). First-person selling and
+// asking the other side to buy. A buyer talking about a listed card ("I want
+// to buy this", "do you want to sell it for 400?") must pass, so the
+// patterns need the speaker as the seller or an unlisted object (my, mine,
+// them, cards, from me).
+const SOLICIT_WORDS = new RegExp(
+    [
+        String.raw`\b(?:i|we)(?:\s+(?:am|are)|[’']?(?:m|re))?\s+(?:want|wanna|would\s+like|looking|trying|need|hoping|planning|willing)\s+to\s+sell\b`,
+        String.raw`\blooking\s+to\s+sell\b`,
+        String.raw`\b(?:i[’']?m|i\s+am|we[’']?re|we\s+are)\s+selling\s+(?:my|mine|some|a\s+few|cards|a\s+lot)\b`,
+        String.raw`\b(?:do|would|did)\s+(?:you|u)\s+(?:want|wanna|like)\s+(?:to\s+)?buy\s+(?:them|these|those|my|mine|some|cards?|any|from\s+me)\b`,
+        String.raw`\b(?:you|u)\s+(?:want|wanna)\s+(?:to\s+)?buy\s+(?:them|these|those|my|mine|some|cards?|from\s+me)\b`,
+        String.raw`\b(?:are|r)\s+(?:you|u)\s+(?:buying|interested\s+in\s+buying)\b(?!\s+(?:it|this|that|the)\b)`,
+        String.raw`\bbuy\s+(?:from\s+me|mine|my\s+\w+)\b`,
+        String.raw`\bsell\s+(?:mine|my\s+\w+|some\s+of\s+my)\b`,
+        String.raw`\bhow\s+much\s+(?:would|will|can|could|do|did)\s+(?:you|u)\s+(?:pay|give|offer)\b`,
+        String.raw`\b(?:wts|wtb|wtt)\b`,
+        String.raw`\bi\s+have\b[^.?!\n]{0,80}\b(?:for\s+sale|to\s+sell)\b`,
+        'อยากขาย', 'ต้องการขาย', 'อยากปล่อย', 'รับซื้อ',
+        'มีการ์ดจะขาย', 'มีของจะขาย',
+        'ขายให้ร้าน', 'ขายให้ทางร้าน',
     ].join('|'),
 );
 
@@ -112,10 +154,14 @@ function contactSpans(n: string): Span[] {
     const add = (re: RegExp, keep?: (m: string) => boolean) => {
         for (const m of n.matchAll(re)) {
             if (keep && !keep(m[0])) continue;
-            spans.push([m.index!, m.index! + m[0].length]);
+            // Not the separators a run may end on, so masking keeps the space after it.
+            const end = m.index! + m[0].replace(/[\s,.\-]+$/, '').length;
+            spans.push([m.index!, end]);
         }
     };
     add(DIGIT_RUN, (m) => !isCardNumberList(m));
+    // Figures alone were judged by DIGIT_RUN (with its card-list exception).
+    add(SPOKEN_DIGITS, (m) => /[a-zก-๙]/.test(m));
     add(EMAIL);
     add(URL, (m) => !OWN_HOST.test(m));
     add(BARE_DOMAIN, (m) => !OWN_HOST.test(m));
@@ -139,6 +185,7 @@ export function findOffPlatform(text: string): OffPlatformKind | null {
     }
     if (MAIL_WORDS.test(n) || CONTACT_WORDS.test(n)) return 'contact';
     if (OFFPLATFORM_WORDS.test(n)) return 'offplatform';
+    if (SOLICIT_WORDS.test(n)) return 'solicit';
     return null;
 }
 

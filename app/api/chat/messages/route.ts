@@ -8,19 +8,21 @@
  * inbox cannot be used to spam every shop. The recipient is notified after
  * the response is sent (push every message, email throttled).
  *
- * A message carrying contact details, an outside link or an off-app deal is
- * refused with 422 OFF_PLATFORM (lib/chatPolicy) and never stored. Each
- * refusal is a strike; the third within a week pages the team in Sentry so a
- * repeat offender can be reviewed and banned (banned accounts cannot send).
+ * A message carrying contact details, an outside link, an off-app deal or an
+ * offer to sell unlisted cards is refused with 422 OFF_PLATFORM
+ * (lib/chatPolicy) and never stored. Each refusal is a strike
+ * (lib/chatModeration.server): the first a warning, the second a 48-hour
+ * chat suspension, the third 7 days, the fourth for good. A suspended
+ * sender gets 403 CHAT_BANNED before anything else is checked.
  */
 
 import { NextRequest, NextResponse, after } from 'next/server';
-import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { CHAT_MAX_CHARS } from '@/lib/chat';
 import { findOffPlatform } from '@/lib/chatPolicy';
+import { CHAT_BAN_COLUMNS, chatBanState, recordChatStrike, type ChatBanRow } from '@/lib/chatModeration.server';
 import { THREAD_COLUMNS, UUID_RE, findThreadBetween, isMissingSchema, isParticipant, notifyChatRecipient, roleOf, type ThreadRow } from '@/lib/chat.server';
 
 export const dynamic = 'force-dynamic';
@@ -47,26 +49,47 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    const { data: senderRow } = await admin.from('profiles').select('banned_at').eq('id', me).maybeSingle<{ banned_at: string | null }>();
-    if (senderRow?.banned_at) {
+    // banned_at is the whole account; chat_banned_until is the chat ladder.
+    // Without the strikes migration the column is missing: read the ban alone.
+    let sender: ChatBanRow | null = null;
+    {
+        const res = await admin.from('profiles').select(CHAT_BAN_COLUMNS).eq('id', me).maybeSingle<ChatBanRow>();
+        if (res.error && isMissingSchema(res.error)) {
+            sender = (await admin.from('profiles').select('banned_at').eq('id', me).maybeSingle<ChatBanRow>()).data;
+        } else {
+            sender = res.data;
+        }
+    }
+    if (sender?.banned_at) {
         return NextResponse.json({ error: 'This account cannot send messages', code: 'BANNED' }, { status: 403 });
+    }
+    const chatBan = chatBanState(sender);
+    if (chatBan) {
+        return NextResponse.json(
+            { error: 'Your chat is suspended', code: 'CHAT_BANNED', until: chatBan.until, permanent: chatBan.permanent },
+            { status: 403 },
+        );
     }
 
     const offPlatform = findOffPlatform(body);
     if (offPlatform) {
-        const strikes = await checkRateLimit(`chat_offplatform:${me}`, { windowSeconds: 7 * 86400, max: 2 });
+        const { strike, ban } = await recordChatStrike(admin, {
+            userId: me,
+            kind: offPlatform,
+            body,
+            threadId: UUID_RE.test(threadId) ? threadId : null,
+        });
         // Kind and user only: the refused text is someone's phone number or account.
-        console.warn(`[chat] refused ${offPlatform} message from ${me} (strike ${strikes.count} this week)`);
-        if (!strikes.allowed) {
-            Sentry.captureMessage('Chat user keeps trying to take deals off Cardstreet', {
-                level: 'warning',
-                tags: { area: 'chat', kind: offPlatform },
-                fingerprint: ['chat-offplatform', me],
-                extra: { userId: me, strikesThisWeek: strikes.count },
-            });
-        }
+        const outcome = !ban ? '' : ban.permanent ? ', chat banned for good' : `, chat banned until ${ban.until}`;
+        console.warn(`[chat] refused ${offPlatform} message from ${me} (strike ${strike}${outcome})`);
         return NextResponse.json(
-            { error: 'Contact details, links and deals outside Cardstreet are not allowed in chat', code: 'OFF_PLATFORM', kind: offPlatform },
+            {
+                error: 'Contact details, links, deals outside Cardstreet and selling unlisted cards are not allowed in chat',
+                code: 'OFF_PLATFORM',
+                kind: offPlatform,
+                strike,
+                ban,
+            },
             { status: 422 },
         );
     }

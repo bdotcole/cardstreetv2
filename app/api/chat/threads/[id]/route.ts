@@ -2,7 +2,9 @@
  * One chat thread's messages. GET → { thread, messages }, oldest first.
  *   ?after=<iso>  only messages newer than that (the open conversation polls this)
  *
- * Reading marks the thread read for the caller. Participants only: anyone
+ * Reading marks the thread read for the caller. The open (no ?after) also
+ * returns `ban`, the caller's chat suspension if one is in force, so the
+ * composer can say so before they type. Participants only: anyone
  * else gets the same 404 as a thread that does not exist.
  */
 
@@ -12,6 +14,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchPublicSellers } from '@/lib/publicProfiles';
 import { THREAD_COLUMNS, UUID_RE, isMissingSchema, isParticipant, otherOf, roleOf, summarize, type ThreadRow } from '@/lib/chat.server';
 import { maskOffPlatform } from '@/lib/chatPolicy';
+import { CHAT_BAN_COLUMNS, chatBanState, type ChatBanRow } from '@/lib/chatModeration.server';
+import type { ChatBanState } from '@/lib/chat';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,9 +72,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const profiles = await fetchPublicSellers(admin, [otherOf(thread, me)]);
+    // Only on open, not on every 5-second poll. A missing column (migration
+    // not run) reads as not suspended.
+    let ban: ChatBanState | null = null;
+    if (!Number.isFinite(afterMs)) {
+        const { data: meRow } = await admin.from('profiles').select(CHAT_BAN_COLUMNS).eq('id', me).maybeSingle<ChatBanRow>();
+        ban = chatBanState(meRow);
+    }
     return NextResponse.json(
         {
             thread: summarize(thread, me, profiles),
+            ban,
             // Masked: messages from before contact details were refused at send.
             messages: ordered.map((m) => ({ id: m.id, senderId: m.sender_id, body: maskOffPlatform(m.body), createdAt: m.created_at })),
         },
