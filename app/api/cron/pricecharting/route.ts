@@ -38,9 +38,10 @@ import { EXCHANGE_RATES } from '@/constants';
 // Rows priced in the last FRESH_WINDOW_MS are skipped, so a catch-up run only does
 // leftovers, and a run with nothing stale skips the CSV download entirely.
 //
-// While JustTCG still runs, a Raw_NM row it refreshed within JUSTTCG_FRESH_MS is left
-// alone, so the two vendors don't overwrite each other nightly. Once JustTCG stops,
-// its rows age past that window and PriceCharting takes them over by itself.
+// JustTCG ended on 2026-10-12. A Raw_NM row it last wrote (source_links still
+// pointing at justtcg.com) is taken over by the first PriceCharting price for that
+// card; its old value is recorded as a 'justtcg' change point so the chart's history
+// stays attributed to the vendor that produced it.
 
 // Daily PriceCharting refresh. Graded + sealed prices move slowly, so this only
 // re-fetches a bounded, stalest-first slice each run (by PriceCharting product id,
@@ -176,9 +177,6 @@ const HEARTBEAT_MS = 15_000;
 // A row priced more recently than this is not re-priced. Under 24h so a run at the
 // same time tomorrow always finds today's rows stale again.
 const FRESH_WINDOW_MS = 20 * 3_600_000;
-// A JustTCG-written Raw_NM row newer than this wins over PriceCharting. Three nightly
-// JustTCG runs of slack, so one missed night doesn't flip a card between vendors.
-const JUSTTCG_FRESH_MS = 72 * 3_600_000;
 const THB_PER_USD = 1 / (EXCHANGE_RATES['USD'] || 0.028);
 // The game ids accepted on `?game=`.
 const SCHEDULED_GAMES = new Set(['pokemon', 'yugioh', 'mtg', 'onepiece', 'lorcana', 'riftbound']);
@@ -387,9 +385,9 @@ export async function GET(request: NextRequest) {
     let gradedCsvRows = 0;
     let gradedComplete = false;
     let gradedStaleAtStart = 0;
-    // Raw_NM rows written from loose-price, rows left to a fresh JustTCG price, and
-    // chart points written because the price moved.
-    let rawRows = 0, rawKeptJustTcg = 0, snapshotPoints = 0;
+    // Raw_NM rows written from loose-price, and chart points written because the
+    // price moved.
+    let rawRows = 0, snapshotPoints = 0;
     // Filled while parsing the CSV, written to pricecharting_console_coverage.
     const consoleStats = new Map<string, { cards: number; release: string | null }>();
     const consoleOfCard = new Map<string, string>();
@@ -565,10 +563,10 @@ export async function GET(request: NextRequest) {
                     }
                 }
 
-                // The current Raw_NM rows, to decide two things per card: whether a
-                // fresh JustTCG price still owns the row, and whether the price moved
-                // (which is what earns a chart point). Throws for the same reason as the
-                // card lookup: a silent gap would overwrite JustTCG rows it should keep.
+                // The current Raw_NM rows, to decide per card whether the price moved
+                // (which is what earns a chart point) and which vendor wrote the old
+                // value. Throws for the same reason as the card lookup: a silent gap
+                // would record every price as a fresh change point.
                 const rawByKey = new Map<string, PriorPrice & { source_links: unknown }>();
                 for (const chunk of chunkByLength(pageIds, 6_000, 300)) {
                     const { data: existing, error: rawErr } = await supabase
@@ -657,11 +655,6 @@ export async function GET(request: NextRequest) {
                     // The ungraded headline price (Raw_NM), from loose-price.
                     if (priced.loose == null) continue;
                     const existing = rawByKey.get(`${m.card_id}|${lang}`);
-                    const linkedToJustTcg = JSON.stringify(existing?.source_links ?? '').includes('justtcg.com');
-                    if (linkedToJustTcg && nowMs - utcMs(existing?.last_updated) < JUSTTCG_FRESH_MS) {
-                        rawKeptJustTcg++;
-                        continue;
-                    }
                     // Every key spelled out on every row: supabase-js upserts a batch
                     // with the union of its rows' keys and NULLs the missing ones.
                     rawRowsPage.push({
@@ -673,11 +666,12 @@ export async function GET(request: NextRequest) {
                         last_updated: stamp, last_priced_at: stamp,
                     });
                     // A chart point only when the price moved (or there was none), the
-                    // same change-point rule JustTCG's history merge used, so the series
-                    // carries on where JustTCG's left off. /api/price-history
-                    // forward-fills the days in between.
+                    // same change-point rule the JustTCG history merge used, so a series
+                    // that started under JustTCG carries on seamlessly. /api/price-history
+                    // forward-fills the days in between. The old value keeps the label of
+                    // the vendor that wrote it.
                     const oldLinks = JSON.stringify(existing?.source_links ?? '');
-                    const oldSource = linkedToJustTcg ? 'justtcg' : oldLinks.includes('pricecharting') ? 'pricecharting' : 'catalog';
+                    const oldSource = oldLinks.includes('justtcg.com') ? 'justtcg' : oldLinks.includes('pricecharting') ? 'pricecharting' : 'catalog';
                     recordChange(m.card_id, 'Market', priced.loose, existing, oldSource);
                 }
 
@@ -881,9 +875,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         success: true,
         gradedCards, gradedRows, sealedUpdated,
-        // Ungraded prices: rows written from loose-price, rows left to a fresh JustTCG
-        // price (falls to 0 a few days after JustTCG stops), chart points written.
-        rawRows, rawKeptJustTcg, snapshotPoints,
+        // Ungraded prices: rows written from loose-price, chart points written.
+        rawRows, snapshotPoints,
         // PriceCharting sets written to pricecharting_console_coverage (0 when an
         // earlier run today already did this game).
         coverageConsoles,

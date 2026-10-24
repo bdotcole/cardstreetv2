@@ -3,7 +3,6 @@ import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@supabase/supabase-js';
 import { mapSupabaseCardToInternal } from '@/lib/cardMapper';
 import { mapSealedRowToProduct, type SealedProductRow } from '@/lib/sealedProduct';
-import { mergeSealedJustTcgHistory, type MergeSummary } from '@/lib/justtcgSealed';
 
 // Daily market-value snapshot -> price_snapshots. Builds the real "Price Over Time"
 // series forward (PriceCharting supplies no history). Captures every sealed product,
@@ -12,11 +11,9 @@ import { mergeSealedJustTcgHistory, type MergeSummary } from '@/lib/justtcgSeale
 // change points from /api/cron/pricecharting as it writes the price. Idempotent within a
 // UTC day via the (subject_id, language, condition, captured_on) unique constraint.
 //
-// Sealed products bridged to JustTCG (sealed_products.justtcg_id, see
-// lib/justtcgSealed.ts) then get the last 7 days of REAL TCGplayer history merged
-// over the PriceCharting rows written above — PriceCharting's sealed prices move
-// rarely, so on their own the series drew a flat line. Runs last so a JustTCG
-// outage still leaves today's PriceCharting point in place.
+// Until 2026-10-12 a final leg merged JustTCG's real TCGplayer history over the
+// sealed rows (sealed_products.justtcg_id); that subscription ended and the leg was
+// removed, so a sealed series now moves only when PriceCharting's price does.
 //
 // Auth: Vercel Cron `Authorization: Bearer ${CRON_SECRET}` (same as the other crons).
 
@@ -230,25 +227,5 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // ── Sealed, JustTCG leg: real TCGplayer daily history for bridged products ──
-    // Fails soft: no key, missing bridge columns, or an API error all leave the
-    // PriceCharting points above untouched.
-    let justtcg: MergeSummary | { enabled: false; reason: string } = { enabled: false, reason: 'JUSTTCG_API_KEY unset' };
-    if (process.env.JUSTTCG_API_KEY) {
-        try {
-            justtcg = await mergeSealedJustTcgHistory(supabase, {
-                apiKey: process.env.JUSTTCG_API_KEY,
-                overBudget,
-                duration: '7d',
-            });
-            if (justtcg.enabled && justtcg.errors.length) {
-                Sentry.captureMessage(`price-snapshots justtcg leg: ${justtcg.errors[0]}`, { level: 'warning', tags: { cron: 'price-snapshots', leg: 'justtcg' } });
-            }
-        } catch (e: unknown) {
-            summary.errors++;
-            Sentry.captureException(e instanceof Error ? e : new Error(String(e)), { tags: { cron: 'price-snapshots', leg: 'justtcg' } });
-        }
-    }
-
-    return NextResponse.json({ ok: true, ...summary, justtcg, tookMs: Date.now() - started });
+    return NextResponse.json({ ok: true, ...summary, tookMs: Date.now() - started });
 }

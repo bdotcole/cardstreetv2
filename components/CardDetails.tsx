@@ -92,7 +92,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({
     );
   }, [isWishlisted, isThai, showToast]);
 
-  // Real graded prices for this card: app sales (official) override JustTCG.
+  // Real graded prices for this card: app sales (official) override the vendor price.
   // Empty until a grade tier actually has data — the dashboard stays blank
   // rather than inventing values off the raw price.
   interface GradedPrice { company: string; grade: number; label: string; price: number; source: 'app_sale' | 'market' | 'thai_estimate'; basis?: 'jp_twin' | 'en_name'; }

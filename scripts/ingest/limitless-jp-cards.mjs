@@ -2,14 +2,12 @@
 // parsing the FULL CARD DETAIL off each card's page.
 //
 // NOT THE SAME AS ITS SIBLING. `limitless-jp-sets.mjs` also reads Limitless, but
-// it takes only the number, the Japanese name and the supertype from there and
-// leans on JustTCG for english_name + rarity. That is the right tool for a
-// BACKLOG set (JustTCG has had years to index it). It is the wrong tool for a
-// set released days ago: JustTCG has not indexed it yet, so rarity comes back
-// empty. This script needs no second source -- rarity, HP, types, stage,
-// attacks, abilities, weakness/resistance/retreat, illustrator and regulation
-// mark all come off the card page itself. Use this one for NEW sets, that one
-// for backfilling old ones.
+// it takes only the number, the Japanese name and the supertype from there
+// (english_name + rarity came from JustTCG until that subscription ended in
+// 2026-10; both are null from it now). This script needs no second source --
+// rarity, HP, types, stage, attacks, abilities, weakness/resistance/retreat,
+// illustrator and regulation mark all come off the card page itself. Prefer this
+// one for any set; the sibling remains for bulk backfills of old SWSH-era sets.
 //
 // Why either exists: TCGdex, our usual ja source, trails the JP releases by
 // roughly two months (M5 released 2026-05-22 and is present; M6 released

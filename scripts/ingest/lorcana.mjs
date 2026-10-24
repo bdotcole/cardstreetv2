@@ -57,7 +57,7 @@ async function ingestSet(setCode, setMeta, cards) {
     language: 'en',
     game: 'lorcana',
     raw_data: {
-      // tcgplayer_id is the JustTCG join key (see justtcg-prices.mjs loadCatalog).
+      // tcgplayer_id is the PriceCharting bridge join key (pricecharting-bridge.mjs).
       tcgplayer_id: c.externalLinks?.tcgPlayerId ?? null,
       images: c.images ?? null,
       type: c.type ?? null,

@@ -80,7 +80,7 @@ async function ingestSet(set) {
       language: 'en',
       game: 'riftbound',
       raw_data: {
-        // tcgplayer_id is the JustTCG join key (see justtcg-prices.mjs loadCatalog).
+        // tcgplayer_id is the PriceCharting bridge join key (pricecharting-bridge.mjs).
         tcgplayer_id: c.tcgplayer?.id ?? null,
         tcgplayer: c.tcgplayer ?? null,
         set: c.set ?? null,

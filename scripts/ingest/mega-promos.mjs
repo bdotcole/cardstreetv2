@@ -9,8 +9,11 @@
  *  1. TCGdex serves NO `image` field for any mep card, so the generic ingest
  *     would write null images. The art DOES exist at the conventional asset
  *     path (assets.tcgdex.net/en/me/mep/<localId>/high.webp) for 40 of the 60
- *     cards -- a missing field is not a missing asset. The remaining 20 resolve
- *     via TCGplayer product images, keyed off the `tcgplayerId` JustTCG returns.
+ *     cards -- a missing field is not a missing asset. The remaining 20 used to
+ *     resolve via TCGplayer product images keyed off the `tcgplayerId` JustTCG
+ *     returned; that subscription ended in 2026-10, so a card without TCGdex art
+ *     is reported as a failure until another product-id source is wired in (the
+ *     PriceCharting CSV `tcg-id` column carries it).
  *  2. The generic ingest UPSERTS image_small/image_large as raw upstream URLs,
  *     which would clobber the mirrored Supabase URLs on rows already mirrored
  *     (the documented me05 gap-fill trap). This script only INSERTS ids that are
@@ -37,7 +40,6 @@ for (const line of fs.readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
   env[k] = v;
 }
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const JUSTTCG_KEY = (env.JUSTTCG_API_KEY || '').trim();
 
 const SET_ID = 'mep';
 const TCGDEX_API = 'https://api.tcgdex.net/v2/en';
@@ -45,7 +47,6 @@ const TCGDEX_ASSET = 'https://assets.tcgdex.net/en/me/mep';
 const BUCKET = 'card-images';
 const SMALL_W = 245, SMALL_Q = 78;
 const LARGE_W = 734, LARGE_Q = 82;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function tcgdex(path) {
   const res = await fetch(`${TCGDEX_API}${path}`);
@@ -73,35 +74,6 @@ async function uploadWebp(objectPath, buf) {
     .upload(objectPath, buf, { contentType: 'image/webp', upsert: true, cacheControl: '31536000' });
   if (error) throw new Error(`upload ${objectPath}: ${error.message}`);
   return supabase.storage.from(BUCKET).getPublicUrl(objectPath).data.publicUrl;
-}
-
-/** Resolve JustTCG's ME-promo products so we can borrow tcgplayerId + price. */
-async function loadJustTcgPromos() {
-  const byNum = new Map();
-  if (!JUSTTCG_KEY) return byNum;
-  let all = [];
-  for (let offset = 0; ; offset += 100) {
-    const r = await fetch(
-      `https://api.justtcg.com/v1/cards?game=pokemon&set=me-mega-evolution-promo-pokemon&conditions=NM&include_price_history=false&limit=100&offset=${offset}`,
-      { headers: { 'x-api-key': JUSTTCG_KEY } },
-    );
-    if (!r.ok) { console.warn(`  JustTCG ${r.status}; continuing without prices`); break; }
-    const j = await r.json();
-    all = all.concat(j.data || []);
-    if (!j.meta?.hasMore || (j.data || []).length < 100) break;
-    await sleep(1300);
-  }
-  for (const c of all) {
-    const n = String(c.number || '').split('/')[0].replace(/^0+/, '');
-    if (!n) continue;
-    // Prefer the plain print over [Staff]/(Cosmos Holo)/(Prerelease) variants:
-    // those are separate collectibles and carry wildly different prices, so a
-    // variant must never become the base card's price or image.
-    const isVariant = /\(|\[/.test(c.name || '');
-    const prev = byNum.get(n);
-    if (!prev || (prev.isVariant && !isVariant)) byNum.set(n, { card: c, isVariant });
-  }
-  return byNum;
 }
 
 /** Fetch the best available art: TCGdex asset path first, then TCGplayer. */
@@ -136,19 +108,15 @@ async function fetchArt(localId, tcgplayerId) {
   console.log(`already in DB: ${have.size}; to ingest: ${missing.length}`);
   if (!missing.length) { console.log('nothing to do'); return; }
 
-  const jt = await loadJustTcgPromos();
-  console.log(`JustTCG promo products indexed by number: ${jt.size}`);
-
-  const rows = [], prices = [], phashes = [];
+  const rows = [], phashes = [];
   const failures = [];
 
   for (const stub of missing) {
     const c = await tcgdex(`/cards/${stub.id}`).catch(() => null);
     if (!c) { failures.push({ id: stub.id, why: 'tcgdex card fetch failed' }); continue; }
 
-    const numKey = String(c.localId).replace(/^0+/, '');
-    const hit = jt.get(numKey);
-    const tcgplayerId = hit?.card?.tcgplayerId || null;
+    // No TCGplayer product id without JustTCG, so only the TCGdex asset path is tried.
+    const tcgplayerId = null;
 
     const art = await fetchArt(c.localId, tcgplayerId);
     if (!art) { failures.push({ id: c.id, why: 'no art on tcgdex asset path or tcgplayer' }); continue; }
@@ -199,34 +167,17 @@ async function fetchArt(localId, tcgplayerId) {
     });
     if (phash) phashes.push({ id: c.id, phash });
 
-    // Price from the JustTCG NM variant, matching batch-price-english's shape.
-    const variant = (hit?.card?.variants || [])
-      .filter((v) => v.language === 'English' || !v.language)
-      .sort((a, b) => {
-        const score = (v) => (v.avgPrice > 0 ? 1000 : 0) + (v.condition === 'Near Mint' || v.condition === 'NM' ? 500 : 0);
-        return score(b) - score(a);
-      })[0];
-    const price = variant?.avgPrice || variant?.price || 0;
-    if (price > 0) {
-      prices.push({
-        card_id: c.id, language: 'en', condition: 'Raw_NM', market_avg: price,
-        currency: 'USD',
-        source_links: [`https://justtcg.com/card/${hit.card.id}`],
-        source_prices: { market_price: price, low_price: variant?.minPrice30d ?? 0, high_price: variant?.maxPrice30d ?? 0, source: 'justtcg' },
-        last_updated: new Date().toISOString(), last_priced_at: new Date().toISOString(),
-      });
-    }
     process.stdout.write(art.source === 'tcgdex-asset-path' ? '.' : '+');
   }
   console.log('');
-  console.log(`prepared ${rows.length} rows (art: ${rows.filter(r => r.raw_data.image_origin === 'tcgdex-asset-path').length} tcgdex / ${rows.filter(r => r.raw_data.image_origin === 'tcgplayer-product-image').length} tcgplayer), ${prices.length} priced`);
+  console.log(`prepared ${rows.length} rows (art: ${rows.filter(r => r.raw_data.image_origin === 'tcgdex-asset-path').length} tcgdex / ${rows.filter(r => r.raw_data.image_origin === 'tcgplayer-product-image').length} tcgplayer)`);
   if (failures.length) console.log(`failures: ${failures.length}`, failures);
 
   if (!COMMIT) {
     console.log('\nDRY RUN -- sample row:');
     const s = rows[0];
     console.log({ id: s.id, name: s.name, number: s.number, rarity: s.rarity, art: s.raw_data.image_origin });
-    console.log(`\nre-run with --commit to write ${rows.length} cards + ${prices.length} prices`);
+    console.log(`\nre-run with --commit to write ${rows.length} cards`);
     return;
   }
 
@@ -242,11 +193,7 @@ async function fetchArt(localId, tcgplayerId) {
   }
   console.log(`phashes: ${phashes.length} written`);
 
-  if (prices.length) {
-    const { error } = await supabase.from('market_values').upsert(prices, { onConflict: 'card_id,language,condition' });
-    if (error) console.warn(`price upsert: ${error.message}`);
-    else console.log(`prices: ${prices.length} upserted`);
-  }
+  // Prices arrive from the PriceCharting cron once the bridge maps the new ids.
 
   // Keep the set row's totals honest now that the lineup grew.
   const { count } = await supabase.from('pokemon_cards').select('id', { count: 'exact', head: true }).eq('set_id', SET_ID);

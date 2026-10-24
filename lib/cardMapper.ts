@@ -112,7 +112,7 @@ export function displaySetName(
 // The market_values join returns one row PER CONDITION — since the PriceCharting
 // ingest that includes graded tiers ("PSA 10", "BGS 10", ...) whose prices run many
 // multiples of raw. The display price must come from an ungraded row: prefer the
-// JustTCG-refreshed 'Raw_NM', then 'Near Mint' (the two catalog conventions), then
+// vendor-refreshed 'Raw_NM', then 'Near Mint' (the two catalog conventions), then
 // any other ungraded condition, freshest first. Queries must project `condition`
 // for the graded filter to work; without it this degrades to freshest-row-first.
 // pokemon_cards stores Japanese as 'ja'; market_values stores it as 'jp'. That

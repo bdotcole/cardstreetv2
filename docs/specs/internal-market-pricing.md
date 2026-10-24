@@ -61,7 +61,7 @@ I now have everything needed. Let me write the deliverable.
 
 ## 1. Overview & Goals
 
-Today every displayed card price originates from a third-party API (JustTCG / PriceCharting) or an app-side derivation (Thai = 55%/60% of the English price, plus an already-present "average of sold Thai listings" branch — see below). We are switching to **CardStreet's own realized sale prices** as the source of truth for a growing set of catalog keys, while keeping the API price as a shadow fallback.
+Today every displayed card price originates from a third-party API (PriceCharting; JustTCG until 2026-10) or an app-side derivation (Thai = 55%/60% of the English price, plus an already-present "average of sold Thai listings" branch — see below). We are switching to **CardStreet's own realized sale prices** as the source of truth for a growing set of catalog keys, while keeping the API price as a shadow fallback.
 
 The mechanism is **materialization, not read-time computation**: a realized sale writes a `source='cardstreet'` row into `market_values` (or updates `sealed_products` for Thai sealed). That row flows through the existing display pipeline **unchanged**:
 
@@ -311,10 +311,10 @@ $$;
 
 ## 3. Condition derivation from the sold listing
 
-The sale's `condition` key must match how PriceCharting/JustTCG encode conditions so the learned row lands on the same key the API writer used.
+The sale's `condition` key must match how PriceCharting (and formerly JustTCG) encode conditions so the learned row lands on the same key the API writer used.
 
 **Verified condition conventions:**
-- **Raw singles, JustTCG (English):** `condition = 'Raw_NM'` — `batch-price-english/index.ts` writes it; `pickDisplayMarketValue` ranks `Raw_NM` first (`cardMapper.ts:124`).
+- **Raw singles, English (PriceCharting loose-price; JustTCG until 2026-10):** `condition = 'Raw_NM'` — `app/api/cron/pricecharting/route.ts` writes it (the JustTCG `batch-price-english` edge function was removed on 2026-10-24); `pickDisplayMarketValue` ranks `Raw_NM` first (`cardMapper.ts:124`).
 - **Raw singles, daily Thai derivation:** `condition = 'Raw_NM'` (`daily-market-update/index.ts:494`).
 - **Graded, PriceCharting:** `condition` is `'PSA 10'`, `'BGS 9.5'`, etc. The filter regex is **`GRADED_CONDITION_RE = /^(PSA|BGS|CGC|SGC|ARS)\s+(\d+(?:\.\d)?)$/i`** in **`lib/pricecharting.ts:38`** (imported by cardMapper) — `<COMPANY> <grade>`, single space, optional one-decimal grade.
 - **`'Near Mint'`** — alternate raw catalog convention (ranked second, `cardMapper.ts:124`).
@@ -430,7 +430,7 @@ CREATE TRIGGER trg_guard_market_value_source
 
 > Interaction with the guard's own UPDATE branch: `recompute_internal_price` sets `source='cardstreet'` explicitly, so its writes hit the early `RETURN NEW` and are never diverted — correct. On an **UPDATE** of an already-`cardstreet` row by an API writer, the `SELECT … ORDER BY last_updated DESC LIMIT 1` reads the pre-image (same row), finds `source='cardstreet'`, and preserves it — correct.
 
-This single trigger discharges the clobber requirement for **all** `market_values` writers — the tree has **20** `.mjs` scripts plus the edge/route writers (`justtcg-prices.mjs:194`, `batch-price-english/index.ts:204`, `batch-price-games/index.ts:195`, `pricecharting/route.ts:87`, `daily-market-update/index.ts:491-500`, and the one-off ingest/repricing scripts). None need code edits for the clobber guard — the DEFAULT `source='api'` routes them through the trigger.
+This single trigger discharges the clobber requirement for **all** `market_values` writers — the tree has **20** `.mjs` scripts plus the edge/route writers (`justtcg-prices.mjs:194`, `batch-price-english/index.ts:204`, `batch-price-games/index.ts:195`, `pricecharting/route.ts:87`, `daily-market-update/index.ts:491-500`, and the one-off ingest/repricing scripts; the JustTCG writers — `justtcg-prices.mjs`, `batch-price-english`, `batch-price-games`, `daily-market-update` — were removed on 2026-10-24). None need code edits for the clobber guard — the DEFAULT `source='api'` routes them through the trigger.
 
 ### 5.2 Daily-Thai-derivation skip (explicit, in code)
 
@@ -456,7 +456,7 @@ if ((card.language || 'th') === 'th') {
 
 Belt-and-suspenders with the trigger, and per the founder's explicit "must SKIP" wording. Requires selecting the new `source` column — gated by §13.1 having confirmed it exists.
 
-### 5.3–5.4 USD writers (JustTCG / PriceCharting graded)
+### 5.3–5.4 USD writers (PriceCharting; JustTCG until 2026-10)
 
 Covered entirely by the trigger (§5.1) — no code change. A graded PriceCharting refresh (`pricecharting/route.ts:87`) hitting a `PSA 10` key that flipped to `cardstreet` has its price diverted into `api_reference_avg` and the learned `market_avg` preserved.
 

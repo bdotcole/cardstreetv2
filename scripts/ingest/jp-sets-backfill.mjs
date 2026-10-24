@@ -3,7 +3,7 @@
 // pokemon_cards has ja cards for ~54 sets but pokemon_sets only had rows for 31,
 // so modern SV1-SV8 / S9 / S12 / neo sets were hidden. This recreates a set row
 // for every ja set that has cards, with:
-//   - English name  (JustTCG pokemon-japan, e.g. "SV3: Ruler..." -> "Ruler...")
+//   - name          (TCGdex's Japanese set name; the JustTCG English names ended 2026-10)
 //   - release_date  (TCGdex)
 //   - logo          (Bulbapedia real expansion logo "File:<CODE> Logo JP.png")
 // Falls back gracefully when a source lacks an entry.
@@ -58,15 +58,12 @@ async function main() {
     if (data.length < 1000) break;
   }
 
-  // JustTCG pokemon-japan set names (for English names) — one call
-  const jtRes = await fetch('https://api.justtcg.com/v1/sets?game=pokemon-japan', { headers: { 'x-api-key': env.JUSTTCG_API_KEY } });
-  const jtcgSets = jtRes.ok ? ((await jtRes.json()).data || []) : [];
+  // English set names used to come from JustTCG (pokemon-japan). That source ended
+  // in 2026-10, so a set row keeps TCGdex's Japanese name until it is relabelled.
+  const englishName = null;
 
   let created = 0, logos = 0;
   for (const [setId, total] of counts) {
-    const prefix = setId.toLowerCase() + '-';
-    const jt = (jtcgSets || []).find((s) => s.id.toLowerCase().startsWith(prefix));
-    const englishName = jt ? jt.name.replace(/^[^:]*:\s*/, '').trim() : null; // "SV3: Ruler..." -> "Ruler..."
 
     const tj = await getJson(`https://api.tcgdex.net/v2/ja/sets/${setId}`);
     const releaseDate = tj && tj.releaseDate ? tj.releaseDate : null;

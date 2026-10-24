@@ -20,7 +20,7 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 
-// .env.local loader — CRLF-safe + quote-stripping (same as justtcg-prices.mjs).
+// .env.local loader — CRLF-safe + quote-stripping (same as the other ingest scripts).
 const env = {};
 for (const line of fs.readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
   const i = line.indexOf('=');

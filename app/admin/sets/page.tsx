@@ -699,7 +699,6 @@ function GlobalSetInboxPage() {
     // Add Set form state
     const [newThaiSet, setNewThaiSet] = useState('')
     const [newEngSet, setNewEngSet] = useState('')
-    const [newSlug, setNewSlug] = useState('')
 
     // Remap Modal State
     const [remapTarget, setRemapTarget] = useState<any>(null)
@@ -714,15 +713,8 @@ function GlobalSetInboxPage() {
 
     async function loadConfigs() {
         const { data: bridges } = await supabase.from('set_bridge').select('*')
-        const { data: mkts } = await supabase.from('marketplace_configs').select('*')
         
-        const merged = bridges?.map(b => {
-            const mConfig = mkts?.find(m => m.set_id === b.english_set_id)
-            return {
-                ...b,
-                justtcg_slug: mConfig?.justtcg_slug || 'Unknown'
-            }
-        }) || []
+        const merged = bridges || []
 
         const sorted = merged.sort((a,b) => a.thai_set_id.localeCompare(b.thai_set_id))
         setConfigs(sorted)
@@ -734,11 +726,10 @@ function GlobalSetInboxPage() {
 
     async function saveNewSet(e: React.FormEvent) {
         e.preventDefault()
-        if (!newThaiSet || !newEngSet || !newSlug) return
-        await supabase.from('marketplace_configs').upsert({ set_id: newEngSet, justtcg_slug: newSlug })
+        if (!newThaiSet || !newEngSet) return
         await supabase.from('set_bridge').upsert({ thai_set_id: newThaiSet, english_set_id: newEngSet }, { onConflict: 'thai_set_id' })
         setShowAddSetMode(false)
-        setNewThaiSet(''); setNewEngSet(''); setNewSlug('')
+        setNewThaiSet(''); setNewEngSet('')
         loadConfigs()
     }
 
@@ -844,10 +835,6 @@ function GlobalSetInboxPage() {
                             <div>
                                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">English ID (e.g. sv8.5)</label>
                                 <input required value={newEngSet} onChange={e=>setNewEngSet(e.target.value)} className="w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">JustTCG Slug</label>
-                                <input required value={newSlug} onChange={e=>setNewSlug(e.target.value)} className="w-full bg-brand-darker border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-cyan font-mono text-sm" />
                             </div>
                         </div>
                         <button type="submit" className="w-full bg-brand-cyan text-black font-black uppercase tracking-widest py-3 rounded-lg mt-6 hover:bg-white transition-colors">Save</button>

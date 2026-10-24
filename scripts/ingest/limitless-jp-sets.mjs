@@ -13,15 +13,13 @@
  *   node scripts/ingest/limitless-jp-sets.mjs --sql           # emit SQL
  *   node scripts/ingest/limitless-jp-sets.mjs --commit        # write directly
  *
- * Two sources, each for what it alone has:
- *   Limitless  card numbers, the printed JAPANESE name (page <title>), and
- *              images at a constructible CDN path
- *   JustTCG    the ENGLISH name + rarity per collector number (game
- *              `pokemon-japan`), which Limitless does not expose
+ * One source: Limitless, for card numbers, the printed JAPANESE name (page
+ * <title>), the supertype and images at a constructible CDN path. JustTCG used to
+ * add the ENGLISH name + rarity per collector number; that subscription ended in
+ * 2026-10, so both are left null here and english_name is filled afterwards by
+ * backfill-ja-names.mjs (dictionary + pHash-verified twins, nothing guessed).
  *
- * A card is only emitted when Limitless yields a Japanese name; english_name is
- * attached when JustTCG has that number and left null otherwise. Nothing is
- * translated or guessed — the same bar as backfill-ja-names.mjs.
+ * A card is only emitted when Limitless yields a Japanese name.
  *
  * Images point at the Limitless CDN. The monthly mirror cron
  * (app/api/cron/mirror-images) pulls newly-ingested cards onto our own storage,
@@ -121,82 +119,12 @@ async function limitlessCardName(code, n) {
   return { name, supertype };
 }
 
-// --------------------------------------------------------------- justtcg ---
-function justTcgEnv() {
-  const env = {};
-  for (const line of fs.readFileSync(path.join(ROOT, '.env.local'), 'utf-8').split(/\r?\n/)) {
-    const i = line.indexOf('=');
-    if (i < 0 || line.trim().startsWith('#')) continue;
-    let v = line.slice(i + 1).trim();
-    env[line.slice(0, i).trim()] = v.replace(/^["']|["']$/g, '');
-  }
-  return env.JUSTTCG_API_KEY;
-}
-const JT_KEY = justTcgEnv();
-
-async function justTcgSetIndex() {
-  const res = await fetch('https://api.justtcg.com/v1/sets?game=pokemon-japan', { headers: { 'x-api-key': JT_KEY } });
-  const j = await res.json();
-  const byCode = new Map();
-  for (const s of j.data || []) {
-    // Names carry the code as a prefix: "S8b: VMAX Climax".
-    const m = s.name.match(/^([A-Za-z0-9-]+):\s/);
-    if (m) byCode.set(m[1].toLowerCase(), s);
-  }
-  return byCode;
-}
-
-// JustTCG decorates names with the collector number and a printing qualifier
-// ("Mew - 002/028 (Mirror Holofoil)"), and lists several printings per number.
-// Strip both, then keep the cleanest candidate per number.
-function cleanEnglishName(raw) {
-  return String(raw || '')
-    .replace(/\s*-\s*\d+\/\d+/g, '')                                  // embedded collector number
-    .replace(/\s*\([^)]*(?:holo|foil|reverse|mirror|edition)[^)]*\)/gi, '')  // printing qualifier
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-// number -> { englishName, rarity }. Sealed rows carry number "N/A".
-async function justTcgCards(setId) {
-  const out = new Map();
-  for (let offset = 0; ; offset += 100) {
-    const url = `https://api.justtcg.com/v1/cards?game=pokemon-japan&set=${encodeURIComponent(setId)}&limit=100&offset=${offset}&include_price_history=false`;
-    const res = await fetch(url, { headers: { 'x-api-key': JT_KEY } });
-    if (!res.ok) break;
-    const j = await res.json();
-    for (const c of j.data || []) {
-      const raw = String(c.number || '');
-      if (!raw || raw === 'N/A') continue;
-      const num = Number(raw.split('/')[0].replace(/[^0-9]/g, ''));
-      if (!num) continue;
-      const name = cleanEnglishName(c.name);
-      if (!name) continue;
-      const rarity = c.rarity && c.rarity !== 'None' ? c.rarity : null;
-      const prev = out.get(num);
-      // Prefer the base printing: an entry whose raw name needed no qualifier
-      // stripped, and failing that the shortest cleaned name.
-      const undecorated = name === String(c.name || '').trim();
-      if (!prev || (undecorated && !prev.undecorated) || (undecorated === prev.undecorated && name.length < prev.englishName.length)) {
-        out.set(num, { englishName: name, rarity: rarity ?? prev?.rarity ?? null, undecorated });
-      } else if (prev && !prev.rarity && rarity) {
-        prev.rarity = rarity;
-      }
-    }
-    if (!j.meta?.hasMore) break;
-    await sleep(1300);   // JustTCG rate limit, per the other ingest scripts
-  }
-  return out;
-}
-
 // ------------------------------------------------------------------ build ---
-async function buildSet(code, jtIndex) {
+async function buildSet(code) {
   const meta = await limitlessSet(code);
   if (!meta || !meta.numbers.length) { console.log(`  ${code}: no Limitless data`); return null; }
 
-  const jtSet = jtIndex.get(code.toLowerCase());
-  const english = jtSet ? await justTcgCards(jtSet.id) : new Map();
-  console.log(`  ${code}: ${meta.numbers.length} cards on Limitless, ${english.size} English names from JustTCG`);
+  console.log(`  ${code}: ${meta.numbers.length} cards on Limitless`);
 
   const cards = [];
   let i = 0;
@@ -205,20 +133,19 @@ async function buildSet(code, jtIndex) {
       const n = meta.numbers[i++];
       const info = await limitlessCardName(code, n);
       if (!info) continue;
-      const en = english.get(n);
       cards.push({
         id: `${code}-${pad3(n)}`,
         name: info.name,
-        english_name: en?.englishName ?? null,
+        english_name: null,
         set_id: code,
         number: pad3(n),
         supertype: info.supertype,
-        rarity: en?.rarity ?? null,
+        rarity: null,
         language: 'ja',
         game: 'pokemon',
         image_small: `${CDN}/${code}/${code}_${n}_R_JP_SM.png`,
         image_large: `${CDN}/${code}/${code}_${n}_R_JP_LG.png`,
-        raw_data: { source: 'limitless+justtcg', set: { id: code, name: meta.name, printedTotal: meta.numbers.length } },
+        raw_data: { source: 'limitless', set: { id: code, name: meta.name, printedTotal: meta.numbers.length } },
       });
       await sleep(120);
     }
@@ -287,9 +214,6 @@ async function commit(all) {
   const targets = ONLY.length ? ONLY : SETS;
   console.log(`JP SWSH set ingest -- ${COMMIT ? 'COMMIT' : 'DRY RUN'}${EMIT_SQL ? ' (+SQL)' : ''}\n${targets.length} sets\n`);
 
-  const jtIndex = await justTcgSetIndex();
-  console.log(`JustTCG: ${jtIndex.size} pokemon-japan sets carry a code prefix\n`);
-
   const all = [];
   for (const code of targets) {
     if (!FORCE) {
@@ -297,7 +221,7 @@ async function commit(all) {
         .eq('language', 'ja').eq('game', 'pokemon').eq('set_id', code);
       if (count) { console.log(`  ${code}: already has ${count} ja rows, skipping (--force to redo)`); continue; }
     }
-    const built = await buildSet(code, jtIndex);
+    const built = await buildSet(code);
     if (built?.cards.length) {
       const withEn = built.cards.filter((c) => c.english_name).length;
       console.log(`  ${code}: built ${built.cards.length} cards (${withEn} with english_name)`);
