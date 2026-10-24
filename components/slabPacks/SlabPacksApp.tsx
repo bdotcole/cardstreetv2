@@ -43,7 +43,7 @@ export default function SlabPacksApp() {
     const reduced = prefersReduced || !!debug?.still;
 
     const [tab, setTab] = useState<Tab>('packs');
-    const [tierKey, setTierKey] = useState<TierKey>('spark');
+    const [tierKey, setTierKey] = useState<TierKey>('silver');
     const [qty, setQty] = useState(1);
     const [method, setMethod] = useState<PaymentMethod>('card');
     const [session, setSession] = useState<OpeningSession | null>(null);
@@ -71,7 +71,7 @@ export default function SlabPacksApp() {
         };
     }, [reduced]);
 
-    // Development only: /packs?demo=nova:ss opens straight onto a chosen pull.
+    // Development only: /packs?demo=opal:ss opens straight onto a chosen pull.
     const demoStarted = useRef(false);
     useEffect(() => {
         if (!state.hydrated || !debug?.demo || demoStarted.current) return;
@@ -187,7 +187,7 @@ export default function SlabPacksApp() {
         >
             <div className="sp-ambient" aria-hidden>
                 {TIER_ORDER.map((key) => (
-                    <div key={key} className="sp-ambient-layer" data-on={key === tierKey} style={tierVars(TIERS[key])} />
+                    <div key={key} className="sp-ambient-layer" data-on={key === tierKey} data-material={TIERS[key].theme.material} style={tierVars(TIERS[key])} />
                 ))}
                 <div className="sp-ambient-grain" />
                 <div className="sp-ambient-vignette" />
@@ -406,10 +406,16 @@ function Lobby({
 
                 {/* Name and price */}
                 <div className="flex items-end justify-between gap-3 px-5">
+                    {/* Sized by the longest word so an eight-letter tier (Platinum) and a
+                        two-word one (Galaxy Opal) both leave room for the price on a
+                        360px phone; short names keep the full 46px. */}
                     <div
                         key={tierKey}
-                        className="sp-display sp-pop-in min-w-0 origin-left bg-clip-text text-[46px] text-transparent"
-                        style={{ backgroundImage: `linear-gradient(180deg, #fff 30%, ${tier.theme.a})` }}
+                        className="sp-display sp-pop-in min-w-0 origin-left bg-clip-text text-transparent"
+                        style={{
+                            backgroundImage: `linear-gradient(180deg, #fff 30%, ${tier.theme.a})`,
+                            fontSize: `clamp(30px, calc((100vw - 190px) / ${(Math.max(...tier.name.split(" ").map((w) => w.length)) * 0.62).toFixed(2)}), 46px)`,
+                        }}
                     >
                         {tier.name}
                     </div>

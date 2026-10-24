@@ -62,13 +62,18 @@ export const PACK_CLIP = {
 
 /** The printed face of a pack. Fills its parent; clip it to taste. */
 export function PackFace({ tier, subtitle }: { tier: PackTier; subtitle: string }) {
-    // The name is set as large as its letter count allows, so a four-letter
-    // tier and a seven-letter one both fill the pack edge to edge.
-    const nameSize = Math.min(27, 74 / (tier.name.length * 0.62));
+    // The name is set as large as its longest word allows, one word per
+    // line, so "Gold" and "Galaxy Opal" both fill the pack edge to edge.
+    const words = tier.name.split(' ');
+    const longest = Math.max(...words.map((w) => w.length));
+    const nameSize = Math.min(27, 74 / (longest * 0.62));
     return (
         <div className="sp-pack-face">
             <div className="sp-pack-grain" />
+            <div className="sp-pack-material" />
+            <div className="sp-pack-stars" />
             <div className="sp-pack-holo" />
+            <div className="sp-pack-sparkle" />
             <div className="sp-pack-form" />
             <div className="sp-pack-crimp" data-edge="top" />
             <div className="sp-pack-crimp" data-edge="bottom" />
@@ -76,7 +81,9 @@ export function PackFace({ tier, subtitle }: { tier: PackTier; subtitle: string 
                 <span className="sp-pack-mark">Cardstreet</span>
                 <TierEmblem tier={tier.key} className="sp-pack-emblem" />
                 <span className="sp-display sp-pack-name" style={{ fontSize: `${nameSize.toFixed(1)}cqw` }}>
-                    {tier.name}
+                    {words.map((w) => (
+                        <span key={w} className="block">{w}</span>
+                    ))}
                 </span>
                 <span className="sp-pack-sub">{subtitle}</span>
             </div>
@@ -96,7 +103,7 @@ export default function PackArt({
     style?: React.CSSProperties;
 }) {
     return (
-        <div className={`sp-pack ${className}`} data-tier={tier.key} style={{ ...tierVars(tier), ...style }}>
+        <div className={`sp-pack ${className}`} data-tier={tier.key} data-material={tier.theme.material} style={{ ...tierVars(tier), ...style }}>
             <div className="sp-pack-piece" style={{ clipPath: PACK_CLIP.whole }}>
                 <PackFace tier={tier} subtitle={subtitle} />
             </div>

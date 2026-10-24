@@ -574,9 +574,11 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
         <div
             ref={stageRef}
             className={`sp-stage ${shake}`}
+            data-material={tier.theme.material}
             style={{ ...tierVars(tier), ...auraStyle }}
             onPointerDown={() => sfx.unlock()}
         >
+            <div className="sp-stage-material" />
             <div className="sp-stage-spot" style={{ opacity: phase === 'summary' ? 0.22 : lit ? 0.2 : 0.5 }} />
             <div className="sp-stage-floor" style={{ opacity: phase === 'summary' ? 0.5 : 1 }} />
             {!reduced &&

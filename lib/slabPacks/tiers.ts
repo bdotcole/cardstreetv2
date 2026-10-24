@@ -4,8 +4,10 @@
  * module (the engine, the preview store, the UI), so a number changed here
  * changes everywhere. Pure, like lib/partnerTiers.ts.
  *
- * All prices and odds are WORKING DEFAULTS for the admin-wall prototype —
- * nothing here has been through pricing or legal review.
+ * The ladder is named after the NBA 2K card tiers (Silver, Gold, Platinum,
+ * Emerald, Diamond, Galaxy Opal) and priced in steps of 775 baht. Prices and
+ * odds are the founder's 2026-10-24 figures; the odds have not been through
+ * pricing or legal review.
  */
 
 import type { HitClass, PackTier, TierKey } from './types';
@@ -49,54 +51,66 @@ export const CHASE_CLASSES: readonly HitClass[] = ['s', 'ss'];
  */
 export const TARGET_EV = 0.9;
 
-export const TIER_ORDER: readonly TierKey[] = ['spark', 'surge', 'nova', 'eclipse', 'apex'];
+export const TIER_ORDER: readonly TierKey[] = ['silver', 'gold', 'platinum', 'emerald', 'diamond', 'opal'];
 
 /**
  * Odds are fixed per tier and published as they are. The shape follows what
  * the big digital-pack operators run: roughly four pulls in five land below
  * the pack price, one in seven is a hit at or above it, and a grail sits
- * under one percent. They sum to exactly 1 (checked by the engine).
+ * around one percent. They sum to exactly 1 (checked by the engine).
+ *
+ * Themes: a / b / c are the foil gradient light to dark, glow lights the
+ * stage, ink is the print colour on the foil, material picks the surface
+ * treatment and the opening effects (see slabPacks.css [data-material]).
  */
 export const TIERS: Record<TierKey, PackTier> = {
-    spark: {
-        key: 'spark',
-        name: 'Spark',
-        priceThb: 1490,
+    silver: {
+        key: 'silver',
+        name: 'Silver',
+        priceThb: 775,
         odds: { d: 0.465, c: 0.32, b: 0.14, a: 0.05, s: 0.018, ss: 0.007 },
         sellBackRate: 0.85,
-        theme: { a: '#FFE9A8', b: '#FFA41B', c: '#B93A04', glow: '#FFB703', ink: '#2A1200' },
+        theme: { a: '#FFFFFF', b: '#C9D1DB', c: '#525C6B', glow: '#E6EDF5', ink: '#1B2430', material: 'metal' },
     },
-    surge: {
-        key: 'surge',
-        name: 'Surge',
-        priceThb: 3490,
+    gold: {
+        key: 'gold',
+        name: 'Gold',
+        priceThb: 1550,
         odds: { d: 0.47, c: 0.32, b: 0.14, a: 0.04, s: 0.02, ss: 0.01 },
         sellBackRate: 0.85,
-        theme: { a: '#A5F7FF', b: '#06B6D4', c: '#1338BE', glow: '#22D3EE', ink: '#021526' },
+        theme: { a: '#FFF3C4', b: '#F2B705', c: '#7A4A00', glow: '#FFD24D', ink: '#2B1A00', material: 'metal' },
     },
-    nova: {
-        key: 'nova',
-        name: 'Nova',
-        priceThb: 6990,
+    platinum: {
+        key: 'platinum',
+        name: 'Platinum',
+        priceThb: 2325,
+        odds: { d: 0.47, c: 0.32, b: 0.14, a: 0.04, s: 0.02, ss: 0.01 },
+        sellBackRate: 0.85,
+        theme: { a: '#FFFFFF', b: '#D9E6F2', c: '#6F869E', glow: '#CFE8FF', ink: '#10283E', material: 'metal' },
+    },
+    emerald: {
+        key: 'emerald',
+        name: 'Emerald',
+        priceThb: 3875,
         odds: { d: 0.475, c: 0.325, b: 0.138, a: 0.037, s: 0.013, ss: 0.012 },
         sellBackRate: 0.85,
-        theme: { a: '#F8C8FF', b: '#C026D3', c: '#4C1D95', glow: '#E879F9', ink: '#1B0530' },
+        theme: { a: '#C8FFE3', b: '#12B981', c: '#04543F', glow: '#3EE8A4', ink: '#03251B', material: 'gem' },
     },
-    eclipse: {
-        key: 'eclipse',
-        name: 'Eclipse',
-        priceThb: 14900,
+    diamond: {
+        key: 'diamond',
+        name: 'Diamond',
+        priceThb: 7750,
         odds: { d: 0.5, c: 0.3, b: 0.134, a: 0.032, s: 0.017, ss: 0.017 },
         sellBackRate: 0.85,
-        theme: { a: '#FFB3BE', b: '#F43F5E', c: '#3F0514', glow: '#FB7185', ink: '#22030B' },
+        theme: { a: '#FFFFFF', b: '#A6E6FF', c: '#1E55C9', glow: '#8FDCFF', ink: '#0A2448', material: 'gem' },
     },
-    apex: {
-        key: 'apex',
-        name: 'Apex',
-        priceThb: 34900,
+    opal: {
+        key: 'opal',
+        name: 'Galaxy Opal',
+        priceThb: 15500,
         odds: { d: 0.5, c: 0.32, b: 0.12, a: 0.02, s: 0.02, ss: 0.02 },
         sellBackRate: 0.85,
-        theme: { a: '#FFFFFF', b: '#B9C6FF', c: '#1A1740', glow: '#E0E7FF', ink: '#0B0B1A' },
+        theme: { a: '#FFD9F6', b: '#8B5CF6', c: '#1A1446', glow: '#F472B6', ink: '#0A0520', material: 'galaxy' },
     },
 };
 

@@ -35,7 +35,7 @@ import { PREVIEW_POOL, getSlab } from './pool';
 import { TIER_ORDER, TIERS, sellBackThb } from './tiers';
 import type { FeedEvent, PackTable, Pull, TierKey } from './types';
 
-const STORAGE_KEY = 'cs_slab_packs_preview_v2';
+const STORAGE_KEY = 'cs_slab_packs_preview_v3';
 const FEED_CAP = 40;
 const PULL_CAP = 400;
 const LEDGER_CAP = 300;
@@ -142,7 +142,7 @@ function persist() {
         try {
             const rest: Partial<PreviewState> = { ...state };
             delete rest.hydrated;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 2, ...rest }));
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 3, ...rest }));
         } catch {
             // Storage full or blocked: the preview still plays, it just will
             // not survive a reload.
@@ -172,7 +172,7 @@ const BOT_NAMES = [
 
 // Cheaper packs move faster, as they would.
 const BOT_TIER_WEIGHTS: [TierKey, number][] = [
-    ['spark', 5], ['surge', 3], ['nova', 2], ['eclipse', 1], ['apex', 0.5],
+    ['silver', 6], ['gold', 4], ['platinum', 3], ['emerald', 2], ['diamond', 1], ['opal', 0.5],
 ];
 
 function pick<T>(items: readonly T[]): T {
@@ -186,7 +186,7 @@ function pickBotTier(): TierKey {
         r -= w;
         if (r <= 0) return key;
     }
-    return 'spark';
+    return 'silver';
 }
 
 /** A simulated collector's pull: a real draw from the table, straight to the feed. */
@@ -220,7 +220,7 @@ function load(now: number): PreviewState {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return freshState(now);
         const saved = JSON.parse(raw);
-        if (!saved || saved.v !== 2 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
+        if (!saved || saved.v !== 3 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
         return {
             hydrated: true,
             walletThb: saved.walletThb,

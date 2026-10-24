@@ -63,31 +63,57 @@ export function TierEmblem({ tier, className }: { tier: TierKey; className?: str
     const id = `sp-emblem-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
     const glyph = (() => {
         switch (tier) {
-            case 'spark':
-                return <path d="M58 4 22 54h22l-8 42 42-56H54z" />;
-            case 'surge':
-                return (
-                    <>
-                        <path d="M6 44c14-22 30-22 44 0s30 22 44 0v14c-14 22-30 22-44 0S20 36 6 58z" />
-                        <path d="M6 70c14-18 30-18 44 0s30 18 44 0v10c-14 18-30 18-44 0S20 62 6 80z" opacity=".55" />
-                        <path d="M6 22c14-18 30-18 44 0s30 18 44 0v10c-14 18-30 18-44 0S20 14 6 32z" opacity=".55" />
-                    </>
-                );
-            case 'nova':
+            case 'silver':
+                // A medal: a ring with a star cut out of it.
                 return (
                     <path
-                        d="M50 2l9 33 30-17-17 30 33 9-33 9 17 30-30-17-9 33-9-33-30 17 17-30-33-9 33-9-17-30 30 17z"
-                        transform="translate(-5 -7) scale(1.1)"
+                        fillRule="evenodd"
+                        d="M50 6a44 44 0 1 0 0 88 44 44 0 0 0 0-88zm0 16 8.8 19.2 21 2.2-15.6 14.2 4.4 20.7L50 67.8l-18.6 10.5 4.4-20.7-15.6-14.2 21-2.2z"
                     />
                 );
-            case 'eclipse':
-                return <path fillRule="evenodd" d="M50 6a44 44 0 1 0 0 88 44 44 0 0 0 0-88zm12 12a32 32 0 1 1 0 64 38 38 0 0 0 0-64z" />;
-            case 'apex':
+            case 'gold':
+                // A crown.
                 return (
                     <>
-                        <path d="M50 6 94 88H6z" opacity=".5" />
-                        <path d="M50 30 80 88H20z" />
-                        <path d="M50 6l12 22H38z" />
+                        <path d="M10 72 4 30l24 16 22-30 22 30 24-16-6 42z" />
+                        <path d="M12 78h76v12H12z" opacity=".7" />
+                    </>
+                );
+            case 'platinum':
+                // A hexagonal badge with a cut-out inner hexagon.
+                return (
+                    <path
+                        fillRule="evenodd"
+                        d="M50 4 90 27v46L50 96 10 73V27zm0 18L26 36v28l24 14 24-14V36z"
+                    />
+                );
+            case 'emerald':
+                // An emerald cut: an octagon with a step inside.
+                return (
+                    <>
+                        <path fillRule="evenodd" d="M30 8h40l22 22v40L70 92H30L8 70V30zm4 12L20 34v32l14 14h32l14-14V34L66 20z" />
+                        <path d="M38 40h24v20H38z" opacity=".55" />
+                    </>
+                );
+            case 'diamond':
+                // A brilliant cut: flat table, pointed pavilion.
+                return (
+                    <>
+                        <path d="M26 14h48l20 26-44 54L6 40z" />
+                        <path d="M26 14 6 40h88L74 14zM36 40l14 50 14-50z" opacity=".4" />
+                    </>
+                );
+            case 'opal':
+                // A ringed planet.
+                return (
+                    <>
+                        <circle cx="50" cy="50" r="28" />
+                        <path
+                            fillRule="evenodd"
+                            d="M50 30c30 0 50 6 50 14s-20 14-50 14S0 52 0 44s20-14 50-14zm0 6c-24 0-40 4-40 8s16 8 40 8 40-4 40-8-16-8-40-8z"
+                            opacity=".75"
+                            transform="rotate(-18 50 44)"
+                        />
                     </>
                 );
         }

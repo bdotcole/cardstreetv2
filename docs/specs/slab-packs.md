@@ -1,8 +1,8 @@
-# Slab Packs — mechanics, money and design
+# Slab Packs (Digital Packs) — mechanics, money and design
 
 Mystery packs that each hold one real graded slab. The buyer rips the pack, the slab is revealed, and they keep it in the vault (where it is part of their Cardstreet collection), sell it back on the spot for wallet credit, list it on the Cardstreet marketplace, or have it shipped.
 
-**Status (2026-10-23): playable prototype behind the admin wall, at `/packs`.** It covers the mechanics, the money rules and the full mobile experience. It takes no money: card payments are simulated, the wallet, the identity checks, the listings and the shipments are browser state. See [What is real and what is stand-in](#what-is-real-and-what-is-stand-in) and [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet).
+**Status (2026-10-24): playable prototype behind the admin wall, at `/packs`.** It covers the mechanics, the money rules and the full mobile experience. It takes no money: card payments are simulated, the wallet, the identity checks, the listings and the shipments are browser state. See [What is real and what is stand-in](#what-is-real-and-what-is-stand-in) and [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet).
 
 ## The mechanic: fixed, published odds
 
@@ -14,17 +14,22 @@ A pack is one independent draw from a published table. Each tier shows, before p
 
 ### The ladder
 
-Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). All numbers are working defaults for the prototype and have not been through pricing or legal review.
+Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). The names and prices are the founder's (2026-10-24), after the NBA 2K card tiers, in steps of ฿775; the odds are working defaults that have not been through pricing or legal review.
 
-| Tier | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
-|---|---|---|---|---|---|
-| Spark | ฿1,490 | 46.5% / 32% / 14% / 5% / 1.8% / 0.7% | 89% | ฿679 | ฿40,850 |
-| Surge | ฿3,490 | 47% / 32% / 14% / 4% / 2% / 1% | 89% | ฿1,580 | ฿103,959 |
-| Nova | ฿6,990 | 47.5% / 32.5% / 13.8% / 3.7% / 1.3% / 1.2% | 91% | ฿3,155 | ฿200,893 |
-| Eclipse | ฿14,900 | 50% / 30% / 13.4% / 3.2% / 1.7% / 1.7% | 90% | ฿6,724 | ฿412,500 |
-| Apex | ฿34,900 | 50% / 32% / 12% / 2% / 2% / 2% | 91% | ฿15,899 | ฿553,571 |
+| Tier | Material | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
+|---|---|---|---|---|---|---|
+| Silver | metal | ฿775 | 46.5% / 32% / 14% / 5% / 1.8% / 0.7% | 91% | ฿349 | ฿22,834 |
+| Gold | metal | ฿1,550 | 47% / 32% / 14% / 4% / 2% / 1% | 89% | ฿714 | ฿46,149 |
+| Platinum | metal | ฿2,325 | 47% / 32% / 14% / 4% / 2% / 1% | 91% | ฿1,110 | ฿66,469 |
+| Emerald | gem | ฿3,875 | 47.5% / 32.5% / 13.8% / 3.7% / 1.3% / 1.2% | 90% | ฿1,753 | ฿114,881 |
+| Diamond | gem | ฿7,750 | 50% / 30% / 13.4% / 3.2% / 1.7% / 1.7% | 90% | ฿3,544 | ฿232,429 |
+| Galaxy Opal | galaxy | ฿15,500 | 50% / 32% / 12% / 2% / 2% / 2% | 92% | ฿7,181 | ฿459,265 |
+
+Emerald's price is an assumption: the brief listed both Emerald and Diamond at ฿7,750, so Emerald took the ฿775 × 5 step between Platinum and Diamond. It is one constant in `tiers.ts`.
 
 The shape follows what the operators publish: about four pulls in five land below the pack price, one in seven is a hit at or above it, and a grail sits around or under one percent. Average pull, floor and top prize are computed from the pool, not assumed (`npx tsx scripts/check-slab-packs.ts` prints them).
+
+**Materials.** Each tier declares a material (`theme.material`) that drives the pack surface, the lobby's ambient light and the opening stage, the way NBA 2K dresses a pull by tier: **metal** is brushed foil with a hard specular sweep and almost no rainbow (Platinum keeps a faint cool iridescence); **gem** is foil cut into facets that catch light one at a time, with twinkling sparkle points; **galaxy** is a drifting nebula with a star field, the full prismatic holo, a gradient wordmark, and the stage's rainbow rays on every pull. The CSS lives under `[data-material]` in `slabPacks.css`; the pack emblem per tier is in `components/slabPacks/ui.tsx` (medal, crown, hexagon badge, emerald cut, brilliant cut, ringed planet).
 
 ### Hit classes
 
@@ -162,8 +167,8 @@ Mapped on 2026-10-23 against the live schema. Short answer to "is it ready to co
 ## Development
 
 - **Check the mechanics:** `npx tsx scripts/check-slab-packs.ts`. Asserts the class odds and the per-card odds sum to 1, every card sits in its band, the floor, the average pull within 8 points of target, a deterministic table and draw, an honest draw verifying and tampered seeds or commits failing, and 40k draws landing on the published odds. Run it before changing a tier, a band or the engine.
-- **Refresh the preview pool:** `node scripts/slab-packs-preview-pool.mjs --write`, then run the check.
-- **Look at one opening** (development only): `/packs?demo=nova:ss`, `/packs?demo=spark:d,b,a`, `&auto=1`, `&still=1` ([lib/slabPacks/debug.ts](../../lib/slabPacks/debug.ts)).
+- **Refresh the preview pool:** `node scripts/slab-packs-preview-pool.mjs --write` (reads PSA 9/10 rows from `market_values` with the public key, keeps mirrored art, samples 16 slabs per log-spaced value bucket from Silver's floor to Galaxy Opal's ceiling), then run the check. Re-run it whenever a tier price moves outside the pool's range.
+- **Look at one opening** (development only): `/packs?demo=opal:ss`, `/packs?demo=silver:d,b,a`, `&auto=1`, `&still=1` ([lib/slabPacks/debug.ts](../../lib/slabPacks/debug.ts)).
 - **Drive it without a phone:** in the desktop app's browser pane a mobile-emulated tap zooms the page instead of pressing; dispatch pointer events from `javascript_tool` for the swipe (see the memory note on browser automation).
 - **Browser floor:** container-query units, `color-mix()` and `dvh`, so iOS 16.2 or later and a current Android WebView.
 - **Thai copy** was written by the engineer and needs a native pass.

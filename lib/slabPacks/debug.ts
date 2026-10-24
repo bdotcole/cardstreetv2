@@ -5,8 +5,8 @@
  * playing it by hand. Every branch is behind NODE_ENV === 'development',
  * which the production build replaces with `false`, so none of this ships.
  *
- *   /packs?demo=nova:ss          open one Nova pack that is an SS pull
- *   /packs?demo=spark:d,b,a      open three slabs of those classes in a row
+ *   /packs?demo=opal:ss          open one Galaxy Opal pack that is an SS pull
+ *   /packs?demo=silver:d,b,a     open three slabs of those classes in a row
  *   &auto=1                      tear the pack without a finger
  *   &still=1                     no animation: every pose jumps to its end
  *                                state (for tools whose tab never gets an

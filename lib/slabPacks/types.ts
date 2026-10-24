@@ -4,7 +4,8 @@
  * and under a plain `tsx` script.
  */
 
-export type TierKey = 'spark' | 'surge' | 'nova' | 'eclipse' | 'apex';
+/** The ladder, cheapest first. The names follow the NBA 2K card tiers. */
+export type TierKey = 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'opal';
 
 /**
  * Hit class of a pull, lowest to highest. A class is a band of slab value
@@ -28,6 +29,13 @@ export interface Slab {
     valueThb: number;
 }
 
+/**
+ * What the pack is made of. Drives the foil, the pack emblem and the stage
+ * effects: brushed metal for the metal tiers, cut facets for the gem tiers,
+ * and a nebula with a star field for Galaxy Opal.
+ */
+export type TierMaterial = 'metal' | 'gem' | 'galaxy';
+
 export interface TierTheme {
     /** Foil gradient, light to dark. */
     a: string;
@@ -37,6 +45,7 @@ export interface TierTheme {
     glow: string;
     /** Ink colour that stays readable on the foil. */
     ink: string;
+    material: TierMaterial;
 }
 
 export interface PackTier {
