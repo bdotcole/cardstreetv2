@@ -9,11 +9,11 @@ import { previewActions } from '@/lib/slabPacks/previewStore';
 import { sfx, type ChargeHandle, type TearHandle } from '@/lib/slabPacks/sfx';
 import type { PaymentMethod } from '@/lib/slabPacks/previewStore';
 import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
-import type { HitClass, Pull, TierKey } from '@/lib/slabPacks/types';
+import type { GameKey, HitClass, Pull, TierKey } from '@/lib/slabPacks/types';
 import FxCanvas, { type FxHandle } from './FxCanvas';
 import { PACK_CLIP, PackFace, TEAR_Y } from './PackArt';
 import SlabCard from './SlabCard';
-import { CountUp, RankBadge, baht, tierVars, useSp, useTween } from './ui';
+import { CountUp, RankBadge, baht, gameLabel, tierVars, useSp, useTween } from './ui';
 
 /**
  * The opening: one sealed pack, a cut across the top, and a slab that turns
@@ -42,6 +42,7 @@ import { CountUp, RankBadge, baht, tierVars, useSp, useTween } from './ui';
 
 export interface OpeningSession {
     id: string;
+    game: GameKey;
     tierKey: TierKey;
     pulls: Pull[];
     /** Resuming unrevealed slabs from the vault: no pack to tear. */
@@ -79,8 +80,10 @@ interface Props {
 }
 
 export default function OpeningStage({ session, credits, fast, reduced, sound, onClose, onRipAgain, autoRip }: Props) {
-    const { t } = useSp();
+    const { t, isThai } = useSp();
     const tier = TIERS[session.tierKey];
+    // The pack face names the game; the tier is the pack's own name.
+    const packSub = gameLabel(session.game, isThai);
     const pulls = session.pulls;
     const quick = fast || reduced;
 
@@ -595,7 +598,8 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                 ))}
 
             {/* Top bar */}
-            <div className="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4" style={{ paddingTop: 'calc(var(--sat) + 10px)' }}>
+            {/* z-40: the results layer below is inset-0 at z-30 and would otherwise sit over the close button. */}
+            <div className="absolute inset-x-0 top-0 z-40 flex items-center gap-3 px-4" style={{ paddingTop: 'calc(var(--sat) + 10px)' }}>
                 <button
                     onClick={() => {
                         sfx.whooshOut();
@@ -732,7 +736,7 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                                     >
                                         <div className="sp-beam" data-on={torn} />
                                         <div className="sp-pack-piece" style={{ clipPath: PACK_CLIP.body }}>
-                                            <PackFace tier={tier} subtitle={t('pack.subtitle')} />
+                                            <PackFace tier={tier} subtitle={packSub} />
                                         </div>
                                         <motion.div
                                             className="sp-pack-piece"
@@ -740,7 +744,7 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                                             animate={torn ? { y: '-34%', x: '30%', rotate: 34, opacity: 0 } : { y: '0%', x: '0%', rotate: 0, opacity: 1 }}
                                             transition={{ duration: 0.55, ease: [0.2, 0.8, 0.3, 1] }}
                                         >
-                                            <PackFace tier={tier} subtitle={t('pack.subtitle')} />
+                                            <PackFace tier={tier} subtitle={packSub} />
                                         </motion.div>
                                         {!torn && (
                                             <>

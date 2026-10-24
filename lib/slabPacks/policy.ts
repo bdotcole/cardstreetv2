@@ -14,8 +14,10 @@
  *    minimum, a fee, a cap, and business-day processing.
  *  - Listing a pull on the Cardstreet marketplace is the cheap exit: the
  *    seller fee is cut, and Cardstreet ships from the vault.
- *  - Shipping a slab out of the vault is the slow exit: a flat fee and a
- *    long window, so the card stays liquid on the platform instead.
+ *  - Shipping a slab out of the vault is the slow exit: the collector types
+ *    in where it goes, is quoted a flat fee and a long window, chooses
+ *    insurance, accepts the terms and pays up front, so the card stays
+ *    liquid on the platform instead.
  *
  * All numbers are WORKING DEFAULTS for the admin-wall prototype, not reviewed.
  */
@@ -41,8 +43,13 @@ export function listingPayoutThb(priceThb: number): number {
 export const SHIP_FEE_THB = 1200;
 /** Delivery window quoted to the buyer, in calendar days from the request. */
 export const SHIP_DAYS: readonly [number, number] = [14, 21];
-/** What a shipment needs before it can be requested. */
-export const SHIP_REQUIRES = ['identity', 'address'] as const;
+/** Optional transit insurance: a share of the slab's market value, with a floor. */
+export const INSURANCE_RATE = 0.015;
+export const INSURANCE_MIN_THB = 50;
+
+export function insuranceThb(valueThb: number): number {
+    return Math.max(INSURANCE_MIN_THB, Math.ceil(valueThb * INSURANCE_RATE));
+}
 
 // ── Cash-out ────────────────────────────────────────────────────────────────
 

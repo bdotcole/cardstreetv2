@@ -2,16 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Check, Coins, ExternalLink, Lock, RotateCcw, ShieldCheck, Tag, Truck, Users, Vibrate, Volume2, X, Zap } from 'lucide-react';
+import { Check, ChevronRight, Coins, ExternalLink, Lock, RotateCcw, ShieldCheck, Tag, Truck, Users, Vibrate, Volume2, X, Zap } from 'lucide-react';
 import { verifyDraw } from '@/lib/slabPacks/engine';
-import { MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, SHIP_FEE_THB, listingPayoutThb } from '@/lib/slabPacks/policy';
+import { MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, listingPayoutThb } from '@/lib/slabPacks/policy';
 import { getSlab } from '@/lib/slabPacks/pool';
-import { getTable, previewActions, type PreviewSettings } from '@/lib/slabPacks/previewStore';
+import { previewActions, tryTable, type PreviewSettings } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
 import type { CardOdds, HitClass, PackTable, PackTier, Pull } from '@/lib/slabPacks/types';
 import SlabCard from './SlabCard';
-import { RankBadge, baht, classVars, tierVars, useSp } from './ui';
+import { RankBadge, baht, classVars, gameLabel, tierVars, useSp } from './ui';
 
 /**
  * Bottom sheets. Open and closed are a CSS transition on a data attribute,
@@ -65,11 +65,17 @@ export const pct = (n: number) => {
     const v = n * 100;
     if (v >= 10) return `${v.toFixed(0)}%`;
     if (v >= 1) return `${v.toFixed(1)}%`;
-    return `${v.toFixed(2)}%`;
+    if (v >= 0.1) return `${v.toFixed(2)}%`;
+    // A single grail in a big table sits far below 0.01%: keep a visible digit.
+    return `${v.toFixed(3)}%`;
 };
 
 /** "1 in 140" reads better than "0.71%" for the long shots. */
 export const oneIn = (n: number) => (n > 0 ? `1 in ${Math.round(1 / n).toLocaleString('en-US')}` : '—');
+
+/** The value band of a class in a tier, as money: "฿7,750 – ฿15,500". */
+export const bandLabel = (cls: HitClass, tier: PackTier) =>
+    `${baht(tier.priceThb * HIT_CLASSES[cls].min)} – ${baht(tier.priceThb * HIT_CLASSES[cls].max)}`;
 
 const shortHash = (h: string) => `${h.slice(0, 10)}…${h.slice(-8)}`;
 
@@ -88,14 +94,15 @@ export function Stat({ label, value, sub }: { label: string; value: string; sub:
 const CARD_LIST_LIMIT = 40;
 
 export function OddsSheet({
-    open, onClose, tier, table,
+    open, onClose, tier, table, onCard,
 }: {
     open: boolean;
     onClose: () => void;
     tier: PackTier;
     table: PackTable;
+    onCard: (c: CardOdds) => void;
 }) {
-    const { t } = useSp();
+    const { t, isThai } = useSp();
     const [showAll, setShowAll] = useState(false);
     useEffect(() => {
         if (!open) setShowAll(false);
@@ -104,7 +111,7 @@ export function OddsSheet({
 
     return (
         <Sheet open={open} onClose={onClose}>
-            <SheetHeader title={t('odds.title', { tier: tier.name })} sub={t('odds.sub')} onClose={onClose} />
+            <SheetHeader title={t('odds.title', { tier: `${gameLabel(table.game, isThai)} ${tier.name}` })} sub={t('odds.sub')} onClose={onClose} />
             <div className="sp-scroll min-h-0 flex-1 px-5 pb-6" style={tierVars(tier)}>
                 <div className="grid grid-cols-3 gap-2">
                     <Stat label={t('odds.avg')} value={baht(table.evThb)} sub={t('odds.avgSub', { pct: pct(table.evThb / tier.priceThb) })} />
@@ -126,7 +133,7 @@ export function OddsSheet({
                 </div>
                 <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
                     {shown.map((c, n) => (
-                        <CardRow key={c.slab.key} c={c} first={n === 0} />
+                        <CardRow key={c.slab.key} c={c} first={n === 0} onClick={() => onCard(c)} />
                     ))}
                 </div>
                 {!showAll && table.cards.length > CARD_LIST_LIMIT && (
@@ -162,7 +169,6 @@ export function OddsSheet({
                                     rate: pct(tier.sellBackRate),
                                     fee: pct(PULL_MARKET_FEE_RATE),
                                     stdFee: pct(MARKET_FEE_RATE),
-                                    ship: baht(SHIP_FEE_THB),
                                     d1: SHIP_DAYS[0],
                                     d2: SHIP_DAYS[1],
                                 })}
@@ -183,13 +189,8 @@ function ClassRow({ cls, tier, table, first }: { cls: HitClass; tier: PackTier; 
         <div className={`flex items-center gap-3 px-3.5 py-3 ${first ? '' : 'border-t border-white/10'}`} style={classVars(cls)}>
             <RankBadge cls={cls} style={{ fontSize: 15 }} />
             <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                    <span className="text-[13px] font-extrabold">{t(`class.${cls}`)}</span>
-                    <span className="truncate text-[11px] text-white/50">
-                        {baht(tier.priceThb * def.min)}–{baht(tier.priceThb * def.max)}
-                    </span>
-                </div>
-                <div className="mt-1 text-[10.5px] text-white/45">{t('odds.cardsInClass', { n: c.cards })}</div>
+                <div className="text-[13px] font-extrabold">{t(`class.${cls}`)}</div>
+                <div className="mt-0.5 truncate text-[11.5px] text-white/55">{bandLabel(cls, tier)}</div>
             </div>
             <div className="shrink-0 text-right">
                 <div className="sp-num text-[15px] leading-none" style={{ color: def.color }}>{pct(c.odds)}</div>
@@ -199,9 +200,15 @@ function ClassRow({ cls, tier, table, first }: { cls: HitClass; tier: PackTier; 
     );
 }
 
-function CardRow({ c, first }: { c: CardOdds; first: boolean }) {
+function CardRow({ c, first, onClick }: { c: CardOdds; first: boolean; onClick: () => void }) {
     return (
-        <div className={`flex items-center gap-2.5 px-3.5 py-2 ${first ? '' : 'border-t border-white/10'}`}>
+        <button
+            onClick={() => {
+                sfx.tap();
+                onClick();
+            }}
+            className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left ${first ? '' : 'border-t border-white/10'}`}
+        >
             <RankBadge cls={c.cls} style={{ fontSize: 10 }} />
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[12px] font-bold leading-tight">{c.slab.name}</div>
@@ -213,21 +220,77 @@ function CardRow({ c, first }: { c: CardOdds; first: boolean }) {
                 <div className="sp-num text-[12.5px] leading-none">{baht(c.slab.valueThb)}</div>
                 <div className="mt-0.5 text-[10px] text-white/45">{pct(c.odds)}</div>
             </div>
-        </div>
+            <ChevronRight size={14} className="shrink-0 text-white/30" />
+        </button>
     );
 }
 
-/** One card of the lobby's top-pulls strip: what it is worth, and the chance of it. */
-export function TopPullCard({ c, tier }: { c: CardOdds; tier: PackTier }) {
+/** One card of the lobby's top-pulls strip: what it is worth, and the chance of it. Opens the card. */
+export function TopPullCard({ c, tier, onClick }: { c: CardOdds; tier: PackTier; onClick: () => void }) {
     return (
-        <div className="w-[86px] shrink-0">
+        <button
+            onClick={() => {
+                sfx.tap();
+                onClick();
+            }}
+            className="sp-mini w-[86px] shrink-0 text-left active:scale-95"
+        >
             <div className="relative">
                 <SlabCard slab={c.slab} tier={tier} art="small" flat foil={0.25} />
                 <RankBadge cls={c.cls} className="absolute -left-1.5 -top-1.5" style={{ fontSize: 12 }} />
             </div>
             <div className="sp-num mt-1.5 truncate text-[13px] leading-none">{baht(c.slab.valueThb)}</div>
             <div className="mt-0.5 truncate text-[10px] text-white/50">{oneIn(c.odds)}</div>
-        </div>
+        </button>
+    );
+}
+
+// ── A card the pack can contain ─────────────────────────────────────────────
+
+export function CardSheet({ card, tier, onClose }: { card: CardOdds | null; tier: PackTier; onClose: () => void }) {
+    const { t, isThai } = useSp();
+    const [shown, setShown] = useState<CardOdds | null>(card);
+    useEffect(() => {
+        if (card) setShown(card);
+    }, [card]);
+    const c = shown;
+
+    return (
+        <Sheet open={!!card} onClose={onClose}>
+            {c && (
+                <>
+                    <div className="flex justify-end px-5">
+                        <button onClick={onClose} aria-label={t('common.close')} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+                            <X size={18} strokeWidth={2.6} />
+                        </button>
+                    </div>
+                    <div className="sp-scroll min-h-0 flex-1 px-5 pb-6">
+                        <div className="mx-auto" style={{ width: 'min(56vw, 230px)' }}>
+                            <SlabCard slab={c.slab} tier={tier} tilt foil={0.3 + HIT_CLASSES[c.cls].rank * 0.12} />
+                        </div>
+                        <div className="mt-5 flex items-center gap-2.5">
+                            <RankBadge cls={c.cls} style={{ fontSize: 16 }} />
+                            <span className="sp-display text-[18px]" style={{ color: HIT_CLASSES[c.cls].color }}>
+                                {t(`class.${c.cls}`)}
+                            </span>
+                            <span className="sp-label ml-auto">{gameLabel(c.slab.game, isThai)} · {tier.name}</span>
+                        </div>
+                        <div className="mt-2 text-[20px] font-extrabold leading-tight">{c.slab.name}</div>
+                        <div className="text-[12.5px] text-white/55">
+                            {c.slab.setName} · PSA {c.slab.grade} · #{c.slab.number}
+                        </div>
+                        <div className="sp-num mt-2 text-[34px] leading-none">{baht(c.slab.valueThb)}</div>
+                        <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                            <Stat label={t('card.odds')} value={pct(c.odds)} sub={oneIn(c.odds)} />
+                            <Stat label={t('card.band')} value={t(`class.${c.cls}`)} sub={bandLabel(c.cls, tier)} />
+                        </div>
+                        <p className="mt-3 text-[11.5px] leading-relaxed text-white/50">{t('card.note', { tier: tier.name, price: baht(tier.priceThb) })}</p>
+                    </div>
+                </>
+            )}
+        </Sheet>
     );
 }
 
@@ -253,10 +316,11 @@ export function SlabSheet({
     const tier = p ? TIERS[p.tier] : null;
     // The check a buyer can run: the seed hashes to the commit shown before
     // the rip, and re-running the draw with it lands on this card.
-    const verified = useMemo(
-        () => (p && !p.id.startsWith('demo-') ? verifyDraw(getTable(p.tier), p.proof.seed, p.proof.clientSeed, p.proof.commit, p.slabKey) : null),
-        [p],
-    );
+    const verified = useMemo(() => {
+        if (!p || !slab || p.id.startsWith('demo-')) return null;
+        const table = tryTable(slab.game, p.tier);
+        return table ? verifyDraw(table, p.proof.seed, p.proof.clientSeed, p.proof.commit, p.slabKey) : null;
+    }, [p, slab]);
     const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
     const inCollection = p && (p.status === 'vault' || p.status === 'listed' || p.status === 'shipping');
 
@@ -278,7 +342,7 @@ export function SlabSheet({
                             <span className="sp-display text-[18px]" style={{ color: HIT_CLASSES[p.cls].color }}>
                                 {t(`class.${p.cls}`)}
                             </span>
-                            <span className="sp-label ml-auto">{tier.name}</span>
+                            <span className="sp-label ml-auto">{gameLabel(slab.game, isThai)} · {tier.name}</span>
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
@@ -331,6 +395,7 @@ export function SlabSheet({
                                 <div className="mt-2 text-center text-[11px] text-white/45">
                                     {t('vault.listFeeNote', { fee: pct(PULL_MARKET_FEE_RATE), std: pct(MARKET_FEE_RATE) })}
                                 </div>
+                                {/* The terms, fee and timing come step by step inside the flow, not here. */}
                                 <button
                                     className="sp-btn sp-btn-ghost mt-3 h-[50px] w-full justify-between px-4 text-[14px]"
                                     onClick={() => {
@@ -342,9 +407,7 @@ export function SlabSheet({
                                         <Truck size={16} />
                                         {t('vault.ship')}
                                     </span>
-                                    <span className="text-[11.5px] text-white/55">
-                                        {t('vault.shipTerms', { fee: baht(SHIP_FEE_THB), d1: SHIP_DAYS[0], d2: SHIP_DAYS[1] })}
-                                    </span>
+                                    <ChevronRight size={16} className="text-white/50" />
                                 </button>
                             </>
                         )}
@@ -387,7 +450,7 @@ export function SlabSheet({
                         {p.status === 'shipping' && p.shipRequestedAt != null && (
                             <div className="sp-card mt-4 flex items-start gap-2.5 rounded-2xl p-3.5 text-[12.5px] text-white/70">
                                 <Truck size={16} className="mt-0.5 shrink-0" style={{ color: tier.theme.glow }} />
-                                <div>
+                                <div className="min-w-0">
                                     <div className="font-extrabold text-white">{t('vault.shippingTitle')}</div>
                                     <div className="mt-0.5">
                                         {t('vault.shippingWindow', {
@@ -395,7 +458,11 @@ export function SlabSheet({
                                             to: fmtDate(p.shipRequestedAt + SHIP_DAYS[1] * 86_400_000),
                                         })}
                                     </div>
-                                    <div className="mt-0.5 text-white/50">{t('vault.shippingFeePaid', { fee: baht(p.shipFeeThb ?? SHIP_FEE_THB) })}</div>
+                                    {p.shipTo && <div className="mt-0.5 truncate text-white/50">{p.shipTo.name} · {p.shipTo.address}</div>}
+                                    <div className="mt-0.5 text-white/50">
+                                        {t('vault.shippingFeePaid', { fee: baht(p.shipFeeThb ?? 0) })}
+                                        {p.shipInsuredThb ? ` · ${t('vault.insured')}` : ''}
+                                    </div>
                                 </div>
                             </div>
                         )}

@@ -7,6 +7,9 @@
 /** The ladder, cheapest first. The names follow the NBA 2K card tiers. */
 export type TierKey = 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'opal';
 
+/** The games packs are sold for. Each game has its own pool and its own tables. */
+export type GameKey = 'pokemon' | 'onepiece' | 'lorcana';
+
 /**
  * Hit class of a pull, lowest to highest. A class is a band of slab value
  * relative to the pack price (see HIT_CLASSES in tiers.ts), so the same slab
@@ -18,6 +21,7 @@ export interface Slab {
     /** `${cardId}:${grade}` — one slab type. Stock may hold several copies. */
     key: string;
     cardId: string;
+    game: GameKey;
     grader: 'PSA';
     grade: 9 | 10;
     name: string;
@@ -78,6 +82,7 @@ export interface CardOdds {
  * pool; it only changes when the pool does.
  */
 export interface PackTable {
+    game: GameKey;
     tier: TierKey;
     byClass: Record<HitClass, {
         odds: number;
@@ -111,6 +116,13 @@ export interface PullProof {
 
 export type PullStatus = 'unrevealed' | 'vault' | 'listed' | 'sold' | 'shipping';
 
+/** Where a shipped slab goes. Typed in by the collector at request time, never prefilled. */
+export interface ShipTo {
+    name: string;
+    phone: string;
+    address: string;
+}
+
 export interface Pull {
     id: string;
     slabKey: string;
@@ -127,7 +139,10 @@ export interface Pull {
     listedAt?: number;
     /** Shipping request, while `status` is 'shipping'. */
     shipRequestedAt?: number;
+    /** Shipping fee plus insurance, as paid. */
     shipFeeThb?: number;
+    shipInsuredThb?: number;
+    shipTo?: ShipTo;
 }
 
 export interface FeedEvent {

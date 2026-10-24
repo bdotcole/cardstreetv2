@@ -1,6 +1,6 @@
 # Slab Packs (Digital Packs) — mechanics, money and design
 
-Mystery packs that each hold one real graded slab. The buyer rips the pack, the slab is revealed, and they keep it in the vault (where it is part of their Cardstreet collection), sell it back on the spot for wallet credit, list it on the Cardstreet marketplace, or have it shipped.
+Mystery packs that each hold one real graded slab, sold per game (Pokémon, One Piece, Lorcana to start; a switch above the packs picks the game, and each game has its own pool and its own odds tables). The buyer rips the pack, the slab is revealed, and they keep it in the vault (where it is part of their Cardstreet collection), sell it back on the spot for wallet credit, list it on the Cardstreet marketplace, or have it shipped.
 
 **Status (2026-10-24): playable prototype behind the admin wall, at `/packs`.** It covers the mechanics, the money rules and the full mobile experience. It takes no money: card payments are simulated, the wallet, the identity checks, the listings and the shipments are browser state. See [What is real and what is stand-in](#what-is-real-and-what-is-stand-in) and [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet).
 
@@ -18,16 +18,18 @@ Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). 
 
 | Tier | Material | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
 |---|---|---|---|---|---|---|
-| Silver | metal | ฿775 | 46.5% / 32% / 14% / 5% / 1.8% / 0.7% | 91% | ฿349 | ฿22,834 |
-| Gold | metal | ฿1,550 | 47% / 32% / 14% / 4% / 2% / 1% | 89% | ฿714 | ฿46,149 |
-| Platinum | metal | ฿2,325 | 47% / 32% / 14% / 4% / 2% / 1% | 91% | ฿1,110 | ฿66,469 |
-| Emerald | gem | ฿3,875 | 47.5% / 32.5% / 13.8% / 3.7% / 1.3% / 1.2% | 90% | ฿1,753 | ฿114,881 |
-| Diamond | gem | ฿7,750 | 50% / 30% / 13.4% / 3.2% / 1.7% / 1.7% | 90% | ฿3,544 | ฿232,429 |
-| Galaxy Opal | galaxy | ฿15,500 | 50% / 32% / 12% / 2% / 2% / 2% | 92% | ฿7,181 | ฿459,265 |
+| Silver | metal | ฿775 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿411 | ฿22,834 |
+| Gold | metal | ฿1,550 | 45% / 30% / 19% / 4% / 1.4% / 0.6% | 94% | ฿786 | ฿44,643 |
+| Platinum | metal | ฿2,325 | 45% / 30% / 19% / 4% / 1.3% / 0.7% | 96% | ฿1,191 | ฿67,857 |
+| Emerald | gem | ฿3,875 | 46% / 30% / 18% / 4% / 1.2% / 0.8% | 95% | ฿2,059 | ฿107,143 |
+| Diamond | gem | ฿7,750 | 47% / 30% / 17% / 4% / 1.2% / 0.8% | 95% | ฿3,929 | ฿232,143 |
+| Galaxy Opal | galaxy | ฿15,500 | 48% / 30% / 16% / 4% / 1.2% / 0.8% | 96% | ฿8,036 | ฿459,265 |
+
+Average pull, floor and top prize are the Pokémon pool's; One Piece and Lorcana land within a point or two of the same averages with thinner pools at the dear end (a tier a game's pool cannot fill is simply not offered for that game).
 
 Emerald's price is an assumption: the brief listed both Emerald and Diamond at ฿7,750, so Emerald took the ฿775 × 5 step between Platinum and Diamond. It is one constant in `tiers.ts`.
 
-The shape follows what the operators publish: about four pulls in five land below the pack price, one in seven is a hit at or above it, and a grail sits around or under one percent. Average pull, floor and top prize are computed from the pool, not assumed (`npx tsx scripts/check-slab-packs.ts` prints them).
+The shape follows what Courtyard's pulls measure out to (PackSpy, ~10,000 Pokémon pulls): nothing under half the price, 71% under the price, 26% paid for itself, 2% a good hit, well under 1% beyond 5x. The average pull targets 95% of the price (`TARGET_EV`), where Courtyard sits; the margin is taken in the 85% sell-back, not the pull. Average pull, floor and top prize are computed from the pool, not assumed (`npx tsx scripts/check-slab-packs.ts` prints them per game).
 
 **Materials.** Each tier declares a material (`theme.material`) that drives the pack surface, the lobby's ambient light and the opening stage, the way NBA 2K dresses a pull by tier: **metal** is brushed foil with a hard specular sweep and almost no rainbow (Platinum keeps a faint cool iridescence); **gem** is foil cut into facets that catch light one at a time, with twinkling sparkle points; **galaxy** is a drifting nebula with a star field, the full prismatic holo, a gradient wordmark, and the stage's rainbow rays on every pull. The CSS lives under `[data-material]` in `slabPacks.css`; the pack emblem per tier is in `components/slabPacks/ui.tsx` (medal, crown, hexagon badge, emerald cut, brilliant cut, ringed planet).
 
@@ -35,16 +37,18 @@ The shape follows what the operators publish: about four pulls in five land belo
 
 A class is a band of slab value relative to the pack price, so the same slab is an SS in a cheap pack and a D in an expensive one.
 
-| Class | Name | Value as a multiple of the pack price |
-|---|---|---|
-| D | Base | 0.45 to 0.62 |
-| C | Solid | 0.62 to 0.90 |
-| B | Hit | 0.90 to 1.5 |
-| A | Big Hit | 1.5 to 3.5 |
-| S | Monster | 3.5 to 8 |
-| SS | Grail | 8 to 30 |
+| Class | Name | Value as a multiple of the pack price | On a ฿775 Silver |
+|---|---|---|---|
+| D | Base | 0.5 to 0.7 | ฿388 – ฿543 |
+| C | Solid | 0.7 to 1 | ฿543 – ฿775 |
+| B | Hit | 1 to 2 | ฿775 – ฿1,550 |
+| A | Big Hit | 2 to 5 | ฿1,550 – ฿3,875 |
+| S | Monster | 5 to 10 | ฿3,875 – ฿7,750 |
+| SS | Grail | 10 to 30 | ฿7,750 – ฿23,250 |
 
-- **Floor:** a slab worth less than 45% of the pack price is never put in that tier's packs.
+The lobby and the odds sheet show each class as its name, its odds and its money range for the pack on screen (no card counts). Any card on the top-pulls strip or in the odds sheet's list opens with its own chance.
+
+- **Floor:** a slab worth less than half the pack price is never put in that tier's packs.
 - **Within a class** the draw leans toward the cheaper cards; the lean is chosen per tier so the average pull lands near `TARGET_EV` (90%). The per-card odds shown to the buyer are the real weights.
 - **Average value:** the target is a design knob. The repack evaluation argued for 70–75% for Cardstreet; Courtyard runs ~96–100% and takes its margin in the buyback. Nothing here decides that; it is one constant.
 
@@ -65,7 +69,7 @@ Single source of truth: [lib/slabPacks/policy.ts](../../lib/slabPacks/policy.ts)
 | **Keep** | The slab stays in the vault and appears in the collector's Cardstreet collection, priced with the rest of it. | Pulls are collection items, not a separate ledger. |
 | **Sell back** | Instant, 85% of market value, paid as wallet credit. | The cheap, fast exit; the house recycles the slab. |
 | **List on Cardstreet** | A **5% seller fee instead of the usual 9%**. The slab stays in the vault while listed; when it sells Cardstreet packs and ships it, and the payout lands in the wallet. Shipping is inside the price, like every listing. | Keeps the card and the money on the platform. Courtyard charges 0% to relist a vaulted pull for the same reason. |
-| **Ship to me** | **฿1,200 flat** (about USD 35), **14–21 days**, only after identity and address verification, cannot be cancelled, and once a slab leaves the vault it cannot be sold back or listed. | Deliberate friction. Courtyard: KYC before redemption, shipping at cost, up to 10 business days processing plus transit, $2 per card surcharge in busy periods. |
+| **Ship to me** | A three-step flow, nothing prefilled: (1) name, phone and address typed in; (2) a quote that "calculates" (฿1,200 flat, about USD 35; the 14–21 day window as dates; optional transit insurance at 1.5% of market value, ฿50 minimum; the terms to accept: paid up front, no cancellation, once out of the vault no sell-back or listing); (3) a checkout that takes shipping plus insurance up front, from the wallet when it covers the total, else by card. | Deliberate friction. Courtyard: KYC before redemption, shipping at cost, up to 10 business days processing plus transit, $2 per card surcharge in busy periods. |
 
 ### The wallet
 
@@ -85,7 +89,8 @@ Mobile-first: one 480px column, centred on anything wider. Always dark, whatever
 ### Navigation
 
 - **Packs** (lobby): pack carousel, price, a one-line summary (average pull and top prize), the top pulls strip (the dearest cards with their chance), the class odds, and the buy dock with the payment method (Card / Wallet / Coins).
-- **Vault:** slabs held (kept, listed, shipping), slabs sold back, and the "in your Cardstreet collection" line with a link to the collection. A slab opens to a tiltable view with sell-back, list, ship, its status, and the fairness check.
+- **Packs** also carries the game switch (Pokémon / One Piece / Lorcana) above the carousel; the pack face names the game.
+- **Vault:** slabs held (kept, listed, shipping), slabs sold back, and the "in your Cardstreet collection" line with a link to the collection. A slab opens to a tiltable view with sell-back, list, ship, its status (a shipment shows the recipient, the window, the fee and whether it is insured), and the fairness check.
 - **Pulls:** the live feed and the buyer's own history and totals.
 - **Odds & cards** (sheet): average pull, floor, top prize, the odds by class, every card in the pack with its chance, how fairness works, and the four rules.
 - **Wallet** (sheet, from the header chip): balance, what is withdrawable now, coins, pending transfers, the ledger, and the cash-out flow with its verification checklist.
@@ -121,7 +126,7 @@ Mobile-first: one 480px column, centred on anything wider. Always dark, whatever
 | Table builder, draw, per-pull fairness proof | Real and tested. `lib/slabPacks/engine.ts`, checked by `scripts/check-slab-packs.ts`. |
 | Money rules: fees, shipping, cash-out, coins | Real as constants. `lib/slabPacks/policy.ts`. |
 | UI, animation, sound, navigation | Real. `components/slabPacks/`. |
-| Slabs | **Stand-in.** Real catalog cards with real PSA 9/10 market prices (`lib/slabPacks/demoPool.ts`), not stock Cardstreet holds. |
+| Slabs | **Stand-in.** Real catalog cards with real PSA 9/10 market prices (`lib/slabPacks/demoPool.ts`, ~700 slabs across the three games), not stock Cardstreet holds. |
 | Card payment | **Simulated**, instant and always successful. |
 | Wallet, ledger, cash-out requests | **Stand-in.** Browser state (`lib/slabPacks/previewStore.ts`). The seed of every pull is generated in the browser, so the fairness proof is demonstrated, not secure. |
 | Identity, address, bank verification | **Mock.** A sheet that "reviews" for a moment and flips a flag. |
@@ -167,7 +172,7 @@ Mapped on 2026-10-23 against the live schema. Short answer to "is it ready to co
 ## Development
 
 - **Check the mechanics:** `npx tsx scripts/check-slab-packs.ts`. Asserts the class odds and the per-card odds sum to 1, every card sits in its band, the floor, the average pull within 8 points of target, a deterministic table and draw, an honest draw verifying and tampered seeds or commits failing, and 40k draws landing on the published odds. Run it before changing a tier, a band or the engine.
-- **Refresh the preview pool:** `node scripts/slab-packs-preview-pool.mjs --write` (reads PSA 9/10 rows from `market_values` with the public key, keeps mirrored art, samples 16 slabs per log-spaced value bucket from Silver's floor to Galaxy Opal's ceiling), then run the check. Re-run it whenever a tier price moves outside the pool's range.
+- **Refresh the preview pool:** `node scripts/slab-packs-preview-pool.mjs --write` (reads PSA 9/10 rows from `market_values` with the public key, keeps mirrored art, samples 10 slabs per game per log-spaced value bucket from Silver's floor to Galaxy Opal's ceiling), then run the check. Re-run it whenever a tier price moves outside the pool's range or a game is added (`PACK_GAMES` in `tiers.ts` and `GAMES` in the script).
 - **Look at one opening** (development only): `/packs?demo=opal:ss`, `/packs?demo=silver:d,b,a`, `&auto=1`, `&still=1` ([lib/slabPacks/debug.ts](../../lib/slabPacks/debug.ts)).
 - **Drive it without a phone:** in the desktop app's browser pane a mobile-emulated tap zooms the page instead of pressing; dispatch pointer events from `javascript_tool` for the swipe (see the memory note on browser automation).
 - **Browser floor:** container-query units, `color-mix()` and `dvh`, so iOS 16.2 or later and a current Android WebView.

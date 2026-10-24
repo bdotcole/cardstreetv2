@@ -11,8 +11,9 @@
  *   - the wallet holds only what sell-backs have paid into it (no top-ups,
  *     exactly as the real one will), and cash-out requests sit as pending
  *   - coins are a demo balance standing in for rewards.coin_balance
- *   - identity / address / bank verification are flags the mock KYC sheet
- *     flips after a short "review"
+ *   - identity / bank verification are flags the mock KYC sheet flips after
+ *     a short "review"
+ *   - a shipment records where it goes, its fee and insurance, as paid
  *   - "other collectors" are simulated so the feed moves; they are labelled
  *     as simulated in the UI and switch off in the preview menu
  *
@@ -27,15 +28,15 @@ import { useSyncExternalStore } from 'react';
 import { buildTable, commitFor, draw } from './engine';
 import {
     CASHOUT_BUSINESS_DAYS, CASHOUT_HOLD_DAYS, CASHOUT_MIN_THB, CASHOUT_MONTHLY_CAP_THB, CASHOUT_REQUIRES,
-    COINS_EARNED_PER_THB, DAY_MS, NO_VERIFICATION, SHIP_FEE_THB, SHIP_REQUIRES,
-    addBusinessDays, cashoutFeeThb, coinsForThb, missingVerification,
+    COINS_EARNED_PER_THB, DAY_MS, NO_VERIFICATION, SHIP_FEE_THB,
+    addBusinessDays, cashoutFeeThb, coinsForThb, insuranceThb, missingVerification,
     type Verification, type VerificationKind,
 } from './policy';
-import { PREVIEW_POOL, getSlab } from './pool';
-import { TIER_ORDER, TIERS, sellBackThb } from './tiers';
-import type { FeedEvent, PackTable, Pull, TierKey } from './types';
+import { getSlab, poolForGame } from './pool';
+import { PACK_GAMES, TIERS, TIER_ORDER, sellBackThb } from './tiers';
+import type { FeedEvent, GameKey, PackTable, Pull, ShipTo, TierKey } from './types';
 
-const STORAGE_KEY = 'cs_slab_packs_preview_v3';
+const STORAGE_KEY = 'cs_slab_packs_preview_v4';
 const FEED_CAP = 40;
 const PULL_CAP = 400;
 const LEDGER_CAP = 300;
@@ -121,14 +122,41 @@ let state: PreviewState = SERVER_STATE;
 const listeners = new Set<() => void>();
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// The published tables, one per tier, built once from the preview pool.
-let tables: Record<TierKey, PackTable> | null = null;
-export function getTable(tier: TierKey): PackTable {
-    if (!tables) {
-        tables = {} as Record<TierKey, PackTable>;
-        for (const key of TIER_ORDER) tables[key] = buildTable(TIERS[key], PREVIEW_POOL);
+// ── The published tables, one per game and tier ─────────────────────────────
+
+const tables = new Map<string, PackTable | null>();
+
+/**
+ * The table for a game's tier, or null when the game's pool cannot fill
+ * every class the tier needs (a thin game at a dear tier). A null tier is
+ * not offered for that game.
+ */
+export function tryTable(game: GameKey, tier: TierKey): PackTable | null {
+    const key = `${game}:${tier}`;
+    if (!tables.has(key)) {
+        try {
+            tables.set(key, buildTable(game, TIERS[tier], poolForGame(game)));
+        } catch {
+            tables.set(key, null);
+        }
     }
-    return tables[tier];
+    return tables.get(key) ?? null;
+}
+
+export function getTable(game: GameKey, tier: TierKey): PackTable {
+    const table = tryTable(game, tier);
+    if (!table) throw new Error(`[slabPacks] no ${tier} table for ${game}`);
+    return table;
+}
+
+/** The tiers a game sells, cheapest first. */
+export function availableTiers(game: GameKey): TierKey[] {
+    return TIER_ORDER.filter((tier) => tryTable(game, tier) !== null);
+}
+
+/** Games that sell at least one tier. */
+export function availableGames(): GameKey[] {
+    return PACK_GAMES.filter((g) => availableTiers(g).length > 0);
 }
 
 function emit() {
@@ -142,7 +170,7 @@ function persist() {
         try {
             const rest: Partial<PreviewState> = { ...state };
             delete rest.hydrated;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 3, ...rest }));
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 4, ...rest }));
         } catch {
             // Storage full or blocked: the preview still plays, it just will
             // not survive a reload.
@@ -170,35 +198,43 @@ const BOT_NAMES = [
     'pikaboy', 'NamTan', 'ripcity66', 'JJ_market', 'beam.tcg', 'Pond_Pokemon', 'Guitar_GX', 'holo.hero',
 ];
 
-// Cheaper packs move faster, as they would.
+// Cheaper packs move faster, as they would; Pokemon moves most.
 const BOT_TIER_WEIGHTS: [TierKey, number][] = [
     ['silver', 6], ['gold', 4], ['platinum', 3], ['emerald', 2], ['diamond', 1], ['opal', 0.5],
 ];
+const BOT_GAME_WEIGHTS: [GameKey, number][] = [['pokemon', 5], ['onepiece', 2], ['lorcana', 2]];
 
 function pick<T>(items: readonly T[]): T {
     return items[Math.floor(Math.random() * items.length)];
 }
 
-function pickBotTier(): TierKey {
-    const total = BOT_TIER_WEIGHTS.reduce((sum, [, w]) => sum + w, 0);
+function weighted<T>(pairs: readonly [T, number][]): T {
+    const total = pairs.reduce((sum, [, w]) => sum + w, 0);
     let r = Math.random() * total;
-    for (const [key, w] of BOT_TIER_WEIGHTS) {
+    for (const [key, w] of pairs) {
         r -= w;
         if (r <= 0) return key;
     }
-    return 'silver';
+    return pairs[0][0];
 }
 
-/** A simulated collector's pull: a real draw from the table, straight to the feed. */
-function botEvent(tierKey: TierKey, who: string, at: number): FeedEvent {
-    const d = draw(getTable(tierKey), newSeed(), who);
-    return { id: `bot-${tierKey}-${at}-${Math.floor(Math.random() * 1e6)}`, who, me: false, slabKey: d.slabKey, tier: tierKey, cls: d.cls, at };
+/** A simulated collector's pull: a real draw from a table, straight to the feed. Null when that pack is not sold. */
+function botEvent(who: string, at: number): FeedEvent | null {
+    const game = weighted(BOT_GAME_WEIGHTS);
+    const tierKey = weighted(BOT_TIER_WEIGHTS);
+    const table = tryTable(game, tierKey);
+    if (!table) return null;
+    const d = draw(table, newSeed(), who);
+    return { id: `bot-${game}-${tierKey}-${at}-${Math.floor(Math.random() * 1e6)}`, who, me: false, slabKey: d.slabKey, tier: tierKey, cls: d.cls, at };
 }
 
 function freshState(now: number): PreviewState {
     const feed: FeedEvent[] = [];
     // The feed opens already moving, spread over the last hour.
-    for (let i = 0; i < 14; i++) feed.push(botEvent(pickBotTier(), pick(BOT_NAMES), now - Math.floor(Math.random() * 3_600_000)));
+    for (let i = 0; i < 14; i++) {
+        const e = botEvent(pick(BOT_NAMES), now - Math.floor(Math.random() * 3_600_000));
+        if (e) feed.push(e);
+    }
     feed.sort((a, b) => b.at - a.at);
     return {
         hydrated: true,
@@ -220,7 +256,7 @@ function load(now: number): PreviewState {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return freshState(now);
         const saved = JSON.parse(raw);
-        if (!saved || saved.v !== 3 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
+        if (!saved || saved.v !== 4 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
         return {
             hydrated: true,
             walletThb: saved.walletThb,
@@ -283,9 +319,16 @@ export function cashoutBlocker(s: PreviewState, amountThb: number, now: number):
     return null;
 }
 
+/** What shipping a vaulted slab costs: the flat fee, plus insurance when chosen. */
+export function shippingQuote(pull: Pull, insure: boolean): { feeThb: number; insuranceThb: number; totalThb: number } {
+    const value = getSlab(pull.slabKey)?.valueThb ?? 0;
+    const ins = insure ? insuranceThb(value) : 0;
+    return { feeThb: SHIP_FEE_THB, insuranceThb: ins, totalThb: SHIP_FEE_THB + ins };
+}
+
 export type BuyResult =
     | { ok: true; pulls: Pull[] }
-    | { ok: false; reason: 'loading' | 'wallet' | 'coins' };
+    | { ok: false; reason: 'loading' | 'wallet' | 'coins' | 'unavailable' };
 
 export const previewActions = {
     /** Read saved state (or seed a fresh preview). Call once, after mount. */
@@ -295,14 +338,16 @@ export const previewActions = {
     },
 
     /**
-     * Buy `count` packs of a tier. Atomic: the payment, the draws and the new
-     * pulls all land together or not at all. The pulls come back unrevealed
-     * and are already owned — closing the app mid-reveal loses nothing.
-     * A card payment is simulated as instant.
+     * Buy `count` packs of a game's tier. Atomic: the payment, the draws and
+     * the new pulls all land together or not at all. The pulls come back
+     * unrevealed and are already owned — closing the app mid-reveal loses
+     * nothing. A card payment is simulated as instant.
      */
-    buy(tierKey: TierKey, count: number, method: PaymentMethod): BuyResult {
+    buy(game: GameKey, tierKey: TierKey, count: number, method: PaymentMethod): BuyResult {
         const s = state;
         if (!s.hydrated) return { ok: false, reason: 'loading' };
+        const table = tryTable(game, tierKey);
+        if (!table) return { ok: false, reason: 'unavailable' };
         const tier = TIERS[tierKey];
         const n = Math.max(1, Math.floor(count));
         const cost = n * tier.priceThb;
@@ -324,13 +369,12 @@ export const previewActions = {
             coins += Math.floor(cost * COINS_EARNED_PER_THB);
         }
 
-        const table = getTable(tierKey);
         const pulls: Pull[] = [];
         for (let i = 0; i < n; i++) {
             const seed = newSeed();
             const d = draw(table, seed, s.clientSeed);
             pulls.push({
-                id: `${tierKey}-${now}-${i}`,
+                id: `${game}-${tierKey}-${now}-${i}`,
                 slabKey: d.slabKey, tier: tierKey, cls: d.cls,
                 pricePaidThb: tier.priceThb, at: now, status: 'unrevealed',
                 proof: { commit: commitFor(seed), seed, clientSeed: s.clientSeed },
@@ -400,33 +444,33 @@ export const previewActions = {
         });
     },
 
-    /** What a shipment still needs before it can be requested. */
-    shippingBlockers(): VerificationKind[] {
-        return missingVerification(state.verification, SHIP_REQUIRES);
-    },
-
     /**
-     * Ask for a vaulted slab to be shipped. The flat fee is paid from the
-     * wallet when it covers it, otherwise by (simulated) card.
+     * Book a shipment for a vaulted slab, paid up front: the flat fee plus
+     * insurance when chosen, from the wallet when it covers the total,
+     * otherwise by (simulated) card. Records where it goes.
      */
-    requestShipping(pullId: string, method: 'wallet' | 'card'): boolean {
+    requestShipping(pullId: string, opts: { method: 'wallet' | 'card'; shipTo: ShipTo; insure: boolean }): boolean {
         const s = state;
-        if (missingVerification(s.verification, SHIP_REQUIRES).length) return false;
         const pull = s.pulls.find((p) => p.id === pullId);
         if (!pull || pull.status !== 'vault') return false;
+        const quote = shippingQuote(pull, opts.insure);
         const now = Date.now();
         let walletThb = s.walletThb;
         let ledger = s.ledger;
-        if (method === 'wallet') {
-            if (walletThb < SHIP_FEE_THB) return false;
-            walletThb -= SHIP_FEE_THB;
-            ledger = withLedger(s, entry('ship_fee', -SHIP_FEE_THB, now, pullId));
+        if (opts.method === 'wallet') {
+            if (walletThb < quote.totalThb) return false;
+            walletThb -= quote.totalThb;
+            ledger = withLedger(s, entry('ship_fee', -quote.totalThb, now, pullId));
         }
         set({
             ...s,
             walletThb,
             ledger,
-            pulls: s.pulls.map((p) => (p.id === pullId ? { ...p, status: 'shipping' as const, shipRequestedAt: now, shipFeeThb: SHIP_FEE_THB } : p)),
+            pulls: s.pulls.map((p) =>
+                p.id === pullId
+                    ? { ...p, status: 'shipping' as const, shipRequestedAt: now, shipFeeThb: quote.totalThb, shipInsuredThb: opts.insure ? quote.insuranceThb : 0, shipTo: opts.shipTo }
+                    : p,
+            ),
         });
         return true;
     },
@@ -482,10 +526,12 @@ export const previewActions = {
         const now = Date.now();
         const n = pick([1, 1, 1, 1, 2, 3]);
         const who = pick(BOT_NAMES);
-        const tierKey = pickBotTier();
         const events: FeedEvent[] = [];
-        for (let i = 0; i < n; i++) events.push(botEvent(tierKey, who, now - i));
-        set({ ...state, feed: [...events, ...state.feed].slice(0, FEED_CAP) });
+        for (let i = 0; i < n; i++) {
+            const e = botEvent(who, now - i);
+            if (e) events.push(e);
+        }
+        if (events.length) set({ ...state, feed: [...events, ...state.feed].slice(0, FEED_CAP) });
     },
 };
 

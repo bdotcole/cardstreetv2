@@ -22,7 +22,7 @@
  */
 
 import { HIT_CLASSES, HIT_ORDER, TARGET_EV, classify } from './tiers';
-import type { CardOdds, HitClass, PackTable, PackTier, Slab } from './types';
+import type { CardOdds, GameKey, HitClass, PackTable, PackTier, Slab } from './types';
 
 // ── Hashing + seeded randomness ─────────────────────────────────────────────
 
@@ -141,7 +141,7 @@ function classWeights(n: number, bias: number): number[] {
 /** How hard to lean cheap, tried in turn; the table nearest TARGET_EV wins. */
 const BIASES = [0, 0.5, 1, 1.6, 2.4, 3.5, 5, 8];
 
-function tableWithBias(tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: number): PackTable {
+function tableWithBias(game: GameKey, tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: number): PackTable {
     const cards: CardOdds[] = [];
     const summary = {} as PackTable['byClass'];
     let ev = 0;
@@ -175,6 +175,7 @@ function tableWithBias(tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: 
 
     cards.sort((x, y) => y.slab.valueThb - x.slab.valueThb || x.slab.key.localeCompare(y.slab.key));
     return {
+        game,
         tier: tier.key,
         byClass: summary,
         cards,
@@ -185,24 +186,26 @@ function tableWithBias(tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: 
 }
 
 /**
- * The published table for a tier: every card the pool can put in this pack,
- * each with its exact chance. Deterministic in (tier, pool), so the client
- * and the server compute the same table from the same inputs.
+ * The published table for a game's tier: every card the pool can put in this
+ * pack, each with its exact chance. Deterministic in (tier, pool), so the
+ * client and the server compute the same table from the same inputs. Throws
+ * when the pool cannot fill a class the odds need, so a tier is never sold
+ * with a hole in its table.
  */
-export function buildTable(tier: PackTier, pool: readonly Slab[]): PackTable {
+export function buildTable(game: GameKey, tier: PackTier, pool: readonly Slab[]): PackTable {
     const sum = HIT_ORDER.reduce((s, cls) => s + tier.odds[cls], 0);
     if (Math.abs(sum - 1) > 1e-6) throw new Error(`[slabPacks] ${tier.key} odds sum to ${sum}, not 1`);
 
     const byClass = poolByClass(pool, tier);
     for (const cls of HIT_ORDER) {
         if (tier.odds[cls] > 0 && byClass[cls].length === 0) {
-            throw new Error(`[slabPacks] pool has no ${HIT_CLASSES[cls].letter} slabs for ${tier.key}`);
+            throw new Error(`[slabPacks] ${game} pool has no ${HIT_CLASSES[cls].letter} slabs for ${tier.key}`);
         }
     }
 
     let best: PackTable | null = null;
     for (const bias of BIASES) {
-        const table = tableWithBias(tier, byClass, bias);
+        const table = tableWithBias(game, tier, byClass, bias);
         const gap = Math.abs(table.evThb / tier.priceThb - TARGET_EV);
         if (!best || gap < Math.abs(best.evThb / tier.priceThb - TARGET_EV)) best = table;
     }

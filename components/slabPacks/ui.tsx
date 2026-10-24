@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { getGame, getGameLabel } from '@/lib/games';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { HIT_CLASSES } from '@/lib/slabPacks/tiers';
-import type { HitClass, PackTier, TierKey } from '@/lib/slabPacks/types';
+import type { GameKey, HitClass, PackTier, TierKey } from '@/lib/slabPacks/types';
 
 /** Whole baht, with the sign in front and thousands separators. */
 export function baht(n: number): string {
@@ -27,6 +28,16 @@ export function useSp() {
         [isThai],
     );
     return { t: tt, isThai };
+}
+
+/**
+ * The game's name for chips and captions: the app's Thai label when there is
+ * one in Thai script, else the short English name ("Disney Lorcana" is the
+ * Thai label too, and the short "Lorcana" fits a pill).
+ */
+export function gameLabel(game: GameKey, isThai: boolean): string {
+    const th = getGameLabel(game, 'th');
+    return isThai && /[฀-๿]/.test(th) ? th : getGame(game).shortName;
 }
 
 /** CSS variables for a tier's colours, for any element that is tier-themed. */

@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDownToLine, Check, Coins, CreditCard, Landmark, MapPin, ShieldCheck, Tag, Truck, UserCheck, Wallet } from 'lucide-react';
 import {
     CASHOUT_BUSINESS_DAYS, CASHOUT_HOLD_DAYS, CASHOUT_MIN_THB, CASHOUT_MONTHLY_CAP_THB, CASHOUT_REQUIRES,
-    COINS_PER_THB, MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, SHIP_FEE_THB, SHIP_REQUIRES,
+    COINS_PER_THB, MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS,
     cashoutFeeThb, cashoutNetThb, listingPayoutThb, missingVerification, thbForCoins,
     type VerificationKind,
 } from '@/lib/slabPacks/policy';
 import { getSlab } from '@/lib/slabPacks/pool';
 import {
-    cashedOutThisMonthThb, previewActions, withdrawableThb,
+    cashedOutThisMonthThb, previewActions, shippingQuote, withdrawableThb,
     type CashoutBlock, type LedgerKind, type PreviewState,
 } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { TIERS } from '@/lib/slabPacks/tiers';
-import type { Pull } from '@/lib/slabPacks/types';
+import type { Pull, ShipTo } from '@/lib/slabPacks/types';
 import { Sheet, SheetHeader, pct } from './Sheets';
 import SlabCard from './SlabCard';
 import { baht, useSp } from './ui';
@@ -67,6 +67,55 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
             <span className="text-white/55">{label}</span>
             <span className={`sp-num ${strong ? 'text-[16px] text-white' : 'text-white/85'}`}>{value}</span>
         </div>
+    );
+}
+
+function Field({
+    id, label, value, onChange, placeholder, type = 'text', multiline,
+}: {
+    id: string;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder?: string;
+    type?: string;
+    multiline?: boolean;
+}) {
+    const cls = 'mt-1.5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[14px] text-white outline-none placeholder:text-white/30 focus:border-white/30';
+    return (
+        <label className="block" htmlFor={id}>
+            <span className="sp-label">{label}</span>
+            {multiline ? (
+                <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} className={cls} />
+            ) : (
+                <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cls} autoComplete="off" />
+            )}
+        </label>
+    );
+}
+
+function Checkbox({ checked, onChange, label, sub }: { checked: boolean; onChange: (v: boolean) => void; label: string; sub?: string }) {
+    return (
+        <button
+            role="checkbox"
+            aria-checked={checked}
+            onClick={() => {
+                sfx.tap();
+                onChange(!checked);
+            }}
+            className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
+        >
+            <span
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors"
+                style={{ background: checked ? '#34D399' : 'transparent', borderColor: checked ? '#34D399' : 'rgba(255,255,255,0.3)' }}
+            >
+                {checked && <Check size={13} strokeWidth={3.5} className="text-black" />}
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold">{label}</span>
+                {sub && <span className="block text-[11.5px] leading-snug text-white/50">{sub}</span>}
+            </span>
+        </button>
     );
 }
 
@@ -430,81 +479,203 @@ export function ListSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
     );
 }
 
-// ── Ship a slab out of the vault ────────────────────────────────────────────
+// ── Ship a slab out of the vault: address, quote, checkout ──────────────────
 
-export function ShipSheet({
-    pull, onClose, state, onVerify,
-}: {
-    pull: Pull | null;
-    onClose: () => void;
-    state: PreviewState;
-    onVerify: (kind: VerificationKind) => void;
-}) {
+type ShipStep = 'address' | 'quote' | 'checkout' | 'done';
+const STEPS: ShipStep[] = ['address', 'quote', 'checkout'];
+
+const EMPTY_SHIP_TO: ShipTo = { name: '', phone: '', address: '' };
+
+export function ShipSheet({ pull, onClose, state }: { pull: Pull | null; onClose: () => void; state: PreviewState }) {
     const { t, isThai } = useSp();
     const [shown, setShown] = useState<Pull | null>(pull);
+    const [step, setStep] = useState<ShipStep>('address');
+    // Never prefilled: the collector types in where this slab goes.
+    const [to, setTo] = useState<ShipTo>(EMPTY_SHIP_TO);
+    const [calculating, setCalculating] = useState(false);
+    const [insure, setInsure] = useState(false);
+    const [terms, setTerms] = useState(false);
+    const [bookedAt, setBookedAt] = useState(0);
+
     useEffect(() => {
-        if (pull) setShown(pull);
+        if (pull) {
+            setShown(pull);
+            setStep('address');
+            setTo(EMPTY_SHIP_TO);
+            setInsure(false);
+            setTerms(false);
+            setCalculating(false);
+        }
     }, [pull]);
+
+    // The quote "calculates": a beat long enough to read as a real lookup.
+    useEffect(() => {
+        if (step !== 'quote') return;
+        setCalculating(true);
+        const id = setTimeout(() => setCalculating(false), 1300);
+        return () => clearTimeout(id);
+    }, [step]);
 
     const p = shown;
     const slab = p ? getSlab(p.slabKey) : undefined;
-    const missing = missingVerification(state.verification, SHIP_REQUIRES);
-    const walletCovers = state.walletThb >= SHIP_FEE_THB;
-    const method = walletCovers ? 'wallet' : 'card';
-    const now = useMemo(() => Date.now(), [pull]); // eslint-disable-line react-hooks/exhaustive-deps
+    const quote = p ? shippingQuote(p, insure) : { feeThb: 0, insuranceThb: 0, totalThb: 0 };
+    const insuranceIfChosen = p ? shippingQuote(p, true).insuranceThb : 0;
+    const walletCovers = state.walletThb >= quote.totalThb;
+    const method: 'wallet' | 'card' = walletCovers ? 'wallet' : 'card';
     const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
+    const now = bookedAt || Date.now();
+    const window = [now + SHIP_DAYS[0] * 86_400_000, now + SHIP_DAYS[1] * 86_400_000];
+    const phoneOk = /^\+?[0-9][0-9 -]{7,}$/.test(to.phone.trim());
+    const addressOk = to.name.trim().length >= 2 && phoneOk && to.address.trim().length >= 10;
+
+    const stepIndex = STEPS.indexOf(step);
+    const back = () => {
+        sfx.tap();
+        if (step === 'quote') setStep('address');
+        else if (step === 'checkout') setStep('quote');
+    };
+
+    const pay = () => {
+        if (!p) return;
+        if (previewActions.requestShipping(p.id, { method, shipTo: { name: to.name.trim(), phone: to.phone.trim(), address: to.address.trim() }, insure })) {
+            sfx.keep();
+            setBookedAt(Date.now());
+            setStep('done');
+        } else {
+            sfx.deny();
+        }
+    };
 
     return (
         <Sheet open={!!pull} onClose={onClose}>
             {p && slab && (
                 <>
-                    <SheetHeader title={t('ship.title')} sub={t('ship.sub')} onClose={onClose} />
+                    <SheetHeader
+                        title={t(`ship.${step}Title`)}
+                        sub={step === 'done' ? undefined : t('ship.stepOf', { n: stepIndex + 1, total: STEPS.length })}
+                        onClose={step === 'address' || step === 'done' ? onClose : back}
+                    />
                     <div className="sp-scroll min-h-0 flex-1 px-5 pb-6">
+                        {step !== 'done' && (
+                            <div className="mb-4 flex gap-1.5">
+                                {STEPS.map((s, i) => (
+                                    <span key={s} className="h-1 flex-1 rounded-full" style={{ background: i <= stepIndex ? 'var(--sp-glow, #fff)' : 'rgba(255,255,255,0.12)' }} />
+                                ))}
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-3.5">
-                            <div className="w-[64px] shrink-0">
+                            <div className="w-[56px] shrink-0">
                                 <SlabCard slab={slab} tier={TIERS[p.tier]} art="small" flat foil={0.2} />
                             </div>
                             <div className="min-w-0">
-                                <div className="truncate text-[15px] font-extrabold">{slab.name}</div>
+                                <div className="truncate text-[14px] font-extrabold">{slab.name}</div>
                                 <div className="truncate text-[12px] text-white/55">
-                                    {slab.setName} · PSA {slab.grade}
+                                    {slab.setName} · PSA {slab.grade} · {baht(slab.valueThb)}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="sp-card mt-4 rounded-[22px] p-4">
-                            <Row label={t('ship.fee')} value={baht(SHIP_FEE_THB)} strong />
-                            <Row label={t('ship.window')} value={t('ship.days', { d1: SHIP_DAYS[0], d2: SHIP_DAYS[1] })} />
-                            <Row label={t('ship.arrives')} value={`${fmtDate(now + SHIP_DAYS[0] * 86_400_000)} – ${fmtDate(now + SHIP_DAYS[1] * 86_400_000)}`} />
-                            <Row label={t('ship.payWith')} value={method === 'wallet' ? t('ship.payWallet') : t('ship.payCard')} />
-                        </div>
-                        <p className="mt-2.5 text-[11.5px] leading-snug text-white/50">{t('ship.note')}</p>
-
-                        <div className="sp-label mt-5">{t('ship.requires')}</div>
-                        <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
-                            {SHIP_REQUIRES.map((k, n) => (
-                                <div key={k} className={n ? 'border-t border-white/10' : ''}>
-                                    <Requirement kind={k} done={state.verification[k]} onVerify={onVerify} />
+                        {step === 'address' && (
+                            <>
+                                <p className="mt-4 text-[12.5px] leading-relaxed text-white/60">{t('ship.addressBody')}</p>
+                                <div className="mt-3 grid gap-3">
+                                    <Field id="sp-ship-name" label={t('ship.name')} value={to.name} onChange={(v) => setTo({ ...to, name: v })} placeholder={t('ship.namePh')} />
+                                    <Field id="sp-ship-phone" label={t('ship.phone')} value={to.phone} onChange={(v) => setTo({ ...to, phone: v })} placeholder="08x xxx xxxx" type="tel" />
+                                    <Field id="sp-ship-address" label={t('ship.address')} value={to.address} onChange={(v) => setTo({ ...to, address: v })} placeholder={t('ship.addressPh')} multiline />
                                 </div>
-                            ))}
-                        </div>
+                                <button
+                                    className="sp-btn sp-btn-primary mt-5 h-[54px] w-full text-[16px]"
+                                    disabled={!addressOk}
+                                    onClick={() => {
+                                        sfx.tap();
+                                        setStep('quote');
+                                    }}
+                                >
+                                    {t('ship.continue')}
+                                </button>
+                            </>
+                        )}
 
-                        <button
-                            className="sp-btn sp-btn-primary mt-4 h-[54px] w-full text-[16px]"
-                            disabled={missing.length > 0}
-                            onClick={() => {
-                                if (previewActions.requestShipping(p.id, method)) {
-                                    sfx.keep();
-                                    onClose();
-                                } else {
-                                    sfx.deny();
-                                }
-                            }}
-                        >
-                            <Truck size={17} />
-                            {missing.length > 0 ? t('ship.blocked') : t('ship.submit', { fee: baht(SHIP_FEE_THB) })}
-                        </button>
-                        <p className="mt-2 text-center text-[11px] text-white/40">{t('ship.noCancel')}</p>
+                        {step === 'quote' && (
+                            calculating ? (
+                                <div className="flex flex-col items-center py-14 text-center">
+                                    <div className="h-9 w-9 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                                    <div className="sp-display mt-5 text-[18px]">{t('ship.calculating')}</div>
+                                    <div className="mt-1 text-[12px] text-white/50">{t('ship.calculatingSub')}</div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="sp-card mt-4 rounded-[22px] p-4">
+                                        <Row label={t('ship.fee')} value={baht(quote.feeThb)} strong />
+                                        <Row label={t('ship.window')} value={t('ship.days', { d1: SHIP_DAYS[0], d2: SHIP_DAYS[1] })} />
+                                        <Row label={t('ship.arrives')} value={`${fmtDate(window[0])} – ${fmtDate(window[1])}`} />
+                                        <Row label={t('ship.to')} value={to.name.trim()} />
+                                    </div>
+                                    <div className="mt-3 overflow-hidden rounded-[20px] border border-white/10">
+                                        <Checkbox
+                                            checked={insure}
+                                            onChange={setInsure}
+                                            label={t('ship.insure', { fee: baht(insuranceIfChosen) })}
+                                            sub={t('ship.insureSub', { value: baht(slab.valueThb) })}
+                                        />
+                                        <div className="border-t border-white/10">
+                                            <Checkbox checked={terms} onChange={setTerms} label={t('ship.terms')} sub={t('ship.termsBody', { d1: SHIP_DAYS[0], d2: SHIP_DAYS[1] })} />
+                                        </div>
+                                    </div>
+                                    <button
+                                        className="sp-btn sp-btn-primary mt-5 h-[54px] w-full text-[16px]"
+                                        disabled={!terms}
+                                        onClick={() => {
+                                            sfx.tap();
+                                            setStep('checkout');
+                                        }}
+                                    >
+                                        {t('ship.continue')}
+                                    </button>
+                                </>
+                            )
+                        )}
+
+                        {step === 'checkout' && (
+                            <>
+                                <div className="sp-card mt-4 rounded-[22px] p-4">
+                                    <Row label={t('ship.fee')} value={baht(quote.feeThb)} />
+                                    <Row label={t('ship.insurance')} value={insure ? baht(quote.insuranceThb) : t('ship.noInsurance')} />
+                                    <div className="my-1 border-t border-white/10" />
+                                    <Row label={t('ship.total')} value={baht(quote.totalThb)} strong />
+                                    <Row label={t('ship.payWith')} value={method === 'wallet' ? t('ship.payWallet') : t('ship.payCard')} />
+                                </div>
+                                <div className="sp-card mt-3 rounded-[20px] p-4 text-[12.5px]">
+                                    <div className="sp-label">{t('ship.to')}</div>
+                                    <div className="mt-1 font-bold">{to.name.trim()} · {to.phone.trim()}</div>
+                                    <div className="mt-0.5 whitespace-pre-line text-white/60">{to.address.trim()}</div>
+                                    <div className="mt-1.5 text-white/50">{t('ship.arrivesLine', { from: fmtDate(window[0]), to: fmtDate(window[1]) })}</div>
+                                </div>
+                                <button className="sp-btn sp-btn-primary mt-5 h-[54px] w-full text-[16px]" onClick={pay}>
+                                    {method === 'wallet' ? <Wallet size={17} /> : <CreditCard size={17} />}
+                                    {t('ship.pay', { amount: baht(quote.totalThb) })}
+                                </button>
+                                <p className="mt-2 text-center text-[11px] text-white/40">{t('ship.noCancel')}</p>
+                            </>
+                        )}
+
+                        {step === 'done' && (
+                            <>
+                                <div className="mt-5 flex flex-col items-center text-center">
+                                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-400">
+                                        <Truck size={28} />
+                                    </span>
+                                    <p className="mt-4 text-[13px] leading-relaxed text-white/70">
+                                        {t('ship.doneBody', { name: to.name.trim(), from: fmtDate(window[0]), to: fmtDate(window[1]) })}
+                                    </p>
+                                </div>
+                                <button className="sp-btn sp-btn-primary mt-6 h-[54px] w-full text-[16px]" onClick={onClose}>
+                                    <Check size={18} strokeWidth={3} />
+                                    {t('ship.done')}
+                                </button>
+                            </>
+                        )}
                     </div>
                 </>
             )}

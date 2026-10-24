@@ -10,16 +10,16 @@ import { topPulls } from '@/lib/slabPacks/engine';
 import { haptics } from '@/lib/slabPacks/haptics';
 import { coinsForThb, type VerificationKind } from '@/lib/slabPacks/policy';
 import { getSlab } from '@/lib/slabPacks/pool';
-import { getTable, previewActions, usePreviewState, type PaymentMethod } from '@/lib/slabPacks/previewStore';
+import { availableGames, availableTiers, previewActions, tryTable, usePreviewState, type PaymentMethod } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
-import { HIT_CLASSES, HIT_ORDER, TIER_ORDER, TIERS } from '@/lib/slabPacks/tiers';
-import type { CardOdds, FeedEvent, PackTable, Pull, TierKey } from '@/lib/slabPacks/types';
+import { HIT_CLASSES, HIT_ORDER, TIERS } from '@/lib/slabPacks/tiers';
+import type { CardOdds, FeedEvent, GameKey, PackTable, Pull, TierKey } from '@/lib/slabPacks/types';
 import { ListSheet, ShipSheet, VerifySheet, WalletSheet } from './MoneySheets';
 import OpeningStage, { type OpeningSession } from './OpeningStage';
 import PackArt from './PackArt';
 import { PullsScreen, VaultScreen } from './Screens';
-import { OddsSheet, PreviewMenu, SlabSheet, TopPullCard, pct } from './Sheets';
-import { RankBadge, baht, tierVars, usePrefersReducedMotion, useSp, useTween } from './ui';
+import { CardSheet, OddsSheet, PreviewMenu, SlabSheet, TopPullCard, bandLabel, pct } from './Sheets';
+import { RankBadge, baht, gameLabel, tierVars, usePrefersReducedMotion, useSp, useTween } from './ui';
 
 /**
  * Slab Packs — the app shell: lobby, vault, pull feed, and the opening stage
@@ -43,6 +43,7 @@ export default function SlabPacksApp() {
     const reduced = prefersReduced || !!debug?.still;
 
     const [tab, setTab] = useState<Tab>('packs');
+    const [game, setGame] = useState<GameKey>('pokemon');
     const [tierKey, setTierKey] = useState<TierKey>('silver');
     const [qty, setQty] = useState(1);
     const [method, setMethod] = useState<PaymentMethod>('card');
@@ -51,10 +52,18 @@ export default function SlabPacksApp() {
     const [menuOpen, setMenuOpen] = useState(false);
     const [walletOpen, setWalletOpen] = useState(false);
     const [slabPull, setSlabPull] = useState<Pull | null>(null);
+    const [cardOdds, setCardOdds] = useState<CardOdds | null>(null);
     const [listPull, setListPull] = useState<Pull | null>(null);
     const [shipPull, setShipPull] = useState<Pull | null>(null);
     const [verifyKind, setVerifyKind] = useState<VerificationKind | null>(null);
 
+    // Each game sells the tiers its pool can fill; a tier the game lacks is
+    // skipped, and the selection falls back to the game's cheapest pack.
+    const games = useMemo(() => availableGames(), []);
+    const tiers = useMemo(() => availableTiers(game), [game]);
+    useEffect(() => {
+        if (tiers.length && !tiers.includes(tierKey)) setTierKey(tiers[0]);
+    }, [tiers, tierKey]);
     const tier = TIERS[tierKey];
 
     useEffect(() => {
@@ -77,7 +86,7 @@ export default function SlabPacksApp() {
         if (!state.hydrated || !debug?.demo || demoStarted.current) return;
         demoStarted.current = true;
         setTierKey(debug.demo.tierKey);
-        setSession({ id: 'demo', tierKey: debug.demo.tierKey, pulls: debug.demo.pulls, packless: false, method: 'card' });
+        setSession({ id: 'demo', game: 'pokemon', tierKey: debug.demo.tierKey, pulls: debug.demo.pulls, packless: false, method: 'card' });
     }, [state.hydrated, debug]);
 
     useEffect(() => {
@@ -94,8 +103,8 @@ export default function SlabPacksApp() {
         return () => clearInterval(id);
     }, [state.hydrated]);
 
-    const table = useMemo(() => getTable(tierKey), [tierKey]);
-    const chase = useMemo(() => topPulls(table, 8), [table]);
+    const table = useMemo(() => tryTable(game, tierKey), [game, tierKey]);
+    const chase = useMemo(() => (table ? topPulls(table, 8) : []), [table]);
 
     // A method the balance cannot cover falls back to the card, which never
     // runs out: the pack is paid for at purchase, like any order.
@@ -106,9 +115,9 @@ export default function SlabPacksApp() {
                 : method;
 
     const openPacks = useCallback(
-        (key: TierKey, count: number, pay: PaymentMethod) => {
+        (g: GameKey, key: TierKey, count: number, pay: PaymentMethod) => {
             sfx.unlock();
-            const res = previewActions.buy(key, count, pay);
+            const res = previewActions.buy(g, key, count, pay);
             if (!res.ok) {
                 sfx.deny();
                 haptics.deny();
@@ -123,7 +132,8 @@ export default function SlabPacksApp() {
             sfx.buy();
             haptics.tap();
             setOddsOpen(false);
-            setSession({ id: `${key}-${Date.now()}`, tierKey: key, pulls: res.pulls, packless: false, method: pay });
+            setCardOdds(null);
+            setSession({ id: `${g}-${key}-${Date.now()}`, game: g, tierKey: key, pulls: res.pulls, packless: false, method: pay });
         },
         [showToast, t],
     );
@@ -136,14 +146,15 @@ export default function SlabPacksApp() {
         sfx.unlock();
         sfx.tap();
         const pulls = state.pulls.filter((p) => p.status === 'unrevealed' && p.tier === first.tier).reverse();
-        setSession({ id: `resume-${Date.now()}`, tierKey: first.tier, pulls, packless: true, method: 'card' });
+        const g = getSlab(first.slabKey)?.game ?? 'pokemon';
+        setSession({ id: `resume-${Date.now()}`, game: g, tierKey: first.tier, pulls, packless: true, method: 'card' });
     }, [state.pulls]);
 
     // Android's back button and the iOS back swipe should close what is on
     // top (a sheet, the opening) rather than leave the feature. One history
     // entry stands for "something is open": back pops it and we close; closing
     // from the UI takes the entry back out so it cannot be replayed.
-    const overlayOpen = !!session || oddsOpen || menuOpen || walletOpen || !!slabPull || !!listPull || !!shipPull || !!verifyKind;
+    const overlayOpen = !!session || oddsOpen || menuOpen || walletOpen || !!slabPull || !!cardOdds || !!listPull || !!shipPull || !!verifyKind;
     const historyEntry = useRef(false);
     useEffect(() => {
         if (overlayOpen && !historyEntry.current) {
@@ -167,6 +178,7 @@ export default function SlabPacksApp() {
             setMenuOpen(false);
             setWalletOpen(false);
             setSlabPull(null);
+            setCardOdds(null);
             setListPull(null);
             setShipPull(null);
             setVerifyKind(null);
@@ -186,7 +198,7 @@ export default function SlabPacksApp() {
             onPointerDown={() => sfx.unlock()}
         >
             <div className="sp-ambient" aria-hidden>
-                {TIER_ORDER.map((key) => (
+                {tiers.map((key) => (
                     <div key={key} className="sp-ambient-layer" data-on={key === tierKey} data-material={TIERS[key].theme.material} style={tierVars(TIERS[key])} />
                 ))}
                 <div className="sp-ambient-grain" />
@@ -194,7 +206,7 @@ export default function SlabPacksApp() {
             </div>
 
             <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden">
-                {!state.hydrated ? (
+                {!state.hydrated || !table ? (
                     <div className="flex h-full items-center justify-center">
                         <div className="sp-display sp-breathe text-[22px] text-white/70">{t('common.loading')}</div>
                     </div>
@@ -202,10 +214,19 @@ export default function SlabPacksApp() {
                     <>
                         {tab === 'packs' && (
                             <Lobby
+                                game={game}
+                                games={games}
+                                onGame={(g) => {
+                                    if (g === game) return;
+                                    sfx.tap();
+                                    haptics.tap();
+                                    setGame(g);
+                                }}
+                                tiers={tiers}
                                 tierKey={tierKey}
                                 onTier={(key) => {
                                     if (key === tierKey) return;
-                                    sfx.swipe(TIER_ORDER.indexOf(key) > TIER_ORDER.indexOf(tierKey));
+                                    sfx.swipe(tiers.indexOf(key) > tiers.indexOf(tierKey));
                                     haptics.tap();
                                     setTierKey(key);
                                 }}
@@ -225,11 +246,12 @@ export default function SlabPacksApp() {
                                     sfx.tap();
                                     setMethod(m);
                                 }}
-                                onRip={() => openPacks(tierKey, qty, effectiveMethod)}
+                                onRip={() => openPacks(game, tierKey, qty, effectiveMethod)}
                                 onOdds={() => {
                                     sfx.sheet(true);
                                     setOddsOpen(true);
                                 }}
+                                onCard={setCardOdds}
                                 onMenu={() => {
                                     sfx.sheet(true);
                                     setMenuOpen(true);
@@ -274,7 +296,7 @@ export default function SlabPacksApp() {
                                 reduced={reduced}
                                 sound={state.settings.sound}
                                 onClose={() => setSession(null)}
-                                onRipAgain={(count) => openPacks(session.tierKey, count, session.method)}
+                                onRipAgain={(count) => openPacks(session.game, session.tierKey, count, session.method)}
                                 autoRip={!!debug?.auto}
                             />
                         )}
@@ -287,7 +309,9 @@ export default function SlabPacksApp() {
                             }}
                             tier={tier}
                             table={table}
+                            onCard={setCardOdds}
                         />
+                        <CardSheet card={cardOdds} tier={tier} onClose={() => setCardOdds(null)} />
                         <SlabSheet
                             pull={shownSlabPull}
                             onClose={() => setSlabPull(null)}
@@ -301,7 +325,7 @@ export default function SlabPacksApp() {
                             }}
                         />
                         <ListSheet pull={listPull} onClose={() => setListPull(null)} />
-                        <ShipSheet pull={shipPull} onClose={() => setShipPull(null)} state={state} onVerify={setVerifyKind} />
+                        <ShipSheet pull={shipPull} onClose={() => setShipPull(null)} state={state} />
                         <WalletSheet
                             open={walletOpen}
                             onClose={() => {
@@ -330,6 +354,10 @@ export default function SlabPacksApp() {
 // ── Lobby ───────────────────────────────────────────────────────────────────
 
 interface LobbyProps {
+    game: GameKey;
+    games: GameKey[];
+    onGame: (g: GameKey) => void;
+    tiers: TierKey[];
     tierKey: TierKey;
     onTier: (key: TierKey) => void;
     table: PackTable;
@@ -344,6 +372,7 @@ interface LobbyProps {
     onMethod: (m: PaymentMethod) => void;
     onRip: () => void;
     onOdds: () => void;
+    onCard: (c: CardOdds) => void;
     onMenu: () => void;
     onWallet: () => void;
     onFeed: () => void;
@@ -351,9 +380,9 @@ interface LobbyProps {
 }
 
 function Lobby({
-    tierKey, onTier, table, chase, feed, walletThb, coins, reduced, qty, onQty, method, onMethod, onRip, onOdds, onMenu, onWallet, onFeed, simulated,
+    game, games, onGame, tiers, tierKey, onTier, table, chase, feed, walletThb, coins, reduced, qty, onQty, method, onMethod, onRip, onOdds, onCard, onMenu, onWallet, onFeed, simulated,
 }: LobbyProps) {
-    const { t } = useSp();
+    const { t, isThai } = useSp();
     const tier = TIERS[tierKey];
     const shownWallet = useTween(walletThb, reduced ? 0 : 600);
     const qtyIndex = QUANTITIES.indexOf(qty);
@@ -401,8 +430,25 @@ function Lobby({
 
             <Ticker feed={feed} onOpen={onFeed} simulated={simulated} />
 
+            {/* Which game the packs are for: each game has its own packs and its own odds. */}
+            <div className="mx-4 mt-2.5 flex shrink-0 gap-1.5 rounded-full border border-white/10 bg-white/5 p-1">
+                {games.map((g) => {
+                    const on = g === game;
+                    return (
+                        <button
+                            key={g}
+                            onClick={() => onGame(g)}
+                            aria-pressed={on}
+                            className={`sp-mini h-9 min-w-0 flex-1 truncate rounded-full px-3 text-[12px] font-extrabold transition-colors ${on ? 'bg-white text-black' : 'text-white/60'}`}
+                        >
+                            {gameLabel(g, isThai)}
+                        </button>
+                    );
+                })}
+            </div>
+
             <div className="sp-scroll min-h-0 flex-1" style={{ paddingBottom: 'calc(var(--sab) + 212px)' }}>
-                <Carousel tierKey={tierKey} onTier={onTier} subtitle={t('pack.subtitle')} />
+                <Carousel tiers={tiers} tierKey={tierKey} onTier={onTier} subtitle={gameLabel(game, isThai)} />
 
                 {/* Name and price */}
                 <div className="flex items-end justify-between gap-3 px-5">
@@ -414,7 +460,7 @@ function Lobby({
                         className="sp-display sp-pop-in min-w-0 origin-left bg-clip-text text-transparent"
                         style={{
                             backgroundImage: `linear-gradient(180deg, #fff 30%, ${tier.theme.a})`,
-                            fontSize: `clamp(30px, calc((100vw - 190px) / ${(Math.max(...tier.name.split(" ").map((w) => w.length)) * 0.62).toFixed(2)}), 46px)`,
+                            fontSize: `clamp(30px, calc((100vw - 190px) / ${(Math.max(...tier.name.split(' ').map((w) => w.length)) * 0.62).toFixed(2)}), 46px)`,
                         }}
                     >
                         {tier.name}
@@ -438,18 +484,18 @@ function Lobby({
                     </button>
                 </div>
 
-                {/* Top pulls: the dearest cards this pack can hold, each with its chance */}
+                {/* Top pulls: the dearest cards this pack can hold, each with its chance. Tap one to see it. */}
                 <div className="mt-4 flex items-center justify-between px-5">
                     <span className="sp-label">{t('lobby.topPulls')}</span>
                     <span className="text-[11px] text-white/45">{t('lobby.floor', { amount: baht(table.floorThb) })}</span>
                 </div>
                 <div className="sp-strip mt-2 gap-3 px-5 pb-2 pt-2">
                     {chase.map((c) => (
-                        <TopPullCard key={c.slab.key} c={c} tier={tier} />
+                        <TopPullCard key={c.slab.key} c={c} tier={tier} onClick={() => onCard(c)} />
                     ))}
                 </div>
 
-                {/* What a pack can be, class by class. Fixed: the same before and after every pull. */}
+                {/* What a pack can be: each class with its odds and its price range. Fixed: the same before and after every pull. */}
                 <div className="mt-5 px-5">
                     <div className="flex items-center justify-between">
                         <span className="sp-label">{t('lobby.nextPack')}</span>
@@ -458,17 +504,19 @@ function Lobby({
                             <ChevronRight size={14} />
                         </button>
                     </div>
-                    <div className="mt-2.5 grid grid-cols-3 gap-2">
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
                         {HIT_ORDER.slice().reverse().map((cls) => (
                             <button key={cls} onClick={onOdds} className="sp-card sp-mini rounded-[18px] px-3 py-2.5 text-left">
-                                <div className="flex items-center justify-between">
-                                    <RankBadge cls={cls} style={{ fontSize: 13 }} />
-                                    <span className="text-[10.5px] text-white/50">{t('odds.cardsShort', { n: table.byClass[cls].cards })}</span>
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <RankBadge cls={cls} style={{ fontSize: 13 }} />
+                                        <span className="truncate text-[12px] font-extrabold">{t(`class.${cls}`)}</span>
+                                    </span>
+                                    <span className="sp-num shrink-0 text-[16px] leading-none" style={{ color: HIT_CLASSES[cls].color }}>
+                                        {pct(table.byClass[cls].odds)}
+                                    </span>
                                 </div>
-                                <div className="sp-num mt-2 text-[18px] leading-none" style={{ color: HIT_CLASSES[cls].color }}>
-                                    {pct(table.byClass[cls].odds)}
-                                </div>
-                                <div className="mt-1 truncate text-[10px] text-white/45">{t(`class.${cls}`)}</div>
+                                <div className="mt-1.5 truncate text-[11px] text-white/50">{bandLabel(cls, tier)}</div>
                             </button>
                         ))}
                     </div>
@@ -581,11 +629,11 @@ function Ticker({ feed, onOpen, simulated }: { feed: FeedEvent[]; onOpen: () => 
 
 // ── Pack carousel ───────────────────────────────────────────────────────────
 
-function Carousel({ tierKey, onTier, subtitle }: { tierKey: TierKey; onTier: (key: TierKey) => void; subtitle: string }) {
+function Carousel({ tiers, tierKey, onTier, subtitle }: { tiers: TierKey[]; tierKey: TierKey; onTier: (key: TierKey) => void; subtitle: string }) {
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const [size, setSize] = useState({ w: 0, h: 0 });
     const x = useMotionValue(0);
-    const index = TIER_ORDER.indexOf(tierKey);
+    const index = Math.max(0, tiers.indexOf(tierKey));
     // True from the start of a drag until just after it ends, so the click
     // that follows a drag is not read as a tap on a pack.
     const dragged = useRef(false);
@@ -604,7 +652,7 @@ function Carousel({ tierKey, onTier, subtitle }: { tierKey: TierKey; onTier: (ke
     const packW = Math.min(packH * 0.64, size.w * 0.52);
     // Distance between pack centres: the neighbours peek in from both sides.
     const gap = Math.max(1, size.w * 0.5);
-    const travel = (TIER_ORDER.length - 1) * gap;
+    const travel = (tiers.length - 1) * gap;
 
     useEffect(() => {
         if (!size.w) return;
@@ -644,19 +692,19 @@ function Carousel({ tierKey, onTier, subtitle }: { tierKey: TierKey; onTier: (ke
                         const box = wrapRef.current?.getBoundingClientRect();
                         if (dragged.current || !box) return;
                         const i = Math.round((e.clientX - (box.left + box.width / 2) - x.get()) / gap);
-                        if (i !== index && i >= 0 && i < TIER_ORDER.length) onTier(TIER_ORDER[i]);
+                        if (i !== index && i >= 0 && i < tiers.length) onTier(tiers[i]);
                     }}
                     onDragEnd={(_, info) => {
                         setTimeout(() => {
                             dragged.current = false;
                         }, 60);
                         const projected = x.get() + info.velocity.x * 0.18;
-                        const target = Math.max(0, Math.min(TIER_ORDER.length - 1, Math.round(-projected / gap)));
+                        const target = Math.max(0, Math.min(tiers.length - 1, Math.round(-projected / gap)));
                         if (target === index) animate(x, -index * gap, SPRING);
-                        else onTier(TIER_ORDER[target]);
+                        else onTier(tiers[target]);
                     }}
                 >
-                    {TIER_ORDER.map((key, i) => (
+                    {tiers.map((key, i) => (
                         <CarouselPack
                             key={key}
                             i={i}

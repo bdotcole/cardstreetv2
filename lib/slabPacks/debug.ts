@@ -18,7 +18,7 @@
  */
 
 import { commitFor } from './engine';
-import { PREVIEW_POOL } from './pool';
+import { poolForGame } from './pool';
 import { HIT_ORDER, TIER_ORDER, TIERS, classify } from './tiers';
 import type { HitClass, Pull, TierKey } from './types';
 
@@ -44,7 +44,7 @@ export function readDebug(): SlabPacksDebug {
             const cls = HIT_ORDER.find((c) => c === raw) as HitClass | undefined;
             if (!cls) return;
             // The priciest slab of the class: the reveal at its most dressed.
-            const slab = PREVIEW_POOL.filter((s) => classify(s.valueThb, tier.priceThb) === cls).pop();
+            const slab = poolForGame('pokemon').filter((s) => classify(s.valueThb, tier.priceThb) === cls).pop();
             if (!slab) return;
             const seed = `demo-seed-${i}`;
             pulls.push({
