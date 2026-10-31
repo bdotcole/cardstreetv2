@@ -1,34 +1,52 @@
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 // URLs per card-sitemap file. Capped at 1000 because PostgREST returns at most
 // 1000 rows per query (a single .range() past that is silently truncated), so
-// one file == one query keeps the code simple. ~76 files for the full catalog,
+// one file == one query keeps the code simple. ~120 files for the full catalog,
 // far below the sitemaps.org 50k-URL / 50MB-per-file and 50k-sitemap-index caps.
 export const CARDS_PER_SITEMAP = 1000;
 
-// Anon client — pokemon_cards is public catalog data (the marketplace reads it
-// from the browser), so no service role is needed for these read-only listings.
+// Service-role client, deliberately. pokemon_cards is public catalog data and
+// the anon key used to be enough, but the anon role runs under Supabase's 3s
+// statement_timeout and both queries below cross it on a cold instance: the
+// exact count right after a deploy, and the deep-offset shard pages (~2.8s with
+// the price embed). The cancelled query came back as a null count / empty data
+// and was published as a 1-shard index or a 404 shard (see the guards below).
+// The service role's timeout is 8s. This module is `server-only`, imported by
+// two route handlers, and reads ids and timestamps only, so bypassing RLS
+// changes nothing about what is exposed.
 function catalogClient() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false } }
-    );
+    return createAdminClient();
 }
 
 // Only cards with an image are worth submitting — an imageless page is thin.
 const HAS_IMAGE = (q: any) => q.not('image_small', 'is', null);
 
+// A sitemap that silently shrinks is worse than one that fails. Google treats a
+// 200 as the truth and a 5xx as "try again later", so every query here THROWS
+// on error instead of degrading: with `revalidate = 86400` on the routes, a throw
+// during background revalidation keeps the last good response in the cache, and
+// a throw on a cold first render returns a 500 that Google retries. The
+// degrading version published a 1-shard index for a day on 2026-10-15, 10-19
+// and 10-30 (Search Console read it as 1,000 pages instead of ~116k), and
+// turned slow shards into 404s.
+//
+// The catalog has >120k imaged cards; a count below this is a failed query,
+// not a smaller catalog. Raise it only if the catalog is deliberately shrunk.
+const SANITY_FLOOR = 50_000;
+
 export async function countSitemapCards(): Promise<number> {
-    const { count } = await HAS_IMAGE(
+    const { count, error } = await HAS_IMAGE(
         catalogClient().from('pokemon_cards').select('id', { count: 'exact', head: true })
     );
-    return count || 0;
+    if (error) throw new Error(`cards-sitemap count failed: ${error.message}`);
+    if (!count || count < SANITY_FLOOR) throw new Error(`cards-sitemap count implausible: ${count}`);
+    return count;
 }
 
 export async function sitemapPageCount(): Promise<number> {
-    return Math.max(1, Math.ceil((await countSitemapCards()) / CARDS_PER_SITEMAP));
+    return Math.ceil((await countSitemapCards()) / CARDS_PER_SITEMAP);
 }
 
 export interface SitemapCard {
@@ -62,6 +80,11 @@ function lastmodFor(row: { updated_at?: string | null; market_values?: { last_up
     return newest;
 }
 
+/**
+ * One shard of card URLs. Throws on a query error; returns an empty array only
+ * for a page number past the end of the catalog, which the route turns into the
+ * one legitimate 404.
+ */
 export async function cardsForPage(page: number): Promise<SitemapCard[]> {
     const from = page * CARDS_PER_SITEMAP;
     const to = from + CARDS_PER_SITEMAP - 1;
@@ -69,11 +92,12 @@ export async function cardsForPage(page: number): Promise<SitemapCard[]> {
     // per chunk per day behind the route's revalidate. Verified 2026-08-14 to
     // return exactly the same row count as the id-only query — an embed that
     // silently dropped rows would drop URLs from the sitemap.
-    const { data } = await HAS_IMAGE(
+    const { data, error } = await HAS_IMAGE(
         catalogClient()
             .from('pokemon_cards')
             .select('id, updated_at, market_values(last_updated)')
             .order('id', { ascending: true })
     ).range(from, to);
+    if (error) throw new Error(`cards-sitemap page ${page} failed: ${error.message}`);
     return (data || []).map((r: any) => ({ id: r.id, lastmod: lastmodFor(r) }));
 }
