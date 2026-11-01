@@ -41,6 +41,23 @@ async function growthCounts(build: () => any, tsColumn: string): Promise<Deltas>
 }
 
 /**
+ * Timestamp column behind the Sellers tile's growth badge.
+ *
+ * `stripe_charges_enabled_at` is stamped once by a trigger when Connect
+ * onboarding completes (migration 20261101_stripe_charges_enabled_at). Until
+ * that migration is applied the column does not exist and the query would
+ * fail, so fall back to `stripe_account_updated_at`: every account.updated
+ * webhook bumps it, so it over-counts a little, but the tile still works.
+ */
+async function sellerCompletionColumn(supabase: ReturnType<typeof createAdminClient>): Promise<string> {
+    const { error } = await supabase
+        .from('profiles')
+        .select('stripe_charges_enabled_at', { count: 'exact', head: true })
+        .limit(1)
+    return error ? 'stripe_account_updated_at' : 'stripe_charges_enabled_at'
+}
+
+/**
  * Every paid order counts, whoever sold it.
  *
  * This used to exclude any seller whose profile role is 'admin' as "seeded",
@@ -52,19 +69,23 @@ async function growthCounts(build: () => any, tsColumn: string): Promise<Deltas>
 async function getOverviewStats() {
     const supabase = createAdminClient()
 
-    const [usersRes, collectionsRes, listingsRes, ticketsRes, reportsRes, requestsRes] = await Promise.all([
+    // A seller "completes" when Stripe flips charges_enabled: that is the flag
+    // checkout gates on, so it is the one that means the shop can actually sell.
+    const sellers = () => supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('stripe_charges_enabled', true)
+
+    const [usersRes, sellersRes, listingsRes, ticketsRes, reportsRes, requestsRes, sellerTsColumn] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('collection_items').select('id', { count: 'exact', head: true }),
+        sellers(),
         supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('support_tickets').select('id, status', { count: 'exact' }).neq('status', 'Resolved'),
         supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
         supabase.from('card_requests').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
+        sellerCompletionColumn(supabase),
     ])
 
-    // collection_items timestamps with `added_at`; everything else `created_at`.
-    const [userGrowth, collectionGrowth, listingGrowth, ticketGrowth, reportGrowth, requestGrowth] = await Promise.all([
+    const [userGrowth, sellerGrowth, listingGrowth, ticketGrowth, reportGrowth, requestGrowth] = await Promise.all([
         growthCounts(() => supabase.from('profiles').select('id', { count: 'exact', head: true }), 'created_at'),
-        growthCounts(() => supabase.from('collection_items').select('id', { count: 'exact', head: true }), 'added_at'),
+        growthCounts(sellers, sellerTsColumn),
         growthCounts(() => supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'), 'created_at'),
         growthCounts(() => supabase.from('support_tickets').select('id', { count: 'exact', head: true }).neq('status', 'Resolved'), 'created_at'),
         growthCounts(() => supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'Open'), 'created_at'),
@@ -104,7 +125,7 @@ async function getOverviewStats() {
 
     return {
         totalUsers: usersRes.count ?? 0,
-        collectionItems: collectionsRes.count ?? 0,
+        activeSellers: sellersRes.count ?? 0,
         activeListings: listingsRes.count ?? 0,
         paidOrders,
         gmvBaht,
@@ -112,7 +133,7 @@ async function getOverviewStats() {
         openReports: reportsRes.count ?? 0,
         openCardRequests: requestsRes.count ?? 0,
         userGrowth,
-        collectionGrowth,
+        sellerGrowth,
         listingGrowth,
         orderGrowth,
         gmvGrowth,
@@ -287,7 +308,7 @@ export default async function AdminOverviewPage() {
 
     const statCards: StatCardData[] = [
         { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: 'fa-solid fa-users', color: 'text-brand-cyan', sub: 'Registered accounts', deltas: stats.userGrowth },
-        { label: 'Collections', value: stats.collectionItems.toLocaleString(), icon: 'fa-solid fa-layer-group', color: 'text-brand-purple', sub: 'Cards in collections', deltas: stats.collectionGrowth },
+        { label: 'Sellers', value: stats.activeSellers.toLocaleString(), icon: 'fa-solid fa-store', color: 'text-brand-purple', sub: 'Stripe Connect complete', deltas: stats.sellerGrowth },
         { label: 'Listings', value: stats.activeListings.toLocaleString(), icon: 'fa-solid fa-tags', color: 'text-brand-green', sub: 'Active on marketplace', deltas: stats.listingGrowth },
         { label: 'Orders', value: stats.paidOrders.toLocaleString(), icon: 'fa-solid fa-cart-shopping', color: 'text-yellow-400', sub: 'Paid, excl. cancelled', deltas: stats.orderGrowth },
         { label: 'GMV', value: `฿${Math.round(stats.gmvBaht).toLocaleString()}`, icon: 'fa-solid fa-baht-sign', color: 'text-brand-green', sub: 'All paid orders', deltas: stats.gmvGrowth, deltaPrefix: '฿' },

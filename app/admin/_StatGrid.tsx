@@ -17,7 +17,7 @@ export interface StatCardData {
     /** Prefix for the delta figure only, e.g. the baht sign on GMV. */
     deltaPrefix?: string
     /** The admin section that works this queue. Tiles without one (GMV,
-     *  collections) have no page to open and stay plain. */
+     *  sellers) have no page to open and stay plain. */
     href?: string
 }
 
