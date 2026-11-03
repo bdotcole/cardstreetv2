@@ -73,6 +73,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { usePurchaseRegion, ensurePurchaseRegion } from '@/lib/hooks/usePurchaseRegion';
 import { useOfferBadge, notifyOffersChanged } from '@/lib/hooks/useOfferBadge';
 import { useChatUnread } from '@/lib/hooks/useChatUnread';
+import { useToShipBadge } from '@/lib/hooks/useToShipBadge';
 import { CHAT_BACK_EVENT } from '@/components/chat/ChatOverlay';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { isEntryPointHidden } from '@/lib/betaFeatures';
@@ -753,9 +754,11 @@ export default function HomePage() {
     const offerBadge = useOfferBadge(
         process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1' && !!user && user.provider !== 'guest',
     );
-    // Unread chats share the profile-tab badge: Messages lives under Profile.
+    // Unread chats and parcels waiting for a label share the profile-tab
+    // badge: Messages and the Seller Dashboard both live under Profile.
     const chatUnread = useChatUnread(!!user && user.provider !== 'guest');
-    const profileBadge = offerBadge.actionable + chatUnread.unread;
+    const toShip = useToShipBadge(!!user && user.provider !== 'guest');
+    const profileBadge = offerBadge.actionable + chatUnread.unread + toShip.count;
     // Collector Pass rewards: the header coin chip replaced the currency
     // switcher (currency now lives in Profile > Settings). Beta-gated + signed
     // in only; the summary hook fails closed so the chip simply doesn't render
@@ -2941,9 +2944,10 @@ export default function HomePage() {
                     <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 transition-all group p-2 ${activeTab === 'profile' ? '-translate-y-2' : ''}`}>
                         <span className="relative">
                             <i className={`fa-solid fa-user-astronaut text-xl transition-colors ${activeTab === 'profile' ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-600 group-hover:text-slate-400'}`}></i>
-                            {/* Offers needing action (mostly: accepted, awaiting your payment).
-                                The inbox is three taps deep, so this is the only thing a buyer
-                                who missed the email will ever see. */}
+                            {/* Offers needing action (mostly: accepted, awaiting your payment),
+                                unread chats and sales waiting for a label. Each inbox is two or
+                                three taps deep, so this is the only thing a user who missed the
+                                push or email will ever see. */}
                             {profileBadge > 0 && (
                                 <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-brand-cyan text-brand-darker text-[9px] font-black flex items-center justify-center shadow-lg shadow-brand-cyan/30">
                                     {profileBadge}

@@ -7,7 +7,7 @@ import {
   Package, History, HelpCircle, FileText, Lock, ChevronRight,
   ChevronLeft, Check, X, Truck, Clock, CheckCircle,
   AlertCircle, Star, Crown, Zap, LogOut, Settings, ShoppingBag,
-  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio, MessageCircle, Eye
+  Wallet, Loader2, Pencil, Moon, Sun, Store, Tag, Radio, MessageCircle, Eye, LayoutDashboard
 } from 'lucide-react';
 import { UserProfile, Offer, Card } from '@/types';
 import type { WatchedListing } from '@/lib/listingWatches';
@@ -24,6 +24,7 @@ import { fetchFollowSummary } from '@/lib/follows';
 import ChatInbox from './chat/ChatInbox';
 import ChatOverlay from './chat/ChatOverlay';
 import { useChatUnread } from '@/lib/hooks/useChatUnread';
+import { useToShipBadge, notifyShipmentsChanged } from '@/lib/hooks/useToShipBadge';
 import type { ChatUser } from '@/lib/chat';
 import StripeConnectSection from './StripeConnectSection';
 import ShopPauseSection from './ShopPauseSection';
@@ -196,6 +197,7 @@ interface Sale {
   id: string;
   total_amount: number;
   platform_fee: number;
+  status: string;
   transfer_group?: string | null;
   // Only set once an order is completed; null for paid/shipped/etc. Fall back
   // to created_at when rendering so a null never becomes `new Date(null)` = epoch.
@@ -209,6 +211,23 @@ interface Sale {
     price: number;
   } | null;
 }
+
+// Where a sale stands, for the Seller Dashboard's recent-sales rows: a parcel
+// still to pack reads "To ship", a finished one "Completed", anything in
+// between its shipping state. Statuses with no label (disputed) show the raw
+// value rather than a translation key.
+const SALE_STAGE_KEYS = new Set(['label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered']);
+const saleStageLabel = (
+  status: string,
+  t: (key: string) => string,
+): { text: string; tone: 'orange' | 'green' | 'slate' } => {
+  if (status === 'paid' || status === 'processing') return { text: t('profile.toShip'), tone: 'orange' };
+  if (status === 'completed') return { text: t('profile.status_completed'), tone: 'green' };
+  return {
+    text: SALE_STAGE_KEYS.has(status) ? t(`profile.status_${status}`) : status.replace(/_/g, ' '),
+    tone: 'slate',
+  };
+};
 
 // Display name/thumbnail for an order/sale row. Live-break spot orders have no
 // listing snapshot — the server-resolved break_context ("<stream> — <lot> ·
@@ -224,7 +243,7 @@ const rowDisplayImage = (
   row: { break_context?: { imageSmall: string | null } | null; listing?: { card_data: any } | null },
 ): string | null => row.break_context?.imageSmall || row.listing?.card_data?.images?.small || null;
 
-type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'shipments' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers' | 'messages' | 'watching';
+type ActivePanel = 'none' | 'account' | 'settings' | 'orders' | 'sales' | 'support' | 'payouts' | 'offers' | 'liveShows' | 'following' | 'followers' | 'messages' | 'watching';
 
 // Shared delivery-progress view: the five-step timeline plus the carrier
 // tracking row. Rendered for both the buyer's Track Orders panel and the
@@ -367,6 +386,15 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   // Messages row badge + the open conversation (a body-portaled overlay above
   // the Messages panel, so its composer is never under the tab bar).
   const chatUnread = useChatUnread(!!user && user.provider !== 'guest');
+  // Seller Dashboard row badge (and the shell's Profile tab, which adds it to
+  // the offers and chat counts): parcels still waiting for a label.
+  const toShip = useToShipBadge(!!user && user.provider !== 'guest');
+  // Which list the Seller Dashboard shows: the parcels to pack or the sales.
+  const [dashboardView, setDashboardView] = useState<'toShip' | 'sales'>('toShip');
+  // Where the Stripe card sits in the dashboard: first until payouts are
+  // enabled (then it is the only thing to do), last once the seller is set up.
+  // null while the status is loading or failed.
+  const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null } | null>(null);
   const supabase = createClient();
 
@@ -511,7 +539,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       seller = !!data && data.seller_id === user?.id;
     } catch { /* unknown side: the buyer panel is the safer default */ }
     setFocusOrderId(orderId);
-    openPanel(seller ? 'shipments' : 'orders');
+    if (seller) openSellerDashboard('toShip');
+    else openPanel('orders');
   };
   useEffect(() => {
     if (!user?.id) return;
@@ -802,11 +831,25 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
         const data = await res.json();
         setShipments(data.shipments);
         setPickupInfo(data.pickup ?? null);
+        // Every label action reloads this list, so this is where the badges
+        // learn that a parcel no longer waits for its label.
+        notifyShipmentsChanged();
       }
     } catch (error) {
       console.error('Error fetching shipments:', error);
     }
   };
+
+  // Every way into the Seller Dashboard (menu row, order push, Stripe return,
+  // the shell's payout nudge, the seller checklist) loads its lists here, so
+  // none of them lands on an empty dashboard: the flag-driven entries set the
+  // panel directly and used to show no sales at all.
+  useEffect(() => {
+    if (activePanel !== 'payouts') return;
+    fetchSales();
+    fetchShipments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePanel]);
 
   // Swipe-to-dismiss on a delivered/completed shipment card. Optimistic:
   // the cards animate out immediately; on failure the list is refetched so
@@ -1278,10 +1321,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
     if (panel === 'orders') fetchOrders().then(syncInFlightOrders);
-    // Seller Account shows earnings + recent sales; Sales History is its
-    // sub-panel, so both need the list.
-    if (panel === 'sales' || panel === 'payouts') fetchSales();
-    if (panel === 'shipments') fetchShipments();
+    // Sales History, the Seller Dashboard's sub-panel. The dashboard itself
+    // loads its lists from the activePanel effect above.
+    if (panel === 'sales') fetchSales();
     if (panel === 'account' && user) {
       // profiles.display_name is the saved name; user.name can still be the
       // Google full_name, and seeding from it made the next save revert the
@@ -1298,6 +1340,13 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
         postcode: profileData?.postcode || ''
       });
     }
+  };
+
+  // The Seller Dashboard opens on the parcels when something waits for a
+  // label, otherwise on the sales; an order push or link names the view.
+  const openSellerDashboard = (view?: 'toShip' | 'sales') => {
+    setDashboardView(view ?? (toShip.count > 0 ? 'toShip' : 'sales'));
+    setActivePanel('payouts');
   };
 
   // Menu sections
@@ -1340,10 +1389,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
         ...(hasBeta('live_broadcast')
           ? [{ name: t('live.myShows.menuTitle'), icon: Radio, panel: 'liveShows' as ActivePanel, color: 'text-brand-red' }]
           : []),
-        { name: t('profile.pendingShipments'), icon: Truck, panel: 'shipments' as ActivePanel, color: 'text-orange-400' },
-        // Sales History lives inside Seller Account (earnings + recent sales
-        // there, the full list one tap deeper) — no separate menu row.
-        { name: t('profile.sellerPayouts'), icon: Wallet, panel: 'payouts' as ActivePanel, color: 'text-brand-cyan' }
+        // Seller Dashboard: earnings, the parcels to pack (Pending Shipments
+        // had its own row until 2026-11-03), the latest sales with Sales
+        // History one tap deeper, shop settings and the Stripe account. The
+        // badge is the parcels still waiting for a label.
+        { name: t('profile.sellerDashboard'), icon: LayoutDashboard, action: () => openSellerDashboard(), color: 'text-brand-cyan', badge: toShip.count }
       ]
     },
     // Settings sits directly above Support: the day-to-day sections (account,
@@ -1565,7 +1615,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {/* Heterogeneous menu-item shapes — only the offers row carries a badge. */}
+                          {/* Heterogeneous menu-item shapes — only the Messages, Offers and Seller Dashboard rows carry a badge. */}
                           {!!(item as { badge?: number }).badge && (
                             <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center">
                               {(item as { badge?: number }).badge}
@@ -1612,10 +1662,17 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                 target="_blank"
                 rel="noopener noreferrer"
               >
+                {/* Served from our own public/ folder: DBD's banner endpoint
+                    sits behind a bot challenge that answers browser user
+                    agents with an HTML page instead of the PNG, so the image
+                    never loaded in the app (2026-11-03). The verification
+                    link above still goes to DBD itself. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="https://dbdregistered.dbd.go.th/api/public/banner?param=264F801AB2642972F5E2CFBD3345A5B9F80CC9E827CEC2581CF516701D187501"
+                  src="/dbd-registered.png"
                   alt="DBD Registered"
+                  width={324}
+                  height={154}
                   className="h-12 w-auto"
                 />
               </a>
@@ -2303,333 +2360,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
           </motion.div>
         )}
 
-        {/* Pending Shipments Panel */}
-        {activePanel === 'shipments' && (
-          <motion.div
-            key="shipments"
-            variants={slideVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
-          >
-            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-              <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-slate-400" />
-                </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">{isThai ? 'รายการรอจัดส่ง' : 'Pending Shipments'}</h2>
-              </div>
-
-              <div className="space-y-3">
-                {shipments.length === 0 ? (
-                  <div className="text-center py-12 space-y-4">
-                    <Truck className="w-12 h-12 text-slate-700 mx-auto" />
-                    <p className="text-slate-500 text-sm">{t('profile.noPendingShipments')}</p>
-                    <p className="text-slate-600 text-xs">{t('profile.pendingShipmentsDesc')}</p>
-                  </div>
-                ) : (
-                  <AnimatePresence initial={false}>
-                  {groupByParcel(shipments).map((group, _i, parcels) => {
-                    // One card per PARCEL (waybill). A checkout is one parcel,
-                    // and several of a buyer's checkouts share one when the
-                    // seller labels them together (lib/parcels), so the card
-                    // lists every card going into that envelope under its
-                    // single label. `shipment` is the primary order; its id
-                    // drives the label/track actions (every row carries the
-                    // same waybill).
-                    const shipment = group[0];
-                    const pno = shipment.shipping_labels?.[0]?.tracking_number;
-                    const checkouts = countCheckouts(group);
-                    const buyerName = shipment.buyer?.display_name || null;
-                    // No label yet: the seller mints it here. The buyer's other
-                    // unlabelled checkouts can go in the same parcel, and a
-                    // parcel Flash has not collected yet can take these cards
-                    // too (no new waybill, nothing cancelled).
-                    const awaitingLabel = group.every(isAwaitingLabel);
-                    const buyerKey = shipment.buyer_id || '';
-                    const otherUnlabelled = awaitingLabel
-                      ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
-                      : [];
-                    const openParcel = awaitingLabel
-                      ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
-                      : undefined;
-                    const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
-                    const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
-                    const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
-                    // Finished shipments stay in the panel as a delivery
-                    // notice until the seller swipes them away (see
-                    // clearShipments). Active ones can't be dismissed.
-                    const isDeliveredCard = ['delivered', 'completed'].includes(shipment.status);
-                    // Live-break spot orders never get a per-order label —
-                    // their parcel is consolidated at stream settle, so every
-                    // label affordance is replaced by a passive notice.
-                    const isBreakOrder = !!shipment.break_spot_id;
-                    // Flash cancelled the booked courier (reconcile-pickups cron):
-                    // flagged in the header so it is not missed in a long list.
-                    const courierCancelled = !isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel)
-                      && isPickupCancelled(group.map((o) => o.shipping_labels?.[0]));
-                    const statusLine = (
-                      <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
-                        {/* 'completed' reads "Delivered" here — in a shipping
-                            panel the parcel state is what matters; the
-                            escrow-side "Completed" label lives in Sales
-                            History. */}
-                        {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${shipment.status === 'completed' ? 'delivered' : shipment.status.toLowerCase()}`) || shipment.status.replace('_', ' ')}</span>
-                      </p>
-                    );
-                    return (
-                    <motion.div
-                      key={shipment.id}
-                      layout
-                      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
-                      drag={isDeliveredCard ? 'x' : false}
-                      dragConstraints={{ left: 0, right: 0 }}
-                      dragElastic={0.8}
-                      dragMomentum={false}
-                      onDragEnd={(_, info) => {
-                        if (isDeliveredCard && (Math.abs(info.offset.x) > 120 || Math.abs(info.velocity.x) > 600)) {
-                          clearShipments(group.map((s) => s.id));
-                        }
-                      }}
-                      id={group.some((s) => s.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
-                      className={`glass p-4 rounded-2xl border space-y-4 ${
-                        group.some((s) => s.id === focusOrderId)
-                          ? 'border-brand-green/60 ring-2 ring-brand-green/40'
-                          : 'border-white/5'
-                      }`}
-                    >
-                      {/* Parcel header: who it goes to, the waybill, and how
-                          many checkouts were folded into it. */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider truncate">
-                            {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
-                          </p>
-                          {isRealWaybill(pno) && (
-                            <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
-                          )}
-                        </div>
-                        <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
-                          {courierCancelled && (
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
-                              {t('parcel.courierCancelled')}
-                            </span>
-                          )}
-                          {checkouts > 1 && (
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
-                              {t('parcel.combined').replace('{count}', String(checkouts))}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {checkouts > 1 && !isDeliveredCard && (
-                        <p className="text-brand-cyan text-xs font-semibold">{t('parcel.packTogether')}</p>
-                      )}
-
-                      {/* One row per card in the parcel. A combined parcel keeps
-                          each checkout's cards under an "Order n" caption so the
-                          seller can match them to the sale notifications. */}
-                      {groupByTransferGroup(group).map((checkout, idx) => (
-                        <div key={checkout[0].id} className="space-y-3">
-                          {checkouts > 1 && (
-                            <p className="text-slate-500 text-[10px] uppercase tracking-wider">
-                              {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          )}
-                          {checkout.map((item) => {
-                            const itemImage = rowDisplayImage(item);
-                            return (
-                            <div key={item.id} className="flex items-start gap-3">
-                              <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
-                                {itemImage && (
-                                  <img
-                                    src={getThumbnailUrl(itemImage)}
-                                    alt="Card"
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-full h-full object-cover"
-                                  />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white font-semibold text-sm truncate">
-                                  {rowDisplayName(item, t, 'profile.cardOrder')}
-                                </p>
-                                <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
-                                {group.length === 1 && statusLine}
-                              </div>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                      {group.length > 1 && (
-                        <div className="flex items-end justify-between gap-2">
-                          {statusLine}
-                          <span className="text-slate-500 text-[10px] uppercase tracking-wider pb-1">
-                            {t('parcel.itemsOne').replace('{count}', String(group.length))}
-                          </span>
-                        </div>
-                      )}
-
-
-                      {/* Delivery notice for sellers not opted into push or
-                          email — the card lingers here until swiped away. */}
-                      {isDeliveredCard && (
-                        <div className="flex items-center justify-between gap-2 h-10 px-3 bg-brand-green/10 border border-brand-green/20 rounded-xl">
-                          <div className="flex items-center gap-2 text-brand-green min-w-0">
-                            <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                            <span className="font-bold text-xs uppercase tracking-widest truncate">{t('profile.shipmentDeliveredBanner')}</span>
-                          </div>
-                          <span className="text-slate-500 text-[10px] flex-shrink-0">{t('profile.swipeToClear')}</span>
-                        </div>
-                      )}
-                      {/* Live-break spot order: no per-order label ever — the
-                          parcel is consolidated per buyer at stream settle, so
-                          the label affordances below are replaced by this
-                          passive notice. */}
-                      {isBreakOrder && !isDeliveredCard && (
-                        <div className="w-full h-10 bg-brand-cyan/5 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
-                          {t('profile.liveBreakShipsWithParcel')}
-                        </div>
-                      )}
-                      {/* The seller said this parcel left another way: the
-                          carrier and number they gave, in place of a Flash
-                          timeline that will never move. */}
-                      <HandoffSummary label={shipment.shipping_labels?.[0]} />
-                      {/* No waybill yet: the seller mints it here, alone or
-                          combined with the buyer's other unlabelled orders, or
-                          adds these cards to a parcel Flash has not collected. */}
-                      {!isBreakOrder && awaitingLabel && (
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
-                            disabled={labelBusy}
-                            className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {labelBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
-                          </button>
-                          {otherUnlabelled.length > 0 && (
-                            <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-3 space-y-2">
-                              <p className="text-brand-cyan text-xs font-bold">
-                                {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
-                              </p>
-                              <button
-                                onClick={() => setShipSheet({ mode: 'create', orderIds: combineIds })}
-                                disabled={labelBusy}
-                                className="w-full h-9 bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/25 transition-colors disabled:opacity-50"
-                              >
-                                {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
-                              </button>
-                            </div>
-                          )}
-                          {openParcelPno && (
-                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
-                              <p className="text-amber-300 text-xs font-bold">{t('parcel.hasOpenParcel')}</p>
-                              <button
-                                onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
-                                disabled={labelBusy}
-                                className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-amber-500/30 transition-colors disabled:opacity-50"
-                              >
-                                {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {/* The handling promise the buyer already read on the card
-                          page; turns red once it has passed. Reminders go out
-                          at 24h and 48h (app/api/cron/ship-reminders). */}
-                      {!isBreakOrder && !isDeliveredCard && ['paid', 'label_generated', 'processing'].includes(shipment.status) && (() => {
-                        const due = shipByDate(shipment.created_at);
-                        if (!due) return null;
-                        const overdue = due.getTime() < Date.now();
-                        return (
-                          <p className={`text-xs font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
-                            {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' })}
-                          </p>
-                        );
-                      })()}
-                      {/* Labelled, not yet scanned by Flash: what was arranged
-                          (drop-off or a booked courier) and a way to book one. */}
-                      {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (
-                        <ParcelHandoffNote
-                          labels={group.map((o) => o.shipping_labels?.[0])}
-                          busy={pickupBusyPno === pno}
-                          onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
-                          onShippedElsewhere={group.every(isHandoffable) ? () => setHandoffSheet({ orderIds: group.map((o) => o.id) }) : undefined}
-                        />
-                      )}
-                      {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
-                        <div className="space-y-2">
-                          <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
-                            {t('profile.manualLabelRequired')}
-                          </div>
-                          {/* A MANUAL placeholder never gets a Flash scan
-                              either; the seller who shipped it anyway can
-                              still move the order on. */}
-                          {group.every(isHandoffable) && (
-                            <button
-                              onClick={() => setHandoffSheet({ orderIds: group.map((o) => o.id) })}
-                              className="w-full text-center text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
-                            >
-                              {t('parcel.shippedElsewhere')}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {/* Print Shipping Label button. Visible whenever the
-                          order is at a status where a Flash label should
-                          exist — even if shipping_labels has no row yet (a
-                          recovery path in /api/orders/[id]/label calls Flash
-                          again with the same outTradeNo to retrieve the
-                          existing shipment). Hidden only when this is a
-                          MANUAL placeholder, which the block above already
-                          handles with its own UI, a live-break spot order
-                          (no per-order label exists to print), or a parcel
-                          the seller shipped another way (the label was never
-                          used). */}
-                      {!isBreakOrder &&
-                       ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(shipment.status) &&
-                       shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' &&
-                       !shipment.shipping_labels?.[0]?.handed_off_at && (
-                        <button
-                          onClick={() => openLabel(shipment.id)}
-                          disabled={labelModal.loading && labelModal.orderId === shipment.id}
-                          className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                          {labelModal.loading && labelModal.orderId === shipment.id && (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          )}
-                          {t('profile.printShippingLabel')}
-                        </button>
-                      )}
-                      {/* Durable track entry point — the label-saved modal only
-                          appears right after a download, so sellers need a way
-                          back to the timeline afterwards. Shown through to
-                          'delivered'/'completed' so the seller can follow the
-                          parcel the whole way, mirroring the buyer's view. */}
-                      {['label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed'].includes(shipment.status) &&
-                       shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' && (
-                        <button
-                          onClick={() => setTrackingOrderId(shipment.id)}
-                          className="w-full h-10 flex items-center justify-center gap-2 bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/20 transition-colors">
-                          <MapPin className="w-3.5 h-3.5" />
-                          {t('profile.trackOrder')}
-                        </button>
-                      )}
-                    </motion.div>
-                    );
-                  })}
-                  </AnimatePresence>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Seller Payouts Panel — Stripe Connect onboarding & management */}
+        {/* Seller Dashboard: earnings, the parcels to pack or the latest
+            sales, shop settings, and the Stripe account last. Pending
+            Shipments had its own menu row and panel until 2026-11-03, and
+            the Stripe card led this panel with the sales buried under it. */}
         {activePanel === 'payouts' && (
           <motion.div
             key="payouts"
@@ -2639,62 +2373,402 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             exit="exit"
             className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
           >
-            <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-              <div className="flex items-center gap-4 mb-6">
+            {/* A flex column so the Stripe card can move by `order` without
+                remounting: it holds onboarding state and listens for the
+                Stripe return event, so it must stay one mounted instance. */}
+            <div className="p-4 pt-16 flex flex-col gap-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
+              <div className="flex items-center gap-4 mb-6 order-first">
                 <button onClick={() => setActivePanel('none')} className="p-2 -ml-2 hover:bg-white/5 rounded-xl transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.sellerPayouts')}</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-wide">{t('profile.sellerDashboard')}</h2>
               </div>
 
-              <StripeConnectSection />
+              <div className="glass p-4 rounded-2xl border border-brand-green/20 bg-brand-green/5">
+                <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">{t('profile.totalEarnings')}</p>
+                <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
+              </div>
 
-              {/* Sales: lifetime earnings and the latest sales, with the full
-                  Sales History one tap deeper. Moved in here from its own
-                  menu row (2026-10-09) — it is seller-account information. */}
+              {/* To ship | Recent sales. The parcels carry the label actions
+                  (create, combine, print, book a courier); the sales are the
+                  money view, with Sales History one tap deeper. */}
               <div className="space-y-3">
-                <div className="glass p-4 rounded-2xl border border-brand-green/20 bg-brand-green/5">
-                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">{t('profile.totalEarnings')}</p>
-                  <p className="text-3xl font-black text-brand-green">฿{totalEarnings.toLocaleString()}</p>
+                <div className="glass rounded-2xl border border-white/5 p-1 flex gap-1">
+                  {(['toShip', 'sales'] as const).map((view) => (
+                    <button
+                      key={view}
+                      onClick={() => setDashboardView(view)}
+                      className={`flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors ${
+                        dashboardView === view ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {view === 'toShip' ? t('profile.toShip') : t('profile.recentSales')}
+                      {view === 'toShip' && toShip.count > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand-cyan text-brand-darker text-[10px] font-black flex items-center justify-center">
+                          {toShip.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </div>
-                {sales.length === 0 ? (
-                  <p className="text-slate-500 text-xs text-center py-2">{t('profile.noSalesYet')}</p>
+
+                {dashboardView === 'toShip' ? (
+                  <div className="space-y-3">
+                    {shipments.length === 0 ? (
+                      <div className="text-center py-12 space-y-4">
+                        <Truck className="w-12 h-12 text-slate-700 mx-auto" />
+                        <p className="text-slate-500 text-sm">{t('profile.noPendingShipments')}</p>
+                        <p className="text-slate-600 text-xs">{t('profile.pendingShipmentsDesc')}</p>
+                      </div>
+                    ) : (
+                      <AnimatePresence initial={false}>
+                      {groupByParcel(shipments).map((group, _i, parcels) => {
+                        // One card per PARCEL (waybill). A checkout is one parcel,
+                        // and several of a buyer's checkouts share one when the
+                        // seller labels them together (lib/parcels), so the card
+                        // lists every card going into that envelope under its
+                        // single label. `shipment` is the primary order; its id
+                        // drives the label/track actions (every row carries the
+                        // same waybill).
+                        const shipment = group[0];
+                        const pno = shipment.shipping_labels?.[0]?.tracking_number;
+                        const checkouts = countCheckouts(group);
+                        const buyerName = shipment.buyer?.display_name || null;
+                        // No label yet: the seller mints it here. The buyer's other
+                        // unlabelled checkouts can go in the same parcel, and a
+                        // parcel Flash has not collected yet can take these cards
+                        // too (no new waybill, nothing cancelled).
+                        const awaitingLabel = group.every(isAwaitingLabel);
+                        const buyerKey = shipment.buyer_id || '';
+                        const otherUnlabelled = awaitingLabel
+                          ? (parcelsByBuyer(parcels, isAwaitingLabel).get(buyerKey) || []).filter((g) => g !== group)
+                          : [];
+                        const openParcel = awaitingLabel
+                          ? (parcelsByBuyer(parcels, isUnscannedParcel).get(buyerKey) || [])[0]
+                          : undefined;
+                        const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
+                        const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                        const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
+                        // Finished shipments stay in the panel as a delivery
+                        // notice until the seller swipes them away (see
+                        // clearShipments). Active ones can't be dismissed.
+                        const isDeliveredCard = ['delivered', 'completed'].includes(shipment.status);
+                        // Live-break spot orders never get a per-order label —
+                        // their parcel is consolidated at stream settle, so every
+                        // label affordance is replaced by a passive notice.
+                        const isBreakOrder = !!shipment.break_spot_id;
+                        // Flash cancelled the booked courier (reconcile-pickups cron):
+                        // flagged in the header so it is not missed in a long list.
+                        const courierCancelled = !isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel)
+                          && isPickupCancelled(group.map((o) => o.shipping_labels?.[0]));
+                        const statusLine = (
+                          <p className={`font-bold text-sm mt-1 ${isDeliveredCard ? 'text-brand-green' : 'text-brand-orange'}`}>
+                            {/* 'completed' reads "Delivered" here — in a shipping
+                                panel the parcel state is what matters; the
+                                escrow-side "Completed" label lives in Sales
+                                History. */}
+                            {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${shipment.status === 'completed' ? 'delivered' : shipment.status.toLowerCase()}`) || shipment.status.replace('_', ' ')}</span>
+                          </p>
+                        );
+                        return (
+                        <motion.div
+                          key={shipment.id}
+                          layout
+                          exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
+                          drag={isDeliveredCard ? 'x' : false}
+                          dragConstraints={{ left: 0, right: 0 }}
+                          dragElastic={0.8}
+                          dragMomentum={false}
+                          onDragEnd={(_, info) => {
+                            if (isDeliveredCard && (Math.abs(info.offset.x) > 120 || Math.abs(info.velocity.x) > 600)) {
+                              clearShipments(group.map((s) => s.id));
+                            }
+                          }}
+                          id={group.some((s) => s.id === focusOrderId) ? `order-card-${focusOrderId}` : undefined}
+                          className={`glass p-4 rounded-2xl border space-y-4 ${
+                            group.some((s) => s.id === focusOrderId)
+                              ? 'border-brand-green/60 ring-2 ring-brand-green/40'
+                              : 'border-white/5'
+                          }`}
+                        >
+                          {/* Parcel header: who it goes to, the waybill, and how
+                              many checkouts were folded into it. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider truncate">
+                                {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
+                              </p>
+                              {isRealWaybill(pno) && (
+                                <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
+                              {courierCancelled && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
+                                  {t('parcel.courierCancelled')}
+                                </span>
+                              )}
+                              {checkouts > 1 && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-lg px-2 py-1">
+                                  {t('parcel.combined').replace('{count}', String(checkouts))}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {checkouts > 1 && !isDeliveredCard && (
+                            <p className="text-brand-cyan text-xs font-semibold">{t('parcel.packTogether')}</p>
+                          )}
+
+                          {/* One row per card in the parcel. A combined parcel keeps
+                              each checkout's cards under an "Order n" caption so the
+                              seller can match them to the sale notifications. */}
+                          {groupByTransferGroup(group).map((checkout, idx) => (
+                            <div key={checkout[0].id} className="space-y-3">
+                              {checkouts > 1 && (
+                                <p className="text-slate-500 text-[10px] uppercase tracking-wider">
+                                  {t('parcel.orderN').replace('{n}', String(idx + 1))} · {new Date(checkout[0].created_at).toLocaleString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                              {checkout.map((item) => {
+                                const itemImage = rowDisplayImage(item);
+                                return (
+                                <div key={item.id} className="flex items-start gap-3">
+                                  <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0">
+                                    {itemImage && (
+                                      <img
+                                        src={getThumbnailUrl(itemImage)}
+                                        alt="Card"
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-white font-semibold text-sm truncate">
+                                      {rowDisplayName(item, t, 'profile.cardOrder')}
+                                    </p>
+                                    <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                                    {group.length === 1 && statusLine}
+                                  </div>
+                                </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                          {group.length > 1 && (
+                            <div className="flex items-end justify-between gap-2">
+                              {statusLine}
+                              <span className="text-slate-500 text-[10px] uppercase tracking-wider pb-1">
+                                {t('parcel.itemsOne').replace('{count}', String(group.length))}
+                              </span>
+                            </div>
+                          )}
+
+
+                          {/* Delivery notice for sellers not opted into push or
+                              email — the card lingers here until swiped away. */}
+                          {isDeliveredCard && (
+                            <div className="flex items-center justify-between gap-2 h-10 px-3 bg-brand-green/10 border border-brand-green/20 rounded-xl">
+                              <div className="flex items-center gap-2 text-brand-green min-w-0">
+                                <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                                <span className="font-bold text-xs uppercase tracking-widest truncate">{t('profile.shipmentDeliveredBanner')}</span>
+                              </div>
+                              <span className="text-slate-500 text-[10px] flex-shrink-0">{t('profile.swipeToClear')}</span>
+                            </div>
+                          )}
+                          {/* Live-break spot order: no per-order label ever — the
+                              parcel is consolidated per buyer at stream settle, so
+                              the label affordances below are replaced by this
+                              passive notice. */}
+                          {isBreakOrder && !isDeliveredCard && (
+                            <div className="w-full h-10 bg-brand-cyan/5 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
+                              {t('profile.liveBreakShipsWithParcel')}
+                            </div>
+                          )}
+                          {/* The seller said this parcel left another way: the
+                              carrier and number they gave, in place of a Flash
+                              timeline that will never move. */}
+                          <HandoffSummary label={shipment.shipping_labels?.[0]} />
+                          {/* No waybill yet: the seller mints it here, alone or
+                              combined with the buyer's other unlabelled orders, or
+                              adds these cards to a parcel Flash has not collected. */}
+                          {!isBreakOrder && awaitingLabel && (
+                            <div className="space-y-2">
+                              <button
+                                onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
+                                disabled={labelBusy}
+                                className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {labelBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                              </button>
+                              {otherUnlabelled.length > 0 && (
+                                <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-3 space-y-2">
+                                  <p className="text-brand-cyan text-xs font-bold">
+                                    {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
+                                  </p>
+                                  <button
+                                    onClick={() => setShipSheet({ mode: 'create', orderIds: combineIds })}
+                                    disabled={labelBusy}
+                                    className="w-full h-9 bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/25 transition-colors disabled:opacity-50"
+                                  >
+                                    {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
+                                  </button>
+                                </div>
+                              )}
+                              {openParcelPno && (
+                                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+                                  <p className="text-amber-300 text-xs font-bold">{t('parcel.hasOpenParcel')}</p>
+                                  <button
+                                    onClick={() => createLabel(group.map((o) => o.id), openParcelPno)}
+                                    disabled={labelBusy}
+                                    className="w-full h-9 bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                                  >
+                                    {t('parcel.addToParcel').replace('{pno}', openParcelPno)}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* The handling promise the buyer already read on the card
+                              page; turns red once it has passed. Reminders go out
+                              at 24h and 48h (app/api/cron/ship-reminders). */}
+                          {!isBreakOrder && !isDeliveredCard && ['paid', 'label_generated', 'processing'].includes(shipment.status) && (() => {
+                            const due = shipByDate(shipment.created_at);
+                            if (!due) return null;
+                            const overdue = due.getTime() < Date.now();
+                            return (
+                              <p className={`text-xs font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                                {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' })}
+                              </p>
+                            );
+                          })()}
+                          {/* Labelled, not yet scanned by Flash: what was arranged
+                              (drop-off or a booked courier) and a way to book one. */}
+                          {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (
+                            <ParcelHandoffNote
+                              labels={group.map((o) => o.shipping_labels?.[0])}
+                              busy={pickupBusyPno === pno}
+                              onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
+                              onShippedElsewhere={group.every(isHandoffable) ? () => setHandoffSheet({ orderIds: group.map((o) => o.id) }) : undefined}
+                            />
+                          )}
+                          {!isBreakOrder && shipment.shipping_labels?.[0]?.tracking_number === 'MANUAL' && (
+                            <div className="space-y-2">
+                              <div className="w-full h-10 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold rounded-xl text-xs uppercase tracking-widest flex items-center justify-center px-3 text-center">
+                                {t('profile.manualLabelRequired')}
+                              </div>
+                              {/* A MANUAL placeholder never gets a Flash scan
+                                  either; the seller who shipped it anyway can
+                                  still move the order on. */}
+                              {group.every(isHandoffable) && (
+                                <button
+                                  onClick={() => setHandoffSheet({ orderIds: group.map((o) => o.id) })}
+                                  className="w-full text-center text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                                >
+                                  {t('parcel.shippedElsewhere')}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {/* Print Shipping Label button. Visible whenever the
+                              order is at a status where a Flash label should
+                              exist — even if shipping_labels has no row yet (a
+                              recovery path in /api/orders/[id]/label calls Flash
+                              again with the same outTradeNo to retrieve the
+                              existing shipment). Hidden only when this is a
+                              MANUAL placeholder, which the block above already
+                              handles with its own UI, a live-break spot order
+                              (no per-order label exists to print), or a parcel
+                              the seller shipped another way (the label was never
+                              used). */}
+                          {!isBreakOrder &&
+                           ['label_generated', 'shipped', 'in_transit', 'out_for_delivery'].includes(shipment.status) &&
+                           shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' &&
+                           !shipment.shipping_labels?.[0]?.handed_off_at && (
+                            <button
+                              onClick={() => openLabel(shipment.id)}
+                              disabled={labelModal.loading && labelModal.orderId === shipment.id}
+                              className="w-full h-10 flex items-center justify-center gap-2 bg-brand-green/20 text-brand-green border border-brand-green/30 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-green/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                              {labelModal.loading && labelModal.orderId === shipment.id && (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              )}
+                              {t('profile.printShippingLabel')}
+                            </button>
+                          )}
+                          {/* Durable track entry point — the label-saved modal only
+                              appears right after a download, so sellers need a way
+                              back to the timeline afterwards. Shown through to
+                              'delivered'/'completed' so the seller can follow the
+                              parcel the whole way, mirroring the buyer's view. */}
+                          {['label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed'].includes(shipment.status) &&
+                           shipment.shipping_labels?.[0]?.tracking_number !== 'MANUAL' && (
+                            <button
+                              onClick={() => setTrackingOrderId(shipment.id)}
+                              className="w-full h-10 flex items-center justify-center gap-2 bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-brand-cyan/20 transition-colors">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {t('profile.trackOrder')}
+                            </button>
+                          )}
+                        </motion.div>
+                        );
+                      })}
+                      </AnimatePresence>
+                    )}
+                  </div>
                 ) : (
-                  <div className="glass rounded-2xl border border-white/5 divide-y divide-white/5">
-                    <p className="px-3 pt-3 pb-1 text-slate-400 text-[10px] uppercase tracking-wider">{t('profile.recentSales')}</p>
-                    {sales.slice(0, 3).map((sale) => {
-                      const saleImage = rowDisplayImage(sale);
-                      return (
-                        <div key={sale.id} className="p-3 flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0">
-                            {saleImage && (
-                              <img
-                                src={getThumbnailUrl(saleImage)}
-                                alt="Card"
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
-                            <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
-                          </div>
-                          <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {sales.length === 0 ? (
+                      <div className="text-center py-12 space-y-4">
+                        <History className="w-12 h-12 text-slate-700 mx-auto" />
+                        <p className="text-slate-500 text-sm">{t('profile.noSalesYet')}</p>
+                      </div>
+                    ) : (
+                      <div className="glass rounded-2xl border border-white/5 divide-y divide-white/5">
+                        {sales.slice(0, 5).map((sale) => {
+                          const saleImage = rowDisplayImage(sale);
+                          const stage = saleStageLabel(sale.status, t);
+                          return (
+                            <div key={sale.id} className="p-3 flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0">
+                                {saleImage && (
+                                  <img
+                                    src={getThumbnailUrl(saleImage)}
+                                    alt="Card"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
+                                <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                                <p className={`text-[9px] font-black uppercase tracking-wider ${
+                                  stage.tone === 'orange' ? 'text-brand-orange' : stage.tone === 'green' ? 'text-brand-green' : 'text-slate-500'
+                                }`}>
+                                  {stage.text}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => openPanel('sales')}
+                      className="w-full glass p-4 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                    >
+                      <History className="w-5 h-5 text-green-400" />
+                      <span className="flex-1 text-left text-white font-semibold text-sm">{t('profile.salesHistory')}</span>
+                      <ChevronRight className="w-4 h-4 text-slate-500" />
+                    </button>
                   </div>
                 )}
-                <button
-                  onClick={() => openPanel('sales')}
-                  className="w-full glass p-4 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/5 transition-colors"
-                >
-                  <History className="w-5 h-5 text-green-400" />
-                  <span className="flex-1 text-left text-white font-semibold text-sm">{t('profile.salesHistory')}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-500" />
-                </button>
               </div>
 
               {/* Vacation mode: pause the whole shop (hides + blocks every
@@ -2705,6 +2779,13 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                   worth listing now that shipping is inside the price. Hidden
                   until its migration runs. */}
               <ShopMinOrderSection />
+
+              {/* Stripe account: last once payouts are enabled, first until
+                  then (a new seller has nothing else to do here). The header
+                  is order-first too and earlier in the DOM, so it stays on top. */}
+              <div className={stripeReady === false ? 'order-first' : 'order-last'}>
+                <StripeConnectSection onStatusChange={(s) => setStripeReady(s ? s.payoutsEnabled : null)} />
+              </div>
             </div>
           </motion.div>
         )}

@@ -27,12 +27,12 @@
  * back to: refreshes status from Stripe and clears the param.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import StripePreScreen from '@/components/StripePreScreen';
 
-interface ConnectStatus {
+export interface ConnectStatus {
     connected: boolean;
     accountId: string | null;
     region: 'us' | 'th' | null;
@@ -97,9 +97,22 @@ async function openStripeUrl(url: string, isNative: boolean, webMode: 'navigate'
     }
 }
 
-export default function StripeConnectSection() {
+interface StripeConnectSectionProps {
+    /**
+     * Reports every status load (null on failure), so the host can place the
+     * card by it: the Seller Dashboard shows it first until payouts are
+     * enabled and last afterwards.
+     */
+    onStatusChange?: (status: ConnectStatus | null) => void;
+}
+
+export default function StripeConnectSection({ onStatusChange }: StripeConnectSectionProps = {}) {
     const { t } = useTranslation();
     const [status, setStatus] = useState<ConnectStatus | null>(null);
+    // A ref so an inline callback never re-creates fetchStatus (its callers
+    // are mount-time effects).
+    const onStatusChangeRef = useRef(onStatusChange);
+    onStatusChangeRef.current = onStatusChange;
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -117,7 +130,9 @@ export default function StripeConnectSection() {
             }
             const data = await res.json();
             setStatus(data);
+            onStatusChangeRef.current?.(data);
         } catch (e: any) {
+            onStatusChangeRef.current?.(null);
             setError(e.message || 'Failed to load Stripe status');
         } finally {
             setLoading(false);

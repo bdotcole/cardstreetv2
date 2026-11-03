@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token, ActionPerformed, PushNotificationSchema } from '@capacitor/push-notifications';
+import { notifyShipmentsChanged } from '@/lib/hooks/useToShipBadge';
+
+// A push that lands while the app is open changes a badge the user is looking
+// at: a sale means one more parcel to label, so the Profile tab and the
+// Seller Dashboard row re-count at once instead of on their next poll.
+function refreshBadgesForPush(data: unknown) {
+    const type = (data as { type?: unknown } | null | undefined)?.type;
+    if (type === 'sold' || type === 'label_generated' || type === 'unshipped_order') notifyShipmentsChanged();
+}
 
 // Route a notification tap by the Courier `data.type` payload. Offer pushes
 // land in the Offers panel — the same destination as the offer-email CTA
@@ -226,8 +235,9 @@ export const usePushNotifications = () => {
                     setFcmToken(event.token);
                     saveToken(event.token);
                 });
-                const notificationReceived = await FirebaseMessaging.addListener('notificationReceived', () => {
+                const notificationReceived = await FirebaseMessaging.addListener('notificationReceived', (event) => {
                     console.log('Push received in foreground');
+                    refreshBadgesForPush(event.notification?.data);
                 });
                 const notificationActionPerformed = await FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
                     console.log('Push action performed');
@@ -357,6 +367,7 @@ export const usePushNotifications = () => {
 
         PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
             console.log('Push received in foreground:', notification);
+            refreshBadgesForPush(notification?.data);
         });
 
         PushNotifications.addListener('pushNotificationActionPerformed', (action: ActionPerformed) => {
