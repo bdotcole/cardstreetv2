@@ -22,13 +22,20 @@
  * where the money is — a 20-copy booster-box listing on a stock render was
  * exactly the case that got the loophole closed.
  *
+ * Graded cards never qualify either. The slab IS the product: the label, the
+ * grade and the cert number are what the buyer is paying for, and the catalog
+ * image shows none of them. Price does not matter here — a "PSA 10" at ฿20
+ * on catalog art (2026-11-04, two listings by one seller) is a raw common
+ * wearing a grade nobody can check, which is the raw-as-graded fraud pattern
+ * at the price where the old rule looked away.
+ *
  * Pure module: the listing form, the bulk lister, the write paths
  * (marketplaceService.createListing, /api/listings, the collection importer)
  * and the draft publisher all read it. The database enforces the same rule
- * in supabase/migrations/20261021_listing_photos_required.sql — until it did,
- * the rule lived in the form alone, and the bulk lister published 18
- * photo-less Charizards worth ฿357k in one tap (2026-10-21). Change the two
- * together.
+ * in supabase/migrations/20261021_listing_photos_required.sql (graded gate:
+ * 20261104_graded_listing_photos_required.sql) — until it did, the rule lived
+ * in the form alone, and the bulk lister published 18 photo-less Charizards
+ * worth ฿357k in one tap (2026-10-21). Change the two together.
  */
 
 import { CardCondition } from '@/types';
@@ -39,7 +46,17 @@ import { CardCondition } from '@/types';
  */
 export const PHOTOS_REQUIRED_FROM_THB = 100;
 
-export function catalogArtAllowed(price: number | null | undefined, condition: string): boolean {
+/**
+ * May the catalog image stand in for the seller's photos? Only for a raw
+ * (ungraded) near-mint single strictly under the threshold. `isGraded` is the
+ * listing's graded flag; a slab always needs photos of the slab.
+ */
+export function catalogArtAllowed(
+    price: number | null | undefined,
+    condition: string,
+    isGraded: boolean | null | undefined = false,
+): boolean {
+    if (isGraded) return false;
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return false;
     if (price >= PHOTOS_REQUIRED_FROM_THB) return false;
     if (condition === CardCondition.Sealed) return false;
@@ -59,15 +76,16 @@ export function isSellerPhotoUrl(url: unknown): url is string {
 /**
  * Does this listing carry the photos the policy asks of it? Catalog art where
  * it is allowed; otherwise the seller's own front photo, plus the back for a
- * single card (a sealed product shows one side).
+ * single card (a sealed product shows one side; a slab shows both).
  */
 export function listingPhotosSatisfied(row: {
     price: number | null | undefined;
     condition: string;
+    is_graded?: boolean | null;
     image_front_url?: string | null;
     image_back_url?: string | null;
 }): boolean {
-    if (catalogArtAllowed(row.price, row.condition)) return true;
+    if (catalogArtAllowed(row.price, row.condition, row.is_graded)) return true;
     if (!isSellerPhotoUrl(row.image_front_url)) return false;
     if (row.condition === CardCondition.Sealed) return true;
     return isSellerPhotoUrl(row.image_back_url);
@@ -82,7 +100,7 @@ export const LISTING_PHOTOS_REQUIRED_CODE = 'LISTING_PHOTOS_REQUIRED';
 export class ListingPhotosRequiredError extends Error {
     readonly code = LISTING_PHOTOS_REQUIRED_CODE;
     constructor(
-        message = `Photos of the actual item are required at ฿${PHOTOS_REQUIRED_FROM_THB} and above, below near-mint, or for sealed products.`,
+        message = `Photos of the actual item are required at ฿${PHOTOS_REQUIRED_FROM_THB} and above, below near-mint, for graded cards, or for sealed products.`,
     ) {
         super(message);
         this.name = 'ListingPhotosRequiredError';

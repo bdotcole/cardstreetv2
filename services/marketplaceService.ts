@@ -417,14 +417,16 @@ export const marketplaceService = {
             const safeCard = normalizeCard(params.cardData, params.cardId);
 
             // The photo rule (lib/listingPhotoPolicy.ts): catalog art only for
-            // a near-mint single under the threshold, the seller's own photos
-            // otherwise. The forms check it before uploading; this is the
-            // write path, and the database trigger behind it is the authority.
-            // The bulk lister once skipped both and published 18 photo-less
-            // Charizards at up to ฿220k in one tap (2026-10-21).
+            // a raw near-mint single under the threshold, the seller's own
+            // photos otherwise (always for a graded card). The forms check it
+            // before uploading; this is the write path, and the database
+            // trigger behind it is the authority. The bulk lister once skipped
+            // both and published 18 photo-less Charizards at up to ฿220k in
+            // one tap (2026-10-21).
             if (!listingPhotosSatisfied({
                 price: params.price,
                 condition: params.condition,
+                is_graded: params.isGraded,
                 image_front_url: params.image_front_url,
                 image_back_url: params.image_back_url,
             })) {

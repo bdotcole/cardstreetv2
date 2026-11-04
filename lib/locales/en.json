@@ -1846,8 +1846,8 @@
     },
     "listingPhotos": {
         "useCatalogArt": "Use the catalog image",
-        "useCatalogArtHint": "Allowed for near-mint singles under ฿100. Anything else, including sealed products, needs photos of the actual item.",
-        "photosRequired": "Photos of the actual item are required at ฿100 and above, below near-mint, or for sealed products.",
+        "useCatalogArtHint": "Allowed for ungraded near-mint singles under ฿100. Anything else, including graded cards and sealed products, needs photos of the actual item.",
+        "photosRequired": "Photos of the actual item are required at ฿100 and above, below near-mint, for graded cards, or for sealed products.",
         "quantity": "How many copies?",
         "quantityHint": "Creates one listing per copy, so each can sell separately."
     },

@@ -153,9 +153,12 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
   const guidance = evaluatePrice(parseFloat(price), card.marketPrice, lowestActive);
   React.useEffect(() => { setOverpriceAcknowledged(false); }, [price]);
 
-  const canUseCatalogArt = catalogArtAllowed(parseFloat(price), condition);
-  // Untick automatically when the seller edits past the threshold, so the
-  // option can never be silently in force for a card it does not cover.
+  // A graded card never qualifies, whatever the price: the slab is what the
+  // buyer is paying for and the catalog image does not show it.
+  const canUseCatalogArt = catalogArtAllowed(parseFloat(price), condition, isGraded);
+  // Untick automatically when the seller edits past the threshold or flips
+  // the graded toggle, so the option can never be silently in force for a
+  // card it does not cover.
   React.useEffect(() => {
     if (!canUseCatalogArt) setUseCatalogArt(false);
   }, [canUseCatalogArt]);
@@ -619,6 +622,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
                     step="0.5"
                   />
                 </div>
+                <p className="col-span-2 text-[11px] text-slate-400 leading-snug">
+                  {isThai
+                    ? 'การ์ดเกรดต้องถ่ายรูปเคสจริงทั้งด้านหน้าและด้านหลัง ให้เห็นฉลากและหมายเลขใบรับรองชัดเจน ใช้รูปจากแคตตาล็อกไม่ได้'
+                    : 'Photograph the slab itself, front and back, with the label and cert number readable. The catalog image cannot stand in for a graded card.'}
+                </p>
               </div>
             )}
 
@@ -638,8 +646,8 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
               </div>
             )}
 
-            {/* Photos. Required, except for cheap near-mint singles where the
-                catalog image may stand in — see lib/listingPhotoPolicy.ts. */}
+            {/* Photos. Required, except for cheap raw near-mint singles where
+                the catalog image may stand in — see lib/listingPhotoPolicy.ts. */}
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
                 {useCatalogArt

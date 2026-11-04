@@ -221,6 +221,7 @@ export async function POST(request: NextRequest) {
         if (!listingPhotosSatisfied({
             price: body.price,
             condition: body.condition,
+            is_graded: body.is_graded,
             image_front_url: body.image_front_url,
             image_back_url: body.image_back_url,
         })) {

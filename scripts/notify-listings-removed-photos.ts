@@ -64,6 +64,9 @@ type RemovedRow = {
     id: string;
     price: number | string;
     condition: string;
+    is_graded?: boolean | null;
+    grading_company?: string | null;
+    grade?: number | string | null;
     card_data: Record<string, unknown> | null;
     updated_at: string;
 };
@@ -74,7 +77,8 @@ function describe(row: RemovedRow): string {
     const alt = String(cd.thaiName ?? '');
     const set = typeof cd.set === 'string' ? cd.set : String((cd.set as { name?: unknown } | null)?.name ?? '');
     const number = String(cd.number ?? '');
-    const label = [name, alt && alt !== name ? `(${alt})` : '', set, number].filter(Boolean).join(' · ');
+    const graded = row.is_graded ? [row.grading_company, row.grade].filter((v) => v != null && v !== '').join(' ') : '';
+    const label = [name, alt && alt !== name ? `(${alt})` : '', set, number, graded].filter(Boolean).join(' · ');
     return `${label} — ฿${Number(row.price).toLocaleString('en-US')}`;
 }
 
@@ -113,7 +117,7 @@ async function main() {
             admin.from('notification_preferences').select('fcm_token').eq('user_id', seller).maybeSingle(),
             admin
                 .from('listings')
-                .select('id, price, condition, card_data, updated_at')
+                .select('id, price, condition, is_graded, grading_company, grade, card_data, updated_at')
                 .eq('seller_id', seller)
                 .eq('status', 'removed')
                 .is('image_front_url', null)
@@ -133,29 +137,48 @@ async function main() {
     for (const r of removed) console.log('  ' + describe(r));
 
     const n = removed.length;
+    // Two reasons, two wordings: a priced-out catalog-art listing, or a graded
+    // card (which needs slab photos at any price, since 2026-11-04). A mixed
+    // batch names both.
+    const gradedCount = removed.filter((r) => r.is_graded).length;
+    const allGraded = gradedCount === n;
     const vaultUrl = 'https://cardstreet.app/?tab=vault&utm_source=courier&utm_medium=email&utm_campaign=listing_removed';
     const list = removed.map((r) => `<li>${escapeHtml(describe(r))}</li>`).join('');
     const muted = 'style="color:#64748b"';
+    const reasonTh = allGraded
+        ? `เพราะการ์ดเกรดต้องมีรูปถ่ายของเคสจริงทั้งด้านหน้าและด้านหลัง ให้เห็นฉลากและหมายเลขใบรับรอง ไม่ว่าจะตั้งราคาเท่าไร ประกาศเหล่านี้ใช้รูปจากแคตตาล็อกแทน ผู้ซื้อจึงตรวจสอบเกรดที่ระบุไม่ได้`
+        : gradedCount > 0
+            ? `เพราะประกาศขายที่ราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป และการ์ดเกรดทุกราคา ต้องมีรูปถ่ายของการ์ดใบจริงทั้งด้านหน้าและด้านหลัง ประกาศเหล่านี้ใช้รูปจากแคตตาล็อกแทน ผู้ซื้อจึงไม่เห็นสภาพหรือเกรดของการ์ดที่จะได้รับจริง`
+            : `เพราะประกาศขายที่ราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไปต้องมีรูปถ่ายของการ์ดใบจริงทั้งด้านหน้าและด้านหลัง ประกาศเหล่านี้ใช้รูปจากแคตตาล็อกแทน ผู้ซื้อจึงไม่เห็นสภาพของการ์ดที่จะได้รับจริง`;
+    const reasonEn = allGraded
+        ? `Graded cards need photos of the actual slab, front and back, with the label and cert number visible, whatever the price. These used the catalog image instead, so buyers had no way to check the grade.`
+        : gradedCount > 0
+            ? `Listings priced at ฿${PHOTOS_REQUIRED_FROM_THB} or more, and graded cards at any price, need photos of the actual card, front and back. These used the catalog image instead, so buyers could not see the condition or the grade of the card they would receive.`
+            : `Listings priced at ฿${PHOTOS_REQUIRED_FROM_THB} or more need photos of the actual card, front and back. These used the catalog image instead, so buyers could not see the condition of the card they would receive.`;
     const html = [
         `<p>สวัสดีคุณ${escapeHtml(name)},</p>`,
-        `<p>ทีม Cardstreet ได้นำประกาศขายของคุณออกจากตลาด ${n} รายการ (รายการด้านล่าง) เพราะประกาศขายที่ราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไปต้องมีรูปถ่ายของการ์ดใบจริงทั้งด้านหน้าและด้านหลัง ประกาศเหล่านี้ใช้รูปจากแคตตาล็อกแทน ผู้ซื้อจึงไม่เห็นสภาพของการ์ดที่จะได้รับจริง</p>`,
-        `<p>การ์ดทั้งหมดยังอยู่ใน Vault ของคุณตามเดิม หากต้องการลงขายอีกครั้ง ให้เปิดการ์ดใน Vault แล้วลงขายทีละใบพร้อมถ่ายรูปด้านหน้าและด้านหลัง (การลงขายหลายใบพร้อมกันด้วยรูปแคตตาล็อกใช้ได้เฉพาะการ์ดสภาพ NM ราคาต่ำกว่า ฿${PHOTOS_REQUIRED_FROM_THB})</p>`,
+        `<p>ทีม Cardstreet ได้นำประกาศขายของคุณออกจากตลาด ${n} รายการ (รายการด้านล่าง) ${reasonTh}</p>`,
+        `<p>การ์ดทั้งหมดยังอยู่ใน Vault ของคุณตามเดิม หากต้องการลงขายอีกครั้ง ให้เปิดการ์ดใน Vault แล้วลงขายทีละใบพร้อมถ่ายรูปด้านหน้าและด้านหลัง (การลงขายหลายใบพร้อมกันด้วยรูปแคตตาล็อกใช้ได้เฉพาะการ์ดที่ไม่ได้เกรด สภาพ NM ราคาต่ำกว่า ฿${PHOTOS_REQUIRED_FROM_THB})</p>`,
         `<ul>${list}</ul>`,
         `<p>หากมีคำถาม ตอบกลับอีเมลนี้ได้เลย</p>`,
         `<p><a href="${vaultUrl}">เปิด Vault ของฉัน · Open my Vault</a></p>`,
         `<hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0">`,
         `<p ${muted}>Hi ${escapeHtml(name)},</p>`,
-        `<p ${muted}>We removed ${n} of your listings from the market (listed above). Listings priced at ฿${PHOTOS_REQUIRED_FROM_THB} or more need photos of the actual card, front and back. These used the catalog image instead, so buyers could not see the condition of the card they would receive.</p>`,
-        `<p ${muted}>Your cards are still in your Vault. To relist one, open it in your Vault and list it on its own with a front and back photo. Bulk listing with the catalog image is only for near-mint cards under ฿${PHOTOS_REQUIRED_FROM_THB}.</p>`,
+        `<p ${muted}>We removed ${n} of your listings from the market (listed above). ${reasonEn}</p>`,
+        `<p ${muted}>Your cards are still in your Vault. To relist one, open it in your Vault and list it on its own with a front and back photo. Bulk listing with the catalog image is only for ungraded near-mint cards under ฿${PHOTOS_REQUIRED_FROM_THB}.</p>`,
         `<p ${muted}>Questions? Just reply to this email.</p>`,
     ].join('\n');
-    const subject = `ประกาศขาย ${n} รายการถูกนำออก — ต้องใช้รูปถ่ายของการ์ดจริง`;
+    const subject = allGraded
+        ? `ประกาศขาย ${n} รายการถูกนำออก — การ์ดเกรดต้องใช้รูปถ่ายของเคสจริง`
+        : `ประกาศขาย ${n} รายการถูกนำออก — ต้องใช้รูปถ่ายของการ์ดจริง`;
     const push = {
         type: 'listing_removed',
         title: `ประกาศขาย ${n} รายการถูกนำออก · ${n} listing${n === 1 ? '' : 's'} removed`,
-        body:
-            `การ์ดราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไปต้องใช้รูปถ่ายของจริง ลงขายใหม่จาก Vault พร้อมรูปได้เลย · ` +
-            `Listings at ฿${PHOTOS_REQUIRED_FROM_THB}+ need real photos. Relist from your Vault with photos.`,
+        body: allGraded
+            ? `การ์ดเกรดต้องใช้รูปถ่ายของเคสจริง ลงขายใหม่จาก Vault พร้อมรูปได้เลย · ` +
+              `Graded cards need photos of the slab. Relist from your Vault with photos.`
+            : `การ์ดราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไปและการ์ดเกรดต้องใช้รูปถ่ายของจริง ลงขายใหม่จาก Vault พร้อมรูปได้เลย · ` +
+              `Listings at ฿${PHOTOS_REQUIRED_FROM_THB}+ and graded cards need real photos. Relist from your Vault with photos.`,
     };
 
     console.log('\n--- email subject ---\n' + subject + '\n--- email html ---\n' + html + '\n--- push ---');

@@ -2010,8 +2010,10 @@ export default function HomePage() {
             // catalog image may stand in for (lib/listingPhotoPolicy.ts). The
             // sheet filters these out; this is the write path, and until
             // 2026-10-21 it listed whatever the sheet handed it — 18 photo-less
-            // Charizards at up to ฿220k in one tap.
-            if (!opts.useCatalogArt || !catalogArtAllowed(row.price, opts.condition)) {
+            // Charizards at up to ฿220k in one tap. A graded vault copy is
+            // skipped too: it needs slab photos, and listing it here would
+            // publish it as a raw card.
+            if (!opts.useCatalogArt || !catalogArtAllowed(row.price, opts.condition, row.item.isGraded)) {
                 needPhotos++;
                 continue;
             }

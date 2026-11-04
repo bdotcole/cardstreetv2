@@ -194,10 +194,10 @@ export async function POST(request: NextRequest) {
     // catalog image may stand in (lib/listingPhotoPolicy.ts). The card is still
     // imported; the seller lists it from the vault with photos. The database
     // refuses the insert anyway; saying so here keeps the rest of the batch.
-    if (!catalogArtAllowed(price, built.condition)) {
+    if (!catalogArtAllowed(price, built.condition, built.is_graded)) {
       failed.push({
         cardId: it.cardId,
-        reason: `Imported, not listed: listings at ฿${PHOTOS_REQUIRED_FROM_THB} or more, below near-mint, or sealed need photos of the item — list it from your vault with photos`,
+        reason: `Imported, not listed: listings at ฿${PHOTOS_REQUIRED_FROM_THB} or more, below near-mint, graded, or sealed need photos of the item — list it from your vault with photos`,
       });
       continue;
     }

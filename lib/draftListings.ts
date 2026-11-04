@@ -34,7 +34,7 @@ export async function publishDraftListings(
     for (let from = 0; ; from += PAGE) {
         const { data, error } = await admin
             .from('listings')
-            .select('id, price, condition, image_front_url, image_back_url')
+            .select('id, price, condition, is_graded, image_front_url, image_back_url')
             .in('seller_id', sellerIds)
             .eq('status', 'draft')
             .order('id')

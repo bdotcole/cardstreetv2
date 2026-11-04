@@ -65,24 +65,30 @@ export default function BulkListSheet({
                     (r) =>
                         Number.isFinite(r.price) &&
                         r.price >= PUBLIC_MIN_LISTING_PRICE_THB &&
-                        catalogArtAllowed(r.price, condition),
+                        catalogArtAllowed(r.price, condition, r.item.isGraded),
                 ),
         [entries, prices, condition],
     );
 
     // Bulk has no camera, so the catalog image is the only picture it can give
-    // a listing, and the policy allows that only for a near-mint single under
-    // the threshold. Rows outside it stay in the vault (badged below) instead
-    // of being published without photos — which is what this sheet did until
-    // 2026-10-21: the checkbox switched itself off, the List button stayed on,
-    // and one tap listed ฿357k of Charizards on catalog art. The write path
-    // and the database refuse those too; filtering here is so the seller sees
-    // it before tapping.
+    // a listing, and the policy allows that only for a raw near-mint single
+    // under the threshold. Rows outside it stay in the vault (badged below)
+    // instead of being published without photos — which is what this sheet did
+    // until 2026-10-21: the checkbox switched itself off, the List button
+    // stayed on, and one tap listed ฿357k of Charizards on catalog art. The
+    // write path and the database refuse those too; filtering here is so the
+    // seller sees it before tapping. A graded vault copy is held the same way:
+    // bulk cannot carry the slab photos, and listing it as a raw card would
+    // silently drop its grade.
     const needsPhotos = useMemo(
         () =>
             entries.filter((e) => {
                 const p = parseFloat(prices[e.item.id] ?? '');
-                return Number.isFinite(p) && p >= PUBLIC_MIN_LISTING_PRICE_THB && !catalogArtAllowed(p, condition);
+                return (
+                    Number.isFinite(p) &&
+                    p >= PUBLIC_MIN_LISTING_PRICE_THB &&
+                    !catalogArtAllowed(p, condition, e.item.isGraded)
+                );
             }).length,
         [entries, prices, condition],
     );
@@ -139,8 +145,8 @@ export default function BulkListSheet({
                                         : 'Bulk listing uses the catalog image. To add your own photos, list the card on its own.'
                                     : needsPhotos > 0
                                         ? isThai
-                                            ? `${needsPhotos} ใบราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป หรือสภาพต่ำกว่า NM จะยังอยู่ใน Vault — ลงขายทีละใบพร้อมรูปถ่ายของจริง`
-                                            : `${needsPhotos} of these are ฿${PHOTOS_REQUIRED_FROM_THB} or more, or below near-mint, and stay in your vault — list them one at a time with real photos.`
+                                            ? `${needsPhotos} ใบราคา ฿${PHOTOS_REQUIRED_FROM_THB} ขึ้นไป สภาพต่ำกว่า NM หรือเป็นการ์ดเกรด จะยังอยู่ใน Vault — ลงขายทีละใบพร้อมรูปถ่ายของจริง`
+                                            : `${needsPhotos} of these are ฿${PHOTOS_REQUIRED_FROM_THB} or more, below near-mint, or graded, and stay in your vault — list them one at a time with real photos.`
                                         : t('listingPhotos.useCatalogArtHint')}
                             </span>
                         </span>
@@ -161,7 +167,9 @@ export default function BulkListSheet({
                         const guidance = evaluatePrice(price, e.card.marketPrice);
                         const belowFloor = Number.isFinite(price) && price > 0 && price < PUBLIC_MIN_LISTING_PRICE_THB;
                         const needsOwnPhotos =
-                            Number.isFinite(price) && price >= PUBLIC_MIN_LISTING_PRICE_THB && !catalogArtAllowed(price, condition);
+                            Number.isFinite(price) &&
+                            price >= PUBLIC_MIN_LISTING_PRICE_THB &&
+                            !catalogArtAllowed(price, condition, e.item.isGraded);
                         return (
                             <div key={e.item.id} className={`flex items-center gap-3 ${needsOwnPhotos ? 'opacity-60' : ''}`}>
                                 <img
