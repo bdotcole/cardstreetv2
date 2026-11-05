@@ -12,7 +12,7 @@ import OffersInbox from '@/components/OffersInbox';
 import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerFeeOf, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
@@ -30,6 +30,8 @@ interface OrderRow {
     status: string;
     created_at: string;
     total_amount: number;
+    // Collector Pass voucher taken off this row's charge (lib/orderGroups buyerPaidOf).
+    discount_amount?: number | null;
     delivered_at?: string | null;
     completed_at?: string | null;
     // The buyer's review of this order (one per order), from /api/profile/orders.
@@ -67,6 +69,9 @@ interface SaleRow {
     id: string;
     total_amount: number;
     platform_fee: number;
+    // Buyer voucher paid out of OUR fee; platform_fee above is stored already
+    // reduced by it (lib/orderGroups sellerNetOf).
+    discount_amount?: number | null;
     completed_at: string;
     transfer_group?: string | null;
     break_spot_id?: string | null;
@@ -532,7 +537,9 @@ export default function DesktopOrders() {
                                     // The seller shipped outside our waybill: what they
                                     // told us replaces the Flash waybill and its link.
                                     const handoff = handoffOf(label);
-                                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                                    // What the buyer paid: list prices less their voucher (lib/orderGroups).
+                                    const groupTotal = group.reduce((sum, o) => sum + buyerPaidOf(o), 0);
+                                    const groupDiscount = group.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
                                     return (
                                         <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                             <div className="space-y-2 min-w-0">
@@ -574,6 +581,11 @@ export default function DesktopOrders() {
                                                 )}
                                                 <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
                                                 <StatusChip status={order.status} />
+                                                {groupDiscount > 0 && (
+                                                    <span className="text-xs text-amber-300">
+                                                        {t('rewards.discount')} -{formatTHB(groupDiscount)}
+                                                    </span>
+                                                )}
                                                 <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
                                                 {canComplete && (
                                                     <button
@@ -865,8 +877,11 @@ export default function DesktopOrders() {
                                     are summed across the group. */}
                                 {groupByTransferGroup(sales).map((group) => {
                                     const sale = group[0];
-                                    const feeTotal = group.reduce((sum, s) => sum + (s.platform_fee || 0), 0);
-                                    const netTotal = group.reduce((sum, s) => sum + (s.total_amount || 0) - (s.platform_fee || 0), 0);
+                                    // Seller money (lib/orderGroups): a buyer voucher is paid out of
+                                    // our fee, so the fee shown is platform_fee + discount_amount and
+                                    // the net does not move with the voucher.
+                                    const feeTotal = group.reduce((sum, s) => sum + sellerFeeOf(s), 0);
+                                    const netTotal = group.reduce((sum, s) => sum + sellerNetOf(s), 0);
                                     return (
                                     <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
                                         <div className="space-y-2 min-w-0">

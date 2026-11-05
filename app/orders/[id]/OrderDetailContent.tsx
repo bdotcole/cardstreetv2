@@ -14,6 +14,11 @@ export interface OrderDetailData {
     status: string;
     totalAmount: number;
     platformFee: number;
+    // Collector Pass voucher taken off the buyer's charge. It is funded from
+    // the platform fee and platformFee arrives already reduced by it, so the
+    // seller's fee is platformFee + discountAmount and their payout is the
+    // same as on a plain sale (lib/orderGroups sellerFeeOf).
+    discountAmount?: number;
     shippingFee: number;
     createdAt: string;
     completedAt: string | null;
@@ -162,8 +167,10 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     const shortId = order.id.slice(0, 8).toUpperCase();
     const shipBy = shipByLabel(order.createdAt, order.status, isThai);
     const isSeller = role === 'seller';
-    const payout = order.totalAmount - order.platformFee;
-    const buyerTotal = order.totalAmount + order.shippingFee;
+    const discount = order.discountAmount ?? 0;
+    const sellerFee = order.platformFee + discount;
+    const payout = order.totalAmount - sellerFee;
+    const buyerTotal = order.totalAmount + order.shippingFee - discount;
     const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' });
 
     const openLabel = async () => {
@@ -191,8 +198,8 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     };
 
     const L = isThai
-        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า', confirmDelivery: 'ยืนยันว่าได้รับพัสดุแล้ว', confirming: 'กำลังยืนยัน…', shippedVia: 'ผู้ขายส่งผ่าน', anotherCarrier: 'ขนส่งอื่น', noNumber: 'ผู้ขายไม่ได้ระบุเลขพัสดุ', receivedEarly: 'ได้รับของแล้ว? กดยืนยันรับสินค้า' }
-        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.', confirmDelivery: 'Confirm I received it', confirming: 'Confirming…', shippedVia: 'Shipped via', anotherCarrier: 'another carrier', noNumber: 'No tracking number given', receivedEarly: 'Already have it? Confirm receipt' };
+        ? { order: 'คำสั่งซื้อ', placed: 'สั่งซื้อเมื่อ', item: 'สินค้า', shipping: 'ค่าจัดส่ง', fee: 'ค่าธรรมเนียม', payout: 'ยอดที่คุณจะได้รับ', total: 'ยอดรวม', voucher: 'ส่วนลดคูปอง', tracking: 'เลขพัสดุ', track: 'ติดตามพัสดุ', printLabel: 'พิมพ์ใบปะหน้าพัสดุ', preparing: 'กำลังเตรียม…', viewAll: 'ดูคำสั่งซื้อทั้งหมด', graded: 'จัดเกรด', liveBreakSpot: 'สปอตไลฟ์เบรก', breakParcel: 'จัดส่งรวมกับพัสดุเบรกหลังจบไลฟ์', shipBy: 'ผู้ขายจะจัดส่งภายใน', shipByHint: 'จัดส่งโดย Flash Express ถึงมือคุณใน 1-3 วัน', trackingPending: 'จะแสดงเลขพัสดุที่นี่ทันทีที่ผู้ขายพิมพ์ใบปะหน้า', confirmDelivery: 'ยืนยันว่าได้รับพัสดุแล้ว', confirming: 'กำลังยืนยัน…', shippedVia: 'ผู้ขายส่งผ่าน', anotherCarrier: 'ขนส่งอื่น', noNumber: 'ผู้ขายไม่ได้ระบุเลขพัสดุ', receivedEarly: 'ได้รับของแล้ว? กดยืนยันรับสินค้า' }
+        : { order: 'Order', placed: 'Placed', item: 'Item', shipping: 'Shipping', fee: 'Platform fee', payout: 'Your payout', total: 'Total', voucher: 'Voucher discount', tracking: 'Tracking', track: 'Track parcel', printLabel: 'Print shipping label', preparing: 'Preparing…', viewAll: 'View all orders', graded: 'Graded', liveBreakSpot: 'Live break spot', breakParcel: 'Ships with the break parcel after the show', shipBy: 'Seller ships by', shipByHint: 'Flash Express, 1-3 days to your door once collected.', trackingPending: 'Appears here as soon as the seller prints the label.', confirmDelivery: 'Confirm I received it', confirming: 'Confirming…', shippedVia: 'Shipped via', anotherCarrier: 'another carrier', noNumber: 'No tracking number given', receivedEarly: 'Already have it? Confirm receipt' };
 
     const isBuyer = role === 'buyer';
     const effectiveForActions = reported ? 'disputed' : order.status;
@@ -281,7 +288,7 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         <>
                             <div className="flex justify-between">
                                 <span className="text-slate-400">{L.fee}</span>
-                                <span className="font-bold text-rose-300">- {fmtTHB(order.platformFee)}</span>
+                                <span className="font-bold text-rose-300">- {fmtTHB(sellerFee)}</span>
                             </div>
                             <div className="flex justify-between pt-3 border-t border-white/10">
                                 <span className="font-black uppercase tracking-wider text-[11px] text-slate-300 self-center">{L.payout}</span>
@@ -289,10 +296,18 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                             </div>
                         </>
                     ) : (
-                        <div className="flex justify-between pt-3 border-t border-white/10">
-                            <span className="font-black uppercase tracking-wider text-[11px] text-slate-300 self-center">{L.total}</span>
-                            <span className="text-xl font-black text-brand-cyan">{fmtTHB(buyerTotal)}</span>
-                        </div>
+                        <>
+                            {discount > 0 && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400">{L.voucher}</span>
+                                    <span className="font-bold text-amber-300">- {fmtTHB(discount)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between pt-3 border-t border-white/10">
+                                <span className="font-black uppercase tracking-wider text-[11px] text-slate-300 self-center">{L.total}</span>
+                                <span className="text-xl font-black text-brand-cyan">{fmtTHB(buyerTotal)}</span>
+                            </div>
+                        </>
                     )}
                 </div>
 

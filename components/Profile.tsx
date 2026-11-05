@@ -40,7 +40,7 @@ import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import OrderCardMeta from './OrderCardMeta';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
@@ -152,6 +152,8 @@ interface Order {
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
+  // Collector Pass voucher taken off this row's charge (lib/orderGroups buyerPaidOf).
+  discount_amount?: number | null;
   delivered_at?: string | null;
   completed_at?: string | null;
   // The buyer's review of this order (one per order), from /api/profile/orders.
@@ -198,6 +200,9 @@ interface Sale {
   id: string;
   total_amount: number;
   platform_fee: number;
+  // Buyer voucher paid out of OUR fee; platform_fee above is stored already
+  // reduced by it (lib/orderGroups sellerNetOf).
+  discount_amount?: number | null;
   status: string;
   transfer_group?: string | null;
   // Only set once an order is completed; null for paid/shipped/etc. Fall back
@@ -2019,7 +2024,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                   // item lines inside a single card with one shared timeline.
                   groupByTransferGroup(orders).map((group) => {
                     const order = group[0];
-                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                    // What the buyer paid: list prices less their voucher (lib/orderGroups).
+                    const groupTotal = group.reduce((sum, o) => sum + buyerPaidOf(o), 0);
+                    const groupDiscount = group.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
                     return (
                     <div
                       key={order.id}
@@ -2057,12 +2064,25 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         );
                       })}
 
-                      {group.length > 1 && (
-                        <div className="flex items-center justify-between border-t border-white/5 pt-3">
-                          <span className="text-slate-500 text-xs">
-                            {isThai ? `${group.length} รายการ · จัดส่งเป็นพัสดุเดียว` : `${group.length} items · ships as one parcel`}
-                          </span>
-                          <span className="text-brand-cyan font-bold text-sm">฿{groupTotal.toLocaleString()}</span>
+                      {/* Footer: the parcel total for a multi-item checkout, and
+                          the voucher line whenever one was used, so the figure
+                          here is the one on the buyer's card statement. */}
+                      {(group.length > 1 || groupDiscount > 0) && (
+                        <div className="border-t border-white/5 pt-3 space-y-1">
+                          {groupDiscount > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 text-xs">{t('rewards.discount')}</span>
+                              <span className="text-amber-300 font-bold text-xs">-฿{groupDiscount.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 text-xs">
+                              {group.length > 1
+                                ? (isThai ? `${group.length} รายการ · จัดส่งเป็นพัสดุเดียว` : `${group.length} items · ships as one parcel`)
+                                : (isThai ? 'ยอดที่ชำระ' : 'Paid')}
+                            </span>
+                            <span className="text-brand-cyan font-bold text-sm">฿{groupTotal.toLocaleString()}</span>
+                          </div>
                         </div>
                       )}
 
@@ -2291,7 +2311,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                   // lists its items with a combined net at the foot.
                   groupByTransferGroup(sales).map((group) => {
                     const sale = group[0];
-                    const netFor = (s: Sale) => s.total_amount - (s.platform_fee || 0);
+                    const netFor = (s: Sale) => sellerNetOf(s);
                     const saleDate = new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US');
                     const saleImage = rowDisplayImage(sale);
                     if (group.length === 1) {
@@ -2772,7 +2792,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                                 <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
                               </div>
                               <div className="text-right shrink-0">
-                                <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                                <p className="text-brand-green font-bold text-sm">+฿{sellerNetOf(sale).toLocaleString()}</p>
                                 <p className={`text-[9px] font-black uppercase tracking-wider ${
                                   stage.tone === 'orange' ? 'text-brand-orange' : stage.tone === 'green' ? 'text-brand-green' : 'text-slate-500'
                                 }`}>

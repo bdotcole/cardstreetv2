@@ -1625,6 +1625,7 @@
         "voucherApply": "Voucher",
         "voucherNone": "None",
         "discount": "Voucher discount",
+        "voucherOfFace": "of ฿{amount}",
         "badge": {
             "buyer_5": "Regular",
             "buyer_25": "Patron",
@@ -1725,7 +1726,7 @@
             "listing_boost": "Listing boost (48h)",
             "pro_trial_7d": "Pro trial - 7 days",
             "voucher_25": "25 baht off a 300+ baht order",
-            "voucher_60": "60 baht off a 600+ baht order",
+            "voucher_60": "60 baht off a 700+ baht order",
             "voucher_150": "150 baht off a 1,200+ baht order",
             "voucher_400": "400 baht off a 2,500+ baht order",
             "voucher_ship_40": "40 baht shipping voucher",

@@ -8,7 +8,8 @@
  * for more than one satang, because settlementCoins' anti-wash-trading caps
  * are computed against that peg.
  */
-import { CATALOG, FRAME_STYLES, CHECKIN_CALENDAR, QUEST_COINS, settlementCoins } from '../lib/rewardTiers';
+import { CATALOG, FRAME_STYLES, CHECKIN_CALENDAR, QUEST_COINS, settlementCoins, voucherDiscountSatang } from '../lib/rewardTiers';
+import { NON_PARTNER_FEE_FRACTION } from '../lib/partnerTiers';
 import en from '../lib/locales/en.json';
 import th from '../lib/locales/th.json';
 
@@ -73,6 +74,23 @@ for (const item of CATALOG) {
     }
 }
 if (failures === 0) ok('no SKU breaches the ceiling; budget reserve equals face value');
+
+console.log('');
+console.log('Face coverage (a redeemable voucher must pay its face at the standard 9% fee)');
+// voucherDiscountSatang clamps every voucher to the cart's platform fee, so a
+// voucher whose own minimum order cannot fund its face at the non-partner rate
+// promises a number checkout can never pay. voucher_150/400 were switched off
+// for exactly this, and voucher_60 sat 10% short of its face until 2026-11-05.
+// Seller-fee vouchers discount the fee itself, so they are exempt. Checkout
+// rounds the fee per order, so a one-item cart at the minimum is the floor.
+for (const item of CATALOG) {
+    if (!item.voucher || !item.redeemable || item.voucher.type === 'seller_fee') continue;
+    const feeAtMin = Math.round(item.voucher.minOrderSatang * NON_PARTNER_FEE_FRACTION);
+    const paid = voucherDiscountSatang(item.voucher.amountSatang, feeAtMin);
+    const line = `${item.key}: min ${item.voucher.minOrderSatang / 100} THB -> fee ${feeAtMin / 100} THB vs face ${item.voucher.amountSatang / 100} THB`;
+    if (paid < item.voucher.amountSatang) fail(`${line}  [pays only ${paid / 100} THB at its own minimum]`);
+    else ok(line);
+}
 
 console.log('\nValue ladder (higher tiers must not be worse value)');
 const orderVouchers = CATALOG

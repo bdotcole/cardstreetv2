@@ -164,7 +164,7 @@ export async function fulfillOrdersByTransferGroup(
             .from('orders')
             // listing card_data rides along so the shipment declares the real
             // parcel weight when the order contains sealed products.
-            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group, listing:listings(card_data)')
+            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, discount_amount, transfer_group, listing:listings(card_data)')
             .eq('transfer_group', transferGroup)
             .eq('status', 'pending_payment')
             // Defense in depth: live-break spot orders carry break_spot_id and
@@ -453,7 +453,14 @@ export async function fulfillOrdersByTransferGroup(
         // ─── Step 8: Send notifications ───
         try {
             // Notify buyer
-            const totalAmount = orders.reduce((sum, o) => sum + (o.total_amount || 0) + (o.shipping_fee || 0), 0);
+            // What the buyer actually paid: a Collector Pass voucher comes off
+            // the charge (orders.discount_amount), so the confirmation must
+            // quote the net figure, the one on their card statement. The
+            // seller's "sold for" below stays the list price: the voucher was
+            // paid out of our fee, not theirs.
+            const totalAmount = orders.reduce(
+                (sum, o) => sum + (o.total_amount || 0) + (o.shipping_fee || 0) - (Number(o.discount_amount) || 0), 0,
+            );
             await sendOrderConfirmationNotification(
                 buyerId,
                 // The first order id, never a 'multiple' sentinel: the push

@@ -93,6 +93,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         status: order.status,
         totalAmount: Number(order.total_amount) || 0,
         platformFee: Number(order.platform_fee) || 0,
+        discountAmount: Number(order.discount_amount) || 0,
         shippingFee: Number(order.shipping_fee) || 0,
         createdAt: order.created_at,
         completedAt: order.completed_at ?? null,

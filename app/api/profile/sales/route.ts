@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { attachBreakContext } from '@/lib/breakOrderContext'
+import { sellerNetOf } from '@/lib/orderGroups'
 
 // Order statuses that represent a real (paid) sale. Everything before `paid`
 // (`pending`, `pending_payment`) is a pre-payment reservation and must NOT
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
                 id,
                 total_amount,
                 platform_fee,
+                discount_amount,
                 status,
                 created_at,
                 completed_at,
@@ -75,11 +77,14 @@ export async function GET(request: NextRequest) {
         // dispute flips the order to `cancelled`, which drops it out here.
         const { data: totals } = await supabase
             .from('orders')
-            .select('total_amount, platform_fee')
+            .select('total_amount, platform_fee, discount_amount')
             .eq('seller_id', user.id)
             .in('status', SOLD_ORDER_STATUSES)
 
-        const totalEarnings = totals?.reduce((sum, t) => sum + (t.total_amount - (t.platform_fee || 0)), 0) || 0
+        // sellerNetOf, not total - platform_fee: on a voucher sale platform_fee
+        // is stored already reduced by the buyer's discount, which came out of
+        // OUR fee, so the plain subtraction credited the seller with the voucher.
+        const totalEarnings = totals?.reduce((sum, t) => sum + sellerNetOf(t), 0) || 0
 
         // Live-break spot sales have no listing snapshot — resolve their
         // stream/lot/spot context so Sales History names them instead of a

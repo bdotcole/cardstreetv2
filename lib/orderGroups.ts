@@ -221,3 +221,40 @@ export function parcelsByBuyer<T extends ShipmentRow>(
     }
     return byBuyer;
 }
+
+// ---------------------------------------------------------------------------
+// Money as the seller and the buyer should see it
+// ---------------------------------------------------------------------------
+
+export interface OrderMoneyRow {
+    total_amount?: number | null;
+    platform_fee?: number | null;
+    /** Collector Pass voucher taken off the buyer's charge (20260829_collector_pass_store.sql). */
+    discount_amount?: number | null;
+}
+
+/**
+ * What the platform took from this sale, as the seller should see it.
+ *
+ * A buyer voucher is paid out of OUR fee, never out of the seller's proceeds
+ * (TH direct charges make that mandatory), and /api/orders/checkout stores
+ * `platform_fee` ALREADY REDUCED by the voucher, with `discount_amount`
+ * recording the cut. `total_amount - platform_fee` therefore overstates the
+ * seller's money by the voucher. The seller's real fee is the normal one,
+ * platform_fee + discount_amount, and their net does not move: a voucher sale
+ * and a plain sale of the same card pay the seller the same amount, which is
+ * the whole point of funding vouchers from the fee.
+ */
+export function sellerFeeOf(row: OrderMoneyRow): number {
+    return (Number(row.platform_fee) || 0) + (Number(row.discount_amount) || 0);
+}
+
+/** The seller's gross for a sale (list price minus the platform fee), before Stripe's processing fee. */
+export function sellerNetOf(row: OrderMoneyRow): number {
+    return (Number(row.total_amount) || 0) - sellerFeeOf(row);
+}
+
+/** What the buyer was charged for one order row: the list price less their voucher share (shipping is inside the price since 2026-09-27). */
+export function buyerPaidOf(row: OrderMoneyRow): number {
+    return (Number(row.total_amount) || 0) - (Number(row.discount_amount) || 0);
+}
