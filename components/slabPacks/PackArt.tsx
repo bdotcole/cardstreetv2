@@ -87,26 +87,38 @@ export function PackFace({ tier, subtitle }: { tier: PackTier; subtitle: string 
                 </span>
                 <span className="sp-pack-sub">{subtitle}</span>
             </div>
-            <span className="sp-pack-micro">Authentic · Graded · Sealed</span>
+            <span className="sp-pack-micro">Authentic · Real cards · Sealed</span>
             <div className="sp-pack-sheen" />
         </div>
     );
 }
 
-/** A whole, sealed pack. Width comes from the parent; height follows. */
+/**
+ * A whole, sealed pack. Width comes from the parent; height follows.
+ * `soonLabel` marks a pack that is not on sale yet: dimmed, with the label
+ * as a ribbon across it.
+ */
 export default function PackArt({
-    tier, subtitle, className = '', style,
+    tier, subtitle, soonLabel, className = '', style,
 }: {
     tier: PackTier;
     subtitle: string;
+    soonLabel?: string;
     className?: string;
     style?: React.CSSProperties;
 }) {
     return (
-        <div className={`sp-pack ${className}`} data-tier={tier.key} data-material={tier.theme.material} style={{ ...tierVars(tier), ...style }}>
+        <div
+            className={`sp-pack ${className}`}
+            data-tier={tier.key}
+            data-material={tier.theme.material}
+            data-soon={soonLabel ? '' : undefined}
+            style={{ ...tierVars(tier), ...style }}
+        >
             <div className="sp-pack-piece" style={{ clipPath: PACK_CLIP.whole }}>
                 <PackFace tier={tier} subtitle={subtitle} />
             </div>
+            {soonLabel && <span className="sp-soon">{soonLabel}</span>}
         </div>
     );
 }

@@ -8,7 +8,7 @@ import {
     cashoutFeeThb, cashoutNetThb, listingPayoutThb, missingVerification, thbForCoins,
     type VerificationKind,
 } from '@/lib/slabPacks/policy';
-import { getSlab } from '@/lib/slabPacks/pool';
+import { getSlab, gradeLabel } from '@/lib/slabPacks/pool';
 import {
     cashedOutThisMonthThb, previewActions, shippingQuote, withdrawableThb,
     type CashoutBlock, type LedgerKind, type PreviewState,
@@ -433,7 +433,7 @@ export function ListSheet({ pull, onClose }: { pull: Pull | null; onClose: () =>
                             <div className="min-w-0">
                                 <div className="truncate text-[15px] font-extrabold">{slab.name}</div>
                                 <div className="truncate text-[12px] text-white/55">
-                                    {slab.setName} · PSA {slab.grade}
+                                    {slab.setName} · {gradeLabel(slab)}
                                 </div>
                                 <div className="mt-1 text-[12px] text-white/55">{t('list.market', { amount: baht(slab.valueThb) })}</div>
                             </div>
@@ -571,7 +571,7 @@ export function ShipSheet({ pull, onClose, state }: { pull: Pull | null; onClose
                             <div className="min-w-0">
                                 <div className="truncate text-[14px] font-extrabold">{slab.name}</div>
                                 <div className="truncate text-[12px] text-white/55">
-                                    {slab.setName} · PSA {slab.grade} · {baht(slab.valueThb)}
+                                    {slab.setName} · {gradeLabel(slab)} · {baht(slab.valueThb)}
                                 </div>
                             </div>
                         </div>

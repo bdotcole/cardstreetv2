@@ -14,18 +14,21 @@ A pack is one independent draw from a published table. Each tier shows, before p
 
 ### The ladder
 
-Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). The names and prices are the founder's (2026-10-24), after the NBA 2K card tiers, in steps of ฿775; the odds are working defaults that have not been through pricing or legal review.
+Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). The names follow the NBA 2K card tiers. Three packs are on sale at the founder's 2026-11-04 low price points, built to clear singles (ex cards above all) out of a ~$1,000 inventory; the rest keep their 2026-10-24 prices and show as **coming soon** (`status: 'coming_soon'`: in the carousel at their price, dimmed under a ribbon, not buyable, no table, never pulled by the simulated collectors). The odds are working defaults that have not been through pricing or legal review.
 
-| Tier | Material | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
-|---|---|---|---|---|---|---|
-| Silver | metal | ฿775 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿411 | ฿22,834 |
-| Gold | metal | ฿1,550 | 45% / 30% / 19% / 4% / 1.4% / 0.6% | 94% | ฿786 | ฿44,643 |
-| Platinum | metal | ฿2,325 | 45% / 30% / 19% / 4% / 1.3% / 0.7% | 96% | ฿1,191 | ฿67,857 |
-| Emerald | gem | ฿3,875 | 46% / 30% / 18% / 4% / 1.2% / 0.8% | 95% | ฿2,059 | ฿107,143 |
-| Diamond | gem | ฿7,750 | 47% / 30% / 17% / 4% / 1.2% / 0.8% | 95% | ฿3,929 | ฿232,143 |
-| Galaxy Opal | galaxy | ฿15,500 | 48% / 30% / 16% / 4% / 1.2% / 0.8% | 96% | ฿8,036 | ฿459,265 |
+| Tier | Status | Material | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
+|---|---|---|---|---|---|---|---|
+| Bronze | live | metal | ฿150 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿85 | ฿4,366 |
+| Silver | live | metal | ฿450 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿230 | ฿13,374 |
+| Gold | live | metal | ฿750 | 45% / 30% / 19% / 4% / 1.4% / 0.6% | 95% | ฿393 | ฿21,780 |
+| Platinum | coming soon | metal | ฿2,325 | 45% / 30% / 19% / 4% / 1.3% / 0.7% | | | |
+| Emerald | coming soon | gem | ฿3,875 | 46% / 30% / 18% / 4% / 1.2% / 0.8% | | | |
+| Diamond | coming soon | gem | ฿7,750 | 47% / 30% / 17% / 4% / 1.2% / 0.8% | | | |
+| Galaxy Opal | coming soon | galaxy | ฿15,500 | 48% / 30% / 16% / 4% / 1.2% / 0.8% | | | |
 
-Average pull, floor and top prize are the Pokémon pool's; One Piece and Lorcana land within a point or two of the same averages with thinner pools at the dear end (a tier a game's pool cannot fill is simply not offered for that game).
+Average pull, floor and top prize are the Pokémon preview pool's (2026-11-04); One Piece and Lorcana land within a point or two. A live tier a game's pool cannot fill is not offered for that game.
+
+**One inventory, three packs.** The live packs draw from the same pool: a card sits in every pack whose bands its value falls in (a ฿3,800 card is a Grail in Bronze at 25×, a Monster in Silver at 8.4× and in Gold at 5.1×), so the chase cards are stocked once, not three times. The sourcing list is `docs/specs/digital-rips-card-ladder-2026-11-04.xlsx`: 56 slots from ฿75 to ฿8,200 adding up to ~฿35,700 ($1,000 at the app rate), a fill-in card list, a per-pack view, and live coverage per pack and class. Most of the list sits at ฿75–750, where ex singles live. The preview pool is raw near-mint singles first (`grade: 'raw'`, `grader: 'none'`; the card renders without a grader's label, filling the case like a toploader), with PSA slabs only where singles run thin.
 
 Emerald's price is an assumption: the brief listed both Emerald and Diamond at ฿7,750, so Emerald took the ฿775 × 5 step between Platinum and Diamond. It is one constant in `tiers.ts`.
 
@@ -37,14 +40,14 @@ The shape follows what Courtyard's pulls measure out to (PackSpy, ~10,000 Pokém
 
 A class is a band of slab value relative to the pack price, so the same slab is an SS in a cheap pack and a D in an expensive one.
 
-| Class | Name | Value as a multiple of the pack price | On a ฿775 Silver |
-|---|---|---|---|
-| D | Base | 0.5 to 0.7 | ฿388 – ฿543 |
-| C | Solid | 0.7 to 1 | ฿543 – ฿775 |
-| B | Hit | 1 to 2 | ฿775 – ฿1,550 |
-| A | Big Hit | 2 to 5 | ฿1,550 – ฿3,875 |
-| S | Monster | 5 to 10 | ฿3,875 – ฿7,750 |
-| SS | Grail | 10 to 30 | ฿7,750 – ฿23,250 |
+| Class | Name | Value as a multiple of the pack price | On a ฿150 Bronze | On a ฿450 Silver | On a ฿750 Gold |
+|---|---|---|---|---|---|
+| D | Base | 0.5 to 0.7 | ฿75 – ฿105 | ฿225 – ฿315 | ฿375 – ฿525 |
+| C | Solid | 0.7 to 1 | ฿105 – ฿150 | ฿315 – ฿450 | ฿525 – ฿750 |
+| B | Hit | 1 to 2 | ฿150 – ฿300 | ฿450 – ฿900 | ฿750 – ฿1,500 |
+| A | Big Hit | 2 to 5 | ฿300 – ฿750 | ฿900 – ฿2,250 | ฿1,500 – ฿3,750 |
+| S | Monster | 5 to 10 | ฿750 – ฿1,500 | ฿2,250 – ฿4,500 | ฿3,750 – ฿7,500 |
+| SS | Grail | 10 to 30 | ฿1,500 – ฿4,500 | ฿4,500 – ฿13,500 | ฿7,500 – ฿22,500 |
 
 The lobby and the odds sheet show each class as its name, its odds and its money range for the pack on screen (no card counts). Any card on the top-pulls strip or in the odds sheet's list opens with its own chance.
 

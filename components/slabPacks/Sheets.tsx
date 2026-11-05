@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Check, ChevronRight, Coins, ExternalLink, Lock, RotateCcw, ShieldCheck, Tag, Truck, Users, Vibrate, Volume2, X, Zap } from 'lucide-react';
 import { verifyDraw } from '@/lib/slabPacks/engine';
 import { MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, listingPayoutThb } from '@/lib/slabPacks/policy';
-import { getSlab } from '@/lib/slabPacks/pool';
+import { getSlab, gradeLabel } from '@/lib/slabPacks/pool';
 import { previewActions, tryTable, type PreviewSettings } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
@@ -213,7 +213,7 @@ function CardRow({ c, first, onClick }: { c: CardOdds; first: boolean; onClick: 
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[12px] font-bold leading-tight">{c.slab.name}</div>
                 <div className="truncate text-[10.5px] text-white/45">
-                    {c.slab.setName} · PSA {c.slab.grade}
+                    {c.slab.setName} · {gradeLabel(c.slab)}
                 </div>
             </div>
             <div className="shrink-0 text-right">
@@ -277,7 +277,7 @@ export function CardSheet({ card, tier, onClose }: { card: CardOdds | null; tier
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{c.slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
-                            {c.slab.setName} · PSA {c.slab.grade} · #{c.slab.number}
+                            {c.slab.setName} · {gradeLabel(c.slab)} · #{c.slab.number}
                         </div>
                         <div className="sp-num mt-2 text-[34px] leading-none">{baht(c.slab.valueThb)}</div>
                         <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>
@@ -346,7 +346,7 @@ export function SlabSheet({
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
-                            {slab.setName} · PSA {slab.grade} · #{slab.number}
+                            {slab.setName} · {gradeLabel(slab)} · #{slab.number}
                         </div>
                         <div className="sp-num mt-2 text-[34px] leading-none">{baht(slab.valueThb)}</div>
                         <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>

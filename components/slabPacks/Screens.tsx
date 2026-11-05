@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, PackageOpen, Tag, Truck } from 'lucide-react';
-import { getSlab, slabImage } from '@/lib/slabPacks/pool';
+import { getSlab, gradeLabel, slabImage } from '@/lib/slabPacks/pool';
 import type { PreviewStats } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, TIERS } from '@/lib/slabPacks/tiers';
@@ -194,7 +194,7 @@ function PullRow({ slabKey, cls, who, tierName, at, now }: {
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-bold leading-tight">{slab.name}</div>
                 <div className="mt-0.5 truncate text-[11px] text-white/50">
-                    {who} · {tierName} · PSA {slab.grade}
+                    {who} · {tierName} · {gradeLabel(slab)}
                 </div>
             </div>
             <div className="shrink-0 text-right">

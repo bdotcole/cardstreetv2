@@ -5,7 +5,14 @@
  */
 
 /** The ladder, cheapest first. The names follow the NBA 2K card tiers. */
-export type TierKey = 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'opal';
+export type TierKey = 'bronze' | 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'opal';
+
+/**
+ * `live` packs are on sale. A `coming_soon` pack is shown in the lobby at its
+ * price but cannot be bought, needs no table, and is never pulled by the
+ * simulated collectors.
+ */
+export type TierStatus = 'live' | 'coming_soon';
 
 /** The games packs are sold for. Each game has its own pool and its own tables. */
 export type GameKey = 'pokemon' | 'onepiece' | 'lorcana';
@@ -18,12 +25,14 @@ export type GameKey = 'pokemon' | 'onepiece' | 'lorcana';
 export type HitClass = 'd' | 'c' | 'b' | 'a' | 's' | 'ss';
 
 export interface Slab {
-    /** `${cardId}:${grade}` — one slab type. Stock may hold several copies. */
+    /** `${cardId}:${grade}` — one card type: a raw single, or one grade of a slab. Stock may hold several copies. */
     key: string;
     cardId: string;
     game: GameKey;
-    grader: 'PSA';
-    grade: 9 | 10;
+    /** `none` for a raw single. */
+    grader: 'PSA' | 'none';
+    /** The PSA grade, or `raw` for an ungraded near-mint single (most of the low-price packs). */
+    grade: 9 | 10 | 'raw';
     name: string;
     setName: string;
     number: string;
@@ -55,6 +64,7 @@ export interface TierTheme {
 export interface PackTier {
     key: TierKey;
     name: string;
+    status: TierStatus;
     priceThb: number;
     /**
      * Fixed, published chance that a pack of this tier is each hit class.

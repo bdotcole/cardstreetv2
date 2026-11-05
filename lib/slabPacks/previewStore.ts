@@ -36,7 +36,7 @@ import { getSlab, poolForGame } from './pool';
 import { PACK_GAMES, TIERS, TIER_ORDER, sellBackThb } from './tiers';
 import type { FeedEvent, GameKey, PackTable, Pull, ShipTo, TierKey } from './types';
 
-const STORAGE_KEY = 'cs_slab_packs_preview_v4';
+const STORAGE_KEY = 'cs_slab_packs_preview_v5';
 const FEED_CAP = 40;
 const PULL_CAP = 400;
 const LEDGER_CAP = 300;
@@ -132,6 +132,8 @@ const tables = new Map<string, PackTable | null>();
  * not offered for that game.
  */
 export function tryTable(game: GameKey, tier: TierKey): PackTable | null {
+    // A coming-soon pack is not sold, so it has no table, whatever the pool holds.
+    if (TIERS[tier].status !== 'live') return null;
     const key = `${game}:${tier}`;
     if (!tables.has(key)) {
         try {
@@ -154,6 +156,15 @@ export function availableTiers(game: GameKey): TierKey[] {
     return TIER_ORDER.filter((tier) => tryTable(game, tier) !== null);
 }
 
+/**
+ * The packs the lobby shows for a game: the ones it sells, then the ones
+ * marked coming soon (shown at their price, not buyable). A live tier the
+ * game's pool cannot fill is left out, as before.
+ */
+export function offeredTiers(game: GameKey): TierKey[] {
+    return TIER_ORDER.filter((tier) => TIERS[tier].status !== 'live' || tryTable(game, tier) !== null);
+}
+
 /** Games that sell at least one tier. */
 export function availableGames(): GameKey[] {
     return PACK_GAMES.filter((g) => availableTiers(g).length > 0);
@@ -170,7 +181,7 @@ function persist() {
         try {
             const rest: Partial<PreviewState> = { ...state };
             delete rest.hydrated;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 4, ...rest }));
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 5, ...rest }));
         } catch {
             // Storage full or blocked: the preview still plays, it just will
             // not survive a reload.
@@ -198,9 +209,10 @@ const BOT_NAMES = [
     'pikaboy', 'NamTan', 'ripcity66', 'JJ_market', 'beam.tcg', 'Pond_Pokemon', 'Guitar_GX', 'holo.hero',
 ];
 
-// Cheaper packs move faster, as they would; Pokemon moves most.
+// Cheaper packs move faster, as they would; Pokemon moves most. Only packs
+// that are on sale: nobody pulls a coming-soon pack.
 const BOT_TIER_WEIGHTS: [TierKey, number][] = [
-    ['silver', 6], ['gold', 4], ['platinum', 3], ['emerald', 2], ['diamond', 1], ['opal', 0.5],
+    ['bronze', 8], ['silver', 5], ['gold', 3],
 ];
 const BOT_GAME_WEIGHTS: [GameKey, number][] = [['pokemon', 5], ['onepiece', 2], ['lorcana', 2]];
 
@@ -256,7 +268,7 @@ function load(now: number): PreviewState {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return freshState(now);
         const saved = JSON.parse(raw);
-        if (!saved || saved.v !== 4 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
+        if (!saved || saved.v !== 5 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
         return {
             hydrated: true,
             walletThb: saved.walletThb,

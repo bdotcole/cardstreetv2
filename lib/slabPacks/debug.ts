@@ -5,8 +5,9 @@
  * playing it by hand. Every branch is behind NODE_ENV === 'development',
  * which the production build replaces with `false`, so none of this ships.
  *
- *   /packs?demo=opal:ss          open one Galaxy Opal pack that is an SS pull
- *   /packs?demo=silver:d,b,a     open three slabs of those classes in a row
+ *   /packs?demo=gold:ss          open one Gold pack that is an SS pull
+ *   /packs?demo=bronze:d,b,a     open three cards of those classes in a row
+ *                                (live tiers only: a coming-soon pack has no table)
  *   &auto=1                      tear the pack without a finger
  *   &still=1                     no animation: every pose jumps to its end
  *                                state (for tools whose tab never gets an
@@ -19,7 +20,7 @@
 
 import { commitFor } from './engine';
 import { poolForGame } from './pool';
-import { HIT_ORDER, TIER_ORDER, TIERS, classify } from './tiers';
+import { HIT_ORDER, LIVE_TIERS, TIERS, classify } from './tiers';
 import type { HitClass, Pull, TierKey } from './types';
 
 export interface SlabPacksDebug {
@@ -36,7 +37,7 @@ export function readDebug(): SlabPacksDebug {
     const out: SlabPacksDebug = { still: q.has('still'), auto: q.has('auto'), demo: null };
 
     const [tierRaw, classesRaw] = (q.get('demo') ?? '').split(':');
-    const tierKey = TIER_ORDER.find((k) => k === tierRaw);
+    const tierKey = LIVE_TIERS.find((k) => k === tierRaw);
     if (tierKey && classesRaw) {
         const tier = TIERS[tierKey];
         const pulls: Pull[] = [];

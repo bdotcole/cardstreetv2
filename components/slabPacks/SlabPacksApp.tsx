@@ -10,7 +10,7 @@ import { topPulls } from '@/lib/slabPacks/engine';
 import { haptics } from '@/lib/slabPacks/haptics';
 import { coinsForThb, type VerificationKind } from '@/lib/slabPacks/policy';
 import { getSlab } from '@/lib/slabPacks/pool';
-import { availableGames, availableTiers, previewActions, tryTable, usePreviewState, type PaymentMethod } from '@/lib/slabPacks/previewStore';
+import { availableGames, offeredTiers, previewActions, tryTable, usePreviewState, type PaymentMethod } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, HIT_ORDER, TIERS } from '@/lib/slabPacks/tiers';
 import type { CardOdds, FeedEvent, GameKey, PackTable, Pull, TierKey } from '@/lib/slabPacks/types';
@@ -44,7 +44,7 @@ export default function SlabPacksApp() {
 
     const [tab, setTab] = useState<Tab>('packs');
     const [game, setGame] = useState<GameKey>('pokemon');
-    const [tierKey, setTierKey] = useState<TierKey>('silver');
+    const [tierKey, setTierKey] = useState<TierKey>('bronze');
     const [qty, setQty] = useState(1);
     const [method, setMethod] = useState<PaymentMethod>('card');
     const [session, setSession] = useState<OpeningSession | null>(null);
@@ -57,10 +57,11 @@ export default function SlabPacksApp() {
     const [shipPull, setShipPull] = useState<Pull | null>(null);
     const [verifyKind, setVerifyKind] = useState<VerificationKind | null>(null);
 
-    // Each game sells the tiers its pool can fill; a tier the game lacks is
-    // skipped, and the selection falls back to the game's cheapest pack.
+    // Each game shows the tiers its pool can fill plus the coming-soon ones;
+    // a live tier the game lacks is skipped, and the selection falls back to
+    // the game's cheapest pack. A coming-soon tier has no table.
     const games = useMemo(() => availableGames(), []);
-    const tiers = useMemo(() => availableTiers(game), [game]);
+    const tiers = useMemo(() => offeredTiers(game), [game]);
     useEffect(() => {
         if (tiers.length && !tiers.includes(tierKey)) setTierKey(tiers[0]);
     }, [tiers, tierKey]);
@@ -126,6 +127,8 @@ export default function SlabPacksApp() {
                     setWalletOpen(true);
                 } else if (res.reason === 'coins') {
                     showToast(t('lobby.needCoins'), 'error');
+                } else if (res.reason === 'unavailable') {
+                    showToast(t('lobby.soonNote'), 'error');
                 }
                 return;
             }
@@ -206,7 +209,7 @@ export default function SlabPacksApp() {
             </div>
 
             <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden">
-                {!state.hydrated || !table ? (
+                {!state.hydrated ? (
                     <div className="flex h-full items-center justify-center">
                         <div className="sp-display sp-breathe text-[22px] text-white/70">{t('common.loading')}</div>
                     </div>
@@ -301,16 +304,18 @@ export default function SlabPacksApp() {
                             />
                         )}
 
-                        <OddsSheet
-                            open={oddsOpen}
-                            onClose={() => {
-                                sfx.sheet(false);
-                                setOddsOpen(false);
-                            }}
-                            tier={tier}
-                            table={table}
-                            onCard={setCardOdds}
-                        />
+                        {table && (
+                            <OddsSheet
+                                open={oddsOpen}
+                                onClose={() => {
+                                    sfx.sheet(false);
+                                    setOddsOpen(false);
+                                }}
+                                tier={tier}
+                                table={table}
+                                onCard={setCardOdds}
+                            />
+                        )}
                         <CardSheet card={cardOdds} tier={tier} onClose={() => setCardOdds(null)} />
                         <SlabSheet
                             pull={shownSlabPull}
@@ -360,7 +365,8 @@ interface LobbyProps {
     tiers: TierKey[];
     tierKey: TierKey;
     onTier: (key: TierKey) => void;
-    table: PackTable;
+    /** Null for a coming-soon pack: shown at its price, nothing to buy. */
+    table: PackTable | null;
     chase: CardOdds[];
     feed: FeedEvent[];
     walletThb: number;
@@ -471,6 +477,15 @@ function Lobby({
                     </div>
                 </div>
 
+                {!table ? (
+                    // Coming soon: the pack stands in the carousel at its price, with nothing to open yet.
+                    <div className="px-5">
+                        <div className="sp-card sp-mini mt-3 rounded-[18px] px-4 py-3.5 text-[12.5px] leading-relaxed text-white/60">
+                            {t('lobby.soonNote')}
+                        </div>
+                    </div>
+                ) : (
+                <>
                 {/* The pack in one line: what it returns on average and what it can reach. Opens the odds. */}
                 <div className="px-5">
                     <button onClick={onOdds} className="sp-card sp-mini mt-3 flex h-11 w-full items-center gap-2 rounded-full pl-4 pr-2.5 text-left">
@@ -521,10 +536,19 @@ function Lobby({
                         ))}
                     </div>
                 </div>
+                </>
+                )}
             </div>
 
             {/* Buy dock */}
             <div className="absolute inset-x-0 z-30 px-4" style={{ bottom: 'calc(var(--sab) + 82px)' }}>
+                {!table ? (
+                    <div className="sp-panel flex h-[60px] items-center justify-between gap-3 rounded-[26px] px-5">
+                        <span className="sp-display text-[clamp(17px,5.5vw,22px)] text-white/60">{t('lobby.soon')}</span>
+                        <span className="sp-num text-[clamp(15px,4.7vw,19px)] text-white/45">{baht(tier.priceThb)}</span>
+                    </div>
+                ) : (
+                <>
                 {/* How the pack is paid for: card by default, wallet credit or coins when they cover it. */}
                 <div className="mb-2 flex gap-1.5">
                     {methods.map((m) => {
@@ -579,6 +603,8 @@ function Lobby({
                         </span>
                     </button>
                 </div>
+                </>
+                )}
             </div>
         </div>
     );
@@ -630,6 +656,7 @@ function Ticker({ feed, onOpen, simulated }: { feed: FeedEvent[]; onOpen: () => 
 // ── Pack carousel ───────────────────────────────────────────────────────────
 
 function Carousel({ tiers, tierKey, onTier, subtitle }: { tiers: TierKey[]; tierKey: TierKey; onTier: (key: TierKey) => void; subtitle: string }) {
+    const { t } = useSp();
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const [size, setSize] = useState({ w: 0, h: 0 });
     const x = useMotionValue(0);
@@ -715,7 +742,7 @@ function Carousel({ tiers, tierKey, onTier, subtitle }: { tiers: TierKey[]; tier
                             label={TIERS[key].name}
                             onPick={() => onTier(key)}
                         >
-                            <PackArt tier={TIERS[key]} subtitle={subtitle} />
+                            <PackArt tier={TIERS[key]} subtitle={subtitle} soonLabel={TIERS[key].status === 'live' ? undefined : t('lobby.soon')} />
                         </CarouselPack>
                     ))}
                 </motion.div>

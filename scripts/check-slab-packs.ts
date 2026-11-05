@@ -13,7 +13,7 @@
 
 import { buildTable, cardAt, commitFor, draw, verifyDraw } from '../lib/slabPacks/engine';
 import { poolForGame } from '../lib/slabPacks/pool';
-import { HIT_CLASSES, HIT_ORDER, PACK_GAMES, TARGET_EV, TIERS, TIER_ORDER } from '../lib/slabPacks/tiers';
+import { HIT_CLASSES, HIT_ORDER, LIVE_TIERS, PACK_GAMES, TARGET_EV, TIERS, TIER_ORDER } from '../lib/slabPacks/tiers';
 
 let failures = 0;
 function check(cond: boolean, msg: string) {
@@ -26,7 +26,12 @@ function check(cond: boolean, msg: string) {
 const pctOf = (n: number) => `${(n * 100).toFixed(n * 100 >= 10 ? 0 : n * 100 >= 1 ? 1 : 2)}%`;
 const N = 40_000;
 
-for (const game of PACK_GAMES) for (const key of TIER_ORDER) {
+// A coming-soon pack has no table to check; say so rather than silently skip it.
+for (const key of TIER_ORDER) {
+    if (TIERS[key].status !== 'live') console.log(`${TIERS[key].name} ฿${TIERS[key].priceThb.toLocaleString('en-US')}: coming soon, not on sale, no table`);
+}
+
+for (const game of PACK_GAMES) for (const key of LIVE_TIERS) {
     const tier = TIERS[key];
     const PREVIEW_POOL = poolForGame(game);
     const table = buildTable(game, tier, PREVIEW_POOL);

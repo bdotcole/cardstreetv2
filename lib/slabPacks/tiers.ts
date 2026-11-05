@@ -4,10 +4,12 @@
  * module (the engine, the preview store, the UI), so a number changed here
  * changes everywhere. Pure, like lib/partnerTiers.ts.
  *
- * The ladder is named after the NBA 2K card tiers (Silver, Gold, Platinum,
- * Emerald, Diamond, Galaxy Opal) and priced in steps of 775 baht. Prices and
- * odds are the founder's 2026-10-24 figures; the odds have not been through
- * pricing or legal review.
+ * The ladder is named after the NBA 2K card tiers. Three packs are on sale,
+ * at the founder's 2026-11-04 low price points (Bronze ฿150, Silver ฿450,
+ * Gold ฿750): a ladder for clearing singles, ex cards above all, out of a
+ * ~$1,000 inventory. Platinum to Galaxy Opal keep their 2026-10-24 prices
+ * and show as coming soon. The odds have not been through pricing or legal
+ * review.
  */
 
 import type { GameKey, HitClass, PackTier, TierKey } from './types';
@@ -59,7 +61,7 @@ export const CHASE_CLASSES: readonly HitClass[] = ['s', 'ss'];
  */
 export const TARGET_EV = 0.95;
 
-export const TIER_ORDER: readonly TierKey[] = ['silver', 'gold', 'platinum', 'emerald', 'diamond', 'opal'];
+export const TIER_ORDER: readonly TierKey[] = ['bronze', 'silver', 'gold', 'platinum', 'emerald', 'diamond', 'opal'];
 
 /**
  * Odds are fixed per tier and published as they are. The shape follows what
@@ -67,15 +69,30 @@ export const TIER_ORDER: readonly TierKey[] = ['silver', 'gold', 'platinum', 'em
  * price, one in five pays for itself, a few percent are a good hit, and a
  * grail is under one percent. They sum to exactly 1 (checked by the engine).
  *
+ * The three live packs share one inventory: a card sits in every pack whose
+ * bands its value falls in (a ฿3,800 card is a Grail in Bronze, a Monster in
+ * Silver and Gold), so the chase cards are stocked once, not three times.
+ * The ladder that fills them is docs/specs/digital-rips-card-ladder-*.xlsx.
+ *
  * Themes: a / b / c are the foil gradient light to dark, glow lights the
  * stage, ink is the print colour on the foil, material picks the surface
  * treatment and the opening effects (see slabPacks.css [data-material]).
  */
 export const TIERS: Record<TierKey, PackTier> = {
+    bronze: {
+        key: 'bronze',
+        name: 'Bronze',
+        status: 'live',
+        priceThb: 150,
+        odds: { d: 0.44, c: 0.3, b: 0.2, a: 0.04, s: 0.014, ss: 0.006 },
+        sellBackRate: 0.85,
+        theme: { a: '#F7DCC2', b: '#B9722F', c: '#4A2710', glow: '#E8A467', ink: '#2B1507', material: 'metal' },
+    },
     silver: {
         key: 'silver',
         name: 'Silver',
-        priceThb: 775,
+        status: 'live',
+        priceThb: 450,
         odds: { d: 0.44, c: 0.3, b: 0.2, a: 0.04, s: 0.014, ss: 0.006 },
         sellBackRate: 0.85,
         theme: { a: '#FFFFFF', b: '#C9D1DB', c: '#525C6B', glow: '#E6EDF5', ink: '#1B2430', material: 'metal' },
@@ -83,7 +100,8 @@ export const TIERS: Record<TierKey, PackTier> = {
     gold: {
         key: 'gold',
         name: 'Gold',
-        priceThb: 1550,
+        status: 'live',
+        priceThb: 750,
         odds: { d: 0.45, c: 0.3, b: 0.19, a: 0.04, s: 0.014, ss: 0.006 },
         sellBackRate: 0.85,
         theme: { a: '#FFF3C4', b: '#F2B705', c: '#7A4A00', glow: '#FFD24D', ink: '#2B1A00', material: 'metal' },
@@ -91,6 +109,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     platinum: {
         key: 'platinum',
         name: 'Platinum',
+        status: 'coming_soon',
         priceThb: 2325,
         odds: { d: 0.45, c: 0.3, b: 0.19, a: 0.04, s: 0.013, ss: 0.007 },
         sellBackRate: 0.85,
@@ -99,6 +118,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     emerald: {
         key: 'emerald',
         name: 'Emerald',
+        status: 'coming_soon',
         priceThb: 3875,
         odds: { d: 0.46, c: 0.3, b: 0.18, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,
@@ -107,6 +127,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     diamond: {
         key: 'diamond',
         name: 'Diamond',
+        status: 'coming_soon',
         priceThb: 7750,
         odds: { d: 0.47, c: 0.3, b: 0.17, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,
@@ -115,12 +136,20 @@ export const TIERS: Record<TierKey, PackTier> = {
     opal: {
         key: 'opal',
         name: 'Galaxy Opal',
+        status: 'coming_soon',
         priceThb: 15500,
         odds: { d: 0.48, c: 0.3, b: 0.16, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,
         theme: { a: '#FFD9F6', b: '#8B5CF6', c: '#1A1446', glow: '#F472B6', ink: '#0A0520', material: 'galaxy' },
     },
 };
+
+/** The packs on sale today, cheapest first. */
+export const LIVE_TIERS: readonly TierKey[] = TIER_ORDER.filter((key) => TIERS[key].status === 'live');
+
+export function isTierLive(key: TierKey): boolean {
+    return TIERS[key].status === 'live';
+}
 
 export function getTier(key: TierKey): PackTier {
     return TIERS[key];

@@ -74,6 +74,14 @@ export function TierEmblem({ tier, className }: { tier: TierKey; className?: str
     const id = `sp-emblem-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
     const glyph = (() => {
         switch (tier) {
+            case 'bronze':
+                // A shield with a smaller shield cut out of it.
+                return (
+                    <path
+                        fillRule="evenodd"
+                        d="M50 4 88 18v30c0 24-16 42-38 48C28 90 12 72 12 48V18zm0 16L26 28v20c0 16 10 28 24 32 14-4 24-16 24-32V28z"
+                    />
+                );
             case 'silver':
                 // A medal: a ring with a star cut out of it.
                 return (

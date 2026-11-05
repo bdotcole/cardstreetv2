@@ -20,7 +20,7 @@ export const PREVIEW_POOL: readonly Slab[] = DEMO_POOL.map(
         key: `${cardId}:${grade}`,
         cardId,
         game,
-        grader: 'PSA' as const,
+        grader: grade === 'raw' ? ('none' as const) : ('PSA' as const),
         grade,
         name,
         setName,
@@ -37,9 +37,15 @@ export function slabImage(slab: Pick<Slab, 'cardId'>, size: 'small' | 'large'): 
     return `${STORAGE_BASE}${encodeURIComponent(slab.cardId)}/${size}.webp`;
 }
 
-/** PSA's own word for each grade the pool carries. */
-export function gradeDescriptor(grade: number): string {
+/** PSA's own word for each grade the pool carries; a raw single is simply near mint. */
+export function gradeDescriptor(grade: Slab['grade']): string {
+    if (grade === 'raw') return 'NEAR MINT';
     return grade >= 10 ? 'GEM MT' : 'MINT';
+}
+
+/** "PSA 10" / "PSA 9" / "Raw NM": the grade the way the UI prints it after a set name. */
+export function gradeLabel(slab: Pick<Slab, 'grade'>): string {
+    return slab.grade === 'raw' ? 'Raw NM' : `PSA ${slab.grade}`;
 }
 
 const POOL_INDEX = new Map<string, Slab>(PREVIEW_POOL.map((slab) => [slab.key, slab]));

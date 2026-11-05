@@ -45,9 +45,12 @@ export default function SlabCard({
     // 180 (mod 360) is face-down. The hidden side stays out of the
     // accessibility tree so a screen reader cannot read the pull early.
     const faceDown = Math.abs(((flipDeg % 360) + 360) % 360 - 180) < 1;
+    // A raw single has no grader's label: the case reads as a toploader and
+    // the card fills the window (slabPacks.css [data-raw]).
+    const raw = slab.grade === 'raw';
 
     return (
-        <div className={`sp-slab ${className}`} style={{ ...tierVars(tier), ...style }}>
+        <div className={`sp-slab ${className}`} data-raw={raw ? '' : undefined} style={{ ...tierVars(tier), ...style }}>
             {/* Perspective lives on a child so its cqw resolves against the slab. */}
             <div className="absolute inset-0" style={{ perspective: '300cqw' }}>
                 <motion.div
@@ -67,23 +70,25 @@ export default function SlabCard({
 
                         <div className="sp-slab-face sp-slab-front" aria-hidden={faceDown}>
                             <div className="sp-case" />
-                            <div className="sp-slab-label">
-                                <div className="sp-slab-label-stripe" />
-                                <div className="sp-slab-label-text">
-                                    <span>
-                                        {slab.year > 0 ? `${slab.year} ` : ''}POKEMON{slab.lang === 'JP' ? ' JAPANESE' : ''}
-                                    </span>
-                                    <span className="sp-slab-label-name">{slab.name}</span>
-                                    <span>
-                                        {slab.setName} · #{slab.number}
-                                    </span>
+                            {!raw && (
+                                <div className="sp-slab-label">
+                                    <div className="sp-slab-label-stripe" />
+                                    <div className="sp-slab-label-text">
+                                        <span>
+                                            {slab.year > 0 ? `${slab.year} ` : ''}POKEMON{slab.lang === 'JP' ? ' JAPANESE' : ''}
+                                        </span>
+                                        <span className="sp-slab-label-name">{slab.name}</span>
+                                        <span>
+                                            {slab.setName} · #{slab.number}
+                                        </span>
+                                    </div>
+                                    <div className="sp-slab-label-grade">
+                                        <PsaLogo className="sp-slab-logo" />
+                                        <span className="sp-slab-label-desc">{gradeDescriptor(slab.grade)}</span>
+                                        <span className="sp-slab-label-num">{slab.grade}</span>
+                                    </div>
                                 </div>
-                                <div className="sp-slab-label-grade">
-                                    <PsaLogo className="sp-slab-logo" />
-                                    <span className="sp-slab-label-desc">{gradeDescriptor(slab.grade)}</span>
-                                    <span className="sp-slab-label-num">{slab.grade}</span>
-                                </div>
-                            </div>
+                            )}
                             <div className="sp-slab-window">
                                 <div className="sp-slab-card">
                                     {/* Card art is served straight from our own bucket (see lib/imageUtils). */}

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion';
 import { Coins, FastForward, Volume2, VolumeX, X } from 'lucide-react';
 import { haptics } from '@/lib/slabPacks/haptics';
-import { getSlab, slabImage } from '@/lib/slabPacks/pool';
+import { getSlab, gradeLabel, slabImage } from '@/lib/slabPacks/pool';
 import { previewActions } from '@/lib/slabPacks/previewStore';
 import { sfx, type ChargeHandle, type TearHandle } from '@/lib/slabPacks/sfx';
 import type { PaymentMethod } from '@/lib/slabPacks/previewStore';
@@ -799,7 +799,7 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                             </div>
                             <div className="mt-2 truncate text-[19px] font-extrabold leading-tight">{slab.name}</div>
                             <div className="truncate text-[12px] text-white/55">
-                                {slab.setName} · PSA {slab.grade} · #{slab.number}
+                                {slab.setName} · {gradeLabel(slab)} · #{slab.number}
                             </div>
                             <div className="mt-1.5 flex items-end justify-between gap-3">
                                 <CountUp

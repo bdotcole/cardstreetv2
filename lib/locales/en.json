@@ -2086,7 +2086,7 @@
     },
     "slabPacks": {
         "common": {"loading":"Opening the vault","close":"Close","back":"Back to Cardstreet","you":"You"},
-        "lobby": {"title":"Slab Packs","preview":"Preview","previewNote":"Admin only","perPack":"per pack","oddsCta":"Odds & cards","avgPill":"Average pull {pct} of price","topPill":"up to {amount}","topPulls":"Top pulls in this pack","floor":"Lowest card {amount}","packs":"Packs","nextPack":"Odds by hit","fewer":"Fewer packs","more":"More packs","rip":"Rip","payCard":"Card","payWallet":"Wallet {amount}","payCoins":"{n} coins","coinsAmount":"{n} coins","needWallet":"Your wallet does not cover that. Pay by card, or sell back a pull first.","needCoins":"Not enough coins for that"},
+        "lobby": {"title":"Slab Packs","preview":"Preview","previewNote":"Admin only","perPack":"per pack","oddsCta":"Odds & cards","avgPill":"Average pull {pct} of price","topPill":"up to {amount}","topPulls":"Top pulls in this pack","floor":"Lowest card {amount}","packs":"Packs","nextPack":"Odds by hit","fewer":"Fewer packs","more":"More packs","rip":"Rip","payCard":"Card","payWallet":"Wallet {amount}","payCoins":"{n} coins","coinsAmount":"{n} coins","needWallet":"Your wallet does not cover that. Pay by card, or sell back a pull first.","needCoins":"Not enough coins for that","soon":"Coming soon","soonNote":"This pack opens once its cards are in stock. Bronze, Silver and Gold are on sale now."},
         "pack": {"subtitle":"1 graded slab"},
         "tabs": {"packs":"Packs","vault":"Vault","pulls":"Pulls"},
         "feed": {"pulled":"pulled","waiting":"Waiting for the next pull","quiet":"No pulls yet"},
