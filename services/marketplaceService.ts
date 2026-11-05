@@ -6,6 +6,7 @@ import { analyzeQuery, resolveForFilter, resolveLoose } from '@/lib/search/resol
 import { buildNamePredicate, LISTING_COLUMNS } from '@/lib/search/postgrestSearch';
 import { clipQuery } from '@/lib/search/normalize';
 import { markFailedResult } from '@/lib/search/failedResult';
+import { DEAL_BADGE_MAX_RATIO } from '@/lib/listingDisplay';
 import {
     SELLER_REQUIRED_PROFILE_FIELDS,
     checkSellerProfileComplete,
@@ -132,9 +133,92 @@ export interface ListingFilters {
     gradingCompany?: string;
     /** Grade floor, inclusive: 9 shows 9, 9.5 and 10. */
     minGrade?: number;
+    /** listings.condition of a raw single. Singles only, like grading. */
+    condition?: string;
+    /** Set name as snapshotted on the listing, in any case. */
+    setName?: string;
+    /** Rarity spellings to keep, in any case (snapshots spell one tier several ways). Singles only. */
+    rarities?: string[];
+    /** Rarity spellings to leave out, in any case. Singles only. */
+    excludeRarities?: string[];
+    /** Only listings priced far enough under market to carry a deal badge. */
+    dealsOnly?: boolean;
+    acceptsOffers?: boolean;
     sort?: ListingSort;
     limit?: number;
     offset?: number;
+}
+
+export interface FacetValue {
+    /** The value as it is spelled on the listings. */
+    value: string;
+    count: number;
+}
+
+export interface ListingFacets {
+    sets: FacetValue[];
+    rarities: FacetValue[];
+}
+
+type ListingScope = Pick<ListingFilters, 'language' | 'game' | 'kind'>;
+
+/** PostgREST's page cap; a longer range silently returns this many rows. */
+const FACET_PAGE_SIZE = 1000;
+const FACET_MAX_PAGES = 5;
+
+// ILIKE with no wildcard is a case-insensitive equals, once the value's own
+// LIKE metacharacters are escaped.
+const exactILike = (value: string) => value.replace(/[\\%_]/g, '\\$&');
+
+interface ScopeableQuery {
+    in(column: string, values: string[]): ScopeableQuery;
+    eq(column: string, value: string): ScopeableQuery;
+    or(filters: string): ScopeableQuery;
+}
+
+/**
+ * Which listings a browse covers: language, game, singles or sealed. Takes and
+ * returns the same builder; the narrow view inside keeps the compiler out of
+ * supabase-js's select-string types, which it gives up on when asked to prove
+ * a builder fits a generic bound (TS2589).
+ */
+function applyListingScope<Q>(base: Q, { language, game, kind = 'all' }: ListingScope): Q {
+    let query = base as unknown as ScopeableQuery;
+
+    // Server-side language filter. Japanese singles snapshot as 'ja'
+    // while sealed products snapshot as 'jp' (see cardMapper) — match
+    // both so a Japanese filter doesn't silently drop singles.
+    if (language && language !== 'all') {
+        if (language === 'ja' || language === 'jp') {
+            query = query.in('card_data->>language', ['ja', 'jp']);
+        } else {
+            query = query.eq('card_data->>language', language);
+        }
+    }
+
+    // Server-side game filter. Legacy listings predate multi-game support
+    // and have no game in card_data, so treat them as Pokemon.
+    if (game && game !== 'all') {
+        if (game === 'pokemon') {
+            query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null');
+        } else {
+            query = query.eq('card_data->>game', game);
+        }
+    }
+
+    // Singles vs sealed. The key is ABSENT on almost every listing
+    // rather than false — 221 of 222 active rows carry no isSealed
+    // at all (they predate sealed selling) — so singles must accept
+    // null as well as false, exactly like the legacy game filter
+    // above. Testing `.neq('...isSealed','true')` would silently
+    // drop all 221, which is the entire marketplace.
+    if (kind === 'sealed') {
+        query = query.eq('card_data->>isSealed', 'true');
+    } else if (kind === 'singles') {
+        query = query.or('card_data->>isSealed.is.null,card_data->>isSealed.eq.false');
+    }
+
+    return query as unknown as Q;
 }
 
 export const marketplaceService = {
@@ -154,6 +238,12 @@ export const marketplaceService = {
             grading,
             gradingCompany,
             minGrade,
+            condition,
+            setName,
+            rarities,
+            excludeRarities,
+            dealsOnly,
+            acceptsOffers,
             sort = 'newest',
             limit = 50,
             offset = 0,
@@ -210,38 +300,7 @@ export const marketplaceService = {
                     query = query.or(predicate);
                 }
 
-                // Server-side language filter. Japanese singles snapshot as 'ja'
-                // while sealed products snapshot as 'jp' (see cardMapper) — match
-                // both so a Japanese filter doesn't silently drop singles.
-                if (language && language !== 'all') {
-                    if (language === 'ja' || language === 'jp') {
-                        query = query.in('card_data->>language', ['ja', 'jp']);
-                    } else {
-                        query = query.eq('card_data->>language', language);
-                    }
-                }
-
-                // Server-side game filter. Legacy listings predate multi-game support
-                // and have no game in card_data, so treat them as Pokemon.
-                if (game && game !== 'all') {
-                    if (game === 'pokemon') {
-                        query = query.or('card_data->>game.eq.pokemon,card_data->>game.is.null');
-                    } else {
-                        query = query.eq('card_data->>game', game);
-                    }
-                }
-
-                // Singles vs sealed. The key is ABSENT on almost every listing
-                // rather than false — 221 of 222 active rows carry no isSealed
-                // at all (they predate sealed selling) — so singles must accept
-                // null as well as false, exactly like the legacy game filter
-                // above. Testing `.neq('...isSealed','true')` would silently
-                // drop all 221, which is the entire marketplace.
-                if (kind === 'sealed') {
-                    query = query.eq('card_data->>isSealed', 'true');
-                } else if (kind === 'singles') {
-                    query = query.or('card_data->>isSealed.is.null,card_data->>isSealed.eq.false');
-                }
+                query = applyListingScope(query, { language, game, kind });
 
                 // Server-side price range
                 if (minPrice !== undefined && minPrice > 0) {
@@ -264,7 +323,23 @@ export const marketplaceService = {
                         if (gradingCompany) query = query.eq('grading_company', gradingCompany);
                         if (minGrade !== undefined && minGrade > 0) query = query.gte('grade', minGrade);
                     }
+
+                    // Also singles only: sealed is stored as condition 'Sealed'
+                    // and rarity 'Sealed', so these would empty that section.
+                    if (condition) query = query.eq('condition', condition);
+                    if (rarities?.length) {
+                        query = query.or(rarities
+                            .map((r) => `card_data->>rarity.ilike."${exactILike(r).replace(/["\\]/g, '\\$&')}"`)
+                            .join(','));
+                    }
+                    for (const r of excludeRarities ?? []) {
+                        query = query.not('card_data->>rarity', 'ilike', exactILike(r));
+                    }
                 }
+
+                if (setName) query = query.ilike('card_data->>set', exactILike(setName));
+                if (dealsOnly) query = query.lte('deal_ratio', DEAL_BADGE_MAX_RATIO);
+                if (acceptsOffers) query = query.eq('accepts_offers', true);
 
                 // Server-side sort
                 switch (sortKey) {
@@ -356,6 +431,48 @@ export const marketplaceService = {
         } catch (error) {
             console.error('Error fetching active listings:', error);
             return markFailedResult([]);
+        }
+    },
+
+    /**
+     * The set names and rarities in stock for a browse, with listing counts,
+     * for filter dropdowns that only offer what the grid can show. Raw spellings:
+     * lib/listingFilters.ts folds them into options. Null when the read failed,
+     * so a caller can tell that apart from a browse with nothing in stock.
+     */
+    async getListingFacets(scope: ListingScope): Promise<ListingFacets | null> {
+        const supabase = createClient();
+        const sets = new Map<string, number>();
+        const rarities = new Map<string, number>();
+        const add = (tally: Map<string, number>, value: unknown) => {
+            if (typeof value === 'string' && value.trim()) tally.set(value, (tally.get(value) ?? 0) + 1);
+        };
+        try {
+            for (let page = 0; page < FACET_MAX_PAGES; page++) {
+                const from = page * FACET_PAGE_SIZE;
+                const { data, error } = await applyListingScope(
+                    supabase
+                        .from('listings')
+                        .select('set:card_data->>set, rarity:card_data->>rarity')
+                        .eq('status', 'active'),
+                    scope,
+                )
+                    .order('id', { ascending: true })
+                    .range(from, from + FACET_PAGE_SIZE - 1);
+                if (error) throw error;
+                const rows = (data ?? []) as unknown as Array<{ set: unknown; rarity: unknown }>;
+                for (const row of rows) {
+                    add(sets, row.set);
+                    add(rarities, row.rarity);
+                }
+                if (rows.length < FACET_PAGE_SIZE) break;
+            }
+            const toValues = (tally: Map<string, number>): FacetValue[] =>
+                [...tally.entries()].map(([value, count]) => ({ value, count }));
+            return { sets: toValues(sets), rarities: toValues(rarities) };
+        } catch (error) {
+            console.error('Error fetching listing facets:', error);
+            return null;
         }
     },
 

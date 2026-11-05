@@ -1,7 +1,14 @@
+import { CardCondition } from '@/types';
 import type { MarketplaceListing } from '@/services/marketplaceService';
 
 // Discounts smaller than this read as noise, not a deal — no badge.
 export const DEAL_BADGE_MIN_PCT = 5;
+
+/**
+ * listings.deal_ratio at or below which getDealPercent rounds up to a badge, so
+ * a "deals only" filter shows exactly the tiles that carry one.
+ */
+export const DEAL_BADGE_MAX_RATIO = 1 - (DEAL_BADGE_MIN_PCT - 0.5) / 100;
 
 /**
  * Percent a listing is priced below its market snapshot, or null when the
@@ -48,6 +55,15 @@ export function isTopCondition(listing: BadgeSource): boolean {
  * would only ever show an empty grid.
  */
 export const LISTING_GRADING_COMPANIES = ['PSA', 'BGS', 'CGC', 'TAG'] as const;
+
+/** A raw single's conditions, as sellers pick them and as listings.condition stores them. */
+export const LISTING_CONDITIONS = [
+    CardCondition.NM,
+    CardCondition.LP,
+    CardCondition.MP,
+    CardCondition.HP,
+    CardCondition.DMG,
+] as const;
 
 /** Grade floors the filter offers: "9+" shows 9, 9.5 and 10. */
 export const MIN_GRADE_OPTIONS = [10, 9, 8, 7] as const;
