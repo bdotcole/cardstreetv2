@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Card, UserCollectionItem, CardCondition, CustomCollection } from '@/types';
+import { Card, UserCollectionItem, CardCondition, CustomCollection, OrphanListing } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
 import { trackEngagement } from '@/lib/engagementEvents';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 
 interface UseUserCollectionsReturn {
     collections: CustomCollection[];
+    /**
+     * The seller's live listings that no vault item matched (see
+     * OrphanListing), one per card + condition group. Empty for guests.
+     */
+    orphanListings: OrphanListing[];
     isLoading: boolean;
     error: string | null;
     addCollection: (name: string, includeInPortfolio?: boolean) => Promise<string>;
@@ -20,6 +25,7 @@ interface UseUserCollectionsReturn {
 
 export function useUserCollections(): UseUserCollectionsReturn {
     const [collections, setCollections] = useState<CustomCollection[]>([]);
+    const [orphanListings, setOrphanListings] = useState<OrphanListing[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +38,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
             if (!user) {
                 // Guest user - return empty collections
                 setCollections([]);
+                setOrphanListings([]);
                 setIsLoading(false);
                 return;
             }
@@ -89,7 +96,10 @@ export function useUserCollections(): UseUserCollectionsReturn {
                     .from('listings')
                     .select('*')
                     .eq('seller_id', user.id)
-                    .in('status', ['active', 'draft', 'paused']),
+                    .in('status', ['active', 'draft', 'paused'])
+                    // Oldest first: the group rule below keys on the oldest row,
+                    // like marketplaceService.ownListingIdsForCard.
+                    .order('created_at', { ascending: true }),
                 supabase
                     .from('auctions')
                     .select('id, card_id, condition, status, ends_at, order:orders!auctions_order_id_fkey(status)')
@@ -127,6 +137,25 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 userListingsMap[listing.card_id].push(listing);
             });
 
+            // The rows the seller-side actions act on for an item: every live
+            // row at the item's condition when any exist there, else every row
+            // sharing the oldest row's condition (the rule in
+            // marketplaceService.ownListingIdsForCard; change both). Read from
+            // the unconsumed list, so a vault item listed twenty times counts
+            // 20 units rather than the one row it matched below.
+            const liveRowsByCard: Record<string, any[]> = {};
+            (listingsData || []).forEach(listing => {
+                (liveRowsByCard[listing.card_id] ||= []).push(listing);
+            });
+            const listedGroupFor = (cardId: string, condition: string | undefined) => {
+                const rows = liveRowsByCard[cardId] ?? [];
+                if (rows.length === 0) return null;
+                const exact = rows.filter(r => r.condition === condition);
+                const cond: string = exact.length ? (condition as string) : rows[0].condition;
+                return { key: `${cardId}|${cond}`, units: rows.filter(r => r.condition === cond).length };
+            };
+            const matchedGroupKeys = new Set<string>();
+
             // Group items by collection
             const collectionsWithItems: CustomCollection[] = (collectionsData || []).map(col => ({
                 id: col.id,
@@ -162,6 +191,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             matchedAuction = exactIdx !== -1 ? potentialAuctions.splice(exactIdx, 1)[0] : potentialAuctions.shift()!;
                         }
 
+                        const listedGroup = matchedListing ? listedGroupFor(item.card_id, item.condition) : null;
+                        if (listedGroup) matchedGroupKeys.add(listedGroup.key);
+
                         return {
                             id: item.id,
                             cardId: item.card_id,
@@ -175,6 +207,8 @@ export function useUserCollections(): UseUserCollectionsReturn {
                             isListing: !!matchedListing,
                             listingPrice: matchedListing ? parseFloat(matchedListing.price) : undefined,
                             listingStatus: matchedListing ? matchedListing.status : undefined,
+                            listedUnits: listedGroup?.units,
+                            listedGroupKey: listedGroup?.key,
                             inAuction: !!matchedAuction,
                             auctionId: matchedAuction?.id,
                             auctionStatus: matchedAuction ? (matchedAuction.status as 'live' | 'sold') : undefined,
@@ -188,7 +222,36 @@ export function useUserCollections(): UseUserCollectionsReturn {
                     })
             }));
 
+            // Live rows no item reached, grouped by card + condition. One
+            // copy sold and fulfilment removed the (single) vault item while
+            // the other copies stayed on the market, or the item was deleted
+            // by hand: either way the seller must still see and manage them.
+            // Keyed on the exact condition, which is what the card-keyed
+            // actions resolve to when rows exist at that condition.
+            const orphanGroups = new Map<string, any[]>();
+            (listingsData || []).forEach(listing => {
+                const key = `${listing.card_id}|${listing.condition}`;
+                if (matchedGroupKeys.has(key)) return;
+                const group = orphanGroups.get(key);
+                if (group) group.push(listing);
+                else orphanGroups.set(key, [listing]);
+            });
+            const orphans: OrphanListing[] = [...orphanGroups.values()].map(rows => {
+                const rep = rows[0];
+                return {
+                    id: rep.id,
+                    cardId: rep.card_id,
+                    card: normalizeCard(rep.card_data, rep.card_id),
+                    condition: rep.condition as CardCondition,
+                    price: parseFloat(rep.price),
+                    status: rep.status,
+                    units: rows.length,
+                    createdAt: rep.created_at,
+                };
+            });
+
             setCollections(collectionsWithItems);
+            setOrphanListings(orphans);
             setError(null);
         } catch (err: any) {
             console.error('Error loading collections:', err);
@@ -451,6 +514,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
 
     return {
         collections,
+        orphanListings,
         isLoading,
         error,
         addCollection,

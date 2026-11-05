@@ -24,6 +24,7 @@ import StripePreScreen from '@/components/StripePreScreen';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
+import { groupSiblingListings, listingUnits, MAX_LISTING_UNITS } from '@/lib/listingSiblings';
 
 interface StripeStatus {
     connected: boolean;
@@ -67,9 +68,16 @@ export default function DesktopSell() {
     const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
     const [priceDraft, setPriceDraft] = useState('');
     const [savingPrice, setSavingPrice] = useState(false);
+    // Inline copies editor on a live listing group (same one-at-a-time rule)
+    const [editingUnitsId, setEditingUnitsId] = useState<string | null>(null);
+    const [unitsDraft, setUnitsDraft] = useState(1);
+    const [savingUnits, setSavingUnits] = useState(false);
 
     const refreshMyListings = useCallback(() => {
-        marketplaceService.getMyListings().then(setMyListings);
+        // One row per copy in the DB (createListing's quantity); one line per
+        // group here, with the copy count, like the marketplace grid. Price
+        // and cancel act on the whole group through siblingIds.
+        marketplaceService.getMyListings().then((rows) => setMyListings(groupSiblingListings(rows)));
     }, []);
 
     useEffect(() => {
@@ -204,12 +212,39 @@ export default function DesktopSell() {
 
     const cancelListing = async (listing: MarketplaceListing) => {
         if (!window.confirm(t('desktop.sell.cancelConfirm'))) return;
-        const ok = await marketplaceService.cancelListing(listing.id);
+        const ok = await marketplaceService.cancelListingsByIds(listing.siblingIds ?? [listing.id]);
         if (ok) {
             showToast(t('desktop.sell.toastCancelled'), 'success');
             refreshMyListings();
         } else {
             showToast(t('desktop.sell.toastCancelFailed'), 'error');
+        }
+    };
+
+    const saveUnits = async (listing: MarketplaceListing) => {
+        if (savingUnits) return;
+        if (unitsDraft === listingUnits(listing)) {
+            setEditingUnitsId(null);
+            return;
+        }
+        setSavingUnits(true);
+        try {
+            const result = await marketplaceService.setListingUnitsByIds(listing.siblingIds ?? [listing.id], unitsDraft);
+            if (result === null) {
+                // Sold/cancelled while editing — the refresh below reconciles.
+                showToast(t('desktop.sell.toastQuantityUpdateFailed'), 'error');
+            } else {
+                showToast(t('desktop.sell.toastQuantityUpdated'), 'success');
+                setEditingUnitsId(null);
+            }
+            refreshMyListings();
+        } catch (error) {
+            showToast(
+                error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('desktop.sell.toastQuantityUpdateFailed'),
+                'error',
+            );
+        } finally {
+            setSavingUnits(false);
         }
     };
 
@@ -225,7 +260,7 @@ export default function DesktopSell() {
         }
         setSavingPrice(true);
         try {
-            const ok = await marketplaceService.updateListingPrice(listing.id, draftPrice);
+            const ok = await marketplaceService.updateListingPriceByIds(listing.siblingIds ?? [listing.id], draftPrice);
             if (ok) {
                 showToast(t('desktop.sell.toastPriceUpdated'), 'success');
                 setEditingPriceId(null);
@@ -475,6 +510,7 @@ export default function DesktopSell() {
                                     <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide truncate">
                                         {listing.card_data.set} · {listing.condition}
                                         {listing.is_graded && listing.grading_company ? ` · ${listing.grading_company} ${listing.grade ?? ''}` : ''}
+                                        {listingUnits(listing) > 1 ? ` · ${listingUnits(listing)} ${t('desktop.sell.units')}` : ''}
                                     </p>
                                 </div>
                             </div>
@@ -512,17 +548,66 @@ export default function DesktopSell() {
                                             <i className="fa-solid fa-xmark"></i>
                                         </button>
                                     </>
+                                ) : editingUnitsId === listing.id ? (
+                                    <>
+                                        <span className="text-[11px] text-slate-500 uppercase font-bold tracking-wide">{t('desktop.sell.unitsOnMarket')}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setUnitsDraft((q) => Math.max(1, q - 1))}
+                                            disabled={savingUnits || unitsDraft <= 1}
+                                            aria-label="Fewer copies"
+                                            className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 transition-colors"
+                                        >
+                                            −
+                                        </button>
+                                        <span className="w-8 text-center text-white font-black tabular-nums">{unitsDraft}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setUnitsDraft((q) => Math.min(MAX_LISTING_UNITS, q + 1))}
+                                            disabled={savingUnits || unitsDraft >= MAX_LISTING_UNITS}
+                                            aria-label="More copies"
+                                            className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 transition-colors"
+                                        >
+                                            +
+                                        </button>
+                                        <button
+                                            onClick={() => saveUnits(listing)}
+                                            disabled={savingUnits}
+                                            className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+                                        >
+                                            {savingUnits ? <i className="fa-solid fa-spinner fa-spin"></i> : t('desktop.sell.saveQuantity')}
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingUnitsId(null)}
+                                            disabled={savingUnits}
+                                            aria-label={t('desktop.sell.cancel')}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors"
+                                        >
+                                            <i className="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </>
                                 ) : (
                                     <>
                                         <span className="text-lg font-black text-brand-cyan">{formatTHB(listing.price)}</span>
                                         <button
                                             onClick={() => {
+                                                setEditingUnitsId(null);
                                                 setPriceDraft(String(listing.price));
                                                 setEditingPriceId(listing.id);
                                             }}
                                             className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
                                         >
                                             {t('desktop.sell.editPrice')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setEditingPriceId(null);
+                                                setUnitsDraft(listingUnits(listing));
+                                                setEditingUnitsId(listing.id);
+                                            }}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+                                        >
+                                            {t('desktop.sell.editQuantity')}
                                         </button>
                                         <button
                                             onClick={() => cancelListing(listing)}

@@ -660,6 +660,7 @@ export default function HomePage() {
     // Supabase hooks for data management
     const {
         collections: customCollections,
+        orphanListings,
         isLoading: collectionsLoading,
         addCollection,
         deleteCollection,
@@ -675,8 +676,8 @@ export default function HomePage() {
     // the mobile app's only listings-of-mine surface. The cron's candidate
     // query is the authoritative zero-listings check; this only gates a banner.
     const hasAnyListing = useMemo(
-        () => customCollections.some((col) => col.items.some((item) => item.isListing)),
-        [customCollections],
+        () => orphanListings.length > 0 || customCollections.some((col) => col.items.some((item) => item.isListing)),
+        [customCollections, orphanListings],
     );
     const showFirstListingPrompt =
         firstListingEligible &&
@@ -2129,9 +2130,15 @@ export default function HomePage() {
             }
 
             await fetchGlobalListings();
-            // listingPrice is derived from the listings table; merge locally
-            // so the Vault reflects the new ask without a full reload.
-            await updateCollectionItem(colId, item.id, { listingPrice: price });
+            if (colId) {
+                // listingPrice is derived from the listings table; merge locally
+                // so the Vault reflects the new ask without a full reload.
+                await updateCollectionItem(colId, item.id, { listingPrice: price });
+            } else {
+                // An item-less entry (see OrphanListing) has nothing local to
+                // merge into; re-derive it from the DB.
+                await refreshCollections();
+            }
             showToast(t('vault.priceUpdated'), 'success');
         } catch (error) {
             console.error('Failed to update listing price:', error);
@@ -2139,6 +2146,30 @@ export default function HomePage() {
             // by the database; say so rather than "update failed".
             showToast(
                 error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('vault.priceUpdateFailed'),
+                'error',
+            );
+            throw error;
+        }
+    };
+
+    // Copies on the market for one Vault listing entry (the Quantity control).
+    // The rows themselves change (createListing's N-rows model), so the Vault
+    // re-derives its entries from the DB afterwards instead of patching a count.
+    const handleUpdateListingUnits = async (_colId: string, item: UserCollectionItem, card: Card, units: number) => {
+        try {
+            const result = await marketplaceService.setListingUnitsForCard(card.id, item.condition, units);
+            if (result === null) {
+                // Sold/cancelled while editing — re-derive so the stale entry drops out.
+                await refreshCollections();
+                throw new Error('Listing no longer active');
+            }
+            await fetchGlobalListings();
+            await refreshCollections();
+            showToast(t('vault.quantityUpdated'), 'success');
+        } catch (error) {
+            console.error('Failed to update listing quantity:', error);
+            showToast(
+                error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('vault.quantityUpdateFailed'),
                 'error',
             );
             throw error;
@@ -2844,6 +2875,8 @@ export default function HomePage() {
                                 onListCard={handleStartListing}
                                 onRemoveListing={handleRemoveListing}
                                 onUpdateListingPrice={handleUpdateListingPrice}
+                                onUpdateListingUnits={handleUpdateListingUnits}
+                                orphanListings={orphanListings}
                                 listingTarget={listingTarget}
                                 onCancelListing={() => setListingTarget(null)}
                                 onPublishListing={handlePublishListing}

@@ -15,6 +15,7 @@ import {
 } from '@/lib/profileValidation';
 import { attachSellers } from '@/lib/publicProfiles';
 import { attachWatchCounts } from '@/lib/listingWatches';
+import { MAX_LISTING_UNITS } from '@/lib/listingSiblings';
 import { trackEngagement } from '@/lib/engagementEvents';
 import {
     ListingPhotosRequiredError,
@@ -747,6 +748,93 @@ export const marketplaceService = {
     },
 
     /**
+     * Set how many copies of a card the signed-in seller has on the market,
+     * keyed like updateListingPriceForCard (the mobile Vault knows card_id +
+     * condition, not listing ids). Copies are rows (createListing's N-rows
+     * model): raising the count clones the group's oldest live row (same
+     * price, photos, grading and status), lowering it cancels the newest rows
+     * first, so the representative the Vault hangs the entry on survives.
+     * Never goes below one: taking the card off the market is Remove, not
+     * quantity zero. Returns the live count after the change, or null when
+     * nothing is live any more (sold or cancelled while editing).
+     */
+    async setListingUnitsForCard(cardId: string, condition: string | undefined, units: number): Promise<number | null> {
+        const supabase = createClient();
+        try {
+            const rows = await ownListingRowsForCard(supabase, cardId, condition);
+            if (rows.length === 0) return null;
+            return await setListingUnits(supabase, rows, units);
+        } catch (error) {
+            console.error('Error updating listing quantity for card:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * setListingUnitsForCard for an explicit sibling group: the desktop Sell
+     * page has listing ids from groupSiblingListings. Rows that are no longer
+     * the caller's live listings are ignored.
+     */
+    async setListingUnitsByIds(ids: string[], units: number): Promise<number | null> {
+        const supabase = createClient();
+        try {
+            const rows = await ownLiveRowsByIds(supabase, ids);
+            if (rows.length === 0) return null;
+            return await setListingUnits(supabase, rows, units);
+        } catch (error) {
+            console.error('Error updating listing quantity:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Reprice a sibling group by id (desktop Sell page). Same contract as
+     * updateListingPrice: false when none of the rows is live any more.
+     */
+    async updateListingPriceByIds(ids: string[], price: number): Promise<boolean> {
+        if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+            throw new Error('Invalid listing price');
+        }
+        if (ids.length === 0) return false;
+        const supabase = createClient();
+        try {
+            const { data, error } = await supabase
+                .from('listings')
+                .update({ price })
+                .in('id', ids)
+                .in('status', LIVE_LISTING_STATUSES)
+                .select('id');
+            if (error) throw isListingPhotosDbError(error) ? new ListingPhotosRequiredError() : error;
+            const changed = (data?.length ?? 0) > 0;
+            if (changed) pingPriceDropSweep();
+            return changed;
+        } catch (error) {
+            console.error('Error updating listing price by ids:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Cancel every copy in a sibling group by id (desktop Sell page).
+     */
+    async cancelListingsByIds(ids: string[]): Promise<boolean> {
+        if (ids.length === 0) return false;
+        const supabase = createClient();
+        try {
+            const { error } = await supabase
+                .from('listings')
+                .update({ status: 'cancelled' })
+                .in('id', ids)
+                .in('status', LIVE_LISTING_STATUSES);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error cancelling listings:', error);
+            return false;
+        }
+    },
+
+    /**
      * Cancel an active listing
      */
     async cancelListing(listingId: string): Promise<boolean> {
@@ -798,6 +886,9 @@ export const marketplaceService = {
     }
 };
 
+/** Statuses under which a listing is the seller's to manage (not sold or cancelled). */
+const LIVE_LISTING_STATUSES = ['active', 'draft', 'paused'] as const;
+
 /**
  * Ids of the signed-in seller's live (active/draft) listings for a card:
  * every row at `condition` when any exist there, else every row sharing the
@@ -817,12 +908,140 @@ async function ownListingIdsForCard(
         .select('id, condition')
         .eq('seller_id', user.id)
         .eq('card_id', cardId)
-        .in('status', ['active', 'draft', 'paused'])
+        .in('status', LIVE_LISTING_STATUSES)
         .order('created_at', { ascending: true });
     if (error) throw error;
-    if (!listings || listings.length === 0) return [];
+    return sameConditionGroup(listings ?? [], condition).map(l => l.id);
+}
 
-    const exact = listings.filter(l => l.condition === condition);
-    const cond = exact.length ? condition : listings[0].condition;
-    return listings.filter(l => l.condition === cond).map(l => l.id);
+/**
+ * The rows the card-keyed actions act on, out of a seller's live rows for
+ * one card (oldest first): every row at `condition` when any exist there,
+ * else every row sharing the oldest row's condition. useUserCollections
+ * mirrors this rule to count and key the Vault's entries; change both.
+ */
+function sameConditionGroup<T extends { condition: string }>(rows: T[], condition: string | undefined): T[] {
+    if (rows.length === 0) return [];
+    const exact = rows.filter(l => l.condition === condition);
+    const cond = exact.length ? condition : rows[0].condition;
+    return rows.filter(l => l.condition === cond);
+}
+
+/** Everything setListingUnits needs to clone a row as another copy. */
+interface OwnListingRow {
+    id: string;
+    seller_id: string;
+    card_id: string;
+    card_data: Card;
+    price: number;
+    condition: string;
+    is_graded: boolean | null;
+    grading_company: string | null;
+    grade: number | null;
+    image_front_url: string | null;
+    image_back_url: string | null;
+    accepts_offers: boolean | null;
+    status: string;
+    created_at: string;
+}
+
+const OWN_LISTING_ROW_COLUMNS =
+    'id, seller_id, card_id, card_data, price, condition, is_graded, grading_company, grade, image_front_url, image_back_url, accepts_offers, status, created_at';
+
+/** ownListingIdsForCard's rows in full, for cloning. */
+async function ownListingRowsForCard(
+    supabase: ReturnType<typeof createClient>,
+    cardId: string,
+    condition: string | undefined,
+): Promise<OwnListingRow[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Must be signed in to manage a listing');
+
+    const { data, error } = await supabase
+        .from('listings')
+        .select(OWN_LISTING_ROW_COLUMNS)
+        .eq('seller_id', user.id)
+        .eq('card_id', cardId)
+        .in('status', LIVE_LISTING_STATUSES)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return sameConditionGroup((data ?? []) as unknown as OwnListingRow[], condition);
+}
+
+/** The caller's live rows among `ids`, oldest first. */
+async function ownLiveRowsByIds(
+    supabase: ReturnType<typeof createClient>,
+    ids: string[],
+): Promise<OwnListingRow[]> {
+    if (ids.length === 0) return [];
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Must be signed in to manage a listing');
+
+    const { data, error } = await supabase
+        .from('listings')
+        .select(OWN_LISTING_ROW_COLUMNS)
+        .eq('seller_id', user.id)
+        .in('id', ids)
+        .in('status', LIVE_LISTING_STATUSES)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as unknown as OwnListingRow[];
+}
+
+/**
+ * Bring a group of live rows (oldest first) to `units` copies. Extra copies
+ * are clones of the oldest row; surplus copies are cancelled newest first.
+ * The clone carries the template's photos, so the photo rule the database
+ * enforces on insert (trg_enforce_listing_photos) passes exactly when the
+ * original did. Wishlist alerts and the listing_publish event are not
+ * re-fired: the card was already published, this is more of the same.
+ */
+async function setListingUnits(
+    supabase: ReturnType<typeof createClient>,
+    rows: OwnListingRow[],
+    units: number,
+): Promise<number> {
+    if (!Number.isFinite(units)) throw new Error('Invalid listing quantity');
+    const current = rows.length;
+    const desired = Math.min(MAX_LISTING_UNITS, Math.max(1, Math.round(units)));
+    if (desired === current) return current;
+
+    if (desired > current) {
+        const template = rows[0];
+        const clone = {
+            seller_id: template.seller_id,
+            card_id: template.card_id,
+            card_data: template.card_data,
+            price: template.price,
+            condition: template.condition,
+            is_graded: template.is_graded ?? false,
+            grading_company: template.grading_company,
+            grade: template.grade,
+            image_front_url: template.image_front_url,
+            image_back_url: template.image_back_url,
+            accepts_offers: template.accepts_offers ?? false,
+            status: template.status,
+        };
+        const { data: inserted, error } = await supabase
+            .from('listings')
+            .insert(Array.from({ length: desired - current }, () => clone))
+            .select('id');
+        if (error) throw isListingPhotosDbError(error) ? new ListingPhotosRequiredError() : error;
+        return current + (inserted?.length ?? 0);
+    }
+
+    // Newest first, so the oldest row (the one the Vault keys on) is the
+    // last to go.
+    const newestFirst = [...rows].sort((a, b) =>
+        a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1,
+    );
+    const toCancel = newestFirst.slice(0, current - desired).map(r => r.id);
+    const { data: cancelled, error } = await supabase
+        .from('listings')
+        .update({ status: 'cancelled' })
+        .in('id', toCancel)
+        .in('status', LIVE_LISTING_STATUSES)
+        .select('id');
+    if (error) throw error;
+    return current - (cancelled?.length ?? 0);
 }

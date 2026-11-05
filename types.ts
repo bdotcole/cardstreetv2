@@ -80,6 +80,33 @@ export interface UserCollectionItem {
   isGraded?: boolean;
   gradingCompany?: string;
   grade?: number;
+  /**
+   * Live copies on the market behind this entry: every own listing row the
+   * seller-side actions (Edit price, Remove, Quantity) act on, which is the
+   * rows at this card + condition. A vault item listed twenty times reads
+   * "20 units", not the one row it happened to match. Absent when unlisted.
+   */
+  listedUnits?: number;
+  /** Key of that row group (card id + condition), so the Listings view shows one entry per group. */
+  listedGroupKey?: string;
+}
+
+/**
+ * A live listing of the seller's with no vault item to hang on: fulfilment
+ * removed the item when one copy sold while the others stayed listed, or the
+ * item was deleted by hand. The Vault's Listings view renders it as an entry
+ * of its own, so a listing can never become unmanageable from the phone.
+ */
+export interface OrphanListing {
+  /** Oldest live row of the group: the representative the entry is keyed on. */
+  id: string;
+  cardId: string;
+  card: Card;
+  condition: CardCondition;
+  price: number;
+  status: 'active' | 'draft' | 'paused';
+  units: number;
+  createdAt: string;
 }
 
 export interface CustomCollection {

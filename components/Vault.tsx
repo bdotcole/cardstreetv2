@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import dynamic from 'next/dynamic';
-import { CustomCollection, Card, CardCondition, UserCollectionItem } from '../types';
+import { CustomCollection, Card, CardCondition, UserCollectionItem, OrphanListing } from '../types';
+import { MAX_LISTING_UNITS } from '@/lib/listingSiblings';
 import { COLLECTION_FOLDERS, MOCK_CARDS } from '../constants';
 import ListingForm from './ListingForm';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
@@ -38,6 +39,13 @@ interface VaultProps {
   onListCard: (colId: string, item: UserCollectionItem, card: Card) => void;
   onRemoveListing: (colId: string, item: UserCollectionItem, card: Card) => void | Promise<void>;
   onUpdateListingPrice: (colId: string, item: UserCollectionItem, card: Card, price: number) => Promise<void>;
+  /**
+   * Copies on the market for a listing entry (the Quantity control). Omitted
+   * and the control is not rendered.
+   */
+  onUpdateListingUnits?: (colId: string, item: UserCollectionItem, card: Card, units: number) => Promise<void>;
+  /** Live listings with no vault item behind them, rendered as entries of their own. */
+  orphanListings?: OrphanListing[];
   listingTarget: { colId: string, item: UserCollectionItem, card: Card } | null;
   onCancelListing: () => void;
   onPublishListing: (data: any) => void;
@@ -76,6 +84,8 @@ const Vault: React.FC<VaultProps> = ({
   onListCard,
   onRemoveListing,
   onUpdateListingPrice,
+  onUpdateListingUnits,
+  orphanListings = [],
   listingTarget,
   onCancelListing,
   onPublishListing,
@@ -128,6 +138,10 @@ const Vault: React.FC<VaultProps> = ({
   // Inline quick price edit on an active listing (one at a time, keyed by item id)
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState('');
+  // Inline copies editor on a listing entry (same one-at-a-time rule).
+  const [editingUnitsItemId, setEditingUnitsItemId] = useState<string | null>(null);
+  const [unitsDraft, setUnitsDraft] = useState(1);
+  const [isSavingUnits, setIsSavingUnits] = useState(false);
   const repriceHandledRef = useRef<string | null>(null);
 
   // Multi-select for bulk listing, keyed by collection-item id. Empty set =
@@ -280,16 +294,46 @@ const Vault: React.FC<VaultProps> = ({
 
   const myVaultListings = useMemo(() => {
     const list: { colId: string, item: UserCollectionItem, card: Card }[] = [];
+    // One entry per market group (the rows Edit price, Remove and Quantity
+    // act on). Two vault copies listed at the same condition used to show as
+    // two entries whose buttons did the same thing.
+    const seen = new Set<string>();
     customCollections.forEach(col => {
       col.items.forEach(item => {
-        if (item.isListing) {
-          const card = item.card || MOCK_CARDS.find(c => c.id === item.cardId);
-          if (card) list.push({ colId: col.id, item, card });
-        }
+        if (!item.isListing) return;
+        const key = item.listedGroupKey ?? `${item.cardId}|${item.condition}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const card = item.card || MOCK_CARDS.find(c => c.id === item.cardId);
+        if (card) list.push({ colId: col.id, item, card });
+      });
+    });
+    // Live listings with no vault item behind them (one copy sold and
+    // fulfilment removed the item while the rest stayed on the market). An
+    // empty colId marks the entry as item-less; price, quantity and Remove
+    // are keyed by card + condition, so they work on it all the same.
+    orphanListings.forEach(orphan => {
+      list.push({
+        colId: '',
+        item: {
+          id: `listing:${orphan.id}`,
+          cardId: orphan.cardId,
+          card: orphan.card,
+          quantity: orphan.units,
+          condition: orphan.condition,
+          purchasePrice: 0,
+          addedAt: orphan.createdAt,
+          isListing: true,
+          listingPrice: orphan.price,
+          listingStatus: orphan.status,
+          listedUnits: orphan.units,
+          listedGroupKey: `${orphan.cardId}|${orphan.condition}`,
+        },
+        card: orphan.card,
       });
     });
     return list;
-  }, [customCollections]);
+  }, [customCollections, orphanListings]);
 
   // Combined flat list of all cards in collection
   const allVaultItems = useMemo(() => {
@@ -348,13 +392,16 @@ const Vault: React.FC<VaultProps> = ({
   // untidy. Runs once per card id, and only once the item exists.
   useEffect(() => {
     if (!repriceCardId || repriceHandledRef.current === repriceCardId) return;
-    const match = allVaultItems.find(({ card, item }) => card.id === repriceCardId && item.isListing);
+    // myVaultListings, not allVaultItems: an item-less listing (OrphanListing)
+    // has an entry here but no vault item.
+    const match = myVaultListings.find(({ card }) => card.id === repriceCardId);
     if (!match) return;
     repriceHandledRef.current = repriceCardId;
     setView('listings');
+    setEditingUnitsItemId(null);
     setEditingPriceItemId(match.item.id);
     setPriceDraft(String(match.item.listingPrice ?? ''));
-  }, [repriceCardId, allVaultItems]);
+  }, [repriceCardId, myVaultListings]);
 
   // Wishlist demand for everything in the vault. Batched and cached by the
   // hook, so the whole list costs one request rather than one per tile.
@@ -504,8 +551,32 @@ const Vault: React.FC<VaultProps> = ({
   };
 
   const startPriceEdit = (item: UserCollectionItem) => {
+    setEditingUnitsItemId(null);
     setPriceDraft(item.listingPrice != null ? String(item.listingPrice) : '');
     setEditingPriceItemId(item.id);
+  };
+
+  const startUnitsEdit = (item: UserCollectionItem) => {
+    setEditingPriceItemId(null);
+    setUnitsDraft(Math.max(1, item.listedUnits ?? item.quantity ?? 1));
+    setEditingUnitsItemId(item.id);
+  };
+
+  const saveUnitsEdit = async (colId: string, item: UserCollectionItem, card: Card) => {
+    if (!onUpdateListingUnits || isSavingUnits) return;
+    if (unitsDraft === (item.listedUnits ?? item.quantity)) {
+      setEditingUnitsItemId(null);
+      return;
+    }
+    setIsSavingUnits(true);
+    try {
+      await onUpdateListingUnits(colId, item, card, unitsDraft);
+      setEditingUnitsItemId(null);
+    } catch {
+      // The page shell already toasts the failure; keep the editor open for retry.
+    } finally {
+      setIsSavingUnits(false);
+    }
   };
 
   const draftPrice = parseFloat(priceDraft);
@@ -702,7 +773,7 @@ const Vault: React.FC<VaultProps> = ({
                     )}
                   </div>
                   <h4 className="text-white text-base font-black truncate">{card.name}</h4>
-                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.quantity} {isThai ? 'ใบ' : 'Unit(s)'}</p>
+                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{item.condition} • {item.listedUnits ?? item.quantity} {isThai ? 'ใบ' : 'Unit(s)'}</p>
                 </div>
                 <button onClick={() => startPriceEdit(item)} className="text-right active:scale-95 transition-transform">
                   <p className="text-xl font-black text-brand-cyan">
@@ -756,6 +827,49 @@ const Vault: React.FC<VaultProps> = ({
                     </button>
                   </div>
                 </div>
+              ) : editingUnitsItemId === item.id ? (
+                <div className="pt-2 space-y-2">
+                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">{t('vault.unitsOnMarket')}</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1 min-w-0 h-12 flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setUnitsDraft((q) => Math.max(1, q - 1))}
+                        disabled={isSavingUnits || unitsDraft <= 1}
+                        aria-label={isThai ? 'ลดจำนวน' : 'Fewer copies'}
+                        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                      >
+                        −
+                      </button>
+                      <span className="text-white font-black tabular-nums text-lg">{unitsDraft}</span>
+                      <button
+                        type="button"
+                        onClick={() => setUnitsDraft((q) => Math.min(MAX_LISTING_UNITS, q + 1))}
+                        disabled={isSavingUnits || unitsDraft >= MAX_LISTING_UNITS}
+                        aria-label={isThai ? 'เพิ่มจำนวน' : 'More copies'}
+                        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white font-black disabled:opacity-30 active:scale-95 transition-all"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => saveUnitsEdit(colId, item, card)}
+                      disabled={isSavingUnits}
+                      className="px-5 h-12 bg-brand-cyan text-brand-darker rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-40"
+                    >
+                      {isSavingUnits ? <i className="fa-solid fa-spinner fa-spin"></i> : t('vault.saveQuantity')}
+                    </button>
+                    <button
+                      onClick={() => setEditingUnitsItemId(null)}
+                      disabled={isSavingUnits}
+                      aria-label={t('report.cancel')}
+                      className="w-12 h-12 glass border-white/5 rounded-xl text-slate-400 active:scale-95 transition-all"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-snug px-1">{t('vault.unitsHint')}</p>
+                </div>
               ) : (
                 <div className="flex gap-2 pt-2">
                   <button
@@ -764,7 +878,15 @@ const Vault: React.FC<VaultProps> = ({
                   >
                     {t('vault.editPrice')}
                   </button>
-                  {canAuction && (
+                  {onUpdateListingUnits && (
+                    <button
+                      onClick={() => startUnitsEdit(item)}
+                      className="flex-1 h-10 glass border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+                    >
+                      {t('vault.editQuantity')}
+                    </button>
+                  )}
+                  {canAuction && !!colId && (
                     <button
                       onClick={() => switchToAuction(colId, item, card)}
                       className="flex-1 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest bg-amber-400/15 border border-amber-400/30 text-amber-300 hover:bg-amber-400/25 transition-colors"

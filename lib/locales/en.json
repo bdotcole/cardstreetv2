@@ -294,6 +294,12 @@
         "savePrice": "Save",
         "priceUpdated": "Listing price updated",
         "priceUpdateFailed": "Could not update the price. Please try again.",
+        "editQuantity": "Quantity",
+        "unitsOnMarket": "Copies on the market",
+        "unitsHint": "Each copy sells on its own. To take the card off the market, use Remove.",
+        "saveQuantity": "Save",
+        "quantityUpdated": "Listing quantity updated",
+        "quantityUpdateFailed": "Could not update the quantity. Please try again.",
         "wishlistEmpty": "Wishlist is Empty",
         "noUnlisted": "No unlisted assets available",
         "selectAsset": "Select an Asset from your Vault",
@@ -741,7 +747,13 @@
             "editPrice": "Edit price",
             "savePrice": "Save",
             "toastPriceUpdated": "Listing price updated",
-            "toastPriceUpdateFailed": "Could not update the price. Please try again."
+            "toastPriceUpdateFailed": "Could not update the price. Please try again.",
+            "units": "copies",
+            "editQuantity": "Quantity",
+            "unitsOnMarket": "Copies on the market",
+            "saveQuantity": "Save",
+            "toastQuantityUpdated": "Listing quantity updated",
+            "toastQuantityUpdateFailed": "Could not update the quantity. Please try again."
         },
         "orders": {
             "title": "Orders",

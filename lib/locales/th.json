@@ -293,6 +293,12 @@
         "savePrice": "บันทึก",
         "priceUpdated": "อัปเดตราคาเรียบร้อยแล้ว",
         "priceUpdateFailed": "อัปเดตราคาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+        "editQuantity": "จำนวน",
+        "unitsOnMarket": "จำนวนที่วางขาย",
+        "unitsHint": "แต่ละใบขายแยกกัน หากต้องการเอาออกจากตลาดให้กด ลบ",
+        "saveQuantity": "บันทึก",
+        "quantityUpdated": "อัปเดตจำนวนเรียบร้อยแล้ว",
+        "quantityUpdateFailed": "อัปเดตจำนวนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         "startSelling": "เริ่มขาย",
         "wishlistEmpty": "รายการที่ต้องการว่างเปล่า",
         "noUnlisted": "ไม่มีรายการที่ยังไม่ประกาศขาย",
@@ -742,7 +748,13 @@
             "editPrice": "แก้ไขราคา",
             "savePrice": "บันทึก",
             "toastPriceUpdated": "อัปเดตราคาเรียบร้อยแล้ว",
-            "toastPriceUpdateFailed": "อัปเดตราคาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+            "toastPriceUpdateFailed": "อัปเดตราคาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+            "units": "ใบ",
+            "editQuantity": "จำนวน",
+            "unitsOnMarket": "จำนวนที่วางขาย",
+            "saveQuantity": "บันทึก",
+            "toastQuantityUpdated": "อัปเดตจำนวนเรียบร้อยแล้ว",
+            "toastQuantityUpdateFailed": "อัปเดตจำนวนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
         },
         "orders": {
             "title": "คำสั่งซื้อ",

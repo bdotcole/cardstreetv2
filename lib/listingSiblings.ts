@@ -68,3 +68,11 @@ export function pickSiblingIds(
     const pool = l.siblingIds?.length ? l.siblingIds : [l.id];
     return pool.filter((id) => !taken.has(id)).slice(0, Math.max(0, count));
 }
+
+/**
+ * Most copies of one card a seller can keep on the market as one listing.
+ * createListing bounds a single publish at 20 (a slip in the form must not
+ * mint hundreds of rows); the quantity editor raises a group a few at a
+ * time, so it gets a wider ceiling that still rules out a typo.
+ */
+export const MAX_LISTING_UNITS = 99;
