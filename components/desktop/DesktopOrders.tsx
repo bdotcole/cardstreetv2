@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import OrderCardMeta from '@/components/OrderCardMeta';
+import { CHAT_OPEN_EVENT, type ChatOpenDetail } from '@/lib/chat';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import AuthModal from '@/components/AuthModal';
@@ -124,7 +126,7 @@ function CardCell({ row }: { row: { listing: { card_data: any; condition?: strin
             </span>
             <div className="min-w-0">
                 <p className="text-sm font-bold text-white truncate">{name}</p>
-                {row.listing?.condition && <p className="text-[11px] text-slate-500 uppercase font-bold tracking-wide">{row.listing.condition}</p>}
+                <OrderCardMeta cardData={cardData} condition={row.listing?.condition} />
             </div>
         </div>
     );
@@ -645,6 +647,7 @@ export default function DesktopOrders() {
                                     const pno = order.shipping_labels?.[0]?.tracking_number;
                                     const checkouts = countCheckouts(group);
                                     const buyerName = order.buyer?.display_name || null;
+                                    const buyerId = order.buyer_id || null;
                                     // No label yet: the seller mints it here. The buyer's
                                     // other unlabelled checkouts can go in the same parcel,
                                     // and a parcel Flash has not collected yet can take
@@ -694,6 +697,25 @@ export default function DesktopOrders() {
                                                     <span className="text-[10px] font-bold uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5">
                                                         {t('parcel.courierCancelled')}
                                                     </span>
+                                                )}
+                                                {/* The seller's way to reach this buyer (which print
+                                                    did you order, is the address right) without going
+                                                    through support. Opens the Messages dialog. */}
+                                                {buyerId && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const detail: ChatOpenDetail = {
+                                                                user: { id: buyerId, username: null, display_name: buyerName || t('parcel.buyer'), avatar_url: null },
+                                                                noShop: true,
+                                                            };
+                                                            window.dispatchEvent(new CustomEvent(CHAT_OPEN_EVENT, { detail }));
+                                                        }}
+                                                        className="text-[11px] font-bold text-brand-cyan hover:text-white transition-colors inline-flex items-center gap-1.5"
+                                                    >
+                                                        <i className="fa-regular fa-comment-dots text-[11px]"></i>
+                                                        {t('parcel.messageBuyer')}
+                                                    </button>
                                                 )}
                                             </div>
                                             {checkouts > 1 && !isDelivered && (

@@ -1917,7 +1917,12 @@
         "shippedElsewhereDone": "Marked as shipped. The buyer has been told.",
         "shippedElsewhereFailed": "Couldn't mark it as shipped. Please try again.",
         "shippedVia": "Shipped via {carrier}",
-        "anotherCarrier": "another carrier"
+        "anotherCarrier": "another carrier",
+        "messageBuyer": "Message buyer",
+        "buyer": "Buyer",
+        "langTh": "Thai",
+        "langEn": "English",
+        "langJp": "Japanese"
     },
     "orderActions": {
         "reviewSeller": "Review seller",

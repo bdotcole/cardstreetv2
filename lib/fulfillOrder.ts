@@ -13,6 +13,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
+import type { SoldItemSummary } from '@/lib/courier';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -445,7 +446,7 @@ export async function fulfillOrdersByTransferGroup(
                 const sellerOrders = orders.filter(o => o.seller_id === sellerId);
                 const sellerTotal = sellerOrders.reduce((sum, o) => sum + o.total_amount, 0);
 
-                await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal });
+                await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal, item: soldItemOf(sellerOrders) });
 
                 // One-time onboarding email on the seller's first-ever sale.
                 // Durably guarded + idempotent (profiles.first_sale_email_sent_at
@@ -471,4 +472,29 @@ export async function fulfillOrdersByTransferGroup(
     }
 
     return result;
+}
+
+/**
+ * The card the seller's "sold" notification names (language, set, number),
+ * read from the orders' embedded listing snapshot. PostgREST returns the
+ * to-one embed as an object; an array is tolerated in case relationship
+ * detection ever changes. Undefined when no row carries a named snapshot
+ * (the notification then falls back to "your item").
+ */
+function soldItemOf(rows: Array<{ listing?: unknown }>): SoldItemSummary | undefined {
+    const snapshotOf = (row: { listing?: unknown }): Record<string, unknown> | null => {
+        const listing = Array.isArray(row.listing) ? row.listing[0] : row.listing;
+        const data = (listing as { card_data?: unknown } | null | undefined)?.card_data;
+        return data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+    };
+    const first = rows.map(snapshotOf).find((c) => c && typeof c.name === 'string' && c.name.trim());
+    if (!first) return undefined;
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    return {
+        name: (first.name as string).trim(),
+        set: str(first.set),
+        number: str(first.number),
+        language: str(first.language),
+        more: rows.length - 1,
+    };
 }

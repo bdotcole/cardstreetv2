@@ -1918,7 +1918,12 @@
         "shippedElsewhereDone": "บันทึกว่าส่งแล้ว แจ้งผู้ซื้อเรียบร้อย",
         "shippedElsewhereFailed": "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         "shippedVia": "ส่งผ่าน {carrier}",
-        "anotherCarrier": "ขนส่งอื่น"
+        "anotherCarrier": "ขนส่งอื่น",
+        "messageBuyer": "ส่งข้อความหาผู้ซื้อ",
+        "buyer": "ผู้ซื้อ",
+        "langTh": "ไทย",
+        "langEn": "อังกฤษ",
+        "langJp": "ญี่ปุ่น"
     },
     "orderActions": {
         "reviewSeller": "รีวิวผู้ขาย",

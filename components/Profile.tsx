@@ -39,6 +39,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import OrderCardMeta from './OrderCardMeta';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
 import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
@@ -395,7 +396,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   // enabled (then it is the only thing to do), last once the seller is set up.
   // null while the status is loading or failed.
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
-  const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null } | null>(null);
+  // noShop: the peer is a buyer reached from a parcel card, so the chat header offers no "View shop".
+  const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null; noShop?: boolean } | null>(null);
   const supabase = createClient();
 
   // Profile data state
@@ -2048,7 +2050,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                             <p className="text-white font-semibold text-sm truncate">
                               {rowDisplayName(item, t, 'profile.cardOrder')}
                             </p>
-                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                            <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                             <p className="text-brand-cyan font-bold text-sm mt-1">฿{item.total_amount?.toLocaleString()}</p>
                           </div>
                         </div>
@@ -2310,7 +2312,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         <p className="text-white font-semibold text-sm truncate">
                           {rowDisplayName(sale, t, 'profile.cardSale')}
                         </p>
-                        <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
+                        <OrderCardMeta cardData={sale.listing?.card_data} condition={sale.listing?.condition} />
                       </div>
                       <div className="text-right">
                         <p className="text-brand-green font-bold">+฿{netFor(sale).toLocaleString()}</p>
@@ -2340,7 +2342,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               <p className="text-white font-semibold text-sm truncate">
                                 {rowDisplayName(item, t, 'profile.cardSale')}
                               </p>
-                              <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                              <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                             </div>
                             <p className="text-slate-400 text-xs font-bold">+฿{netFor(item).toLocaleString()}</p>
                           </div>
@@ -2438,6 +2440,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         const pno = shipment.shipping_labels?.[0]?.tracking_number;
                         const checkouts = countCheckouts(group);
                         const buyerName = shipment.buyer?.display_name || null;
+                        const buyerId = shipment.buyer_id || null;
                         // No label yet: the seller mints it here. The buyer's other
                         // unlabelled checkouts can go in the same parcel, and a
                         // parcel Flash has not collected yet can take these cards
@@ -2505,6 +2508,23 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               {isRealWaybill(pno) && (
                                 <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
                               )}
+                              {/* The seller's way to reach this buyer (which print did you
+                                  order, is the address right) without going through
+                                  support. Either side may start the conversation. */}
+                              {buyerId && viewerId && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenChat({
+                                    threadId: null,
+                                    other: { id: buyerId, username: null, display_name: buyerName || t('parcel.buyer'), avatar_url: null },
+                                    noShop: true,
+                                  })}
+                                  className="mt-1.5 inline-flex items-center gap-1.5 text-brand-cyan text-xs font-bold hover:text-white transition-colors"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  {t('parcel.messageBuyer')}
+                                </button>
+                              )}
                             </div>
                             <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
                               {courierCancelled && (
@@ -2552,7 +2572,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                                     <p className="text-white font-semibold text-sm truncate">
                                       {rowDisplayName(item, t, 'profile.cardOrder')}
                                     </p>
-                                    <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                                    <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                                     {group.length === 1 && statusLine}
                                   </div>
                                 </div>
@@ -2748,6 +2768,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
+                                <OrderCardMeta cardData={sale.listing?.card_data} />
                                 <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
                               </div>
                               <div className="text-right shrink-0">
@@ -3007,7 +3028,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         <p className="text-white font-semibold text-sm truncate">
                           {rowDisplayName(trackingOrder, t, 'profile.cardOrder')}
                         </p>
-                        <p className="text-slate-500 text-xs">{trackingOrder.listing?.condition}</p>
+                        <OrderCardMeta cardData={trackingOrder.listing?.card_data} condition={trackingOrder.listing?.condition} />
                         <p className="text-brand-orange font-bold text-sm mt-1">
                           {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${trackingOrder.status.toLowerCase()}`) || trackingOrder.status.replace('_', ' ')}</span>
                         </p>
@@ -3129,7 +3150,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
           other={openChat.other}
           viewerId={viewerId}
           onClose={() => setOpenChat(null)}
-          onViewShop={(peer) => {
+          onViewShop={openChat.noShop ? undefined : (peer) => {
             setOpenChat(null);
             setActivePanel('none');
             onOpenSeller?.(peer.id, { display_name: peer.display_name, username: peer.username, avatar_url: peer.avatar_url });

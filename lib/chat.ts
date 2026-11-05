@@ -54,6 +54,8 @@ export const CHAT_OPEN_EVENT = 'cs:openChat';
 export interface ChatOpenDetail {
     user?: ChatUser;
     threadId?: string;
+    /** The peer is a buyer reached from an order, not a shop: no "View shop" in the header. */
+    noShop?: boolean;
 }
 
 /** Fired after sending or reading, so unread badges re-check. */

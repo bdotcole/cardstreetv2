@@ -23,13 +23,13 @@ export default function DesktopChatHost({ pathPrefix = '' }: { pathPrefix?: stri
     const { t } = useTranslation();
     const router = useRouter();
     const [open, setOpen] = useState(false);
-    const [conversation, setConversation] = useState<{ threadId: string | null; other: ChatUser | null } | null>(null);
+    const [conversation, setConversation] = useState<{ threadId: string | null; other: ChatUser | null; noShop?: boolean } | null>(null);
 
     useEffect(() => {
         const onOpen = (e: Event) => {
             const detail = (e as CustomEvent<ChatOpenDetail | undefined>).detail;
             setConversation(detail?.user || detail?.threadId
-                ? { threadId: detail.threadId ?? null, other: detail.user ?? null }
+                ? { threadId: detail.threadId ?? null, other: detail.user ?? null, noShop: detail.noShop }
                 : null);
             setOpen(true);
         };
@@ -76,7 +76,7 @@ export default function DesktopChatHost({ pathPrefix = '' }: { pathPrefix?: stri
                         other={conversation.other}
                         viewerId={user.id}
                         onBack={() => setConversation(null)}
-                        onViewShop={(peer) => {
+                        onViewShop={conversation.noShop ? undefined : (peer) => {
                             if (!peer.username) return;
                             setOpen(false);
                             router.push(`${pathPrefix}/seller/${encodeURIComponent(peer.username)}`);
