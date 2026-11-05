@@ -68,12 +68,16 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        // Calculate total earnings
+        // Total earnings = the net of every sale the list shows. It used to
+        // count only `completed`, which on the Thai direct-charge path an
+        // order reaches 48h after delivery, so a seller with a week of paid,
+        // labelled and shipped orders still read a stale total. A refunded
+        // dispute flips the order to `cancelled`, which drops it out here.
         const { data: totals } = await supabase
             .from('orders')
             .select('total_amount, platform_fee')
             .eq('seller_id', user.id)
-            .eq('status', 'completed')
+            .in('status', SOLD_ORDER_STATUSES)
 
         const totalEarnings = totals?.reduce((sum, t) => sum + (t.total_amount - (t.platform_fee || 0)), 0) || 0
 

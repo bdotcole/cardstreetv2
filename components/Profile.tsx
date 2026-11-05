@@ -1683,6 +1683,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
 
       {/* Slide-in Panels */}
       <AnimatePresence>
+        {/* Every panel ends at the safe-area line (bottom-[var(--sab)]), not
+            the viewport edge. The tab bar is a sibling of <main> painted above
+            these panels, and it ends at that line too: with inset-0 the page
+            scrolled on through the strip under the bar, past the gesture area. */}
         {/* Account Panel */}
         {activePanel === 'account' && (
           <motion.div
@@ -1691,7 +1695,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -1846,7 +1850,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -1984,7 +1988,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2135,7 +2139,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2172,7 +2176,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <MyLiveShows onBack={() => setActivePanel('none')} />
           </motion.div>
@@ -2186,7 +2190,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2208,7 +2212,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <FollowList
               kind={activePanel}
@@ -2231,7 +2235,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <WatchList
               onBack={() => setActivePanel('none')}
@@ -2255,7 +2259,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2371,7 +2375,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             {/* A flex column so the Stripe card can move by `order` without
                 remounting: it holds onboarding state and listens for the
@@ -2798,7 +2802,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2856,7 +2860,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] flex flex-col bg-brand-darker"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] z-[10000] flex flex-col bg-brand-darker"
           >
             <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <h3 className="text-white font-black uppercase tracking-widest text-sm">
@@ -2960,7 +2964,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[10001] flex flex-col bg-brand-darker"
+              className="fixed inset-x-0 top-0 bottom-[var(--sab)] z-[10001] flex flex-col bg-brand-darker"
             >
               <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
                 <h3 className="text-white font-black uppercase tracking-widest text-sm">
