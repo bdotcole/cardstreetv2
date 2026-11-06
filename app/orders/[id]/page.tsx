@@ -1,17 +1,15 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { embedArray } from '@/lib/utils/embed';
-import { handoffOf, hasShippingLabel } from '@/lib/orderGroups';
-import { resolveBreakOrderContexts } from '@/lib/breakOrderContext';
-import OrderDetailContent, { type OrderDetailData } from './OrderDetailContent';
+import { loadOrderDetail } from '@/lib/orderDetailData';
+import OrderDetail from '@/components/orders/OrderDetail';
 
-// Addressable, auth-gated order page — the deep-link target for the seller
-// notification emails (first-sale, label-generated). It sits at /orders/<id>,
-// which the middleware matcher deliberately does NOT cover (only the bare
-// /orders list does), so this renders the same for mobile and desktop instead
-// of going through the desktop/SPA split.
+// Addressable, auth-gated order page — the deep-link target for every order
+// email and push (first-sale, label-generated, shipped, confirmation). It sits
+// at /orders/<id>. Phones (and the cs_view=mobile override) render this
+// standalone page; desktop browsers are rewritten by the middleware to
+// app/desktop/orders/[id], which renders the same component inside the desktop
+// shell (nav, cart, messages). The native app never reaches either: Android
+// App Links hand the id to the SPA's Profile (components/MobileHome.tsx).
 export const metadata: Metadata = {
     title: 'Order — Cardstreet',
     // Private, per-user content — never index.
@@ -20,104 +18,10 @@ export const metadata: Metadata = {
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return <OrderDetailContent signedOut orderId={id} />;
+    const result = await loadOrderDetail(id);
+    if (result.kind === 'not_found') notFound();
+    if (result.kind === 'signed_out') {
+        return <OrderDetail signedOut orderId={id} />;
     }
-
-    // Authorize via RLS: the orders SELECT policy returns the row only when the
-    // viewer is its buyer or seller. No row => not theirs (or doesn't exist).
-    const { data: authz } = await supabase
-        .from('orders')
-        .select('id, buyer_id, seller_id')
-        .eq('id', id)
-        .maybeSingle();
-    if (!authz) notFound();
-
-    const role: 'seller' | 'buyer' = authz.seller_id === user.id ? 'seller' : 'buyer';
-
-    // Full detail via the service-role client: a sold listing is hidden from the
-    // session client by RLS, so the card snapshot would come back null otherwise
-    // (same reason app/api/profile/orders uses the admin client).
-    const admin = createAdminClient();
-    // `*` rather than a column list: the dispute columns arrive with migration
-    // 20260907_order_disputes.sql (and the label handoff columns with
-    // 20261016_shipping_label_handoff.sql); a named select would 42703
-    // before they run.
-    const { data: order } = await admin
-        .from('orders')
-        .select(`
-            *,
-            listing:listings(card_data, condition, is_graded, grading_company, grade, price),
-            shipping_labels(*)
-        `)
-        .eq('id', id)
-        .single();
-    if (!order) notFound();
-
-    // The buyer's review of this order, if any (one per order).
-    const { data: reviewRow } = role === 'buyer'
-        ? await admin.from('reviews').select('rating, comment').eq('order_id', id).maybeSingle()
-        : { data: null };
-
-    const listing = (order.listing ?? null) as any;
-    const card = (listing?.card_data ?? {}) as any;
-    const label = embedArray(order.shipping_labels)[0] as any | undefined;
-    const trackingNumber = label?.tracking_number && label.tracking_number !== 'MANUAL'
-        ? String(label.tracking_number)
-        : null;
-    // A parcel the seller shipped outside our Flash waybill travels under
-    // whatever carrier and number they entered (lib/parcels handOffParcel);
-    // the Flash waybill and its tracking link no longer describe it.
-    const handoff = handoffOf(label);
-    const tracking: OrderDetailData['tracking'] = handoff
-        ? { number: handoff.trackingNumber, url: null, carrier: handoff.carrier }
-        : trackingNumber
-            ? { number: trackingNumber, url: label?.courier_tracking_url ?? null, carrier: null }
-            : null;
-
-    // Live-break spot orders have no listing snapshot — resolve stream/lot/
-    // spot context so this page (the email deep-link target) shows
-    // "<stream> — <lot> · Spot #N" + the lot's art instead of "Card order".
-    // A failed join leaves the name empty and the client renders its
-    // localized "Live break spot" fallback.
-    const isBreakOrder = !!order.break_spot_id;
-    const breakContext = isBreakOrder
-        ? (await resolveBreakOrderContexts(admin, [order.break_spot_id])).get(order.break_spot_id as string) ?? null
-        : null;
-
-    const data: OrderDetailData = {
-        id: order.id,
-        status: order.status,
-        totalAmount: Number(order.total_amount) || 0,
-        platformFee: Number(order.platform_fee) || 0,
-        discountAmount: Number(order.discount_amount) || 0,
-        shippingFee: Number(order.shipping_fee) || 0,
-        createdAt: order.created_at,
-        completedAt: order.completed_at ?? null,
-        deliveredAt: (order as any).delivered_at ?? null,
-        review: reviewRow ? { rating: Number(reviewRow.rating), comment: reviewRow.comment ?? null } : null,
-        disputeReason: (order as any).dispute_reason ?? null,
-        disputeOutcome: (order as any).dispute_outcome ?? null,
-        isBreakOrder,
-        card: {
-            name: isBreakOrder
-                ? (breakContext?.title || '')
-                : (card?.name || 'Card order'),
-            set: card?.set || card?.setName || '',
-            imageSmall: isBreakOrder
-                ? (breakContext?.imageSmall ?? null)
-                : (card?.images?.small || card?.imageUrl || null),
-            condition: listing?.condition ?? null,
-            isGraded: !!listing?.is_graded,
-            gradingCompany: listing?.grading_company ?? null,
-            grade: listing?.grade ?? null,
-        },
-        tracking,
-        hasLabel: hasShippingLabel({ shipping_labels: label ? [label] : [] }),
-    };
-
-    return <OrderDetailContent order={data} role={role} orderId={id} />;
+    return <OrderDetail order={result.order} role={result.role} orderId={id} />;
 }

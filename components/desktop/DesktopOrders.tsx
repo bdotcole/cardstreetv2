@@ -111,6 +111,103 @@ function StatusChip({ status }: { status: string }) {
     );
 }
 
+// Button and link styles shared by the three tabs, so a confirm, a label and
+// a clear read as the same family wherever they sit.
+const BTN_PRIMARY = 'inline-flex items-center justify-center gap-2 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap';
+const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap';
+const BTN_OUTLINE_CYAN = 'inline-flex items-center justify-center gap-2 border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap';
+const BTN_OUTLINE_AMBER = 'inline-flex items-center justify-center gap-2 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap';
+const BTN_GREEN = 'inline-flex items-center justify-center gap-2 bg-brand-green/20 hover:bg-brand-green/30 border border-brand-green/30 text-brand-green text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap';
+const LINK_QUIET = 'inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors';
+const EYEBROW = 'text-[10px] font-bold uppercase tracking-widest text-slate-500';
+
+// One purchase, parcel or sale: a header strip (who, when, which waybill,
+// status), the cards on the left, money and actions stacked on the right.
+// Replaces a single wrapped flex row in which ten chips and buttons landed
+// wherever the width put them.
+function RowShell({ header, aside, children }: { header: React.ReactNode; aside: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <article className="rounded-2xl border border-white/5 bg-slate-800/40 overflow-hidden">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 border-b border-white/5 bg-white/[0.02] text-xs text-slate-400">
+                {header}
+            </div>
+            <div className="grid gap-5 px-5 py-4 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0 space-y-3">{children}</div>
+                <div className="flex flex-col items-end gap-2.5 md:min-w-[200px] md:pl-6 md:border-l md:border-white/5">{aside}</div>
+            </div>
+        </article>
+    );
+}
+
+// "Order #ABCD1234 · 6 Nov 2026", the id linking to the order page.
+function OrderRef({ id, date }: { id: string; date?: string | null }) {
+    const { t } = useTranslation();
+    return (
+        <span className="flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wide text-slate-500">{t('desktop.orders.order')}</span>
+            <Link href={`/orders/${id}`} className="font-mono text-white hover:text-brand-cyan transition-colors">#{id.slice(0, 8).toUpperCase()}</Link>
+            {date && (
+                <span className="text-slate-500">· {new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            )}
+        </span>
+    );
+}
+
+function EmptyState({ icon, title, body, action }: { icon: string; title: string; body: string; action?: React.ReactNode }) {
+    return (
+        <div className="rounded-2xl border border-dashed border-white/10 py-14 px-6 text-center">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 mb-4">
+                <i className={`fa-solid ${icon} text-xl text-slate-500`}></i>
+            </div>
+            <p className="text-white font-black">{title}</p>
+            <p className="text-slate-500 text-sm mt-1 max-w-md mx-auto">{body}</p>
+            {action && <div className="mt-5">{action}</div>}
+        </div>
+    );
+}
+
+// How a purchase is travelling, under its cards: the Flash waybill with its
+// tracking link, the carrier the seller named when they shipped another way,
+// or the manual-handling notice. Nothing before a label exists.
+function ShippingLine({ label }: { label?: NonNullable<OrderRow['shipping_labels']>[number] }) {
+    const { t } = useTranslation();
+    const handoff = handoffOf(label);
+    if (handoff) {
+        return (
+            <p className="text-xs text-slate-400 flex items-center gap-2">
+                <i className="fa-solid fa-truck-fast opacity-60"></i>
+                <span>
+                    {t('parcel.shippedVia').replace('{carrier}', handoff.carrier || t('parcel.anotherCarrier'))}
+                    {handoff.trackingNumber && <span className="font-mono text-white ml-2">{handoff.trackingNumber}</span>}
+                </span>
+            </p>
+        );
+    }
+    const pno = label?.tracking_number;
+    if (pno === 'MANUAL') {
+        return <p className="text-xs text-amber-300 italic">{t('desktop.orders.manual')}</p>;
+    }
+    if (label && isRealWaybill(pno)) {
+        return (
+            <p className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
+                <i className="fa-solid fa-truck opacity-60"></i>
+                <span className="font-mono text-white">{pno}</span>
+                {label.courier_tracking_url && (
+                    <a
+                        href={label.courier_tracking_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-cyan hover:underline font-bold uppercase text-[10px] tracking-widest"
+                    >
+                        {t('desktop.orders.track')} ↗
+                    </a>
+                )}
+            </p>
+        );
+    }
+    return null;
+}
+
 // Row shape shared by orders/shipments/sales cells. Live-break spot orders
 // have no listing snapshot — the server-resolved break_context ("<stream> —
 // <lot> · Spot #N" + lot art) takes precedence, and a break row whose context
@@ -510,18 +607,23 @@ export default function DesktopOrders() {
             </div>
 
             {loading ? (
-                <div className="space-y-2 mt-6">
+                <div className="space-y-3 mt-6">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-20 rounded-xl bg-white/5 animate-pulse"></div>
+                        <div key={i} className="h-32 rounded-2xl bg-white/5 animate-pulse"></div>
                     ))}
                 </div>
             ) : (
                 <div className="mt-6">
                     {tab === 'purchases' && (
                         orders.length === 0 ? (
-                            <p className="text-slate-500 text-sm">{t('desktop.orders.noPurchases')}</p>
+                            <EmptyState
+                                icon="fa-bag-shopping"
+                                title={t('desktop.orders.noPurchases')}
+                                body={t('desktop.orders.noPurchasesDesc')}
+                                action={<Link href="/" className={BTN_PRIMARY}>{t('desktop.orders.browseMarketplace')}</Link>}
+                            />
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {/* One row per checkout: a multi-item purchase is
                                     one payment and one parcel (lib/orderGroups),
                                     so its rows stack as item cells in one row
@@ -535,113 +637,89 @@ export default function DesktopOrders() {
                                     // moving, so the buyer who holds it can still close
                                     // the order. Quieter than the confirm above.
                                     const canCompleteEarly = order.status === 'label_generated' && hasShippingLabel(order);
-                                    // The seller shipped outside our waybill: what they
-                                    // told us replaces the Flash waybill and its link.
-                                    const handoff = handoffOf(label);
                                     // What the buyer paid: list prices less their voucher (lib/orderGroups).
                                     const groupTotal = group.reduce((sum, o) => sum + buyerPaidOf(o), 0);
                                     const groupDiscount = group.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
+                                    const openConfirm = () => { setReviewOrderIds(group.map((o) => o.id)); setReviewScore(5); setReviewComment(''); };
+                                    const inCollection = cardAddedToCollection(order.status, !!order.break_spot_id);
                                     return (
-                                        <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                            <div className="space-y-2 min-w-0">
-                                                {group.map((o) => (
-                                                    <CardCell key={o.id} row={o} />
-                                                ))}
-                                                {group.length > 1 && (
-                                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
-                                                        {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-5 flex-wrap">
-                                                {handoff && (
-                                                    <span className="text-xs text-slate-400">
-                                                        {t('parcel.shippedVia').replace('{carrier}', handoff.carrier || t('parcel.anotherCarrier'))}
-                                                        {handoff.trackingNumber && (
-                                                            <span className="font-mono text-white ml-2">{handoff.trackingNumber}</span>
+                                        <RowShell
+                                            key={order.id}
+                                            header={(
+                                                <>
+                                                    <OrderRef id={order.id} date={order.created_at} />
+                                                    {group.length > 1 && (
+                                                        <span className="font-bold uppercase tracking-wide text-slate-500">
+                                                            {t('desktop.orders.itemsCount').replace('{count}', String(group.length))} · {t('desktop.orders.onePackage')}
+                                                        </span>
+                                                    )}
+                                                    <span className="ml-auto flex items-center gap-3">
+                                                        <StatusChip status={order.status} />
+                                                        <Link href={`/orders/${order.id}`} className={LINK_QUIET}>
+                                                            {t('desktop.orders.viewOrder')}
+                                                            <i className="fa-solid fa-chevron-right text-[9px]" aria-hidden="true"></i>
+                                                        </Link>
+                                                    </span>
+                                                </>
+                                            )}
+                                            aside={(
+                                                <>
+                                                    <div className="text-right">
+                                                        <p className="text-xl font-black text-brand-cyan leading-none">{formatTHB(groupTotal)}</p>
+                                                        {groupDiscount > 0 && (
+                                                            <p className="text-[11px] text-amber-300 mt-1.5">{t('rewards.discount')} -{formatTHB(groupDiscount)}</p>
                                                         )}
-                                                    </span>
-                                                )}
-                                                {!handoff && label?.tracking_number && label.tracking_number !== 'MANUAL' && (
-                                                    <span className="text-xs text-slate-400">
-                                                        <span className="font-mono text-white">{label.tracking_number}</span>
-                                                        {label.courier_tracking_url && (
-                                                            <a
-                                                                href={label.courier_tracking_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-brand-cyan hover:underline ml-2 font-bold uppercase text-[10px] tracking-widest"
-                                                            >
-                                                                {t('desktop.orders.track')} ↗
-                                                            </a>
-                                                        )}
-                                                    </span>
-                                                )}
-                                                {label?.tracking_number === 'MANUAL' && (
-                                                    <span className="text-xs text-amber-300 italic">{t('desktop.orders.manual')}</span>
-                                                )}
-                                                <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
-                                                <StatusChip status={order.status} />
-                                                {cardAddedToCollection(order.status, !!order.break_spot_id) && (
-                                                    <Link href="/collection" className="text-brand-cyan text-xs font-bold hover:underline" title={t('orderActions.addedToCollection')}>
-                                                        {t('orderActions.viewCollection')} →
-                                                    </Link>
-                                                )}
-                                                {groupDiscount > 0 && (
-                                                    <span className="text-xs text-amber-300">
-                                                        {t('rewards.discount')} -{formatTHB(groupDiscount)}
-                                                    </span>
-                                                )}
-                                                <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
-                                                {canComplete && (
-                                                    <button
-                                                        onClick={() => { setReviewOrderIds(group.map((o) => o.id)); setReviewScore(5); setReviewComment(''); }}
-                                                        className="bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-xs font-black px-4 py-2 rounded-lg transition-colors"
-                                                    >
-                                                        {t('desktop.orders.confirmDelivery')}
-                                                    </button>
-                                                )}
-                                                {canCompleteEarly && (
-                                                    <button
-                                                        onClick={() => { setReviewOrderIds(group.map((o) => o.id)); setReviewScore(5); setReviewComment(''); }}
-                                                        className="border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 text-xs font-black px-4 py-2 rounded-lg transition-colors"
-                                                    >
-                                                        {t('orderActions.receivedEarly')}
-                                                    </button>
-                                                )}
-                                                {/* Review and report live here so a buyer whose order
-                                                    completed on its own still has both paths. */}
-                                                {canReviewOrder(order) && order.status !== 'disputed' && (
-                                                    order.review ? (
-                                                        <button
-                                                            onClick={() => setReviewSheetOrder(order)}
-                                                            className="text-amber-300 text-xs font-bold hover:underline"
-                                                            title={t('orderActions.editReview')}
-                                                        >
-                                                            {'★'.repeat(order.review.rating)} · {t('orderActions.editReview')}
+                                                    </div>
+                                                    {canComplete && (
+                                                        <button onClick={openConfirm} className={BTN_PRIMARY}>
+                                                            {t('desktop.orders.confirmDelivery')}
                                                         </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => setReviewSheetOrder(order)}
-                                                            className="border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-black px-4 py-2 rounded-lg transition-colors"
-                                                        >
-                                                            {t('orderActions.reviewSeller')}
+                                                    )}
+                                                    {canCompleteEarly && (
+                                                        <button onClick={openConfirm} className={BTN_OUTLINE_CYAN}>
+                                                            {t('orderActions.receivedEarly')}
                                                         </button>
-                                                    )
-                                                )}
-                                                {order.status !== 'disputed' && canReportOrder(order) && (
-                                                    <button
-                                                        onClick={() => setReportSheetOrder(order)}
-                                                        className="text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
-                                                    >
-                                                        {t('orderActions.reportProblem')}
-                                                    </button>
-                                                )}
-                                                {order.status === 'disputed' && (
-                                                    <span className="text-[11px] text-rose-300 max-w-[220px]">{t('orderActions.disputeOpen')}</span>
-                                                )}
-                                            </div>
-                                        </div>
+                                                    )}
+                                                    {/* Review and report live here so a buyer whose order
+                                                        completed on its own still has both paths. */}
+                                                    {canReviewOrder(order) && order.status !== 'disputed' && (
+                                                        order.review ? (
+                                                            <button onClick={() => setReviewSheetOrder(order)} className={LINK_QUIET} title={t('orderActions.editReview')}>
+                                                                <span className="text-amber-300">{'★'.repeat(order.review.rating)}</span>
+                                                                <span>· {t('orderActions.editReview')}</span>
+                                                            </button>
+                                                        ) : (
+                                                            <button onClick={() => setReviewSheetOrder(order)} className={BTN_OUTLINE_AMBER}>
+                                                                <i className="fa-solid fa-star text-[10px]"></i>
+                                                                {t('orderActions.reviewSeller')}
+                                                            </button>
+                                                        )
+                                                    )}
+                                                    {inCollection && (
+                                                        <Link href="/collection" className={LINK_QUIET} title={t('orderActions.addedToCollection')}>
+                                                            <i className="fa-solid fa-circle-check text-emerald-300"></i>
+                                                            {t('orderActions.viewCollection')}
+                                                        </Link>
+                                                    )}
+                                                    {order.status !== 'disputed' && canReportOrder(order) && (
+                                                        <button
+                                                            onClick={() => setReportSheetOrder(order)}
+                                                            className="text-slate-500 hover:text-rose-300 text-[11px] font-bold uppercase tracking-wider transition-colors"
+                                                        >
+                                                            {t('orderActions.reportProblem')}
+                                                        </button>
+                                                    )}
+                                                    {order.status === 'disputed' && (
+                                                        <p className="text-[11px] text-rose-300 text-right max-w-[220px]">{t('orderActions.disputeOpen')}</p>
+                                                    )}
+                                                </>
+                                            )}
+                                        >
+                                            {group.map((o) => (
+                                                <CardCell key={o.id} row={o} />
+                                            ))}
+                                            <ShippingLine label={label} />
+                                        </RowShell>
                                     );
                                 })}
                             </div>
@@ -650,9 +728,13 @@ export default function DesktopOrders() {
 
                     {tab === 'shipments' && (
                         shipments.length === 0 ? (
-                            <p className="text-slate-500 text-sm">{t('desktop.orders.noShipments')}</p>
+                            <EmptyState
+                                icon="fa-box-open"
+                                title={t('desktop.orders.noShipmentsTitle')}
+                                body={t('desktop.orders.noShipments')}
+                            />
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {/* One row per PARCEL (waybill). A checkout ships as
                                     one Flash parcel, and two checkouts share one when
                                     the seller labels them together (lib/parcels), so the row
@@ -694,48 +776,103 @@ export default function DesktopOrders() {
                                     const courierCancelled = !isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel)
                                         && isPickupCancelled(group.map((o) => o.shipping_labels?.[0]));
                                     const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                                    // The handling promise the buyer already read on the card
+                                    // page; overdue once it has passed.
+                                    const shipDue = !isDelivered && !isBreakOrder && ['paid', 'label_generated', 'processing'].includes(order.status)
+                                        ? shipByDate(order.created_at)
+                                        : null;
+                                    const shipOverdue = !!shipDue && shipDue.getTime() < Date.now();
+                                    // What the seller does with this parcel next.
+                                    const primaryAction = isDelivered ? (
+                                        <button onClick={() => clearShipments(group.map((o) => o.id))} className={BTN_SECONDARY}>
+                                            <i className="fa-solid fa-check text-emerald-400"></i>
+                                            {t('desktop.orders.clearShipment')}
+                                        </button>
+                                    ) : isBreakOrder ? (
+                                        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg px-3 py-2 text-right">
+                                            <i className="fa-solid fa-box-open mr-2"></i>
+                                            {t('desktop.orders.liveBreakShipsWithParcel')}
+                                        </span>
+                                    ) : awaitingLabel ? (
+                                        <button
+                                            onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
+                                            disabled={labelBusy}
+                                            className={BTN_GREEN}
+                                        >
+                                            <i className="fa-solid fa-tag"></i>
+                                            {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                                        </button>
+                                    ) : handoffOf(order.shipping_labels?.[0]) ? null : (
+                                        // A parcel shipped another way never used this label.
+                                        <button onClick={() => openLabel(order.id)} className={BTN_SECONDARY}>
+                                            <i className="fa-solid fa-print text-slate-400"></i>
+                                            {t('desktop.orders.shippingLabel')}
+                                        </button>
+                                    );
                                     return (
-                                    <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                        <div className="space-y-2 min-w-0">
-                                            {/* Parcel header: who it goes to, the waybill,
-                                                and how many checkouts it holds. */}
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wide">
-                                                    {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
-                                                </span>
-                                                {isRealWaybill(pno) && (
-                                                    <span className="font-mono text-[11px] text-slate-500">{pno}</span>
-                                                )}
-                                                {checkouts > 1 && (
-                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-md px-2 py-0.5">
-                                                        {t('parcel.combined').replace('{count}', String(checkouts))}
+                                        <RowShell
+                                            key={order.id}
+                                            header={(
+                                                <>
+                                                    {/* Parcel header: who it goes to, the waybill,
+                                                        and how many checkouts it holds. */}
+                                                    <span className="font-bold uppercase tracking-wide text-slate-300">
+                                                        {t('parcel.heading')}{buyerName ? ` · ${t('parcel.to').replace('{name}', buyerName)}` : ''}
                                                     </span>
-                                                )}
-                                                {courierCancelled && (
-                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5">
-                                                        {t('parcel.courierCancelled')}
+                                                    {isRealWaybill(pno) && (
+                                                        <span className="font-mono text-slate-400">{pno}</span>
+                                                    )}
+                                                    {checkouts > 1 && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 rounded-md px-2 py-0.5">
+                                                            {t('parcel.combined').replace('{count}', String(checkouts))}
+                                                        </span>
+                                                    )}
+                                                    {courierCancelled && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5">
+                                                            {t('parcel.courierCancelled')}
+                                                        </span>
+                                                    )}
+                                                    {/* The seller's way to reach this buyer (which print
+                                                        did you order, is the address right) without going
+                                                        through support. Opens the Messages dialog. */}
+                                                    {buyerId && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const detail: ChatOpenDetail = {
+                                                                    user: { id: buyerId, username: null, display_name: buyerName || t('parcel.buyer'), avatar_url: null },
+                                                                    noShop: true,
+                                                                };
+                                                                window.dispatchEvent(new CustomEvent(CHAT_OPEN_EVENT, { detail }));
+                                                            }}
+                                                            className="font-bold text-brand-cyan hover:text-white transition-colors inline-flex items-center gap-1.5"
+                                                        >
+                                                            <i className="fa-regular fa-comment-dots"></i>
+                                                            {t('parcel.messageBuyer')}
+                                                        </button>
+                                                    )}
+                                                    <span className="ml-auto flex items-center gap-3">
+                                                        <span className="text-slate-500">{new Date(order.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                        {shipDue && (
+                                                            <span className={`font-bold ${shipOverdue ? 'text-rose-300' : 'text-amber-300'}`}>
+                                                                {shipOverdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {shipDue.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                            </span>
+                                                        )}
+                                                        <StatusChip status={isDelivered ? 'delivered' : order.status} />
                                                     </span>
-                                                )}
-                                                {/* The seller's way to reach this buyer (which print
-                                                    did you order, is the address right) without going
-                                                    through support. Opens the Messages dialog. */}
-                                                {buyerId && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const detail: ChatOpenDetail = {
-                                                                user: { id: buyerId, username: null, display_name: buyerName || t('parcel.buyer'), avatar_url: null },
-                                                                noShop: true,
-                                                            };
-                                                            window.dispatchEvent(new CustomEvent(CHAT_OPEN_EVENT, { detail }));
-                                                        }}
-                                                        className="text-[11px] font-bold text-brand-cyan hover:text-white transition-colors inline-flex items-center gap-1.5"
-                                                    >
-                                                        <i className="fa-regular fa-comment-dots text-[11px]"></i>
-                                                        {t('parcel.messageBuyer')}
-                                                    </button>
-                                                )}
-                                            </div>
+                                                </>
+                                            )}
+                                            aside={(
+                                                <>
+                                                    <p className="text-xl font-black text-brand-cyan leading-none">{formatTHB(groupTotal)}</p>
+                                                    {primaryAction}
+                                                    <Link href={`/orders/${order.id}`} className={LINK_QUIET}>
+                                                        {t('desktop.orders.viewOrder')}
+                                                        <i className="fa-solid fa-chevron-right text-[9px]" aria-hidden="true"></i>
+                                                    </Link>
+                                                </>
+                                            )}
+                                        >
                                             {checkouts > 1 && !isDelivered && (
                                                 <p className="text-xs font-semibold text-brand-cyan">{t('parcel.packTogether')}</p>
                                             )}
@@ -817,57 +954,7 @@ export default function DesktopOrders() {
                                             {/* The seller said this parcel left another way:
                                                 the carrier and number they gave. */}
                                             <HandoffSummary label={order.shipping_labels?.[0]} />
-                                        </div>
-                                        <div className="flex items-center gap-5 flex-wrap">
-                                            <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
-                                            {/* The handling promise the buyer already read on the card
-                                                page; overdue once it has passed. */}
-                                            {!isDelivered && !isBreakOrder && ['paid', 'label_generated', 'processing'].includes(order.status) && (() => {
-                                                const due = shipByDate(order.created_at);
-                                                if (!due) return null;
-                                                const overdue = due.getTime() < Date.now();
-                                                return (
-                                                    <span className={`text-[11px] font-bold ${overdue ? 'text-rose-300' : 'text-amber-300'}`}>
-                                                        {overdue ? t('orderActions.overdue') : t('orderActions.shipBy')} {due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                                                    </span>
-                                                );
-                                            })()}
-                                            <StatusChip status={isDelivered ? 'delivered' : order.status} />
-                                            <span className="text-lg font-black text-brand-cyan">{formatTHB(groupTotal)}</span>
-                                            {isDelivered ? (
-                                                <button
-                                                    onClick={() => clearShipments(group.map((o) => o.id))}
-                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-                                                >
-                                                    <i className="fa-solid fa-check mr-2 text-emerald-400"></i>
-                                                    {t('desktop.orders.clearShipment')}
-                                                </button>
-                                            ) : isBreakOrder ? (
-                                                <span className="text-[11px] font-bold uppercase tracking-wide text-brand-cyan bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg px-3 py-2">
-                                                    <i className="fa-solid fa-box-open mr-2"></i>
-                                                    {t('desktop.orders.liveBreakShipsWithParcel')}
-                                                </span>
-                                            ) : awaitingLabel ? (
-                                                <button
-                                                    onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
-                                                    disabled={labelBusy}
-                                                    className="bg-brand-green/20 hover:bg-brand-green/30 border border-brand-green/30 text-brand-green text-xs font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-                                                >
-                                                    <i className="fa-solid fa-tag mr-2"></i>
-                                                    {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
-                                                </button>
-                                            ) : handoffOf(order.shipping_labels?.[0]) ? null : (
-                                                // A parcel shipped another way never used this label.
-                                                <button
-                                                    onClick={() => openLabel(order.id)}
-                                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-                                                >
-                                                    <i className="fa-solid fa-print mr-2 text-slate-400"></i>
-                                                    {t('desktop.orders.shippingLabel')}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                                        </RowShell>
                                     );
                                 })}
                             </div>
@@ -876,9 +963,14 @@ export default function DesktopOrders() {
 
                     {tab === 'sales' && (
                         sales.length === 0 ? (
-                            <p className="text-slate-500 text-sm">{t('desktop.orders.noSales')}</p>
+                            <EmptyState
+                                icon="fa-coins"
+                                title={t('desktop.orders.noSales')}
+                                body={t('desktop.orders.noSalesDesc')}
+                                action={<Link href="/sell" className={BTN_PRIMARY}>{t('desktop.orders.startSelling')}</Link>}
+                            />
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {/* One row per checkout — items stack, fee and net
                                     are summed across the group. */}
                                 {groupByTransferGroup(sales).map((group) => {
@@ -889,29 +981,38 @@ export default function DesktopOrders() {
                                     const feeTotal = group.reduce((sum, s) => sum + sellerFeeOf(s), 0);
                                     const netTotal = group.reduce((sum, s) => sum + sellerNetOf(s), 0);
                                     return (
-                                    <div key={sale.id} className="flex flex-wrap items-center justify-between gap-4 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
-                                        <div className="space-y-2 min-w-0">
+                                        <RowShell
+                                            key={sale.id}
+                                            header={(
+                                                <>
+                                                    <OrderRef id={sale.id} date={sale.completed_at} />
+                                                    {group.length > 1 && (
+                                                        <span className="font-bold uppercase tracking-wide text-slate-500">
+                                                            {t('desktop.orders.itemsCount').replace('{count}', String(group.length))}
+                                                        </span>
+                                                    )}
+                                                    <span className="ml-auto">
+                                                        <Link href={`/orders/${sale.id}`} className={LINK_QUIET}>
+                                                            {t('desktop.orders.viewOrder')}
+                                                            <i className="fa-solid fa-chevron-right text-[9px]" aria-hidden="true"></i>
+                                                        </Link>
+                                                    </span>
+                                                </>
+                                            )}
+                                            aside={(
+                                                <div className="text-right">
+                                                    <p className={EYEBROW}>{t('desktop.orders.youReceive')}</p>
+                                                    <p className="text-xl font-black text-emerald-300 leading-none mt-1">{formatTHB(netTotal)}</p>
+                                                    <p className="text-[11px] text-slate-500 mt-1.5">
+                                                        {t('desktop.orders.fee')} <span className="text-slate-300 font-bold">{formatTHB(feeTotal)}</span>
+                                                    </p>
+                                                </div>
+                                            )}
+                                        >
                                             {group.map((s) => (
                                                 <CardCell key={s.id} row={s} />
                                             ))}
-                                            {group.length > 1 && (
-                                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">
-                                                    {t('desktop.orders.itemsCount').replace('{count}', String(group.length))}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-5 flex-wrap">
-                                            <span className="text-xs text-slate-500">
-                                                {sale.completed_at ? new Date(sale.completed_at).toLocaleDateString() : ''}
-                                            </span>
-                                            <span className="text-xs text-slate-400">
-                                                {t('desktop.orders.fee')} <span className="text-slate-300 font-bold">{formatTHB(feeTotal)}</span>
-                                            </span>
-                                            <span className="text-lg font-black text-emerald-300">
-                                                {formatTHB(netTotal)}
-                                            </span>
-                                        </div>
-                                    </div>
+                                        </RowShell>
                                     );
                                 })}
                             </div>

@@ -48,6 +48,14 @@ const SPA_TAB_FOR_PATH: Record<string, string> = {
 // (never redirected — the native shells deep-link here).
 const DESKTOP_WRAPPED_PREFIXES = ['/premium', '/auctions']
 
+// One order, /orders/<id>: the deep-link target of every order email and push.
+// Wrapped like the prefixes above (desktop shell for desktop browsers, the
+// standalone app/orders/[id] page for phones), and checked BEFORE the
+// desktop-only /orders list, whose phone bounce to /?tab=orders would drop
+// the id. The native app never gets here: Android App Links hand the id to
+// the SPA's Profile (components/MobileHome.tsx).
+const ORDER_DETAIL_RE = /^\/orders\/[^/]+$/
+
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
 // the ?view= escape hatch below) is a manual override in either direction.
@@ -119,6 +127,12 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
 
     if (GAME_LANDING_PATHS.includes(basePath)) {
         return { kind: 'rewrite', pathname: `/desktop/games${basePath}`, uaVary: false }
+    }
+
+    if (ORDER_DETAIL_RE.test(basePath)) {
+        return isDesktopClient(request)
+            ? { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
+            : { kind: 'next', uaVary: true }
     }
 
     const desktopOnly = DESKTOP_ONLY_PREFIXES.find((p) => basePath === p || basePath.startsWith(`${p}/`))
@@ -324,6 +338,8 @@ export const config = {
         '/shops',
         '/sell',
         '/orders',
+        // The order page (see ORDER_DETAIL_RE).
+        '/orders/:path*',
         '/collection',
         '/settings',
         '/premium',
