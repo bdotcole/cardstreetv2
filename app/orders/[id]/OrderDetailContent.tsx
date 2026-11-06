@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
+import { cardAddedToCollection, canReportOrder, canReviewOrder } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 
@@ -211,6 +211,13 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
     const showReport = isBuyer && effectiveForActions !== 'disputed'
         && canReportOrder({ status: effectiveForActions, delivered_at: order.deliveredAt ?? null, completed_at: order.completedAt });
     const isDisputed = effectiveForActions === 'disputed';
+    const showInCollection = isBuyer && cardAddedToCollection(effectiveForActions, !!order.isBreakOrder);
+    // PromptPay: paid in the banking app, the webhook has not landed, so the
+    // card is not in the collection yet and the page must not claim it is.
+    const showCollectionPending = isBuyer && !order.isBreakOrder && effectiveStatus === 'payment_confirming';
+    // Pushing more shopping is right for a buyer whose purchase went through, and
+    // wrong on a dispute, a cancellation, or while a delivery waits on their tap.
+    const promoteShopping = !showConfirm && (showInCollection || showCollectionPending);
 
     const confirmDelivery = async () => {
         if (confirmBusy) return;
@@ -273,6 +280,29 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         </div>
                     </div>
                 </div>
+
+                {/* Fulfilment already put the card in the buyer's collection;
+                    without this row nothing on the page says so. */}
+                {showInCollection && (
+                    <Link
+                        href="/collection"
+                        className="glass rounded-2xl border border-emerald-500/20 p-4 flex items-center justify-between gap-4 active:scale-[0.98] transition-all"
+                    >
+                        <span className="min-w-0">
+                            <span className="block text-sm font-bold text-white">
+                                <i className="fa-solid fa-circle-check text-emerald-300 mr-2"></i>
+                                {t('orderActions.addedToCollection')}
+                            </span>
+                            <span className="block text-[11px] text-slate-500 mt-1">{t('orderActions.addedToCollectionHint')}</span>
+                        </span>
+                        <i className="fa-solid fa-chevron-right text-brand-cyan text-xs shrink-0" aria-hidden="true"></i>
+                    </Link>
+                )}
+                {showCollectionPending && (
+                    <div className="glass rounded-2xl border border-dashed border-white/10 p-4">
+                        <p className="text-[11px] text-slate-400">{t('orderActions.collectionAfterPayment')}</p>
+                    </div>
+                )}
 
                 {/* Money */}
                 <div className="glass rounded-2xl border border-white/10 p-5 space-y-3 text-sm">
@@ -450,13 +480,29 @@ export default function OrderDetailContent({ order, role, orderId, signedOut }: 
                         <p className="text-[11px] text-slate-500 text-center">{t('orderActions.guarantee')}</p>
                     )}
                     {actionError && <p className="text-xs text-rose-300 text-center">{actionError}</p>}
-                    <Link
-                        href="/orders"
-                        className="block w-full text-center glass border border-white/10 text-slate-200 font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all"
-                    >
-                        {L.viewAll}
-                    </Link>
                 </div>
+
+                {/* The way back into the shop: this page sits outside the app
+                    shell, so it has no tab bar. Sticky, and so a sibling of the
+                    actions rather than inside them, because the page is taller
+                    than a phone and a buyer who has just paid should not have to
+                    scroll to find it. */}
+                {isBuyer && (
+                    <Link
+                        href="/?tab=marketplace"
+                        className={promoteShopping
+                            ? 'block w-full text-center sticky bottom-[calc(env(safe-area-inset-bottom,0px)+12px)] z-10 shadow-lg shadow-black/40 bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all'
+                            : 'block w-full text-center glass border border-white/10 text-slate-200 font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all'}
+                    >
+                        {t('orderActions.keepShopping')}
+                    </Link>
+                )}
+                <Link
+                    href="/orders"
+                    className="block w-full !mt-3 text-center glass border border-white/10 text-slate-200 font-bold uppercase tracking-wider text-sm py-3 rounded-xl active:scale-[0.98] transition-all"
+                >
+                    {L.viewAll}
+                </Link>
             </div>
 
             {reviewOpen && (

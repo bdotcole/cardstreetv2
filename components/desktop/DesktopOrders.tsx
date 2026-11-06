@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import OrderCardMeta from '@/components/OrderCardMeta';
 import { CHAT_OPEN_EVENT, type ChatOpenDetail } from '@/lib/chat';
@@ -15,7 +16,7 @@ import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerFeeOf, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
-import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 
@@ -581,6 +582,11 @@ export default function DesktopOrders() {
                                                 )}
                                                 <span className="text-xs text-slate-500">{new Date(order.created_at).toLocaleDateString()}</span>
                                                 <StatusChip status={order.status} />
+                                                {cardAddedToCollection(order.status, !!order.break_spot_id) && (
+                                                    <Link href="/collection" className="text-brand-cyan text-xs font-bold hover:underline" title={t('orderActions.addedToCollection')}>
+                                                        {t('orderActions.viewCollection')} →
+                                                    </Link>
+                                                )}
                                                 {groupDiscount > 0 && (
                                                     <span className="text-xs text-amber-300">
                                                         {t('rewards.discount')} -{formatTHB(groupDiscount)}

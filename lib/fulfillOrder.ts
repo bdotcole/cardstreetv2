@@ -350,7 +350,7 @@ export async function fulfillOrdersByTransferGroup(
             if (listingIdsForTransfer.length > 0) {
                 const { data: soldListings } = await supabase
                     .from('listings')
-                    .select('id, seller_id, card_id, card_data, condition, price')
+                    .select('id, seller_id, card_id, card_data, condition, price, is_graded, grading_company, grade')
                     .in('id', listingIdsForTransfer);
 
                 if (soldListings && soldListings.length > 0) {
@@ -374,14 +374,24 @@ export async function fulfillOrdersByTransferGroup(
                     }
 
                     for (const listing of soldListings) {
-                        await supabase.from('collection_items').insert({
+                        const { error: collectionErr } = await supabase.from('collection_items').insert({
                             collection_id: targetCollectionId,
                             card_id: listing.card_id,
                             card_data: listing.card_data,
                             quantity: 1,
                             condition: listing.condition,
                             purchase_price: listing.price,
+                            is_graded: !!listing.is_graded,
+                            grading_company: listing.grading_company ?? null,
+                            grade: listing.grade ?? null,
                         });
+                        // supabase-js returns errors instead of throwing, so the
+                        // catch below would never see this. The order page tells
+                        // the buyer the card is in their collection.
+                        if (collectionErr) {
+                            console.error('[Fulfillment] Collection insert failed (non-fatal):', collectionErr);
+                            result.errors.push(`Collection insert for listing ${listing.id}: ${collectionErr.message}`);
+                        }
 
                         // Take one copy out of the seller's collection, if
                         // present. Deterministic by id ASC. A stack (quantity

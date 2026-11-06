@@ -42,7 +42,7 @@ import { getThumbnailUrl } from '@/lib/imageUtils';
 import OrderCardMeta from './OrderCardMeta';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
-import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
@@ -2087,6 +2087,24 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                       )}
 
                       <OrderTrackingTimeline order={order} isThai={isThai} />
+
+                      {/* Order pushes land on this card, not the order page, so
+                          the collection link has to be here too. */}
+                      {cardAddedToCollection(order.status, !!order.break_spot_id) && (
+                        <button
+                          onClick={() => {
+                            setActivePanel('none');
+                            window.dispatchEvent(new Event('cs-open-vault'));
+                          }}
+                          className="w-full flex items-center justify-between gap-3 text-left text-xs font-bold"
+                        >
+                          <span className="min-w-0 text-slate-300">
+                            <CheckCircle className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5 text-brand-green" />
+                            {t('orderActions.addedToCollection')}
+                          </span>
+                          <span className="shrink-0 text-brand-cyan">{t('orderActions.viewCollection')} →</span>
+                        </button>
+                      )}
 
                       {/* Buyer Action required — confirms the whole parcel */}
                       {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (

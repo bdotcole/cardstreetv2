@@ -1973,7 +1973,12 @@
         "sending": "Sending…",
         "shipBy": "Ship by",
         "overdue": "Overdue since",
-        "receivedEarly": "Already have it? Confirm receipt"
+        "receivedEarly": "Already have it? Confirm receipt",
+        "addedToCollection": "Added to your collection",
+        "addedToCollectionHint": "We added this card when you paid.",
+        "collectionAfterPayment": "This card goes into your collection as soon as your payment clears.",
+        "viewCollection": "View collection",
+        "keepShopping": "Keep shopping"
     },
     "movers": {
         "title": "Market movers this week",
