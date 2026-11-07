@@ -30,6 +30,21 @@ export interface ChatMessage {
     createdAt: string;
 }
 
+/** A support-account conversation as the admin console lists it (/api/admin/messages). */
+export interface AdminChatThread {
+    id: string;
+    other: ChatUser;
+    lastMessageAt: string | null;
+    lastMessagePreview: string | null;
+    lastSenderIsSupport: boolean;
+    unread: boolean;
+}
+
+/** A message in an admin-console conversation; fromSupport = sent by the team. */
+export interface AdminChatMessage extends ChatMessage {
+    fromSupport: boolean;
+}
+
 /** A chat suspension in force: until an instant, or for good. */
 export interface ChatBanState {
     until: string | null;

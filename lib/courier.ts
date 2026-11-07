@@ -3409,7 +3409,11 @@ export async function sendSupportReplyNotification(
  */
 export async function sendChatMessageNotification(
     userId: string,
-    msg: { threadId: string; senderName: string; body: string; allowEmail: boolean },
+    msg: {
+        threadId: string; senderName: string; body: string; allowEmail: boolean;
+        /** Where the email button goes instead of the app inbox (the support account answers from /admin). */
+        cta?: { label: string; path: string };
+    },
 ): Promise<{ pushed: boolean; emailed: boolean }> {
     const courier = getCourier();
     if (!courier) return { pushed: false, emailed: false };
@@ -3424,7 +3428,10 @@ export async function sendChatMessageNotification(
     const flat = msg.body.replace(/\s+/g, ' ').trim();
     const pushBody = flat.length > 140 ? `${flat.slice(0, 137)}...` : flat;
     const lines = msg.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    const url = `${appBaseUrl()}/?tab=messages&thread=${encodeURIComponent(msg.threadId)}&utm_source=courier&utm_medium=email&utm_campaign=chat_message`;
+    const utm = 'utm_source=courier&utm_medium=email&utm_campaign=chat_message';
+    const url = msg.cta
+        ? `${appBaseUrl()}${msg.cta.path}${msg.cta.path.includes('?') ? '&' : '?'}${utm}`
+        : `${appBaseUrl()}/?tab=messages&thread=${encodeURIComponent(msg.threadId)}&${utm}`;
 
     try {
         await courier.send.message({
@@ -3439,7 +3446,7 @@ export async function sendChatMessageNotification(
                         { text: `${name}:`, muted: true },
                         ...lines.map((text) => ({ text })),
                     ],
-                    cta: { label: 'ตอบกลับในแอป · Reply in the app', url },
+                    cta: { label: msg.cta?.label ?? 'ตอบกลับในแอป · Reply in the app', url },
                     emailFooter: 'ชำระเงินผ่าน Cardstreet เท่านั้น การโอนเงินนอกแอปจะไม่ได้รับการคุ้มครอง · Pay only through Cardstreet. Payments made outside the app are not protected.',
                     pushBody,
                 }),

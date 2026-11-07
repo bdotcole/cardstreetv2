@@ -11,6 +11,14 @@ import { maskOffPlatform } from '@/lib/chatPolicy';
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * The "Cardstreet TCG Marketplace" shop (username `support`) that the team
+ * messages sellers and buyers from. Its conversations are read and answered in
+ * the admin console (/admin/messages), not by signing in as it.
+ */
+export const SUPPORT_CHAT_USER_ID =
+    (process.env.SUPPORT_CHAT_USER_ID || '').trim() || '6d2609da-db1e-485a-9c8c-85a8e25d876a';
+
 const MISSING_SCHEMA_CODES = new Set(['PGRST202', 'PGRST204', 'PGRST205', '42883', '42P01', '42703']);
 export function isMissingSchema(error: { code?: string } | null | undefined): boolean {
     return !!error?.code && MISSING_SCHEMA_CODES.has(error.code);
@@ -100,7 +108,12 @@ export async function notifyChatRecipient(threadId: string, senderId: string, bo
 
         const sender = (await fetchPublicSellers(admin, [senderId])).get(senderId);
         const senderName = sender?.display_name || sender?.username || 'Cardstreet';
-        const result = await sendChatMessageNotification(recipientId, { threadId, senderName, body, allowEmail });
+        // The support account's inbox is the admin console, so its email
+        // button opens the conversation there.
+        const cta = recipientId === SUPPORT_CHAT_USER_ID
+            ? { label: 'Reply in admin', path: `/admin/messages?thread=${encodeURIComponent(threadId)}` }
+            : undefined;
+        const result = await sendChatMessageNotification(recipientId, { threadId, senderName, body, allowEmail, cta });
         if (result.emailed) {
             await admin
                 .from('chat_threads')
