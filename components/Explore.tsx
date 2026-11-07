@@ -10,7 +10,8 @@ import { CURRENCY_SYMBOLS } from '@/constants';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import Image from 'next/image';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getThumbnailUrl, getSetLogoUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
+import { getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
+import SetArtwork from '@/components/SetArtwork';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, GameLanguageCode } from '@/lib/games';
 import ShopSearchResults from '@/components/ShopSearchResults';
 import { useShopSearch } from '@/lib/hooks/useShopSearch';
@@ -524,43 +525,44 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   </button>
 
                   {isSetListOpen && (
-                    <div className="absolute top-full right-0 w-[280px] max-w-[90vw] mt-2 bg-slate-900 rounded-xl border border-white/10 shadow-2xl max-h-80 overflow-y-auto z-50">
+                    // Wide rows with a pack-sized picture: a set is recognised
+                    // by its logo or its booster art, and the old 64px square
+                    // (or the first letter of the name, for sets with no logo)
+                    // made "which pack is this" a guess.
+                    <div className="absolute top-full right-0 w-[min(92vw,360px)] mt-2 bg-slate-900 rounded-xl border border-white/10 shadow-2xl max-h-[70vh] overflow-y-auto z-50">
                       <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md p-2 border-b border-white/10 z-10 flex justify-between items-center">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 pl-2">{t('explore.selectExpansion')}</span>
                         <span className="text-[9px] font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 rounded">{visibleSets.length} {t('explore.found')}</span>
                       </div>
-                      {visibleSets.map(set => (
-                        <button
-                          key={set.id}
-                          onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
-                          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
-                        >
-                          <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-brand-cyan/20 to-brand-purple/20 rounded-lg border border-white/10 relative overflow-hidden">
-                            {set.images.logo ? (
-                              <Image
-                                src={getSetLogoUrl(set.images.logo, 160)}
-                                alt={set.name}
-                                fill
-                                sizes="64px"
-                                unoptimized={shouldSkipNextOptimization(getSetLogoUrl(set.images.logo, 160))}
-                                className="object-contain p-1"
-                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <span className="text-2xl font-black text-white/60">{set.name.charAt(0)}</span>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className={`text-xs font-bold truncate block ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-300 group-hover:text-white'}`}>{set.name}</span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{set.series || t('explore.expansion')}</span>
-                              <span className="text-[8px] text-slate-700 font-bold">•</span>
-                              <span className="text-[8px] text-slate-600 font-bold">{set.total} {t('explore.cards')}</span>
+                      {visibleSets.map(set => {
+                        const year = set.releaseDate ? set.releaseDate.slice(0, 4) : '';
+                        return (
+                          <button
+                            key={set.id}
+                            onClick={() => { setSelectedSetId(set.id); setIsSetListOpen(false); }}
+                            className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors text-left group"
+                          >
+                            <div className="w-24 h-26 shrink-0 bg-gradient-to-br from-brand-cyan/10 to-brand-purple/10 rounded-lg border border-white/10 relative overflow-hidden">
+                              <SetArtwork set={set} sizes="96px" />
                             </div>
-                          </div>
-                          {selectedSetId === set.id && <i className="fa-solid fa-check text-brand-cyan text-xs"></i>}
-                        </button>
-                      ))}
+                            <div className="min-w-0 flex-1">
+                              <span className={`text-[13px] font-bold leading-snug line-clamp-2 ${selectedSetId === set.id ? 'text-brand-cyan' : 'text-slate-200 group-hover:text-white'}`}>{set.name}</span>
+                              <div className="flex items-center gap-1.5 mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 min-w-0">
+                                <span className="truncate">{set.series || t('explore.expansion')}</span>
+                                <span className="text-slate-700">•</span>
+                                <span className="shrink-0">{set.total} {t('explore.cards')}</span>
+                                {year && (
+                                  <>
+                                    <span className="text-slate-700">•</span>
+                                    <span className="shrink-0">{year}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            {selectedSetId === set.id && <i className="fa-solid fa-check text-brand-cyan text-xs shrink-0"></i>}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </>

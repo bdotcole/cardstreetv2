@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
+import SellerAvatar from './SellerAvatar';
 import { Card } from '../types';
 import PriceHistoryChart from './PriceHistoryChart';
 import { THAI_SETS, CURRENCY_SYMBOLS } from '@/constants';
@@ -277,8 +278,13 @@ const CardDetails: React.FC<CardDetailsProps> = ({
                         <div key={idx} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:border-brand-green/30 transition-all">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 flex-shrink-0">
-                              {listing.seller?.avatar_url ? (
-                                <Image src={listing.seller.avatar_url} alt="Seller Avatar" width={40} height={40} className="w-full h-full object-cover" />
+                              {listing.seller ? (
+                                <SellerAvatar
+                                  src={listing.seller.avatar_url}
+                                  seed={listing.seller.id || listing.seller_id || listing.id}
+                                  name={listing.seller.display_name}
+                                  className="w-full h-full object-cover"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500">?</div>
                               )}

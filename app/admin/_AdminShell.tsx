@@ -29,6 +29,7 @@ const NAV_SECTIONS: NavSection[] = [
     {
         label: 'Support', icon: 'fa-solid fa-headset', pages: [
             { href: '/admin/tickets', label: 'Tickets' },
+            { href: '/admin/messages', label: 'Messages' },
             { href: '/admin/reports', label: 'User Reports' },
         ],
     },
