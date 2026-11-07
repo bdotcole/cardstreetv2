@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 interface PortfolioHistoryPoint {
     date: string;
     value: number;
+    // Cards held at that snapshot, so the chart can tell a step that came from
+    // adding or selling cards apart from one the market made.
+    items: number;
 }
 
 type Interval = 'hour' | 'day' | 'month';
@@ -20,6 +23,9 @@ function getRangeConfig(timeRange: string): { startTime: Date; interval: Interva
             return { startTime: start, interval: 'hour' };
         case '1W':
             start.setDate(now.getDate() - 7);
+            return { startTime: start, interval: 'day' };
+        case '3M':
+            start.setDate(now.getDate() - 90);
             return { startTime: start, interval: 'day' };
         case '1Y':
             start.setMonth(now.getMonth() - 12);
@@ -48,7 +54,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const timeRange = (request.nextUrl.searchParams.get('range') as '1D' | '1W' | '1M' | '1Y') || '1M';
+        const timeRange = (request.nextUrl.searchParams.get('range') as '1D' | '1W' | '1M' | '3M' | '1Y') || '1M';
         const { startTime, interval } = getRangeConfig(timeRange);
         const now = new Date();
 
@@ -56,7 +62,7 @@ export async function GET(request: NextRequest) {
             // Real snapshots inside the window, oldest first.
             supabase
                 .from('portfolio_snapshots')
-                .select('timestamp, total_market_value')
+                .select('timestamp, total_market_value, item_count')
                 .eq('user_id', user.id)
                 .gte('timestamp', startTime.toISOString())
                 .lte('timestamp', now.toISOString())
@@ -77,6 +83,10 @@ export async function GET(request: NextRequest) {
             const marketPrice = Number(item?.marketPrice) || 0;
             return total + marketPrice * (item?.quantity || 1);
         }, 0);
+        const currentItemCount = (itemsResult.data || []).reduce(
+            (total: number, item: any) => total + (Number(item?.quantity) || 1),
+            0,
+        );
 
         // Downsample the real snapshots to one point per bucket. No zero-fill and no
         // carry-forward before the first tracked snapshot: the line reflects only
@@ -88,9 +98,20 @@ export async function GET(request: NextRequest) {
             byBucket.set(bucketKey(s.timestamp, interval), {
                 date: s.timestamp,
                 value: Number(s.total_market_value) || 0,
+                items: Number(s.item_count) || 0,
             });
         }
-        const data: PortfolioHistoryPoint[] = Array.from(byBucket.values());
+        const bucketed = Array.from(byBucket.values());
+
+        // A ฿0 snapshot of a collection that held cards is a pricing gap (the
+        // snapshot ran while every card's price was missing), not a valuation;
+        // plotted, it is a cliff to zero and back. Drop those when the series
+        // has real values. A collection whose cards are all unpriced keeps its
+        // zeros: that is its honest value.
+        const hasRealValue = bucketed.some((p) => p.value > 0) || currentPortfolioValue > 0;
+        const data: PortfolioHistoryPoint[] = hasRealValue
+            ? bucketed.filter((p) => !(p.value === 0 && p.items > 0))
+            : bucketed;
 
         // Fold the live value in as the final "now" point — it's the real valuation
         // this instant. Replace the last point if it lands in the current bucket so we
@@ -101,9 +122,9 @@ export async function GET(request: NextRequest) {
             const nowKey = bucketKey(nowIso, interval);
             const last = data[data.length - 1];
             if (last && bucketKey(last.date, interval) === nowKey) {
-                data[data.length - 1] = { date: nowIso, value: currentPortfolioValue };
+                data[data.length - 1] = { date: nowIso, value: currentPortfolioValue, items: currentItemCount };
             } else {
-                data.push({ date: nowIso, value: currentPortfolioValue });
+                data.push({ date: nowIso, value: currentPortfolioValue, items: currentItemCount });
             }
         }
 

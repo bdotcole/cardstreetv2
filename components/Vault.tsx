@@ -170,8 +170,11 @@ const Vault: React.FC<VaultProps> = ({
     if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
   };
   const [isSavingPrice, setIsSavingPrice] = useState(false);
-  const [timeframe, setTimeframe] = useState('1M');
-  const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
+  // Snapshots are daily (the portfolio-snapshots cron), so the shortest window
+  // that can hold more than the live point is a week; 1D only ever showed the
+  // empty state.
+  const [timeframe, setTimeframe] = useState<'1W' | '1M' | '3M' | '1Y'>('1M');
+  const [chartData, setChartData] = useState<{ date: string; label: string; price: number; items?: number }[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
 
   // Fetch real portfolio history from API. Each point already carries a real ISO
@@ -194,14 +197,14 @@ const Vault: React.FC<VaultProps> = ({
         if (cancelled) return;
 
         if (result.success && Array.isArray(result.data)) {
-          const formattedData = result.data.map((point: { date: string; value: number }) => {
+          const formattedData = result.data.map((point: { date: string; value: number; items?: number }) => {
             const d = new Date(point.date);
             let label: string;
-            if (timeframe === '1D') label = `${d.getHours()}h`;
-            else if (timeframe === '1W') label = dayNames[d.getDay()];
-            else if (timeframe === '1M') label = `${d.getDate()}`;
-            else label = monthNames[d.getMonth()];
-            return { date: label, price: point.value };
+            if (timeframe === '1W') label = dayNames[d.getDay()];
+            else if (timeframe === '1Y') label = monthNames[d.getMonth()];
+            // Day numbers alone ("10 14 18 ... 3 6") lost the month boundary.
+            else label = `${monthNames[d.getMonth()]} ${d.getDate()}`;
+            return { date: point.date, label, price: point.value, items: point.items };
           });
           setChartData(formattedData);
         } else {
@@ -225,6 +228,13 @@ const Vault: React.FC<VaultProps> = ({
     const lastPrice = chartData[chartData.length - 1].price;
     if (firstPrice === 0) return 0;
     return ((lastPrice - firstPrice) / firstPrice) * 100;
+  }, [chartData]);
+
+  // The same move in baht, for the line under the window pills: a percentage
+  // alone leaves people guessing what it is worth.
+  const valueChange = useMemo(() => {
+    if (chartData.length < 2) return 0;
+    return chartData[chartData.length - 1].price - chartData[0].price;
   }, [chartData]);
 
   const hasHistory = chartData.length >= 2;
@@ -468,23 +478,33 @@ const Vault: React.FC<VaultProps> = ({
         {/* Chart Card */}
         <div className="glass-panel rounded-2xl p-0.5 border-brand-cyan/20 overflow-hidden shadow-2xl mb-6 mx-1">
           <div className="bg-slate-900 rounded-2xl p-4">
-            <div className="flex justify-start items-center mb-4 gap-2">
-              {['1D', '1W', '1M', '1Y'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTimeframe(t)}
-                  className={`px-3 py-1 rounded-md text-[10px] font-black tracking-widest transition-all skew-x-[-10deg] ${timeframe === t ? 'bg-brand-cyan text-brand-darker' : 'text-slate-600 hover:text-slate-300 bg-white/5'
-                    }`}
-                >
-                  {t}
-                </button>
-              ))}
+            <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                {(['1W', '1M', '3M', '1Y'] as const).map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-3 py-1 rounded-md text-[10px] font-black tracking-widest transition-all skew-x-[-10deg] ${timeframe === tf ? 'bg-brand-cyan text-brand-darker' : 'text-slate-600 hover:text-slate-300 bg-white/5'
+                      }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+              {hasHistory && (
+                <p className="text-right text-[10px] font-bold leading-tight min-w-0">
+                  <span className={valueChange >= 0 ? 'text-brand-green' : 'text-brand-red'}>
+                    {valueChange >= 0 ? '+' : '−'}฿{Math.abs(Math.round(valueChange)).toLocaleString()}
+                  </span>
+                  <span className="block text-[9px] font-medium text-slate-500">{t(`vault.window${timeframe}`)}</span>
+                </p>
+              )}
             </div>
             <div className="h-40">
               {isLoadingChart ? (
                 <div className="w-full h-full rounded-lg bg-white/5 animate-pulse" />
               ) : hasHistory ? (
-                <PriceChart data={chartData} />
+                <PriceChart data={chartData} itemsLabel={isThai ? 'ใบ' : 'cards'} />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-center px-6 text-[11px] text-slate-500">
                   {t('vault.historyEmpty')}

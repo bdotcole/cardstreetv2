@@ -128,6 +128,18 @@ function routeNotificationTap(data: unknown) {
         if (unconsumed) window.location.assign('/?tab=watching&utm_source=courier&utm_medium=push&utm_campaign=watch_price_drop');
         return;
     }
+    if (type === 'wishlist_listing') {
+        // A wishlisted card was just listed: the card page is where that
+        // listing (and every other copy) is. This type had no branch, so the
+        // tap opened the app wherever it last sat, usually the Vault, with
+        // no route to the listing the alert was about.
+        const d = data as { cardId?: unknown };
+        const cardId = typeof d?.cardId === 'string' ? d.cardId : '';
+        window.location.assign(
+            `/?${cardId ? `card=${encodeURIComponent(cardId)}&` : 'tab=vault&'}utm_source=courier&utm_medium=push&utm_campaign=wishlist_listing`,
+        );
+        return;
+    }
     if (type === 'watch_sold') {
         // The watched copy is gone; the card page lists the other copies.
         // ?card= is the SPA's card deep link (middleware uses it for /card/*).

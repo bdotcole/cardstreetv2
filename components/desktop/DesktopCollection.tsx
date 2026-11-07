@@ -233,7 +233,9 @@ export default function DesktopCollection() {
 
 // ── Overview / valuation tracker ─────────────────────────────────────────────
 
-const TIMEFRAMES = ['1D', '1W', '1M', '1Y'] as const;
+// Snapshots are daily, so a week is the shortest window with more than the
+// live point in it; 1D only ever drew the empty state.
+const TIMEFRAMES = ['1W', '1M', '3M', '1Y'] as const;
 
 function OverviewPanel({
     totalValue,
@@ -254,7 +256,7 @@ function OverviewPanel({
 }) {
     const { t } = useTranslation();
     const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>('1M');
-    const [chartData, setChartData] = useState<{ date: string; price: number }[]>([]);
+    const [chartData, setChartData] = useState<{ date: string; label: string; price: number; items?: number }[]>([]);
     const [loadingChart, setLoadingChart] = useState(true);
 
     useEffect(() => {
@@ -270,14 +272,13 @@ function OverviewPanel({
                     // Label every real point from its own date; the chart's minTickGap
                     // thins them (index-based blanking fought the axis on short series).
                     setChartData(
-                        result.data.map((p: { date: string; value: number }) => {
+                        result.data.map((p: { date: string; value: number; items?: number }) => {
                             const d = new Date(p.date);
                             let label: string;
-                            if (timeframe === '1D') label = `${d.getHours()}h`;
-                            else if (timeframe === '1W') label = dayNames[d.getDay()];
-                            else if (timeframe === '1M') label = `${d.getDate()}`;
-                            else label = monthNames[d.getMonth()];
-                            return { date: label, price: p.value };
+                            if (timeframe === '1W') label = dayNames[d.getDay()];
+                            else if (timeframe === '1Y') label = monthNames[d.getMonth()];
+                            else label = `${monthNames[d.getMonth()]} ${d.getDate()}`;
+                            return { date: p.date, label, price: p.value, items: p.items };
                         }),
                     );
                 } else {

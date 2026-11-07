@@ -2379,6 +2379,24 @@ export default function HomePage() {
                     }
                 } catch { /* not a parseable URL — fall through */ }
 
+                // Card page App Link (cardstreet.app/card/<id>): the wishlist
+                // alert email's button and any shared card link. Android
+                // intercepts all cardstreet.app URLs, so the tap opened the app
+                // here and, with no branch, dropped the path: the user landed
+                // wherever the shell last sat (the Vault, after a wishlist
+                // alert) with no card open. The web middleware turns /card/<id>
+                // into the ?card= deep link for phones; do the same here, so
+                // the mount-time handler fetches the card and opens its detail
+                // view with the listings.
+                try {
+                    const appLink = new URL(data.url);
+                    const cardMatch = appLink.pathname.match(/^\/(?:en\/|th\/)?card\/([^/]+)\/?$/i);
+                    if (appLink.protocol.startsWith('http') && cardMatch) {
+                        window.location.href = `/?card=${encodeURIComponent(decodeURIComponent(cardMatch[1]))}`;
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
                 // Public web pages (the breaker landing, FAQ, policies, game
                 // landings, the trade QR target). Same problem as /live/ above:
                 // Android intercepts ALL cardstreet.app URLs, so a shared link
