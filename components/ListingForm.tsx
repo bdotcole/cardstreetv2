@@ -8,6 +8,7 @@ import { usePremium } from '@/lib/hooks/usePremium';
 import { minListingPriceThb } from '@/lib/pricingFloors';
 import { clampRecommendation, evaluatePrice, isUsableMarketValue } from '@/lib/listingPriceGuidance';
 import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoPolicy';
+import { UnsupportedPhotoError, normalizeListingPhoto } from '@/lib/listingPhoto';
 import { marketplaceService } from '@/services/marketplaceService';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import CustomSelect from './CustomSelect';
@@ -91,7 +92,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
   const [frontImagePreview, setFrontImagePreview] = useState<string | null>(null);
   const [backImageBlob, setBackImageBlob] = useState<Blob | null>(null);
   const [backImagePreview, setBackImagePreview] = useState<string | null>(null);
-  
+  // Which photo is being decoded and re-encoded right now (a HEIC on Android
+  // takes a couple of seconds through WASM). The tile shows a spinner and the
+  // submit button waits, so the form can never be sent with half a photo.
+  const [photoBusy, setPhotoBusy] = useState<'front' | 'back' | null>(null);
+
   // First-listing explainer: open it on mount unless this device already
   // acknowledged it. SSR-safe (localStorage read deferred to an effect).
   const [showSellerInfo, setShowSellerInfo] = useState(false);
@@ -163,7 +168,38 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
     if (!canUseCatalogArt) setUseCatalogArt(false);
   }, [canUseCatalogArt]);
 
+  // Every photo, from the camera or a file picker, becomes a JPEG the size
+  // the catalog expects before it is previewed or uploaded. The preview is
+  // the very blob that will be uploaded, so what the seller sees is what the
+  // buyer gets: a HEIC that the phone could show but no buyer's browser could
+  // render is what put broken back photos on two listings (2026-11-07).
+  const acceptPhoto = async (side: 'front' | 'back', raw: Blob) => {
+    setPhotoBusy(side);
+    setError(null);
+    try {
+      const jpeg = await normalizeListingPhoto(raw);
+      const previewUrl = URL.createObjectURL(jpeg);
+      const replacePreview = (previous: string | null) => {
+        if (previous?.startsWith('blob:')) URL.revokeObjectURL(previous);
+        return previewUrl;
+      };
+      if (side === 'front') {
+        setFrontImageBlob(jpeg);
+        setFrontImagePreview(replacePreview);
+      } else {
+        setBackImageBlob(jpeg);
+        setBackImagePreview(replacePreview);
+      }
+    } catch (e) {
+      console.warn('[ListingForm] Photo could not be prepared:', e);
+      setError(t(e instanceof UnsupportedPhotoError ? 'listingPhotos.unsupportedFormat' : 'listingPhotos.processingFailed'));
+    } finally {
+      setPhotoBusy(null);
+    }
+  };
+
   const takePhoto = async (side: 'front' | 'back') => {
+    if (photoBusy) return;
     try {
       const image = await Camera.getPhoto({
         quality: 80,
@@ -175,13 +211,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
       if (image.webPath) {
         const response = await fetch(image.webPath);
         const blob = await response.blob();
-        if (side === 'front') {
-          setFrontImageBlob(blob);
-          setFrontImagePreview(image.webPath);
-        } else {
-          setBackImageBlob(blob);
-          setBackImagePreview(image.webPath);
-        }
+        await acceptPhoto(side, blob);
       }
     } catch (e: any) {
       console.log('Camera error or cancelled:', e);
@@ -193,16 +223,11 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
+    // Clear the input so picking the same file again still fires onChange
+    // (after a format error the seller may retry with the same file).
+    e.target.value = '';
     if (!file) return;
-
-    const previewUrl = URL.createObjectURL(file);
-    if (side === 'front') {
-      setFrontImageBlob(file);
-      setFrontImagePreview(previewUrl);
-    } else {
-      setBackImageBlob(file);
-      setBackImagePreview(previewUrl);
-    }
+    void acceptPhoto(side, file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -700,7 +725,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
                     onClick={() => takePhoto('front')}
                     className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/20 bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:border-brand-cyan hover:bg-white/10 transition-colors overflow-hidden group relative"
                   >
-                    {frontImagePreview ? (
+                    {photoBusy === 'front' ? (
+                      <div className="w-6 h-6 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin"></div>
+                    ) : frontImagePreview ? (
                       <>
                         <img src={frontImagePreview} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -729,7 +756,9 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
                     onClick={() => takePhoto('back')}
                     className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/20 bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:border-brand-cyan hover:bg-white/10 transition-colors overflow-hidden group relative"
                   >
-                    {backImagePreview ? (
+                    {photoBusy === 'back' ? (
+                      <div className="w-6 h-6 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin"></div>
+                    ) : backImagePreview ? (
                       <>
                         <img src={backImagePreview} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -757,7 +786,7 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || photoBusy !== null}
               className="w-full h-14 bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] rounded-xl text-brand-darker font-black uppercase tracking-wider shadow-lg shadow-brand-green/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (

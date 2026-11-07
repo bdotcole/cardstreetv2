@@ -1879,7 +1879,9 @@
         "useCatalogArtHint": "Allowed for ungraded near-mint singles under ฿100. Anything else, including graded cards and sealed products, needs photos of the actual item.",
         "photosRequired": "Photos of the actual item are required at ฿100 and above, below near-mint, for graded cards, or for sealed products.",
         "quantity": "How many copies?",
-        "quantityHint": "Creates one listing per copy, so each can sell separately."
+        "quantityHint": "Creates one listing per copy, so each can sell separately.",
+        "unsupportedFormat": "That photo format can't be used. Choose a JPEG or PNG, or take the photo with the camera.",
+        "processingFailed": "Couldn't prepare that photo. Please try again."
     },
     "shipping": {
         "note": "Shipping included · Flash Express · 1-3 days",

@@ -85,6 +85,10 @@ Card art used to be hotlinked from third-party hosts (TCGdex, ygoprodeck, Scryfa
 
 Coverage is not total: ~2.2k Japanese vintage cards have no image on any host (nothing to mirror), and a handful of promo rows have corrupt upstream URLs. These render imageless regardless of mirroring.
 
+### Seller photos are always JPEG
+
+`components/ListingForm.tsx` is the only place that uploads to the `listing-images` bucket (desktop Sell and the auction form both use it). Every photo it takes or picks goes through **`lib/listingPhoto.ts:normalizeListingPhoto`** before preview and upload: decoded on the device (the browser's own decoder first; HEIC/HEIF that the browser refuses falls back to libheif WASM, `libheif-js`, loaded only when such a file turns up), re-encoded as JPEG at most 2048px on the long side, EXIF stripped. A format nothing can decode (RAW) throws `UnsupportedPhotoError` and the form asks for a JPEG. The preview is the very blob that is uploaded. **Why:** supabase-js ignores the `contentType` option for a Blob body, so the object takes the blob's own type under our `.jpg` name; on 2026-11-07 two back photos went up as HEIC, the Next.js image optimizer passed them through untransformed and no buyer's browser could decode them. `supabase/migrations/20261107_listing_images_mime_allowlist.sql` makes the bucket refuse anything but JPEG/PNG/WebP, so a second upload path that forgets the normalizer fails loudly instead of publishing a broken photo. The two listings were repaired by re-encoding the files and repointing `image_back_url`; the old HEIC objects are still in the bucket.
+
 ## Scanning pipeline (`/api/scan`)
 
 > **The route must run `nodejs` runtime, not Edge.** `sharp` is a native module.
