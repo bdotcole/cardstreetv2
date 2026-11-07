@@ -269,7 +269,9 @@ export default function DesktopCartDrawer() {
                 <div className="fixed inset-0 z-50">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={close}></div>
 
-                    <aside className="absolute right-0 top-0 h-full w-full max-w-[440px] bg-brand-darker border-l border-white/10 shadow-2xl flex flex-col">
+                    {/* Top inset for the Android app, where the WebView draws under the
+                        status bar (see DesktopNav's header). 0 on the web. */}
+                    <aside className="absolute right-0 top-0 h-full w-full max-w-[440px] bg-brand-darker border-l border-white/10 shadow-2xl flex flex-col" style={{ paddingTop: 'var(--sat)' }}>
                         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
                             <h2 className="text-white font-black text-lg">
                                 {phase === 'address' ? t('desktop.cart.shippingDetails') : t('desktop.cart.title')}

@@ -841,6 +841,11 @@ export default function HomePage() {
                         // reports env(safe-area-inset-*) as 0 — so keep hardcoded floors.
                         // max() lets the real inset win on devices that do report it
                         // (3-button navigation is ~48px, taller than the 24px floor).
+                        // app/layout.tsx applies the same floors inline before first
+                        // paint on every page (keyed on the UA marker), so the pages
+                        // the shell navigates to as real URLs get them too; this is
+                        // the platform-detected belt to that UA-sniffed suspender.
+                        // Change the two together.
                         document.documentElement.style.setProperty('--sab', 'max(24px, env(safe-area-inset-bottom, 0px))');
                         document.documentElement.style.setProperty('--sat', 'max(44px, env(safe-area-inset-top, 0px))');
                     }

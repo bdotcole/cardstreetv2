@@ -17,6 +17,12 @@
  * standalone page. Everything here is server-reachable and renders on its own,
  * with the Android back button returning to the shell.
  *
+ * Every page listed here draws under the Android status bar (the WebView
+ * overlays it on every page, and the shell that pads for it is gone after the
+ * navigation). app/layout.tsx sets the --sat / --sab floors for the app's UA
+ * before first paint; a page added here must pad its own top edge by
+ * var(--sat) (the desktop shell's header does, as do the standalone routes).
+ *
  * Pure module (no next/* or @capacitor/* imports) so the client shell can
  * import it freely.
  */

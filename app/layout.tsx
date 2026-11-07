@@ -118,6 +118,22 @@ export default async function RootLayout({
         <html lang={lang === 'EN' ? 'en' : 'th'} className={theme === 'light' ? 'theme-light' : undefined}>
             <head>
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+                {/* Safe-area floors for the Android app, before first paint.
+                    The native WebView draws under the status bar on every page
+                    (capacitor.config.ts: overlaysWebView), yet Android reports
+                    env(safe-area-inset-top) as 0, so globals.css's --sat is 0
+                    there. The SPA shell sets these same floors when it mounts,
+                    but a page the shell navigates to as a real URL (a shared
+                    wishlist, the breaker landing, a pay link: lib/nativeWebPaths.ts)
+                    is a fresh document where it never runs, and its header sat
+                    under the clock (2026-11-07). Keyed on the UA marker the
+                    config appends, Android only, since iOS reports real insets.
+                    Inline and synchronous so the first layout is already right. */}
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: "(function(){var u=navigator.userAgent;if(u.indexOf('CardStreetApp')<0||!/Android/i.test(u))return;var s=document.documentElement.style;s.setProperty('--sat','max(44px, env(safe-area-inset-top, 0px))');s.setProperty('--sab','max(24px, env(safe-area-inset-bottom, 0px))')})()",
+                    }}
+                />
             </head>
             <body>
                 {/* Sitewide Organization + WebSite graph. The SearchAction target is
