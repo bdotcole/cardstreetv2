@@ -70,6 +70,8 @@ const facetKey = (value: string) => value.trim().toLowerCase();
 export interface FilterOption {
     value: string;
     label: string;
+    /** Active listings behind the option, so a buyer can see what a choice leaves. */
+    count: number;
 }
 
 /**
@@ -95,15 +97,19 @@ export function setFilterOptions(sets: FacetValue[]): FilterOption[] {
     }
     return [...merged.entries()]
         .sort(([, a], [, b]) => b.total - a.total || a.label.localeCompare(b.label))
-        .map(([value, { label }]) => ({ value, label }));
+        .map(([value, { label, total }]) => ({ value, label, count: total }));
 }
 
 /** The tiers in stock, low to high, then anything else, most stocked first. */
 export function rarityFilterOptions(rarities: FacetValue[]): FilterOption[] {
-    const stocked = new Set(rarities.map((r) => facetKey(r.value)));
+    const stocked = new Map<string, number>();
+    for (const { value, count } of rarities) {
+        const key = facetKey(value);
+        stocked.set(key, (stocked.get(key) ?? 0) + count);
+    }
     const grouped = RARITY_GROUPS
-        .filter((g) => g.spellings.some((s) => stocked.has(s)))
-        .map((g) => ({ value: g.key, label: g.label }));
+        .map((g) => ({ value: g.key, label: g.label, count: g.spellings.reduce((n, s) => n + (stocked.get(s) ?? 0), 0) }))
+        .filter((g) => g.count > 0);
     const known = new Set(RARITY_GROUPS.flatMap((g) => g.spellings));
     const others = setFilterOptions(rarities.filter((r) => !known.has(facetKey(r.value))));
     return [...grouped, ...others];
