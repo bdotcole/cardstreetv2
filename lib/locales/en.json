@@ -278,6 +278,32 @@
         "chat": "Sign in to message shops",
         "watch": "Sign in to watch listings"
     },
+    "wishlistShare": {
+        "button": "Share",
+        "buttonLong": "Share wishlist",
+        "sheetTitle": "Share your wishlist",
+        "close": "Close",
+        "intro": "Create a link your friends and family can open to see the cards you are hoping for.",
+        "privacy": "They see the cards on this list only, never your collection. You can turn the link off any time.",
+        "seasonHint": "Holiday hint: send it to whoever is buying your gift this year.",
+        "createLink": "Create link",
+        "creating": "Creating...",
+        "linkReady": "Anyone with this link can see your wishlist.",
+        "share": "Share",
+        "copyLink": "Copy link",
+        "copied": "Link copied",
+        "copyError": "Could not copy the link",
+        "turnOff": "Turn off link",
+        "turnedOff": "Link turned off. Create a new one any time.",
+        "failed": "Could not update sharing. Please try again.",
+        "retry": "Try again",
+        "unavailable": "Sharing is not available yet. Please try again later.",
+        "message": "My Cardstreet wishlist: the cards I am hoping for. Hint, hint.",
+        "messageSeason": "My Cardstreet wishlist: the cards I am hoping for this holiday season. Hint, hint.",
+        "seasonStripTitle": "Hint at your holiday gift",
+        "seasonStripBody": "Share this list with the people shopping for you. They see only these cards, never your collection.",
+        "desktopHint": "Share your wishlist so friends and family know which cards to get you."
+    },
     "vault": {
         "myPortfolio": "My Portfolio",
         "historyEmpty": "History builds as the daily snapshot runs — check back tomorrow.",

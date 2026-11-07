@@ -21,6 +21,8 @@ import { useSearchResolution } from '@/lib/hooks/useSearchResolution';
 import { cardMatchesQuery, prepareCardKeys, prepareQueryKeys } from '@/lib/search/clientMatch';
 import Image from 'next/image';
 import { getThumbnailUrl, getPreviewUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
+import { WishlistShareButton } from './wishlist/WishlistShareSheet';
+import { isGiftSeason } from '@/lib/wishlistShare';
 
 // recharts is ~100KB. Defer until the chart actually renders.
 const PriceChart = dynamic(() => import('./PriceChart'), {
@@ -987,7 +989,32 @@ const Vault: React.FC<VaultProps> = ({
           <i className="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
         </button>
         <h3 className="text-white text-xl font-black uppercase tracking-tight italic skew-x-[-10deg]">{t('vault.wishlist')}</h3>
+        {wishlist.length > 0 && (
+          <WishlistShareButton
+            cardCount={wishlist.length}
+            label={t('wishlistShare.button')}
+            className="ml-auto h-10 px-4 rounded-xl glass border-white/10 flex items-center gap-2 text-xs font-bold text-white active:scale-95 transition-all"
+          />
+        )}
       </div>
+      {/* Gift-season nudge (lib/wishlistShare isGiftSeason): the share button
+          alone is easy to miss, and the holiday promotion lives or dies on
+          people finding it. Opens the same sheet. */}
+      {wishlist.length > 0 && isGiftSeason() && (
+        <WishlistShareButton
+          cardCount={wishlist.length}
+          className="w-full text-left rounded-3xl border border-brand-cyan/30 bg-brand-cyan/10 p-4 flex items-center gap-4 active:scale-[0.99] transition-all"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-brand-cyan/20 flex items-center justify-center shrink-0">
+            <i className="fa-solid fa-gift text-brand-cyan"></i>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-bold">{t('wishlistShare.seasonStripTitle')}</p>
+            <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{t('wishlistShare.seasonStripBody')}</p>
+          </div>
+          <i className="fa-solid fa-chevron-right text-slate-500 text-xs"></i>
+        </WishlistShareButton>
+      )}
       <div className="space-y-3">
         {wishlist.length === 0 ? (
           <div className="text-center py-20 opacity-20">

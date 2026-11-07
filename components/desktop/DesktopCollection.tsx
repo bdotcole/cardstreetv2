@@ -19,6 +19,8 @@ import AuthModal from '@/components/AuthModal';
 import { pokemonService, type ApiSet } from '@/services/pokemonService';
 import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLanguageForGame, type GameLanguageCode } from '@/lib/games';
 import BulkImportModal from '@/components/desktop/BulkImportModal';
+import { WishlistShareButton } from '@/components/wishlist/WishlistShareSheet';
+import { isGiftSeason } from '@/lib/wishlistShare';
 import type { Card, UserCollectionItem } from '@/types';
 
 // recharts is ~100KB — defer until the Overview chart actually renders.
@@ -532,40 +534,64 @@ function WishlistPanel({
     if (wishlist.length === 0) return <EmptyState icon="fa-heart" text={t('desktop.collection.wishlistEmpty')} />;
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-            {wishlist.map((card) => (
-                <div key={card.id} className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative">
-                    <Link href={`/card/${card.id}`} className="block">
-                        <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
-                            <Image
-                                src={getThumbnailUrl(card.images?.small || card.imageUrl)}
-                                alt={card.name}
-                                fill
-                                sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
-                                loading="lazy"
-                                placeholder="blur"
-                                blurDataURL={CARD_BLUR_DATA_URL}
-                                unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
-                                className={`group-hover:scale-[1.03] transition-transform duration-300 ${card.isSealed ? 'object-contain p-3' : 'object-cover'}`}
-                            />
+        <div>
+            {/* Share toolbar. Holiday wording inside the gift window (lib/wishlistShare
+                isGiftSeason), a plain hint outside it; the button opens the same sheet. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                {isGiftSeason() ? (
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-cyan/15 flex items-center justify-center shrink-0">
+                            <i className="fa-solid fa-gift text-brand-cyan"></i>
                         </div>
-                        <div className="p-3">
-                            <h3 className="text-sm font-bold text-white truncate">{card.name}</h3>
-                            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
-                                {card.set}{card.rarity ? ` · ${card.rarity}` : ''}
-                            </p>
-                            {card.marketPrice > 0 && <p className="text-sm font-black text-brand-cyan mt-1.5">{formatTHB(card.marketPrice)}</p>}
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-white">{t('wishlistShare.seasonStripTitle')}</p>
+                            <p className="text-xs text-slate-400">{t('wishlistShare.seasonStripBody')}</p>
                         </div>
-                    </Link>
-                    <button
-                        onClick={() => remove(card.id)}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 backdrop-blur text-brand-red hover:bg-black/70 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-                        aria-label={t('desktop.collection.remove')}
-                    >
-                        <i className="fa-solid fa-heart-circle-minus text-[11px]"></i>
-                    </button>
-                </div>
-            ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-slate-400">{t('wishlistShare.desktopHint')}</p>
+                )}
+                <WishlistShareButton
+                    cardCount={wishlist.length}
+                    label={t('wishlistShare.buttonLong')}
+                    className="inline-flex items-center gap-2 bg-brand-cyan hover:bg-cyan-400 text-brand-darker text-sm font-black px-4 py-2 rounded-xl transition-colors shrink-0"
+                />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                {wishlist.map((card) => (
+                    <div key={card.id} className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-brand-cyan/40 transition-all relative">
+                        <Link href={`/card/${card.id}`} className="block">
+                            <div className="relative aspect-[3/4] bg-brand-darker overflow-hidden">
+                                <Image
+                                    src={getThumbnailUrl(card.images?.small || card.imageUrl)}
+                                    alt={card.name}
+                                    fill
+                                    sizes="(min-width: 1536px) 15vw, (min-width: 1024px) 20vw, 40vw"
+                                    loading="lazy"
+                                    placeholder="blur"
+                                    blurDataURL={CARD_BLUR_DATA_URL}
+                                    unoptimized={shouldSkipNextOptimization(getThumbnailUrl(card.images?.small || card.imageUrl))}
+                                    className={`group-hover:scale-[1.03] transition-transform duration-300 ${card.isSealed ? 'object-contain p-3' : 'object-cover'}`}
+                                />
+                            </div>
+                            <div className="p-3">
+                                <h3 className="text-sm font-bold text-white truncate">{card.name}</h3>
+                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide truncate mt-0.5">
+                                    {card.set}{card.rarity ? ` · ${card.rarity}` : ''}
+                                </p>
+                                {card.marketPrice > 0 && <p className="text-sm font-black text-brand-cyan mt-1.5">{formatTHB(card.marketPrice)}</p>}
+                            </div>
+                        </Link>
+                        <button
+                            onClick={() => remove(card.id)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 backdrop-blur text-brand-red hover:bg-black/70 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
+                            aria-label={t('desktop.collection.remove')}
+                        >
+                            <i className="fa-solid fa-heart-circle-minus text-[11px]"></i>
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

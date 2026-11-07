@@ -85,8 +85,12 @@ const EXACT_PATHS = new Set([
  * with the app installed fires appUrlOpen and nothing else, so without this
  * entry the link a seller sent to chase payment silently lands the buyer on the
  * SPA home — the exact failure /become-a-breaker had.
+ *
+ * /wishlist/<token> is a shared wishlist (the holiday gift-hint link). Served
+ * to the native app as the same server page every browser gets (middleware's
+ * WISHLIST_SHARE_RE), since the SPA has no view for someone else's list.
  */
-const PREFIX_PATHS = ['/card/', '/pay/']
+const PREFIX_PATHS = ['/card/', '/pay/', '/wishlist/']
 
 /**
  * Strip a locale prefix so /en/faq matches the same entry as /faq. The lookahead
